@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef } from "react";
+import { safeNext } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/client";
 import {
   acceptPortalInvitation,
@@ -48,6 +49,10 @@ function asPreview(value: unknown): InvitePreview | null {
   return value && typeof value === "object" ? (value as InvitePreview) : null;
 }
 
+function mfaDestination() {
+  return safeNext(new URLSearchParams(location.search).get("next"));
+}
+
 function portalLocale(root: ParentNode): "en-CA" | "fr-CA" {
   const french = [...root.querySelectorAll<HTMLElement>(".seg[aria-label='Language'] button")].find(
     (button) => button.getAttribute("aria-pressed") === "true" && /fran/i.test(button.textContent || ""),
@@ -85,20 +90,28 @@ export function usePortActions(page: string, token?: string) {
       const session = ctx.current;
 
       if (event.type === "step") {
-        if (page === "mfa" && event.step === 2 && session.signedIn && !session.factorId && !enrolled.current) {
-          const started = await enrollAuthenticator();
-          if (started) {
-            enrolled.current = started.factorId;
-            const key = event.root.querySelector(".key b");
-            if (key) key.textContent = started.secret.replace(/(.{4})/g, "$1 ").trim();
-            const svg = event.root.querySelector(".qr svg");
-            if (svg) {
+        if (page === "mfa" && event.step === 2 && !enrolled.current) {
+          const preset = event.root.querySelector<HTMLElement>("[data-factor]")?.dataset.factor;
+          if (preset) {
+            enrolled.current = preset;
+          } else if (session.signedIn && !session.factorId) {
+            const started = await enrollAuthenticator();
+            const box = event.root.querySelector<HTMLElement>(".qr");
+            const status = box?.querySelector<HTMLElement>("[role=status]");
+            if (started) {
+              enrolled.current = started.factorId;
+              if (box) box.dataset.factor = started.factorId;
+              const key = event.root.querySelector(".key b");
+              if (key) key.textContent = started.secret.replace(/(.{4})/g, "$1 ").trim();
               const img = document.createElement("img");
               img.src = started.qr;
               img.alt = "QR code for your authenticator app";
               img.width = 132;
               img.height = 132;
-              svg.replaceWith(img);
+              if (status) status.replaceWith(img);
+              else box?.prepend(img);
+            } else if (status) {
+              status.textContent = "Setup couldn’t start. Reload this page to try again.";
             }
           }
         }
@@ -172,13 +185,18 @@ export function usePortActions(page: string, token?: string) {
         if (page === "mfa" && event.then === "#3" && enrolled.current) {
           const verified = await verifyTotpCode(enrolled.current, event.code);
           if (!verified || verified.ok === false) return verified;
-          return issueRecoveryCodes();
+          const issued = await issueRecoveryCodes();
+          if (issued && issued.ok && issued.codes?.length) return issued;
+          // Two-step is on now, but the person has no way back in without codes. Say so; entering a new code retries.
+          return {
+            ok: false,
+            message: "Two-step sign-in is on, but your recovery codes weren’t created. Enter the next code to try again.",
+          };
         }
-        if (page === "mfa" && session.factorId && (event.then === "/sheet" || event.then.startsWith("/sheet/matter"))) {
+        if (page === "mfa" && session.factorId && !event.then.startsWith("#")) {
           const verified = await verifyTotpCode(session.factorId, event.code);
           if (!verified || verified.ok === false) return verified;
-          const next = new URLSearchParams(location.search).get("next") || event.then;
-          return { ok: true, href: next };
+          return { ok: true, href: mfaDestination() };
         }
         return null;
       }
@@ -202,12 +220,15 @@ export function usePortActions(page: string, token?: string) {
         const supabase = createClient();
         const { error } = await supabase.auth.signInWithPasskey();
         if (error) return { ok: false, message: "That passkey was not accepted." };
-        return { ok: true, href: new URLSearchParams(location.search).get("next") || "/app" };
+        return { ok: true, href: mfaDestination() };
       }
       if (page === "mfa" && event.step === 5 && el.dataset.href === "/sheet") {
         const redeemed = await redeemRecovery(val(event.root, "rc"));
         if (!redeemed || redeemed.ok === false) return redeemed;
-        return { ok: true, href: new URLSearchParams(location.search).get("next") || "/app" };
+        return { ok: true, href: mfaDestination() };
+      }
+      if (page === "mfa" && el.dataset.href?.startsWith("/sheet")) {
+        return { ok: true, href: mfaDestination() };
       }
       if (page === "start-trial" && el.hasAttribute("data-next") && event.step === 0) {
         return signUpForTrial({

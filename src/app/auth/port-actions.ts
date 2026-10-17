@@ -5,6 +5,7 @@ import { hasPublicSupabaseEnv } from "@/lib/env";
 import { passwordOk } from "@/lib/auth/password";
 import { safeAccessError } from "@/lib/auth/step-up";
 import { safeNext } from "@/lib/auth/redirect";
+import { clearPendingTotp, readPendingTotp, writePendingTotp, type PendingTotp } from "@/lib/auth/mfa-pending";
 import { firmSlug } from "@/lib/auth/slug";
 import { syncClaimedFirmSlug } from "@/modules/email/sync-routing";
 import { isInvitationToken } from "@/lib/auth/invitations";
@@ -338,16 +339,34 @@ export async function verifyTotpCode(factorId: string, code: string): Promise<Po
   if (!hasPublicSupabaseEnv()) return nullResult();
   if (!/^[0-9a-f-]{36}$/i.test(factorId) || !/^\d{6}$/.test(code)) return fail("That code didn’t match.");
   const supabase = await createClient();
-  const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
-  if (error) return fail("That code didn’t match.");
+  const challenge = await supabase.auth.mfa.challenge({ factorId });
+  if (challenge.error || !challenge.data) return fail("That code didn’t match.");
+  const verified = await supabase.auth.mfa.verify({
+    factorId,
+    challengeId: challenge.data.id,
+    code,
+  });
+  if (verified.error) return fail("That code didn’t match.");
+  await clearPendingTotp();
   return { ok: true };
 }
 
-export async function enrollAuthenticator() {
+/**
+ * Starts authenticator setup once. A reload or a second tab gets the same
+ * pending factor back, so a QR already scanned keeps working.
+ */
+export async function enrollAuthenticator(): Promise<PendingTotp | null> {
   if (!hasPublicSupabaseEnv()) return null;
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) return null;
+  const { data: factors } = await supabase.auth.mfa.listFactors();
+  const totp = (factors?.all ?? []).filter((factor) => factor.factor_type === "totp");
+  if (totp.some((factor) => factor.status === "verified")) return null;
+  const pending = await readPendingTotp();
+  if (pending && totp.some((factor) => factor.id === pending.factorId)) return pending;
+  // Unconfirmed setups from an expired or lost page. Supabase refuses a second factor with the same name.
+  for (const factor of totp) await supabase.auth.mfa.unenroll({ factorId: factor.id });
   const { data, error } = await supabase.auth.mfa.enroll({
     factorType: "totp",
     friendlyName: "Casevoya",
@@ -357,7 +376,9 @@ export async function enrollAuthenticator() {
   const qr = data.totp.qr_code.startsWith("data:")
     ? data.totp.qr_code
     : `data:image/svg+xml;utf-8,${encodeURIComponent(data.totp.qr_code)}`;
-  return { factorId: data.id, secret: data.totp.secret, qr };
+  const started = { factorId: data.id, secret: data.totp.secret, qr };
+  await writePendingTotp(started);
+  return started;
 }
 
 export async function issueRecoveryCodes(): Promise<PortResult | null> {

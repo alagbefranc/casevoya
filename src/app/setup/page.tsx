@@ -10,6 +10,14 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+function SetupScreen({ codes, firmName }: { codes: string[]; firmName: string }) {
+  return (
+    <PortScreen page="setup" variant="wzb">
+      <SetupMarkup jurisdictionCodes={codes} firmName={firmName} />
+    </PortScreen>
+  );
+}
+
 async function SavedSetup() {
   let codes = ["CA", "ON"];
   let firmName = "";
@@ -38,15 +46,13 @@ async function SavedSetup() {
       }
     }
   }
-  return <SetupMarkup jurisdictionCodes={codes} firmName={firmName} />;
+  return <SetupScreen codes={codes} firmName={firmName} />;
 }
 
 export default function SetupPage() {
   return (
-    <PortScreen page="setup" variant="wzb">
-      <Suspense fallback={<SetupMarkup />}>
-        <SavedSetup />
-      </Suspense>
-    </PortScreen>
+    <Suspense fallback={<SetupScreen codes={["CA", "ON"]} firmName="" />}>
+      <SavedSetup />
+    </Suspense>
   );
 }
