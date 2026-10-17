@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // OpenNext and Wrangler build output.
+    ".open-next/**",
+    ".wrangler/**",
   ]),
   {
     files: ["src/components/port/**/*.{ts,tsx}", "src/components/portal/**/*.{ts,tsx}", "src/components/sheet/**/*.{ts,tsx}"],

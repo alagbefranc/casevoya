@@ -18,6 +18,22 @@ Do not commit secrets. Copy the names below into the host environment. Account i
 | `CLOUDFLARE_ROUTING_API_TOKEN` | Email Routing Rules Write on zone `303990065795d627a9fd337b01258024`. Creates and deletes per-firm rules. |
 | `EMAIL_ROUTING_RECONCILE_SECRET` | Bearer for `POST /api/email/routing/reconcile`. |
 
+## App Worker
+
+`casevoya-app` is built with OpenNext and deployed with Wrangler from the repo root:
+
+```
+pnpm run deploy:app
+```
+
+- `wrangler.jsonc` mirrors the live Worker: compatibility date and flags, `ASSETS`, the `WORKER_SELF_REFERENCE` service binding, the custom domain `app.casevoya.ca`, `workers_dev = false`.
+- `CASEVOYA_TARGET=workers` (set by `build:workers`) turns `cacheComponents` and `partialPrefetching` off until opennextjs-cloudflare#1318 is fixed. Local and CI builds keep them on.
+- `.env.production` holds only the two public Supabase values, which Next.js inlines at build time.
+- Secrets stay on the Worker (`wrangler secret put <NAME>`). Wrangler keeps existing secrets on deploy, and `keep_vars` keeps dashboard variables.
+- Deploying needs `CLOUDFLARE_API_TOKEN` with Workers Scripts edit on the account.
+
+`pnpm run deploy:inbound` deploys the inbound mail Worker below.
+
 ## Inbound Worker
 
 `workers/inbound-email/wrangler.toml` sets `workers_dev = false`, so deploy does not publish a `workers.dev` hostname.

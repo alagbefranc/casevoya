@@ -11,7 +11,10 @@
     "test": "vitest run",
     "check:migrations": "node scripts/check-migrations.mjs",
     "db:types": "supabase gen types typescript --project-id aqjtvqmojfamtspzyeqm --schema public > src/types/database.types.ts",
-    "verify": "pnpm check:migrations && pnpm lint && pnpm typecheck && pnpm test"
+    "verify": "pnpm check:migrations && pnpm lint && pnpm typecheck && pnpm test",
+    "build:workers": "CASEVOYA_TARGET=workers opennextjs-cloudflare build",
+    "deploy:app": "pnpm run build:workers && opennextjs-cloudflare deploy",
+    "deploy:inbound": "wrangler deploy --config workers/inbound-email/wrangler.toml"
   },
   "dependencies": {
     "@stripe/stripe-js": "^10.1.0",
@@ -26,6 +29,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.10",
+    "@opennextjs/cloudflare": "^1.20.12",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -35,7 +39,8 @@
     "supabase": "^2.121.0",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "wrangler": "^4.151.1"
   },
   "packageManager": "pnpm@10.34.6",
   "engines": {
