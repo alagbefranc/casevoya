@@ -1,7 +1,8 @@
 // Live schema (project aqjtvqmojfamtspzyeqm) through 20261017113202, extended in-repo
-// for unapplied migrations 20261017120000 and 20261017140000–20261017140800,
-// plus preview_invitation and request_mfa_reset from 20261017160000.
-// Regenerate with `pnpm db:types` only after those migrations are applied live.
+// for unapplied migrations 20261017120000, 20261017140000–20261017140800,
+// 20261017160000 (preview_invitation, request_mfa_reset), and
+// 20261017170000–20261017170300. Regenerate with `pnpm db:types` only after those
+// migrations are applied live.
 
 export type Json =
   | string
@@ -782,10 +783,23 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          engagement_status: Database["public"]["Enums"]["engagement_status"]
+          government_status: Database["public"]["Enums"]["government_status"]
           id: string
           is_sample: boolean
           on_hold: boolean
+          on_hold_owner_membership_id: string | null
+          on_hold_reason: string | null
+          on_hold_review_on: string | null
           organization_id: string
+          outcome: Database["public"]["Enums"]["matter_outcome"] | null
+          predecessor_matter_id: string | null
+          program_pack_id: string | null
+          reference: string | null
+          reference_seq: number | null
+          reference_year: number | null
+          responsible_consultant_membership_id: string | null
+          retention_on: string | null
           sample_label: string | null
           stage: Database["public"]["Enums"]["matter_stage"]
           title: string
@@ -795,10 +809,23 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          engagement_status?: Database["public"]["Enums"]["engagement_status"]
+          government_status?: Database["public"]["Enums"]["government_status"]
           id?: string
           is_sample?: boolean
           on_hold?: boolean
+          on_hold_owner_membership_id?: string | null
+          on_hold_reason?: string | null
+          on_hold_review_on?: string | null
           organization_id: string
+          outcome?: Database["public"]["Enums"]["matter_outcome"] | null
+          predecessor_matter_id?: string | null
+          program_pack_id?: string | null
+          reference?: string | null
+          reference_seq?: number | null
+          reference_year?: number | null
+          responsible_consultant_membership_id?: string | null
+          retention_on?: string | null
           sample_label?: string | null
           stage?: Database["public"]["Enums"]["matter_stage"]
           title: string
@@ -808,10 +835,23 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          engagement_status?: Database["public"]["Enums"]["engagement_status"]
+          government_status?: Database["public"]["Enums"]["government_status"]
           id?: string
           is_sample?: boolean
           on_hold?: boolean
+          on_hold_owner_membership_id?: string | null
+          on_hold_reason?: string | null
+          on_hold_review_on?: string | null
           organization_id?: string
+          outcome?: Database["public"]["Enums"]["matter_outcome"] | null
+          predecessor_matter_id?: string | null
+          program_pack_id?: string | null
+          reference?: string | null
+          reference_seq?: number | null
+          reference_year?: number | null
+          responsible_consultant_membership_id?: string | null
+          retention_on?: string | null
           sample_label?: string | null
           stage?: Database["public"]["Enums"]["matter_stage"]
           title?: string
@@ -3019,6 +3059,232 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["subscription_status"]
       }
+      override_matter_stage: {
+        Args: {
+          p_expected_version: number
+          p_matter_id: string
+          p_reason: string
+          p_to_stage: Database["public"]["Enums"]["matter_stage"]
+        }
+        Returns: Json
+      }
+      create_engaged_matter: {
+        Args: {
+          p_consultant_membership_id: string
+          p_is_sample: boolean
+          p_rule_pack_version_id?: string | null
+          p_scope?: string | null
+          p_title: string
+        }
+        Returns: Json
+      }
+      assign_responsible_consultant: {
+        Args: { p_expected_version: number; p_matter_id: string; p_membership_id: string }
+        Returns: number
+      }
+      select_matter_program: {
+        Args: {
+          p_expected_version: number
+          p_matter_id: string
+          p_reason: string
+          p_rule_pack_version_id: string
+        }
+        Returns: number
+      }
+      record_matter_engagement: {
+        Args: {
+          p_agreement_locator: string | null
+          p_exception_reason: string | null
+          p_matter_id: string
+          p_scope: string
+          p_use_exception: boolean
+        }
+        Returns: string
+      }
+      set_matter_on_hold: {
+        Args: {
+          p_expected_version: number
+          p_matter_id: string
+          p_owner_membership_id: string
+          p_reason: string
+          p_review_on: string
+        }
+        Returns: number
+      }
+      clear_matter_on_hold: {
+        Args: { p_expected_version: number; p_matter_id: string; p_reason: string }
+        Returns: number
+      }
+      record_government_status: {
+        Args: {
+          p_expected_version: number
+          p_matter_id: string
+          p_note: string
+          p_status: Database["public"]["Enums"]["government_status"]
+        }
+        Returns: number
+      }
+      record_matter_outcome: {
+        Args: {
+          p_expected_version: number
+          p_matter_id: string
+          p_note: string
+          p_outcome: Database["public"]["Enums"]["matter_outcome"]
+        }
+        Returns: number
+      }
+      record_matter_retention: {
+        Args: {
+          p_expected_version: number
+          p_matter_id: string
+          p_reason: string
+          p_retention_on: string
+        }
+        Returns: number
+      }
+      link_successor_matter: {
+        Args: { p_predecessor_id: string; p_reason: string; p_successor_id: string }
+        Returns: string
+      }
+      save_intake_template: {
+        Args: {
+          p_effective_on: string | null
+          p_locale: string
+          p_publish: boolean
+          p_rule_pack_version_id: string | null
+          p_schema: Json
+          p_stable_key: string
+          p_title: string
+          p_workflow_category: Database["public"]["Enums"]["intake_workflow_category"]
+        }
+        Returns: string
+      }
+      open_intake_response: {
+        Args: { p_matter_id: string; p_person_id: string; p_template_id: string }
+        Returns: string
+      }
+      save_intake_answer: {
+        Args: {
+          p_expected_version: number
+          p_field_key: string
+          p_presence: Database["public"]["Enums"]["answer_presence"]
+          p_response_id: string
+          p_value: Json
+        }
+        Returns: string
+      }
+      submit_intake_response: {
+        Args: { p_expected_version: number; p_response_id: string }
+        Returns: number
+      }
+      freeze_intake_response: {
+        Args: { p_response_id: string }
+        Returns: undefined
+      }
+      create_task: {
+        Args: {
+          p_audience: Database["public"]["Enums"]["task_audience"]
+          p_checklist: Json
+          p_due_at: string | null
+          p_due_on: string | null
+          p_due_timezone: string
+          p_estimated_minutes: number | null
+          p_intake_field_key: string | null
+          p_matter_id: string
+          p_owner_membership_id: string | null
+          p_owner_person_id: string | null
+          p_priority: Database["public"]["Enums"]["task_priority"]
+          p_title: string
+        }
+        Returns: string
+      }
+      set_task_status: {
+        Args: {
+          p_blocker_note: string | null
+          p_expected_version: number
+          p_status: Database["public"]["Enums"]["task_status"]
+          p_task_id: string
+        }
+        Returns: number
+      }
+      reassign_task: {
+        Args: {
+          p_expected_version: number
+          p_owner_membership_id: string | null
+          p_owner_person_id: string | null
+          p_task_id: string
+        }
+        Returns: number
+      }
+      add_task_dependency: {
+        Args: { p_depends_on_task_id: string; p_task_id: string }
+        Returns: string
+      }
+      add_task_watcher: {
+        Args: { p_membership_id: string; p_task_id: string }
+        Returns: string
+      }
+      record_deadline: {
+        Args: {
+          p_calculation_note: string | null
+          p_due_at: string | null
+          p_due_on: string | null
+          p_event_on: string | null
+          p_evidence_locator: string | null
+          p_kind: Database["public"]["Enums"]["deadline_kind"]
+          p_label: string
+          p_matter_id: string
+          p_receipt_on: string | null
+          p_rule_version_id: string | null
+          p_source_retrieved_on: string | null
+          p_source_url: string | null
+          p_task_id: string | null
+          p_timezone: string
+        }
+        Returns: string
+      }
+      confirm_deadline: {
+        Args: { p_deadline_id: string; p_expected_version: number }
+        Returns: number
+      }
+      schedule_deadline_reminders: {
+        Args: { p_as_of: string; p_deadline_id: string }
+        Returns: number
+      }
+      revise_deadline_due: {
+        Args: {
+          p_deadline_id: string
+          p_due_at: string | null
+          p_due_on: string | null
+          p_expected_version: number
+          p_timezone: string
+        }
+        Returns: number
+      }
+      claim_due_reminders: {
+        Args: { p_as_of: string; p_limit: number }
+        Returns: string[]
+      }
+      escalate_overdue_work: {
+        Args: { p_as_of: string }
+        Returns: number
+      }
+      set_quiet_hours: {
+        Args: { p_end: string | null; p_start: string | null }
+        Returns: undefined
+      }
+      set_firm_reminder_offsets: {
+        Args: { p_days: number[] }
+        Returns: undefined
+      }
+      open_majority_review_task: {
+        Args: { p_person_id: string }
+        Returns: string
+      }
+      deadline_local_end: {
+        Args: { p_due_on: string; p_timezone: string }
+        Returns: string
+      }
     }
     Enums: {
       access_grant_kind: "explicit" | "guardian"
@@ -3094,6 +3360,49 @@ export type Database = {
         | "official_decision"
         | "outcome_and_follow_up"
         | "closure"
+      engagement_status: "pending" | "engaged" | "exception" | "ended"
+      government_status:
+        | "not_recorded"
+        | "receipt_on_file"
+        | "processing_reported"
+        | "additional_request_open"
+        | "decision_evidence_on_file"
+      matter_outcome:
+        | "approved"
+        | "refused"
+        | "withdrawn"
+        | "returned_or_incomplete"
+        | "abandoned"
+        | "other_verified"
+      intake_workflow_category:
+        | "temporary_residence"
+        | "study"
+        | "work"
+        | "permanent_residence"
+        | "sponsorship"
+        | "citizenship"
+        | "provincial"
+        | "unspecified"
+      intake_template_status: "draft" | "published" | "superseded"
+      intake_response_status: "draft" | "submitted"
+      intake_field_type:
+        | "text"
+        | "date"
+        | "country"
+        | "address"
+        | "repeatable"
+        | "relationship"
+        | "declaration"
+        | "file_request"
+        | "choice"
+      answer_presence: "provided" | "unknown" | "not_applicable" | "approximate"
+      answer_date_kind: "exact" | "year_month" | "year"
+      task_audience: "internal" | "client"
+      task_priority: "low" | "normal" | "high" | "critical"
+      task_status: "open" | "blocked" | "done" | "cancelled"
+      deadline_kind: "legal" | "correspondence" | "internal"
+      deadline_verification: "tentative" | "confirmed"
+      reminder_status: "pending" | "sent" | "cancelled"
       membership_status: "invited" | "active" | "suspended" | "revoked"
       org_role:
         | "firm_owner"
@@ -3398,6 +3707,53 @@ export const Constants = {
         "outcome_and_follow_up",
         "closure",
       ],
+      engagement_status: ["pending", "engaged", "exception", "ended"],
+      government_status: [
+        "not_recorded",
+        "receipt_on_file",
+        "processing_reported",
+        "additional_request_open",
+        "decision_evidence_on_file",
+      ],
+      matter_outcome: [
+        "approved",
+        "refused",
+        "withdrawn",
+        "returned_or_incomplete",
+        "abandoned",
+        "other_verified",
+      ],
+      intake_workflow_category: [
+        "temporary_residence",
+        "study",
+        "work",
+        "permanent_residence",
+        "sponsorship",
+        "citizenship",
+        "provincial",
+        "unspecified",
+      ],
+      intake_template_status: ["draft", "published", "superseded"],
+      intake_response_status: ["draft", "submitted"],
+      intake_field_type: [
+        "text",
+        "date",
+        "country",
+        "address",
+        "repeatable",
+        "relationship",
+        "declaration",
+        "file_request",
+        "choice",
+      ],
+      answer_presence: ["provided", "unknown", "not_applicable", "approximate"],
+      answer_date_kind: ["exact", "year_month", "year"],
+      task_audience: ["internal", "client"],
+      task_priority: ["low", "normal", "high", "critical"],
+      task_status: ["open", "blocked", "done", "cancelled"],
+      deadline_kind: ["legal", "correspondence", "internal"],
+      deadline_verification: ["tentative", "confirmed"],
+      reminder_status: ["pending", "sent", "cancelled"],
       membership_status: ["invited", "active", "suspended", "revoked"],
       org_role: [
         "firm_owner",
