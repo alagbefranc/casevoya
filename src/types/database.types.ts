@@ -1,5 +1,5 @@
 // Generated from the live schema (project aqjtvqmojfamtspzyeqm) after migrations
-// through 20261017052643. Regenerate with `pnpm db:types`.
+// through 20261017113202. Regenerate with `pnpm db:types`.
 
 export type Json =
   | string
@@ -380,6 +380,86 @@ export type Database = {
           },
         ]
       }
+      matter_rule_bindings: {
+        Row: {
+          checked_at: string | null
+          chosen_context: Json | null
+          created_at: string
+          created_by: string | null
+          id: string
+          matter_id: string
+          organization_id: string
+          rationale: string | null
+          recheck_required: boolean
+          reviewed_by: string | null
+          rule_pack_version_id: string
+          superseded_at: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          checked_at?: string | null
+          chosen_context?: Json | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id: string
+          organization_id: string
+          rationale?: string | null
+          recheck_required?: boolean
+          reviewed_by?: string | null
+          rule_pack_version_id: string
+          superseded_at?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          checked_at?: string | null
+          chosen_context?: Json | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          rationale?: string | null
+          recheck_required?: boolean
+          reviewed_by?: string | null
+          rule_pack_version_id?: string
+          superseded_at?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_rule_bindings_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_rule_bindings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matter_rule_bindings_reviewed_by_organization_id_fkey"
+            columns: ["reviewed_by", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_rule_bindings_rule_pack_version_id_fkey"
+            columns: ["rule_pack_version_id"]
+            isOneToOne: false
+            referencedRelation: "rule_pack_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       matters: {
         Row: {
           created_at: string
@@ -476,6 +556,134 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "memberships_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      official_source_domains: {
+        Row: {
+          active: boolean
+          authority: string
+          created_at: string
+          created_by: string | null
+          host: string
+          id: string
+          jurisdiction_code: string
+          match_kind: Database["public"]["Enums"]["domain_match_kind"]
+          notes: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          active?: boolean
+          authority: string
+          created_at?: string
+          created_by?: string | null
+          host: string
+          id?: string
+          jurisdiction_code: string
+          match_kind: Database["public"]["Enums"]["domain_match_kind"]
+          notes?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          active?: boolean
+          authority?: string
+          created_at?: string
+          created_by?: string | null
+          host?: string
+          id?: string
+          jurisdiction_code?: string
+          match_kind?: Database["public"]["Enums"]["domain_match_kind"]
+          notes?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      official_sources: {
+        Row: {
+          allowed_host: string
+          canonical_url: string
+          change_state: Database["public"]["Enums"]["source_change_state"]
+          content_kind: Database["public"]["Enums"]["source_content_kind"]
+          created_at: string
+          created_by: string | null
+          discovery_status: Database["public"]["Enums"]["source_discovery_status"]
+          id: string
+          jurisdiction: string
+          last_attempt_at: string | null
+          last_attempt_error: string | null
+          last_attempt_result:
+            | Database["public"]["Enums"]["source_observation"]
+            | null
+          last_checked_at: string | null
+          next_review_at: string | null
+          organization_id: string | null
+          publisher: string
+          review_status: Database["public"]["Enums"]["source_review_status"]
+          source_language: string | null
+          title: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          allowed_host: string
+          canonical_url: string
+          change_state?: Database["public"]["Enums"]["source_change_state"]
+          content_kind: Database["public"]["Enums"]["source_content_kind"]
+          created_at?: string
+          created_by?: string | null
+          discovery_status?: Database["public"]["Enums"]["source_discovery_status"]
+          id?: string
+          jurisdiction: string
+          last_attempt_at?: string | null
+          last_attempt_error?: string | null
+          last_attempt_result?:
+            | Database["public"]["Enums"]["source_observation"]
+            | null
+          last_checked_at?: string | null
+          next_review_at?: string | null
+          organization_id?: string | null
+          publisher: string
+          review_status?: Database["public"]["Enums"]["source_review_status"]
+          source_language?: string | null
+          title?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          allowed_host?: string
+          canonical_url?: string
+          change_state?: Database["public"]["Enums"]["source_change_state"]
+          content_kind?: Database["public"]["Enums"]["source_content_kind"]
+          created_at?: string
+          created_by?: string | null
+          discovery_status?: Database["public"]["Enums"]["source_discovery_status"]
+          id?: string
+          jurisdiction?: string
+          last_attempt_at?: string | null
+          last_attempt_error?: string | null
+          last_attempt_result?:
+            | Database["public"]["Enums"]["source_observation"]
+            | null
+          last_checked_at?: string | null
+          next_review_at?: string | null
+          organization_id?: string | null
+          publisher?: string
+          review_status?: Database["public"]["Enums"]["source_review_status"]
+          source_language?: string | null
+          title?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "official_sources_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -710,6 +918,103 @@ export type Database = {
           },
         ]
       }
+      platform_admins: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          note: string | null
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          note?: string | null
+          updated_at?: string
+          user_id: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          note?: string | null
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      professional_reviews: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          decided_at: string
+          decision: Database["public"]["Enums"]["review_decision"]
+          id: string
+          organization_id: string
+          rationale: string | null
+          reviewer_credential_snapshot: Json | null
+          reviewer_membership_id: string
+          rule_content_revision: number
+          rule_version_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          decided_at: string
+          decision: Database["public"]["Enums"]["review_decision"]
+          id?: string
+          organization_id: string
+          rationale?: string | null
+          reviewer_credential_snapshot?: Json | null
+          reviewer_membership_id: string
+          rule_content_revision: number
+          rule_version_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string
+          decision?: Database["public"]["Enums"]["review_decision"]
+          id?: string
+          organization_id?: string
+          rationale?: string | null
+          reviewer_credential_snapshot?: Json | null
+          reviewer_membership_id?: string
+          rule_content_revision?: number
+          rule_version_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "professional_reviews_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professional_reviews_reviewer_membership_id_organization_i_fkey"
+            columns: ["reviewer_membership_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "professional_reviews_rule_version_id_fkey"
+            columns: ["rule_version_id"]
+            isOneToOne: false
+            referencedRelation: "rule_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -742,6 +1047,629 @@ export type Database = {
           version?: number
         }
         Relationships: []
+      }
+      rule_definitions: {
+        Row: {
+          applicant_context: string | null
+          category: Database["public"]["Enums"]["rule_category"]
+          created_at: string
+          created_by: string | null
+          has_published_version: boolean
+          id: string
+          jurisdiction: string
+          organization_id: string | null
+          owner_label: string | null
+          program_key: string | null
+          required_facts: string[]
+          stable_key: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          applicant_context?: string | null
+          category: Database["public"]["Enums"]["rule_category"]
+          created_at?: string
+          created_by?: string | null
+          has_published_version?: boolean
+          id?: string
+          jurisdiction: string
+          organization_id?: string | null
+          owner_label?: string | null
+          program_key?: string | null
+          required_facts?: string[]
+          stable_key: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          applicant_context?: string | null
+          category?: Database["public"]["Enums"]["rule_category"]
+          created_at?: string
+          created_by?: string | null
+          has_published_version?: boolean
+          id?: string
+          jurisdiction?: string
+          organization_id?: string | null
+          owner_label?: string | null
+          program_key?: string | null
+          required_facts?: string[]
+          stable_key?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rule_definitions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rule_evidence: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          evidence_excerpt: string | null
+          id: string
+          interpretation_notes: string | null
+          locator: string | null
+          organization_id: string | null
+          rule_version_id: string
+          snapshot_id: string
+          source_language: string | null
+          source_section: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          evidence_excerpt?: string | null
+          id?: string
+          interpretation_notes?: string | null
+          locator?: string | null
+          organization_id?: string | null
+          rule_version_id: string
+          snapshot_id: string
+          source_language?: string | null
+          source_section?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          evidence_excerpt?: string | null
+          id?: string
+          interpretation_notes?: string | null
+          locator?: string | null
+          organization_id?: string | null
+          rule_version_id?: string
+          snapshot_id?: string
+          source_language?: string | null
+          source_section?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rule_evidence_rule_version_id_fkey"
+            columns: ["rule_version_id"]
+            isOneToOne: false
+            referencedRelation: "rule_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rule_evidence_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "source_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rule_impacts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          disposition: Database["public"]["Enums"]["rule_impact_disposition"]
+          id: string
+          matter_id: string | null
+          organization_id: string
+          owner_membership_id: string | null
+          reason: string
+          rule_version_id: string | null
+          snapshot_id: string | null
+          source_id: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          disposition?: Database["public"]["Enums"]["rule_impact_disposition"]
+          id?: string
+          matter_id?: string | null
+          organization_id: string
+          owner_membership_id?: string | null
+          reason: string
+          rule_version_id?: string | null
+          snapshot_id?: string | null
+          source_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          disposition?: Database["public"]["Enums"]["rule_impact_disposition"]
+          id?: string
+          matter_id?: string | null
+          organization_id?: string
+          owner_membership_id?: string | null
+          reason?: string
+          rule_version_id?: string | null
+          snapshot_id?: string | null
+          source_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rule_impacts_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "rule_impacts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rule_impacts_owner_membership_id_organization_id_fkey"
+            columns: ["owner_membership_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "rule_impacts_rule_version_id_fkey"
+            columns: ["rule_version_id"]
+            isOneToOne: false
+            referencedRelation: "rule_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rule_impacts_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "source_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rule_impacts_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "official_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rule_pack_items: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          organization_id: string | null
+          pack_id: string
+          rule_version_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id?: string | null
+          pack_id: string
+          rule_version_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id?: string | null
+          pack_id?: string
+          rule_version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rule_pack_items_pack_id_fkey"
+            columns: ["pack_id"]
+            isOneToOne: false
+            referencedRelation: "rule_pack_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rule_pack_items_rule_version_id_fkey"
+            columns: ["rule_version_id"]
+            isOneToOne: false
+            referencedRelation: "rule_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rule_pack_versions: {
+        Row: {
+          content_frozen: boolean
+          created_at: string
+          created_by: string | null
+          form_mappings: Json | null
+          id: string
+          jurisdiction: string
+          next_review_at: string | null
+          organization_id: string | null
+          pack_version: number
+          program_key: string
+          release_notes: string | null
+          signature_policy: string | null
+          status: Database["public"]["Enums"]["rule_publication_status"]
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          content_frozen?: boolean
+          created_at?: string
+          created_by?: string | null
+          form_mappings?: Json | null
+          id?: string
+          jurisdiction: string
+          next_review_at?: string | null
+          organization_id?: string | null
+          pack_version: number
+          program_key: string
+          release_notes?: string | null
+          signature_policy?: string | null
+          status?: Database["public"]["Enums"]["rule_publication_status"]
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          content_frozen?: boolean
+          created_at?: string
+          created_by?: string | null
+          form_mappings?: Json | null
+          id?: string
+          jurisdiction?: string
+          next_review_at?: string | null
+          organization_id?: string | null
+          pack_version?: number
+          program_key?: string
+          release_notes?: string | null
+          signature_policy?: string | null
+          status?: Database["public"]["Enums"]["rule_publication_status"]
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rule_pack_versions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rule_versions: {
+        Row: {
+          applicability: Json | null
+          applicability_established: boolean
+          applicability_note: string | null
+          claim: string | null
+          content_frozen: boolean
+          content_revision: number
+          created_at: string
+          created_by: string | null
+          definition_id: string
+          effective_from: string | null
+          effective_to: string | null
+          exceptions: Json | null
+          id: string
+          next_review_at: string | null
+          organization_id: string | null
+          output_value: Json | null
+          status: Database["public"]["Enums"]["rule_publication_status"]
+          structured_condition: Json | null
+          supersedes_version_id: string | null
+          test_case_ids: string[]
+          updated_at: string
+          version: number
+          version_number: number
+        }
+        Insert: {
+          applicability?: Json | null
+          applicability_established?: boolean
+          applicability_note?: string | null
+          claim?: string | null
+          content_frozen?: boolean
+          content_revision?: number
+          created_at?: string
+          created_by?: string | null
+          definition_id: string
+          effective_from?: string | null
+          effective_to?: string | null
+          exceptions?: Json | null
+          id?: string
+          next_review_at?: string | null
+          organization_id?: string | null
+          output_value?: Json | null
+          status?: Database["public"]["Enums"]["rule_publication_status"]
+          structured_condition?: Json | null
+          supersedes_version_id?: string | null
+          test_case_ids?: string[]
+          updated_at?: string
+          version?: number
+          version_number: number
+        }
+        Update: {
+          applicability?: Json | null
+          applicability_established?: boolean
+          applicability_note?: string | null
+          claim?: string | null
+          content_frozen?: boolean
+          content_revision?: number
+          created_at?: string
+          created_by?: string | null
+          definition_id?: string
+          effective_from?: string | null
+          effective_to?: string | null
+          exceptions?: Json | null
+          id?: string
+          next_review_at?: string | null
+          organization_id?: string | null
+          output_value?: Json | null
+          status?: Database["public"]["Enums"]["rule_publication_status"]
+          structured_condition?: Json | null
+          supersedes_version_id?: string | null
+          test_case_ids?: string[]
+          updated_at?: string
+          version?: number
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rule_versions_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "rule_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rule_versions_supersedes_version_id_fkey"
+            columns: ["supersedes_version_id"]
+            isOneToOne: false
+            referencedRelation: "rule_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      source_check_attempts: {
+        Row: {
+          attempted_at: string
+          change_signal: boolean
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_detail: string | null
+          http_status: number | null
+          id: string
+          next_retry_at: string | null
+          organization_id: string | null
+          result: Database["public"]["Enums"]["source_observation"]
+          snapshot_id: string | null
+          source_id: string
+        }
+        Insert: {
+          attempted_at: string
+          change_signal?: boolean
+          created_at?: string
+          created_by?: string | null
+          error_code?: string | null
+          error_detail?: string | null
+          http_status?: number | null
+          id?: string
+          next_retry_at?: string | null
+          organization_id?: string | null
+          result: Database["public"]["Enums"]["source_observation"]
+          snapshot_id?: string | null
+          source_id: string
+        }
+        Update: {
+          attempted_at?: string
+          change_signal?: boolean
+          created_at?: string
+          created_by?: string | null
+          error_code?: string | null
+          error_detail?: string | null
+          http_status?: number | null
+          id?: string
+          next_retry_at?: string | null
+          organization_id?: string | null
+          result?: Database["public"]["Enums"]["source_observation"]
+          snapshot_id?: string | null
+          source_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "source_check_attempts_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "source_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "source_check_attempts_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "official_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      source_dependencies: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expected_type: string | null
+          id: string
+          linked_snapshot_id: string | null
+          linked_url: string
+          observed_version: string | null
+          organization_id: string | null
+          parent_snapshot_id: string
+          purpose: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expected_type?: string | null
+          id?: string
+          linked_snapshot_id?: string | null
+          linked_url: string
+          observed_version?: string | null
+          organization_id?: string | null
+          parent_snapshot_id: string
+          purpose: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expected_type?: string | null
+          id?: string
+          linked_snapshot_id?: string | null
+          linked_url?: string
+          observed_version?: string | null
+          organization_id?: string | null
+          parent_snapshot_id?: string
+          purpose?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "source_dependencies_linked_snapshot_id_fkey"
+            columns: ["linked_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "source_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "source_dependencies_parent_snapshot_id_fkey"
+            columns: ["parent_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "source_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      source_snapshots: {
+        Row: {
+          content_hash: string
+          created_at: string
+          created_by: string | null
+          current_to: string | null
+          evidence_storage_ref: string | null
+          final_url: string
+          http_status: number | null
+          id: string
+          modified_at: string | null
+          modified_on: string | null
+          organization_id: string | null
+          published_at: string | null
+          published_on: string | null
+          publisher: string
+          retrieval_result: Database["public"]["Enums"]["source_observation"]
+          retrieved_at: string
+          review_status: Database["public"]["Enums"]["snapshot_review_status"]
+          snapshot_number: number
+          source_id: string
+          supersedes_snapshot_id: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          content_hash: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          evidence_storage_ref?: string | null
+          final_url: string
+          http_status?: number | null
+          id?: string
+          modified_at?: string | null
+          modified_on?: string | null
+          organization_id?: string | null
+          published_at?: string | null
+          published_on?: string | null
+          publisher: string
+          retrieval_result: Database["public"]["Enums"]["source_observation"]
+          retrieved_at: string
+          review_status?: Database["public"]["Enums"]["snapshot_review_status"]
+          snapshot_number: number
+          source_id: string
+          supersedes_snapshot_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          content_hash?: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          evidence_storage_ref?: string | null
+          final_url?: string
+          http_status?: number | null
+          id?: string
+          modified_at?: string | null
+          modified_on?: string | null
+          organization_id?: string | null
+          published_at?: string | null
+          published_on?: string | null
+          publisher?: string
+          retrieval_result?: Database["public"]["Enums"]["source_observation"]
+          retrieved_at?: string
+          review_status?: Database["public"]["Enums"]["snapshot_review_status"]
+          snapshot_number?: number
+          source_id?: string
+          supersedes_snapshot_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "source_snapshots_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "official_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "source_snapshots_supersedes_snapshot_id_fkey"
+            columns: ["supersedes_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "source_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       webhook_inbox: {
         Row: {
@@ -849,6 +1777,7 @@ export type Database = {
     }
     Enums: {
       access_grant_kind: "explicit" | "guardian"
+      domain_match_kind: "exact" | "suffix"
       matter_party_role:
         | "applicant"
         | "dependant"
@@ -903,6 +1832,66 @@ export type Database = {
         | "sponsor"
         | "household"
         | "other"
+      review_decision:
+        | "approved"
+        | "rejected"
+        | "changes_requested"
+        | "abstained"
+      rule_category:
+        | "immigration_requirement"
+        | "professional_obligation"
+        | "privacy_requirement"
+        | "product_control"
+      rule_impact_disposition:
+        | "open"
+        | "acknowledged"
+        | "reassessed"
+        | "dismissed"
+      rule_publication_status:
+        | "draft"
+        | "evidence_captured"
+        | "professional_review"
+        | "approved"
+        | "published"
+        | "review_due"
+        | "suspended"
+        | "superseded"
+        | "rejected"
+      snapshot_review_status:
+        | "draft"
+        | "evidence_captured"
+        | "verified"
+        | "rejected"
+        | "superseded"
+      source_change_state: "unknown" | "unchanged" | "change_detected"
+      source_content_kind:
+        | "legislation"
+        | "regulation"
+        | "program_guidance"
+        | "ministerial_instruction"
+        | "public_policy"
+        | "form_instruction"
+        | "checklist"
+        | "fee_schedule"
+        | "processing_time_tool"
+        | "professional_rule"
+        | "privacy_guidance"
+        | "other_official"
+      source_discovery_status: "candidate" | "active" | "archived" | "suspended"
+      source_observation:
+        | "success"
+        | "unchanged"
+        | "changed"
+        | "partial"
+        | "failed"
+        | "blocked"
+      source_review_status:
+        | "unverified"
+        | "evidence_captured"
+        | "in_review"
+        | "verified"
+        | "review_due"
+        | "suspended"
       webhook_inbox_status:
         | "received"
         | "processing"
@@ -1037,6 +2026,7 @@ export const Constants = {
   public: {
     Enums: {
       access_grant_kind: ["explicit", "guardian"],
+      domain_match_kind: ["exact", "suffix"],
       matter_party_role: [
         "applicant",
         "dependant",
@@ -1096,6 +2086,74 @@ export const Constants = {
         "sponsor",
         "household",
         "other",
+      ],
+      review_decision: [
+        "approved",
+        "rejected",
+        "changes_requested",
+        "abstained",
+      ],
+      rule_category: [
+        "immigration_requirement",
+        "professional_obligation",
+        "privacy_requirement",
+        "product_control",
+      ],
+      rule_impact_disposition: [
+        "open",
+        "acknowledged",
+        "reassessed",
+        "dismissed",
+      ],
+      rule_publication_status: [
+        "draft",
+        "evidence_captured",
+        "professional_review",
+        "approved",
+        "published",
+        "review_due",
+        "suspended",
+        "superseded",
+        "rejected",
+      ],
+      snapshot_review_status: [
+        "draft",
+        "evidence_captured",
+        "verified",
+        "rejected",
+        "superseded",
+      ],
+      source_change_state: ["unknown", "unchanged", "change_detected"],
+      source_content_kind: [
+        "legislation",
+        "regulation",
+        "program_guidance",
+        "ministerial_instruction",
+        "public_policy",
+        "form_instruction",
+        "checklist",
+        "fee_schedule",
+        "processing_time_tool",
+        "professional_rule",
+        "privacy_guidance",
+        "other_official",
+      ],
+      source_discovery_status: ["candidate", "active", "archived", "suspended"],
+      source_observation: [
+        "success",
+        "unchanged",
+        "changed",
+        "partial",
+        "failed",
+        "blocked",
+      ],
+      source_review_status: [
+        "unverified",
+        "evidence_captured",
+        "in_review",
+        "verified",
+        "review_due",
+        "suspended",
       ],
       webhook_inbox_status: [
         "received",

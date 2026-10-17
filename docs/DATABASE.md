@@ -14,13 +14,14 @@ Applied on the live project (versions recorded by `apply_migration`; do not edit
 | 20261017052636 | persons_matters_grants | persons, matters, participants, households, relationships, access grants, RLS |
 | 20261017052643 | webhook_inbox | provider event inbox, unique `(provider, event_id)`, `app.ingest_webhook_event` |
 | 20261017083908 | fk_covering_indexes | covering indexes for foreign keys flagged by the performance advisor. Additive only. |
+| 20261017113157 | source_governance | Official-host allowlist, source snapshots, check attempts, rule versions, evidence, professional reviews, pack versions, matter pins, impacts. |
+| 20261017113202 | platform_admin_and_pnp_domains | `platform_admins` and `app.is_platform_admin()`, plus verified provincial nominee hosts. No user id is seeded. |
 
 In the repository, not yet applied to the live project (do not edit the file in place once applied):
 
 | Version | Name | Contents |
 |---|---|---|
-| 20261017110000 | source_governance | Official-host allowlist, source snapshots, check attempts, rule versions, evidence, professional reviews, pack versions, matter pins, impacts. `src/types/database.types.ts` stays stale until this migration is applied and `pnpm db:types` is run against the live project. |
-| 20261017130000 | platform_admin_and_pnp_domains | `platform_admins` and `app.is_platform_admin()`, plus verified provincial nominee hosts. No user id is seeded. |
+| 20261017120000 | matter_rule_bindings_fk_index | Covering index on `matter_rule_bindings (matter_id, organization_id)`. Additive only. Not applied on the live project. |
 
 All tables have `ENABLE` + `FORCE ROW LEVEL SECURITY`. `anon` has no table privileges. There are
 no DELETE policies: deletion is a retention workflow (SEC-07), not a client action.
@@ -106,7 +107,7 @@ Replace `<auth.users.id>` with the person's id from `auth.users`. A platform adm
 
 ## Provincial hosts verified 2026-10-17
 
-Pages fetched that day. Hosts already in `20261017110000` were not inserted again.
+Pages fetched that day. Hosts already in `20261017113157` were not inserted again.
 
 | Host | Added now | Verification URL |
 |---|---|---|
@@ -146,6 +147,6 @@ idempotency key produced one outbox row. Profile display-name change was audited
 * T006 is not done: session inventory, revocation, recovery, and login rate limits are still open. Client and guardian invitations remain T021; this slice invites staff only.
 * T007 is not done: negative tests cover SQL RLS (cross-tenant, household, payer, unassigned staff, guardian-without-grant, adult-to-adult). Storage URLs, search, exports, and jobs do not exist yet, so they are not tested. Sensitive document categories are not split. `finance_user` sees no person or matter rows in this slice.
 * T010 is not done: the inbox deduplicates. Signature verification, retry, and the business effect of a webhook are still the worker's job.
-* T011 is in the repository and not applied to the live project. There is no fetcher (T012), so a stored hash is attested by the caller and not checked against bytes. There is no review workbench (T013) and no client projection of rule claims (T017). The first `platform_admins` row is not seeded. `database.types.ts` does not include these tables until the migration is applied and types are regenerated.
+* T011 source governance is applied on the live project (`20261017113157`, `20261017113202`). There is no fetcher (T012), so a stored hash is attested by the caller and not checked against bytes. There is no review workbench (T013) and no client projection of rule claims (T017). The first `platform_admins` row is not seeded. `database.types.ts` is generated through `20261017113202`. The `matter_rule_bindings` foreign-key index (`20261017120000`) is in the repository and is not applied on the live project.
 * External tamper-evident audit sink (DB owner can still disable triggers).
 * Age of majority is not calculated. `is_minor` is recorded by staff. An authority-review task when a child reaches majority is future work.
