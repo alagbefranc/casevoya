@@ -1,7 +1,8 @@
 // Live schema (project aqjtvqmojfamtspzyeqm) through 20261017113202, extended in-repo
 // for unapplied migrations 20261017120000, 20261017140000–20261017140800,
 // 20261017160000 (preview_invitation, request_mfa_reset),
-// 20261017170000–20261017170300, and 20261017180000–20261017180100.
+// 20261017170000–20261017170300, 20261017180000–20261017180100,
+// and 20261017190000–20261017190100.
 // Regenerate with `pnpm db:types` only after those migrations are applied live.
 
 export type Json =
@@ -3027,6 +3028,426 @@ export type Database = {
         }
         Relationships: []
       }
+      agreement_templates: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          body: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: Database["public"]["Enums"]["agreement_kind"]
+          name: string
+          organization_id: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          body: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["agreement_kind"]
+          name: string
+          organization_id: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["agreement_kind"]
+          name?: string
+          organization_id?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      agreements: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          current_version_id: string | null
+          id: string
+          kind: Database["public"]["Enums"]["agreement_kind"]
+          matter_id: string
+          organization_id: string
+          quote_expires_on: string | null
+          status: Database["public"]["Enums"]["agreement_status"]
+          supersedes_id: string | null
+          template_id: string | null
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          current_version_id?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["agreement_kind"]
+          matter_id: string
+          organization_id: string
+          quote_expires_on?: string | null
+          status?: Database["public"]["Enums"]["agreement_status"]
+          supersedes_id?: string | null
+          template_id?: string | null
+          title: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          current_version_id?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["agreement_kind"]
+          matter_id?: string
+          organization_id?: string
+          quote_expires_on?: string | null
+          status?: Database["public"]["Enums"]["agreement_status"]
+          supersedes_id?: string | null
+          template_id?: string | null
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      agreement_versions: {
+        Row: {
+          agreement_id: string
+          canonical_body: string
+          comparison_note: string | null
+          content_sha256: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          exclusions: string | null
+          fee_cents: number | null
+          government_fee_note: string | null
+          id: string
+          locked_at: string | null
+          organization_id: string
+          refund_policy: string | null
+          scope_summary: string
+          updated_at: string
+          version: number
+          version_number: number
+        }
+        Insert: {
+          agreement_id: string
+          canonical_body: string
+          comparison_note?: string | null
+          content_sha256?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          exclusions?: string | null
+          fee_cents?: number | null
+          government_fee_note?: string | null
+          id?: string
+          locked_at?: string | null
+          organization_id: string
+          refund_policy?: string | null
+          scope_summary: string
+          updated_at?: string
+          version?: number
+          version_number: number
+        }
+        Update: {
+          agreement_id?: string
+          canonical_body?: string
+          comparison_note?: string | null
+          content_sha256?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          exclusions?: string | null
+          fee_cents?: number | null
+          government_fee_note?: string | null
+          id?: string
+          locked_at?: string | null
+          organization_id?: string
+          refund_policy?: string | null
+          scope_summary?: string
+          updated_at?: string
+          version?: number
+          version_number?: number
+        }
+        Relationships: []
+      }
+      signature_envelopes: {
+        Row: {
+          agreement_id: string
+          certificate_document_version_id: string | null
+          certificate_pdf: string | null
+          certificate_sha256: string | null
+          certificate_storage_key: string | null
+          completed_at: string | null
+          content_sha256: string
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          idempotency_key: string
+          organization_id: string
+          provider: string
+          sealed_document_version_id: string | null
+          sealed_pdf: string | null
+          sealed_sha256: string | null
+          sealed_storage_key: string | null
+          sent_at: string
+          status: Database["public"]["Enums"]["agreement_status"]
+          updated_at: string
+          version: number
+          version_id: string
+          voided_at: string | null
+        }
+        Insert: {
+          agreement_id: string
+          certificate_document_version_id?: string | null
+          certificate_pdf?: string | null
+          certificate_sha256?: string | null
+          certificate_storage_key?: string | null
+          completed_at?: string | null
+          content_sha256: string
+          created_at?: string
+          created_by?: string | null
+          expires_at: string
+          id?: string
+          idempotency_key: string
+          organization_id: string
+          provider?: string
+          sealed_document_version_id?: string | null
+          sealed_pdf?: string | null
+          sealed_sha256?: string | null
+          sealed_storage_key?: string | null
+          sent_at?: string
+          status?: Database["public"]["Enums"]["agreement_status"]
+          updated_at?: string
+          version?: number
+          version_id: string
+          voided_at?: string | null
+        }
+        Update: {
+          agreement_id?: string
+          certificate_document_version_id?: string | null
+          certificate_pdf?: string | null
+          certificate_sha256?: string | null
+          certificate_storage_key?: string | null
+          completed_at?: string | null
+          content_sha256?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          idempotency_key?: string
+          organization_id?: string
+          provider?: string
+          sealed_document_version_id?: string | null
+          sealed_pdf?: string | null
+          sealed_sha256?: string | null
+          sealed_storage_key?: string | null
+          sent_at?: string
+          status?: Database["public"]["Enums"]["agreement_status"]
+          updated_at?: string
+          version?: number
+          version_id?: string
+          voided_at?: string | null
+        }
+        Relationships: []
+      }
+      envelope_signers: {
+        Row: {
+          consent_accepted: boolean
+          consent_text: string | null
+          consent_version: string | null
+          created_at: string
+          created_by: string | null
+          declined_at: string | null
+          display_name: string
+          envelope_id: string
+          id: string
+          ip: string | null
+          membership_id: string | null
+          organization_id: string
+          person_id: string | null
+          role: Database["public"]["Enums"]["agreement_signer_role"]
+          signed_at: string | null
+          signer_user_id: string | null
+          signing_order: number
+          status: Database["public"]["Enums"]["agreement_signer_status"]
+          updated_at: string
+          user_agent: string | null
+          version: number
+        }
+        Insert: {
+          consent_accepted?: boolean
+          consent_text?: string | null
+          consent_version?: string | null
+          created_at?: string
+          created_by?: string | null
+          declined_at?: string | null
+          display_name: string
+          envelope_id: string
+          id?: string
+          ip?: string | null
+          membership_id?: string | null
+          organization_id: string
+          person_id?: string | null
+          role: Database["public"]["Enums"]["agreement_signer_role"]
+          signed_at?: string | null
+          signer_user_id?: string | null
+          signing_order: number
+          status?: Database["public"]["Enums"]["agreement_signer_status"]
+          updated_at?: string
+          user_agent?: string | null
+          version?: number
+        }
+        Update: {
+          consent_accepted?: boolean
+          consent_text?: string | null
+          consent_version?: string | null
+          created_at?: string
+          created_by?: string | null
+          declined_at?: string | null
+          display_name?: string
+          envelope_id?: string
+          id?: string
+          ip?: string | null
+          membership_id?: string | null
+          organization_id?: string
+          person_id?: string | null
+          role?: Database["public"]["Enums"]["agreement_signer_role"]
+          signed_at?: string | null
+          signer_user_id?: string | null
+          signing_order?: number
+          status?: Database["public"]["Enums"]["agreement_signer_status"]
+          updated_at?: string
+          user_agent?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
+      signature_events: {
+        Row: {
+          actor_user_id: string | null
+          consent_accepted: boolean | null
+          consent_version: string | null
+          content_sha256: string | null
+          created_at: string
+          envelope_id: string
+          id: string
+          idempotency_key: string
+          ip: string | null
+          kind: Database["public"]["Enums"]["signature_event_kind"]
+          occurred_at: string
+          organization_id: string
+          provider: string
+          signer_id: string | null
+          summary: Json
+          user_agent: string | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          consent_accepted?: boolean | null
+          consent_version?: string | null
+          content_sha256?: string | null
+          created_at?: string
+          envelope_id: string
+          id?: string
+          idempotency_key: string
+          ip?: string | null
+          kind: Database["public"]["Enums"]["signature_event_kind"]
+          occurred_at?: string
+          organization_id: string
+          provider?: string
+          signer_id?: string | null
+          summary?: Json
+          user_agent?: string | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          consent_accepted?: boolean | null
+          consent_version?: string | null
+          content_sha256?: string | null
+          created_at?: string
+          envelope_id?: string
+          id?: string
+          idempotency_key?: string
+          ip?: string | null
+          kind?: Database["public"]["Enums"]["signature_event_kind"]
+          occurred_at?: string
+          organization_id?: string
+          provider?: string
+          signer_id?: string | null
+          summary?: Json
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
+      representation_authorities: {
+        Row: {
+          agreement_id: string | null
+          created_at: string
+          created_by: string | null
+          effective_on: string
+          evidence_locator: string
+          id: string
+          matter_id: string
+          organization_id: string
+          person_id: string
+          revoked_at: string | null
+          revocation_reason: string | null
+          scope: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          agreement_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          effective_on: string
+          evidence_locator: string
+          id?: string
+          matter_id: string
+          organization_id: string
+          person_id: string
+          revoked_at?: string | null
+          revocation_reason?: string | null
+          scope: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          agreement_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          effective_on?: string
+          evidence_locator?: string
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          person_id?: string
+          revoked_at?: string | null
+          revocation_reason?: string | null
+          scope?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       webhook_inbox: {
         Row: {
           connected_account_id: string | null
@@ -3705,9 +4126,124 @@ export type Database = {
         Args: { p_reason: string; p_ref_id: string }
         Returns: undefined
       }
+      create_agreement_template: {
+        Args: {
+          p_body: string
+          p_kind: Database["public"]["Enums"]["agreement_kind"]
+          p_name: string
+        }
+        Returns: string
+      }
+      approve_agreement_template: {
+        Args: { p_template_id: string }
+        Returns: undefined
+      }
+      create_agreement: {
+        Args: {
+          p_body: string
+          p_comparison: string | null
+          p_currency: string | null
+          p_exclusions: string | null
+          p_fee_cents: number | null
+          p_government_fee_note: string | null
+          p_kind: Database["public"]["Enums"]["agreement_kind"]
+          p_matter_id: string
+          p_quote_expires_on: string | null
+          p_refund_policy: string | null
+          p_scope: string
+          p_supersedes_id: string | null
+          p_template_id: string | null
+          p_title: string
+        }
+        Returns: string
+      }
+      send_agreement: {
+        Args: {
+          p_agreement_id: string
+          p_expires_at: string | null
+          p_idempotency_key: string
+          p_signers: Json
+        }
+        Returns: Json
+      }
+      revise_agreement: {
+        Args: {
+          p_agreement_id: string
+          p_body: string
+          p_comparison: string | null
+          p_fee_cents: number | null
+          p_government_fee_note: string | null
+          p_scope: string
+        }
+        Returns: string
+      }
+      sign_agreement: {
+        Args: {
+          p_consent: boolean
+          p_envelope_id: string
+          p_idempotency_key: string
+          p_ip: string
+          p_user_agent: string
+        }
+        Returns: Json
+      }
+      decline_agreement: {
+        Args: {
+          p_envelope_id: string
+          p_idempotency_key: string
+          p_ip: string
+          p_user_agent: string
+        }
+        Returns: Json
+      }
+      void_agreement_envelope: {
+        Args: { p_envelope_id: string; p_reason: string }
+        Returns: undefined
+      }
+      accept_quote: {
+        Args: { p_agreement_id: string }
+        Returns: undefined
+      }
+      record_representation_authority: {
+        Args: {
+          p_agreement_id: string | null
+          p_effective_on: string
+          p_evidence_locator: string
+          p_matter_id: string
+          p_person_id: string
+          p_scope: string
+        }
+        Returns: string
+      }
+      revoke_representation_authority: {
+        Args: { p_id: string; p_reason: string }
+        Returns: undefined
+      }
+      agreement_executed_pdf: {
+        Args: { p_envelope_id: string }
+        Returns: string
+      }
+      agreement_certificate_pdf: {
+        Args: { p_envelope_id: string }
+        Returns: string
+      }
     }
     Enums: {
       access_grant_kind: "explicit" | "guardian"
+      agreement_kind: "quote" | "consultation" | "service" | "amendment" | "consent"
+      agreement_status:
+        | "draft"
+        | "sent"
+        | "partially_signed"
+        | "completed"
+        | "declined"
+        | "expired"
+        | "voided"
+        | "superseded"
+        | "accepted"
+      agreement_signer_role: "client" | "consultant" | "sponsor" | "dependant" | "guardian" | "firm"
+      agreement_signer_status: "waiting" | "current" | "signed" | "declined"
+      signature_event_kind: "sent" | "signed" | "declined" | "voided" | "expired" | "completed" | "superseded" | "replayed"
       consent_purpose:
         | "portal_terms"
         | "privacy_notice"
@@ -3718,6 +4254,7 @@ export type Database = {
         | "share_section"
         | "ai_drafting"
         | "participation_declined"
+        | "electronic_signature"
       person_section_key:
         | "passport_bio"
         | "school_transcript"
@@ -4059,6 +4596,21 @@ export const Constants = {
   public: {
     Enums: {
       access_grant_kind: ["explicit", "guardian"],
+      agreement_kind: ["quote", "consultation", "service", "amendment", "consent"],
+      agreement_status: [
+        "draft",
+        "sent",
+        "partially_signed",
+        "completed",
+        "declined",
+        "expired",
+        "voided",
+        "superseded",
+        "accepted",
+      ],
+      agreement_signer_role: ["client", "consultant", "sponsor", "dependant", "guardian", "firm"],
+      agreement_signer_status: ["waiting", "current", "signed", "declined"],
+      signature_event_kind: ["sent", "signed", "declined", "voided", "expired", "completed", "superseded", "replayed"],
       consent_purpose: [
         "portal_terms",
         "privacy_notice",
@@ -4069,6 +4621,7 @@ export const Constants = {
         "share_section",
         "ai_drafting",
         "participation_declined",
+        "electronic_signature",
       ],
       person_section_key: [
         "passport_bio",
