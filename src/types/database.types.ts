@@ -5,6 +5,8 @@
 // 20261017190000–20261017190100, and 20261017200000–20261017200200.
 // 20261017200300 only sets search_path on app.reserved_firm_slugs. It does not change this file.
 // Regenerate with `pnpm db:types` only after those migrations are applied live.
+// Table types for tasks, deadlines, intake, engagement and inbound-attachment tables were copied
+// from `pnpm db:types` on 2026-10-17; function signatures keep their hand-reviewed optional arguments.
 
 export type Json =
   | string
@@ -3720,6 +3722,1205 @@ export type Database = {
           version?: number
         }
         Relationships: []
+      }
+      deadlines: {
+        Row: {
+          calculation_note: string | null
+          created_at: string
+          created_by: string | null
+          due_at: string | null
+          due_on: string | null
+          escalated_at: string | null
+          event_on: string | null
+          evidence_locator: string | null
+          id: string
+          kind: Database["public"]["Enums"]["deadline_kind"]
+          label: string
+          matter_id: string
+          organization_id: string
+          receipt_on: string | null
+          rule_version_id: string | null
+          source_retrieved_on: string | null
+          source_url: string | null
+          task_id: string | null
+          timezone: string
+          updated_at: string
+          verification: Database["public"]["Enums"]["deadline_verification"]
+          verifying_membership_id: string | null
+          version: number
+        }
+        Insert: {
+          calculation_note?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_at?: string | null
+          due_on?: string | null
+          escalated_at?: string | null
+          event_on?: string | null
+          evidence_locator?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["deadline_kind"]
+          label: string
+          matter_id: string
+          organization_id: string
+          receipt_on?: string | null
+          rule_version_id?: string | null
+          source_retrieved_on?: string | null
+          source_url?: string | null
+          task_id?: string | null
+          timezone: string
+          updated_at?: string
+          verification?: Database["public"]["Enums"]["deadline_verification"]
+          verifying_membership_id?: string | null
+          version?: number
+        }
+        Update: {
+          calculation_note?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_at?: string | null
+          due_on?: string | null
+          escalated_at?: string | null
+          event_on?: string | null
+          evidence_locator?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["deadline_kind"]
+          label?: string
+          matter_id?: string
+          organization_id?: string
+          receipt_on?: string | null
+          rule_version_id?: string | null
+          source_retrieved_on?: string | null
+          source_url?: string | null
+          task_id?: string | null
+          timezone?: string
+          updated_at?: string
+          verification?: Database["public"]["Enums"]["deadline_verification"]
+          verifying_membership_id?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deadlines_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "deadlines_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deadlines_rule_version_id_fkey"
+            columns: ["rule_version_id"]
+            isOneToOne: false
+            referencedRelation: "rule_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deadlines_task_id_organization_id_fkey"
+            columns: ["task_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "deadlines_verifying_membership_id_organization_id_fkey"
+            columns: ["verifying_membership_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      email_inbound_windows: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          hits: number
+          hour_bucket: string
+          organization_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          hits?: number
+          hour_bucket: string
+          organization_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          hits?: number
+          hour_bucket?: string
+          organization_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_inbound_windows_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      firm_reminder_offsets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          offset_days: number
+          organization_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          offset_days: number
+          organization_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          offset_days?: number
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "firm_reminder_offsets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inbound_attachment_files: {
+        Row: {
+          byte_size: number
+          created_at: string
+          created_by: string | null
+          filename: string
+          id: string
+          inbound_email_id: string
+          inbox_item_id: string | null
+          ordinal: number
+          organization_id: string
+          storage_key: string | null
+          updated_at: string
+          version: number
+          version_id: string | null
+        }
+        Insert: {
+          byte_size: number
+          created_at?: string
+          created_by?: string | null
+          filename: string
+          id?: string
+          inbound_email_id: string
+          inbox_item_id?: string | null
+          ordinal: number
+          organization_id: string
+          storage_key?: string | null
+          updated_at?: string
+          version?: number
+          version_id?: string | null
+        }
+        Update: {
+          byte_size?: number
+          created_at?: string
+          created_by?: string | null
+          filename?: string
+          id?: string
+          inbound_email_id?: string
+          inbox_item_id?: string | null
+          ordinal?: number
+          organization_id?: string
+          storage_key?: string | null
+          updated_at?: string
+          version?: number
+          version_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbound_attachment_files_inbound_email_id_organization_id_fkey"
+            columns: ["inbound_email_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "inbound_emails"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "inbound_attachment_files_inbox_item_id_organization_id_fkey"
+            columns: ["inbox_item_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "inbound_inbox_items"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "inbound_attachment_files_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbound_attachment_files_version_id_organization_id_fkey"
+            columns: ["version_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "document_versions"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      intake_answer_versions: {
+        Row: {
+          approximate_note: string | null
+          calendar_date: string | null
+          created_at: string
+          created_by: string | null
+          date_kind: Database["public"]["Enums"]["answer_date_kind"] | null
+          field_key: string
+          id: string
+          month_value: number | null
+          normalized_value: Json
+          organization_id: string
+          presence: Database["public"]["Enums"]["answer_presence"]
+          raw_value: Json
+          response_id: string
+          section_key: Database["public"]["Enums"]["person_section_key"] | null
+          year_value: number | null
+        }
+        Insert: {
+          approximate_note?: string | null
+          calendar_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          date_kind?: Database["public"]["Enums"]["answer_date_kind"] | null
+          field_key: string
+          id?: string
+          month_value?: number | null
+          normalized_value: Json
+          organization_id: string
+          presence: Database["public"]["Enums"]["answer_presence"]
+          raw_value: Json
+          response_id: string
+          section_key?: Database["public"]["Enums"]["person_section_key"] | null
+          year_value?: number | null
+        }
+        Update: {
+          approximate_note?: string | null
+          calendar_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          date_kind?: Database["public"]["Enums"]["answer_date_kind"] | null
+          field_key?: string
+          id?: string
+          month_value?: number | null
+          normalized_value?: Json
+          organization_id?: string
+          presence?: Database["public"]["Enums"]["answer_presence"]
+          raw_value?: Json
+          response_id?: string
+          section_key?: Database["public"]["Enums"]["person_section_key"] | null
+          year_value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_answer_versions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_answer_versions_response_id_organization_id_fkey"
+            columns: ["response_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "intake_responses"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      intake_responses: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          frozen_at: string | null
+          id: string
+          matter_id: string
+          organization_id: string
+          person_id: string
+          status: Database["public"]["Enums"]["intake_response_status"]
+          submitted_at: string | null
+          template_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          frozen_at?: string | null
+          id?: string
+          matter_id: string
+          organization_id: string
+          person_id: string
+          status?: Database["public"]["Enums"]["intake_response_status"]
+          submitted_at?: string | null
+          template_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          frozen_at?: string | null
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          person_id?: string
+          status?: Database["public"]["Enums"]["intake_response_status"]
+          submitted_at?: string | null
+          template_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_responses_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "intake_responses_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_responses_person_id_organization_id_fkey"
+            columns: ["person_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "intake_responses_template_id_organization_id_fkey"
+            columns: ["template_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "intake_templates"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      intake_snapshot_answers: {
+        Row: {
+          calendar_date: string | null
+          created_at: string
+          date_kind: Database["public"]["Enums"]["answer_date_kind"] | null
+          field_key: string
+          id: string
+          month_value: number | null
+          normalized_value: Json
+          organization_id: string
+          presence: Database["public"]["Enums"]["answer_presence"]
+          section_key: Database["public"]["Enums"]["person_section_key"] | null
+          snapshot_id: string
+          source_answer_id: string
+          year_value: number | null
+        }
+        Insert: {
+          calendar_date?: string | null
+          created_at?: string
+          date_kind?: Database["public"]["Enums"]["answer_date_kind"] | null
+          field_key: string
+          id?: string
+          month_value?: number | null
+          normalized_value: Json
+          organization_id: string
+          presence: Database["public"]["Enums"]["answer_presence"]
+          section_key?: Database["public"]["Enums"]["person_section_key"] | null
+          snapshot_id: string
+          source_answer_id: string
+          year_value?: number | null
+        }
+        Update: {
+          calendar_date?: string | null
+          created_at?: string
+          date_kind?: Database["public"]["Enums"]["answer_date_kind"] | null
+          field_key?: string
+          id?: string
+          month_value?: number | null
+          normalized_value?: Json
+          organization_id?: string
+          presence?: Database["public"]["Enums"]["answer_presence"]
+          section_key?: Database["public"]["Enums"]["person_section_key"] | null
+          snapshot_id?: string
+          source_answer_id?: string
+          year_value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_snapshot_answers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_snapshot_answers_snapshot_id_organization_id_fkey"
+            columns: ["snapshot_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "intake_snapshots"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "intake_snapshot_answers_source_answer_id_organization_id_fkey"
+            columns: ["source_answer_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "intake_answer_versions"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      intake_snapshots: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          organization_id: string
+          response_id: string
+          snapshot_number: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id: string
+          response_id: string
+          snapshot_number: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id?: string
+          response_id?: string
+          snapshot_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_snapshots_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_snapshots_response_id_organization_id_fkey"
+            columns: ["response_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "intake_responses"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      intake_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effective_on: string | null
+          id: string
+          locale: string
+          organization_id: string
+          published_at: string | null
+          reviewer_membership_id: string | null
+          rule_pack_version_id: string | null
+          schema: Json
+          stable_key: string
+          status: Database["public"]["Enums"]["intake_template_status"]
+          title: string
+          updated_at: string
+          version: number
+          version_number: number
+          workflow_category: Database["public"]["Enums"]["intake_workflow_category"]
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effective_on?: string | null
+          id?: string
+          locale: string
+          organization_id: string
+          published_at?: string | null
+          reviewer_membership_id?: string | null
+          rule_pack_version_id?: string | null
+          schema: Json
+          stable_key: string
+          status?: Database["public"]["Enums"]["intake_template_status"]
+          title: string
+          updated_at?: string
+          version?: number
+          version_number: number
+          workflow_category?: Database["public"]["Enums"]["intake_workflow_category"]
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effective_on?: string | null
+          id?: string
+          locale?: string
+          organization_id?: string
+          published_at?: string | null
+          reviewer_membership_id?: string | null
+          rule_pack_version_id?: string | null
+          schema?: Json
+          stable_key?: string
+          status?: Database["public"]["Enums"]["intake_template_status"]
+          title?: string
+          updated_at?: string
+          version?: number
+          version_number?: number
+          workflow_category?: Database["public"]["Enums"]["intake_workflow_category"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_templates_reviewer_membership_id_organization_id_fkey"
+            columns: ["reviewer_membership_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "intake_templates_rule_pack_version_id_fkey"
+            columns: ["rule_pack_version_id"]
+            isOneToOne: false
+            referencedRelation: "rule_pack_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      matter_engagements: {
+        Row: {
+          agreement_locator: string | null
+          consultant_membership_id: string
+          created_at: string
+          created_by: string | null
+          exception_reason: string | null
+          id: string
+          matter_id: string
+          organization_id: string
+          permitted_role: Database["public"]["Enums"]["org_role"] | null
+          scope_summary: string
+          status: Database["public"]["Enums"]["engagement_status"]
+          updated_at: string
+          use_exception: boolean
+          version: number
+        }
+        Insert: {
+          agreement_locator?: string | null
+          consultant_membership_id: string
+          created_at?: string
+          created_by?: string | null
+          exception_reason?: string | null
+          id?: string
+          matter_id: string
+          organization_id: string
+          permitted_role?: Database["public"]["Enums"]["org_role"] | null
+          scope_summary: string
+          status: Database["public"]["Enums"]["engagement_status"]
+          updated_at?: string
+          use_exception: boolean
+          version?: number
+        }
+        Update: {
+          agreement_locator?: string | null
+          consultant_membership_id?: string
+          created_at?: string
+          created_by?: string | null
+          exception_reason?: string | null
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          permitted_role?: Database["public"]["Enums"]["org_role"] | null
+          scope_summary?: string
+          status?: Database["public"]["Enums"]["engagement_status"]
+          updated_at?: string
+          use_exception?: boolean
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_engagements_consultant_membership_id_organization_i_fkey"
+            columns: ["consultant_membership_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_engagements_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_engagements_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      matter_program_changes: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          from_pack_id: string | null
+          id: string
+          matter_id: string
+          organization_id: string
+          permitted_role: Database["public"]["Enums"]["org_role"]
+          reason: string
+          to_pack_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          from_pack_id?: string | null
+          id?: string
+          matter_id: string
+          organization_id: string
+          permitted_role: Database["public"]["Enums"]["org_role"]
+          reason: string
+          to_pack_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          from_pack_id?: string | null
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          permitted_role?: Database["public"]["Enums"]["org_role"]
+          reason?: string
+          to_pack_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_program_changes_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_program_changes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matter_program_changes_to_pack_id_fkey"
+            columns: ["to_pack_id"]
+            isOneToOne: false
+            referencedRelation: "rule_pack_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      matter_reply_addresses: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          matter_id: string
+          organization_id: string
+          token: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id: string
+          organization_id: string
+          token: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          token?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_reply_addresses_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_reply_addresses_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      matter_stage_overrides: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          from_stage: Database["public"]["Enums"]["matter_stage"]
+          id: string
+          matter_id: string
+          organization_id: string
+          permitted_role: Database["public"]["Enums"]["org_role"]
+          reason: string
+          to_stage: Database["public"]["Enums"]["matter_stage"]
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          from_stage: Database["public"]["Enums"]["matter_stage"]
+          id?: string
+          matter_id: string
+          organization_id: string
+          permitted_role: Database["public"]["Enums"]["org_role"]
+          reason: string
+          to_stage: Database["public"]["Enums"]["matter_stage"]
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          from_stage?: Database["public"]["Enums"]["matter_stage"]
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          permitted_role?: Database["public"]["Enums"]["org_role"]
+          reason?: string
+          to_stage?: Database["public"]["Enums"]["matter_stage"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_stage_overrides_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_stage_overrides_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_invite_attempts: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          organization_id: string | null
+          token_hash: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          organization_id?: string | null
+          token_hash?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          organization_id?: string | null
+          token_hash?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_invite_attempts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reminder_schedules: {
+        Row: {
+          created_at: string
+          deadline_id: string | null
+          id: string
+          idempotency_key: string
+          offset_days: number | null
+          organization_id: string
+          reminder_kind: string
+          scheduled_for: string
+          sent_at: string | null
+          status: Database["public"]["Enums"]["reminder_status"]
+          task_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          deadline_id?: string | null
+          id?: string
+          idempotency_key: string
+          offset_days?: number | null
+          organization_id: string
+          reminder_kind: string
+          scheduled_for: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["reminder_status"]
+          task_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          deadline_id?: string | null
+          id?: string
+          idempotency_key?: string
+          offset_days?: number | null
+          organization_id?: string
+          reminder_kind?: string
+          scheduled_for?: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["reminder_status"]
+          task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminder_schedules_deadline_id_organization_id_fkey"
+            columns: ["deadline_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "deadlines"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "reminder_schedules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reminder_schedules_task_id_organization_id_fkey"
+            columns: ["task_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      task_dependencies: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          depends_on_task_id: string
+          id: string
+          organization_id: string
+          task_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          depends_on_task_id: string
+          id?: string
+          organization_id: string
+          task_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          depends_on_task_id?: string
+          id?: string
+          organization_id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_dependencies_depends_on_task_id_organization_id_fkey"
+            columns: ["depends_on_task_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "task_dependencies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_dependencies_task_id_organization_id_fkey"
+            columns: ["task_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      task_events: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          event_kind: string
+          from_membership_id: string | null
+          from_status: Database["public"]["Enums"]["task_status"] | null
+          id: string
+          organization_id: string
+          task_id: string
+          to_membership_id: string | null
+          to_status: Database["public"]["Enums"]["task_status"] | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          event_kind: string
+          from_membership_id?: string | null
+          from_status?: Database["public"]["Enums"]["task_status"] | null
+          id?: string
+          organization_id: string
+          task_id: string
+          to_membership_id?: string | null
+          to_status?: Database["public"]["Enums"]["task_status"] | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          event_kind?: string
+          from_membership_id?: string | null
+          from_status?: Database["public"]["Enums"]["task_status"] | null
+          id?: string
+          organization_id?: string
+          task_id?: string
+          to_membership_id?: string | null
+          to_status?: Database["public"]["Enums"]["task_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_events_task_id_organization_id_fkey"
+            columns: ["task_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      task_watchers: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          membership_id: string
+          organization_id: string
+          task_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          membership_id: string
+          organization_id: string
+          task_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          membership_id?: string
+          organization_id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_watchers_membership_id_organization_id_fkey"
+            columns: ["membership_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "task_watchers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_watchers_task_id_organization_id_fkey"
+            columns: ["task_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          audience: Database["public"]["Enums"]["task_audience"]
+          blocker_note: string | null
+          checklist: Json
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          due_at: string | null
+          due_on: string | null
+          due_timezone: string
+          escalated_at: string | null
+          estimated_minutes: number | null
+          id: string
+          intake_field_key: string | null
+          intake_stale: boolean
+          matter_id: string | null
+          organization_id: string
+          owner_membership_id: string | null
+          owner_person_id: string | null
+          person_id: string | null
+          priority: Database["public"]["Enums"]["task_priority"]
+          status: Database["public"]["Enums"]["task_status"]
+          task_key: string | null
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          audience: Database["public"]["Enums"]["task_audience"]
+          blocker_note?: string | null
+          checklist?: Json
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_at?: string | null
+          due_on?: string | null
+          due_timezone?: string
+          escalated_at?: string | null
+          estimated_minutes?: number | null
+          id?: string
+          intake_field_key?: string | null
+          intake_stale?: boolean
+          matter_id?: string | null
+          organization_id: string
+          owner_membership_id?: string | null
+          owner_person_id?: string | null
+          person_id?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          status?: Database["public"]["Enums"]["task_status"]
+          task_key?: string | null
+          title: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          audience?: Database["public"]["Enums"]["task_audience"]
+          blocker_note?: string | null
+          checklist?: Json
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_at?: string | null
+          due_on?: string | null
+          due_timezone?: string
+          escalated_at?: string | null
+          estimated_minutes?: number | null
+          id?: string
+          intake_field_key?: string | null
+          intake_stale?: boolean
+          matter_id?: string | null
+          organization_id?: string
+          owner_membership_id?: string | null
+          owner_person_id?: string | null
+          person_id?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          status?: Database["public"]["Enums"]["task_status"]
+          task_key?: string | null
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "tasks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_owner_membership_id_organization_id_fkey"
+            columns: ["owner_membership_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "tasks_owner_person_id_organization_id_fkey"
+            columns: ["owner_person_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "tasks_person_id_organization_id_fkey"
+            columns: ["person_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
       }
     }
     Views: {

@@ -1,9 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 import { DemoSheet } from "@/components/sheet/demo";
+import { SheetFrame } from "@/components/sheet/designer/frame";
+import { SheetHome } from "@/components/sheet/designer/home";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
 import { signInLocation } from "@/lib/auth/redirect";
+import { loadSheetHome } from "@/modules/sheet/home-load";
 import { loadSheetAccess, loadSheetBundle } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 
@@ -35,6 +38,17 @@ export async function SheetBody({
   const tone = PUBLIC.has(page) ? "public" : "sheet";
   const access = await loadSheetAccess();
   if (!PUBLIC.has(page) && access.kind === "signed-out") redirect(signInLocation(sheetPath(page, matterId)));
+  // The Designer home with the firm's own records, in sample mode too. Sample records are real rows marked sample.
+  if (page === "index" && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, rbar, home } = await loadSheetHome(access.staff);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={chrome.sidebar} top={chrome.top} rbar={rbar} statusbar={chrome.statusbar}>
+          <SheetHome data={home} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
   if (access.kind === "sample") {
     return (
       <SheetScreen page={page} tone={tone}>

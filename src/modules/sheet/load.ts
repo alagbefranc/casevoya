@@ -13,7 +13,7 @@ export type SheetStaff = {
   role: string;
   membershipId: string;
   displayName: string;
-  sampleMode: false;
+  sampleMode: boolean;
 };
 
 export type SheetMatterRow = {
@@ -127,7 +127,7 @@ const EMPTY = {
 
 export type SheetAccess =
   | { kind: "signed-out" }
-  | { kind: "sample" }
+  | { kind: "sample"; staff: SheetStaff }
   | { kind: "empty" }
   | { kind: "live"; staff: SheetStaff };
 
@@ -157,20 +157,17 @@ export async function loadSheetAccess(): Promise<SheetAccess> {
     scoped.from("profiles").select("display_name").eq("id", userId).maybeSingle(),
   ]);
   if (!org) return { kind: "empty" };
-  if (org.sample_mode) return { kind: "sample" };
-  return {
-    kind: "live",
-    staff: {
-      organizationId: org.id,
-      organizationName: org.display_name,
-      legalName: org.legal_name,
-      timezone: org.timezone,
-      role: membership.role,
-      membershipId: membership.id,
-      displayName: profile?.display_name || org.display_name,
-      sampleMode: false,
-    },
+  const staff: SheetStaff = {
+    organizationId: org.id,
+    organizationName: org.display_name,
+    legalName: org.legal_name,
+    timezone: org.timezone,
+    role: membership.role,
+    membershipId: membership.id,
+    displayName: profile?.display_name || org.display_name,
+    sampleMode: org.sample_mode,
   };
+  return org.sample_mode ? { kind: "sample", staff } : { kind: "live", staff };
 }
 
 export async function loadSheetStaff(): Promise<SheetStaff | null> {
