@@ -1,0 +1,9 @@
+/*
+ * Typography per DESIGN.md (approved 2026-10-17): Inter for the interface,
+ * Erode for headings only. Loaded after the Designer's kit so it overrides
+ * the kit's Erode body and control fonts without editing the captured CSS.
+ */
+body,.shell-au,.shell-wzb,.shell-sheet,.shell-public{font-family:var(--font-ui)}
+.otp input{font-family:var(--font-ui)}
+.vc-box textarea,.k2-wt,.side .admk,.av.ini{font-family:var(--font-ui)}
+h1,.display,.au-poster .big{font-family:var(--font-erode),Georgia,serif}
