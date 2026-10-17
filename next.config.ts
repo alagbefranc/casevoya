@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const WORKERS = process.env.CASEVOYA_TARGET === "workers";
+
 const nextConfig: NextConfig = {
   /* config options here */
   allowedDevOrigins: ["127.0.0.1"],
@@ -13,8 +15,10 @@ const nextConfig: NextConfig = {
       { source: "/sheet/matter", destination: "/portal/matters", permanent: false },
     ];
   },
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Off for the Cloudflare build until opennextjs-cloudflare#1318 is fixed; on everywhere else.
+  // partialPrefetching requires cacheComponents, so they switch together.
+  cacheComponents: !WORKERS,
+  partialPrefetching: !WORKERS,
   turbopack: {
     rules: {
       "*.css": {
