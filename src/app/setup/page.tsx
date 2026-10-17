@@ -6,12 +6,13 @@ import { hasPublicSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "Set up your firm · Casevoya (prototype)",
+  title: "Set up your firm · Casevoya",
   robots: { index: false, follow: false },
 };
 
 async function SavedSetup() {
   let codes = ["CA", "ON"];
+  let firmName = "";
   if (hasPublicSupabaseEnv()) {
     const supabase = await createClient();
     const { data: claims } = await supabase.auth.getClaims();
@@ -29,14 +30,15 @@ async function SavedSetup() {
         const scoped = await createClient({ organizationId: membership.organization_id });
         const { data: org } = await scoped
           .from("organizations")
-          .select("jurisdiction_codes")
+          .select("jurisdiction_codes, display_name")
           .eq("id", membership.organization_id)
           .maybeSingle();
         if (org?.jurisdiction_codes?.length) codes = [...org.jurisdiction_codes];
+        if (org?.display_name) firmName = org.display_name;
       }
     }
   }
-  return <SetupMarkup jurisdictionCodes={codes} />;
+  return <SetupMarkup jurisdictionCodes={codes} firmName={firmName} />;
 }
 
 export default function SetupPage() {

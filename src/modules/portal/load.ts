@@ -3,7 +3,11 @@ import "server-only";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 
-const PORTAL_ROLES = new Set(["client", "adult_dependant", "sponsor", "employer_contact", "guardian"]);
+const PORTAL_ROLES = ["client", "adult_dependant", "sponsor", "employer_contact", "guardian"] as const;
+
+export function isPortalRole(role: string): boolean {
+  return (PORTAL_ROLES as readonly string[]).includes(role);
+}
 
 export type PortalMatter = {
   id: string;
@@ -58,13 +62,19 @@ export type PortalViewer = {
   sections: { id: string; sectionKey: string; summary: string; personName: string; matterTitle: string }[];
 };
 
-/** Signed-out visitors and sample-mode firms keep the designer's demo pages. */
-export async function loadPortalViewer(): Promise<PortalViewer | null> {
-  if (!hasPublicSupabaseEnv()) return null;
+export type PortalAccess =
+  | { kind: "signed-out" }
+  | { kind: "sample" }
+  | { kind: "empty" }
+  | { kind: "live"; viewer: PortalViewer };
+
+/** Designer demo pages render only for a signed-in firm with sample mode on. */
+export async function loadPortalAccess(): Promise<PortalAccess> {
+  if (!hasPublicSupabaseEnv()) return { kind: "signed-out" };
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
   const userId = claims?.claims?.sub;
-  if (!userId) return null;
+  if (!userId) return { kind: "signed-out" };
 
   const { data: memberships } = await supabase
     .from("memberships")
@@ -72,8 +82,8 @@ export async function loadPortalViewer(): Promise<PortalViewer | null> {
     .eq("user_id", userId)
     .eq("status", "active");
   const membership =
-    memberships?.find((row) => PORTAL_ROLES.has(row.role)) ?? memberships?.[0];
-  if (!membership) return null;
+    memberships?.find((row) => isPortalRole(row.role)) ?? memberships?.[0];
+  if (!membership) return { kind: "empty" };
 
   const scoped = await createClient({ organizationId: membership.organization_id });
   const { data: org } = await scoped
@@ -81,7 +91,8 @@ export async function loadPortalViewer(): Promise<PortalViewer | null> {
     .select("id, display_name, sample_mode, timezone")
     .eq("id", membership.organization_id)
     .maybeSingle();
-  if (!org || org.sample_mode) return null;
+  if (!org) return { kind: "empty" };
+  if (org.sample_mode) return { kind: "sample" };
 
   const [{ data: matters }, { data: persons }, { data: participants }, { data: grants }, { data: shares }, { data: sections }] =
     await Promise.all([
@@ -128,7 +139,7 @@ export async function loadPortalViewer(): Promise<PortalViewer | null> {
     }
   }
 
-  return {
+  return { kind: "live", viewer: {
     organizationId: org.id,
     organizationName: org.display_name,
     timezone: org.timezone,
@@ -163,5 +174,5 @@ export async function loadPortalViewer(): Promise<PortalViewer | null> {
       personName: names.get(section.person_id) ?? "Person",
       matterTitle: matterTitles.get(section.matter_id) ?? "Matter",
     })),
-  };
+  } };
 }

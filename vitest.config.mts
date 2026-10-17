@@ -7,7 +7,8 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "src"),
       // The governance module is server-only. Tests import the pure validators.
       "server-only": path.resolve(import.meta.dirname, "tests/helpers/server-only-stub.ts"),
+      "next/headers": path.resolve(import.meta.dirname, "tests/helpers/next-headers-stub.ts"),
     },
   },
-  test: { include: ["tests/**/*.test.ts"], environment: "node" },
+  test: { include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"], environment: "node" },
 });

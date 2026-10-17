@@ -383,7 +383,7 @@ export function usePort(
 
     if (page === "accept-family" || page === "accept-sponsor") {
       const last = page === "accept-family" ? 3 : 2;
-      const href = page === "accept-family" ? "/sheet/portal-olena" : "/sheet/portal-rafael";
+      const href = "/portal";
       root.querySelector<HTMLElement>(".wz-foot [data-next]")?.addEventListener(
         "click",
         (event) => {

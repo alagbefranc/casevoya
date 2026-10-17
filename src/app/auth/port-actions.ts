@@ -432,7 +432,7 @@ export async function previewStaffInvite(token: string) {
   return data[0];
 }
 
-/** No backend in this environment: the screen keeps the prototype path. */
+/** No backend in this environment: the screen keeps its current path. */
 function nullResult(): null {
   return null;
 }

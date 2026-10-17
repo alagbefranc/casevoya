@@ -230,6 +230,24 @@ function Stub({ page }: { page: string }) {
   );
 }
 
+export function EmptyPortal() {
+  return (
+    <main className="sheet">
+      <div className="main" id="main">
+        <div id="pc">
+          <div className="ph">
+            <h1 className="display">No portal yet</h1>
+            <p>When a firm invites you, your file appears here.</p>
+          </div>
+          <div className="panel">
+            <div className="emp"><b>Nothing on file</b><small>This account isn’t linked to a client file.</small></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
+
 function Empty({ title, copy }: { title: string; copy: string }): ReactNode {
   return (
     <div className="panel">

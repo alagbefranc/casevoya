@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { DemoPortal, PORTAL_SLUGS } from "@/components/portal/demo";
-import { LivePortal } from "@/components/portal/live";
+import { EmptyPortal, LivePortal } from "@/components/portal/live";
 import { PortalScreen } from "@/components/portal/screen";
-import { HomeMarkup } from "@/components/portal/markup/portal";
+import { signInLocation } from "@/lib/auth/redirect";
 import { loadPortalAgreements } from "@/modules/agreements/load";
 import { loadPortalDocuments } from "@/modules/documents/load";
-import { loadPortalViewer } from "@/modules/portal/load";
+import { loadPortalAccess } from "@/modules/portal/load";
 import { payStateFromQuery } from "@/modules/portal/pay";
 
 export const metadata: Metadata = {
@@ -16,6 +16,7 @@ export const metadata: Metadata = {
 };
 
 const LIVE = new Set(["home", ...PORTAL_SLUGS]);
+const PERSONA = new Set(["olena", "rafael"]);
 
 async function Body({
   params,
@@ -29,12 +30,29 @@ async function Body({
   if (slug && slug.length > 1) notFound();
   if (page !== "home" && !LIVE.has(page)) notFound();
   const stateValue = Array.isArray(query.state) ? query.state[0] : query.state;
-  const viewer = await loadPortalViewer();
-  const documents = viewer && (page === "documents" || page === "upload") ? await loadPortalDocuments(viewer) : null;
-  const agreements = viewer && page === "agreements" ? await loadPortalAgreements(viewer) : null;
+  const next = page === "home" ? "/portal" : `/portal/${page}`;
+  const access = await loadPortalAccess();
+  if (access.kind === "signed-out") redirect(signInLocation(next));
+  if (access.kind === "sample") {
+    return (
+      <PortalScreen page={page}>
+        <DemoPortal page={page} state={payStateFromQuery(stateValue)} />
+      </PortalScreen>
+    );
+  }
+  if (PERSONA.has(page)) notFound();
+  if (access.kind !== "live") {
+    return (
+      <PortalScreen page={page}>
+        <EmptyPortal />
+      </PortalScreen>
+    );
+  }
+  const documents = page === "documents" || page === "upload" ? await loadPortalDocuments(access.viewer) : null;
+  const agreements = page === "agreements" ? await loadPortalAgreements(access.viewer) : null;
   return (
     <PortalScreen page={page}>
-      {viewer ? <LivePortal page={page} viewer={viewer} documents={documents} agreements={agreements} /> : <DemoPortal page={page} state={payStateFromQuery(stateValue)} />}
+      <LivePortal page={page} viewer={access.viewer} documents={documents} agreements={agreements} />
     </PortalScreen>
   );
 }
@@ -47,7 +65,7 @@ export default function PortalPage({
   searchParams: Promise<{ state?: string | string[] }>;
 }) {
   return (
-    <Suspense fallback={<PortalScreen page="home"><HomeMarkup /></PortalScreen>}>
+    <Suspense fallback={<PortalScreen page="home"><EmptyPortal /></PortalScreen>}>
       <Body params={params} searchParams={searchParams} />
     </Suspense>
   );
