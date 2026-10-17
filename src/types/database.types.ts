@@ -1,5 +1,5 @@
 // Live schema (project aqjtvqmojfamtspzyeqm) through 20261017113202, extended in-repo
-// for unapplied migrations 20261017120000 and 20261017140000–20261017140500.
+// for unapplied migrations 20261017120000 and 20261017140000–20261017140700.
 // Regenerate with `pnpm db:types` only after those migrations are applied live.
 
 export type Json =
@@ -168,6 +168,177 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      consultant_credentials: {
+        Row: {
+          checked_at: string | null
+          college_id: string
+          created_at: string
+          created_by: string | null
+          declared_at: string
+          discipline_restricted: boolean
+          discipline_revoked: boolean
+          discipline_suspended: boolean
+          entitlement_to_practise: boolean | null
+          id: string
+          licence_type: Database["public"]["Enums"]["licence_type"]
+          membership_id: string
+          next_review_at: string | null
+          organization_id: string
+          proof_locator: string | null
+          register_status: Database["public"]["Enums"]["register_licence_status"] | null
+          regulator: string
+          reviewer_user_id: string | null
+          scope_note: string | null
+          source_url: string | null
+          status: Database["public"]["Enums"]["credential_status"]
+          updated_at: string
+          verification_method: string | null
+          version: number
+        }
+        Insert: {
+          checked_at?: string | null
+          college_id: string
+          created_at?: string
+          created_by?: string | null
+          declared_at?: string
+          discipline_restricted?: boolean
+          discipline_revoked?: boolean
+          discipline_suspended?: boolean
+          entitlement_to_practise?: boolean | null
+          id?: string
+          licence_type: Database["public"]["Enums"]["licence_type"]
+          membership_id: string
+          next_review_at?: string | null
+          organization_id: string
+          proof_locator?: string | null
+          register_status?: Database["public"]["Enums"]["register_licence_status"] | null
+          regulator?: string
+          reviewer_user_id?: string | null
+          scope_note?: string | null
+          source_url?: string | null
+          status?: Database["public"]["Enums"]["credential_status"]
+          updated_at?: string
+          verification_method?: string | null
+          version?: number
+        }
+        Update: {
+          checked_at?: string | null
+          college_id?: string
+          created_at?: string
+          created_by?: string | null
+          declared_at?: string
+          discipline_restricted?: boolean
+          discipline_revoked?: boolean
+          discipline_suspended?: boolean
+          entitlement_to_practise?: boolean | null
+          id?: string
+          licence_type?: Database["public"]["Enums"]["licence_type"]
+          membership_id?: string
+          next_review_at?: string | null
+          organization_id?: string
+          proof_locator?: string | null
+          register_status?: Database["public"]["Enums"]["register_licence_status"] | null
+          regulator?: string
+          reviewer_user_id?: string | null
+          scope_note?: string | null
+          source_url?: string | null
+          status?: Database["public"]["Enums"]["credential_status"]
+          updated_at?: string
+          verification_method?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultant_credentials_membership_id_organization_id_fkey"
+            columns: ["membership_id", "organization_id"]
+            isOneToOne: true
+            referencedRelation: "memberships"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "consultant_credentials_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credential_checks: {
+        Row: {
+          created_at: string
+          credential_id: string
+          discipline_restricted: boolean
+          discipline_revoked: boolean
+          discipline_suspended: boolean
+          entitlement_to_practise: boolean
+          id: string
+          method: string
+          notes: string | null
+          organization_id: string
+          proof_locator: string
+          register_status: Database["public"]["Enums"]["register_licence_status"]
+          result: Database["public"]["Enums"]["licence_check_result"]
+          retrieved_at: string
+          reviewer_user_id: string
+          source_host: string
+          source_url: string
+        }
+        Insert: {
+          created_at?: string
+          credential_id: string
+          discipline_restricted: boolean
+          discipline_revoked: boolean
+          discipline_suspended: boolean
+          entitlement_to_practise: boolean
+          id?: string
+          method?: string
+          notes?: string | null
+          organization_id: string
+          proof_locator: string
+          register_status: Database["public"]["Enums"]["register_licence_status"]
+          result: Database["public"]["Enums"]["licence_check_result"]
+          retrieved_at: string
+          reviewer_user_id: string
+          source_host: string
+          source_url: string
+        }
+        Update: {
+          created_at?: string
+          credential_id?: string
+          discipline_restricted?: boolean
+          discipline_revoked?: boolean
+          discipline_suspended?: boolean
+          entitlement_to_practise?: boolean
+          id?: string
+          method?: string
+          notes?: string | null
+          organization_id?: string
+          proof_locator?: string
+          register_status?: Database["public"]["Enums"]["register_licence_status"]
+          result?: Database["public"]["Enums"]["licence_check_result"]
+          retrieved_at?: string
+          reviewer_user_id?: string
+          source_host?: string
+          source_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credential_checks_credential_id_organization_id_fkey"
+            columns: ["credential_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "consultant_credentials"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "credential_checks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       household_members: {
         Row: {
@@ -605,8 +776,10 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          is_sample: boolean
           on_hold: boolean
           organization_id: string
+          sample_label: string | null
           stage: Database["public"]["Enums"]["matter_stage"]
           title: string
           updated_at: string
@@ -616,8 +789,10 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_sample?: boolean
           on_hold?: boolean
           organization_id: string
+          sample_label?: string | null
           stage?: Database["public"]["Enums"]["matter_stage"]
           title: string
           updated_at?: string
@@ -627,8 +802,10 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_sample?: boolean
           on_hold?: boolean
           organization_id?: string
+          sample_label?: string | null
           stage?: Database["public"]["Enums"]["matter_stage"]
           title?: string
           updated_at?: string
@@ -906,14 +1083,28 @@ export type Database = {
       organizations: {
         Row: {
           age_of_majority_years: number
+          billing_contact_email: string | null
+          billing_contact_name: string | null
+          branding: Json
+          continuity_contact_email: string | null
+          continuity_contact_name: string | null
           created_at: string
           created_by: string | null
           default_locale: string
           display_name: string
+          dpa_accepted_at: string | null
+          dpa_version: string | null
           id: string
           jurisdiction_codes: string[]
           legal_name: string
+          privacy_contact_email: string | null
+          privacy_contact_name: string | null
+          retention_policy: Json | null
+          sample_mode: boolean
           slug: string
+          subscription_terms_accepted_at: string | null
+          subscription_terms_version: string | null
+          succession_note: string | null
           timezone: string
           updated_at: string
           verification_status: Database["public"]["Enums"]["org_verification_status"]
@@ -921,14 +1112,28 @@ export type Database = {
         }
         Insert: {
           age_of_majority_years?: number
+          billing_contact_email?: string | null
+          billing_contact_name?: string | null
+          branding?: Json
+          continuity_contact_email?: string | null
+          continuity_contact_name?: string | null
           created_at?: string
           created_by?: string | null
           default_locale?: string
           display_name: string
+          dpa_accepted_at?: string | null
+          dpa_version?: string | null
           id?: string
           jurisdiction_codes?: string[]
           legal_name: string
+          privacy_contact_email?: string | null
+          privacy_contact_name?: string | null
+          retention_policy?: Json | null
+          sample_mode?: boolean
           slug: string
+          subscription_terms_accepted_at?: string | null
+          subscription_terms_version?: string | null
+          succession_note?: string | null
           timezone?: string
           updated_at?: string
           verification_status?: Database["public"]["Enums"]["org_verification_status"]
@@ -936,20 +1141,163 @@ export type Database = {
         }
         Update: {
           age_of_majority_years?: number
+          billing_contact_email?: string | null
+          billing_contact_name?: string | null
+          branding?: Json
+          continuity_contact_email?: string | null
+          continuity_contact_name?: string | null
           created_at?: string
           created_by?: string | null
           default_locale?: string
           display_name?: string
+          dpa_accepted_at?: string | null
+          dpa_version?: string | null
           id?: string
           jurisdiction_codes?: string[]
           legal_name?: string
+          privacy_contact_email?: string | null
+          privacy_contact_name?: string | null
+          retention_policy?: Json | null
+          sample_mode?: boolean
           slug?: string
+          subscription_terms_accepted_at?: string | null
+          subscription_terms_version?: string | null
+          succession_note?: string | null
           timezone?: string
           updated_at?: string
           verification_status?: Database["public"]["Enums"]["org_verification_status"]
           version?: number
         }
         Relationships: []
+      }
+      organization_offices: {
+        Row: {
+          address_line: string
+          country_code: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_primary: boolean
+          label: string
+          locality: string
+          organization_id: string
+          postal_code: string | null
+          region: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          address_line: string
+          country_code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_primary?: boolean
+          label: string
+          locality: string
+          organization_id: string
+          postal_code?: string | null
+          region?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          address_line?: string
+          country_code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_primary?: boolean
+          label?: string
+          locality?: string
+          organization_id?: string
+          postal_code?: string | null
+          region?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_offices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_setup_steps: {
+        Row: {
+          completed_at: string
+          completed_by: string
+          organization_id: string
+          step: Database["public"]["Enums"]["firm_setup_step"]
+        }
+        Insert: {
+          completed_at?: string
+          completed_by: string
+          organization_id: string
+          step: Database["public"]["Enums"]["firm_setup_step"]
+        }
+        Update: {
+          completed_at?: string
+          completed_by?: string
+          organization_id?: string
+          step?: Database["public"]["Enums"]["firm_setup_step"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_setup_steps_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_subscriptions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          duration_snapshot: Json | null
+          organization_id: string
+          status: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at: string | null
+          trial_started_at: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          duration_snapshot?: Json | null
+          organization_id: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at?: string | null
+          trial_started_at?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          duration_snapshot?: Json | null
+          organization_id?: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at?: string | null
+          trial_started_at?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_subscriptions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       outbox_events: {
         Row: {
@@ -1151,7 +1499,9 @@ export type Database = {
           email: string | null
           id: string
           is_minor: boolean
+          is_sample: boolean
           organization_id: string
+          sample_label: string | null
           updated_at: string
           user_id: string | null
           version: number
@@ -1166,7 +1516,9 @@ export type Database = {
           email?: string | null
           id?: string
           is_minor?: boolean
+          is_sample?: boolean
           organization_id: string
+          sample_label?: string | null
           updated_at?: string
           user_id?: string | null
           version?: number
@@ -1181,7 +1533,9 @@ export type Database = {
           email?: string | null
           id?: string
           is_minor?: boolean
+          is_sample?: boolean
           organization_id?: string
+          sample_label?: string | null
           updated_at?: string
           user_id?: string | null
           version?: number
@@ -1219,6 +1573,39 @@ export type Database = {
           note?: string | null
           updated_at?: string
           user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      product_settings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string
+          key: string
+          pending_confirmation: boolean
+          updated_at: string
+          value: Json
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description: string
+          key: string
+          pending_confirmation?: boolean
+          updated_at?: string
+          value: Json
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          key?: string
+          pending_confirmation?: boolean
+          updated_at?: string
+          value?: Json
           version?: number
         }
         Relationships: []
@@ -1736,6 +2123,45 @@ export type Database = {
           },
         ]
       }
+      sample_proof_steps: {
+        Row: {
+          completed_at: string
+          completed_by: string
+          organization_id: string
+          sample_matter_id: string
+          step: Database["public"]["Enums"]["sample_proof_step"]
+        }
+        Insert: {
+          completed_at?: string
+          completed_by: string
+          organization_id: string
+          sample_matter_id: string
+          step: Database["public"]["Enums"]["sample_proof_step"]
+        }
+        Update: {
+          completed_at?: string
+          completed_by?: string
+          organization_id?: string
+          sample_matter_id?: string
+          step?: Database["public"]["Enums"]["sample_proof_step"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sample_proof_steps_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sample_proof_steps_sample_matter_id_organization_id_fkey"
+            columns: ["sample_matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
       session_revocations: {
         Row: {
           created_at: string
@@ -2070,14 +2496,28 @@ export type Database = {
         Args: { display_name: string; legal_name: string; slug: string }
         Returns: {
           age_of_majority_years: number
+          billing_contact_email: string | null
+          billing_contact_name: string | null
+          branding: Json
+          continuity_contact_email: string | null
+          continuity_contact_name: string | null
           created_at: string
           created_by: string | null
           default_locale: string
           display_name: string
+          dpa_accepted_at: string | null
+          dpa_version: string | null
           id: string
           jurisdiction_codes: string[]
           legal_name: string
+          privacy_contact_email: string | null
+          privacy_contact_name: string | null
+          retention_policy: Json | null
+          sample_mode: boolean
           slug: string
+          subscription_terms_accepted_at: string | null
+          subscription_terms_version: string | null
+          succession_note: string | null
           timezone: string
           updated_at: string
           verification_status: Database["public"]["Enums"]["org_verification_status"]
@@ -2164,11 +2604,121 @@ export type Database = {
         }
         Returns: number
       }
+      attempt_matter_stage_transition: {
+        Args: {
+          p_expected_version: number
+          p_matter_id: string
+          p_reason: string
+          p_to_stage: Database["public"]["Enums"]["matter_stage"]
+        }
+        Returns: Json
+      }
+      complete_sample_proof: {
+        Args: {
+          p_matter_id: string
+          p_step: Database["public"]["Enums"]["sample_proof_step"]
+        }
+        Returns: undefined
+      }
+      create_practice_matter: {
+        Args: { p_is_sample: boolean; p_title: string }
+        Returns: Json
+      }
+      declare_consultant_credential: {
+        Args: {
+          p_college_id: string
+          p_licence_type: Database["public"]["Enums"]["licence_type"]
+          p_membership_id: string
+          p_proof_locator: string
+          p_scope_note: string
+        }
+        Returns: string
+      }
+      evaluate_real_client_invites: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      list_exportable_matter_ids: {
+        Args: never
+        Returns: { matter_id: string }[]
+      }
+      reassign_consultant_matters: {
+        Args: {
+          p_from_membership: string
+          p_reason: string
+          p_to_membership: string
+        }
+        Returns: number
+      }
+      record_licence_check: {
+        Args: {
+          p_credential_id: string
+          p_discipline_restricted: boolean
+          p_discipline_revoked: boolean
+          p_discipline_suspended: boolean
+          p_entitlement_to_practise: boolean
+          p_notes: string
+          p_proof_locator: string
+          p_register_status: Database["public"]["Enums"]["register_licence_status"]
+          p_retrieved_at: string
+          p_source_url: string
+        }
+        Returns: string
+      }
+      save_firm_setup: {
+        Args: {
+          p_payload: Json
+          p_step: Database["public"]["Enums"]["firm_setup_step"]
+        }
+        Returns: undefined
+      }
+      save_organization_office: {
+        Args: {
+          p_address_line: string
+          p_country_code: string
+          p_is_primary: boolean
+          p_label: string
+          p_locality: string
+          p_postal_code: string
+          p_region: string
+        }
+        Returns: string
+      }
+      set_product_setting: {
+        Args: { p_key: string; p_value: Json }
+        Returns: undefined
+      }
+      set_sample_mode: {
+        Args: { p_enabled: boolean }
+        Returns: undefined
+      }
+      sync_trial_status: {
+        Args: never
+        Returns: Database["public"]["Enums"]["subscription_status"]
+      }
     }
     Enums: {
       access_grant_kind: "explicit" | "guardian"
       date_precision: "day" | "month" | "year"
+      credential_status:
+        | "declared"
+        | "verified"
+        | "not_entitled"
+        | "inactive"
+        | "suspended"
+        | "revoked"
       domain_match_kind: "exact" | "suffix"
+      firm_setup_step:
+        | "firm_profile"
+        | "offices"
+        | "jurisdictions"
+        | "privacy_and_terms"
+        | "branding"
+        | "retention"
+        | "continuity"
+        | "licence"
+      licence_check_result: "verified" | "not_entitled" | "inactive" | "suspended" | "revoked"
+      licence_type: "RCIC" | "RISIA"
       matter_party_role:
         | "applicant"
         | "dependant"
@@ -2229,6 +2779,9 @@ export type Database = {
         | "published"
         | "failed"
         | "dead_lettered"
+      register_licence_status: "active" | "inactive"
+      sample_proof_step: "intake" | "agreement" | "upload" | "reminder" | "invoice" | "export"
+      subscription_status: "trial" | "trial_ended" | "active" | "cancelled"
       person_relationship_type:
         | "spouse"
         | "parent"
@@ -2432,7 +2985,23 @@ export const Constants = {
     Enums: {
       access_grant_kind: ["explicit", "guardian"],
       date_precision: ["day", "month", "year"],
+      credential_status: ["declared", "verified", "not_entitled", "inactive", "suspended", "revoked"],
       domain_match_kind: ["exact", "suffix"],
+      firm_setup_step: [
+        "firm_profile",
+        "offices",
+        "jurisdictions",
+        "privacy_and_terms",
+        "branding",
+        "retention",
+        "continuity",
+        "licence",
+      ],
+      licence_check_result: ["verified", "not_entitled", "inactive", "suspended", "revoked"],
+      licence_type: ["RCIC", "RISIA"],
+      register_licence_status: ["active", "inactive"],
+      sample_proof_step: ["intake", "agreement", "upload", "reminder", "invoice", "export"],
+      subscription_status: ["trial", "trial_ended", "active", "cancelled"],
       matter_party_role: [
         "applicant",
         "dependant",

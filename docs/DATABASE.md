@@ -28,6 +28,8 @@ In the repository, not yet applied to the live project (do not edit the file in 
 | 20261017140300 | matter_stage_transitions | Stage changes only through `transition_matter_stage`, with evidence. |
 | 20261017140400 | person_date_of_birth | `date_of_birth`, derived minor status, firm `age_of_majority_years` (default 19, firm-configurable 18–21; Francis confirmed). |
 | 20261017140500 | staff_recovery_sessions_passkey | Hashed recovery codes, session revocation, owner MFA reset, passkey assurance. |
+| 20261017140600 | fk_covering_indexes_practice | Covering indexes for foreign keys on matter stage evidence, stage transitions, break-glass, and session revocations. The break-glass actor index is not partial. |
+| 20261017140700 | firm_onboarding | Firm setup, sample mode, trial settings, and manual CICC public-register licence checks. Not applied on the live project. |
 
 `src/types/database.types.ts` includes the live schema through `20261017113202`, extended in this branch for the unapplied migrations above. Do not run `pnpm db:types` until those migrations are applied; a live regeneration would drop the extension.
 
@@ -151,7 +153,7 @@ Pages fetched that day. Hosts already in `20261017113157` were not inserted agai
 | `yukon.ca` | already present | https://yukon.ca/en/yukon-nominee-program |
 | `gov.nt.ca` | already present | https://www.ece.gov.nt.ca/en/services/immigration-and-nominee-program |
 | `immigratenwt.ca` | yes | https://www.immigratenwt.ca/ |
-| `college-ic.ca` | already present | https://www.college-ic.ca/ |
+| `college-ic.ca` | already present | https://www.college-ic.ca/ . Suffix match includes `register.college-ic.ca`. Public register entry pages identified 2026-10-17: https://register.college-ic.ca/Public-Register-EN and https://register.college-ic.ca/Public-Register-EN/RCIC_Search.aspx . The snapshot hashes are those HTML shells, not the register database. No RISIA search URL is stored. |
 
 Excluded: `liveinnovascotia.ca` (DNS answered, TLS handshake failed, so the page was not confirmed). `gov.nu.ca` stays from the original government seed; this fetch was stopped by a Cloudflare challenge, and IRCC says Nunavut has no nominee program, so no second Nunavut host was added. `gov.pe.ca/immigration` returned 404; the immigration pages that loaded are on `princeedwardisland.ca`.
 | `app.rule_publication_blockers(version_id, content_revision)` | Not granted to `authenticated`. Blocks publish when claim, review date, tests, evidence, section, hash, retrieval time, or an approved review of that revision is missing, and when `effective_from` is only a copy of `retrieved_at`. |
@@ -166,6 +168,18 @@ enqueue into A's org (42501), and setting A's org id as B's workspace resolved t
 idempotency key produced one outbox row. Profile display-name change was audited as redacted.
 `UPDATE audit_log` as `postgres` was rejected. Security advisors: 0 findings.
 
+## Firm onboarding (repository only, `20261017140700`)
+
+Not applied on the live project. Do not run `pnpm db:types` or `supabase db push` for it.
+
+`product_settings` holds `trial.duration`, `licence.recheck_interval`, and `licence.manual_check_target`. The seeded values are pending Francis's confirmation. `business_days` is not converted into an interval and does not verify a licence. A trial copies `trial.duration` into `organization_subscriptions.duration_snapshot` when the firm is created. Later edits do not rewrite that snapshot. `trial_ended` does not delete rows and does not by itself lock invitations.
+
+`organizations.sample_mode` defaults to true. `authenticated` and `service_role` can insert people and matters only with `is_sample`. The sample label is `Fictional sample. Not a client record.` The flag cannot be changed. A sample person cannot be linked to a real matter. Billing and `list_exportable_matter_ids` skip sample rows.
+
+`consultant_credentials` stores `licence_type` (`RCIC` or `RISIA`), `college_id` (uppercase storage limit, not a published CICC format), register status (`active` or `inactive`), `entitlement_to_practise`, and discipline flags for suspension, revocation, and restriction. `credential_checks` is append-only. The reviewer is a firm owner or a platform admin, with a recent step-up. The source URL must be `https` on `register.college-ic.ca`, which is allowlisted by the `college-ic.ca` suffix. `app.record_licence_check` derives the result. It does not accept a caller-supplied standing, and it does not fetch the register. `manual_public_register` is the only method. Revoked, suspended, and inactive lock new matters and regulated stage changes for that consultant. A restriction flag does not lock. Entitlement false is `not_entitled`: the firm is not treated as verified from that credential, and the stage lock does not fire. Missing a credential does not lock a stage change. `attempt_matter_stage_transition` and `create_practice_matter` keep the denial audit `licence.regulated_action_blocked`. A re-check outbox event `licence.recheck_due` is due at `retrieved_at` plus `licence.recheck_interval`.
+
+Real client invitations stay locked until `verification_status` is `verified`, a manual good-standing licence is on file, and the six sample proofs (`intake`, `agreement`, `upload`, `reminder`, `invoice`, `export`) are recorded. Staff invitations are unchanged. The eight setup step keys are `firm_profile`, `offices`, `jurisdictions`, `privacy_and_terms`, `branding`, `retention`, `continuity`, and `licence`, pending the designer HTML.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.
@@ -176,3 +190,4 @@ idempotency key produced one outbox row. Profile display-name change was audited
 * A firm owner can still read household membership ids. That is not person-row access.
 * External tamper-evident audit sink (DB owner can still disable triggers).
 * Majority review is an outbox event `person.majority_review_due`. The task itself waits on T026. Francis confirmed `age_of_majority_years` defaults to 19 and is firm-configurable from 18 to 21.
+* T018 firm onboarding, sample mode, and manual licence checks are in `20261017140600` and `20261017140700` and are not applied on the live project. There is no register scraper. Client invitation rows remain T021. An approved professional review is still not a verified licence until a manual register check is recorded.
