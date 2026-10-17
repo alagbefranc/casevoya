@@ -31,6 +31,9 @@ In the repository, not yet applied to the live project (do not edit the file in 
 | 20261017140600 | fk_covering_indexes_practice | Covering indexes for foreign keys on matter stage evidence, stage transitions, break-glass, and session revocations. The break-glass actor index is not partial. |
 | 20261017140700 | firm_onboarding | Firm setup, sample mode, trial settings, and manual CICC public-register licence checks. Not applied on the live project. |
 | 20261017140800 | portal_invitations | Client, adult dependant, sponsor, employer contact, and guardian invites. Hashed single-use tokens, consent, section shares. Not applied on the live project. |
+| 20261017200000 | agreements_current_version_fk_index | Covering index on `agreements (current_version_id, organization_id)`. |
+| 20261017200100 | outbound_email | Outbox-driven deliveries, suppressions, and mail claim. Staff invites, document requests, and due reminders enqueue mail without raw tokens. |
+| 20261017200200 | inbound_email | Per-firm `docs.casevoya.ca` addresses, reserved slugs, inbound messages, and the unsorted inbox. |
 
 `src/types/database.types.ts` includes the live schema through `20261017113202`, extended in this branch for the unapplied migrations above. Do not run `pnpm db:types` until those migrations are applied; a live regeneration would drop the extension.
 
@@ -196,6 +199,25 @@ Not applied on the live project. Do not run `pnpm db:types` or `supabase db push
 A sent version stores SHA-256 of its canonical text and cannot be edited. A fee change after a signature supersedes the open envelope and inserts a new version. The final PDF and completion certificate are `%PDF` bytes on the envelope and a matching object in the private `documents` bucket. `storage.objects` is not altered. Portal download streams `agreement_executed_pdf` and `agreement_certificate_pdf`. Staff create, send, revise, and void need aal2 and a recent step-up. A portal signer does not, unless that signer is a staff membership. Signing a service agreement moves a pending engagement to engaged. Representation authority is a separate write.
 
 `agreements.envelope_days` is 14 and `agreements.esign_consent` is version `esign-consent-2026-10-17`. Both have `pending_confirmation` true.
+
+## Email (repository only, `20261017200000`–`20261017200200`)
+
+Not applied on the live project. Do not run `pnpm db:types` or `supabase db push` for them. Do not deploy the Worker from CI.
+
+Outbound mail is claimed from the outbox by `POST /api/email/dispatch` (bearer `EMAIL_DISPATCH_SECRET`) and sent with the Cloudflare Email Sending REST API. `from` and `reply_to` are `{address, name}`. The visible name is the firm display name. The default From address is `notices@casevoya.ca` (`email.from_address`, confirmed, still configurable via `CLOUDFLARE_EMAIL_FROM`).
+
+Inbound addresses are `<firm-slug>@docs.casevoya.ca`. A matter reply is `<firm-slug>+<32 hex>@` the same domain. `INBOUND_EMAIL_DOMAIN` overrides `email.inbound_domain` (default `docs.casevoya.ca`, confirmed). These slugs cannot be claimed: `support`, `billing`, `admin`, `hello`, `noreply`, `postmaster`, `abuse`, `security`, `help`, `info`, `team`. The Worker in `workers/inbound-email` buffers `message.raw` once, parses with postal-mime, and POSTs to `/api/email/inbound` with `x-casevoya-timestamp` and `x-casevoya-signature` (HMAC-SHA256 of `timestamp.body`, five-minute skew).
+
+Known senders on a matter go through `create_upload_intent` and `complete_document_upload` into the private `documents` bucket. Other attachments land in `inbound_inbox_items` for staff at aal2 with a recent step-up to assign. Unknown firms are rejected. The hourly cap defaults to 30 (`email.inbound_hourly_limit`, pending confirmation) and a duplicate message id does not consume it. Bodies go to `public.messages` when that table has `organization_id`, `matter_id`, and `body`; otherwise they stay on `inbound_emails`.
+
+Deploy the Worker from the repo root after merge, then add the routing rule. Do not commit `INBOUND_WEBHOOK_SECRET`.
+
+```
+pnpm exec wrangler deploy --config workers/inbound-email/wrangler.toml
+pnpm exec wrangler secret put INBOUND_WEBHOOK_SECRET --config workers/inbound-email/wrangler.toml
+```
+
+Zone `303990065795d627a9fd337b01258024` (`casevoya.ca`): match `*@docs.casevoya.ca`, action Send to Worker `casevoya-inbound-email`. Set the Worker var `INBOUND_WEBHOOK_URL` to the deployed app origin plus `/api/email/inbound`. `INBOUND_WEBHOOK_SECRET` and `EMAIL_INBOUND_WEBHOOK_SECRET` are the same value.
 
 ## Known gaps (next tasks)
 
