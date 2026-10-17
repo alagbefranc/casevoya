@@ -473,7 +473,10 @@ describe("person, matter and household permissions", () => {
 
     await asUser(db, { userId: consultant, aal: "aal2", orgId: orgA, totpAgeSeconds: 0 });
     expect(await visiblePersonIds()).toEqual([]);
-    await db.query(`insert into public.persons (organization_id, display_name) values ($1, 'Synthetic created')`, [orgA]);
+    await db.query(
+      `insert into public.persons (organization_id, display_name, is_sample) values ($1, 'Synthetic created', true)`,
+      [orgA],
+    );
     const created = await visiblePersonIds();
     expect(created).toHaveLength(1);
 
