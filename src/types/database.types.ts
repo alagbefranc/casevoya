@@ -1,6 +1,5 @@
-// Hand-extended for migrations 20261017160000 through 20261017160300.
-// Regenerating with `pnpm db:types` before those migrations are applied would
-// drop the new tables, because the generator reads the live project.
+// Generated from the live schema (project aqjtvqmojfamtspzyeqm) after migrations
+// through 20261017052643. Regenerate with `pnpm db:types`.
 
 export type Json =
   | string
@@ -18,6 +17,83 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_grants: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          grantee_person_id: string
+          id: string
+          kind: Database["public"]["Enums"]["access_grant_kind"]
+          matter_id: string | null
+          organization_id: string
+          purpose: string
+          revoked_at: string | null
+          subject_person_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          grantee_person_id: string
+          id?: string
+          kind: Database["public"]["Enums"]["access_grant_kind"]
+          matter_id?: string | null
+          organization_id: string
+          purpose: string
+          revoked_at?: string | null
+          subject_person_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          grantee_person_id?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["access_grant_kind"]
+          matter_id?: string | null
+          organization_id?: string
+          purpose?: string
+          revoked_at?: string | null
+          subject_person_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "access_grants_grantee_person_id_organization_id_fkey"
+            columns: ["grantee_person_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "access_grants_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "access_grants_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "access_grants_subject_person_id_organization_id_fkey"
+            columns: ["subject_person_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -67,6 +143,280 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "audit_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      household_members: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          household_id: string
+          id: string
+          organization_id: string
+          person_id: string
+          relationship_label: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          household_id: string
+          id?: string
+          organization_id: string
+          person_id: string
+          relationship_label?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          household_id?: string
+          id?: string
+          organization_id?: string
+          person_id?: string
+          relationship_label?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_members_household_id_organization_id_fkey"
+            columns: ["household_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "household_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_members_person_id_organization_id_fkey"
+            columns: ["person_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      households: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          organization_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "households_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invitations: {
+        Row: {
+          consumed_at: string | null
+          consumed_by: string | null
+          created_at: string
+          created_by: string | null
+          email: string
+          expires_at: string
+          id: string
+          membership_id: string | null
+          organization_id: string
+          revoked_at: string | null
+          role: Database["public"]["Enums"]["org_role"]
+          token_hash: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          consumed_at?: string | null
+          consumed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          email: string
+          expires_at: string
+          id?: string
+          membership_id?: string | null
+          organization_id: string
+          revoked_at?: string | null
+          role: Database["public"]["Enums"]["org_role"]
+          token_hash: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          consumed_at?: string | null
+          consumed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          membership_id?: string | null
+          organization_id?: string
+          revoked_at?: string | null
+          role?: Database["public"]["Enums"]["org_role"]
+          token_hash?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invitations_membership_id_organization_id_fkey"
+            columns: ["membership_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "invitations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      matter_participants: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          matter_id: string
+          membership_id: string | null
+          organization_id: string
+          person_id: string | null
+          role: Database["public"]["Enums"]["matter_party_role"]
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id: string
+          membership_id?: string | null
+          organization_id: string
+          person_id?: string | null
+          role: Database["public"]["Enums"]["matter_party_role"]
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id?: string
+          membership_id?: string | null
+          organization_id?: string
+          person_id?: string | null
+          role?: Database["public"]["Enums"]["matter_party_role"]
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_participants_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_participants_membership_id_organization_id_fkey"
+            columns: ["membership_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_participants_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matter_participants_person_id_organization_id_fkey"
+            columns: ["person_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      matters: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          on_hold: boolean
+          organization_id: string
+          stage: Database["public"]["Enums"]["matter_stage"]
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          on_hold?: boolean
+          organization_id: string
+          stage?: Database["public"]["Enums"]["matter_stage"]
+          title: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          on_hold?: boolean
+          organization_id?: string
+          stage?: Database["public"]["Enums"]["matter_stage"]
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matters_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -252,86 +602,63 @@ export type Database = {
           },
         ]
       }
-      profiles: {
+      person_relationships: {
         Row: {
           created_at: string
           created_by: string | null
-          display_name: string | null
+          from_person_id: string
           id: string
-          preferred_locale: string
-          timezone: string
+          organization_id: string
+          relationship_type: Database["public"]["Enums"]["person_relationship_type"]
+          to_person_id: string
           updated_at: string
           version: number
         }
         Insert: {
           created_at?: string
           created_by?: string | null
-          display_name?: string | null
-          id: string
-          preferred_locale?: string
-          timezone?: string
+          from_person_id: string
+          id?: string
+          organization_id: string
+          relationship_type: Database["public"]["Enums"]["person_relationship_type"]
+          to_person_id: string
           updated_at?: string
           version?: number
         }
         Update: {
           created_at?: string
           created_by?: string | null
-          display_name?: string | null
+          from_person_id?: string
           id?: string
-          preferred_locale?: string
-          timezone?: string
-          updated_at?: string
-          version?: number
-        }
-        Relationships: []
-      }
-      invitations: {
-        Row: {
-          consumed_at: string | null
-          consumed_by: string | null
-          created_at: string
-          created_by: string | null
-          email: string
-          expires_at: string
-          id: string
-          membership_id: string | null
-          organization_id: string
-          revoked_at: string | null
-          role: Database["public"]["Enums"]["org_role"]
-          updated_at: string
-          version: number
-        }
-        Insert: {
-          consumed_at?: string | null
-          consumed_by?: string | null
-          created_at?: string
-          created_by?: string | null
-          email: string
-          expires_at: string
-          id?: string
-          membership_id?: string | null
-          organization_id: string
-          revoked_at?: string | null
-          role: Database["public"]["Enums"]["org_role"]
-          updated_at?: string
-          version?: number
-        }
-        Update: {
-          consumed_at?: string | null
-          consumed_by?: string | null
-          created_at?: string
-          created_by?: string | null
-          email?: string
-          expires_at?: string
-          id?: string
-          membership_id?: string | null
           organization_id?: string
-          revoked_at?: string | null
-          role?: Database["public"]["Enums"]["org_role"]
+          relationship_type?: Database["public"]["Enums"]["person_relationship_type"]
+          to_person_id?: string
           updated_at?: string
           version?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "person_relationships_from_person_id_organization_id_fkey"
+            columns: ["from_person_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "person_relationships_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "person_relationships_to_person_id_organization_id_fkey"
+            columns: ["to_person_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
       }
       persons: {
         Row: {
@@ -373,228 +700,44 @@ export type Database = {
           user_id?: string | null
           version?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "persons_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      matters: {
+      profiles: {
         Row: {
           created_at: string
           created_by: string | null
+          display_name: string | null
           id: string
-          on_hold: boolean
-          organization_id: string
-          stage: Database["public"]["Enums"]["matter_stage"]
-          title: string
+          preferred_locale: string
+          timezone: string
           updated_at: string
           version: number
         }
         Insert: {
           created_at?: string
           created_by?: string | null
-          id?: string
-          on_hold?: boolean
-          organization_id: string
-          stage?: Database["public"]["Enums"]["matter_stage"]
-          title: string
-          updated_at?: string
-          version?: number
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          on_hold?: boolean
-          organization_id?: string
-          stage?: Database["public"]["Enums"]["matter_stage"]
-          title?: string
-          updated_at?: string
-          version?: number
-        }
-        Relationships: []
-      }
-      matter_participants: {
-        Row: {
-          created_at: string
-          created_by: string | null
+          display_name?: string | null
           id: string
-          matter_id: string
-          membership_id: string | null
-          organization_id: string
-          person_id: string | null
-          role: Database["public"]["Enums"]["matter_party_role"]
-          updated_at: string
-          version: number
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          matter_id: string
-          membership_id?: string | null
-          organization_id: string
-          person_id?: string | null
-          role: Database["public"]["Enums"]["matter_party_role"]
+          preferred_locale?: string
+          timezone?: string
           updated_at?: string
           version?: number
         }
         Update: {
           created_at?: string
           created_by?: string | null
+          display_name?: string | null
           id?: string
-          matter_id?: string
-          membership_id?: string | null
-          organization_id?: string
-          person_id?: string | null
-          role?: Database["public"]["Enums"]["matter_party_role"]
-          updated_at?: string
-          version?: number
-        }
-        Relationships: []
-      }
-      households: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          id: string
-          name: string
-          organization_id: string
-          updated_at: string
-          version: number
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          name: string
-          organization_id: string
-          updated_at?: string
-          version?: number
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          name?: string
-          organization_id?: string
-          updated_at?: string
-          version?: number
-        }
-        Relationships: []
-      }
-      household_members: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          household_id: string
-          id: string
-          organization_id: string
-          person_id: string
-          relationship_label: string | null
-          updated_at: string
-          version: number
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          household_id: string
-          id?: string
-          organization_id: string
-          person_id: string
-          relationship_label?: string | null
-          updated_at?: string
-          version?: number
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          household_id?: string
-          id?: string
-          organization_id?: string
-          person_id?: string
-          relationship_label?: string | null
-          updated_at?: string
-          version?: number
-        }
-        Relationships: []
-      }
-      person_relationships: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          from_person_id: string
-          id: string
-          organization_id: string
-          relationship_type: Database["public"]["Enums"]["person_relationship_type"]
-          to_person_id: string
-          updated_at: string
-          version: number
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          from_person_id: string
-          id?: string
-          organization_id: string
-          relationship_type: Database["public"]["Enums"]["person_relationship_type"]
-          to_person_id: string
-          updated_at?: string
-          version?: number
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          from_person_id?: string
-          id?: string
-          organization_id?: string
-          relationship_type?: Database["public"]["Enums"]["person_relationship_type"]
-          to_person_id?: string
-          updated_at?: string
-          version?: number
-        }
-        Relationships: []
-      }
-      access_grants: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          expires_at: string | null
-          grantee_person_id: string
-          id: string
-          kind: Database["public"]["Enums"]["access_grant_kind"]
-          matter_id: string | null
-          organization_id: string
-          purpose: string
-          revoked_at: string | null
-          subject_person_id: string
-          updated_at: string
-          version: number
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          expires_at?: string | null
-          grantee_person_id: string
-          id?: string
-          kind: Database["public"]["Enums"]["access_grant_kind"]
-          matter_id?: string | null
-          organization_id: string
-          purpose: string
-          revoked_at?: string | null
-          subject_person_id: string
-          updated_at?: string
-          version?: number
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          expires_at?: string | null
-          grantee_person_id?: string
-          id?: string
-          kind?: Database["public"]["Enums"]["access_grant_kind"]
-          matter_id?: string | null
-          organization_id?: string
-          purpose?: string
-          revoked_at?: string | null
-          subject_person_id?: string
+          preferred_locale?: string
+          timezone?: string
           updated_at?: string
           version?: number
         }
@@ -652,29 +795,22 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "webhook_inbox_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      accept_invitation: {
-        Args: { token: string }
-        Returns: string
-      }
-      create_staff_invitation: {
-        Args: {
-          email: string
-          organization_id: string
-          role: Database["public"]["Enums"]["org_role"]
-        }
-        Returns: string
-      }
-      revoke_staff_invitation: {
-        Args: { invitation_id: string }
-        Returns: undefined
-      }
+      accept_invitation: { Args: { token: string }; Returns: string }
       create_organization: {
         Args: { display_name: string; legal_name: string; slug: string }
         Returns: {
@@ -697,6 +833,18 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      create_staff_invitation: {
+        Args: {
+          email: string
+          organization_id: string
+          role: Database["public"]["Enums"]["org_role"]
+        }
+        Returns: string
+      }
+      revoke_staff_invitation: {
+        Args: { invitation_id: string }
+        Returns: undefined
       }
     }
     Enums: {
@@ -741,14 +889,26 @@ export type Database = {
         | "pending_review"
         | "verified"
         | "restricted"
-      person_relationship_type: "spouse" | "parent" | "child" | "payer" | "sponsor" | "household" | "other"
       outbox_status:
         | "pending"
         | "processing"
         | "published"
         | "failed"
         | "dead_lettered"
-      webhook_inbox_status: "received" | "processing" | "processed" | "ignored" | "failed"
+      person_relationship_type:
+        | "spouse"
+        | "parent"
+        | "child"
+        | "payer"
+        | "sponsor"
+        | "household"
+        | "other"
+      webhook_inbox_status:
+        | "received"
+        | "processing"
+        | "processed"
+        | "ignored"
+        | "failed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -921,7 +1081,6 @@ export const Constants = {
         "verified",
         "restricted",
       ],
-      person_relationship_type: ["spouse", "parent", "child", "payer", "sponsor", "household", "other"],
       outbox_status: [
         "pending",
         "processing",
@@ -929,7 +1088,22 @@ export const Constants = {
         "failed",
         "dead_lettered",
       ],
-      webhook_inbox_status: ["received", "processing", "processed", "ignored", "failed"],
+      person_relationship_type: [
+        "spouse",
+        "parent",
+        "child",
+        "payer",
+        "sponsor",
+        "household",
+        "other",
+      ],
+      webhook_inbox_status: [
+        "received",
+        "processing",
+        "processed",
+        "ignored",
+        "failed",
+      ],
     },
   },
 } as const

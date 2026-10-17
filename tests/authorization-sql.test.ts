@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const personsSql = readFileSync(
-  path.resolve(import.meta.dirname, "../supabase/migrations/20261017160200_persons_matters_grants.sql"),
+  path.resolve(import.meta.dirname, "../supabase/migrations/20261017052636_persons_matters_grants.sql"),
   "utf8",
 );
 
