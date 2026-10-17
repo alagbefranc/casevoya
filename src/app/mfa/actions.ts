@@ -63,14 +63,7 @@ export async function redeemRecoveryCode(formData: FormData) {
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) redirect(`/sign-in?next=${encodeURIComponent(mfaPath(next))}`);
 
-  const { data, error } = await (
-    supabase as unknown as {
-      rpc: (
-        fn: string,
-        args: { p_code: string },
-      ) => Promise<{ data: boolean | null; error: { message: string } | null }>;
-    }
-  ).rpc("consume_recovery_code", { p_code: code });
+  const { data, error } = await supabase.rpc("consume_recovery_code", { p_code: code });
   if (error || data !== true) redirect(mfaPath(next, "recovery_failed"));
   redirect(next);
 }

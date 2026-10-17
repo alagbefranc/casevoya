@@ -72,11 +72,7 @@ export async function updateSession(request: NextRequest) {
     const { data: level } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     let mfaSatisfied = level?.currentLevel === "aal2";
     if (!mfaSatisfied) {
-      const { data: satisfied, error: rpcError } = await (
-        supabase as unknown as {
-          rpc: (fn: string) => Promise<{ data: boolean | null; error: { message: string } | null }>;
-        }
-      ).rpc("session_mfa_satisfied");
+      const { data: satisfied, error: rpcError } = await supabase.rpc("session_mfa_satisfied");
       if (!rpcError && satisfied === true) mfaSatisfied = true;
     }
     if (!mfaSatisfied) {

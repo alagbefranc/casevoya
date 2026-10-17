@@ -24,11 +24,7 @@ async function MfaFlow({ searchParams }: { searchParams: Promise<Record<string, 
   if (!claims?.claims?.sub) redirect(`/sign-in?next=${encodeURIComponent(`/mfa?next=${encodeURIComponent(next)}`)}`);
 
   const { data: level } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  const { data: satisfied, error: satisfiedError } = await (
-    supabase as unknown as {
-      rpc: (fn: string) => Promise<{ data: boolean | null; error: { message: string } | null }>;
-    }
-  ).rpc("session_mfa_satisfied");
+  const { data: satisfied, error: satisfiedError } = await supabase.rpc("session_mfa_satisfied");
   if (level?.currentLevel === "aal2" || (!satisfiedError && satisfied === true)) {
     return (
       <div className="flex flex-col gap-4">

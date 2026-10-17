@@ -14,21 +14,22 @@ Applied on the live project (versions recorded by `apply_migration`; do not edit
 | 20261017052636 | persons_matters_grants | persons, matters, participants, households, relationships, access grants, RLS |
 | 20261017052643 | webhook_inbox | provider event inbox, unique `(provider, event_id)`, `app.ingest_webhook_event` |
 | 20261017083908 | fk_covering_indexes | covering indexes for foreign keys flagged by the performance advisor. Additive only. |
-| 20261017113157 | source_governance | Official-host allowlist, source snapshots, check attempts, rule versions, evidence, professional reviews, pack versions, matter pins, impacts. Applied live. This branch still has the file as `20261017110000_source_governance.sql`; `cursor/post-pr4-sync` renames it to the live version. |
-| 20261017113202 | platform_admin_and_pnp_domains | `platform_admins` and `app.is_platform_admin()`, plus verified provincial nominee hosts. Applied live. This branch still has the file as `20261017130000_platform_admin_and_pnp_domains.sql`. No user id is seeded. |
+| 20261017113157 | source_governance | Official-host allowlist, source snapshots, check attempts, rule versions, evidence, professional reviews, pack versions, matter pins, impacts. Applied live. |
+| 20261017113202 | platform_admin_and_pnp_domains | `platform_admins` and `app.is_platform_admin()`, plus verified provincial nominee hosts. Applied live. No user id is seeded. |
 
 In the repository, not yet applied to the live project (do not edit the file in place once applied):
 
 | Version | Name | Contents |
 |---|---|---|
+| 20261017120000 | matter_rule_bindings_fk_index | Covering index on `matter_rule_bindings (matter_id, organization_id)`. Additive only. Not applied on the live project. |
 | 20261017140000 | finance_matter_billing | Billing projection and audited `issue_invoice` / `approve_earned_fee_transfer`. No ledger tables. |
 | 20261017140100 | webhook_account_dedupe | Unique `(provider, connected_account_id, event_id)` with `NULLS NOT DISTINCT`. |
 | 20261017140200 | owner_person_access | Assignment-based person reads. Audited 60-minute break-glass. |
 | 20261017140300 | matter_stage_transitions | Stage changes only through `transition_matter_stage`, with evidence. |
-| 20261017140400 | person_date_of_birth | `date_of_birth`, derived minor status, firm `age_of_majority_years`. |
+| 20261017140400 | person_date_of_birth | `date_of_birth`, derived minor status, firm `age_of_majority_years` (default 19, firm-configurable 18–21; Francis confirmed). |
 | 20261017140500 | staff_recovery_sessions_passkey | Hashed recovery codes, session revocation, owner MFA reset, passkey assurance. |
 
-`src/types/database.types.ts` is intentionally stale. `cursor/post-pr4-sync` regenerates it. Do not run `pnpm db:types` against the live project from this branch.
+`src/types/database.types.ts` includes the live schema through `20261017113202`, extended in this branch for the unapplied migrations above. Do not run `pnpm db:types` until those migrations are applied; a live regeneration would drop the extension.
 
 All tables have `ENABLE` + `FORCE ROW LEVEL SECURITY`. `anon` has no table privileges. There are
 no DELETE policies: deletion is a retention workflow (SEC-07), not a client action.
@@ -130,7 +131,7 @@ Replace `<auth.users.id>` with the person's id from `auth.users`. A platform adm
 
 ## Provincial hosts verified 2026-10-17
 
-Pages fetched that day. Hosts already in the source-governance migration (live version `20261017113157`; this branch's file is still `20261017110000` until `cursor/post-pr4-sync` renames it) were not inserted again.
+Pages fetched that day. Hosts already in `20261017113157` were not inserted again.
 
 | Host | Added now | Verification URL |
 |---|---|---|
@@ -170,8 +171,8 @@ idempotency key produced one outbox row. Profile display-name change was audited
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.
 * T007 negative tests cover SQL RLS. Storage URLs, search, exports, and jobs do not exist yet. `finance_user` still has no person-row access. Billing is a projection plus two audited actions; invoices and the ledger are T030.
 * T010 dedupes on `(provider, connected_account_id, event_id)`. Signature verification, retry, and the business effect of a webhook are still the worker's job.
-* T011 source governance and platform admin are applied live as `20261017113157` and `20261017113202`. There is no fetcher (T012). There is no review workbench (T013) and no client projection of rule claims (T017). The first `platform_admins` row is not seeded. `database.types.ts` stays stale until `cursor/post-pr4-sync`.
+* T011 source governance is applied on the live project (`20261017113157`, `20261017113202`). There is no fetcher (T012), so a stored hash is attested by the caller and not checked against bytes. There is no review workbench (T013) and no client projection of rule claims (T017). The first `platform_admins` row is not seeded. `database.types.ts` includes that live schema and the unapplied migrations in this branch. The `matter_rule_bindings` foreign-key index (`20261017120000`) is in the repository and is not applied on the live project.
 * T023 in this slice is the stage transition function and its evidence gate. Matter reference, on-hold workflow, and tasks are not built.
 * A firm owner can still read household membership ids. That is not person-row access.
 * External tamper-evident audit sink (DB owner can still disable triggers).
-* Majority review is an outbox event `person.majority_review_due`. The task itself waits on T026. `age_of_majority_years` defaults to 19 as a product setting.
+* Majority review is an outbox event `person.majority_review_due`. The task itself waits on T026. Francis confirmed `age_of_majority_years` defaults to 19 and is firm-configurable from 18 to 21.
