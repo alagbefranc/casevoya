@@ -1,0 +1,263 @@
+"use client";
+
+import { useEffect, useLayoutEffect, type RefObject } from "react";
+import { useRouter } from "next/navigation";
+import { toast2 } from "@/components/port/kit";
+import { sheetStateCopy } from "@/modules/sheet/present";
+
+const ASSET = "/assets/icons-coreui/sprite.svg";
+
+function icon(name: string, cls = ""): string {
+  return `<svg class="ic ${cls}" aria-hidden="true"><use href="${ASSET}#i-${name}"/></svg>`;
+}
+
+function art(name: string, px: number) {
+  return `<span class="art" style="--a:${px}px" aria-hidden="true"><img src="/assets/generated/b2/${name}-160@1x.webp" srcset="/assets/generated/b2/${name}-160@2x.webp 2x" width="${px}" height="${px}" alt="" loading="lazy" decoding="async"></span>`;
+}
+
+export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
+  const router = useRouter();
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    const ac = new AbortController();
+    const listen = { signal: ac.signal };
+
+    const side = root.querySelector<HTMLElement>("#side");
+    const scrim = root.querySelector<HTMLElement>("#scrimd");
+    const shut = () => {
+      side?.classList.remove("open");
+      scrim?.classList.remove("on");
+    };
+    root.querySelector("#mOpen")?.addEventListener("click", () => {
+      side?.classList.add("open");
+      scrim?.classList.add("on");
+    }, listen);
+    root.querySelector("#mClose")?.addEventListener("click", shut, listen);
+    scrim?.addEventListener("click", shut, listen);
+
+    root.querySelectorAll<HTMLButtonElement>(".grp>button").forEach((button) => {
+      button.addEventListener("click", () => {
+        const group = button.parentElement;
+        group?.classList.toggle("shut");
+        button.setAttribute("aria-expanded", String(!group?.classList.contains("shut")));
+      }, listen);
+    });
+
+    const place = () => {
+      const underline = root.querySelector<HTMLElement>(".tabs .ul");
+      const current = root.querySelector<HTMLElement>(".tabs button.on");
+      if (!underline || !current) return;
+      underline.style.left = `${current.offsetLeft}px`;
+      underline.style.width = `${current.offsetWidth}px`;
+    };
+    place();
+    root.querySelectorAll<HTMLButtonElement>(".tabs button[data-t]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", button.dataset.t || "");
+        router.replace(`${url.pathname}${url.search}`);
+      }, listen);
+    });
+
+    const openDialog = (id: string) => {
+      const dialog = root.querySelector<HTMLDialogElement>(`#${CSS.escape(id)}`);
+      if (dialog && !dialog.open) dialog.showModal();
+    };
+    const closeDialog = (id: string) => {
+      const dialog = root.querySelector<HTMLDialogElement>(`#${CSS.escape(id)}`);
+      dialog?.close();
+    };
+
+    root.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      const palette = target.closest<HTMLElement>("[data-palette], #newB");
+      if (palette && root.contains(palette)) {
+        event.preventDefault();
+        openPalette(root);
+        return;
+      }
+      const opener = target.closest<HTMLElement>("[data-open], [data-stage], [data-letter], [data-hold]");
+      if (opener) {
+        event.preventDefault();
+        const id = opener.dataset.open || (opener.hasAttribute("data-stage") ? "dStage" : opener.hasAttribute("data-letter") ? "dLetter" : "dHold");
+        openDialog(id);
+      }
+      const closer = target.closest<HTMLElement>("[data-close], [data-x]");
+      if (closer) {
+        event.preventDefault();
+        const dialog = closer.closest("dialog");
+        if (closer.dataset.close) closeDialog(closer.dataset.close);
+        else dialog?.close();
+      }
+      const toast = target.closest<HTMLElement>("[data-toast]");
+      if (toast?.dataset.toast) {
+        event.preventDefault();
+        toast2(toast.dataset.toast, { kind: toast.dataset.toastKind || "", sub: toast.dataset.toastSub || "" });
+      }
+      const check = target.closest<HTMLElement>("[data-toggle-on], .ck");
+      if (check && root.contains(check)) {
+        event.preventDefault();
+        event.stopPropagation();
+        check.classList.toggle("on");
+        check.setAttribute("aria-checked", String(check.classList.contains("on")));
+        check.closest("li")?.classList.toggle("on", check.classList.contains("on"));
+        check.closest("tr")?.classList.toggle("sel", check.classList.contains("on"));
+      }
+      const tab = target.closest<HTMLElement>("[data-goto-tab]");
+      if (tab?.dataset.gotoTab) {
+        event.preventDefault();
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", tab.dataset.gotoTab);
+        router.replace(`${url.pathname}${url.search}`);
+      }
+      if (target.closest("[data-clear-search]")) {
+        event.preventDefault();
+        const url = new URL(window.location.href);
+        url.searchParams.delete("state");
+        router.replace(`${url.pathname}${url.search}`);
+      }
+      const bell = target.closest<HTMLElement>(".k2-bell");
+      if (bell) bell.setAttribute("aria-pressed", String(bell.getAttribute("aria-pressed") !== "true"));
+      const sw = target.closest<HTMLElement>(".k2-sw");
+      if (sw) sw.setAttribute("aria-checked", String(sw.getAttribute("aria-checked") !== "true"));
+      const fuse = target.closest<HTMLElement>(".k2-fb-idle, .k2-fb-undo");
+      if (fuse) armFuse(fuse);
+      const rubber = target.closest<HTMLElement>(".k2-rsw");
+      const rubberButton = target.closest("button");
+      if (rubber && rubberButton && rubber.contains(rubberButton)) {
+        rubber.querySelectorAll("button").forEach((item) => item.setAttribute("aria-checked", String(item === rubberButton)));
+        const mine = /Mine/.test(rubberButton.textContent || "");
+        root.querySelectorAll<HTMLElement>("tbody tr").forEach((row) => {
+          row.hidden = mine && !row.querySelector('img[src*="amara"]');
+        });
+      }
+    }, listen);
+
+    root.querySelectorAll<HTMLInputElement>('.bar input').forEach((input) => {
+      const apply = () => {
+        const q = input.value.trim().toLowerCase();
+        root.querySelectorAll<HTMLElement>(".t tbody tr").forEach((row) => {
+          row.hidden = Boolean(q) && !row.textContent.toLowerCase().includes(q);
+        });
+      };
+      const preset = new URLSearchParams(window.location.search).get("q");
+      if (preset && !input.value) input.value = preset;
+      input.addEventListener("input", apply, listen);
+      apply();
+    });
+
+    root.querySelectorAll("form").forEach((form) => {
+      if (form.getAttribute("data-live") === "1") return;
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        toast2("This form isn’t connected yet", { kind: "warn", sub: "Nothing was saved." });
+      }, listen);
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    const dialog = params.get("dlg");
+    if (dialog === "stage" || dialog === "hold" || dialog === "letter") {
+      window.setTimeout(() => openDialog(dialog === "stage" ? "dStage" : dialog === "hold" ? "dHold" : "dLetter"), 300);
+    }
+
+    window.addEventListener("resize", place, listen);
+    return () => ac.abort();
+  }, [page, ref, router]);
+
+  useLayoutEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    const state = new URLSearchParams(window.location.search).get("state");
+    if (state) applyState(root, page, state);
+  });
+}
+
+function armFuse(button: HTMLElement) {
+  const wrap = button.closest<HTMLElement>(".k2-fb");
+  if (!wrap) return;
+  const idle = wrap.querySelector<HTMLElement>(".k2-fb-idle");
+  const undo = wrap.querySelector<HTMLElement>(".k2-fb-undo");
+  const done = wrap.querySelector<HTMLElement>(".k2-fb-done");
+  if (button.classList.contains("k2-fb-undo")) {
+    wrap.dataset.phase = "idle";
+    wrap.querySelector(".k2-fb-rim rect")?.getAnimations().forEach((animation) => animation.cancel());
+    return;
+  }
+  if (wrap.dataset.phase !== "idle") return;
+  wrap.dataset.phase = "armed";
+  const ms = Number(wrap.dataset.ms || 4000);
+  const rect = wrap.querySelector(".k2-fb-rim rect");
+  const animation = rect?.animate([{ strokeDashoffset: 0 }, { strokeDashoffset: -1 }], { duration: ms, easing: "linear", fill: "forwards" });
+  if (animation) {
+    animation.onfinish = () => {
+      wrap.dataset.phase = "settled";
+      if (done) done.setAttribute("aria-hidden", "false");
+      idle?.setAttribute("hidden", "");
+      undo?.setAttribute("hidden", "");
+    };
+  }
+  void done;
+}
+
+function openPalette(root: HTMLElement) {
+  let scrim = root.querySelector<HTMLElement>(".scrim");
+  if (!scrim) {
+    scrim = document.createElement("div");
+    scrim.className = "scrim";
+    const links = [...root.querySelectorAll<HTMLAnchorElement>(".tree a[href], .nav a[href], .tiles a[href]")]
+      .filter((link) => link.getAttribute("href") && link.getAttribute("href") !== "#")
+      .slice(0, 24);
+    scrim.innerHTML = `<div class="palette" role="dialog" aria-label="Search"><input placeholder="Search matters, people and actions" aria-label="Search"><ul>${links
+      .map((link) => `<li data-u="${link.getAttribute("href")}">${link.textContent?.trim() || "Open"}</li>`)
+      .join("")}</ul></div>`;
+    root.append(scrim);
+    scrim.addEventListener("click", (event) => {
+      if (event.target === scrim) scrim?.classList.remove("on");
+    });
+    scrim.querySelectorAll<HTMLElement>("li").forEach((item) => {
+      item.addEventListener("click", () => {
+        const href = item.dataset.u;
+        if (href) window.location.assign(href);
+      });
+    });
+    const input = scrim.querySelector("input");
+    input?.addEventListener("input", () => {
+      const q = input.value.trim().toLowerCase();
+      scrim?.querySelectorAll<HTMLElement>("li").forEach((item) => {
+        item.hidden = Boolean(q) && !item.textContent.toLowerCase().includes(q);
+      });
+    });
+    input?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") scrim?.classList.remove("on");
+    });
+  }
+  scrim.classList.add("on");
+  window.setTimeout(() => scrim?.querySelector("input")?.focus(), 30);
+}
+
+function applyState(root: HTMLElement, page: string, state: string) {
+  const content = root.querySelector("#content");
+  if (!content) return;
+  const copy = sheetStateCopy(page);
+  const heading = content.querySelector("h1")?.textContent || "This screen";
+  if (state === "loading") {
+    content.innerHTML = `<div class="fp-st" role="status"><span class="sr">Loading ${copy[4]}…</span><div class="sk h"></div><div class="sk" style="width:60%"></div>${'<div class="sk r"></div>'.repeat(4)}</div>`;
+    return;
+  }
+  if (state === "empty") {
+    content.innerHTML = `<div class="ph"><h1 class="display">${heading}</h1></div><div class="panel"><div class="emp">${art(copy[0], 88)}<b>${copy[1]}</b><small>${copy[2]}</small></div></div>`;
+    return;
+  }
+  if (state === "error") {
+    content.innerHTML = `<div class="ph"><h1 class="display">${heading}</h1></div><div class="alert bad" role="alert">${icon("alert")}<div><b>We couldn’t load ${copy[4]}</b>The server didn’t answer in time. Nothing was lost.</div></div>`;
+    return;
+  }
+  if (state === "denied") {
+    content.innerHTML = `<div class="ph"><h1 class="display">${heading}</h1></div><div class="panel"><div class="emp">${art("privacy-shield", 88)}<b>You don’t have permission to see ${copy[4]}</b><small>Your role doesn’t include this. Ask your firm owner if you need access.</small></div></div>`;
+    return;
+  }
+  if (state === "offline") {
+    content.insertAdjacentHTML("afterbegin", `<div class="alert warn" role="status">${icon("wifi-off")}<div><b>You’re offline</b>Showing ${copy[4]} from this device. Changes wait until you reconnect.</div></div>`);
+  }
+}

@@ -4,6 +4,7 @@
 @import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "../styles/kit/base.css" layer(kit);
+@import "../styles/kit/pipeline.css" layer(kit);
 @import "../styles/kit/mascot.css" layer(kit);
 @import "../styles/kit/kit2.css" layer(kit);
 @import "../styles/kit/fp.css" layer(kit);

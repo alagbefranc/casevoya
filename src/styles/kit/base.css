@@ -50,7 +50,7 @@ a{color:inherit;text-decoration:none}
 .panel .pad{padding:16px 18px}
 /* gauge */
 .gauge{position:relative;width:170px;height:96px;margin:6px auto 12px}.gauge svg{width:170px;height:96px;overflow:visible}
-.gauge path{transition:stroke-dashoffset 1.1s var(--ease),stroke-dasharray 1.1s var(--ease)}
+.gauge path{transition:stroke-dashoffset 300ms var(--ease),stroke-dasharray 300ms var(--ease)}
 .gauge .c{position:absolute;left:0;right:0;bottom:-6px;text-align:center}.gauge .c b{display:block;font-size:34px;font-weight:300;line-height:1}.gauge .c small{font-size:13px;color:var(--t2)}
 .leg>div{display:grid;grid-template-columns:12px 1fr 44px 44px;align-items:center;gap:6px;font-size:13.5px;padding:4px 0}
 .leg i{width:7px;height:7px;border-radius:2px}.leg span{text-align:right}.leg b{font-weight:400}.leg span+span{color:var(--t2)}
@@ -85,6 +85,7 @@ a{color:inherit;text-decoration:none}
 /* list rows (queue, tasks, notifications) */
 .li{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:12px;background:var(--canvas);margin-bottom:8px;transition:background var(--fast),transform var(--fast) var(--ease)}
 .li:hover{background:#efedeb}.li b{font-weight:500}.li small{display:block;color:var(--t2);font-size:13px}.li .r{margin-left:auto;display:flex;gap:10px;align-items:center}
+@media (max-width:600px){.li{flex-wrap:wrap}.li>div{min-width:0;flex:1 1 0}.li .r{margin-left:0;flex:1 0 100%;flex-wrap:wrap;justify-content:flex-start}} /* XC02: integration rows wrap on phones */
 .h4,.sub{font-size:14px;font-weight:600;margin:20px 0 10px}
 /* toast */
 .toasts{position:fixed;right:22px;bottom:40px;display:flex;flex-direction:column;gap:8px;z-index:90;align-items:flex-end}

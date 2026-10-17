@@ -6,7 +6,7 @@
 .m-thinking .m-dots circle{animation:m-dot 1s ease-in-out infinite}
 .m-thinking .m-dots circle:nth-child(2){animation-delay:.15s}
 .m-thinking .m-dots circle:nth-child(3){animation-delay:.3s}
-.m-done .m-badge,.m-review .m-badge{transform-origin:80px 22px;animation:m-pop .5s cubic-bezier(.34,1.56,.64,1)}
+.m-done .m-badge,.m-review .m-badge{transform-origin:80px 22px;animation:m-pop 300ms cubic-bezier(.34,1.56,.64,1)}
 .m-review .m-body{animation:m-tilt 2.4s ease-in-out infinite}
 .mascot .m-wing{animation:m-wing 3.6s ease-in-out infinite}
 @keyframes m-blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}

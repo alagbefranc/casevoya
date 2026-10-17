@@ -1,0 +1,27 @@
+/* Pipeline board: columns of lead cards. Drag with pointer or move with the arrow buttons. */
+.pipe{display:flex;gap:14px;align-items:flex-start;overflow-x:auto;padding-bottom:12px;margin-right:-32px;padding-right:32px;scroll-snap-type:x proximity}
+.col{flex:0 0 247px;background:#efeeec;border-radius:14px;padding:12px 8px 8px;scroll-snap-align:start;transition:background var(--fast),box-shadow var(--fast)}
+.col.over{background:var(--tint);box-shadow:inset 0 0 0 2px #8fc4f5}
+.colh{display:flex;align-items:flex-start;justify-content:space-between;padding:2px 6px 10px}
+.colh b{display:block;font-weight:600;font-size:15px}.colh small{font-size:13px;color:var(--t2)}
+.ring{width:26px;height:26px;flex:none}.ring circle{fill:none;stroke-width:3}.ring .bg{stroke:#dcd9d5}.ring .fg{stroke:var(--blue);stroke-linecap:round;transition:stroke-dashoffset 300ms var(--ease)}
+.cards{display:flex;flex-direction:column;gap:8px;min-height:40px}
+.lc{background:#fff;border-radius:10px;padding:10px 12px 10px 12px;cursor:grab;transition:transform var(--fast) var(--ease),box-shadow var(--fast);touch-action:none;user-select:none}
+.lc:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(17,17,17,.08)}
+.lc.lift{opacity:.35}
+.lc.ghost{position:fixed;z-index:100;pointer-events:none;box-shadow:0 18px 40px rgba(17,17,17,.22);transition:transform 80ms}
+.lbar{display:block;width:28px;height:4px;border-radius:4px;margin-bottom:8px}
+.lt{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.lt b{font-weight:600;font-size:14.5px}
+.lm{font-size:12.5px;color:var(--t2);margin:2px 0 8px}
+.lf{display:flex;align-items:center;gap:8px;font-size:13px}.lf .av{width:22px;height:22px}
+.mv{margin-left:auto;display:flex;opacity:0;transition:opacity var(--fast)}.lc:hover .mv,.lc:focus-within .mv{opacity:1}
+.mv button{width:24px;height:24px;display:grid;place-items:center;border-radius:6px}.mv button:hover{background:var(--muted)}
+.nx{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--ok-bg);color:var(--ok)}
+.chip.od{animation:nudge 300ms var(--ease) infinite}
+@keyframes nudge{0%,80%,100%{transform:none}84%{transform:translateX(-2px)}88%{transform:translateX(2px)}92%{transform:translateX(-1px)}}
+.lflag{font-size:12px;color:var(--warn);background:var(--warn-bg);border-radius:6px;padding:4px 6px;display:flex;gap:4px;align-items:center;margin-bottom:8px}
+.aichip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;text-align:left;width:100%;font-size:12.5px;background:var(--ink);color:#fff;border-radius:8px;padding:6px 8px;margin-bottom:8px;transition:background var(--fast)}
+.aichip:hover{background:#262626}.aichip .ic{color:#8fc4f5}
+.aia{display:flex;gap:6px;width:100%}.aia em{font-style:normal;font-weight:600;padding:3px 8px;border-radius:6px;background:#2d2d2d}.aia em:first-child{background:var(--blue)}
+.empty{font-size:13px;color:var(--t2);padding:12px 6px}
+@media (max-width:900px){.pipe{margin-right:-16px;padding-right:16px}}
