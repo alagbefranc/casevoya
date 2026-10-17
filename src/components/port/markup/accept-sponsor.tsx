@@ -1,7 +1,11 @@
 "use client";
 
 import { showFace, type InviteFace } from "@/lib/auth/invite-face";
-/** Converted from site/app-v2/auth/accept-sponsor.html. Same DOM, classes and copy. */
+/**
+ * Converted from site/app-v2/auth/accept-sponsor.html. Same DOM, classes and copy, plus the
+ * processing-consent box from accept-family.html (decision 2026-10-17: every portal role
+ * gives its own processing consent).
+ */
 export function AcceptSponsorMarkup({ face }: { face?: InviteFace } = {}) {
   const firm = showFace(face?.firm, "your firm");
   const person = showFace(face?.person, "");
@@ -18,7 +22,7 @@ export function AcceptSponsorMarkup({ face }: { face?: InviteFace } = {}) {
 <section data-step="1" data-title="What you’ll see" data-vo="lock"><div className="wz-head"><div className="wz-vo" data-size="64" data-pose="lock"></div><div><h1>What you’ll see</h1><p className="lead">Sponsor and applicant each have private records. That keeps both of you safe.</p></div></div>
 <div className="who"><div className="y"><h4><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-eye" /></svg>You’ll see</h4><ul><li>Your own questions, documents and tasks</li><li>Shared items, like the marriage certificate and photos</li><li>Invoices you agree to pay</li></ul></div><div className="n"><h4><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-lock" /></svg>You won’t see</h4><ul><li>{applicant}’s private records, like a police certificate</li><li>Other family members’ records, unless they share them</li></ul></div></div>
 <p className="why"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-info" /></svg>Paying an invoice doesn’t give access to anyone else’s records.</p>
-<label className="check" data-req="Accept the portal terms to continue"><input type="checkbox" id="r1" /><span>I understand and accept {firm}’s portal terms</span></label></section>
+<label className="check" data-req="Accept the portal terms to continue"><input type="checkbox" id="r1" /><span>I understand and accept {firm}’s portal terms</span></label><label className="check" data-req={`Give consent to continue, or tell ${firm} you don’t want to take part`}><input type="checkbox" id="o1" /><span>I agree that {firm} can use my information to prepare this application</span></label></section>
 <section data-step="2" data-title="Sign-in" data-vo="cheer" data-cta="Create my account"><div className="wz-head"><div className="wz-vo" data-size="64" data-pose="cheer"></div><div><h1>Create your sign-in</h1><p className="lead">Separate from {applicant}’s account.</p></div></div>
 <div role="radiogroup" aria-label="Sign-in method" style={{ "maxWidth": "520px" }}><button className="opt" role="radio" aria-checked="true" type="button"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-key" /></svg></span><span>Use a passkey<small>Face, fingerprint or phone PIN</small></span></button><button className="opt" role="radio" aria-checked="false" type="button"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-lock" /></svg></span><span>Create a password</span></button></div>
 <fieldset className="fld" style={{ "border": "0", "marginTop": "18px" }}><legend>Portal language</legend><div className="seg" role="group" aria-label="Language"><button type="button" aria-pressed="true">English</button><button type="button" aria-pressed="false">Français</button></div></fieldset></section></main><footer className="wz-foot"><button className="btn" data-prev="" type="button"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-chevron-left" /></svg>Back</button><span className="save"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-check-circle" /></svg>Your answers are saved</span><span className="sp"></span><button className="btn p" data-next=""><span className="lab">Continue</span><span className="spin" aria-hidden="true"></span></button></footer></div></div>

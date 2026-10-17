@@ -438,4 +438,44 @@ describe("portal invitations", () => {
     const isolated = await db.query(`select id from public.portal_invitations`);
     expect(isolated.rows).toHaveLength(0);
   });
+
+  it("requires and records processing consent from clients and sponsors", async () => {
+    const { owner, consultant, orgId, membershipId } = await firmWithConsultant();
+    const policies = await publishPolicies(owner, orgId);
+    const matterId = await addMatter(consultant, orgId, "Fictional consent file", true);
+    await addStaffParty(owner, orgId, matterId, membershipId, "consultant");
+    const applicant = await addPerson(consultant, orgId, "Sample Applicant", null, "1990-04-04", true);
+    const sponsor = await addPerson(consultant, orgId, "Sample Sponsor", null, "1985-02-02", true);
+    await addParty(consultant, orgId, matterId, applicant, "applicant");
+    await addParty(consultant, orgId, matterId, sponsor, "sponsor");
+
+    for (const [personId, role] of [
+      [applicant, "client"],
+      [sponsor, "sponsor"],
+    ] as const) {
+      const address = email(role);
+      const issued = await invite(consultant, orgId, personId, matterId, role, address);
+      expect(issued.ok).toBe(true);
+      const user = await createUser(address);
+      await asUser(db, { userId: user, aal: "aal1", orgId });
+      const refused = await db.query<{ result: { ok: boolean; error?: string } }>(
+        `select public.accept_portal_invitation($1, $2::jsonb) as result`,
+        [issued.token, JSON.stringify(acceptPayload(policies.termsId, policies.privacyId, { processing_consent: false }))],
+      );
+      expect(refused.rows[0].result).toMatchObject({ ok: false, error: "processing_consent_required" });
+      const accepted = await db.query<{ result: { ok: boolean; error?: string } }>(
+        `select public.accept_portal_invitation($1, $2::jsonb) as result`,
+        [issued.token, JSON.stringify(acceptPayload(policies.termsId, policies.privacyId))],
+      );
+      expect(accepted.rows[0].result.ok).toBe(true);
+
+      await asMaintenance(db);
+      const recorded = await db.query<{ n: number }>(
+        `select count(*)::int as n from public.consent_records
+         where person_id = $1 and invitation_id = $2 and purpose = 'processing' and granted`,
+        [personId, issued.invitation_id],
+      );
+      expect(countOf(recorded.rows[0].n)).toBe(1);
+    }
+  });
 });
