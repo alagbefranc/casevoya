@@ -1,24 +1,27 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { previewStaffInvite } from "@/app/auth/port-actions";
 import { AcceptStaffMarkup } from "@/components/port/markup/accept-staff";
 import { PortScreen } from "@/components/port/screen";
+import { faceFromStaffPreview, type InviteFace } from "@/lib/auth/invite-face";
 
 export const metadata: Metadata = {
-  title: "Join your team · Casevoya (prototype)",
+  title: "Join your team · Casevoya",
   robots: { index: false, follow: false },
 };
 
-function StaffInvite({ token }: { token?: string }) {
+function StaffInvite({ token, face }: { token?: string; face?: InviteFace }) {
   return (
     <PortScreen page="accept-staff" variant="au" token={token}>
-      <AcceptStaffMarkup />
+      <AcceptStaffMarkup face={face} />
     </PortScreen>
   );
 }
 
 async function InviteToken({ params }: { params: PageProps<"/invite/[token]">["params"] }) {
   const { token } = await params;
-  return <StaffInvite token={token} />;
+  const face = faceFromStaffPreview(token ? await previewStaffInvite(token) : null);
+  return <StaffInvite token={token} face={face} />;
 }
 
 export default function InvitePage({ params }: PageProps<"/invite/[token]">) {

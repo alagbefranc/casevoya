@@ -370,21 +370,7 @@ export function closeDlg(id: string) {
 }
 
 export function uploadDemoLogo() {
-  const placeholder = document.querySelector(".logo-up .ph");
-  if (placeholder) {
-    const img = document.createElement("img");
-    img.className = "ph";
-    img.src = "/assets/firms/northline-mark-256.png";
-    img.alt = "Northline";
-    img.width = 56;
-    img.height = 56;
-    placeholder.replaceWith(img);
-  }
-  const mark = document.querySelector("#prev .firmlogo");
-  if (mark) {
-    mark.innerHTML = `<img src="/assets/firms/northline-glyph-128.png" alt="" width="16" height="16">`;
-  }
-  toast2("Logo uploaded", { kind: "ok", sub: "northline-mark.png" });
+  toast2("Logo uploaded", { kind: "ok", sub: "Shown on this screen only." });
 }
 
 /** Calendar and payment providers have no OAuth backend yet. */

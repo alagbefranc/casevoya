@@ -2,10 +2,9 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database.types";
 import { hasPublicSupabaseEnv, getPublicSupabaseEnv } from "@/lib/env";
+import { isGatedPath, signInLocation } from "@/lib/auth/redirect";
 import { isStaffArea, staffMfaRedirectPath } from "@/lib/auth/staff-session";
 import { REQUEST_ID_HEADER, resolveRequestId } from "@/lib/tenant/context";
-
-const PROTECTED_PREFIXES = ["/app"];
 
 function redirectKeepingSession(request: NextRequest, response: NextResponse, pathname: string, search: string) {
   const redirectUrl = request.nextUrl.clone();
@@ -32,7 +31,15 @@ export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
   response.headers.set(REQUEST_ID_HEADER, requestId);
 
-  if (!hasPublicSupabaseEnv()) return response;
+  const path = request.nextUrl.pathname;
+  const search = request.nextUrl.search;
+  if (!hasPublicSupabaseEnv()) {
+    if (isGatedPath(path)) {
+      const destination = new URL(signInLocation(path, search), request.url);
+      return redirectKeepingSession(request, response, destination.pathname, destination.search);
+    }
+    return response;
+  }
   const { url, publishableKey } = getPublicSupabaseEnv();
 
   const supabase = createServerClient<Database>(url, publishableKey, {
@@ -55,7 +62,6 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const signedIn = Boolean(data?.claims?.sub);
 
-  const path = request.nextUrl.pathname;
   if (
     path === "/mfa" ||
     path.startsWith("/mfa/") ||
@@ -69,8 +75,9 @@ export async function updateSession(request: NextRequest) {
     response.headers.set("Cache-Control", "no-store");
   }
 
-  if (!signedIn && PROTECTED_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))) {
-    return redirectKeepingSession(request, response, "/sign-in", `?next=${encodeURIComponent(path)}`);
+  if (!signedIn && isGatedPath(path)) {
+    const destination = new URL(signInLocation(path, search), request.url);
+    return redirectKeepingSession(request, response, destination.pathname, destination.search);
   }
 
   // Staff need an assured session before the firm workspace. Clients are not redirected.

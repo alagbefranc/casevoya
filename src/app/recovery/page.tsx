@@ -3,7 +3,7 @@ import { RecoveryMarkup } from "@/components/port/markup/recovery";
 import { PortScreen } from "@/components/port/screen";
 
 export const metadata: Metadata = {
-  title: "Account recovery · Casevoya (prototype)",
+  title: "Account recovery · Casevoya",
   robots: { index: false, follow: false },
 };
 

@@ -60,6 +60,17 @@ function viewOf(matter: SheetMatterRow, bundle: SheetBundle): MatterViewInput {
   };
 }
 
+export function QuietSheet({ title, copy }: { title: string; copy: string }) {
+  return (
+    <div id="content">
+      <div className="ph">
+        <h1 className="display">{title}</h1>
+        <p>{copy}</p>
+      </div>
+    </div>
+  );
+}
+
 export function LiveSheet({
   bundle,
   page,
@@ -442,7 +453,7 @@ function Licences({ bundle }: { bundle: SheetBundle }) {
 function Settings({ bundle, tab, page }: { bundle: SheetBundle; tab?: string; page: string }) {
   const current = page === "sample-mode" ? "sample" : tab || "general";
   if (current === "sample") {
-    return <div className="panel"><h2>Sample mode is off</h2><p>{bundle.staff.organizationName} is a live firm. The Northline walkthrough is not mixed into these records.</p></div>;
+    return <div className="panel"><h2>Sample mode is off</h2><p>{bundle.staff.organizationName} is a live firm. The sample walkthrough is not mixed into these records.</p></div>;
   }
   const unwired = slotFor("settings", current);
   if (unwired) return <Slot message={unwired} />;

@@ -3,7 +3,7 @@ import { SignInMarkup } from "@/components/port/markup/sign-in";
 import { PortScreen } from "@/components/port/screen";
 
 export const metadata: Metadata = {
-  title: "Sign in · Casevoya (prototype)",
+  title: "Sign in · Casevoya",
   robots: { index: false, follow: false },
 };
 

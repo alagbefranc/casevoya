@@ -3,7 +3,7 @@ import { StartTrialMarkup } from "@/components/port/markup/start-trial";
 import { PortScreen } from "@/components/port/screen";
 
 export const metadata: Metadata = {
-  title: "Start a trial · Casevoya (prototype)",
+  title: "Start a trial · Casevoya",
   robots: { index: false, follow: false },
 };
 

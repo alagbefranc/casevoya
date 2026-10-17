@@ -47,8 +47,8 @@ export function usePortal(ref: RefObject<HTMLElement | null>, page: string) {
 
     root.querySelector("#lang")?.addEventListener("click", (event) => {
       event.preventDefault();
-      toast2("Français : bientôt disponible dans ce prototype", {
-        sub: "French strings are part of the portal spec (PRD §4)",
+      toast2("Français arrive bientôt", {
+        sub: "French isn’t available on this screen yet.",
       });
     }, listen);
 
