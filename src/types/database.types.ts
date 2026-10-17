@@ -2,7 +2,7 @@
 // for unapplied migrations 20261017120000, 20261017140000–20261017140800,
 // 20261017160000 (preview_invitation, request_mfa_reset),
 // 20261017170000–20261017170300, 20261017180000–20261017180100,
-// and 20261017190000–20261017190100.
+// 20261017190000–20261017190100, and 20261017200000–20261017200200.
 // Regenerate with `pnpm db:types` only after those migrations are applied live.
 
 export type Json =
@@ -3513,6 +3513,210 @@ export type Database = {
           },
         ]
       }
+      email_deliveries: {
+        Row: {
+          attempt_count: number
+          context: Json
+          created_at: string
+          created_by: string | null
+          critical: boolean
+          id: string
+          last_error: string | null
+          matter_id: string | null
+          organization_id: string
+          outbox_event_id: string
+          provider_message_id: string | null
+          recipient_email: string
+          status: Database["public"]["Enums"]["email_delivery_status"]
+          template: Database["public"]["Enums"]["email_template"]
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          attempt_count?: number
+          context?: Json
+          created_at?: string
+          created_by?: string | null
+          critical?: boolean
+          id?: string
+          last_error?: string | null
+          matter_id?: string | null
+          organization_id: string
+          outbox_event_id: string
+          provider_message_id?: string | null
+          recipient_email: string
+          status?: Database["public"]["Enums"]["email_delivery_status"]
+          template: Database["public"]["Enums"]["email_template"]
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          attempt_count?: number
+          context?: Json
+          created_at?: string
+          created_by?: string | null
+          critical?: boolean
+          id?: string
+          last_error?: string | null
+          matter_id?: string | null
+          organization_id?: string
+          outbox_event_id?: string
+          provider_message_id?: string | null
+          recipient_email?: string
+          status?: Database["public"]["Enums"]["email_delivery_status"]
+          template?: Database["public"]["Enums"]["email_template"]
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      email_suppressions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          organization_id: string
+          reason: string
+          recipient_email: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id: string
+          reason: string
+          recipient_email: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id?: string
+          reason?: string
+          recipient_email?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      inbound_emails: {
+        Row: {
+          attachments_done: boolean
+          body_location: string
+          created_at: string
+          created_by: string | null
+          from_email: string
+          html_body: string | null
+          id: string
+          matter_id: string | null
+          message_id: string
+          organization_id: string
+          person_id: string | null
+          subject: string | null
+          text_body: string | null
+          to_email: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          attachments_done?: boolean
+          body_location: string
+          created_at?: string
+          created_by?: string | null
+          from_email: string
+          html_body?: string | null
+          id?: string
+          matter_id?: string | null
+          message_id: string
+          organization_id: string
+          person_id?: string | null
+          subject?: string | null
+          text_body?: string | null
+          to_email: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          attachments_done?: boolean
+          body_location?: string
+          created_at?: string
+          created_by?: string | null
+          from_email?: string
+          html_body?: string | null
+          id?: string
+          matter_id?: string | null
+          message_id?: string
+          organization_id?: string
+          person_id?: string | null
+          subject?: string | null
+          text_body?: string | null
+          to_email?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      inbound_inbox_items: {
+        Row: {
+          assigned_version_id: string | null
+          byte_size: number | null
+          created_at: string
+          created_by: string | null
+          filename: string
+          id: string
+          inbound_email_id: string
+          matter_id: string | null
+          media_type: string | null
+          organization_id: string
+          scan_result: string | null
+          sha256: string | null
+          storage_key: string
+          updated_at: string
+          upload_state: string
+          version: number
+        }
+        Insert: {
+          assigned_version_id?: string | null
+          byte_size?: number | null
+          created_at?: string
+          created_by?: string | null
+          filename: string
+          id?: string
+          inbound_email_id: string
+          matter_id?: string | null
+          media_type?: string | null
+          organization_id: string
+          scan_result?: string | null
+          sha256?: string | null
+          storage_key: string
+          updated_at?: string
+          upload_state?: string
+          version?: number
+        }
+        Update: {
+          assigned_version_id?: string | null
+          byte_size?: number | null
+          created_at?: string
+          created_by?: string | null
+          filename?: string
+          id?: string
+          inbound_email_id?: string
+          matter_id?: string | null
+          media_type?: string | null
+          organization_id?: string
+          scan_result?: string | null
+          sha256?: string | null
+          storage_key?: string
+          updated_at?: string
+          upload_state?: string
+          version?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -4227,8 +4431,87 @@ export type Database = {
         Args: { p_envelope_id: string }
         Returns: string
       }
+      assign_unsorted_email_file: {
+        Args: { p_item_id: string; p_matter_id: string; p_person_id: string }
+        Returns: Json
+      }
+      begin_inbound_message: {
+        Args: {
+          p_domain?: string
+          p_from: string
+          p_html: string
+          p_message_id: string
+          p_subject: string
+          p_text: string
+          p_to: string
+        }
+        Returns: Json
+      }
+      claim_mail_events: {
+        Args: { p_limit?: number; p_worker: string }
+        Returns: Json
+      }
+      complete_email_upload: {
+        Args: { p_header_hex: string; p_inbound_id: string; p_ordinal: number; p_sha256: string }
+        Returns: Json
+      }
+      complete_unsorted_assignment: {
+        Args: { p_item_id: string }
+        Returns: undefined
+      }
+      create_email_upload_intent: {
+        Args: { p_byte_size: number; p_filename: string; p_inbound_id: string; p_ordinal: number }
+        Returns: Json
+      }
+      finish_email_delivery: {
+        Args: {
+          p_delivery_id: string
+          p_error?: string
+          p_outcome: string
+          p_provider_message_id?: string
+          p_worker: string
+        }
+        Returns: undefined
+      }
+      finish_inbound_attachments: {
+        Args: { p_inbound_id: string }
+        Returns: undefined
+      }
+      finish_unsorted_email_file: {
+        Args: { p_header_hex: string; p_inbound_id: string; p_ordinal: number; p_sha256: string }
+        Returns: Json
+      }
+      open_unsorted_email_file: {
+        Args: { p_byte_size: number; p_filename: string; p_inbound_id: string; p_ordinal: number }
+        Returns: Json
+      }
+      prepare_email_delivery: {
+        Args: {
+          p_event_id: string
+          p_from_address?: string
+          p_inbound_domain?: string
+          p_worker: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
+      email_delivery_status:
+        | "pending"
+        | "sending"
+        | "sent"
+        | "queued"
+        | "bounced"
+        | "suppressed"
+        | "skipped"
+        | "failed"
+      email_template:
+        | "invite"
+        | "reminder"
+        | "agreement"
+        | "signature"
+        | "document_request"
+        | "document_receipt"
       access_grant_kind: "explicit" | "guardian"
       agreement_kind: "quote" | "consultation" | "service" | "amendment" | "consent"
       agreement_status:
@@ -4595,6 +4878,24 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      email_delivery_status: [
+        "pending",
+        "sending",
+        "sent",
+        "queued",
+        "bounced",
+        "suppressed",
+        "skipped",
+        "failed",
+      ],
+      email_template: [
+        "invite",
+        "reminder",
+        "agreement",
+        "signature",
+        "document_request",
+        "document_receipt",
+      ],
       access_grant_kind: ["explicit", "guardian"],
       agreement_kind: ["quote", "consultation", "service", "amendment", "consent"],
       agreement_status: [
