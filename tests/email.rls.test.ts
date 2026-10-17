@@ -123,6 +123,16 @@ describe("outbound and inbound email", () => {
   it("reserves platform slugs and still allows a longer slug", async () => {
     const reserved = await db.query<{ slugs: string[] }>(`select app.reserved_firm_slugs() as slugs`);
     expect(reserved.rows[0].slugs).toEqual([...RESERVED_FIRM_SLUGS]);
+    const pinned = await db.query<{ proconfig: string[] | null }>(
+      `select p.proconfig
+       from pg_proc p
+       join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'app' and p.proname = 'reserved_firm_slugs'`,
+    );
+    expect(pinned.rows[0].proconfig?.join(" ") ?? "").toMatch(/search_path=/);
+    await db.query(`select set_config('search_path', 'pg_temp', true)`);
+    const still = await db.query<{ slugs: string[] }>(`select app.reserved_firm_slugs() as slugs`);
+    expect(still.rows[0].slugs).toEqual([...RESERVED_FIRM_SLUGS]);
     const owner = await createUser(email("owner"));
     await asUser(db, { userId: owner, aal: "aal2", totpAgeSeconds: 0 });
     await expectDbError(

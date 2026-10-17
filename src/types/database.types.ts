@@ -3,6 +3,7 @@
 // 20261017160000 (preview_invitation, request_mfa_reset),
 // 20261017170000–20261017170300, 20261017180000–20261017180100,
 // 20261017190000–20261017190100, and 20261017200000–20261017200200.
+// 20261017200300 only sets search_path on app.reserved_firm_slugs. It does not change this file.
 // Regenerate with `pnpm db:types` only after those migrations are applied live.
 
 export type Json =

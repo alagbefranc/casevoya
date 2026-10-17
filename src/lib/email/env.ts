@@ -9,6 +9,8 @@ export function emailRuntimeConfig() {
     fromAddress: process.env.CLOUDFLARE_EMAIL_FROM?.trim() || DEFAULT_FROM_ADDRESS,
     accountId: process.env.CLOUDFLARE_ACCOUNT_ID?.trim() || DEFAULT_CLOUDFLARE_ACCOUNT_ID,
     token: process.env.CLOUDFLARE_EMAIL_API_TOKEN ?? "",
+    routingToken: process.env.CLOUDFLARE_ROUTING_API_TOKEN ?? "",
+    routingReconcileSecret: process.env.EMAIL_ROUTING_RECONCILE_SECRET ?? "",
     dispatchSecret: process.env.EMAIL_DISPATCH_SECRET ?? "",
     inboundSecret: process.env.EMAIL_INBOUND_WEBHOOK_SECRET ?? "",
     serviceKey: process.env.SUPABASE_SECRET_KEY ?? "",
