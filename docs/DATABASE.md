@@ -15,6 +15,12 @@ Applied on the live project (versions recorded by `apply_migration`; do not edit
 | 20261017052643 | webhook_inbox | provider event inbox, unique `(provider, event_id)`, `app.ingest_webhook_event` |
 | 20261017083908 | fk_covering_indexes | covering indexes for foreign keys flagged by the performance advisor. Additive only. |
 
+In the repository, not yet applied to the live project (do not edit the file in place once applied):
+
+| Version | Name | Contents |
+|---|---|---|
+| 20261017110000 | source_governance | Official-host allowlist, source snapshots, check attempts, rule versions, evidence, professional reviews, pack versions, matter pins, impacts. `src/types/database.types.ts` stays stale until this migration is applied and `pnpm db:types` is run against the live project. |
+
 All tables have `ENABLE` + `FORCE ROW LEVEL SECURITY`. `anon` has no table privileges. There are
 no DELETE policies: deletion is a retention workflow (SEC-07), not a client action.
 
@@ -35,6 +41,17 @@ no DELETE policies: deletion is a retention workflow (SEC-07), not a client acti
 | `person_relationships` | Descriptive links, including `payer` and `sponsor`. Never consulted by authorization. | Same staff rule as households. |
 | `access_grants` | `explicit` or `guardian`. Guardian grants require a minor subject and a purpose. | SELECT: parties to the grant, or a firm owner at aal2. Writes: firm owner with a recent step-up. |
 | `webhook_inbox` | Provider events. Unique `(provider, event_id)`. `provider_account_id` is stored; a replay with a different account is rejected. | SELECT: staff of the row's organization at aal2. Unscoped rows (`organization_id` null) are invisible to tenants. No direct writes. |
+| `official_source_domains` | Official-host allowlist. Suffix match: exact host or a host that ends in `.` plus the registered host. Seed includes `canada.ca` (so `www.canada.ca` and `ircc.canada.ca`) and `cic.gc.ca` (so `www.cic.gc.ca`). `cic.gc.ca.evil.com` does not match. A match is an entry gate, not approval of a page. | SELECT: any active member with a workspace. INSERT/UPDATE: `service_role` only. |
+| `official_sources` | Page identity. `organization_id` null is the platform catalog. A firm row is that firm's record of an allowlisted URL. Freshness columns move only from snapshot and check triggers. | SELECT: global rows for any active member; firm rows for that firm's staff at aal2. INSERT/UPDATE: practice writers of that firm. Global writes are `service_role`. |
+| `source_snapshots` | Immutable capture: final URL, publisher, `retrieved_at`, nullable authority dates, sha256 `content_hash`. `snapshot_number` is assigned by the database. A hash change sets `change_detected` and does not rewrite older rows. | Same visibility as the parent source. Practice writers insert firm snapshots. |
+| `source_dependencies` | Linked URL recorded against a parent snapshot. The parent cannot be rewritten. | Same visibility as the parent snapshot. |
+| `source_check_attempts` | Append-only monitoring attempt. `failed` and `blocked` do not move `last_checked_at` and do not clear `change_detected`. | Staff of the active firm at aal2, including global attempts. Insert only. |
+| `rule_definitions` / `rule_versions` | Stable key plus a version. Published content is frozen. `content_revision` bumps when the claim, dates, or tests change. Global drafts stay hidden; tenants see a global version only at `published`, `review_due`, `suspended`, or `superseded`. | Staff of the active firm at aal2. Firm rows are private. Practice writers insert and update firm rows. |
+| `rule_evidence` | Claim-to-snapshot link. A blank or homepage section (`/`, `home`, `homepage`, `index`) cannot satisfy publication. Excerpt and interpretation notes are redacted in the audit diff. | Same staff visibility as the rule version. |
+| `professional_reviews` | Decision on the current `content_revision`. `approved` requires an active `licensed_consultant` membership of the signed-in user. Credential snapshot stays null. | Staff of that review's organization at aal2. |
+| `rule_pack_versions` / `rule_pack_items` | Versioned set a matter can pin. Publishing requires `next_review_at`, at least one item, and included rules already published, review-due, or suspended. | Staff visibility. Items are insert-only and freeze with the pack. |
+| `matter_rule_bindings` | The pack version a matter used. The pin does not move when a newer pack is published. `recheck_required` is set when a cited source hash changes and a tenant cannot clear it. | Staff of that organization at aal2. |
+| `rule_impacts` | Open work item when a cited hash changes (`source_content_hash_changed`). | Staff of that organization at aal2. |
 
 Common columns: `created_at`, `updated_at`, `created_by`, `version` (bumped by `app.touch_row()` on
 every UPDATE for optimistic locking: update `... where id = $1 and version = $expected`; 0 rows ⇒ 409).
@@ -72,6 +89,8 @@ licensed consultant. Platform admin is intentionally **not** an org role.
 | `app.can_insert_practice_row` | `firm_owner`, `licensed_consultant`, or `case_manager`, active workspace, aal2. Assistants read and update assigned people; they do not insert practice rows. `finance_user` has no person or matter visibility. |
 | `app.can_manage_access` | Firm owner, aal2, recent step-up, active workspace. |
 | `app.ingest_webhook_event(...)` | service_role only. First payload wins. Duplicate `(provider, event_id)` returns the existing id; a different account raises an error. |
+| `app.official_url_host(url)` / `app.host_is_allowlisted(host)` | HTTPS host parse, then exact or suffix match against `official_source_domains`. `cic.gc.ca.evil.com` is not `cic.gc.ca`. |
+| `app.rule_publication_blockers(version_id, content_revision)` | Not granted to `authenticated`. Blocks publish when claim, review date, tests, evidence, section, hash, retrieval time, or an approved review of that revision is missing, and when `effective_from` is only a copy of `retrieved_at`. |
 
 Staff MFA is enforced with new functions and RESTRICTIVE policies. Existing helpers are not replaced (`CREATE OR REPLACE` is forbidden). `public.create_organization` now requires aal2 because the membership trigger fires when it inserts an active `firm_owner`. Step-up is not required there because `user_id` is the caller.
 
@@ -88,5 +107,6 @@ idempotency key produced one outbox row. Profile display-name change was audited
 * T006 is not done: session inventory, revocation, recovery, and login rate limits are still open. Client and guardian invitations remain T021; this slice invites staff only.
 * T007 is not done: negative tests cover SQL RLS (cross-tenant, household, payer, unassigned staff, guardian-without-grant, adult-to-adult). Storage URLs, search, exports, and jobs do not exist yet, so they are not tested. Sensitive document categories are not split. `finance_user` sees no person or matter rows in this slice.
 * T010 is not done: the inbox deduplicates. Signature verification, retry, and the business effect of a webhook are still the worker's job.
+* T011 is in the repository and not applied to the live project. There is no fetcher (T012), so a stored hash is attested by the caller and not checked against bytes. There is no review workbench (T013) and no client projection of rule claims (T017). There is no platform-admin role; global catalog writes are `service_role` until that exists. Provincial nominee sites on other domains are not allowlisted. `database.types.ts` does not include these tables until the migration is applied and types are regenerated.
 * External tamper-evident audit sink (DB owner can still disable triggers).
 * Age of majority is not calculated. `is_minor` is recorded by staff. An authority-review task when a child reaches majority is future work.

@@ -96,6 +96,15 @@ export async function asMaintenance(db: TestDb) {
   await db.query(`select set_config('app.organization_id', '', false)`);
 }
 
+export async function asServiceRole(db: TestDb) {
+  await db.exec("reset role");
+  const claims = JSON.stringify({ role: "service_role" });
+  await db.query(`select set_config('request.jwt.claim.sub', '', false)`);
+  await db.query(`select set_config('request.jwt.claims', $1, false)`, [claims]);
+  await db.query(`select set_config('app.organization_id', '', false)`);
+  await db.exec("set role service_role");
+}
+
 export async function asUser(db: TestDb, session: Session) {
   await db.exec("reset role");
   const now = await db.query<{ epoch: string | number }>(
