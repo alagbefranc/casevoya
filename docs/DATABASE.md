@@ -2,22 +2,23 @@
 
 Project `casevoya` (`aqjtvqmojfamtspzyeqm`), Postgres 17, ca-central-1.
 
-Applied on the live project (16 Oct 2026):
+Applied on the live project (versions recorded by `apply_migration`; do not edit these files in place):
 
 | Version | Name | Contents |
 |---|---|---|
 | 20261017040614 | foundation_core | `app` schema, enums, organizations, profiles, memberships, tenant helpers, RLS |
 | 20261017040620 | audit_log | append-only `audit_log`, row-change triggers, `app.record_audit_event` |
 | 20261017040625 | outbox | `outbox_events`, enqueue + worker claim/ack/fail/replay functions |
+| 20261017052625 | staff_mfa | `app.current_aal`, `app.staff_mfa_satisfied`, `app.mfa_step_up_satisfied`, restrictive policies, staff membership trigger |
+| 20261017052630 | invitations | hashed single-use staff invites, accept/revoke, last `firm_owner` guard |
+| 20261017052636 | persons_matters_grants | persons, matters, participants, households, relationships, access grants, RLS |
+| 20261017052643 | webhook_inbox | provider event inbox, unique `(provider, event_id)`, `app.ingest_webhook_event` |
 
-Committed, not applied (apply after review; do not edit these files in place):
+Committed, not applied (needs Francis's approval before it is applied to the live database):
 
 | Version | Name | Contents |
 |---|---|---|
-| 20261017160000 | staff_mfa | `app.current_aal`, `app.staff_mfa_satisfied`, `app.mfa_step_up_satisfied`, restrictive policies, staff membership trigger |
-| 20261017160100 | invitations | hashed single-use staff invites, accept/revoke, last `firm_owner` guard |
-| 20261017160200 | persons_matters_grants | persons, matters, participants, households, relationships, access grants, RLS |
-| 20261017160300 | webhook_inbox | provider event inbox, unique `(provider, event_id)`, `app.ingest_webhook_event` |
+| 20261017053000 | fk_covering_indexes | covering indexes for foreign keys flagged by the performance advisor. Additive only. |
 
 All tables have `ENABLE` + `FORCE ROW LEVEL SECURITY`. `anon` has no table privileges. There are
 no DELETE policies: deletion is a retention workflow (SEC-07), not a client action.
