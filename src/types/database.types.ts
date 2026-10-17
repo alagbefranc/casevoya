@@ -1,5 +1,5 @@
 // Live schema (project aqjtvqmojfamtspzyeqm) through 20261017113202, extended in-repo
-// for unapplied migrations 20261017120000 and 20261017140000–20261017140500.
+// for unapplied migrations 20261017120000, 20261017140000–20261017140500 and 20261017160000.
 // Regenerate with `pnpm db:types` only after those migrations are applied live.
 
 export type Json =
@@ -168,6 +168,50 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      firm_onboarding: {
+        Row: {
+          completed_steps: string[]
+          created_at: string
+          created_by: string | null
+          current_step: string
+          details: Json
+          organization_id: string
+          sample_mode: boolean
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          completed_steps?: string[]
+          created_at?: string
+          created_by?: string | null
+          current_step?: string
+          details?: Json
+          organization_id: string
+          sample_mode?: boolean
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          completed_steps?: string[]
+          created_at?: string
+          created_by?: string | null
+          current_step?: string
+          details?: Json
+          organization_id?: string
+          sample_mode?: boolean
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "firm_onboarding_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       household_members: {
         Row: {
@@ -2129,6 +2173,20 @@ export type Database = {
       }
       perform_billing_action: {
         Args: { p_action: string; p_matter_id: string }
+        Returns: string
+      }
+      preview_invitation: {
+        Args: { p_token: string }
+        Returns: {
+          email: string | null
+          expires_at: string | null
+          organization_name: string | null
+          role: string | null
+          status: string
+        }[]
+      }
+      request_mfa_reset: {
+        Args: { p_reason: string }
         Returns: string
       }
       reset_staff_mfa: {

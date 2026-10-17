@@ -1,9 +1,19 @@
-@import "tailwindcss";
+@layer theme, base, kit, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "../styles/kit/base.css" layer(kit);
+@import "../styles/kit/mascot.css" layer(kit);
+@import "../styles/kit/kit2.css" layer(kit);
+@import "../styles/kit/auth.css" layer(kit);
 
 /*
- * Casevoya design tokens (docs/spec/DESIGN.md is the source of truth; Francis's overrides:
- * action #0075DE, canvas #F6F5F4, ink #111, Erode typeface). The Designer's HTML will replace
- * this shell; keep tokens here so converted components can use them.
+ * Casevoya design tokens (docs/spec/DESIGN.md; Francis's overrides:
+ * action #0075DE, canvas #F6F5F4, ink #111, Erode).
+ * Kit CSS sits above Tailwind preflight and below utilities, so the converted
+ * auth screens keep their element styles and the rest of the app can still
+ * use utilities.
  */
 :root {
   --canvas: #f6f5f4;
@@ -44,8 +54,7 @@
   --motion-base: 200ms;
   --shadow-overlay: 0 12px 32px rgba(17, 17, 17, 0.12);
 
-  /* Erode is not bundled yet (licence + tabular-figure check pending). */
-  --font-brand: "Erode", Georgia, "Times New Roman", serif;
+  --font-brand: var(--font-erode), Georgia, "Times New Roman", serif;
 }
 
 @theme inline {
@@ -78,9 +87,11 @@ html {
   background: var(--selection);
 }
 
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
 }
 
 .tabular {
