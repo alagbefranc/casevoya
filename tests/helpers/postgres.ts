@@ -102,9 +102,24 @@ grant select, insert, update, delete on storage.objects to service_role;
 
 export type TestDb = PGlite;
 
-export async function createTestDb(): Promise<TestDb> {
+// Hosted Supabase grants every new public table, function, and sequence to anon and
+// authenticated by default. A migration that forgets to revoke keeps those privileges.
+const supabaseDefaultPrivileges = `
+grant usage on schema public to anon, authenticated, service_role;
+alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+`;
+
+export type TestDbOptions = {
+  /** Emulate Supabase's default privileges on the public schema. */
+  supabaseDefaultPrivileges?: boolean;
+};
+
+export async function createTestDb(options: TestDbOptions = {}): Promise<TestDb> {
   const db = new PGlite({ extensions: { pgcrypto } });
   await db.exec(harness);
+  if (options.supabaseDefaultPrivileges) await db.exec(supabaseDefaultPrivileges);
   const dir = path.join(root, "supabase/migrations");
   const files = readdirSync(dir)
     .filter((file) => file.endsWith(".sql"))
@@ -156,6 +171,12 @@ export async function asServiceRole(db: TestDb) {
   await db.query(`select set_config('request.jwt.claims', $1, false)`, [claims]);
   await db.query(`select set_config('app.organization_id', '', false)`);
   await db.exec("set role service_role");
+}
+
+export async function asAnon(db: TestDb) {
+  await asMaintenance(db);
+  await db.query(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ role: "anon" })]);
+  await db.exec("set role anon");
 }
 
 export async function asUser(db: TestDb, session: Session) {

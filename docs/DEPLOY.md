@@ -8,7 +8,7 @@ Do not commit secrets. Copy the names below into the host environment. Account i
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL. Public. |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser key. Public. |
-| `SUPABASE_SECRET_KEY` | Service role for mail dispatch, inbound intake, and routing reconcile. |
+| `SUPABASE_SECRET_KEY` | Service role for mail dispatch, inbound intake, routing reconcile, and document upload completion (the server reads the stored file and calls `finish_verified_document_upload`). Without it, portal uploads cannot be completed. |
 | `CLOUDFLARE_EMAIL_API_TOKEN` | Email Sending API. Not used for routing rules. |
 | `CLOUDFLARE_ACCOUNT_ID` | Account that owns the zone. Default `c8010438fc56280e3ea5747a123e818a`. Sending uses it in the URL. Routing rules are zone-scoped, so reconcile does not send this id. |
 | `CLOUDFLARE_EMAIL_FROM` | Outbound From address. Default `notices@casevoya.ca`. |

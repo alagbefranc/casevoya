@@ -1,10 +1,11 @@
 "use server";
 
-import { createHash } from "node:crypto";
 import { documentError } from "@/modules/documents/errors";
-import { headerHex, mediaTypeForFilename, UPLOAD_CEILING_BYTES } from "@/modules/documents/files";
+import { mediaTypeForFilename, UPLOAD_CEILING_BYTES } from "@/modules/documents/files";
+import { verifyDocumentStream } from "@/modules/documents/verify";
 import { verifyTotpCode } from "@/lib/auth/verify-totp";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { isUuid } from "@/lib/tenant/context";
 import type { Database, Json } from "@/types/database.types";
 
@@ -21,12 +22,13 @@ async function clientFor(organizationId: string, code: string | null) {
   if (!isUuid(organizationId)) return { error: "Choose a firm." as const };
   const supabase = await createClient({ organizationId });
   const { data: claims } = await supabase.auth.getClaims();
-  if (!claims?.claims?.sub) return { error: "Sign in first." as const };
+  const userId = claims?.claims?.sub;
+  if (!userId) return { error: "Sign in first." as const };
   if (code != null && code !== "") {
     const verified = await verifyTotpCode(supabase, code);
     if (!verified.ok) return { error: verified.error };
   }
-  return { supabase };
+  return { supabase, userId };
 }
 
 function objectRecord(value: Json): Record<string, Json | undefined> | null {
@@ -109,27 +111,36 @@ export async function completeDocumentUpload(input: { organizationId: string; ve
   if (!isUuid(input.versionId)) return { error: "Choose the upload to finish." };
   const session = await clientFor(input.organizationId, null);
   if ("error" in session) return { error: session.error };
+  // The caller's own session proves they can see this upload and that they started it.
   const { data: row, error: readError } = await session.supabase
     .from("document_versions")
-    .select("storage_key, upload_state")
+    .select("storage_key, upload_state, scan_result, created_by")
     .eq("id", input.versionId)
     .maybeSingle();
-  if (readError || !row) return { error: "That upload could not be found." };
-
-  let sha = "a".repeat(64);
-  let header = "00".repeat(8);
-  if (row.upload_state === "uploading") {
-    const downloaded = await session.supabase.storage.from("documents").download(row.storage_key);
-    if (downloaded.error || !downloaded.data) return { error: "The file did not finish uploading. Try again." };
-    const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
-    sha = createHash("sha256").update(bytes).digest("hex");
-    header = headerHex(bytes);
-    if (header.length < 16) return { error: "The file is not a PDF, JPEG, PNG, HEIC, or DOCX." };
+  if (readError || !row || row.created_by !== session.userId) return { error: "That upload could not be found." };
+  if (row.upload_state !== "uploading") {
+    return { uploadState: row.upload_state as string, scanResult: row.scan_result ?? null };
   }
-  const { data, error } = await session.supabase.rpc("complete_document_upload", {
+
+  // The bytes are read and checked here, on the server. Completion is service-role only,
+  // so a browser cannot report its own hash or file header.
+  let service: ReturnType<typeof createServiceClient>;
+  try {
+    service = createServiceClient();
+  } catch {
+    return { error: "Uploads cannot be checked right now. Try again later." };
+  }
+  const downloaded = await service.storage.from("documents").download(row.storage_key);
+  if (downloaded.error || !downloaded.data) return { error: "The file did not finish uploading. Try again." };
+  const verified = await verifyDocumentStream(downloaded.data.stream(), UPLOAD_CEILING_BYTES);
+  if (!verified.ok) return { error: "That file is larger than 100 MB." };
+
+  const { data, error } = await service.rpc("finish_verified_document_upload", {
     p_version_id: input.versionId,
-    p_sha256: sha,
-    p_header_hex: header,
+    p_actor_user_id: session.userId,
+    p_sha256: verified.sha256,
+    p_byte_size: verified.byteSize,
+    p_detected_media_type: verified.mediaType,
   });
   if (error) return { error: documentError(error.message) };
   const result = objectRecord(data);
