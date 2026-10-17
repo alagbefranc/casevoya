@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__github__merge_pull_request",
+      "Bash(node scripts/ops/apply-migration.mjs:*)",
+      "Bash(node scripts/ops/read-sql.mjs:*)",
+      "Bash(node scripts/ops/bootstrap-e2e-owner.mjs)",
+      "Bash(pnpm run deploy:app)",
+      "Bash(pnpm run deploy:inbound)"
+    ]
+  }
+}
