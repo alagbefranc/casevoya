@@ -13,6 +13,16 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    files: ["src/components/port/**/*.{ts,tsx}"],
+    rules: {
+      // The converted screens keep the designer's markup, anchors and location changes.
+      "@next/next/no-img-element": "off",
+      "@next/next/no-html-link-for-pages": "off",
+      "@next/next/no-location-assign-relative-destination": "off",
+      "jsx-a11y/aria-unsupported-elements": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;
