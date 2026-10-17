@@ -13,12 +13,7 @@ Applied on the live project (versions recorded by `apply_migration`; do not edit
 | 20261017052630 | invitations | hashed single-use staff invites, accept/revoke, last `firm_owner` guard |
 | 20261017052636 | persons_matters_grants | persons, matters, participants, households, relationships, access grants, RLS |
 | 20261017052643 | webhook_inbox | provider event inbox, unique `(provider, event_id)`, `app.ingest_webhook_event` |
-
-Committed, not applied (needs Francis's approval before it is applied to the live database):
-
-| Version | Name | Contents |
-|---|---|---|
-| 20261017053000 | fk_covering_indexes | covering indexes for foreign keys flagged by the performance advisor. Additive only. |
+| 20261017083908 | fk_covering_indexes | covering indexes for foreign keys flagged by the performance advisor. Additive only. |
 
 All tables have `ENABLE` + `FORCE ROW LEVEL SECURITY`. `anon` has no table privileges. There are
 no DELETE policies: deletion is a retention workflow (SEC-07), not a client action.
