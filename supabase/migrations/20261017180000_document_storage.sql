@@ -1286,7 +1286,7 @@ begin
   values ('documents', 'documents', false)
   on conflict (id) do update set public = false;
   execute 'grant select, insert on storage.objects to authenticated';
-  execute 'alter table storage.objects enable row level security';
+  -- storage.objects already has row level security. The migration role does not own that table.
   if not exists (
     select 1 from pg_policies
     where schemaname = 'storage' and tablename = 'objects' and policyname = 'documents_object_insert'
