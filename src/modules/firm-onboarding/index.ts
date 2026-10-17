@@ -25,6 +25,13 @@ export {
 } from "./licence";
 export { intervalFromSetting, productIntervalSchema, type ProductInterval } from "./settings";
 export {
+  DEFAULT_JURISDICTION_CODES,
+  PRACTICE_JURISDICTIONS,
+  jurisdictionCodePatternOk,
+  jurisdictionCodesFromFields,
+  jurisdictionFieldChecked,
+} from "./jurisdictions";
+export {
   FIRM_SETUP_STEP_LABELS,
   FIRM_SETUP_STEPS,
   SAMPLE_PROOF_LABELS,

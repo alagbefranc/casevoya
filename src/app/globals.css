@@ -6,6 +6,9 @@
 @import "../styles/kit/base.css" layer(kit);
 @import "../styles/kit/mascot.css" layer(kit);
 @import "../styles/kit/kit2.css" layer(kit);
+@import "../styles/kit/fp.css" layer(kit);
+@import "../styles/kit/shell.css" layer(kit);
+@import "../styles/kit/portal.css" layer(kit);
 @import "../styles/kit/auth.css" layer(kit);
 
 /*

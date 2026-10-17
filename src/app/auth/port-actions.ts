@@ -7,7 +7,12 @@ import { safeAccessError } from "@/lib/auth/step-up";
 import { safeNext } from "@/lib/auth/redirect";
 import { firmSlug } from "@/lib/auth/slug";
 import { isInvitationToken } from "@/lib/auth/invitations";
-import { firmSetupDbPayload, firmSetupPayloadSchema, normalizeCollegeId } from "@/modules/firm-onboarding";
+import {
+  firmSetupDbPayload,
+  firmSetupPayloadSchema,
+  jurisdictionCodesFromFields,
+  normalizeCollegeId,
+} from "@/modules/firm-onboarding";
 import { createClient } from "@/lib/supabase/server";
 
 export type PortResult =
@@ -273,7 +278,6 @@ export async function saveSetupStep(
   const locale = text(fields, "lc").startsWith("Fran") ? "fr-CA" : "en-CA";
   const years = Number.parseInt(text(fields, "retention_years"), 10);
   const accent = text(fields, "brand");
-  const practised = ["j0", "j1", "j2", "j3", "j4", "j5", "j6", "j7"].some((id) => fields[id] === true);
   const draft = {
     firm_details: {
       step,
@@ -293,8 +297,7 @@ export async function saveSetupStep(
       dpaVersion: "2026-10-17",
       subscriptionTermsVersion: "2026-10-17",
     },
-    // The screen lists federal and provincial practice. The live function stores two-letter country codes.
-    jurisdictions: { step, codes: practised ? ["CA"] : [] },
+    jurisdictions: { step, codes: jurisdictionCodesFromFields(fields) },
     licence: { step },
     branding: {
       step,

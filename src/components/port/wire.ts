@@ -3,6 +3,12 @@
 import { useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
+  acceptPortalInvitation,
+  previewPortalInvitation,
+  savePortalInvitationDraft,
+} from "@/modules/portal-invitations/actions";
+import type { PortalAcceptPayload, PortalShareSection } from "@/modules/portal-invitations/types";
+import {
   createTrialFirm,
   enrollAuthenticator,
   getAuthContext,
@@ -31,9 +37,47 @@ function checked(root: ParentNode, id: string) {
   return Boolean(root.querySelector<HTMLInputElement>(`#${id}`)?.checked);
 }
 
+type InvitePreview = {
+  status?: string;
+  invitee?: { display_name?: string };
+  organization?: { display_name?: string };
+  policies?: { portal_terms?: { id?: string } | null; privacy_notice?: { id?: string } | null };
+};
+
+function asPreview(value: unknown): InvitePreview | null {
+  return value && typeof value === "object" ? (value as InvitePreview) : null;
+}
+
+function portalLocale(root: ParentNode): "en-CA" | "fr-CA" {
+  const french = [...root.querySelectorAll<HTMLElement>(".seg[aria-label='Language'] button")].find(
+    (button) => button.getAttribute("aria-pressed") === "true" && /fran/i.test(button.textContent || ""),
+  );
+  return french ? "fr-CA" : "en-CA";
+}
+
+function portalAcceptPayload(root: HTMLElement, preview: InvitePreview, page: string): PortalAcceptPayload | { error: string } {
+  const terms = preview.policies?.portal_terms?.id;
+  const privacy = preview.policies?.privacy_notice?.id;
+  if (!terms || !privacy) return { error: "The firm hasn’t published the current terms and privacy notice." };
+  const shares: PortalShareSection[] = [];
+  if (checked(root, "o2")) shares.push("passport_bio");
+  if (checked(root, "o3")) shares.push("school_transcript");
+  return {
+    portal_terms_id: terms,
+    privacy_notice_id: privacy,
+    locale: portalLocale(root),
+    email_notices: root.querySelector("#c1") ? checked(root, "c1") : true,
+    sms_notices: root.querySelector("#c2") ? checked(root, "c2") : false,
+    deadline_reminders: root.querySelector("#c3") ? checked(root, "c3") : true,
+    processing_consent: page === "accept-family" ? checked(root, "o1") : true,
+    shares: page === "accept-family" ? shares : undefined,
+  };
+}
+
 export function usePortActions(page: string, token?: string) {
   const ctx = useRef<Ctx | null>(null);
   const enrolled = useRef<string | null>(null);
+  const invite = useRef<InvitePreview | null>(null);
 
   return useCallback(
     async (event: PortEvent): Promise<PortResult> => {
@@ -75,6 +119,23 @@ export function usePortActions(page: string, token?: string) {
               if (created?.ok && created.href === "/setup") sessionStorage.removeItem("cv-trial");
               if (created && created.ok === false) return created;
             }
+          }
+        }
+        if ((page === "accept-client" || page === "accept-family" || page === "accept-sponsor") && token && event.step === 0) {
+          if (!invite.current) {
+            const opened = await previewPortalInvitation(token);
+            if ("error" in opened) return { ok: false, message: opened.error ?? "This invitation could not be opened." };
+            invite.current = asPreview(opened.preview);
+          }
+          const preview = invite.current;
+          const heading = event.root.querySelector("h1");
+          const first = preview?.invitee?.display_name?.split(" ")[0];
+          const firm = preview?.organization?.display_name;
+          if (heading && first && firm && preview?.status === "open") {
+            heading.textContent = `Hi ${first}, welcome to your portal`;
+          }
+          if (preview?.status && preview.status !== "open") {
+            return { ok: false, message: "This invitation can no longer be used." };
           }
         }
         if (page === "accept-staff" && token && session.configured) {
@@ -191,6 +252,28 @@ export function usePortActions(page: string, token?: string) {
           }
         }
         return saveSetupStep(event.step, fields);
+      }
+      if ((page === "accept-client" || page === "accept-family" || page === "accept-sponsor") && token && el.hasAttribute("data-next")) {
+        if (!invite.current) {
+          const opened = await previewPortalInvitation(token);
+          if ("error" in opened) return { ok: false, message: opened.error ?? "This invitation could not be opened." };
+          invite.current = asPreview(opened.preview);
+        }
+        const preview = invite.current;
+        if (!preview || preview.status !== "open") return { ok: false, message: "This invitation can no longer be used." };
+        const draft = portalAcceptPayload(event.root, preview, page);
+        if ("error" in draft) return { ok: false, message: draft.error };
+        const saved = await savePortalInvitationDraft(token, { ...draft, step: event.step });
+        if ("error" in saved) return { ok: false, message: saved.error ?? "That draft could not be saved." };
+        const finishing =
+          (page === "accept-client" && event.step === 3) ||
+          (page === "accept-family" && event.step === 3) ||
+          (page === "accept-sponsor" && event.step === 2);
+        if (!finishing) return null;
+        const accepted = await acceptPortalInvitation(token, draft);
+        if ("error" in accepted) return { ok: false, message: accepted.error ?? "That invitation could not be accepted." };
+        if (page === "accept-client") return null;
+        return { ok: true, href: "/portal" };
       }
       if (page === "accept-staff" && token && el.dataset.href?.startsWith("/mfa")) {
         return joinStaffInvite({

@@ -12,6 +12,9 @@ import {
   ciccRegisterHost,
   deriveLicenceCheck,
   firmSetupDbPayload,
+  jurisdictionCodePatternOk,
+  jurisdictionCodesFromFields,
+  jurisdictionFieldChecked,
   intervalFromSetting,
   licenceCheckInputSchema,
   realClientInviteBlockers,
@@ -182,5 +185,35 @@ describe("setup steps", () => {
       "sample_step_missing:invoice",
       "sample_step_missing:export",
     ]);
+  });
+});
+
+describe("practice jurisdictions", () => {
+  it("maps Federal and the provinces to two-letter codes and reloads them", () => {
+    const fields = {
+      j0: true,
+      j1: false,
+      j2: true,
+      j3: false,
+      j4: true,
+      j5: false,
+      j6: false,
+      j7: true,
+    };
+    const codes = jurisdictionCodesFromFields(fields);
+    expect(codes).toEqual(["CA", "BC", "MB", "QC"]);
+    expect(jurisdictionCodePatternOk(codes)).toBe(true);
+    expect(codes.every((code) => /^[A-Z]{2}$/.test(code))).toBe(true);
+    expect(jurisdictionFieldChecked(codes)).toMatchObject({
+      j0: true,
+      j1: false,
+      j2: true,
+      j3: false,
+      j4: true,
+      j5: false,
+      j6: false,
+      j7: true,
+    });
+    expect(jurisdictionCodesFromFields({ j0: false, j1: true })).toEqual(["ON"]);
   });
 });

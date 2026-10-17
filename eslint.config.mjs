@@ -14,7 +14,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
   ]),
   {
-    files: ["src/components/port/**/*.{ts,tsx}"],
+    files: ["src/components/port/**/*.{ts,tsx}", "src/components/portal/**/*.{ts,tsx}"],
     rules: {
       // The converted screens keep the designer's markup, anchors and location changes.
       "@next/next/no-img-element": "off",
