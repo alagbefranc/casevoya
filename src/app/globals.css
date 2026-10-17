@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+/*
+ * Casevoya design tokens (docs/spec/DESIGN.md is the source of truth; Francis's overrides:
+ * action #0075DE, canvas #F6F5F4, ink #111, Erode typeface). The Designer's HTML will replace
+ * this shell; keep tokens here so converted components can use them.
+ */
+:root {
+  --canvas: #f6f5f4;
+  --surface: #ffffff;
+  --surface-muted: #efeeec;
+  --text: #111111;
+  --text-secondary: #615d59;
+  --text-muted: #69635e;
+  --border: #dedbd7;
+  --border-strong: #8c8781;
+  --divider: rgba(0, 0, 0, 0.08);
+
+  --action: #0075de;
+  --action-hover: #0065bf;
+  --action-active: #0055a1;
+  --on-action: #ffffff;
+  --action-tint: #e6f3fe;
+  --action-tint-text: #075b9f;
+  --focus: #075b9f;
+  --selection: #dceeff;
+
+  --success-bg: #e7f3ec;
+  --success-text: #205c38;
+  --warning-bg: #fff2d2;
+  --warning-text: #704b00;
+  --danger-bg: #fde9e5;
+  --danger-text: #a12c20;
+  --info-bg: #e6f3fe;
+  --info-text: #075b9f;
+  --neutral-bg: #efeeec;
+  --neutral-text: #514c47;
+
+  --radius-sm: 4px;
+  --radius-control: 8px;
+  --radius-panel: 12px;
+
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --shadow-overlay: 0 12px 32px rgba(17, 17, 17, 0.12);
+
+  /* Erode is not bundled yet (licence + tabular-figure check pending). */
+  --font-brand: "Erode", Georgia, "Times New Roman", serif;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-ink: var(--text);
+  --color-ink-secondary: var(--text-secondary);
+  --color-ink-muted: var(--text-muted);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-action: var(--action);
+  --color-action-hover: var(--action-hover);
+  --color-action-active: var(--action-active);
+  --color-on-action: var(--on-action);
+  --color-danger: var(--danger-text);
+  --color-danger-bg: var(--danger-bg);
+  --radius-control: var(--radius-control);
+  --radius-panel: var(--radius-panel);
+  --font-sans: var(--font-brand);
+}
+
+html {
+  background: var(--canvas);
+  color: var(--text);
+  font-family: var(--font-brand);
+}
+
+::selection {
+  background: var(--selection);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
