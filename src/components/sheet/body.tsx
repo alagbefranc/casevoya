@@ -3,6 +3,7 @@ import { DemoSheet } from "@/components/sheet/demo";
 import { LiveSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
+import { loadFinanceSnapshot } from "@/modules/finance/load";
 import { loadSheetBundle, loadSheetStaff } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 
@@ -33,9 +34,12 @@ export async function SheetBody({
     );
   }
   const bundle = await loadSheetBundle(staff);
+  const finance = page === "finance" || page === "matter" || page === "settings"
+    ? await loadFinanceSnapshot(staff.organizationId, page === "matter" ? matterId ?? null : null)
+    : null;
   return (
     <SheetScreen page={page}>
-      <LiveSheet bundle={bundle} page={page} tab={query.tab} view={query.view} query={query.q} matterId={matterId} />
+      <LiveSheet bundle={bundle} page={page} tab={query.tab} view={query.view} query={query.q} matterId={matterId} finance={finance} />
     </SheetScreen>
   );
 }

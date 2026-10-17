@@ -2,19 +2,21 @@
 
 export type PortalPaymentIntentResult = {
   clientSecret: string | null;
-  /**
-   * TODO(finance): create a Stripe PaymentIntent for a real invoice and return its client_secret.
-   * There is no invoices table, and this action must not charge a card.
-   */
-  reason?: "not_implemented";
+  reason?: "not_implemented" | "advance_card_disabled" | "connect_required";
 };
 
 export async function createPortalPaymentIntent(input: {
   organizationId?: string;
+  invoiceId?: string;
   amountCents: number;
-  currency: "cad";
+  currency: string;
   description: string;
 }): Promise<PortalPaymentIntentResult> {
-  void input;
+  if (!input.invoiceId || !input.organizationId) return { clientSecret: null, reason: "not_implemented" };
+  const { createInvoicePaymentIntent } = await import("@/modules/finance/actions");
+  const result = await createInvoicePaymentIntent({ organizationId: input.organizationId, invoiceId: input.invoiceId });
+  if (result.clientSecret) return { clientSecret: result.clientSecret };
+  if (result.error && /bank transfer|advances/i.test(result.error)) return { clientSecret: null, reason: "advance_card_disabled" };
+  if (result.error && /payout account/i.test(result.error)) return { clientSecret: null, reason: "connect_required" };
   return { clientSecret: null, reason: "not_implemented" };
 }

@@ -29,7 +29,7 @@ function literal(address: string) {
   return [{ type: "literal", field: "to", value: address }];
 }
 
-function mockZone(initial: RoutingRule[], opts?: { failCreate?: boolean; throwOn?: string }) {
+function mockZone(initial: RoutingRule[], opts?: { failCreate?: boolean; throwOn?: string; conflictCreate?: boolean; ownOnConflict?: boolean }) {
   const rules = initial.map((item) => ({ ...item }));
   const calls: Call[] = [];
   const fetchImpl = async (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => {
@@ -54,6 +54,13 @@ function mockZone(initial: RoutingRule[], opts?: { failCreate?: boolean; throwOn
     if (init.method === "POST") {
       if (opts?.failCreate) {
         return { ok: false, status: 500, json: async () => ({ success: false, errors: [{ message: "unavailable" }] }) };
+      }
+      if (opts?.conflictCreate) {
+        if (opts.ownOnConflict) {
+          const body = JSON.parse(init.body ?? "{}") as Record<string, unknown>;
+          rules.push({ id: `owned-${rules.length + 1}`, enabled: true, ...body } as RoutingRule);
+        }
+        return { ok: false, status: 409, json: async () => ({ success: false, errors: [{ message: "duplicate" }] }) };
       }
       const body = JSON.parse(init.body ?? "{}") as Record<string, unknown>;
       const created = { id: `created-${rules.length + 1}`, enabled: true, ...body };
@@ -173,6 +180,48 @@ describe("firm routing rules", () => {
     expect(result.added).toEqual([]);
     expect(result.removed).toEqual([]);
     expect(result.failures[0]?.op).toBe("list");
+  });
+
+  it("reports a 409 on a rule we do not own as skipped, not added", async () => {
+    const zone = mockZone(
+      [
+        rule({
+          id: "shared",
+          name: "shared inbox",
+          matchers: literal("harbour@docs.casevoya.ca"),
+        }),
+      ],
+      { conflictCreate: true },
+    );
+    const result = await reconcileFirmRoutes(["harbour"], client(zone.fetchImpl));
+    expect(result.added).toEqual([]);
+    expect(result.skipped).toContain("harbour");
+    expect(result.failures).toEqual([]);
+    expect(zone.rules.map((item) => item.id)).toEqual(["shared"]);
+  });
+
+  it("counts a 409 as added when the re-list shows the canonical firm rule", async () => {
+    const zone = mockZone([], { conflictCreate: true, ownOnConflict: true });
+    const result = await reconcileFirmRoutes(["harbour"], client(zone.fetchImpl));
+    expect(result.added).toEqual(["harbour"]);
+    expect(result.skipped).toEqual([]);
+    expect(result.failures).toEqual([]);
+    expect(zone.rules.some((item) => item.name === "casevoya-firm:harbour")).toBe(true);
+  });
+
+  it("keeps the previous rule when a 409 is a rule we do not own", async () => {
+    const zone = mockZone(
+      [
+        rule({ id: "old-firm", name: "casevoya-firm:retired", matchers: literal("retired@docs.casevoya.ca") }),
+        rule({ id: "shared", name: "shared inbox", matchers: literal("harbour@docs.casevoya.ca") }),
+      ],
+      { conflictCreate: true },
+    );
+    const failed = await applyFirmSlugRoute({ claimed: "harbour", released: "retired" }, client(zone.fetchImpl));
+    expect(failed.ok).toBe(false);
+    expect(failed.failures[0]).toMatchObject({ op: "create", slug: "harbour" });
+    expect(zone.calls.some((call) => call.method === "DELETE")).toBe(false);
+    expect(zone.rules.map((item) => item.id)).toContain("old-firm");
   });
 
   it("creates the new slug before deleting the old one, and keeps the old rule when create fails", async () => {

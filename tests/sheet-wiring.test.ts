@@ -13,13 +13,13 @@ import {
 
 describe("sheet wiring", () => {
   it("keeps Northline off live slots and names the missing backends", () => {
-    expect(slotFor("finance")).toMatch(/Stripe/);
+    expect(slotFor("finance")).toBeNull();
     expect(slotFor("inbox")).toMatch(/mailer/);
     expect(slotFor("drafts")).toMatch(/Vo/);
     expect(slotFor("ai")).toMatch(/not connected/);
-    expect(slotFor("matter", "billing")).toMatch(/Stripe/);
+    expect(slotFor("matter", "billing")).toBeNull();
     expect(slotFor("matter", "messages")).toMatch(/mailer/);
-    expect(slotFor("settings", "billing")).toMatch(/Stripe/);
+    expect(slotFor("settings", "billing")).toBeNull();
     expect(slotFor("settings", "general")).toBeNull();
     expect(slotFor("calendar", "deadlines")).toBeNull();
     expect(slotFor("calendar")).toBeNull();

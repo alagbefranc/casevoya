@@ -133,10 +133,12 @@ export async function reconcileFirmRoutes(desiredSlugs: readonly string[], clien
   }
   const plan = planFirmRouting(desiredSlugs, rules, client.domain);
   const added: string[] = [];
+  const skipped = [...plan.skipped];
   const removed: { id: string; name: string }[] = [];
   for (const slug of plan.create) {
     const created = await createFirmRule(slug, client);
     if (created.ok) added.push(slug);
+    else if (created.skipped) skipped.push(slug);
     else failures.push({ op: "create", slug, error: created.error });
   }
   for (const rule of plan.remove) {
@@ -144,7 +146,7 @@ export async function reconcileFirmRoutes(desiredSlugs: readonly string[], clien
     if (deleted.ok) removed.push({ id: rule.id, name: rule.name });
     else failures.push({ op: "delete", ruleId: rule.id, slug: slugFromRule(rule), error: deleted.error });
   }
-  return { added, removed, kept: plan.keep, skipped: plan.skipped, failures };
+  return { added, removed, kept: plan.keep, skipped, failures };
 }
 
 export async function applyFirmSlugRoute(
@@ -222,10 +224,15 @@ function ownedRuleForSlug(rule: RoutingRule, slug: string, domain: string): bool
   });
 }
 
-async function createFirmRule(slug: string, client: RoutingClient): Promise<{ ok: true } | { ok: false; error: string }> {
+async function createFirmRule(
+  slug: string,
+  client: RoutingClient,
+): Promise<{ ok: true; skipped?: false } | { ok: false; skipped: boolean; error: string }> {
   const domain = inboundDomain(client.domain);
   const address = firmAddress(slug, domain);
-  if (address.length > 90 || address.includes("+")) return { ok: false, error: "address is not an exact firm rule" };
+  if (address.length > 90 || address.includes("+")) {
+    return { ok: false, skipped: false, error: "address is not an exact firm rule" };
+  }
   const zoneId = client.zoneId || EMAIL_ROUTING_ZONE_ID;
   const url = `https://api.cloudflare.com/client/v4/zones/${zoneId}/email/routing/rules`;
   try {
@@ -233,8 +240,19 @@ async function createFirmRule(slug: string, client: RoutingClient): Promise<{ ok
     return { ok: true };
   } catch (error) {
     const status = error instanceof CfError ? error.status : 0;
-    if (status === 409) return { ok: true };
-    return { ok: false, error: messageOf(error) };
+    if (status === 409) {
+      // A 409 means some rule already matches the address. Count it as added only
+      // when a re-list shows the canonical casevoya-firm:<slug> rule. A rule we
+      // do not own is skipped, not added, and not a failure.
+      try {
+        const listed = await listRoutingRules(client);
+        if (listed.some((rule) => isCanonicalFirmRule(rule, slug, domain))) return { ok: true };
+      } catch (listError) {
+        return { ok: false, skipped: false, error: messageOf(listError) };
+      }
+      return { ok: false, skipped: true, error: "duplicate rule is not owned" };
+    }
+    return { ok: false, skipped: false, error: messageOf(error) };
   }
 }
 

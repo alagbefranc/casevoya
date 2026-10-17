@@ -25,7 +25,7 @@ const APPEARANCE = {
 /**
  * Mounts Stripe's Payment Element and Express Checkout Element in the designed slots.
  * Without NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY the stand-in fields stay.
- * Confirming still needs a PaymentIntent from createPortalPaymentIntent, which is stubbed.
+ * A live invoice puts its amount on #cv-payment. The demo markup has no invoice id, so it stays a preview.
  */
 export function useStripePay(ref: RefObject<HTMLElement | null>, page: string) {
   useEffect(() => {
@@ -37,6 +37,10 @@ export function useStripePay(ref: RefObject<HTMLElement | null>, page: string) {
     const paymentSlot = root.querySelector<HTMLElement>("#cv-payment");
     const expressSlot = root.querySelector<HTMLElement>("#cv-express");
     if (!paymentSlot || !expressSlot || root.dataset.stripe === "1") return;
+    const invoiceId = paymentSlot.dataset.invoiceId;
+    const organizationId = paymentSlot.dataset.organizationId;
+    const amountCents = Number(paymentSlot.dataset.amountCents || "113000");
+    const currency = (paymentSlot.dataset.currency || "cad").toLowerCase();
 
     let stripe: Stripe | null = null;
     let elements: StripeElements | null = null;
@@ -52,14 +56,19 @@ export function useStripePay(ref: RefObject<HTMLElement | null>, page: string) {
         return;
       }
       const intent = await createPortalPaymentIntent({
-        amountCents: 113_000,
-        currency: "cad",
+        organizationId,
+        invoiceId,
+        amountCents,
+        currency,
         description: "Invoice balance",
       });
       if (!intent.clientSecret) {
-        toast2("Payment isn’t connected yet", {
-          sub: "Nothing was charged. Invoices will create the PaymentIntent.",
-        });
+        const sub = intent.reason === "advance_card_disabled"
+          ? "Advances stay a bank transfer until the firm verifies them. Nothing was charged."
+          : intent.reason === "connect_required"
+            ? "The firm’s payout account is not enabled yet. Nothing was charged."
+            : "Nothing was charged. A live invoice creates the PaymentIntent.";
+        toast2("Payment isn’t connected yet", { sub });
         return;
       }
       const confirmed = await stripe.confirmPayment({
@@ -76,8 +85,8 @@ export function useStripePay(ref: RefObject<HTMLElement | null>, page: string) {
       if (!stripe || cancelled) return;
       elements = stripe.elements({
         mode: "payment",
-        amount: 113_000,
-        currency: "cad",
+        amount: amountCents,
+        currency,
         appearance: APPEARANCE,
         fonts: [{ cssSrc: `${location.origin}/fonts/erode.css` }],
       });

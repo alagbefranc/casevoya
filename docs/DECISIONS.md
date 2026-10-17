@@ -39,12 +39,14 @@
 
 | 2026-10-17 | T022 implements the in-house e-signature decision. Provider is always `in_house`. Envelope life defaults to 14 days (`agreements.envelope_days`, pending confirmation, clamped 1–90). Consent text version `esign-consent-2026-10-17` is pending confirmation and is not a certification of legal sufficiency. Currency defaults to CAD. Professional fees are integer cents. A government-fee note stores no amount. At most 8 signers, in the order given. Idempotency keys are 8–180 characters. Signing a service agreement on a pending engagement sets `engaged` and stores the agreement id as the locator. It does not change stage and does not record representation authority. Quotes are issued and accepted without an envelope. An accepted quote is not an executed agreement. | Engineering, pending Francis |
 
+| 2026-10-17 | T030–T033 keep payments in Casevoya. PaymentIntents and the Payment Element collect professional-fee cards on the firm’s Connect account, with no application fee and no Checkout or hosted invoice. Advances stay manual bank transfers until verified and post to client-funds, not earned fees. Government fees are a note only. Plan prices are `product_settings` `billing.plans` (`pending_confirmation` true) from the PRD §3 hypotheses: solo 12900, practice 29900, firm 59900 monthly cents, extra seat 2500, annual discount 1500 bps. Enterprise is quoted. Amounts are integer cents; a payment must match the invoice currency. Two active billing staff require a different approver for earned-fee transfers and for refunds above `refund_self_approval_limit_cents` (100000). Withdrawal follow-up is `withdrawal_follow_up_days` (30). Webhooks use `STRIPE_WEBHOOK_SECRET`, the existing inbox key, the outbox, and the audit log. `STRIPE_MODE=test` reads only `STRIPE_TEST_SECRET_KEY`. A processor balance is not the client account. Migrations `20261017210000` and `20261017210100` are not applied on the live project. A routing 409 on a rule the firm does not own is `skipped`, not `added`. | Engineering, pending Francis |
+
 ## Open
 
 * Erode-only typography vs DESIGN.md's tabular / non-decorative rule for money, IDs and form fields.
 * Residency review for Supabase Auth email delivery and other subprocessors before claiming "Canada-only".
 * First provinces / programs and the licensed reviewer (T001).
-* Payment provider (Stripe Connect?) for earned fees.
+* Plan prices in `billing.plans` are still pending buyer validation. They are not IRCC fees.
 * Firms may record their own allowlisted source rows. Hashes are stored, not fetched, until T012.
 * An approved review requires a `licensed_consultant` membership. That membership is not a verified licence until T018's manual register check is recorded. The professional-review credential snapshot stays null.
 * T021 portal invites call `app.real_client_invite_blockers`. Sample-mode invites are allowed while that lock is closed. `trial_ended` remains one of the blockers.

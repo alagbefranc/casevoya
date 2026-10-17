@@ -2,8 +2,9 @@
 // for unapplied migrations 20261017120000, 20261017140000–20261017140800,
 // 20261017160000 (preview_invitation, request_mfa_reset),
 // 20261017170000–20261017170300, 20261017180000–20261017180100,
-// 20261017190000–20261017190100, and 20261017200000–20261017200200.
-// 20261017200300 only sets search_path on app.reserved_firm_slugs. It does not change this file.
+// 20261017190000–20261017190100, and 20261017200000–20261017200300.
+// 20261017210000 adds subscription_status values and billing enums.
+// 20261017210100 adds finance tables, organization_subscriptions plan columns, and the billing RPCs below.
 // Regenerate with `pnpm db:types` only after those migrations are applied live.
 
 export type Json =
@@ -1312,30 +1313,48 @@ export type Database = {
           created_at: string
           created_by: string | null
           duration_snapshot: Json | null
+          billing_interval: string | null
+          current_period_ends_at: string | null
           organization_id: string
+          plan_code: string | null
+          price_snapshot: Json | null
           status: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
           trial_ends_at: string | null
           trial_started_at: string
           updated_at: string
           version: number
         }
         Insert: {
+          billing_interval?: string | null
           created_at?: string
           created_by?: string | null
+          current_period_ends_at?: string | null
           duration_snapshot?: Json | null
           organization_id: string
+          plan_code?: string | null
+          price_snapshot?: Json | null
           status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           trial_ends_at?: string | null
           trial_started_at?: string
           updated_at?: string
           version?: number
         }
         Update: {
+          billing_interval?: string | null
           created_at?: string
           created_by?: string | null
+          current_period_ends_at?: string | null
           duration_snapshot?: Json | null
           organization_id?: string
+          plan_code?: string | null
+          price_snapshot?: Json | null
           status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           trial_ends_at?: string | null
           trial_started_at?: string
           updated_at?: string
@@ -1350,6 +1369,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      payments: {
+        Row: {
+          amount_cents: number
+          connected_account_id: string | null
+          currency: string
+          id: string
+          invoice_id: string | null
+          organization_id: string
+          state: string
+        }
+        Insert: {
+          amount_cents: number
+          connected_account_id?: string | null
+          currency: string
+          id?: string
+          invoice_id?: string | null
+          organization_id: string
+          state?: string
+        }
+        Update: {
+          amount_cents?: number
+          connected_account_id?: string | null
+          currency?: string
+          id?: string
+          invoice_id?: string | null
+          organization_id?: string
+          state?: string
+        }
+        Relationships: []
+      }
+      processor_accounts: {
+        Row: {
+          id: string
+          organization_id: string
+          status: string
+          stripe_account_id: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          status?: string
+          stripe_account_id: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          status?: string
+          stripe_account_id?: string
+        }
+        Relationships: []
       }
       outbox_events: {
         Row: {
@@ -3807,6 +3877,120 @@ export type Database = {
         Args: { p_person_id: string; p_reason: string }
         Returns: string
       }
+      approve_earned_transfer: {
+        Args: { p_reason: string; p_transfer_id: string }
+        Returns: string
+      }
+      approve_refund: { Args: { p_refund_id: string }; Returns: string }
+      attach_payment_intent: {
+        Args: { p_intent_id: string; p_payment_id: string }
+        Returns: undefined
+      }
+      billing_document_pdf: { Args: { p_id: string }; Returns: string }
+      billing_plan_amount: {
+        Args: { p_code: string; p_interval: string }
+        Returns: number
+      }
+      billing_plan_catalog: { Args: never; Returns: Json }
+      cancel_installment_plan: { Args: { p_plan_id: string }; Returns: undefined }
+      client_funds_cents: {
+        Args: { p_currency: string; p_matter_id: string; p_person_id: string }
+        Returns: number
+      }
+      create_billing_document: {
+        Args: {
+          p_billing_person_id: string
+          p_currency: string
+          p_due_on: string
+          p_government_fee_note: string
+          p_kind: string
+          p_lines: Json
+          p_matter_id: string
+          p_service_note: string
+        }
+        Returns: string
+      }
+      create_installment_plan: {
+        Args: { p_count: number; p_invoice_id: string }
+        Returns: string
+      }
+      earned_fee_cents: {
+        Args: { p_currency: string; p_matter_id: string; p_person_id: string }
+        Returns: number
+      }
+      finance_snapshot: { Args: { p_matter_id: string | null }; Returns: Json }
+      issue_billing_document: {
+        Args: { p_id: string; p_service_note: string }
+        Returns: string
+      }
+      issue_credit_note: {
+        Args: { p_amount_cents: number; p_invoice_id: string; p_reason: string }
+        Returns: string
+      }
+      open_payment_dispute: {
+        Args: { p_amount: number; p_payment_id: string; p_provider_dispute_id: string }
+        Returns: string
+      }
+      portal_finance_snapshot: { Args: never; Returns: Json }
+      propose_earned_transfer: {
+        Args: { p_amount_cents: number; p_invoice_id: string; p_reason: string }
+        Returns: string
+      }
+      receipt_pdf: { Args: { p_id: string }; Returns: string }
+      record_manual_payment: {
+        Args: {
+          p_amount_cents: number
+          p_destination: string
+          p_evidence: string
+          p_external_reference: string
+          p_invoice_id: string
+          p_method: string
+          p_received_on: string
+        }
+        Returns: string
+      }
+      record_reconciliation: {
+        Args: {
+          p_period_end: string
+          p_period_start: string
+          p_processor_balance_cents: number
+          p_statement_cents: number
+        }
+        Returns: string
+      }
+      record_stripe_event: {
+        Args: {
+          p_account_id: string
+          p_event_id: string
+          p_event_type: string
+          p_organization_id: string | null
+          p_payload: Json
+        }
+        Returns: string
+      }
+      record_time_entry: {
+        Args: { p_matter_id: string; p_memo: string; p_minutes: number; p_rate_cents: number }
+        Returns: string
+      }
+      request_refund: {
+        Args: { p_amount_cents: number; p_payment_id: string; p_reason: string }
+        Returns: string
+      }
+      reserve_card_payment: { Args: { p_invoice_id: string }; Returns: string }
+      select_firm_plan: {
+        Args: { p_interval: string; p_plan_code: string }
+        Returns: Json
+      }
+      set_tax_rate: {
+        Args: { p_code: string; p_effective_from: string; p_label: string; p_rate_bps: number }
+        Returns: string
+      }
+      settle_refund: {
+        Args: { p_provider: string; p_provider_refund_id: string; p_refund_id: string }
+        Returns: string
+      }
+      upsert_processor_account: { Args: { p_stripe_account_id: string }; Returns: string }
+      verify_manual_payment: { Args: { p_payment_id: string }; Returns: string }
       perform_billing_action: {
         Args: { p_action: string; p_matter_id: string }
         Returns: string
@@ -4677,7 +4861,7 @@ export type Database = {
         | "dead_lettered"
       register_licence_status: "active" | "inactive"
       sample_proof_step: "intake" | "agreement" | "upload" | "reminder" | "invoice" | "export"
-      subscription_status: "trial" | "trial_ended" | "active" | "cancelled"
+      subscription_status: "trial" | "trial_ended" | "active" | "past_due" | "restricted" | "cancelled" | "archive"
       person_relationship_type:
         | "spouse"
         | "parent"
@@ -4949,7 +5133,7 @@ export const Constants = {
       licence_type: ["RCIC", "RISIA"],
       register_licence_status: ["active", "inactive"],
       sample_proof_step: ["intake", "agreement", "upload", "reminder", "invoice", "export"],
-      subscription_status: ["trial", "trial_ended", "active", "cancelled"],
+      subscription_status: ["trial", "trial_ended", "active", "past_due", "restricted", "cancelled", "archive"],
       matter_party_role: [
         "applicant",
         "dependant",

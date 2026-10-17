@@ -35,6 +35,8 @@ In the repository, not yet applied to the live project (do not edit the file in 
 | 20261017200100 | outbound_email | Outbox-driven deliveries, suppressions, and mail claim. Staff invites, document requests, and due reminders enqueue mail without raw tokens. |
 | 20261017200200 | inbound_email | Per-firm `docs.casevoya.ca` addresses, reserved slugs, inbound messages, and the unsorted inbox. |
 | 20261017200300 | reserved_firm_slugs_search_path | `app.reserved_firm_slugs` gets `search_path = ''` and schema-qualified types. No storage changes. |
+| 20261017210000 | finance_enums | Adds `past_due`, `restricted`, and `archive` to `subscription_status`, and the billing enums. No tables. |
+| 20261017210100 | finance_ledger | Invoices, client-funds ledger, receipts, refunds, disputes, installments, Connect accounts, and reconciliation. Forced RLS through `app.current_organization_id()`. Plan prices are `product_settings` key `billing.plans`. Does not alter `storage`. Not applied on the live project. |
 
 `src/types/database.types.ts` includes the live schema through `20261017113202`, extended in this branch for the unapplied migrations above. Do not run `pnpm db:types` until those migrations are applied; a live regeneration would drop the extension.
 

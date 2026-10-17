@@ -9,6 +9,8 @@ import {
   taskFromSheet,
   completeTaskFromSheet,
 } from "@/modules/sheet/actions";
+import { FinanceLive } from "@/components/sheet/finance-live";
+import type { FinanceSnapshot } from "@/modules/finance/load";
 import type { SheetBundle, SheetMatterRow } from "@/modules/sheet/load";
 import {
   GOVERNMENT_STATUSES,
@@ -67,6 +69,7 @@ export function LiveSheet({
   view,
   query,
   matterId,
+  finance,
 }: {
   bundle: SheetBundle;
   page: string;
@@ -74,6 +77,7 @@ export function LiveSheet({
   view?: string;
   query?: string;
   matterId?: string;
+  finance?: FinanceSnapshot | null;
 }) {
   const slot = page === "matter" || page === "settings" || page === "calendar" ? null : slotFor(page, tab);
   const today = isoDateInTimeZone(new Date(), bundle.staff.timezone);
@@ -109,7 +113,7 @@ export function LiveSheet({
             </header>
             {bundle.error ? <div className="alert bad" role="alert"><div><b>Some records didn’t load</b>{bundle.error}</div></div> : null}
             <div id="content">
-              {slot ? <Slot message={slot} /> : <Wired bundle={bundle} page={page} tab={tab} view={view} query={query} matterId={matterId} today={today} />}
+              {slot ? <Slot message={slot} /> : <Wired bundle={bundle} page={page} tab={tab} view={view} query={query} matterId={matterId} today={today} finance={finance ?? null} />}
             </div>
           </div>
         </main>
@@ -139,6 +143,7 @@ function Wired({
   query,
   matterId,
   today,
+  finance,
 }: {
   bundle: SheetBundle;
   page: string;
@@ -147,10 +152,12 @@ function Wired({
   query?: string;
   matterId?: string;
   today: string;
+  finance: FinanceSnapshot | null;
 }) {
   if (page === "index") return <Home bundle={bundle} today={today} />;
   if (page === "matters") return <Matters bundle={bundle} view={view} query={query} today={today} />;
-  if (page === "matter") return <Matter bundle={bundle} matterId={matterId} tab={tab} today={today} />;
+  if (page === "finance") return finance ? <FinanceLive organizationId={bundle.staff.organizationId} snapshot={finance} tab={tab} /> : <Slot message="Finance records didn’t load." />;
+  if (page === "matter") return <Matter bundle={bundle} matterId={matterId} tab={tab} today={today} finance={finance} />;
   if (page === "tasks" || page === "queue") return <Tasks bundle={bundle} tab={tab} today={today} queue={page === "queue"} />;
   if (page === "calendar") return <Calendar bundle={bundle} tab={tab} />;
   if (page === "documents") return <Documents bundle={bundle} />;
@@ -160,7 +167,7 @@ function Wired({
   if (page === "grants") return <Grants bundle={bundle} />;
   if (page === "government") return <Government bundle={bundle} />;
   if (page === "licence" || page === "licence-suspended") return <Licences bundle={bundle} />;
-  if (page === "settings" || page === "sample-mode") return <Settings bundle={bundle} tab={tab} page={page} />;
+  if (page === "settings" || page === "sample-mode") return <Settings bundle={bundle} tab={tab} page={page} finance={finance} />;
   if (page === "roles") return <Roles />;
   if (page === "templates" || page === "intake-builder") return <Templates bundle={bundle} />;
   if (page === "states") return <p>Open any Sheet screen with <span className="num">?state=loading</span>, empty, error, denied or offline.</p>;
@@ -221,7 +228,7 @@ function Matters({ bundle, view, query, today }: { bundle: SheetBundle; view?: s
   );
 }
 
-function Matter({ bundle, matterId, tab, today }: { bundle: SheetBundle; matterId?: string; tab?: string; today: string }) {
+function Matter({ bundle, matterId, tab, today, finance }: { bundle: SheetBundle; matterId?: string; tab?: string; today: string; finance: FinanceSnapshot | null }) {
   const matter = bundle.matters.find((row) => row.id === matterId);
   if (!matter) {
     return <div className="panel"><div className="emp"><b>Matter not found</b><small>That file is not in this firm.</small></div></div>;
@@ -259,6 +266,7 @@ function Matter({ bundle, matterId, tab, today }: { bundle: SheetBundle; matterI
       {current === "people" ? <Table head={["Person"]} rows={bundle.people.slice(0, 12).map((person) => [person.name])} empty="No people on file." /> : null}
       {current === "documents" ? <Table head={["Document", "Review"]} rows={docs.map((row) => [row.purpose, row.reviewState ?? "No version"])} empty="No documents linked to this matter." /> : null}
       {current === "agreements" ? <Table head={["Agreement", "Status"]} rows={agreements.map((row) => [row.title, row.status])} empty="No agreements on this matter." /> : null}
+      {current === "billing" && finance ? <FinanceLive organizationId={bundle.staff.organizationId} snapshot={finance} matterId={matter.id} /> : null}
       {current === "tasks" ? (
         <>
           <Table head={["Task", "Due", "Status"]} rows={tasks.map((row) => [row.title, row.dueOn ?? "—", taskBadge(row.status).label])} empty="No tasks on this matter." />
@@ -439,7 +447,7 @@ function Licences({ bundle }: { bundle: SheetBundle }) {
   );
 }
 
-function Settings({ bundle, tab, page }: { bundle: SheetBundle; tab?: string; page: string }) {
+function Settings({ bundle, tab, page, finance }: { bundle: SheetBundle; tab?: string; page: string; finance: FinanceSnapshot | null }) {
   const current = page === "sample-mode" ? "sample" : tab || "general";
   if (current === "sample") {
     return <div className="panel"><h2>Sample mode is off</h2><p>{bundle.staff.organizationName} is a live firm. The Northline walkthrough is not mixed into these records.</p></div>;
@@ -456,6 +464,9 @@ function Settings({ bundle, tab, page }: { bundle: SheetBundle; tab?: string; pa
   }
   if (current === "offices") {
     return <Table head={["Office", "Locality", "Region"]} rows={bundle.offices.map((row) => [row.label + (row.primary ? " · primary" : ""), row.locality, row.region ?? "—"])} empty="No offices saved." />;
+  }
+  if (current === "billing" && finance) {
+    return <FinanceLive organizationId={bundle.staff.organizationId} snapshot={finance} showPlan />;
   }
   return (
     <div className="panel">

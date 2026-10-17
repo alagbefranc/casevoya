@@ -3,6 +3,9 @@ import { AccountForm } from "./account-form";
 import { AgreementsLive } from "./agreements-live";
 import { DocumentsLive } from "./documents-live";
 import { WithdrawShare } from "./withdraw-share";
+import { PayLive } from "@/components/portal/pay-live";
+import { PaymentsLive } from "@/components/portal/payments-live";
+import type { PortalFinance } from "@/modules/finance/load";
 import type { PortalAgreements } from "@/modules/agreements/load";
 import type { PortalDocuments } from "@/modules/documents/load";
 import type { PortalViewer } from "@/modules/portal/load";
@@ -31,11 +34,15 @@ export function LivePortal({
   viewer,
   documents,
   agreements,
+  finance,
+  invoiceId,
 }: {
   page: string;
   viewer: PortalViewer;
   documents?: PortalDocuments | null;
   agreements?: PortalAgreements | null;
+  finance?: PortalFinance | null;
+  invoiceId?: string;
 }) {
   const name = viewer.person?.displayName ?? "Your account";
   const matter = viewer.matters[0];
@@ -75,7 +82,7 @@ export function LivePortal({
               <span className="pill">{matter ? matter.title : viewer.organizationName}</span>
               <span className="acts"><a className="btn s sm" href="/help/client-home-screen" id="help">Help</a></span>
             </header>
-            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} />
+            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} finance={finance ?? null} invoiceId={invoiceId} />
           </div>
         </main>
         <footer className="statusbar">
@@ -93,11 +100,15 @@ function LiveMain({
   viewer,
   documents,
   agreements,
+  finance,
+  invoiceId,
 }: {
   page: string;
   viewer: PortalViewer;
   documents: PortalDocuments | null;
   agreements: PortalAgreements | null;
+  finance: PortalFinance | null;
+  invoiceId?: string;
 }) {
   if (page === "documents" || page === "upload") {
     return documents ? <DocumentsLive page={page} viewer={viewer} documents={documents} /> : <Stub page={page} />;
@@ -105,6 +116,8 @@ function LiveMain({
   if (page === "agreements") {
     return agreements ? <AgreementsLive viewer={viewer} agreements={agreements} /> : <Stub page={page} />;
   }
+  if (page === "payments") return finance ? <PaymentsLive viewer={viewer} finance={finance} /> : <Stub page={page} />;
+  if (page === "pay") return finance ? <PayLive viewer={viewer} finance={finance} invoiceId={invoiceId} /> : <Stub page={page} />;
   if (page === "home" || page === "matters") return <MatterList viewer={viewer} home={page === "home"} />;
   if (page === "family" || page === "rafael" || page === "olena") return <People viewer={viewer} />;
   if (page === "guardian") return <Guardian viewer={viewer} />;

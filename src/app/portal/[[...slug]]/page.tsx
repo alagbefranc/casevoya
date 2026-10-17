@@ -5,6 +5,7 @@ import { DemoPortal, PORTAL_SLUGS } from "@/components/portal/demo";
 import { LivePortal } from "@/components/portal/live";
 import { PortalScreen } from "@/components/portal/screen";
 import { HomeMarkup } from "@/components/portal/markup/portal";
+import { loadPortalFinance } from "@/modules/finance/load";
 import { loadPortalAgreements } from "@/modules/agreements/load";
 import { loadPortalDocuments } from "@/modules/documents/load";
 import { loadPortalViewer } from "@/modules/portal/load";
@@ -22,19 +23,21 @@ async function Body({
   searchParams,
 }: {
   params: Promise<{ slug?: string[] }>;
-  searchParams: Promise<{ state?: string | string[] }>;
+  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[] }>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const page = slug?.[0] ?? "home";
   if (slug && slug.length > 1) notFound();
   if (page !== "home" && !LIVE.has(page)) notFound();
   const stateValue = Array.isArray(query.state) ? query.state[0] : query.state;
+  const invoiceId = Array.isArray(query.invoice) ? query.invoice[0] : query.invoice;
   const viewer = await loadPortalViewer();
   const documents = viewer && (page === "documents" || page === "upload") ? await loadPortalDocuments(viewer) : null;
   const agreements = viewer && page === "agreements" ? await loadPortalAgreements(viewer) : null;
+  const finance = viewer && (page === "payments" || page === "pay") ? await loadPortalFinance(viewer.organizationId) : null;
   return (
     <PortalScreen page={page}>
-      {viewer ? <LivePortal page={page} viewer={viewer} documents={documents} agreements={agreements} /> : <DemoPortal page={page} state={payStateFromQuery(stateValue)} />}
+      {viewer ? <LivePortal page={page} viewer={viewer} documents={documents} agreements={agreements} finance={finance} invoiceId={invoiceId} /> : <DemoPortal page={page} state={payStateFromQuery(stateValue)} />}
     </PortalScreen>
   );
 }
