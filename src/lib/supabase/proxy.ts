@@ -56,7 +56,15 @@ export async function updateSession(request: NextRequest) {
   const signedIn = Boolean(data?.claims?.sub);
 
   const path = request.nextUrl.pathname;
-  if (path === "/mfa" || path.startsWith("/mfa/") || path.startsWith("/invite/")) {
+  if (
+    path === "/mfa" ||
+    path.startsWith("/mfa/") ||
+    path.startsWith("/invite/") ||
+    path === "/recovery" ||
+    path === "/start-trial" ||
+    path === "/setup" ||
+    path.startsWith("/accept/")
+  ) {
     response.headers.set("Referrer-Policy", "no-referrer");
     response.headers.set("Cache-Control", "no-store");
   }
