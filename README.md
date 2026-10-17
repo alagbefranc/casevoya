@@ -44,11 +44,11 @@ pnpm dev
 
 ```
 src/
-  app/                 minimal shell (home, /sign-in, /auth/confirm, /app); real UI comes from the Designer's HTML
+  app/                 minimal shell (home, /sign-in, /auth/confirm, /mfa, /invite/[token], /app, /app/invitations); real UI comes from the Designer's HTML
   lib/env.ts           public env access (URL + publishable key only)
   lib/supabase/        browser, server and proxy clients (@supabase/ssr)
   lib/tenant/          tenant context headers, request ids, role helpers
-  proxy.ts             session refresh + request id + optimistic /app gate
+  proxy.ts             session refresh + request id + optimistic /app gate and staff aal2 redirect
   types/database.types.ts  generated from the live schema
 supabase/migrations/   additive SQL migrations (applied to the remote project)
 docs/                  spec set + DATABASE.md
