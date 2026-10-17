@@ -1,7 +1,7 @@
 /**
  * Official-host allowlist. Must stay in lockstep with the
- * official_source_domains seeds in supabase/migrations/20261017110000_source_governance.sql
- * and 20261017130000_platform_admin_and_pnp_domains.sql.
+ * official_source_domains seeds in supabase/migrations/20261017113157_source_governance.sql
+ * and 20261017113202_platform_admin_and_pnp_domains.sql.
  *
  * A match is an entry gate. It does not approve a page, program, fee, form, or deadline.
  * IRCC on canada.ca includes www.canada.ca and ircc.canada.ca. cic.gc.ca includes
