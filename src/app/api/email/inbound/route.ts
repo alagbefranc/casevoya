@@ -30,6 +30,8 @@ function asPayload(value: unknown): InboundPayload | null {
     subject: typeof record.subject === "string" ? record.subject : null,
     text: typeof record.text === "string" ? record.text : null,
     html: typeof record.html === "string" ? record.html : null,
+    // Only an explicit true from the signed worker payload counts.
+    senderVerified: record.senderVerified === true,
     attachments,
   };
 }

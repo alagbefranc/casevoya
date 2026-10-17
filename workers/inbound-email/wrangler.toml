@@ -16,6 +16,10 @@ workers_dev = false
 # Leave the casevoya-test@ rule and the catch-all alone. Subaddressing
 # already delivers <slug>+<token>@ through the base rule.
 
+# TRUSTED_AUTHSERV_ID is deliberately unset: until a real delivered message shows the
+# Authentication-Results id Cloudflare stamps, no sender is treated as verified and all
+# mail goes to staff triage. Set it here once that id is confirmed.
+
 [vars]
 INBOUND_EMAIL_DOMAIN = "docs.casevoya.ca"
-INBOUND_WEBHOOK_URL = "https://REPLACE_ME.example/api/email/inbound"
+INBOUND_WEBHOOK_URL = "https://app.casevoya.ca/api/email/inbound"
