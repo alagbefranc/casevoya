@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type RefObject } from "react";
+import { useEffect, useLayoutEffect, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { toast2 } from "@/components/port/kit";
 import { sheetStateCopy } from "@/modules/sheet/present";
@@ -160,12 +160,17 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     if (dialog === "stage" || dialog === "hold" || dialog === "letter") {
       window.setTimeout(() => openDialog(dialog === "stage" ? "dStage" : dialog === "hold" ? "dHold" : "dLetter"), 300);
     }
-    const state = params.get("state");
-    if (state) applyState(root, page, state);
 
     window.addEventListener("resize", place, listen);
     return () => ac.abort();
   }, [page, ref, router]);
+
+  useLayoutEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    const state = new URLSearchParams(window.location.search).get("state");
+    if (state) applyState(root, page, state);
+  });
 }
 
 function armFuse(button: HTMLElement) {
