@@ -1,5 +1,5 @@
 // Live schema (project aqjtvqmojfamtspzyeqm) through 20261017113202, extended in-repo
-// for unapplied migrations 20261017120000 and 20261017140000–20261017140700.
+// for unapplied migrations 20261017120000 and 20261017140000–20261017140800.
 // Regenerate with `pnpm db:types` only after those migrations are applied live.
 
 export type Json =
@@ -1502,6 +1502,7 @@ export type Database = {
           created_by: string | null
           date_of_birth: string | null
           display_name: string
+          contact_phone: string | null
           email: string | null
           id: string
           is_minor: boolean
@@ -1517,6 +1518,7 @@ export type Database = {
           birth_date_precision?: Database["public"]["Enums"]["date_precision"] | null
           created_at?: string
           created_by?: string | null
+          contact_phone?: string | null
           date_of_birth?: string | null
           display_name: string
           email?: string | null
@@ -1534,6 +1536,7 @@ export type Database = {
           birth_date_precision?: Database["public"]["Enums"]["date_precision"] | null
           created_at?: string
           created_by?: string | null
+          contact_phone?: string | null
           date_of_birth?: string | null
           display_name?: string
           email?: string | null
@@ -1555,6 +1558,240 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      portal_invitations: {
+        Row: {
+          consumed_at: string | null
+          consumed_by: string | null
+          created_at: string
+          created_by: string | null
+          declined_at: string | null
+          draft: Json
+          email: string
+          email_enqueued_at: string | null
+          expires_at: string
+          guardian_subject_ids: string[]
+          id: string
+          matter_id: string
+          membership_id: string | null
+          opened_at: string | null
+          organization_id: string
+          person_id: string
+          revoked_at: string | null
+          role: Database["public"]["Enums"]["org_role"]
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          consumed_at?: string | null
+          consumed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          declined_at?: string | null
+          draft?: Json
+          email: string
+          email_enqueued_at?: string | null
+          expires_at: string
+          guardian_subject_ids?: string[]
+          id?: string
+          matter_id: string
+          membership_id?: string | null
+          opened_at?: string | null
+          organization_id: string
+          person_id: string
+          revoked_at?: string | null
+          role: Database["public"]["Enums"]["org_role"]
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          consumed_at?: string | null
+          consumed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          declined_at?: string | null
+          draft?: Json
+          email?: string
+          email_enqueued_at?: string | null
+          expires_at?: string
+          guardian_subject_ids?: string[]
+          id?: string
+          matter_id?: string
+          membership_id?: string | null
+          opened_at?: string | null
+          organization_id?: string
+          person_id?: string
+          revoked_at?: string | null
+          role?: Database["public"]["Enums"]["org_role"]
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      portal_policy_documents: {
+        Row: {
+          body: string
+          body_sha256: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          organization_id: string
+          title: string
+          version_label: string
+        }
+        Insert: {
+          body: string
+          body_sha256: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          organization_id: string
+          title: string
+          version_label: string
+        }
+        Update: {
+          body?: string
+          body_sha256?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          organization_id?: string
+          title?: string
+          version_label?: string
+        }
+        Relationships: []
+      }
+      consent_records: {
+        Row: {
+          created_at: string
+          granted: boolean
+          id: string
+          invitation_id: string | null
+          matter_id: string | null
+          organization_id: string
+          person_id: string
+          policy_document_id: string | null
+          policy_version: string | null
+          purpose: Database["public"]["Enums"]["consent_purpose"]
+          scope: string | null
+          statement_sha256: string
+          statement_text: string
+          withdrawn_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          granted: boolean
+          id?: string
+          invitation_id?: string | null
+          matter_id?: string | null
+          organization_id: string
+          person_id: string
+          policy_document_id?: string | null
+          policy_version?: string | null
+          purpose: Database["public"]["Enums"]["consent_purpose"]
+          scope?: string | null
+          statement_sha256: string
+          statement_text: string
+          withdrawn_at?: string | null
+        }
+        Update: {
+          withdrawn_at?: string | null
+        }
+        Relationships: []
+      }
+      person_section_records: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          matter_id: string
+          organization_id: string
+          person_id: string
+          restricted: boolean
+          section_key: Database["public"]["Enums"]["person_section_key"]
+          summary: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id: string
+          organization_id: string
+          person_id: string
+          restricted?: boolean
+          section_key: Database["public"]["Enums"]["person_section_key"]
+          summary: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          restricted?: boolean
+          summary?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      section_shares: {
+        Row: {
+          consent_record_id: string | null
+          created_at: string
+          grantee_person_id: string
+          id: string
+          matter_id: string
+          organization_id: string
+          revoked_at: string | null
+          section_key: Database["public"]["Enums"]["person_section_key"]
+          subject_person_id: string
+        }
+        Insert: {
+          consent_record_id?: string | null
+          created_at?: string
+          grantee_person_id: string
+          id?: string
+          matter_id: string
+          organization_id: string
+          revoked_at?: string | null
+          section_key: Database["public"]["Enums"]["person_section_key"]
+          subject_person_id: string
+        }
+        Update: {
+          revoked_at?: string | null
+        }
+        Relationships: []
+      }
+      person_contact_preferences: {
+        Row: {
+          deadline_reminders: boolean
+          email_notices: boolean
+          locale: string
+          organization_id: string
+          person_id: string
+          sms_notices: boolean
+          updated_at: string
+        }
+        Insert: {
+          deadline_reminders?: boolean
+          email_notices?: boolean
+          locale?: string
+          organization_id: string
+          person_id: string
+          sms_notices?: boolean
+          updated_at?: string
+        }
+        Update: {
+          deadline_reminders?: boolean
+          email_notices?: boolean
+          locale?: string
+          sms_notices?: boolean
+          updated_at?: string
+        }
+        Relationships: []
       }
       platform_admins: {
         Row: {
@@ -2644,6 +2881,70 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: Json
       }
+      accept_portal_invitation: {
+        Args: { p_payload: Json; p_token: string }
+        Returns: Json
+      }
+      create_portal_invitation: {
+        Args: {
+          p_email: string
+          p_guardian_subject_ids?: string[]
+          p_matter_id: string
+          p_person_id: string
+          p_role: Database["public"]["Enums"]["org_role"]
+        }
+        Returns: Json
+      }
+      decline_portal_invitation: {
+        Args: { p_token: string }
+        Returns: Json
+      }
+      preview_portal_invitation: {
+        Args: { p_token: string }
+        Returns: Json
+      }
+      publish_portal_policy: {
+        Args: { p_body: string; p_kind: string; p_title: string; p_version_label: string }
+        Returns: string
+      }
+      record_person_section: {
+        Args: {
+          p_matter_id: string
+          p_person_id: string
+          p_section_key: Database["public"]["Enums"]["person_section_key"]
+          p_summary: string
+        }
+        Returns: string
+      }
+      report_portal_invitation_mismatch: {
+        Args: { p_token: string }
+        Returns: Json
+      }
+      resend_portal_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: Json
+      }
+      revoke_portal_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: Json
+      }
+      save_my_contact_preferences: {
+        Args: {
+          p_deadline_reminders: boolean
+          p_email_notices: boolean
+          p_locale: string
+          p_sms_notices: boolean
+        }
+        Returns: undefined
+      }
+      save_portal_invitation_draft: {
+        Args: { p_draft: Json; p_token: string }
+        Returns: Json
+      }
+      withdraw_section_share: {
+        Args: { p_share_id: string }
+        Returns: undefined
+      }
       list_exportable_matter_ids: {
         Args: never
         Returns: { matter_id: string }[]
@@ -2706,6 +3007,22 @@ export type Database = {
     }
     Enums: {
       access_grant_kind: "explicit" | "guardian"
+      consent_purpose:
+        | "portal_terms"
+        | "privacy_notice"
+        | "processing"
+        | "contact_email"
+        | "contact_sms"
+        | "deadline_reminder"
+        | "share_section"
+        | "ai_drafting"
+        | "participation_declined"
+      person_section_key:
+        | "passport_bio"
+        | "school_transcript"
+        | "police_certificate"
+        | "shared_family_record"
+        | "private_record"
       date_precision: "day" | "month" | "year"
       credential_status:
         | "declared"
@@ -2991,6 +3308,24 @@ export const Constants = {
   public: {
     Enums: {
       access_grant_kind: ["explicit", "guardian"],
+      consent_purpose: [
+        "portal_terms",
+        "privacy_notice",
+        "processing",
+        "contact_email",
+        "contact_sms",
+        "deadline_reminder",
+        "share_section",
+        "ai_drafting",
+        "participation_declined",
+      ],
+      person_section_key: [
+        "passport_bio",
+        "school_transcript",
+        "police_certificate",
+        "shared_family_record",
+        "private_record",
+      ],
       date_precision: ["day", "month", "year"],
       credential_status: ["declared", "verified", "not_entitled", "inactive", "suspended", "revoked"],
       domain_match_kind: ["exact", "suffix"],

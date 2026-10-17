@@ -30,6 +30,7 @@ In the repository, not yet applied to the live project (do not edit the file in 
 | 20261017140500 | staff_recovery_sessions_passkey | Hashed recovery codes, session revocation, owner MFA reset, passkey assurance. |
 | 20261017140600 | fk_covering_indexes_practice | Covering indexes for foreign keys on matter stage evidence, stage transitions, break-glass, and session revocations. The break-glass actor index is not partial. |
 | 20261017140700 | firm_onboarding | Firm setup, sample mode, trial settings, and manual CICC public-register licence checks. Not applied on the live project. |
+| 20261017140800 | portal_invitations | Client, adult dependant, sponsor, employer contact, and guardian invites. Hashed single-use tokens, consent, section shares. Not applied on the live project. |
 
 `src/types/database.types.ts` includes the live schema through `20261017113202`, extended in this branch for the unapplied migrations above. Do not run `pnpm db:types` until those migrations are applied; a live regeneration would drop the extension.
 
