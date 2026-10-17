@@ -42,7 +42,7 @@ export type RegisterLicenceStatus = (typeof registerLicenceStatuses)[number];
 export type LicenceCheckResult = (typeof licenceCheckResults)[number];
 export type CredentialStatus = (typeof credentialStatuses)[number];
 
-const LOCKED: readonly CredentialStatus[] = ["revoked", "suspended", "inactive"];
+const LOCKED: readonly CredentialStatus[] = ["revoked", "suspended", "inactive", "not_entitled"];
 
 export function licenceStatusBlocks(status: CredentialStatus): boolean {
   return LOCKED.includes(status);
@@ -75,7 +75,8 @@ export type DerivedLicenceCheck = {
 
 /**
  * Precedence: revoked, then suspended, then inactive, then not entitled, otherwise verified.
- * disciplineRestricted is kept on the record and does not change the result.
+ * not_entitled locks, the same as revoked, suspended, and inactive.
+ * disciplineRestricted is kept on the record with its detail and does not change the result.
  * Must stay aligned with app.record_licence_check.
  */
 export function deriveLicenceCheck(observation: RegisterObservation): DerivedLicenceCheck {
@@ -120,11 +121,26 @@ export const licenceCheckInputSchema = z
     disciplineSuspended: z.boolean(),
     disciplineRevoked: z.boolean(),
     disciplineRestricted: z.boolean(),
+    disciplineRestrictionDetail: z.string().trim().min(1).max(1000).optional(),
     proofLocator,
     notes: z.string().trim().max(500).optional(),
     code: z.string().trim().min(6).max(12),
   })
   .superRefine((value, ctx) => {
+    if (value.disciplineRestricted && !value.disciplineRestrictionDetail) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["disciplineRestrictionDetail"],
+        message: "a restriction needs the register detail",
+      });
+    }
+    if (!value.disciplineRestricted && value.disciplineRestrictionDetail) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["disciplineRestrictionDetail"],
+        message: "restriction detail requires the restriction flag",
+      });
+    }
     if (ciccRegisterHost(value.sourceUrl) === null) {
       ctx.addIssue({
         code: "custom",

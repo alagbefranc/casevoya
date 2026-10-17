@@ -9,9 +9,9 @@
 --   https://register.college-ic.ca/Public-Register-EN
 --   https://register.college-ic.ca/Public-Register-EN/RCIC_Search.aspx
 -- A profile shows Licence Status (Active/Inactive), licence history,
--- Entitlement to Practise, and discipline history. Revoked, suspended, and
--- inactive lock consultant-only actions. A restriction flag is stored and
--- does not lock. Entitlement = No is not verified and does not lock.
+-- Entitlement to Practise, and discipline history. Francis, 2026-10-17:
+-- revoked, suspended, inactive, and Entitlement to Practise = No lock that
+-- consultant. A restriction is stored with its detail and does not auto-lock.
 -- register.college-ic.ca passes the allowlist because college-ic.ca is a
 -- suffix host. Evidence URLs must still be that register host.
 --
@@ -20,17 +20,17 @@
 -- designer placeholder numbers.
 
 create type public.firm_setup_step as enum (
-  'firm_profile',
-  'offices',
+  'firm_details',
+  'terms_and_privacy',
   'jurisdictions',
-  'privacy_and_terms',
+  'licence',
   'branding',
-  'retention',
-  'continuity',
-  'licence'
+  'calendar_and_payments',
+  'records_and_retention',
+  'sample_case'
 );
 comment on type public.firm_setup_step is
-  'Eight setup steps for site/app-v2/auth/setup. Keys follow the screen fields named in the 2026-10-17 gap check (offices, privacy contact, branding, retention) and PRD §6 / ORG-01–06. Confirm the labels with the designer HTML.';
+  'Designer setup screen order, 2026-10-17: Firm details; Terms and privacy; Where you practise; Your licence; Branding; Calendar and payments; Records and retention; Sample case. The HTML is a design reference and is not stored in this repo.';
 
 create type public.sample_proof_step as enum (
   'intake',
@@ -41,7 +41,7 @@ create type public.sample_proof_step as enum (
   'export'
 );
 comment on type public.sample_proof_step is
-  'PRD §6 firm activation: the sample case proves these six paths before real client invitations. Later tasks own the modules. This slice records that a flagged sample matter was used.';
+  'The six key steps on the designer Sample case screen, in order: Send an intake form, Send a service agreement, Request and review an upload, Schedule a reminder, Issue an invoice, Export the file. Real client invitations also need a good-standing licence check. Recording a step does not claim that module exists.';
 
 create type public.licence_type as enum ('RCIC', 'RISIA');
 comment on type public.licence_type is
@@ -60,7 +60,7 @@ create type public.credential_status as enum (
   'revoked'
 );
 comment on type public.credential_status is
-  'verified means a manual register check recorded Active, Entitlement to Practise, and neither suspension nor revocation. inactive, suspended, and revoked lock regulated consultant actions. not_entitled is not verified and does not lock. A restriction flag is not a status.';
+  'verified means a manual register check recorded Active, Entitlement to Practise, and neither suspension nor revocation. inactive, suspended, revoked, and not_entitled lock that consultant. A restriction flag is not a status and does not lock.';
 
 create type public.licence_check_result as enum (
   'verified',
@@ -93,7 +93,7 @@ create table public.product_settings (
   version integer not null default 1 check (version >= 1)
 );
 comment on table public.product_settings is
-  'Platform configuration. Enforcement reads these rows. pending_confirmation means Francis has not accepted the seeded value.';
+  'Platform configuration. Enforcement reads these rows. Francis confirmed the seeded defaults on 2026-10-17. A later edit stays confirmed and does not rewrite an existing trial snapshot.';
 
 create index product_settings_created_by_idx on public.product_settings (created_by);
 
@@ -108,20 +108,20 @@ insert into public.product_settings (key, value, description, pending_confirmati
   (
     'trial.duration',
     '{"unit":"days","count":14}'::jsonb,
-    'Proposed trial length from PRD §3 and the designer sample-mode status. Not a confirmed business rule. Trial end does not delete records.',
-    true
+    'Confirmed trial length. Still configurable. Trial end does not delete records. trial_ended blocks new real client invites.',
+    false
   ),
   (
     'licence.recheck_interval',
     '{"unit":"months","count":1}'::jsonb,
-    'Proposed product control for the next public-register re-check (ORG-04). Not a statutory interval.',
-    true
+    'Confirmed product control for the next public-register re-check. Still configurable. Not a statutory interval.',
+    false
   ),
   (
     'licence.manual_check_target',
     '{"unit":"business_days","count":1}'::jsonb,
-    'Designer copy for how soon a manual register check is usually recorded. Not an SLA and not used to mark a licence verified.',
-    true
+    'Confirmed target for how soon a manual register check is usually recorded. Still configurable. Not an SLA and not used to mark a licence verified.',
+    false
   );
 
 create function app.product_setting_interval(p_key text)
@@ -457,6 +457,7 @@ create table public.consultant_credentials (
   discipline_suspended boolean not null default false,
   discipline_revoked boolean not null default false,
   discipline_restricted boolean not null default false,
+  discipline_restriction_detail text,
   verification_method text check (
     verification_method is null or verification_method = 'manual_public_register'
   ),
@@ -471,16 +472,26 @@ create table public.consultant_credentials (
   unique (id, organization_id),
   unique (membership_id),
   unique (organization_id, licence_type, college_id),
-  foreign key (membership_id, organization_id) references public.memberships (id, organization_id)
+  foreign key (membership_id, organization_id) references public.memberships (id, organization_id),
+  constraint consultant_credentials_restriction_detail_ck check (
+    (
+      discipline_restricted
+      and discipline_restriction_detail is not null
+      and length(btrim(discipline_restriction_detail)) between 1 and 1000
+    )
+    or (not discipline_restricted and discipline_restriction_detail is null)
+  )
 );
 comment on table public.consultant_credentials is
   'Declared CICC licence for one licensed_consultant membership. Status verified means a person recorded a manual public-register check, not that a register API responded.';
 comment on column public.consultant_credentials.college_id is
   'Uppercased storage limit of 40 letters, digits, or hyphens. Not a published CICC number format, and no sample number is seeded.';
 comment on column public.consultant_credentials.discipline_restricted is
-  'Copied from the register discipline history when a reviewer records a restriction. Stored, and not a lock.';
+  'Copied from the register discipline history when a reviewer records a restriction. Stored and shown to staff. It does not auto-lock.';
+comment on column public.consultant_credentials.discipline_restriction_detail is
+  'The restriction wording the reviewer copied from the register profile. Required when discipline_restricted is true. Staff can read it on the credential. It does not auto-lock.';
 comment on column public.consultant_credentials.entitlement_to_practise is
-  'Entitlement to Practise as entered from the register profile. False is not verified. It does not by itself lock stage changes.';
+  'Entitlement to Practise as entered from the register profile. False is not_entitled and locks that consultant''s new matters and regulated stage changes.';
 
 create index consultant_credentials_org_idx on public.consultant_credentials (organization_id, status);
 create index consultant_credentials_membership_org_fk_idx
@@ -495,7 +506,7 @@ create trigger consultant_credentials_immutable before update on public.consulta
 create trigger consultant_credentials_stamp before insert on public.consultant_credentials
   for each row execute function app.stamp_created_by();
 create trigger consultant_credentials_audit after insert or update or delete on public.consultant_credentials
-  for each row execute function app.audit_row_change('college_id', 'proof_locator');
+  for each row execute function app.audit_row_change('college_id', 'proof_locator', 'discipline_restriction_detail');
 create trigger consultant_credentials_no_delete before delete on public.consultant_credentials
   for each row execute function app.reject_governed_delete();
 create trigger consultant_credentials_no_truncate before truncate on public.consultant_credentials
@@ -515,12 +526,21 @@ create table public.credential_checks (
   discipline_suspended boolean not null,
   discipline_revoked boolean not null,
   discipline_restricted boolean not null,
+  discipline_restriction_detail text,
   reviewer_user_id uuid not null references auth.users (id),
   method text not null default 'manual_public_register' check (method = 'manual_public_register'),
   notes text check (notes is null or length(notes) <= 500),
   created_at timestamptz not null default now(),
   unique (id, organization_id),
-  foreign key (credential_id, organization_id) references public.consultant_credentials (id, organization_id)
+  foreign key (credential_id, organization_id) references public.consultant_credentials (id, organization_id),
+  constraint credential_checks_restriction_detail_ck check (
+    (
+      discipline_restricted
+      and discipline_restriction_detail is not null
+      and length(btrim(discipline_restriction_detail)) between 1 and 1000
+    )
+    or (not discipline_restricted and discipline_restriction_detail is null)
+  )
 );
 comment on table public.credential_checks is
   'Append-only manual public-register check. source_url must be https on register.college-ic.ca. method is manual_public_register and is never a live sync. The result is derived from the register fields the reviewer entered.';
@@ -531,7 +551,7 @@ create index credential_checks_org_idx on public.credential_checks (organization
 create index credential_checks_reviewer_idx on public.credential_checks (reviewer_user_id);
 
 create trigger credential_checks_audit after insert or update or delete on public.credential_checks
-  for each row execute function app.audit_row_change('proof_locator', 'notes');
+  for each row execute function app.audit_row_change('proof_locator', 'notes', 'discipline_restriction_detail');
 create trigger credential_checks_no_delete before delete on public.credential_checks
   for each row execute function app.reject_governed_delete();
 create trigger credential_checks_no_truncate before truncate on public.credential_checks
@@ -586,10 +606,10 @@ language sql
 immutable
 set search_path = ''
 as $$
-  select p_status in ('revoked', 'suspended', 'inactive');
+  select p_status in ('revoked', 'suspended', 'inactive', 'not_entitled');
 $$;
 comment on function app.licence_status_blocks(public.credential_status) is
-  'Revoked, suspended, and inactive lock consultant-only actions. not_entitled and discipline_restricted do not.';
+  'Revoked, suspended, inactive, and not entitled lock that consultant. A restriction flag does not.';
 revoke all on function app.licence_status_blocks(public.credential_status) from public;
 
 create function app.actor_licence_block_status(p_org uuid)
@@ -613,6 +633,7 @@ as $$
       or credential.discipline_revoked
       or credential.discipline_suspended
       or credential.register_status = 'inactive'
+      or credential.entitlement_to_practise is false
     )
   order by credential.checked_at desc nulls last
   limit 1;
@@ -888,6 +909,7 @@ create function app.record_licence_check(
   p_discipline_suspended boolean,
   p_discipline_revoked boolean,
   p_discipline_restricted boolean,
+  p_discipline_restriction_detail text,
   p_proof_locator text,
   p_notes text
 )
@@ -905,6 +927,7 @@ declare
   new_status public.credential_status;
   review_at timestamptz;
   interval_known interval;
+  restriction_detail text;
 begin
   if actor is null or app.staff_mfa_satisfied() is distinct from true
      or app.mfa_step_up_satisfied() is distinct from true then
@@ -937,10 +960,18 @@ begin
      or p_discipline_restricted is null then
     raise exception 'register status, entitlement, and discipline flags are required' using errcode = '22023';
   end if;
+  restriction_detail := nullif(btrim(coalesce(p_discipline_restriction_detail, '')), '');
+  if p_discipline_restricted and (restriction_detail is null or length(restriction_detail) > 1000) then
+    raise exception 'a restriction needs the register detail' using errcode = '22023';
+  end if;
+  if not p_discipline_restricted and restriction_detail is not null then
+    raise exception 'restriction detail requires the restriction flag' using errcode = '22023';
+  end if;
 
   -- Precedence matches src/modules/firm-onboarding/licence.ts.
   -- Revoked, then suspended, then inactive, then not entitled, otherwise verified.
-  -- discipline_restricted is stored and does not change this result.
+  -- discipline_restricted and its detail are stored and do not change this result.
+  -- not_entitled locks, the same as revoked, suspended, and inactive.
   if p_discipline_revoked then
     result := 'revoked';
     new_status := 'revoked';
@@ -968,7 +999,7 @@ begin
     organization_id, credential_id, source_url, source_host, retrieved_at, result,
     proof_locator, register_status, entitlement_to_practise,
     discipline_suspended, discipline_revoked, discipline_restricted,
-    reviewer_user_id, notes
+    discipline_restriction_detail, reviewer_user_id, notes
   ) values (
     credential.organization_id,
     credential.id,
@@ -982,6 +1013,7 @@ begin
     p_discipline_suspended,
     p_discipline_revoked,
     p_discipline_restricted,
+    restriction_detail,
     actor,
     nullif(btrim(coalesce(p_notes, '')), '')
   )
@@ -995,6 +1027,7 @@ begin
          discipline_suspended = p_discipline_suspended,
          discipline_revoked = p_discipline_revoked,
          discipline_restricted = p_discipline_restricted,
+         discipline_restriction_detail = restriction_detail,
          verification_method = 'manual_public_register',
          proof_locator = btrim(p_proof_locator),
          checked_at = p_retrieved_at,
@@ -1018,7 +1051,7 @@ begin
     coalesce(review_at, statement_timestamp())
   );
 
-  if new_status in ('revoked', 'suspended', 'inactive') then
+  if new_status in ('revoked', 'suspended', 'inactive', 'not_entitled') then
     perform app.enqueue_licence_event(
       credential.organization_id,
       credential.id,
@@ -1049,17 +1082,19 @@ begin
       'entitlement_to_practise', p_entitlement_to_practise,
       'discipline_suspended', p_discipline_suspended,
       'discipline_revoked', p_discipline_revoked,
-      'discipline_restricted', p_discipline_restricted
+      'discipline_restricted', p_discipline_restricted,
+      'restriction_detail_recorded', restriction_detail is not null
     )
   );
   return check_id;
 end;
 $$;
-revoke all on function app.record_licence_check(uuid, text, timestamptz, public.register_licence_status, boolean, boolean, boolean, boolean, text, text) from public;
+revoke all on function app.record_licence_check(uuid, text, timestamptz, public.register_licence_status, boolean, boolean, boolean, boolean, text, text, text) from public;
 
 -- ---------------------------------------------------------------------------
 -- Real client invitations stay locked until the firm is verified, a licence
--- check is in good standing, and the six sample proofs are recorded.
+-- check is in good standing, the trial has not ended, and the six sample
+-- proofs on the Sample case screen are recorded.
 -- ---------------------------------------------------------------------------
 create function app.real_client_invite_blockers(p_org uuid)
 returns text[]
@@ -1082,6 +1117,13 @@ begin
   end if;
   if app.firm_has_verified_licence(p_org) is distinct from true then
     blockers := array_append(blockers, 'licence_not_verified');
+  end if;
+  if exists (
+    select 1 from public.organization_subscriptions sub
+    where sub.organization_id = p_org
+      and sub.status = 'trial_ended'
+  ) then
+    blockers := array_append(blockers, 'trial_ended');
   end if;
   foreach proof_step in array enum_range(null::public.sample_proof_step) loop
     if not exists (
@@ -1203,26 +1245,33 @@ begin
     raise exception 'setup payload is required' using errcode = '22023';
   end if;
 
-  if p_step = 'firm_profile' then
+  if p_step = 'firm_details' then
     locale := p_payload ->> 'locale';
     zone := btrim(coalesce(p_payload ->> 'timezone', ''));
+    billing_email := app.normalize_email(p_payload ->> 'billing_contact_email');
     if locale not in ('en-CA', 'fr-CA') or zone !~ '^[A-Za-z_]+(/[A-Za-z_]+){1,2}$' then
       raise exception 'locale or timezone is not usable' using errcode = '22023';
     end if;
     if length(btrim(coalesce(p_payload ->> 'legal_name', ''))) not between 1 and 300
-       or length(btrim(coalesce(p_payload ->> 'display_name', ''))) not between 1 and 200 then
-      raise exception 'firm name is required' using errcode = '22023';
+       or length(btrim(coalesce(p_payload ->> 'display_name', ''))) not between 1 and 200
+       or length(btrim(coalesce(p_payload ->> 'billing_contact_name', ''))) not between 1 and 200
+       or billing_email is null then
+      raise exception 'firm name and billing contact are required' using errcode = '22023';
+    end if;
+    if not exists (
+      select 1 from public.organization_offices office
+      where office.organization_id = org and office.is_primary
+    ) then
+      raise exception 'add the main office before completing firm details' using errcode = '22023';
     end if;
     update public.organizations
        set legal_name = btrim(p_payload ->> 'legal_name'),
            display_name = btrim(p_payload ->> 'display_name'),
            default_locale = locale,
-           timezone = zone
+           timezone = zone,
+           billing_contact_name = btrim(p_payload ->> 'billing_contact_name'),
+           billing_contact_email = billing_email
      where id = org;
-  elsif p_step = 'offices' then
-    if not exists (select 1 from public.organization_offices office where office.organization_id = org) then
-      raise exception 'add an office before completing this step' using errcode = '22023';
-    end if;
   elsif p_step = 'jurisdictions' then
     select coalesce(array_agg(value), array[]::text[]) into codes
     from jsonb_array_elements_text(coalesce(p_payload -> 'codes', '[]'::jsonb)) as t(value);
@@ -1235,24 +1284,21 @@ begin
       end if;
     end loop;
     update public.organizations set jurisdiction_codes = codes where id = org;
-  elsif p_step = 'privacy_and_terms' then
-    if (p_payload ->> 'accepted') is distinct from 'true' then
-      raise exception 'terms must be accepted' using errcode = '22023';
+  elsif p_step = 'terms_and_privacy' then
+    if (p_payload ->> 'subscription_terms_accepted') is distinct from 'true'
+       or (p_payload ->> 'dpa_accepted') is distinct from 'true' then
+      raise exception 'subscription terms and the data processing agreement must be accepted' using errcode = '22023';
     end if;
     email := app.normalize_email(p_payload ->> 'privacy_contact_email');
-    billing_email := app.normalize_email(p_payload ->> 'billing_contact_email');
-    if email is null or billing_email is null
+    if email is null
        or length(btrim(coalesce(p_payload ->> 'privacy_contact_name', ''))) not between 1 and 200
-       or length(btrim(coalesce(p_payload ->> 'billing_contact_name', ''))) not between 1 and 200
        or length(btrim(coalesce(p_payload ->> 'dpa_version', ''))) not between 1 and 40
        or length(btrim(coalesce(p_payload ->> 'subscription_terms_version', ''))) not between 1 and 40 then
-      raise exception 'privacy contact, billing contact, and terms versions are required' using errcode = '22023';
+      raise exception 'privacy contact and terms versions are required' using errcode = '22023';
     end if;
     update public.organizations
        set privacy_contact_name = btrim(p_payload ->> 'privacy_contact_name'),
            privacy_contact_email = email,
-           billing_contact_name = btrim(p_payload ->> 'billing_contact_name'),
-           billing_contact_email = billing_email,
            dpa_version = btrim(p_payload ->> 'dpa_version'),
            dpa_accepted_at = statement_timestamp(),
            subscription_terms_version = btrim(p_payload ->> 'subscription_terms_version'),
@@ -1262,7 +1308,8 @@ begin
     if (p_payload ->> 'acknowledged') is distinct from 'true' then
       raise exception 'branding step must be acknowledged' using errcode = '22023';
     end if;
-    if p_payload ? 'accent' and (p_payload ->> 'accent') !~ '^#[0-9A-Fa-f]{6}$' then
+    if nullif(p_payload ->> 'accent', '') is not null
+       and (p_payload ->> 'accent') !~ '^#[0-9A-Fa-f]{6}$' then
       raise exception 'accent must be a hex colour' using errcode = '22023';
     end if;
     update public.organizations
@@ -1271,7 +1318,11 @@ begin
          'accent', nullif(p_payload ->> 'accent', '')
        ))
      where id = org;
-  elsif p_step = 'retention' then
+  elsif p_step = 'calendar_and_payments' then
+    if (p_payload ->> 'acknowledged') is distinct from 'true' then
+      raise exception 'calendar and payments must be acknowledged' using errcode = '22023';
+    end if;
+  elsif p_step = 'records_and_retention' then
     begin
       years := (p_payload ->> 'count')::integer;
     exception when others then
@@ -1283,18 +1334,10 @@ begin
     update public.organizations
        set retention_policy = jsonb_build_object('unit', 'years', 'count', years)
      where id = org;
-  elsif p_step = 'continuity' then
-    email := app.normalize_email(p_payload ->> 'contact_email');
-    if email is null
-       or length(btrim(coalesce(p_payload ->> 'contact_name', ''))) not between 1 and 200
-       or length(btrim(coalesce(p_payload ->> 'succession_note', ''))) not between 8 and 2000 then
-      raise exception 'continuity contact and succession note are required' using errcode = '22023';
+  elsif p_step = 'sample_case' then
+    if (p_payload ->> 'acknowledged') is distinct from 'true' then
+      raise exception 'the sample case must be acknowledged' using errcode = '22023';
     end if;
-    update public.organizations
-       set continuity_contact_name = btrim(p_payload ->> 'contact_name'),
-           continuity_contact_email = email,
-           succession_note = btrim(p_payload ->> 'succession_note')
-     where id = org;
   elsif p_step = 'licence' then
     if not exists (
       select 1 from public.consultant_credentials credential
@@ -1459,7 +1502,7 @@ begin
 end;
 $$;
 comment on function app.sync_trial_status(uuid) is
-  'Marks an elapsed trial trial_ended. Does not delete people, matters, or audit rows, and does not by itself lock invitations.';
+  'Marks an elapsed trial trial_ended. Does not delete people, matters, or audit rows. trial_ended blocks new real client invites.';
 revoke all on function app.sync_trial_status(uuid) from public;
 
 -- ---------------------------------------------------------------------------
@@ -1474,7 +1517,7 @@ set search_path = ''
 as $$
 begin
   if tg_op = 'INSERT' and app.actor_licence_blocks_regulated_action(new.organization_id) then
-    raise exception 'revoked, suspended, or inactive licence blocks this consultant action' using errcode = '42501';
+    raise exception 'not entitled, revoked, suspended, or inactive licence blocks this consultant action' using errcode = '42501';
   end if;
   return new;
 end;
@@ -1534,7 +1577,7 @@ begin
   end if;
   if app.matter_stage_is_regulated(matter.stage, p_to_stage)
      and app.actor_licence_blocks_regulated_action(matter.organization_id) then
-    raise exception 'revoked, suspended, or inactive licence blocks this consultant action' using errcode = '42501';
+    raise exception 'not entitled, revoked, suspended, or inactive licence blocks this consultant action' using errcode = '42501';
   end if;
   if app.matter_stage_transition_allowed(matter.stage, p_to_stage) is distinct from true then
     raise exception 'that stage transition is not allowed' using errcode = '42501';
@@ -1781,7 +1824,7 @@ begin
   end if;
   update public.product_settings
      set value = jsonb_build_object('unit', unit, 'count', count),
-         pending_confirmation = true
+         pending_confirmation = false
    where key = p_key;
   perform app.record_audit_event(
     null,
@@ -1915,6 +1958,7 @@ create function public.record_licence_check(
   p_discipline_suspended boolean,
   p_discipline_revoked boolean,
   p_discipline_restricted boolean,
+  p_discipline_restriction_detail text,
   p_proof_locator text,
   p_notes text
 )
@@ -1926,7 +1970,7 @@ as $$
   select app.record_licence_check(
     p_credential_id, p_source_url, p_retrieved_at, p_register_status,
     p_entitlement_to_practise, p_discipline_suspended, p_discipline_revoked,
-    p_discipline_restricted, p_proof_locator, p_notes
+    p_discipline_restricted, p_discipline_restriction_detail, p_proof_locator, p_notes
   );
 $$;
 
@@ -2008,7 +2052,7 @@ as $$
 $$;
 
 revoke all on function public.declare_consultant_credential(uuid, public.licence_type, text, text, text) from public, anon;
-revoke all on function public.record_licence_check(uuid, text, timestamptz, public.register_licence_status, boolean, boolean, boolean, boolean, text, text) from public, anon;
+revoke all on function public.record_licence_check(uuid, text, timestamptz, public.register_licence_status, boolean, boolean, boolean, boolean, text, text, text) from public, anon;
 revoke all on function public.save_firm_setup(public.firm_setup_step, jsonb) from public, anon;
 revoke all on function public.save_organization_office(text, text, text, text, text, text, boolean) from public, anon;
 revoke all on function public.complete_sample_proof(public.sample_proof_step, uuid) from public, anon;
@@ -2018,7 +2062,7 @@ revoke all on function public.reassign_consultant_matters(uuid, uuid, text) from
 revoke all on function public.set_product_setting(text, jsonb) from public, anon;
 
 grant execute on function app.declare_consultant_credential(uuid, public.licence_type, text, text, text) to authenticated, service_role;
-grant execute on function app.record_licence_check(uuid, text, timestamptz, public.register_licence_status, boolean, boolean, boolean, boolean, text, text) to authenticated, service_role;
+grant execute on function app.record_licence_check(uuid, text, timestamptz, public.register_licence_status, boolean, boolean, boolean, boolean, text, text, text) to authenticated, service_role;
 grant execute on function app.save_firm_setup(public.firm_setup_step, jsonb) to authenticated, service_role;
 grant execute on function app.save_organization_office(text, text, text, text, text, text, boolean) to authenticated, service_role;
 grant execute on function app.complete_sample_proof(public.sample_proof_step, uuid) to authenticated, service_role;
@@ -2027,7 +2071,7 @@ grant execute on function app.sync_trial_status(uuid) to authenticated, service_
 grant execute on function app.reassign_consultant_matters(uuid, uuid, text) to authenticated, service_role;
 grant execute on function app.set_product_setting(text, jsonb) to authenticated, service_role;
 grant execute on function public.declare_consultant_credential(uuid, public.licence_type, text, text, text) to authenticated, service_role;
-grant execute on function public.record_licence_check(uuid, text, timestamptz, public.register_licence_status, boolean, boolean, boolean, boolean, text, text) to authenticated, service_role;
+grant execute on function public.record_licence_check(uuid, text, timestamptz, public.register_licence_status, boolean, boolean, boolean, boolean, text, text, text) to authenticated, service_role;
 grant execute on function public.save_firm_setup(public.firm_setup_step, jsonb) to authenticated, service_role;
 grant execute on function public.save_organization_office(text, text, text, text, text, text, boolean) to authenticated, service_role;
 grant execute on function public.complete_sample_proof(public.sample_proof_step, uuid) to authenticated, service_role;

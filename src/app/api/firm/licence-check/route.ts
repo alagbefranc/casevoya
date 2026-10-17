@@ -37,6 +37,7 @@ export async function POST(request: Request) {
     p_discipline_suspended: parsed.data.disciplineSuspended,
     p_discipline_revoked: parsed.data.disciplineRevoked,
     p_discipline_restricted: parsed.data.disciplineRestricted,
+    p_discipline_restriction_detail: parsed.data.disciplineRestrictionDetail ?? "",
     p_proof_locator: parsed.data.proofLocator,
     p_notes: parsed.data.notes ?? "",
   });

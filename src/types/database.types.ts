@@ -177,6 +177,7 @@ export type Database = {
           created_by: string | null
           declared_at: string
           discipline_restricted: boolean
+          discipline_restriction_detail: string | null
           discipline_revoked: boolean
           discipline_suspended: boolean
           entitlement_to_practise: boolean | null
@@ -203,6 +204,7 @@ export type Database = {
           created_by?: string | null
           declared_at?: string
           discipline_restricted?: boolean
+          discipline_restriction_detail?: string | null
           discipline_revoked?: boolean
           discipline_suspended?: boolean
           entitlement_to_practise?: boolean | null
@@ -229,6 +231,7 @@ export type Database = {
           created_by?: string | null
           declared_at?: string
           discipline_restricted?: boolean
+          discipline_restriction_detail?: string | null
           discipline_revoked?: boolean
           discipline_suspended?: boolean
           entitlement_to_practise?: boolean | null
@@ -270,6 +273,7 @@ export type Database = {
           created_at: string
           credential_id: string
           discipline_restricted: boolean
+          discipline_restriction_detail: string | null
           discipline_revoked: boolean
           discipline_suspended: boolean
           entitlement_to_practise: boolean
@@ -289,6 +293,7 @@ export type Database = {
           created_at?: string
           credential_id: string
           discipline_restricted: boolean
+          discipline_restriction_detail?: string | null
           discipline_revoked: boolean
           discipline_suspended: boolean
           entitlement_to_practise: boolean
@@ -308,6 +313,7 @@ export type Database = {
           created_at?: string
           credential_id?: string
           discipline_restricted?: boolean
+          discipline_restriction_detail?: string | null
           discipline_revoked?: boolean
           discipline_suspended?: boolean
           entitlement_to_practise?: boolean
@@ -2654,6 +2660,7 @@ export type Database = {
         Args: {
           p_credential_id: string
           p_discipline_restricted: boolean
+          p_discipline_restriction_detail: string
           p_discipline_revoked: boolean
           p_discipline_suspended: boolean
           p_entitlement_to_practise: boolean
@@ -2709,14 +2716,14 @@ export type Database = {
         | "revoked"
       domain_match_kind: "exact" | "suffix"
       firm_setup_step:
-        | "firm_profile"
-        | "offices"
+        | "firm_details"
+        | "terms_and_privacy"
         | "jurisdictions"
-        | "privacy_and_terms"
-        | "branding"
-        | "retention"
-        | "continuity"
         | "licence"
+        | "branding"
+        | "calendar_and_payments"
+        | "records_and_retention"
+        | "sample_case"
       licence_check_result: "verified" | "not_entitled" | "inactive" | "suspended" | "revoked"
       licence_type: "RCIC" | "RISIA"
       matter_party_role:
@@ -2988,14 +2995,14 @@ export const Constants = {
       credential_status: ["declared", "verified", "not_entitled", "inactive", "suspended", "revoked"],
       domain_match_kind: ["exact", "suffix"],
       firm_setup_step: [
-        "firm_profile",
-        "offices",
+        "firm_details",
+        "terms_and_privacy",
         "jurisdictions",
-        "privacy_and_terms",
-        "branding",
-        "retention",
-        "continuity",
         "licence",
+        "branding",
+        "calendar_and_payments",
+        "records_and_retention",
+        "sample_case",
       ],
       licence_check_result: ["verified", "not_entitled", "inactive", "suspended", "revoked"],
       licence_type: ["RCIC", "RISIA"],

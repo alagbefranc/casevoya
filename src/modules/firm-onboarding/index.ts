@@ -25,7 +25,9 @@ export {
 } from "./licence";
 export { intervalFromSetting, productIntervalSchema, type ProductInterval } from "./settings";
 export {
+  FIRM_SETUP_STEP_LABELS,
   FIRM_SETUP_STEPS,
+  SAMPLE_PROOF_LABELS,
   SAMPLE_PROOF_STEPS,
   firmSetupDbPayload,
   firmSetupPayloadSchema,

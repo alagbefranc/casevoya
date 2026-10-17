@@ -5,7 +5,9 @@ import {
   CICC_PUBLIC_REGISTER_URL,
   CICC_RCIC_SEARCH_URL,
   CICC_REGISTER_RETRIEVED_ON,
+  FIRM_SETUP_STEP_LABELS,
   FIRM_SETUP_STEPS,
+  SAMPLE_PROOF_LABELS,
   SAMPLE_PROOF_STEPS,
   ciccRegisterHost,
   deriveLicenceCheck,
@@ -52,7 +54,7 @@ describe("CICC register evidence", () => {
     expect(ciccRegisterHost("http://register.college-ic.ca/Public-Register-EN")).toBeNull();
   });
 
-  it("derives the lock from revoked, suspended, and inactive only", () => {
+  it("locks revoked, suspended, inactive, and not entitled, and keeps a restriction unlocked", () => {
     expect(
       deriveLicenceCheck({
         registerStatus: "active",
@@ -70,7 +72,7 @@ describe("CICC register evidence", () => {
         disciplineRevoked: false,
         disciplineRestricted: false,
       }).locksRegulatedAction,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       deriveLicenceCheck({
         registerStatus: "active",
@@ -127,16 +129,44 @@ describe("setup steps", () => {
   it("matches the SQL enums and the invite blockers", () => {
     expect(enumBody("firm_setup_step")).toEqual([...FIRM_SETUP_STEPS]);
     expect(enumBody("sample_proof_step")).toEqual([...SAMPLE_PROOF_STEPS]);
+    expect(FIRM_SETUP_STEPS.map((step) => FIRM_SETUP_STEP_LABELS[step].label)).toEqual([
+      "Firm details",
+      "Terms and privacy",
+      "Where you practise",
+      "Your licence",
+      "Branding",
+      "Calendar and payments",
+      "Records and retention",
+      "Sample case",
+    ]);
+    expect(SAMPLE_PROOF_STEPS.map((step) => SAMPLE_PROOF_LABELS[step])).toEqual([
+      "Send an intake form",
+      "Send a service agreement",
+      "Request and review an upload",
+      "Schedule a reminder",
+      "Issue an invoice",
+      "Export the file",
+    ]);
     expect(enumBody("licence_type")).toEqual(["RCIC", "RISIA"]);
     expect(
       firmSetupDbPayload({
-        step: "firm_profile",
+        step: "firm_details",
         legalName: "Synthetic Legal",
         displayName: "Synthetic",
         locale: "en-CA",
         timezone: "America/Toronto",
+        billingContactName: "Synthetic Billing",
+        billingContactEmail: "billing@example.com",
       }),
     ).toMatchObject({ legal_name: "Synthetic Legal", locale: "en-CA" });
+    expect(
+      realClientInviteBlockers({
+        verificationStatus: "verified",
+        hasVerifiedLicence: true,
+        completedSampleSteps: [...SAMPLE_PROOF_STEPS],
+        subscriptionStatus: "trial_ended",
+      }),
+    ).toEqual(["trial_ended"]);
     expect(
       realClientInviteBlockers({
         verificationStatus: "pending_review",

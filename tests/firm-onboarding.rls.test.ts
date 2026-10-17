@@ -88,13 +88,15 @@ async function recordCheck(
     suspended?: boolean;
     revoked?: boolean;
     restricted?: boolean;
+    restrictionDetail?: string;
   } = {},
 ) {
   await asUser(db, { userId, aal: "aal2", orgId, totpAgeSeconds: 0 });
+  const restricted = fields.restricted ?? false;
   const row = await db.query<{ id: string }>(
     `select public.record_licence_check(
        $1, $2, statement_timestamp(), $3::public.register_licence_status,
-       $4, $5, $6, $7, $8, 'Synthetic reviewer note'
+       $4, $5, $6, $7, $8, $9, 'Synthetic reviewer note'
      ) as id`,
     [
       credentialId,
@@ -103,7 +105,8 @@ async function recordCheck(
       fields.entitlement ?? true,
       fields.suspended ?? false,
       fields.revoked ?? false,
-      fields.restricted ?? false,
+      restricted,
+      restricted ? (fields.restrictionDetail ?? "Synthetic restriction copied from the register profile") : null,
       PROOF,
     ],
   );
@@ -264,7 +267,7 @@ describe("manual register checks", () => {
       () =>
         db.query(
           `select public.record_licence_check(
-             $1, $2, statement_timestamp(), 'active', true, false, false, false, $3, null
+             $1, $2, statement_timestamp(), 'active', true, false, false, false, null, $3, null
            )`,
           [credentialId, REGISTER, PROOF],
         ),
@@ -275,7 +278,7 @@ describe("manual register checks", () => {
       () =>
         db.query(
           `select public.record_licence_check(
-             $1, 'https://www.college-ic.ca/', statement_timestamp(), 'active', true, false, false, false, $2, null
+             $1, 'https://www.college-ic.ca/', statement_timestamp(), 'active', true, false, false, false, null, $2, null
            )`,
           [credentialId, PROOF],
         ),
@@ -285,7 +288,7 @@ describe("manual register checks", () => {
       () =>
         db.query(
           `select public.record_licence_check(
-             $1, 'https://canada.ca/', statement_timestamp(), 'active', true, false, false, false, $2, null
+             $1, 'https://canada.ca/', statement_timestamp(), 'active', true, false, false, false, null, $2, null
            )`,
           [credentialId, PROOF],
         ),
@@ -299,12 +302,14 @@ describe("manual register checks", () => {
       method: string;
       entitlement: boolean;
       restricted: boolean;
+      detail: string;
       firm: string;
     }>(
       `select credential.status::text as status,
               credential.verification_method as method,
               credential.entitlement_to_practise as entitlement,
               credential.discipline_restricted as restricted,
+              credential.discipline_restriction_detail as detail,
               org.verification_status::text as firm
        from public.consultant_credentials credential
        join public.organizations org on org.id = credential.organization_id
@@ -316,6 +321,7 @@ describe("manual register checks", () => {
       method: "manual_public_register",
       entitlement: true,
       restricted: true,
+      detail: "Synthetic restriction copied from the register profile",
       firm: "verified",
     });
     const delay = await db.query<{ matches: boolean; configured: boolean }>(
@@ -483,8 +489,8 @@ describe("manual register checks", () => {
               app.actor_licence_block_status($1)::text as status`,
       [orgId],
     );
-    expect(notEntitled.rows[0].status).toBeNull();
-    expect(notEntitled.rows[0].result.ok).toBe(true);
+    expect(notEntitled.rows[0].status).toBe("not_entitled");
+    expect(notEntitled.rows[0].result).toMatchObject({ ok: false, blocked: "licence" });
     await asMaintenance(db);
     const firm = await db.query<{ status: string }>(
       `select verification_status::text as status from public.organizations where id = $1`,
@@ -547,7 +553,7 @@ describe("real client invites and trial", () => {
       [orgId],
     );
     expect(snapshot.rows[0].snapshot).toEqual({ unit: "days", count: 14 });
-    expect(snapshot.rows[0].pending).toBe(true);
+    expect(snapshot.rows[0].pending).toBe(false);
     expect(before.rows[0].trial_ends_at).toBe(
       (
         await db.query<{ trial_ends_at: string }>(
@@ -604,6 +610,23 @@ describe("real client invites and trial", () => {
       [orgId],
     );
     expect(open.rows[0].result).toEqual({ unlocked: true, blockers: [] });
+    await asMaintenance(db);
+    await db.query(
+      `update public.organization_subscriptions set status = 'trial_ended' where organization_id = $1`,
+      [orgId],
+    );
+    await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    const trialEnded = await db.query<{ result: { unlocked: boolean; blockers: string[] } }>(
+      `select public.evaluate_real_client_invites($1) as result`,
+      [orgId],
+    );
+    expect(trialEnded.rows[0].result).toEqual({ unlocked: false, blockers: ["trial_ended"] });
+    await asMaintenance(db);
+    await db.query(
+      `update public.organization_subscriptions set status = 'trial' where organization_id = $1`,
+      [orgId],
+    );
+    await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
     await db.query(`select public.set_sample_mode(false)`);
     await asMaintenance(db);
     const mode = await db.query<{ sample_mode: boolean }>(
