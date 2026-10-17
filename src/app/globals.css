@@ -11,6 +11,7 @@
 @import "../styles/kit/shell.css" layer(kit);
 @import "../styles/kit/portal.css" layer(kit);
 @import "../styles/kit/auth.css" layer(kit);
+@import "../styles/kit/typography.css" layer(kit);
 
 /*
  * Casevoya design tokens (docs/spec/DESIGN.md; Francis's overrides:
@@ -59,6 +60,8 @@
   --shadow-overlay: 0 12px 32px rgba(17, 17, 17, 0.12);
 
   --font-brand: var(--font-erode), Georgia, "Times New Roman", serif;
+  /* DESIGN.md: Inter for the interface; Erode stays for headings only. */
+  --font-ui: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 @theme inline {
@@ -78,13 +81,13 @@
   --color-danger-bg: var(--danger-bg);
   --radius-control: var(--radius-control);
   --radius-panel: var(--radius-panel);
-  --font-sans: var(--font-brand);
+  --font-sans: var(--font-ui);
 }
 
 html {
   background: var(--canvas);
   color: var(--text);
-  font-family: var(--font-brand);
+  font-family: var(--font-ui);
 }
 
 ::selection {
