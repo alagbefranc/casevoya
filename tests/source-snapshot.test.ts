@@ -34,7 +34,9 @@ describe("official host allowlist", () => {
       ),
       "utf8",
     );
-    const seeded = [...sql.matchAll(/\('([a-z0-9.-]+)', 'suffix'/g)].map((match) => match[1]);
+    const seeded = [...sql.matchAll(/\('([a-z0-9-]+(?:\.[a-z0-9-]+)+)', 'suffix'/g)].map(
+      (match) => match[1],
+    );
     expect(seeded).toEqual([...OFFICIAL_SOURCE_HOSTS]);
     expect(seeded).toContain("canada.ca");
     expect(seeded).toContain("cic.gc.ca");

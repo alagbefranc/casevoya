@@ -1064,27 +1064,27 @@ begin
     return array['missing_rule_version']::text[];
   end if;
   if rv.claim is null or length(btrim(rv.claim)) = 0 then
-    blockers := blockers || 'missing_claim';
+    blockers := array_append(blockers, 'missing_claim');
   end if;
   if rv.next_review_at is null then
-    blockers := blockers || 'missing_next_review_at';
+    blockers := array_append(blockers, 'missing_next_review_at');
   end if;
   if coalesce(cardinality(rv.test_case_ids), 0) = 0 then
-    blockers := blockers || 'missing_test_cases';
+    blockers := array_append(blockers, 'missing_test_cases');
   end if;
   if rv.effective_from is null and rv.applicability_established is not true then
-    blockers := blockers || 'missing_effective_applicability';
+    blockers := array_append(blockers, 'missing_effective_applicability');
   end if;
   if rv.applicability_established is true
      and (rv.applicability_note is null or length(btrim(rv.applicability_note)) = 0) then
-    blockers := blockers || 'missing_applicability_note';
+    blockers := array_append(blockers, 'missing_applicability_note');
   end if;
 
   select count(*) into evidence_count
   from public.rule_evidence e
   where e.rule_version_id = p_id;
   if evidence_count = 0 then
-    blockers := blockers || 'missing_evidence';
+    blockers := array_append(blockers, 'missing_evidence');
   else
     select count(*) into usable
     from public.rule_evidence e
@@ -1099,7 +1099,7 @@ begin
       and length(btrim(src.publisher)) > 0
       and app.host_is_allowlisted(app.official_url_host(s.final_url));
     if usable = 0 then
-      blockers := blockers || 'missing_source_section';
+      blockers := array_append(blockers, 'missing_source_section');
     end if;
     select count(*) into copied
     from public.rule_evidence e
@@ -1112,7 +1112,7 @@ begin
       and s.current_to is null
       and rv.applicability_established is not true;
     if copied > 0 then
-      blockers := blockers || 'effective_from_copies_retrieved_at';
+      blockers := array_append(blockers, 'effective_from_copies_retrieved_at');
     end if;
   end if;
 
@@ -1125,7 +1125,7 @@ begin
       and r.rule_content_revision = p_content_revision
       and (rv.organization_id is null or r.organization_id = rv.organization_id)
   ) then
-    blockers := blockers || 'missing_reviewer';
+    blockers := array_append(blockers, 'missing_reviewer');
   end if;
 
   return blockers;

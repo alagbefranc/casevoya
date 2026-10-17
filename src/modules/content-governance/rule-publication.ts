@@ -116,7 +116,7 @@ export function publicationBlockers(input: RulePublicationInput): string[] {
     push(blockers, "missing_applicability_note");
   }
 
-  if (blank(rule.source_url)) {
+  if (rule.source_url == null || rule.source_url.trim().length === 0) {
     push(blockers, "missing_source_url");
     push(blockers, "missing_evidence");
   } else if (!officialUrlIsAllowlisted(rule.source_url)) {

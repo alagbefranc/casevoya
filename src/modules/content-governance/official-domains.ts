@@ -53,7 +53,7 @@ export function officialUrlHost(raw: string): string | null {
     return null;
   }
   if (url.protocol !== "https:" || url.username || url.password || url.port) return null;
-  let host = url.hostname.toLowerCase().replace(/\.$/, "");
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
   if (
     !host ||
     host === "localhost" ||

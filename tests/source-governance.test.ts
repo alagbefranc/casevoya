@@ -416,16 +416,16 @@ describe("source governance access and versions", () => {
     ]);
 
     await asUser(db, staff);
-    const matter = await db.query<{ id: string }>(
-      `insert into public.matters (organization_id, title) values ($1, 'Fictional matter')
-       returning id`,
-      [orgId],
+    const matterId = randomUUID();
+    await db.query(
+      `insert into public.matters (id, organization_id, title) values ($1, $2, 'Fictional matter')`,
+      [matterId, orgId],
     );
     const binding = await db.query<{ id: string; recheck_required: boolean }>(
       `insert into public.matter_rule_bindings (organization_id, matter_id, rule_pack_version_id)
        values ($1, $2, $3)
        returning id, recheck_required`,
-      [orgId, matter.rows[0].id, packId],
+      [orgId, matterId, packId],
     );
     expect(binding.rows[0].recheck_required).toBe(false);
 
@@ -467,14 +467,14 @@ describe("source governance access and versions", () => {
     const impacts = await db.query<{ n: number }>(
       `select count(*)::int as n from public.rule_impacts
        where matter_id = $1 and snapshot_id = $2 and reason = 'source_content_hash_changed'`,
-      [matter.rows[0].id, second.rows[0].id],
+      [matterId, second.rows[0].id],
     );
     expect(countOf(impacts.rows[0].n)).toBe(1);
 
     await asUser(db, { userId: other, aal: "aal2", orgId: otherOrg, totpAgeSeconds: 0 });
     const foreignImpacts = await db.query<{ n: number }>(
       `select count(*)::int as n from public.rule_impacts where matter_id = $1`,
-      [matter.rows[0].id],
+      [matterId],
     );
     expect(countOf(foreignImpacts.rows[0].n)).toBe(0);
 
