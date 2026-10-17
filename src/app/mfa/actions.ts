@@ -52,3 +52,18 @@ export async function verifyTotp(formData: FormData) {
   if (error) redirect(mfaPath(next, "verify_failed"));
   redirect(next);
 }
+
+/** Redeems one app recovery code for this session. The code is not written to logs. */
+export async function redeemRecoveryCode(formData: FormData) {
+  const next = safeNext(formData.get("next"));
+  const code = String(formData.get("code") ?? "").trim();
+  if (!/^[A-Za-z0-9-]{8,32}$/.test(code)) redirect(mfaPath(next, "invalid_recovery"));
+
+  const supabase = await createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  if (!claims?.claims?.sub) redirect(`/sign-in?next=${encodeURIComponent(mfaPath(next))}`);
+
+  const { data, error } = await supabase.rpc("consume_recovery_code", { p_code: code });
+  if (error || data !== true) redirect(mfaPath(next, "recovery_failed"));
+  redirect(next);
+}

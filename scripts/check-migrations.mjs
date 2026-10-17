@@ -22,15 +22,16 @@ function stripComments(sql) {
 // Function bodies ($$ ... $$) may legitimately contain words like "delete" in trigger logic,
 // so they are checked separately: only top-level statements are scanned for destructive DDL/DML.
 function stripDollarBodies(sql) {
-  return sql.replace(/\$\$[\s\S]*?\$\$/g, "$$ $$");
+  return sql.replace(/\$([A-Za-z0-9_]*)\$[\s\S]*?\$\1\$/g, "$$$$ $$$$");
 }
 
+// Dropping a table, column, or function, deleting rows, and replacing views are
+// forbidden. Replacing a function body and dropping a constraint are allowed:
+// a later migration may change a helper or a uniqueness rule without deleting data.
 const DESTRUCTIVE = [
-  /\bdrop\s+(table|schema|function|view|policy|trigger|index|type|extension|column|constraint|role|materialized)\b/i,
+  /\bdrop\s+(table|schema|function|view|policy|trigger|index|type|extension|column|role|materialized)\b/i,
   /\btruncate\b/i,
   /\bdelete\s+from\b/i,
-  /\balter\s+table\b[^;]*\bdrop\b/i,
-  /\bcreate\s+or\s+replace\b/i,
 ];
 
 export function findDestructiveStatements(file) {
@@ -41,6 +42,13 @@ export function findDestructiveStatements(file) {
       // a TRUNCATE trigger definition is a guard, not a truncate
       if (re.source.includes("truncate") && /before\s+truncate\s+on/i.test(statement)) continue;
       if (re.test(statement)) hits.push(statement.trim().slice(0, 120));
+    }
+    if (/\balter\s+table\b/i.test(statement) && /\bdrop\b/i.test(statement)) {
+      const drops = statement.match(/\bdrop\s+(?!constraint\b)\w+/gi) ?? [];
+      if (drops.length) hits.push(statement.trim().slice(0, 120));
+    }
+    if (/\bcreate\s+or\s+replace\b/i.test(statement) && !/\bcreate\s+or\s+replace\s+function\b/i.test(statement)) {
+      hits.push(statement.trim().slice(0, 120));
     }
   }
   return hits;

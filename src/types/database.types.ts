@@ -1,5 +1,6 @@
-// Generated from the live schema (project aqjtvqmojfamtspzyeqm) after migrations
-// through 20261017113202. Regenerate with `pnpm db:types`.
+// Live schema (project aqjtvqmojfamtspzyeqm) through 20261017113202, extended in-repo
+// for unapplied migrations 20261017120000 and 20261017140000–20261017140500.
+// Regenerate with `pnpm db:types` only after those migrations are applied live.
 
 export type Json =
   | string
@@ -149,6 +150,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      auth_session_cutoffs: {
+        Row: {
+          sessions_valid_after: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          sessions_valid_after: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          sessions_valid_after?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       household_members: {
         Row: {
@@ -460,6 +479,127 @@ export type Database = {
           },
         ]
       }
+      matter_stage_evidence: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          external_reference: string | null
+          id: string
+          kind: Database["public"]["Enums"]["matter_stage_evidence_kind"]
+          matter_id: string
+          organization_id: string
+          receipt_locator: string | null
+          submission_at: string | null
+          summary: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          external_reference?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["matter_stage_evidence_kind"]
+          matter_id: string
+          organization_id: string
+          receipt_locator?: string | null
+          submission_at?: string | null
+          summary: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          external_reference?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["matter_stage_evidence_kind"]
+          matter_id?: string
+          organization_id?: string
+          receipt_locator?: string | null
+          submission_at?: string | null
+          summary?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_stage_evidence_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_stage_evidence_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      matter_stage_transitions: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          evidence_id: string | null
+          from_stage: Database["public"]["Enums"]["matter_stage"]
+          from_version: number
+          id: string
+          matter_id: string
+          organization_id: string
+          reason: string
+          to_stage: Database["public"]["Enums"]["matter_stage"]
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          evidence_id?: string | null
+          from_stage: Database["public"]["Enums"]["matter_stage"]
+          from_version: number
+          id?: string
+          matter_id: string
+          organization_id: string
+          reason: string
+          to_stage: Database["public"]["Enums"]["matter_stage"]
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          evidence_id?: string | null
+          from_stage?: Database["public"]["Enums"]["matter_stage"]
+          from_version?: number
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          reason?: string
+          to_stage?: Database["public"]["Enums"]["matter_stage"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_stage_transitions_evidence_id_organization_id_fkey"
+            columns: ["evidence_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matter_stage_evidence"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_stage_transitions_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_stage_transitions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       matters: {
         Row: {
           created_at: string
@@ -562,6 +702,78 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      mfa_assurance_proofs: {
+        Row: {
+          created_at: string
+          id: string
+          method: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          method: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          method?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mfa_recovery_attempts: {
+        Row: {
+          failures: number
+          locked_until: string | null
+          user_id: string
+        }
+        Insert: {
+          failures?: number
+          locked_until?: string | null
+          user_id: string
+        }
+        Update: {
+          failures?: number
+          locked_until?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mfa_recovery_codes: {
+        Row: {
+          batch_id: string
+          code_hash: string
+          created_at: string
+          id: string
+          retired_at: string | null
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          batch_id: string
+          code_hash: string
+          created_at?: string
+          id?: string
+          retired_at?: string | null
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          batch_id?: string
+          code_hash?: string
+          created_at?: string
+          id?: string
+          retired_at?: string | null
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       official_source_domains: {
         Row: {
@@ -693,6 +905,7 @@ export type Database = {
       }
       organizations: {
         Row: {
+          age_of_majority_years: number
           created_at: string
           created_by: string | null
           default_locale: string
@@ -707,6 +920,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          age_of_majority_years?: number
           created_at?: string
           created_by?: string | null
           default_locale?: string
@@ -721,6 +935,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          age_of_majority_years?: number
           created_at?: string
           created_by?: string | null
           default_locale?: string
@@ -810,6 +1025,63 @@ export type Database = {
           },
         ]
       }
+      person_break_glass: {
+        Row: {
+          actor_user_id: string
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          organization_id: string
+          person_id: string
+          reason: string
+          revoked_at: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          actor_user_id: string
+          created_at?: string
+          created_by?: string | null
+          expires_at: string
+          id?: string
+          organization_id: string
+          person_id: string
+          reason: string
+          revoked_at?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          actor_user_id?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          organization_id?: string
+          person_id?: string
+          reason?: string
+          revoked_at?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "person_break_glass_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "person_break_glass_person_id_organization_id_fkey"
+            columns: ["person_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
       person_relationships: {
         Row: {
           created_at: string
@@ -871,8 +1143,10 @@ export type Database = {
       persons: {
         Row: {
           birth_date: string | null
+          birth_date_precision: Database["public"]["Enums"]["date_precision"] | null
           created_at: string
           created_by: string | null
+          date_of_birth: string | null
           display_name: string
           email: string | null
           id: string
@@ -884,8 +1158,10 @@ export type Database = {
         }
         Insert: {
           birth_date?: string | null
+          birth_date_precision?: Database["public"]["Enums"]["date_precision"] | null
           created_at?: string
           created_by?: string | null
+          date_of_birth?: string | null
           display_name: string
           email?: string | null
           id?: string
@@ -897,8 +1173,10 @@ export type Database = {
         }
         Update: {
           birth_date?: string | null
+          birth_date_precision?: Database["public"]["Enums"]["date_precision"] | null
           created_at?: string
           created_by?: string | null
+          date_of_birth?: string | null
           display_name?: string
           email?: string | null
           id?: string
@@ -1458,6 +1736,44 @@ export type Database = {
           },
         ]
       }
+      session_revocations: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string | null
+          reason: string | null
+          revoked_by: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id?: string | null
+          reason?: string | null
+          revoked_by: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string | null
+          reason?: string | null
+          revoked_by?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_revocations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       source_check_attempts: {
         Row: {
           attempted_at: string
@@ -1673,6 +1989,7 @@ export type Database = {
       }
       webhook_inbox: {
         Row: {
+          connected_account_id: string | null
           created_at: string
           created_by: string | null
           event_id: string
@@ -1690,6 +2007,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          connected_account_id?: string | null
           created_at?: string
           created_by?: string | null
           event_id: string
@@ -1707,6 +2025,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          connected_account_id?: string | null
           created_at?: string
           created_by?: string | null
           event_id?: string
@@ -1739,9 +2058,18 @@ export type Database = {
     }
     Functions: {
       accept_invitation: { Args: { token: string }; Returns: string }
+      close_person_break_glass: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
+      consume_recovery_code: {
+        Args: { p_code: string }
+        Returns: boolean
+      }
       create_organization: {
         Args: { display_name: string; legal_name: string; slug: string }
         Returns: {
+          age_of_majority_years: number
           created_at: string
           created_by: string | null
           default_locale: string
@@ -1770,13 +2098,76 @@ export type Database = {
         }
         Returns: string
       }
+      generate_recovery_codes: {
+        Args: never
+        Returns: string[]
+      }
+      list_matter_billing: {
+        Args: never
+        Returns: {
+          client_display_name: string | null
+          matter_id: string
+          organization_id: string
+          stage: Database["public"]["Enums"]["matter_stage"]
+          title: string
+        }[]
+      }
+      list_my_sessions: {
+        Args: never
+        Returns: {
+          aal: string | null
+          created_at: string
+          refreshed_at: string | null
+          revoked: boolean
+          session_id: string
+          user_agent: string | null
+        }[]
+      }
+      open_person_break_glass: {
+        Args: { p_person_id: string; p_reason: string }
+        Returns: string
+      }
+      perform_billing_action: {
+        Args: { p_action: string; p_matter_id: string }
+        Returns: string
+      }
+      reset_staff_mfa: {
+        Args: {
+          p_organization_id: string
+          p_reason: string
+          p_target_user_id: string
+        }
+        Returns: undefined
+      }
+      revoke_my_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
+      revoke_other_sessions: {
+        Args: never
+        Returns: number
+      }
       revoke_staff_invitation: {
         Args: { invitation_id: string }
         Returns: undefined
       }
+      session_mfa_satisfied: {
+        Args: never
+        Returns: boolean
+      }
+      transition_matter_stage: {
+        Args: {
+          p_expected_version: number
+          p_matter_id: string
+          p_reason: string
+          p_to_stage: Database["public"]["Enums"]["matter_stage"]
+        }
+        Returns: number
+      }
     }
     Enums: {
       access_grant_kind: "explicit" | "guardian"
+      date_precision: "day" | "month" | "year"
       domain_match_kind: "exact" | "suffix"
       matter_party_role:
         | "applicant"
@@ -1800,6 +2191,20 @@ export type Database = {
         | "decision_review"
         | "post_decision"
         | "closed"
+      matter_stage_evidence_kind:
+        | "engagement_prerequisites"
+        | "service_agreement"
+        | "service_agreement_exception"
+        | "questionnaire_assigned"
+        | "facts_reviewed"
+        | "draft_package"
+        | "client_review_package"
+        | "submission_approvals"
+        | "submission_confirmation"
+        | "verified_submission"
+        | "official_decision"
+        | "outcome_and_follow_up"
+        | "closure"
       membership_status: "invited" | "active" | "suspended" | "revoked"
       org_role:
         | "firm_owner"
@@ -2026,6 +2431,7 @@ export const Constants = {
   public: {
     Enums: {
       access_grant_kind: ["explicit", "guardian"],
+      date_precision: ["day", "month", "year"],
       domain_match_kind: ["exact", "suffix"],
       matter_party_role: [
         "applicant",
@@ -2050,6 +2456,21 @@ export const Constants = {
         "decision_review",
         "post_decision",
         "closed",
+      ],
+      matter_stage_evidence_kind: [
+        "engagement_prerequisites",
+        "service_agreement",
+        "service_agreement_exception",
+        "questionnaire_assigned",
+        "facts_reviewed",
+        "draft_package",
+        "client_review_package",
+        "submission_approvals",
+        "submission_confirmation",
+        "verified_submission",
+        "official_decision",
+        "outcome_and_follow_up",
+        "closure",
       ],
       membership_status: ["invited", "active", "suspended", "revoked"],
       org_role: [

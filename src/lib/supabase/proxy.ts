@@ -36,6 +36,7 @@ export async function updateSession(request: NextRequest) {
   const { url, publishableKey } = getPublicSupabaseEnv();
 
   const supabase = createServerClient<Database>(url, publishableKey, {
+    auth: { experimental: { passkey: true } },
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -64,11 +65,17 @@ export async function updateSession(request: NextRequest) {
     return redirectKeepingSession(request, response, "/sign-in", `?next=${encodeURIComponent(path)}`);
   }
 
-  // Staff need aal2 before the firm workspace. Clients are not redirected.
-  // This is optimistic: RLS still enforces aal2 on staff reads and writes.
+  // Staff need an assured session before the firm workspace. Clients are not redirected.
+  // aal2 covers TOTP and WebAuthn MFA. Passkey login and an app recovery code do not
+  // raise aal, so the database function is the optimistic check. RLS remains the authority.
   if (signedIn && isStaffArea(path)) {
     const { data: level } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (level?.currentLevel !== "aal2") {
+    let mfaSatisfied = level?.currentLevel === "aal2";
+    if (!mfaSatisfied) {
+      const { data: satisfied, error: rpcError } = await supabase.rpc("session_mfa_satisfied");
+      if (!rpcError && satisfied === true) mfaSatisfied = true;
+    }
+    if (!mfaSatisfied) {
       const { data: memberships, error } = await supabase
         .from("memberships")
         .select("role")
@@ -79,6 +86,7 @@ export async function updateSession(request: NextRequest) {
           signedIn: true,
           currentAal: level?.currentLevel,
           activeRoles: (memberships ?? []).map((membership) => membership.role),
+          mfaSatisfied: false,
         });
         if (target) {
           const destination = new URL(target, request.url);
