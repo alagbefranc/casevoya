@@ -6,6 +6,7 @@ import { passwordOk } from "@/lib/auth/password";
 import { safeAccessError } from "@/lib/auth/step-up";
 import { safeNext } from "@/lib/auth/redirect";
 import { firmSlug } from "@/lib/auth/slug";
+import { syncClaimedFirmSlug } from "@/modules/email/sync-routing";
 import { isInvitationToken } from "@/lib/auth/invitations";
 import {
   firmSetupDbPayload,
@@ -218,9 +219,9 @@ export async function createTrialFirm(input: { firmName: string; sampleMode: boo
     if (/duplicate|already/i.test(error.message)) return { ok: true, href: "/setup" };
     return fail("The firm could not be created.");
   }
-  const orgId = data?.id;
-  if (!orgId) return fail("The firm could not be created.");
-  const workspace = await createClient({ organizationId: orgId });
+  if (!data?.id) return fail("The firm could not be created.");
+  await syncClaimedFirmSlug(data.slug || slug);
+  const workspace = await createClient({ organizationId: data.id });
   const { error: modeError } = await workspace.rpc("set_sample_mode", { p_enabled: input.sampleMode });
   if (modeError) return fromRpc(modeError);
   const { error: trialError } = await workspace.rpc("sync_trial_status");

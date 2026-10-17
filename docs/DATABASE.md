@@ -34,6 +34,7 @@ In the repository, not yet applied to the live project (do not edit the file in 
 | 20261017200000 | agreements_current_version_fk_index | Covering index on `agreements (current_version_id, organization_id)`. |
 | 20261017200100 | outbound_email | Outbox-driven deliveries, suppressions, and mail claim. Staff invites, document requests, and due reminders enqueue mail without raw tokens. |
 | 20261017200200 | inbound_email | Per-firm `docs.casevoya.ca` addresses, reserved slugs, inbound messages, and the unsorted inbox. |
+| 20261017200300 | reserved_firm_slugs_search_path | `app.reserved_firm_slugs` gets `search_path = ''` and schema-qualified types. No storage changes. |
 
 `src/types/database.types.ts` includes the live schema through `20261017113202`, extended in this branch for the unapplied migrations above. Do not run `pnpm db:types` until those migrations are applied; a live regeneration would drop the extension.
 
@@ -210,14 +211,7 @@ Inbound addresses are `<firm-slug>@docs.casevoya.ca`. A matter reply is `<firm-s
 
 Known senders on a matter go through `create_upload_intent` and `complete_document_upload` into the private `documents` bucket. Other attachments land in `inbound_inbox_items` for staff at aal2 with a recent step-up to assign. Unknown firms are rejected. The hourly cap defaults to 30 (`email.inbound_hourly_limit`, pending confirmation) and a duplicate message id does not consume it. Bodies go to `public.messages` when that table has `organization_id`, `matter_id`, and `body`; otherwise they stay on `inbound_emails`.
 
-Deploy the Worker from the repo root after merge, then add the routing rule. Do not commit `INBOUND_WEBHOOK_SECRET`.
-
-```
-pnpm exec wrangler deploy --config workers/inbound-email/wrangler.toml
-pnpm exec wrangler secret put INBOUND_WEBHOOK_SECRET --config workers/inbound-email/wrangler.toml
-```
-
-Zone `303990065795d627a9fd337b01258024` (`casevoya.ca`): match `*@docs.casevoya.ca`, action Send to Worker `casevoya-inbound-email`. Set the Worker var `INBOUND_WEBHOOK_URL` to the deployed app origin plus `/api/email/inbound`. `INBOUND_WEBHOOK_SECRET` and `EMAIL_INBOUND_WEBHOOK_SECRET` are the same value.
+Deploy steps and the routing env vars are in `docs/DEPLOY.md`. The Worker does not publish a `workers.dev` hostname (`workers_dev = false`). Each claimed slug gets an exact rule `<slug>@docs.casevoya.ca` named `casevoya-firm:<slug>` on zone `303990065795d627a9fd337b01258024`, action Send to Worker `casevoya-inbound-email`. A failed rule does not roll back the slug. `POST /api/email/routing/reconcile` adds missing firm rules and deletes stale ones with that name prefix. The `casevoya-test@` rule and the catch-all stay. Plus-tags use subaddressing and do not get their own rules. `app.reserved_firm_slugs` is pinned with `search_path = ''` in `20261017200300`. That migration does not alter `storage` tables.
 
 ## Known gaps (next tasks)
 

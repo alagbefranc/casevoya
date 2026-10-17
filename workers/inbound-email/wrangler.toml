@@ -2,16 +2,19 @@ name = "casevoya-inbound-email"
 main = "src/index.ts"
 compatibility_date = "2026-10-17"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = false
 
 # Deploy from the repo root so postal-mime resolves:
 #   pnpm exec wrangler deploy --config workers/inbound-email/wrangler.toml
 # Secret, same value as EMAIL_INBOUND_WEBHOOK_SECRET on the app (do not commit it):
 #   pnpm exec wrangler secret put INBOUND_WEBHOOK_SECRET --config workers/inbound-email/wrangler.toml
 #
-# Email Routing rule, zone 303990065795d627a9fd337b01258024 (casevoya.ca):
-#   Match: *@docs.casevoya.ca
-#   Action: Send to Worker casevoya-inbound-email
-# Do not create that rule from this repository.
+# Per-firm rules are created by the app (see docs/DEPLOY.md), not by this file.
+# Zone 303990065795d627a9fd337b01258024 (casevoya.ca):
+#   <slug>@docs.casevoya.ca -> Worker casevoya-inbound-email
+#   Owned rule names start with casevoya-firm:
+# Leave the casevoya-test@ rule and the catch-all alone. Subaddressing
+# already delivers <slug>+<token>@ through the base rule.
 
 [vars]
 INBOUND_EMAIL_DOMAIN = "docs.casevoya.ca"
