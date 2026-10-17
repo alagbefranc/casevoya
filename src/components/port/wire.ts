@@ -170,7 +170,7 @@ export function usePortActions(page: string, token?: string) {
       if (page === "recovery" && el.dataset.go === "5") {
         return requestMfaReset(val(event.root, "why"));
       }
-      if (page === "setup" && el.hasAttribute("data-next") && event.step < 7) {
+      if (page === "setup" && el.hasAttribute("data-next") && event.step <= 7) {
         const panel = event.root.querySelector<HTMLElement>(`[data-step="${event.step}"]`);
         const fields: Record<string, string | boolean> = {};
         panel?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input,select,textarea").forEach((input) => {
@@ -181,6 +181,15 @@ export function usePortActions(page: string, token?: string) {
         if (brand) fields.brand = brand.trim();
         const years = document.querySelector("#retS .v")?.textContent;
         if (years) fields.retention_years = years;
+        const pending = sessionStorage.getItem("cv-trial");
+        if (pending) {
+          try {
+            const trial = JSON.parse(pending) as { sampleMode?: boolean };
+            fields.sample_mode = trial.sampleMode !== false;
+          } catch {
+            sessionStorage.removeItem("cv-trial");
+          }
+        }
         return saveSetupStep(event.step, fields);
       }
       if (page === "accept-staff" && token && el.dataset.href?.startsWith("/mfa")) {

@@ -1,5 +1,6 @@
 // Live schema (project aqjtvqmojfamtspzyeqm) through 20261017113202, extended in-repo
-// for unapplied migrations 20261017120000 and 20261017140000–20261017140700.
+// for unapplied migrations 20261017120000 and 20261017140000–20261017140700,
+// plus preview_invitation and request_mfa_reset from 20261017160000.
 // Regenerate with `pnpm db:types` only after those migrations are applied live.
 
 export type Json =
@@ -2575,6 +2576,20 @@ export type Database = {
       }
       perform_billing_action: {
         Args: { p_action: string; p_matter_id: string }
+        Returns: string
+      }
+      preview_invitation: {
+        Args: { p_token: string }
+        Returns: {
+          email: string | null
+          expires_at: string | null
+          organization_name: string | null
+          role: string | null
+          status: string
+        }[]
+      }
+      request_mfa_reset: {
+        Args: { p_reason: string }
         Returns: string
       }
       reset_staff_mfa: {

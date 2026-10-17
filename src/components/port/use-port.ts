@@ -378,20 +378,7 @@ export function usePort(
         document.getElementById("retC")?.classList.toggle("on", value === "custom");
       }, listen);
       const footerNext = root.querySelector<HTMLElement>(".wz-foot [data-next]");
-      if (footerNext) {
-        k2Spark(footerNext);
-        footerNext.addEventListener(
-          "click",
-          (event) => {
-            if (current === 7) {
-              event.stopImmediatePropagation();
-              event.preventDefault();
-              location.href = "/sheet/sample-mode";
-            }
-          },
-          { capture: true, signal: ac.signal },
-        );
-      }
+      if (footerNext) k2Spark(footerNext);
     }
 
     if (page === "accept-family" || page === "accept-sponsor") {
