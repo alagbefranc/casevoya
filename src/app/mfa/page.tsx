@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { TwoStepMarkup, type TotpEnrollment } from "@/components/port/markup/two-step";
 import { PortScreen } from "@/components/port/screen";
 import { hasPublicSupabaseEnv } from "@/lib/env";
+import { readPendingTotp } from "@/lib/auth/mfa-pending";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -15,10 +16,6 @@ export function mfaActiveStep(hasVerifiedFactor: boolean, requested: number | nu
   if (!hasVerifiedFactor) return 2;
   if (requested === 1 || requested === 5 || requested === 6) return requested;
   return 0;
-}
-
-function qrSrc(qr: string) {
-  return qr.startsWith("data:") ? qr : `data:image/svg+xml;utf-8,${encodeURIComponent(qr)}`;
 }
 
 async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: string }> }) {
@@ -41,23 +38,13 @@ async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: strin
         activeStep = mfaActiveStep(true, asked);
       } else {
         activeStep = mfaActiveStep(false, asked);
-        for (const factor of factors?.all ?? []) {
-          if (factor.factor_type === "totp" && factor.status !== "verified") {
-            await supabase.auth.mfa.unenroll({ factorId: factor.id });
-          }
-        }
-        const enrolled = await supabase.auth.mfa.enroll({
-          factorType: "totp",
-          friendlyName: "Casevoya",
-          issuer: "Casevoya",
-        });
-        if (!enrolled.error && enrolled.data?.type === "totp") {
-          enrollment = {
-            factorId: enrolled.data.id,
-            secret: enrolled.data.totp.secret,
-            qr: qrSrc(enrolled.data.totp.qr_code),
-          };
-        }
+        // Never enrol while rendering: a reload would replace a QR the person already scanned.
+        // Setup starts from the client on the setup step; a pending one is shown again here.
+        const pending = await readPendingTotp();
+        const stillOpen = factors?.all?.some(
+          (factor) => factor.id === pending?.factorId && factor.factor_type === "totp" && factor.status !== "verified",
+        );
+        if (pending && stillOpen) enrollment = pending;
       }
     }
   }

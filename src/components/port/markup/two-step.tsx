@@ -3,6 +3,18 @@
 import { toast2 } from "../kit";
 /** Converted from site/app-v2/auth/two-step.html. Same DOM, classes and copy. */
 
+function copyKey(button: HTMLElement) {
+  const key = button.closest(".key")?.querySelector("b")?.textContent?.replace(/\s/g, "") ?? "";
+  if (!key || !navigator.clipboard) {
+    toast2("Select the key and copy it", { kind: "warn" });
+    return;
+  }
+  navigator.clipboard.writeText(key).then(
+    () => toast2("Key copied", { kind: "ok" }),
+    () => toast2("Select the key and copy it", { kind: "warn" }),
+  );
+}
+
 export type TotpEnrollment = {
   factorId: string;
   secret: string;
@@ -36,7 +48,7 @@ export function TwoStepMarkup({
 <button className="opt" data-href="/recovery?step=4" data-novalidate="" data-instant=""><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-help" /></svg></span><span>I’ve lost my device and codes<small>Your firm owner confirms it’s you. Every step is logged.</small></span><svg className="ic s go" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-chevron-right" /></svg></button>
 <p style={{ "marginTop": "18px" }}><button className="btn" data-go="0" data-novalidate="" data-instant=""><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-chevron-left" /></svg>Back to the code</button></p></section>
 <section data-step="2" className={stepOn(2)} data-title="Set up two-step" data-vo="lock"><span className="au-art" aria-hidden="true"><img src="/assets/generated/b2/two-step-72@1x.webp" srcSet="/assets/generated/b2/two-step-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span><div className="dots" aria-hidden="true"><i></i><i></i><i></i></div><h1>Set up two-step sign-in</h1><p className="lead">Your firm requires it for every staff account. It takes about two minutes.</p>
-<div className="qr" data-factor={enrollment?.factorId}>{enrollment ? <img src={enrollment.qr} alt="QR code for your authenticator app" width={132} height={132} /> : <p>Refresh this page to get a setup code.</p>}<div className="key">Scan this with an authenticator app, like Google Authenticator, 1Password or Microsoft Authenticator.<br />Can’t scan? Enter this key:<b>{secret}</b><button className="btn sm" type="button" onClick={(event) => { event.preventDefault(); toast2("Key copied", { kind: "ok" }); }}><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-paperclip" /></svg>Copy key</button></div></div>
+<div className="qr" data-factor={enrollment?.factorId}>{enrollment ? <img src={enrollment.qr} alt="QR code for your authenticator app" width={132} height={132} /> : <p role="status" aria-live="polite">Preparing your setup code…</p>}<div className="key">Scan this with an authenticator app, like Google Authenticator, 1Password or Microsoft Authenticator.<br />Can’t scan? Enter this key:<b>{secret}</b><button className="btn sm" type="button" onClick={(event) => { event.preventDefault(); copyKey(event.currentTarget); }}><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-paperclip" /></svg>Copy key</button></div></div>
 <p style={{ "fontSize": "14.5px", "marginBottom": "10px" }}>Then enter the six-digit code the app shows.</p><fieldset className="fld" style={{ "border": "0" }}><legend className="sr">Six-digit code</legend><div className="otp" data-then="#3"><input inputMode="numeric" autoComplete="one-time-code" maxLength={1} aria-label="Digit 1 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 2 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 3 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 4 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 5 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 6 of 6" /></div><span className="otp-msg" role="status" aria-live="polite"></span></fieldset>
 <div className="au-or">or</div><button className="opt" data-go="3" data-novalidate="" data-instant=""><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-key" /></svg></span><span>Add a passkey instead<small>Works with Face ID, Touch ID, Windows Hello and Android</small></span><svg className="ic s go" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-chevron-right" /></svg></button></section>
 <section data-step="3" className={stepOn(3)} data-title="Save your codes" data-vo="holding"><div className="au-vo" data-size="56" data-pose="holding"></div><div className="dots" aria-hidden="true"><i></i><i></i><i></i></div><h1>Save your recovery codes</h1><p className="lead">If you lose your phone, each code gets you in once. Keep them somewhere safe and away from your phone.</p>

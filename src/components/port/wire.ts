@@ -96,19 +96,22 @@ export function usePortActions(page: string, token?: string) {
             enrolled.current = preset;
           } else if (session.signedIn && !session.factorId) {
             const started = await enrollAuthenticator();
+            const box = event.root.querySelector<HTMLElement>(".qr");
+            const status = box?.querySelector<HTMLElement>("[role=status]");
             if (started) {
               enrolled.current = started.factorId;
+              if (box) box.dataset.factor = started.factorId;
               const key = event.root.querySelector(".key b");
               if (key) key.textContent = started.secret.replace(/(.{4})/g, "$1 ").trim();
-              const svg = event.root.querySelector(".qr svg");
-              if (svg) {
-                const img = document.createElement("img");
-                img.src = started.qr;
-                img.alt = "QR code for your authenticator app";
-                img.width = 132;
-                img.height = 132;
-                svg.replaceWith(img);
-              }
+              const img = document.createElement("img");
+              img.src = started.qr;
+              img.alt = "QR code for your authenticator app";
+              img.width = 132;
+              img.height = 132;
+              if (status) status.replaceWith(img);
+              else box?.prepend(img);
+            } else if (status) {
+              status.textContent = "Setup couldn’t start. Reload this page to try again.";
             }
           }
         }
@@ -184,7 +187,11 @@ export function usePortActions(page: string, token?: string) {
           if (!verified || verified.ok === false) return verified;
           const issued = await issueRecoveryCodes();
           if (issued && issued.ok && issued.codes?.length) return issued;
-          return { ok: true, href: mfaDestination() };
+          // Two-step is on now, but the person has no way back in without codes. Say so; entering a new code retries.
+          return {
+            ok: false,
+            message: "Two-step sign-in is on, but your recovery codes weren’t created. Enter the next code to try again.",
+          };
         }
         if (page === "mfa" && session.factorId && !event.then.startsWith("#")) {
           const verified = await verifyTotpCode(session.factorId, event.code);

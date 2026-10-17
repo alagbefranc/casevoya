@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
-import { clearBtn, icon, k2Count, k2Slider, k2Spark, morphText, runBtn, toast2, voPose } from "./kit";
+import { busyBtn, clearBtn, icon, k2Count, k2Slider, k2Spark, morphText, settleBtn, toast2, voPose } from "./kit";
 
 export type PortResult =
   | { ok: true; href?: string; codes?: string[] }
@@ -173,17 +173,19 @@ export function usePort(
       }
     };
 
-    const finishOtp = (otp: HTMLElement, code: string) => {
+    const finishOtp = (otp: HTMLElement, accepted: boolean, failure?: string) => {
       const inputs = all<HTMLInputElement>(otp, "input");
       const message = otp.parentElement?.querySelector<HTMLElement>(".otp-msg");
-      if (code === "000000") {
+      if (!accepted) {
         otp.classList.add("err", "nudge");
         otp.classList.remove("ok");
         window.setTimeout(() => otp.classList.remove("nudge"), 200);
         if (message) {
           message.className = "emsg otp-msg";
           message.style.display = "flex";
-          message.innerHTML = `${icon("alert", "s")}<span>That code didn’t match. Codes change every 30 seconds, so use the newest one.</span>`;
+          message.innerHTML = `${icon("alert", "s")}<span></span>`;
+          message.querySelector("span")!.textContent =
+            failure ?? "That code didn’t match. Codes change every 30 seconds, so use the newest one.";
         }
         pose("worried");
         inputs.forEach((input) => {
@@ -217,24 +219,25 @@ export function usePort(
           const code = inputs.map((input) => input.value).join("");
           if (code.length < 6) return;
           otp.classList.remove("err", "ok");
-          if (!actionRef.current || code === "000000") {
-            finishOtp(otp, code);
+          if (!actionRef.current) {
+            finishOtp(otp, false, "This code can’t be checked right now. Reload the page and try again.");
             return;
           }
           void actionRef.current({ type: "otp", page, code, then: otp.dataset.then || "", otp, root }).then((result) => {
             if (stopped) return;
-            if (result && result.ok === false) {
-              finishOtp(otp, "000000");
+            // No handler means nothing checked the code, which is never a success.
+            if (!result || result.ok === false) {
+              finishOtp(otp, false, result?.message ?? "This code can’t be checked right now. Reload the page and try again.");
               return;
             }
-            if (result && result.ok && result.codes) {
+            if (result.ok && result.codes) {
               const slots = all<HTMLElement>(root, ".codes span");
               result.codes.slice(0, slots.length).forEach((value, index) => {
                 if (slots[index]) slots[index].textContent = value;
               });
             }
-            if (result && result.ok && result.href) otp.dataset.then = result.href;
-            finishOtp(otp, code);
+            if (result.ok && result.href) otp.dataset.then = result.href;
+            finishOtp(otp, true);
           });
         };
         inputs.forEach((input, index) => {
@@ -383,25 +386,6 @@ export function usePort(
       if (footerNext) k2Spark(footerNext);
     }
 
-    if (page === "accept-family" || page === "accept-sponsor") {
-      const last = page === "accept-family" ? 3 : 2;
-      const href = "/portal";
-      root.querySelector<HTMLElement>(".wz-foot [data-next]")?.addEventListener(
-        "click",
-        (event) => {
-          if (current === last && !new URLSearchParams(location.search).has("token")) {
-            event.stopImmediatePropagation();
-            event.preventDefault();
-            runBtn(event.currentTarget as HTMLElement);
-            window.setTimeout(() => {
-              location.href = href;
-            }, 1300);
-          }
-        },
-        { capture: true, signal: ac.signal },
-      );
-    }
-
     bindPw();
     bindOtp();
     bindResend();
@@ -439,25 +423,29 @@ export function usePort(
         else if (target.dataset.go != null) go(Number(target.dataset.go));
         else go(current + 1);
       };
+      // The button shows "Saved" only after the server confirms; a pure navigation button just moves on.
+      const animated = target.classList.contains("btn") && Boolean(target.querySelector(".spin")) && target.dataset.instant == null;
       const run = async () => {
-        if (actionRef.current) {
-          const result = await actionRef.current({ type: "click", page, step: current, el: target, root });
+        if (animated) busyBtn(target);
+        const result = actionRef.current
+          ? await actionRef.current({ type: "click", page, step: current, el: target, root })
+          : null;
+        if (stopped) return;
+        if (result && result.ok === false) {
+          clearBtn(target);
+          if (result.state) showState(result.state);
+          else toast2(result.message, { kind: "bad" });
+          return;
+        }
+        if (result?.ok && result.href) target.dataset.href = result.href;
+        if (animated) {
+          if (result?.ok) await settleBtn(target, "ok");
+          else clearBtn(target);
           if (stopped) return;
-          if (result && result.ok === false) {
-            clearBtn(target);
-            if (result.state) showState(result.state);
-            else toast2(result.message, { kind: "bad" });
-            return;
-          }
-          if (result?.ok && result.href) target.dataset.href = result.href;
         }
         after();
       };
-      if (target.classList.contains("btn") && target.querySelector(".spin") && target.dataset.instant == null) {
-        const ms = target.dataset.ms ? Number(target.dataset.ms) : 900;
-        runBtn(target, "ok", ms);
-        window.setTimeout(() => void run(), ms + 450);
-      } else void run();
+      void run();
     }, listen);
 
     root.addEventListener("click", (event) => {
