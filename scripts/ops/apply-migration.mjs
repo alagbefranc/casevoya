@@ -9,6 +9,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { runSql } from "./supabase-api.mjs";
+import { isDestructive } from "./destructive.mjs";
 
 const file = process.argv[2];
 if (!file) {
@@ -24,8 +25,7 @@ if (path.dirname(resolved) !== dir || !match) {
 }
 const [, version, name] = match;
 const sql = readFileSync(resolved, "utf8");
-const stripped = sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
-if (/\b(drop\s+table|truncate|delete\s+from|drop\s+schema|drop\s+column)\b/i.test(stripped)) {
+if (isDestructive(sql)) {
   console.error("This migration contains destructive SQL. Get explicit approval and apply it by hand.");
   process.exit(3);
 }
