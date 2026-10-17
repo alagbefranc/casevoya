@@ -92,6 +92,10 @@ After a material decision or milestone, append a dated entry with: decision/chan
 
 Never put passwords, tokens, client names, passports, medical facts, banking information or private case files here. Link only to appropriately permissioned operational records when necessary. Keep this file short enough to read at the start of a session; move implementation details to the owning document.
 
+### Handoff entry — 17 October 2026
+
+T022 in-house electronic signatures are in the repository and are not applied on the live database. Evidence is migrations `20261017190000_esign_consent_purpose.sql` and `20261017190100_inhouse_esign.sql`, `tests/agreements.rls.test.ts`, and the portal agreements screen wired through the same classes as the demo markup. Provider is `in_house`. Defaults still pending confirmation: envelope life 14 days, consent version `esign-consent-2026-10-17`. Signing a service agreement on proposed scope sets engagement to engaged and does not record representation authority or change matter stage. The platform does not certify legal sufficiency of the wording.
+
 ### Handoff entry — 14 October 2026
 
 Authored the six-file specification package, incorporating the full prior PRD, the supplied design reference, official-source governance, implementation architecture and 50-task backlog. The package is ready for product and engineering review. Source packs, branding clearance, production software and professional launch approvals remain uncompleted.
