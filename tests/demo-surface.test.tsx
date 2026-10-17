@@ -10,11 +10,13 @@ import { metadata as helpMeta } from "@/app/help/client-home-screen/page";
 import { metadata as inviteMeta } from "@/app/invite/[token]/page";
 import { metadata as mfaMeta } from "@/app/mfa/page";
 import HomePage from "@/app/page";
+import { metadata as bookMeta } from "@/app/book/page";
+import { metadata as enquiryMeta } from "@/app/enquiry/page";
 import { metadata as portalMeta } from "@/app/portal/[[...slug]]/page";
 import { metadata as recoveryMeta } from "@/app/recovery/page";
 import RecoveryPage from "@/app/recovery/page";
 import { metadata as setupMeta } from "@/app/setup/page";
-import { metadata as sheetMeta } from "@/app/sheet/[[...slug]]/page";
+import { metadata as sheetMeta } from "@/app/sheet/page";
 import { metadata as signInMeta } from "@/app/sign-in/page";
 import SignInPage from "@/app/sign-in/page";
 import { metadata as trialMeta } from "@/app/start-trial/page";
@@ -30,6 +32,8 @@ import { StartTrialMarkup } from "@/components/port/markup/start-trial";
 import { TwoStepMarkup } from "@/components/port/markup/two-step";
 import { PORTAL_SLUGS } from "@/components/portal/demo";
 import { EmptyPortal, LivePortal } from "@/components/portal/live";
+import { LiveSheet, QuietSheet } from "@/components/sheet/live";
+import type { SheetBundle } from "@/modules/sheet/load";
 import { isGatedPath, signInLocation } from "@/lib/auth/redirect";
 import type { PortalViewer } from "@/modules/portal/load";
 
@@ -48,6 +52,8 @@ const TITLES = [
   inviteMeta.title,
   portalMeta.title,
   sheetMeta.title,
+  enquiryMeta.title,
+  bookMeta.title,
   helpMeta.title,
 ];
 
@@ -127,6 +133,40 @@ describe("public and live surfaces", () => {
     for (const page of LIVE_PAGES) {
       assertClean(createElement(LivePortal, { page, viewer }), `live ${page}`);
       assertClean(createElement(LivePortal, { page, viewer: emptyViewer }), `empty ${page}`);
+    }
+  });
+
+  it("renders the live sheet from the signed-in firm only", () => {
+    const bundle: SheetBundle = {
+      staff: {
+        organizationId: "00000000-0000-4000-8000-000000000001",
+        organizationName: "Example Firm",
+        legalName: "Example Firm",
+        timezone: "America/Toronto",
+        role: "firm_owner",
+        membershipId: "00000000-0000-4000-8000-000000000002",
+        displayName: "Casey Nguyen",
+        sampleMode: false,
+      },
+      error: null,
+      matters: [{ id: "m1", title: "Work permit", reference: "F-100", stage: "open", governmentStatus: "not_submitted", onHold: false, onHoldReason: null, outcome: null, retentionOn: null, version: 1, updatedAt: "2026-10-01" }],
+      tasks: [],
+      deadlines: [],
+      documents: [],
+      agreements: [],
+      invites: [],
+      people: [{ id: "p1", name: "Casey Nguyen", email: "casey@example.test" }],
+      grants: [],
+      credentials: [{ id: "c1", collegeId: "C100", licenceType: "RCIC", status: "active", regulator: "CICC" }],
+      offices: [],
+      templates: [],
+      audit: [],
+      intake: [],
+      members: [],
+    };
+    assertClean(createElement(QuietSheet, { title: "Casevoya", copy: "Your firm’s records load after sign-in." }), "sheet hold");
+    for (const page of ["index", "matters", "matter", "tasks", "clients", "documents", "agreements", "licence", "settings", "sample-mode", "invitations", "finance"]) {
+      assertClean(createElement(LiveSheet, { bundle, page, matterId: "m1" }), `sheet ${page}`);
     }
   });
 

@@ -125,13 +125,19 @@ const EMPTY = {
   members: [],
 };
 
-/** Signed-out visitors and sample-mode firms keep the designer's Northline pages. */
-export async function loadSheetStaff(): Promise<SheetStaff | null> {
-  if (!hasPublicSupabaseEnv()) return null;
+export type SheetAccess =
+  | { kind: "signed-out" }
+  | { kind: "sample" }
+  | { kind: "empty" }
+  | { kind: "live"; staff: SheetStaff };
+
+/** Designer pages render only for a signed-in firm with sample mode on. */
+export async function loadSheetAccess(): Promise<SheetAccess> {
+  if (!hasPublicSupabaseEnv()) return { kind: "signed-out" };
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
   const userId = claims?.claims?.sub;
-  if (!userId) return null;
+  if (!userId) return { kind: "signed-out" };
 
   const { data: memberships } = await supabase
     .from("memberships")
@@ -139,7 +145,7 @@ export async function loadSheetStaff(): Promise<SheetStaff | null> {
     .eq("user_id", userId)
     .eq("status", "active");
   const membership = memberships?.find((row) => (STAFF_ROLES as readonly string[]).includes(row.role));
-  if (!membership) return null;
+  if (!membership) return { kind: "empty" };
 
   const scoped = await createClient({ organizationId: membership.organization_id });
   const [{ data: org }, { data: profile }] = await Promise.all([
@@ -150,17 +156,26 @@ export async function loadSheetStaff(): Promise<SheetStaff | null> {
       .maybeSingle(),
     scoped.from("profiles").select("display_name").eq("id", userId).maybeSingle(),
   ]);
-  if (!org || org.sample_mode) return null;
+  if (!org) return { kind: "empty" };
+  if (org.sample_mode) return { kind: "sample" };
   return {
-    organizationId: org.id,
-    organizationName: org.display_name,
-    legalName: org.legal_name,
-    timezone: org.timezone,
-    role: membership.role,
-    membershipId: membership.id,
-    displayName: profile?.display_name || org.display_name,
-    sampleMode: false,
+    kind: "live",
+    staff: {
+      organizationId: org.id,
+      organizationName: org.display_name,
+      legalName: org.legal_name,
+      timezone: org.timezone,
+      role: membership.role,
+      membershipId: membership.id,
+      displayName: profile?.display_name || org.display_name,
+      sampleMode: false,
+    },
   };
+}
+
+export async function loadSheetStaff(): Promise<SheetStaff | null> {
+  const access = await loadSheetAccess();
+  return access.kind === "live" ? access.staff : null;
 }
 
 export async function loadSheetBundle(staff: SheetStaff): Promise<SheetBundle> {
