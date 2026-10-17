@@ -288,7 +288,7 @@ describe("outbound and inbound email", () => {
     expect(reserved.rows[0].result.status).toBe("reserved");
 
     const first = await db.query<{ result: { status: string; person_id: string; inbound_email_id: string } }>(
-      `select public.begin_inbound_message($1, 'client@example.test', '<same-message@example.test>', 'Hello', 'Body text', '<p>Body</p>', 'docs.casevoya.ca') as result`,
+      `select public.begin_verified_inbound_message($1, 'client@example.test', '<same-message@example.test>', 'Hello', 'Body text', '<p>Body</p>', 'docs.casevoya.ca', true) as result`,
       [`${ctx.orgSlug}@docs.casevoya.ca`],
     );
     expect(first.rows[0].result.status).toBe("accepted");
@@ -324,11 +324,47 @@ describe("outbound and inbound email", () => {
     }
   });
 
+  it("does not credit a client for mail whose sender was not authenticated", async () => {
+    const ctx = await firm();
+    await asServiceRole(db);
+    const forged = await db.query<{ result: { status: string; person_id: string | null; matter_id: string | null; inbound_email_id: string } }>(
+      `select public.begin_verified_inbound_message($1, 'client@example.test', $2, 'Passport', 'attached', null, null, false) as result`,
+      [`${ctx.orgSlug}@docs.casevoya.ca`, `<forged-${randomUUID()}@example.test>`],
+    );
+    expect(forged.rows[0].result.status).toBe("accepted");
+    expect(forged.rows[0].result.person_id).toBeNull();
+    expect(forged.rows[0].result.matter_id).toBeNull();
+    const legacy = await db.query<{ result: { person_id: string | null } }>(
+      `select public.begin_inbound_message($1, 'client@example.test', $2, 'Passport', 'attached', null, null) as result`,
+      [`${ctx.orgSlug}@docs.casevoya.ca`, `<legacy-${randomUUID()}@example.test>`],
+    );
+    expect(legacy.rows[0].result.person_id).toBeNull();
+    await asMaintenance(db);
+    const stored = await db.query<{ sender_verified: boolean; person_id: string | null }>(
+      `select sender_verified, person_id from public.inbound_emails where id = $1`,
+      [forged.rows[0].result.inbound_email_id],
+    );
+    expect(stored.rows[0]).toEqual({ sender_verified: false, person_id: null });
+  });
+
+  it("keeps the verification wrapper away from signed-in users", async () => {
+    const ctx = await firm();
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    await expectDbError(
+      () =>
+        db.query(
+          `select public.begin_verified_inbound_message($1, 'client@example.test', $2, 'x', 'x', null, null, true)`,
+          [`${ctx.orgSlug}@docs.casevoya.ca`, `<user-${randomUUID()}@example.test>`],
+        ),
+      /permission denied|42501/,
+    );
+  });
+
   it("links a known sender through document intake and files everyone else in the inbox", async () => {
     const ctx = await firm();
     await asServiceRole(db);
     const known = await db.query<{ result: { inbound_email_id: string; person_id: string } }>(
-      `select public.begin_inbound_message($1, 'client@example.test', $2, 'Scan', 'see attached', null, 'docs.casevoya.ca') as result`,
+      `select public.begin_verified_inbound_message($1, 'client@example.test', $2, 'Scan', 'see attached', null, 'docs.casevoya.ca', true) as result`,
       [`${ctx.orgSlug}@docs.casevoya.ca`, `<known-${randomUUID()}@example.test>`],
     );
     const intent = await db.query<{ result: { storage_key: string; version_id: string } }>(
@@ -404,7 +440,7 @@ describe("outbound and inbound email", () => {
     try {
       await asServiceRole(db);
       const result = await db.query<{ result: { status: string; inbound_email_id: string } }>(
-        `select public.begin_inbound_message($1, 'client@example.test', $2, 'Note', 'Hello from mail', '<p>Hello</p>', null) as result`,
+        `select public.begin_verified_inbound_message($1, 'client@example.test', $2, 'Note', 'Hello from mail', '<p>Hello</p>', null, true) as result`,
         [`${ctx.orgSlug}@docs.casevoya.ca`, `<thread-${randomUUID()}@example.test>`],
       );
       expect(result.rows[0].result.status).toBe("accepted");
