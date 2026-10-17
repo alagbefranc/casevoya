@@ -306,7 +306,8 @@ export function usePort(
     const bindResend = () => {
       all<HTMLButtonElement>(root, "[data-resend]").forEach((button) => {
         let left = Number(button.dataset.resend || 30);
-        const label = button.textContent || "Send a new code";
+        if (!button.dataset.label) button.dataset.label = button.textContent || "Send a new code";
+        const label = button.dataset.label;
         const tick = () => {
           if (stopped) return;
           if (left <= 0) {
@@ -346,7 +347,8 @@ export function usePort(
     };
 
     root.querySelectorAll<HTMLElement>("[data-pose]").forEach((host) => {
-      host.innerHTML = voPose(host.dataset.pose || "wave", Number(host.dataset.size || 56)) + host.innerHTML;
+      if (host.querySelector("svg.vo-pose")) return;
+      host.insertAdjacentHTML("afterbegin", voPose(host.dataset.pose || "wave", Number(host.dataset.size || 56)));
     });
 
     const params = new URLSearchParams(location.search);

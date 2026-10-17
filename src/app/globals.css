@@ -98,6 +98,15 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
+/* body.au / body.wzb set height:auto. html.h-full would otherwise pin these pages to the viewport. */
+html:has(.shell-au),
+html:has(.shell-wzb),
+body:has(.shell-au),
+body:has(.shell-wzb) {
+  height: auto;
+  min-height: 100dvh;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
