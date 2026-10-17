@@ -13,6 +13,8 @@ export type InboundPayload = {
   subject?: string | null;
   text?: string | null;
   html?: string | null;
+  /** Set by the inbound worker after an aligned DMARC pass. Unverified mail is never matched to a client. */
+  senderVerified?: boolean;
   attachments?: InboundAttachment[];
 };
 

@@ -6,7 +6,40 @@ export type InboundEnv = {
   INBOUND_WEBHOOK_URL: string;
   INBOUND_WEBHOOK_SECRET: string;
   INBOUND_EMAIL_DOMAIN?: string;
+  /**
+   * authserv-id that Cloudflare Email Routing stamps on Authentication-Results.
+   * Unset means no sender is treated as verified, so every message goes to staff triage.
+   * Set it only after a real delivered message shows the stamped header.
+   */
+  TRUSTED_AUTHSERV_ID?: string;
 };
+
+type HeaderLine = { key: string; value: string };
+
+function domainOf(address: string): string {
+  return address.split("@").pop()?.trim().toLowerCase() ?? "";
+}
+
+/**
+ * True only for an aligned DMARC pass recorded by our receiving server. Only the topmost
+ * Authentication-Results header is read: the receiver adds it last, and a sender can forge
+ * any header below it.
+ */
+export function senderVerified(headers: HeaderLine[], fromAddress: string, trustedAuthservId?: string): boolean {
+  const trusted = trustedAuthservId?.trim().toLowerCase();
+  const fromDomain = domainOf(fromAddress);
+  if (!trusted || !fromDomain) return false;
+  const top = headers.find((header) => header.key.toLowerCase() === "authentication-results");
+  if (!top) return false;
+  const [authserv, ...results] = top.value.split(";");
+  if (authserv.trim().split(/\s+/)[0]?.toLowerCase() !== trusted) return false;
+  return results.some((result) => {
+    const clause = result.trim().toLowerCase();
+    if (!/^dmarc=pass\b/.test(clause)) return false;
+    const aligned = clause.match(/header\.from=([^\s;]+)/);
+    return aligned?.[1] === fromDomain;
+  });
+}
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
@@ -46,8 +79,10 @@ export async function handleInboundEmail(message: InboundEmailMessage, env: Inbo
       contentBase64: bytesToBase64(content),
     });
   }
+  const from = mailboxAddress(parsed.from) || message.from;
   const body = JSON.stringify({
-    from: mailboxAddress(parsed.from) || message.from,
+    from,
+    senderVerified: senderVerified(parsed.headers ?? [], from, env.TRUSTED_AUTHSERV_ID),
     to: recipient,
     messageId,
     subject: parsed.subject ?? null,

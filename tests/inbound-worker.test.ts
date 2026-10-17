@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { verifyPayload } from "@/modules/email/sign";
-import { handleInboundEmail, type InboundEmailMessage } from "../workers/inbound-email/src/index";
+import { handleInboundEmail, senderVerified, type InboundEmailMessage } from "../workers/inbound-email/src/index";
 
 const RAW = [
   "From: Client <client@example.test>",
@@ -69,7 +69,8 @@ describe("inbound email worker", () => {
       fetchImpl,
     );
     expect(message.readers()).toBe(1);
-    const body = JSON.parse(posted) as { to: string; messageId: string; text: string };
+    const body = JSON.parse(posted) as { to: string; messageId: string; text: string; senderVerified: boolean };
+    expect(body.senderVerified).toBe(false);
     expect(body.to).toBe("northline@docs.casevoya.ca");
     expect(body.messageId).toContain("abc@example.test");
     expect(body.text).toContain("Please file this.");
@@ -92,5 +93,35 @@ describe("inbound email worker", () => {
     });
     expect(huge.setReject).toHaveBeenCalled();
     expect(huge.message.readers()).toBe(0);
+  });
+});
+
+describe("sender verification", () => {
+  const stamped = (value: string) => [
+    { key: "authentication-results", value },
+    { key: "authentication-results", value: "attacker.example; dmarc=pass header.from=example.test" },
+  ];
+
+  it("trusts only an aligned DMARC pass from the configured receiver", () => {
+    expect(
+      senderVerified(stamped("mx.cloudflare.net; spf=pass; dmarc=pass header.from=example.test"), "client@example.test", "mx.cloudflare.net"),
+    ).toBe(true);
+  });
+
+  it("ignores a forged header below the receiver's own", () => {
+    expect(
+      senderVerified(stamped("mx.cloudflare.net; dmarc=fail header.from=example.test"), "client@example.test", "mx.cloudflare.net"),
+    ).toBe(false);
+  });
+
+  it("rejects a pass for a different From domain, another receiver, or no configured id", () => {
+    const headers = stamped("mx.cloudflare.net; dmarc=pass header.from=other.test");
+    expect(senderVerified(headers, "client@example.test", "mx.cloudflare.net")).toBe(false);
+    expect(
+      senderVerified([{ key: "Authentication-Results", value: "attacker.example; dmarc=pass header.from=example.test" }], "client@example.test", "mx.cloudflare.net"),
+    ).toBe(false);
+    expect(
+      senderVerified(stamped("mx.cloudflare.net; dmarc=pass header.from=example.test"), "client@example.test", undefined),
+    ).toBe(false);
   });
 });

@@ -42,6 +42,21 @@ export function runBtn(button: HTMLElement, outcome: "ok" | "fail" = "ok", ms = 
   }, ms);
 }
 
+/** Loading state while a request is in flight. Pair with `settleBtn` once the server answers. */
+export function busyBtn(button: HTMLElement) {
+  const spin = button.querySelector<HTMLElement>(".spin");
+  button.classList.add("is-loading");
+  button.setAttribute("aria-busy", "true");
+  if (spin) spin.innerHTML = SPIN;
+}
+
+/** Shows the server's answer on a busy button. Resolves after the confirmation has been visible. */
+export function settleBtn(button: HTMLElement, outcome: "ok" | "fail"): Promise<void> {
+  button.classList.remove("is-loading");
+  runBtn(button, outcome, 0);
+  return new Promise((resolve) => window.setTimeout(resolve, outcome === "ok" ? 450 : 0));
+}
+
 export function clearBtn(button: HTMLElement) {
   button.classList.remove("is-loading", "is-ok", "is-fail");
   button.removeAttribute("aria-busy");

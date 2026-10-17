@@ -2,13 +2,8 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { safeNext } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/server";
-
-function safeNext(value: FormDataEntryValue | null): string {
-  const next = typeof value === "string" ? value : "/app";
-  // only same-site relative paths
-  return next.startsWith("/") && !next.startsWith("//") ? next : "/app";
-}
 
 export async function sendMagicLink(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
