@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -27,19 +27,22 @@ function snapshot(finalUrl: string) {
 
 describe("official host allowlist", () => {
   it("matches the migration seed, including cic.gc.ca", () => {
-    const sql = readFileSync(
-      path.resolve(
-        import.meta.dirname,
-        "../supabase/migrations/20261017110000_source_governance.sql",
-      ),
-      "utf8",
-    );
-    const seeded = [...sql.matchAll(/\('([a-z0-9-]+(?:\.[a-z0-9-]+)+)', 'suffix'/g)].map(
-      (match) => match[1],
-    );
+    const dir = path.resolve(import.meta.dirname, "../supabase/migrations");
+    const seeded = readdirSync(dir)
+      .filter((file) => file.endsWith(".sql"))
+      .sort()
+      .flatMap((file) => {
+        const sql = readFileSync(path.join(dir, file), "utf8");
+        return [...sql.matchAll(/\(\s*'([a-z0-9-]+(?:\.[a-z0-9-]+)+)'\s*,\s*'suffix'/g)].map(
+          (match) => match[1],
+        );
+      });
     expect(seeded).toEqual([...OFFICIAL_SOURCE_HOSTS]);
     expect(seeded).toContain("canada.ca");
     expect(seeded).toContain("cic.gc.ca");
+    expect(seeded).toContain("college-ic.ca");
+    expect(seeded).toContain("welcomebc.ca");
+    expect(seeded).toContain("immigratenwt.ca");
   });
 
   it("allows IRCC hosts and rejects a cic.gc.ca lookalike", () => {
@@ -49,6 +52,14 @@ describe("official host allowlist", () => {
       "https://cic.gc.ca/fictional-casevoya",
       "https://www.cic.gc.ca/fictional-casevoya",
       "https://services.cic.gc.ca/fictional-casevoya",
+      "https://www.welcomebc.ca/fictional-casevoya",
+      "https://immigratemanitoba.com/fictional-casevoya",
+      "https://www.welcomenb.ca/fictional-casevoya",
+      "https://novascotiaimmigration.com/fictional-casevoya",
+      "https://www.liveinnovascotia.com/fictional-casevoya",
+      "https://www.princeedwardisland.ca/en/topic/fictional-casevoya",
+      "https://www.immigratenwt.ca/fictional-casevoya",
+      "https://www.college-ic.ca/fictional-casevoya",
     ];
     for (const url of allowed) {
       expect(officialUrlIsAllowlisted(url), url).toBe(true);
@@ -69,6 +80,15 @@ describe("official host allowlist", () => {
       "https://evilcanada.ca/fictional-casevoya",
       "http://www.canada.ca/en/immigration-refugees-citizenship/fictional-casevoya",
       "https://example.com/fictional-casevoya",
+      "https://welcomebc.ca.evil.com/fictional-casevoya",
+      "https://immigratemanitoba.com.evil.com/fictional-casevoya",
+      "https://welcomenb.ca.evil.com/fictional-casevoya",
+      "https://novascotiaimmigration.com.evil.com/fictional-casevoya",
+      "https://liveinnovascotia.com.evil.com/fictional-casevoya",
+      "https://princeedwardisland.ca.evil.com/fictional-casevoya",
+      "https://immigratenwt.ca.evil.com/fictional-casevoya",
+      "https://college-ic.ca.evil.com/fictional-casevoya",
+      "https://notwelcomebc.ca/fictional-casevoya",
     ];
     for (const url of rejected) {
       expect(officialUrlIsAllowlisted(url), url).toBe(false);

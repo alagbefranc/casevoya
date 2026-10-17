@@ -198,6 +198,79 @@ describe("official source allowlist", () => {
       /future/,
     );
   });
+
+  it("allows verified provincial nominee hosts and rejects lookalikes", async () => {
+    await asServiceRole(db);
+    const hosts = await db.query<{
+      welcome_bc: boolean;
+      manitoba: boolean;
+      welcome_nb: boolean;
+      ns_legacy: boolean;
+      ns_live: boolean;
+      pei: boolean;
+      nwt: boolean;
+      college: boolean;
+      bc_lookalike: boolean;
+      mb_lookalike: boolean;
+      nb_lookalike: boolean;
+      ns_lookalike: boolean;
+      live_lookalike: boolean;
+      pei_lookalike: boolean;
+      nwt_lookalike: boolean;
+      college_lookalike: boolean;
+      not_bc: boolean;
+    }>(
+      `select
+         app.host_is_allowlisted('www.welcomebc.ca') as welcome_bc,
+         app.host_is_allowlisted('immigratemanitoba.com') as manitoba,
+         app.host_is_allowlisted('www.welcomenb.ca') as welcome_nb,
+         app.host_is_allowlisted('novascotiaimmigration.com') as ns_legacy,
+         app.host_is_allowlisted('www.liveinnovascotia.com') as ns_live,
+         app.host_is_allowlisted('www.princeedwardisland.ca') as pei,
+         app.host_is_allowlisted('www.immigratenwt.ca') as nwt,
+         app.host_is_allowlisted('www.college-ic.ca') as college,
+         app.host_is_allowlisted('welcomebc.ca.evil.com') as bc_lookalike,
+         app.host_is_allowlisted('immigratemanitoba.com.evil.com') as mb_lookalike,
+         app.host_is_allowlisted('welcomenb.ca.evil.com') as nb_lookalike,
+         app.host_is_allowlisted('novascotiaimmigration.com.evil.com') as ns_lookalike,
+         app.host_is_allowlisted('liveinnovascotia.com.evil.com') as live_lookalike,
+         app.host_is_allowlisted('princeedwardisland.ca.evil.com') as pei_lookalike,
+         app.host_is_allowlisted('immigratenwt.ca.evil.com') as nwt_lookalike,
+         app.host_is_allowlisted('college-ic.ca.evil.com') as college_lookalike,
+         app.host_is_allowlisted('notwelcomebc.ca') as not_bc`,
+    );
+    expect(hosts.rows[0]).toEqual({
+      welcome_bc: true,
+      manitoba: true,
+      welcome_nb: true,
+      ns_legacy: true,
+      ns_live: true,
+      pei: true,
+      nwt: true,
+      college: true,
+      bc_lookalike: false,
+      mb_lookalike: false,
+      nb_lookalike: false,
+      ns_lookalike: false,
+      live_lookalike: false,
+      pei_lookalike: false,
+      nwt_lookalike: false,
+      college_lookalike: false,
+      not_bc: false,
+    });
+
+    const suffix = token();
+    const bc = await insertGlobalSource(`https://www.welcomebc.ca/fictional-casevoya-${suffix}`);
+    expect(bc.allowed_host).toBe("www.welcomebc.ca");
+    await expectDbError(
+      () => insertGlobalSource(`https://welcomebc.ca.evil.com/fictional-${suffix}`),
+      /allowlist/,
+    );
+    await expectDbError(
+      () => insertGlobalSource(`https://immigratemanitoba.com.evil.com/fictional-${suffix}`),
+      /allowlist/,
+    );
+  });
 });
 
 describe("source governance access and versions", () => {
@@ -229,7 +302,7 @@ describe("source governance access and versions", () => {
           `insert into public.official_source_domains (host, match_kind, authority, jurisdiction_code)
            values ('example.test', 'exact', 'Not an authority', 'CA')`,
         ),
-      /permission denied/,
+      /row-level security/,
     );
 
     const renamed = await db.query(
@@ -565,5 +638,122 @@ describe("source governance access and versions", () => {
         ),
       /freshness/,
     );
+  });
+});
+
+describe("platform admins", () => {
+  it("lets an aal2 platform admin write the global catalog and not another firm's rows", async () => {
+    const suffix = token();
+    const admin = await createUser(email("platform-admin"));
+    const owner = await createUser(email("firm-owner"));
+    const staff = await createUser(email("firm-staff"));
+    const orgId = await createOrg(owner);
+    await activeMembership(orgId, staff, "case_manager", owner);
+    await asMaintenance(db);
+    await db.query(`insert into public.platform_admins (user_id) values ($1)`, [admin]);
+
+    await asUser(db, { userId: admin, aal: "aal1" });
+    await expectDbError(
+      () =>
+        db.query(
+          `insert into public.official_sources (
+             publisher, canonical_url, jurisdiction, content_kind
+           ) values ('Government of British Columbia', $1, 'CA-BC', 'program_guidance')`,
+          [`https://www.welcomebc.ca/fictional-aal1-${suffix}`],
+        ),
+      /row-level security/,
+    );
+
+    await asUser(db, { userId: staff, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    await expectDbError(
+      () =>
+        db.query(
+          `insert into public.official_sources (
+             publisher, canonical_url, jurisdiction, content_kind
+           ) values ('Government of British Columbia', $1, 'CA-BC', 'program_guidance')`,
+          [`https://www.welcomebc.ca/fictional-staff-global-${suffix}`],
+        ),
+      /row-level security/,
+    );
+
+    await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    const matterId = randomUUID();
+    await db.query(
+      `insert into public.matters (id, organization_id, title) values ($1, $2, 'Firm matter')`,
+      [matterId, orgId],
+    );
+    await db.query(
+      `insert into public.official_sources (
+         organization_id, publisher, canonical_url, jurisdiction, content_kind
+       ) values ($1, 'Government of British Columbia', $2, 'CA-BC', 'program_guidance')`,
+      [orgId, `https://www.welcomebc.ca/fictional-firm-hidden-${suffix}`],
+    );
+
+    await asUser(db, { userId: admin, aal: "aal2", totpAgeSeconds: 0 });
+    const domain = await db.query<{ host: string }>(
+      `insert into public.official_source_domains (host, match_kind, authority, jurisdiction_code, notes)
+       values ($1, 'exact', 'Platform fixture', 'CA', 'Test row. Not a program.')
+       returning host`,
+      [`platform-fixture-${suffix}.gc.ca`],
+    );
+    expect(domain.rows[0].host).toBe(`platform-fixture-${suffix}.gc.ca`);
+
+    const source = await db.query<{ id: string; organization_id: string | null; allowed_host: string }>(
+      `insert into public.official_sources (
+         publisher, canonical_url, jurisdiction, content_kind, title
+       ) values ('Government of British Columbia', $1, 'CA-BC', 'program_guidance', 'Fictional global page')
+       returning id, organization_id, allowed_host`,
+      [`https://welcomebc.ca/fictional-platform-${suffix}`],
+    );
+    expect(source.rows[0].organization_id).toBeNull();
+    expect(source.rows[0].allowed_host).toBe("welcomebc.ca");
+    const renamed = await db.query<{ title: string }>(
+      `update public.official_sources set title = 'Fictional global page revised' where id = $1
+       returning title`,
+      [source.rows[0].id],
+    );
+    expect(renamed.rows[0].title).toBe("Fictional global page revised");
+
+    const definition = await db.query<{ id: string; organization_id: string | null }>(
+      `insert into public.rule_definitions (stable_key, category, jurisdiction)
+       values ($1, 'product_control', 'CA')
+       returning id, organization_id`,
+      [`CA.FICTIONAL.P${suffix.toUpperCase()}`],
+    );
+    expect(definition.rows[0].organization_id).toBeNull();
+    const version = await db.query<{ id: string; organization_id: string | null }>(
+      `insert into public.rule_versions (definition_id, version_number, claim)
+       values ($1, 1, 'FICTIONAL platform draft. Not an immigration requirement.')
+       returning id, organization_id`,
+      [definition.rows[0].id],
+    );
+    expect(version.rows[0].organization_id).toBeNull();
+    const pack = await db.query<{ id: string; organization_id: string | null }>(
+      `insert into public.rule_pack_versions (jurisdiction, program_key, pack_version)
+       values ('CA', $1, 1)
+       returning id, organization_id`,
+      [`fictional_${suffix}`],
+    );
+    expect(pack.rows[0].organization_id).toBeNull();
+    await db.query(
+      `insert into public.rule_pack_items (pack_id, rule_version_id) values ($1, $2)`,
+      [pack.rows[0].id, version.rows[0].id],
+    );
+
+    const hiddenSources = await db.query<{ n: number }>(
+      `select count(*)::int as n from public.official_sources where organization_id = $1`,
+      [orgId],
+    );
+    expect(countOf(hiddenSources.rows[0].n)).toBe(0);
+    const hiddenMatters = await db.query<{ n: number }>(
+      `select count(*)::int as n from public.matters where organization_id = $1`,
+      [orgId],
+    );
+    expect(countOf(hiddenMatters.rows[0].n)).toBe(0);
+    const hiddenRules = await db.query<{ n: number }>(
+      `select count(*)::int as n from public.rule_versions where organization_id = $1`,
+      [orgId],
+    );
+    expect(countOf(hiddenRules.rows[0].n)).toBe(0);
   });
 });

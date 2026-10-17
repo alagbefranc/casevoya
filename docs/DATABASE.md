@@ -20,6 +20,7 @@ In the repository, not yet applied to the live project (do not edit the file in 
 | Version | Name | Contents |
 |---|---|---|
 | 20261017110000 | source_governance | Official-host allowlist, source snapshots, check attempts, rule versions, evidence, professional reviews, pack versions, matter pins, impacts. `src/types/database.types.ts` stays stale until this migration is applied and `pnpm db:types` is run against the live project. |
+| 20261017130000 | platform_admin_and_pnp_domains | `platform_admins` and `app.is_platform_admin()`, plus verified provincial nominee hosts. No user id is seeded. |
 
 All tables have `ENABLE` + `FORCE ROW LEVEL SECURITY`. `anon` has no table privileges. There are
 no DELETE policies: deletion is a retention workflow (SEC-07), not a client action.
@@ -41,7 +42,8 @@ no DELETE policies: deletion is a retention workflow (SEC-07), not a client acti
 | `person_relationships` | Descriptive links, including `payer` and `sponsor`. Never consulted by authorization. | Same staff rule as households. |
 | `access_grants` | `explicit` or `guardian`. Guardian grants require a minor subject and a purpose. | SELECT: parties to the grant, or a firm owner at aal2. Writes: firm owner with a recent step-up. |
 | `webhook_inbox` | Provider events. Unique `(provider, event_id)`. `provider_account_id` is stored; a replay with a different account is rejected. | SELECT: staff of the row's organization at aal2. Unscoped rows (`organization_id` null) are invisible to tenants. No direct writes. |
-| `official_source_domains` | Official-host allowlist. Suffix match: exact host or a host that ends in `.` plus the registered host. Seed includes `canada.ca` (so `www.canada.ca` and `ircc.canada.ca`) and `cic.gc.ca` (so `www.cic.gc.ca`). `cic.gc.ca.evil.com` does not match. A match is an entry gate, not approval of a page. | SELECT: any active member with a workspace. INSERT/UPDATE: `service_role` only. |
+| `official_source_domains` | Official-host allowlist. Suffix match: exact host or a host that ends in `.` plus the registered host. Seed includes `canada.ca` (so `www.canada.ca` and `ircc.canada.ca`), `cic.gc.ca` (so `www.cic.gc.ca`), `college-ic.ca`, and the provincial hosts in the verification table below. `cic.gc.ca.evil.com` does not match. A match is an entry gate, not approval of a page. | SELECT: any active member with a workspace, or a platform admin at aal2. INSERT/UPDATE: `service_role`, or a platform admin at aal2. |
+| `platform_admins` | Platform operators, keyed by `auth.users.id`. Not an organization role. The first row is not seeded. | SELECT: own row, or a platform admin at aal2. INSERT/UPDATE: `service_role` (and the database owner). |
 | `official_sources` | Page identity. `organization_id` null is the platform catalog. A firm row is that firm's record of an allowlisted URL. Freshness columns move only from snapshot and check triggers. | SELECT: global rows for any active member; firm rows for that firm's staff at aal2. INSERT/UPDATE: practice writers of that firm. Global writes are `service_role`. |
 | `source_snapshots` | Immutable capture: final URL, publisher, `retrieved_at`, nullable authority dates, sha256 `content_hash`. `snapshot_number` is assigned by the database. A hash change sets `change_detected` and does not rewrite older rows. | Same visibility as the parent source. Practice writers insert firm snapshots. |
 | `source_dependencies` | Linked URL recorded against a parent snapshot. The parent cannot be rewritten. | Same visibility as the parent snapshot. |
@@ -90,6 +92,43 @@ licensed consultant. Platform admin is intentionally **not** an org role.
 | `app.can_manage_access` | Firm owner, aal2, recent step-up, active workspace. |
 | `app.ingest_webhook_event(...)` | service_role only. First payload wins. Duplicate `(provider, event_id)` returns the existing id; a different account raises an error. |
 | `app.official_url_host(url)` / `app.host_is_allowlisted(host)` | HTTPS host parse, then exact or suffix match against `official_source_domains`. `cic.gc.ca.evil.com` is not `cic.gc.ca`. |
+| `app.is_platform_admin()` | Signed-in user is in `platform_admins` and the JWT `aal` is `aal2`. Does not read tenant tables. |
+
+## First platform admin
+
+No user id is stored in the migration. In the Supabase SQL editor, as the database owner (or as `service_role`), run:
+
+```sql
+insert into public.platform_admins (user_id) values ('<auth.users.id>');
+```
+
+Replace `<auth.users.id>` with the person's id from `auth.users`. A platform admin at `aal2` can create and edit global domains, official sources, rule definitions, rule versions, and rule packs. That grant does not reveal another firm's rows.
+
+## Provincial hosts verified 2026-10-17
+
+Pages fetched that day. Hosts already in `20261017110000` were not inserted again.
+
+| Host | Added now | Verification URL |
+|---|---|---|
+| `ontario.ca` | already present | https://www.ontario.ca/page/ontario-immigrant-nominee-program-oinp |
+| `welcomebc.ca` | yes | https://www.welcomebc.ca/immigrate-to-b-c/about-the-bc-provincial-nominee-program |
+| `alberta.ca` | already present | https://www.alberta.ca/aaip-application-streams |
+| `saskatchewan.ca` | already present | https://www.saskatchewan.ca/residents/moving-to-saskatchewan/live-in-saskatchewan/by-immigrating/saskatchewan-immigrant-nominee-program |
+| `immigratemanitoba.com` | yes | https://immigratemanitoba.com/ and https://www.gov.mb.ca/contact/faq.html |
+| `quebec.ca` | already present | https://www.quebec.ca/en/immigration |
+| `gnb.ca` | already present | https://www.gnb.ca/en/topic/family-home-community/immigration/provincial-nominee-program.html |
+| `welcomenb.ca` | yes | https://www.welcomenb.ca/ redirects to https://www.gnb.ca/bil/immigration.html |
+| `novascotia.ca` | already present | https://lampss.novascotia.ca/Forms/IMM/Home |
+| `novascotiaimmigration.com` | yes | 301 to https://liveinnovascotia.com/nova-scotia-nominee-program |
+| `liveinnovascotia.com` | yes | https://liveinnovascotia.com/nova-scotia-nominee-program |
+| `princeedwardisland.ca` | yes | https://www.princeedwardisland.ca/en/topic/immigration |
+| `gov.nl.ca` | already present | https://www.gov.nl.ca/immigration/immigrating-to-newfoundland-and-labrador/provincial-nominee-program/overview/ |
+| `yukon.ca` | already present | https://yukon.ca/en/yukon-nominee-program |
+| `gov.nt.ca` | already present | https://www.ece.gov.nt.ca/en/services/immigration-and-nominee-program |
+| `immigratenwt.ca` | yes | https://www.immigratenwt.ca/ |
+| `college-ic.ca` | already present | https://www.college-ic.ca/ |
+
+Excluded: `liveinnovascotia.ca` (DNS answered, TLS handshake failed, so the page was not confirmed). `gov.nu.ca` stays from the original government seed; this fetch was stopped by a Cloudflare challenge, and IRCC says Nunavut has no nominee program, so no second Nunavut host was added. `gov.pe.ca/immigration` returned 404; the immigration pages that loaded are on `princeedwardisland.ca`.
 | `app.rule_publication_blockers(version_id, content_revision)` | Not granted to `authenticated`. Blocks publish when claim, review date, tests, evidence, section, hash, retrieval time, or an approved review of that revision is missing, and when `effective_from` is only a copy of `retrieved_at`. |
 
 Staff MFA is enforced with new functions and RESTRICTIVE policies. Existing helpers are not replaced (`CREATE OR REPLACE` is forbidden). `public.create_organization` now requires aal2 because the membership trigger fires when it inserts an active `firm_owner`. Step-up is not required there because `user_id` is the caller.
@@ -107,6 +146,6 @@ idempotency key produced one outbox row. Profile display-name change was audited
 * T006 is not done: session inventory, revocation, recovery, and login rate limits are still open. Client and guardian invitations remain T021; this slice invites staff only.
 * T007 is not done: negative tests cover SQL RLS (cross-tenant, household, payer, unassigned staff, guardian-without-grant, adult-to-adult). Storage URLs, search, exports, and jobs do not exist yet, so they are not tested. Sensitive document categories are not split. `finance_user` sees no person or matter rows in this slice.
 * T010 is not done: the inbox deduplicates. Signature verification, retry, and the business effect of a webhook are still the worker's job.
-* T011 is in the repository and not applied to the live project. There is no fetcher (T012), so a stored hash is attested by the caller and not checked against bytes. There is no review workbench (T013) and no client projection of rule claims (T017). There is no platform-admin role; global catalog writes are `service_role` until that exists. Provincial nominee sites on other domains are not allowlisted. `database.types.ts` does not include these tables until the migration is applied and types are regenerated.
+* T011 is in the repository and not applied to the live project. There is no fetcher (T012), so a stored hash is attested by the caller and not checked against bytes. There is no review workbench (T013) and no client projection of rule claims (T017). The first `platform_admins` row is not seeded. `database.types.ts` does not include these tables until the migration is applied and types are regenerated.
 * External tamper-evident audit sink (DB owner can still disable triggers).
 * Age of majority is not calculated. `is_minor` is recorded by staff. An authority-review task when a child reaches majority is future work.
