@@ -491,7 +491,7 @@ describe("source governance access and versions", () => {
     await asUser(db, staff);
     const matterId = randomUUID();
     await db.query(
-      `insert into public.matters (id, organization_id, title) values ($1, $2, 'Fictional matter')`,
+      `insert into public.matters (id, organization_id, title, is_sample) values ($1, $2, 'Fictional matter', true)`,
       [matterId, orgId],
     );
     const binding = await db.query<{ id: string; recheck_required: boolean }>(
@@ -679,7 +679,7 @@ describe("platform admins", () => {
     await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
     const matterId = randomUUID();
     await db.query(
-      `insert into public.matters (id, organization_id, title) values ($1, $2, 'Firm matter')`,
+      `insert into public.matters (id, organization_id, title, is_sample) values ($1, $2, 'Firm matter', true)`,
       [matterId, orgId],
     );
     await db.query(
