@@ -1,0 +1,40 @@
+{
+  "name": "casevoya-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "check:migrations": "node scripts/check-migrations.mjs",
+    "db:types": "supabase gen types typescript --project-id aqjtvqmojfamtspzyeqm --schema public > src/types/database.types.ts",
+    "verify": "pnpm check:migrations && pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
+    "next": "16.4.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.2",
+    "supabase": "^2.121.0",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^5.0.5"
+  },
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=20"
+  }
+}
