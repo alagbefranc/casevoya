@@ -75,7 +75,7 @@ function portalAcceptPayload(root: HTMLElement, preview: InvitePreview, page: st
     email_notices: checked(root, "c1"),
     sms_notices: checked(root, "c2"),
     deadline_reminders: checked(root, "c3"),
-    processing_consent: page === "accept-family" ? checked(root, "o1") : true,
+    processing_consent: checked(root, "o1"),
     shares: page === "accept-family" ? shares : undefined,
   };
 }

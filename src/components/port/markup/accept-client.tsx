@@ -2,7 +2,11 @@
 
 import { showFace, type InviteFace } from "@/lib/auth/invite-face";
 import { closeDlg, openDlg, toast2 } from "../kit";
-/** Converted from site/app-v2/auth/accept-client.html. Same DOM, classes and copy. */
+/**
+ * Converted from site/app-v2/auth/accept-client.html. Same DOM, classes and copy, plus the
+ * processing-consent box from accept-family.html (decision 2026-10-17: every portal role
+ * gives its own processing consent).
+ */
 export function AcceptClientMarkup({ face }: { face?: InviteFace } = {}) {
   const firm = showFace(face?.firm, "your firm");
   const person = showFace(face?.person, "");
@@ -23,6 +27,7 @@ export function AcceptClientMarkup({ face }: { face?: InviteFace } = {}) {
 <div className="who"><div className="y"><h4><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-eye" /></svg>Who can see your file</h4><ul><li>{consultant} and the staff at {firm} assigned to it</li><li>People you choose to share with, like your sponsor</li></ul></div><div className="n"><h4><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-lock" /></svg>Who can’t</h4><ul><li>Other clients at {firm}</li><li>Casevoya staff, unless {firm} asks for support and you’re told</li></ul></div></div>
 <div className="terms"><div><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-file-check" /></svg><div>{firm} portal terms<small>Current version</small></div><button className="btn sm" type="button" onClick={(event) => openDlg("dlgTerms", event.currentTarget)}>Read</button></div><div><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-shield" /></svg><div>Privacy information<small>What {firm} collects, why, and how long it keeps it</small></div><button className="btn sm" type="button" onClick={(event) => openDlg("dlgTerms", event.currentTarget)}>Read</button></div></div>
 <label className="check" data-req="Accept the portal terms to continue"><input type="checkbox" id="ct" /><span>I accept {firm}’s portal terms</span></label>
+<label className="check" data-req={`Give consent to continue, or tell ${firm} you don’t want to take part`}><input type="checkbox" id="o1" /><span>I agree that {firm} can use my information to prepare this application</span></label>
 <p className="why" style={{ "marginTop": "10px" }}><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-info" /></svg>Your service agreement with {firm} is separate. You’ll sign it later in the portal.</p>
 <dialog className="dlg" id="dlgTerms" aria-labelledby="dtT"><div className="dh"><h2 id="dtT">{firm} portal terms</h2><button className="x" aria-label="Close" onClick={() => closeDlg("dlgTerms")}><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-close" /></svg></button></div><div className="db"><p>Use the portal to share documents and information for your file. Keep your sign-in private. {firm} reviews everything you send; uploading a document doesn’t mean it’s accepted. You can ask {firm} for a copy of your information at any time.</p></div><div className="df"><button className="btn p" onClick={() => closeDlg("dlgTerms")}>Done</button></div></dialog></section>
 <section data-step="2" data-title="Your choices" data-vo="point"><div className="wz-head"><div className="wz-vo" data-size="64" data-pose="point"></div><div><h1>How should we reach you?</h1><p className="lead">Messages only say there’s something new. Details stay in the portal.</p></div></div>
