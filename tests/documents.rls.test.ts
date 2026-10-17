@@ -6,8 +6,8 @@ let db: TestDb;
 
 const REGISTER = "https://register.college-ic.ca/Public-Register-EN";
 const PROOF = "proof/synthetic-register-capture";
-const PDF = "255044462d312e340d0a25e2e3cfd3";
-const JPEG = "ffd8ffe000104a4649460000";
+const PDF = "application/pdf";
+const JPEG = "image/jpeg";
 const SHA = "a".repeat(64);
 
 beforeAll(async () => {
@@ -146,6 +146,15 @@ async function storeObject(key: string, size: number) {
   );
 }
 
+/** The server action verifies the stored bytes, then completes through the service-role function. */
+async function completeVerified(versionId: string, actor: string, size: number, mediaType: string) {
+  await asServiceRole(db);
+  return db.query<{ result: { upload_state: string; scan_result: string } }>(
+    `select public.finish_verified_document_upload($1, $2, $3, $4, $5) as result`,
+    [versionId, actor, SHA, size, mediaType],
+  );
+}
+
 describe("document storage and review", () => {
   it("keeps the bucket private and forces RLS", async () => {
     const bucket = await db.query<{ public: boolean }>(
@@ -187,10 +196,11 @@ describe("document storage and review", () => {
     await db.query(`select public.attach_upload_to_request($1, $2)`, [bad.rows[0].result.version_id, requestId]);
     await storeObject(bad.rows[0].result.storage_key, 32);
     await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
-    const quarantined = await db.query<{ result: { upload_state: string; scan_result: string } }>(
-      `select public.complete_document_upload($1, $2, $3) as result`,
-      [bad.rows[0].result.version_id, SHA, JPEG],
+    await expectDbError(
+      () => db.query(`select public.complete_document_upload($1, $2, $3)`, [bad.rows[0].result.version_id, SHA, "25504446"]),
+      /permission denied/,
     );
+    const quarantined = await completeVerified(bad.rows[0].result.version_id, ctx.client, 32, JPEG);
     expect(quarantined.rows[0].result).toMatchObject({
       upload_state: "quarantined",
       scan_result: "extension_mismatch",
@@ -219,12 +229,9 @@ describe("document storage and review", () => {
     );
     await db.query(`select public.attach_upload_to_request($1, $2)`, [good.rows[0].result.version_id, requestId]);
     await storeObject(good.rows[0].result.storage_key, 40);
-    await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
-    const clean = await db.query<{ result: { upload_state: string; scan_result: string } }>(
-      `select public.complete_document_upload($1, $2, $3) as result`,
-      [good.rows[0].result.version_id, SHA, PDF],
-    );
+    const clean = await completeVerified(good.rows[0].result.version_id, ctx.client, 40, PDF);
     expect(clean.rows[0].result).toMatchObject({ upload_state: "clean", scan_result: "structural_only" });
+    await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
 
     const before = await db.query<{ progress: { accepted_count: number; uploaded_unaccepted_count: number; request_count: number } }>(
       `select public.document_request_progress($1) as progress`,
@@ -309,12 +316,7 @@ describe("document storage and review", () => {
       [ctx.matterId, ctx.applicant],
     );
     await storeObject(uploaded.rows[0].result.storage_key, 20);
-    await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
-    await db.query(`select public.complete_document_upload($1, $2, $3)`, [
-      uploaded.rows[0].result.version_id,
-      SHA,
-      PDF,
-    ]);
+    await completeVerified(uploaded.rows[0].result.version_id, ctx.client, 20, PDF);
 
     await asUser(db, { userId: ctx.sponsor, aal: "aal1", orgId: ctx.orgId });
     const sponsorSees = await db.query(`select id from public.documents`);
@@ -377,12 +379,7 @@ describe("document storage and review", () => {
       [ctx.matterId, ctx.applicant],
     );
     await storeObject(uploaded.rows[0].result.storage_key, 24);
-    await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
-    await db.query(`select public.complete_document_upload($1, $2, $3)`, [
-      uploaded.rows[0].result.version_id,
-      SHA,
-      PDF,
-    ]);
+    await completeVerified(uploaded.rows[0].result.version_id, ctx.client, 24, PDF);
     await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
     await expectDbError(
       () => db.query(`select public.apply_document_scan($1, 'suspicious')`, [uploaded.rows[0].result.version_id]),

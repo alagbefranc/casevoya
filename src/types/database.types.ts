@@ -4260,6 +4260,16 @@ export type Database = {
         Args: { p_header_hex: string; p_sha256: string; p_version_id: string }
         Returns: Json
       }
+      finish_verified_document_upload: {
+        Args: {
+          p_actor_user_id: string
+          p_byte_size: number
+          p_detected_media_type: string | null
+          p_sha256: string
+          p_version_id: string
+        }
+        Returns: Json
+      }
       apply_document_scan: {
         Args: { p_result: string; p_version_id: string }
         Returns: Database["public"]["Enums"]["document_upload_state"]

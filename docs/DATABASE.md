@@ -35,6 +35,13 @@ In the repository, not yet applied to the live project (do not edit the file in 
 | 20261017200100 | outbound_email | Outbox-driven deliveries, suppressions, and mail claim. Staff invites, document requests, and due reminders enqueue mail without raw tokens. |
 | 20261017200200 | inbound_email | Per-firm `docs.casevoya.ca` addresses, reserved slugs, inbound messages, and the unsorted inbox. |
 | 20261017200300 | reserved_firm_slugs_search_path | `app.reserved_firm_slugs` gets `search_path = ''` and schema-qualified types. No storage changes. |
+| 20261018010000 | organizations_update_lockdown | Revokes table UPDATE on `organizations` from API roles. Trigger refuses API-role changes to status, sample mode, DPA/terms acceptance, and upload limit. |
+| 20261018010100 | memberships_write_lockdown | Revokes INSERT/UPDATE on `memberships` from API roles. Trigger refuses API-role membership writes. Definer functions only. |
+| 20261018010200 | email_table_privileges | Revokes Supabase default ALL on the seven email tables from anon/authenticated; re-grants SELECT to authenticated. |
+| 20261018010300 | staff_only_matter_notes_intake | Restrictive staff-only SELECT on engagement, stage-override, and program-change rows. Section-less intake answers are private to the subject and staff. |
+| 20261018010400 | document_download_grants | `authorize_document_download` writes an expiring grant; documents-bucket reads of clean objects require it. Function bodies only; no storage DDL. |
+| 20261018010500 | verified_document_upload | `finish_verified_document_upload` (service_role only) completes uploads with server-measured hash, size, and type. `complete_document_upload` revoked from authenticated. |
+| 20261018010600 | revoke_anon_app_usage | Revokes `usage on schema app` from anon. |
 
 `src/types/database.types.ts` includes the live schema through `20261017113202`, extended in this branch for the unapplied migrations above. Do not run `pnpm db:types` until those migrations are applied; a live regeneration would drop the extension.
 
@@ -45,9 +52,9 @@ no DELETE policies: deletion is a retention workflow (SEC-07), not a client acti
 
 | Table | Purpose | Policies (role `authenticated`) |
 |---|---|---|
-| `organizations` | Tenant boundary (`id` = `organization_id`). `verification_status` starts `unverified` (sandbox). | SELECT: active member. UPDATE: `firm_owner` and aal2. |
+| `organizations` | Tenant boundary (`id` = `organization_id`). `verification_status` starts `unverified` (sandbox). | SELECT: active member. No direct UPDATE for API roles (since `20261018010000`); changes go through `save_firm_setup`, `set_sample_mode`, `set_quiet_hours`, `set_document_upload_limit`, and licence-check functions. |
 | `profiles` | 1:1 with `auth.users`, auto-created by trigger on sign-up. Global, not a client Person. | SELECT: self, or staff who share an org and have aal2. UPDATE: self. |
-| `memberships` | user ↔ org, one row per role (`unique(org,user,role)`), status invited/active/suspended/revoked. | SELECT: own rows, or staff of that org at aal2. INSERT: `firm_owner`, only as `status='invited'`, plus aal2 and a recent step-up. UPDATE: `firm_owner` and a recent step-up. A BEFORE trigger blocks removing or demoting the last active `firm_owner`, including for the table owner. |
+| `memberships` | user ↔ org, one row per role (`unique(org,user,role)`), status invited/active/suspended/revoked. | SELECT: own rows, or staff of that org at aal2. No direct INSERT/UPDATE for API roles (since `20261018010100`); writes happen in `create_organization`, `accept_invitation`, and `accept_portal_invitation`. A BEFORE trigger blocks removing or demoting the last active `firm_owner`, including for the table owner. |
 | `audit_log` | Append-only trail: actor, actor_type, db_role, tenant, action, object, result, request_id, redacted diff, context. | SELECT: `firm_owner` of that org at aal2. No writes; UPDATE/DELETE/TRUNCATE rejected by triggers for every role. `token_hash` is redacted. |
 | `outbox_events` | Transactional outbox (event envelope: id, organization_id, aggregate, version, type, schema_version, minimal payload ≤ 8 KB). Idempotency key unique per org. | SELECT: staff of that org at aal2. No writes; workers use functions. |
 | `invitations` | Expiring single-use staff invite. Stores `sha256(token)` only, bound to normalized email, role, and organization. TTL 7 days. | SELECT: `firm_owner` at aal2, and not the `token_hash` column. No direct writes. |

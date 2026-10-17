@@ -276,16 +276,19 @@ describe("last firm owner and staff MFA", () => {
     expect(own.rows.map((row) => row.user_id)).toEqual([owner]);
     const profiles = await db.query<{ id: string }>(`select id from public.profiles where id = $1`, [colleague]);
     expect(profiles.rows).toHaveLength(0);
-    const updated = await db.query(
-      `update public.organizations set display_name = 'Changed' where id = $1`,
-      [orgId],
+    // Organization rows change only through the firm setup functions (security H1).
+    await expectDbError(
+      () => db.query(`update public.organizations set display_name = 'Changed' where id = $1`, [orgId]),
+      /permission denied/,
     );
-    expect(updated.affectedRows ?? 0).toBe(0);
 
     await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
     const both = await db.query<{ user_id: string }>(`select user_id from public.memberships`);
     expect(both.rows).toHaveLength(2);
-    await db.query(`update public.organizations set display_name = 'Synthetic Firm Renamed' where id = $1`, [orgId]);
+    await expectDbError(
+      () => db.query(`update public.organizations set display_name = 'Synthetic Firm Renamed' where id = $1`, [orgId]),
+      /permission denied/,
+    );
 
     const plain = await createUser(email("plain"));
     await asUser(db, { userId: plain, aal: "aal1" });

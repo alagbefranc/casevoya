@@ -142,6 +142,13 @@ describe("outbound and inbound email", () => {
     const created = await db.query<{ id: string }>(
       `select (public.create_organization('Legal Name', 'Support North', 'support-north')).id as id`,
     );
+    // The API role has no UPDATE on organizations (security H1); the reserved-slug
+    // trigger still guards every other writer, including the table owner.
+    await expectDbError(
+      () => db.query(`update public.organizations set slug = 'admin' where id = $1`, [created.rows[0].id]),
+      /permission denied/,
+    );
+    await asMaintenance(db);
     await expectDbError(
       () => db.query(`update public.organizations set slug = 'admin' where id = $1`, [created.rows[0].id]),
       /reserved/,
