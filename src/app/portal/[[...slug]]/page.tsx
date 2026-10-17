@@ -5,6 +5,7 @@ import { DemoPortal, PORTAL_SLUGS } from "@/components/portal/demo";
 import { LivePortal } from "@/components/portal/live";
 import { PortalScreen } from "@/components/portal/screen";
 import { HomeMarkup } from "@/components/portal/markup/portal";
+import { loadPortalDocuments } from "@/modules/documents/load";
 import { loadPortalViewer } from "@/modules/portal/load";
 import { payStateFromQuery } from "@/modules/portal/pay";
 
@@ -28,9 +29,10 @@ async function Body({
   if (page !== "home" && !LIVE.has(page)) notFound();
   const stateValue = Array.isArray(query.state) ? query.state[0] : query.state;
   const viewer = await loadPortalViewer();
+  const documents = viewer && (page === "documents" || page === "upload") ? await loadPortalDocuments(viewer) : null;
   return (
     <PortalScreen page={page}>
-      {viewer ? <LivePortal page={page} viewer={viewer} /> : <DemoPortal page={page} state={payStateFromQuery(stateValue)} />}
+      {viewer ? <LivePortal page={page} viewer={viewer} documents={documents} /> : <DemoPortal page={page} state={payStateFromQuery(stateValue)} />}
     </PortalScreen>
   );
 }

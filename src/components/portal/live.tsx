@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { AccountForm } from "./account-form";
+import { DocumentsLive } from "./documents-live";
 import { WithdrawShare } from "./withdraw-share";
+import type { PortalDocuments } from "@/modules/documents/load";
 import type { PortalViewer } from "@/modules/portal/load";
 
 const NAV = [
@@ -22,7 +24,15 @@ function icon(name: string) {
   );
 }
 
-export function LivePortal({ page, viewer }: { page: string; viewer: PortalViewer }) {
+export function LivePortal({
+  page,
+  viewer,
+  documents,
+}: {
+  page: string;
+  viewer: PortalViewer;
+  documents?: PortalDocuments | null;
+}) {
   const name = viewer.person?.displayName ?? "Your account";
   const matter = viewer.matters[0];
   const current = page === "home" ? "/portal" : `/portal/${page}`;
@@ -61,7 +71,7 @@ export function LivePortal({ page, viewer }: { page: string; viewer: PortalViewe
               <span className="pill">{matter ? matter.title : viewer.organizationName}</span>
               <span className="acts"><a className="btn s sm" href="/help/client-home-screen" id="help">Help</a></span>
             </header>
-            <LiveMain page={page} viewer={viewer} />
+            <LiveMain page={page} viewer={viewer} documents={documents ?? null} />
           </div>
         </main>
         <footer className="statusbar">
@@ -74,7 +84,18 @@ export function LivePortal({ page, viewer }: { page: string; viewer: PortalViewe
   );
 }
 
-function LiveMain({ page, viewer }: { page: string; viewer: PortalViewer }) {
+function LiveMain({
+  page,
+  viewer,
+  documents,
+}: {
+  page: string;
+  viewer: PortalViewer;
+  documents: PortalDocuments | null;
+}) {
+  if (page === "documents" || page === "upload") {
+    return documents ? <DocumentsLive page={page} viewer={viewer} documents={documents} /> : <Stub page={page} />;
+  }
   if (page === "home" || page === "matters") return <MatterList viewer={viewer} home={page === "home"} />;
   if (page === "family" || page === "rafael" || page === "olena") return <People viewer={viewer} />;
   if (page === "guardian") return <Guardian viewer={viewer} />;
@@ -183,8 +204,8 @@ function Sections({ viewer, correction }: { viewer: PortalViewer; correction: bo
 function Stub({ page }: { page: string }) {
   const copy: Record<string, [string, string]> = {
     tasks: ["No tasks yet", "Tasks aren’t stored yet. Your firm will email you when something needs you."],
-    documents: ["No documents yet", "Document storage isn’t connected. Uploads stay on this screen only."],
-    upload: ["Upload isn’t stored yet", "You can walk the steps. Nothing is saved to the firm."],
+    documents: ["No documents yet", "When your firm asks for a document, it appears here."],
+    upload: ["Nothing to upload", "Your firm has not requested a document."],
     messages: ["No messages yet", "Messages aren’t stored yet."],
     appointments: ["No appointments yet", "Appointments aren’t stored yet."],
     agreements: ["No agreements yet", "E-sign isn’t connected yet."],
