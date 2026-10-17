@@ -1,8 +1,8 @@
 // Live schema (project aqjtvqmojfamtspzyeqm) through 20261017113202, extended in-repo
 // for unapplied migrations 20261017120000, 20261017140000–20261017140800,
-// 20261017160000 (preview_invitation, request_mfa_reset), and
-// 20261017170000–20261017170300. Regenerate with `pnpm db:types` only after those
-// migrations are applied live.
+// 20261017160000 (preview_invitation, request_mfa_reset),
+// 20261017170000–20261017170300, and 20261017180000–20261017180100.
+// Regenerate with `pnpm db:types` only after those migrations are applied live.
 
 export type Json =
   | string
@@ -1138,6 +1138,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           default_locale: string
+          document_max_bytes: number | null
           display_name: string
           dpa_accepted_at: string | null
           dpa_version: string | null
@@ -1167,6 +1168,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           default_locale?: string
+          document_max_bytes?: number | null
           display_name: string
           dpa_accepted_at?: string | null
           dpa_version?: string | null
@@ -1196,6 +1198,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           default_locale?: string
+          document_max_bytes?: number | null
           display_name?: string
           dpa_accepted_at?: string | null
           dpa_version?: string | null
@@ -2697,6 +2700,333 @@ export type Database = {
           },
         ]
       }
+      document_custody_events: {
+        Row: {
+          acknowledged_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          location: string | null
+          organization_id: string
+          purpose: string
+          received_on: string | null
+          recipient: string | null
+          return_on: string | null
+          version_id: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          location?: string | null
+          organization_id: string
+          purpose: string
+          received_on?: string | null
+          recipient?: string | null
+          return_on?: string | null
+          version_id: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          location?: string | null
+          organization_id?: string
+          purpose?: string
+          received_on?: string | null
+          recipient?: string | null
+          return_on?: string | null
+          version_id?: string
+        }
+        Relationships: []
+      }
+      document_matter_refs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          document_id: string
+          id: string
+          matter_id: string
+          organization_id: string
+          removal_reason: string | null
+          removed_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          document_id: string
+          id?: string
+          matter_id: string
+          organization_id: string
+          removal_reason?: string | null
+          removed_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          document_id?: string
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          removal_reason?: string | null
+          removed_at?: string | null
+        }
+        Relationships: []
+      }
+      document_requests: {
+        Row: {
+          acceptable_formats: string[]
+          audience: Database["public"]["Enums"]["document_audience"]
+          created_at: string
+          created_by: string | null
+          document_id: string | null
+          due_on: string | null
+          explanation: string
+          expires_on: string | null
+          id: string
+          matter_id: string
+          organization_id: string
+          person_id: string
+          purpose: string
+          review_criteria: string | null
+          rule_item_key: string | null
+          rule_version_id: string | null
+          sensitivity: Database["public"]["Enums"]["document_sensitivity"]
+          source: Database["public"]["Enums"]["document_request_source"]
+          status: Database["public"]["Enums"]["document_request_status"]
+          updated_at: string
+          version: number
+          waiver_reason: string | null
+        }
+        Insert: {
+          acceptable_formats: string[]
+          audience?: Database["public"]["Enums"]["document_audience"]
+          created_at?: string
+          created_by?: string | null
+          document_id?: string | null
+          due_on?: string | null
+          explanation: string
+          expires_on?: string | null
+          id?: string
+          matter_id: string
+          organization_id: string
+          person_id: string
+          purpose: string
+          review_criteria?: string | null
+          rule_item_key?: string | null
+          rule_version_id?: string | null
+          sensitivity?: Database["public"]["Enums"]["document_sensitivity"]
+          source: Database["public"]["Enums"]["document_request_source"]
+          status?: Database["public"]["Enums"]["document_request_status"]
+          updated_at?: string
+          version?: number
+          waiver_reason?: string | null
+        }
+        Update: {
+          acceptable_formats?: string[]
+          audience?: Database["public"]["Enums"]["document_audience"]
+          created_at?: string
+          created_by?: string | null
+          document_id?: string | null
+          due_on?: string | null
+          explanation?: string
+          expires_on?: string | null
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          person_id?: string
+          purpose?: string
+          review_criteria?: string | null
+          rule_item_key?: string | null
+          rule_version_id?: string | null
+          sensitivity?: Database["public"]["Enums"]["document_sensitivity"]
+          source?: Database["public"]["Enums"]["document_request_source"]
+          status?: Database["public"]["Enums"]["document_request_status"]
+          updated_at?: string
+          version?: number
+          waiver_reason?: string | null
+        }
+        Relationships: []
+      }
+      document_reviews: {
+        Row: {
+          annotations: string | null
+          created_at: string
+          created_by: string | null
+          decision: Database["public"]["Enums"]["document_review_decision"]
+          id: string
+          organization_id: string
+          reason: string
+          version_id: string
+        }
+        Insert: {
+          annotations?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision: Database["public"]["Enums"]["document_review_decision"]
+          id?: string
+          organization_id: string
+          reason: string
+          version_id: string
+        }
+        Update: {
+          annotations?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision?: Database["public"]["Enums"]["document_review_decision"]
+          id?: string
+          organization_id?: string
+          reason?: string
+          version_id?: string
+        }
+        Relationships: []
+      }
+      document_versions: {
+        Row: {
+          byte_size: number | null
+          checksum_sha256: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          declared_byte_size: number
+          declared_media_type: string
+          detected_media_type: string | null
+          document_id: string
+          expires_on: string | null
+          id: string
+          intent_expires_at: string
+          language_tag: string | null
+          organization_id: string
+          original_filename: string
+          parent_version_id: string | null
+          quarantine_reason: string | null
+          request_id: string | null
+          review_state: Database["public"]["Enums"]["document_review_state"]
+          scan_engine: string | null
+          scan_result: string | null
+          storage_bucket: string
+          storage_key: string
+          superseded_at: string | null
+          transformation: Json | null
+          translation_of_version_id: string | null
+          updated_at: string
+          upload_state: Database["public"]["Enums"]["document_upload_state"]
+          version: number
+          version_number: number
+        }
+        Insert: {
+          byte_size?: number | null
+          checksum_sha256?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          declared_byte_size: number
+          declared_media_type: string
+          detected_media_type?: string | null
+          document_id: string
+          expires_on?: string | null
+          id?: string
+          intent_expires_at: string
+          language_tag?: string | null
+          organization_id: string
+          original_filename: string
+          parent_version_id?: string | null
+          quarantine_reason?: string | null
+          request_id?: string | null
+          review_state?: Database["public"]["Enums"]["document_review_state"]
+          scan_engine?: string | null
+          scan_result?: string | null
+          storage_bucket?: string
+          storage_key: string
+          superseded_at?: string | null
+          transformation?: Json | null
+          translation_of_version_id?: string | null
+          updated_at?: string
+          upload_state?: Database["public"]["Enums"]["document_upload_state"]
+          version?: number
+          version_number: number
+        }
+        Update: {
+          byte_size?: number | null
+          checksum_sha256?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          declared_byte_size?: number
+          declared_media_type?: string
+          detected_media_type?: string | null
+          document_id?: string
+          expires_on?: string | null
+          id?: string
+          intent_expires_at?: string
+          language_tag?: string | null
+          organization_id?: string
+          original_filename?: string
+          parent_version_id?: string | null
+          quarantine_reason?: string | null
+          request_id?: string | null
+          review_state?: Database["public"]["Enums"]["document_review_state"]
+          scan_engine?: string | null
+          scan_result?: string | null
+          storage_bucket?: string
+          storage_key?: string
+          superseded_at?: string | null
+          transformation?: Json | null
+          translation_of_version_id?: string | null
+          updated_at?: string
+          upload_state?: Database["public"]["Enums"]["document_upload_state"]
+          version?: number
+          version_number?: number
+        }
+        Relationships: []
+      }
+      documents: {
+        Row: {
+          audience: Database["public"]["Enums"]["document_audience"]
+          created_at: string
+          created_by: string | null
+          current_version_id: string | null
+          id: string
+          organization_id: string
+          person_id: string
+          purpose: string
+          sensitivity: Database["public"]["Enums"]["document_sensitivity"]
+          translates_document_id: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          audience?: Database["public"]["Enums"]["document_audience"]
+          created_at?: string
+          created_by?: string | null
+          current_version_id?: string | null
+          id?: string
+          organization_id: string
+          person_id: string
+          purpose: string
+          sensitivity?: Database["public"]["Enums"]["document_sensitivity"]
+          translates_document_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          audience?: Database["public"]["Enums"]["document_audience"]
+          created_at?: string
+          created_by?: string | null
+          current_version_id?: string | null
+          id?: string
+          organization_id?: string
+          person_id?: string
+          purpose?: string
+          sensitivity?: Database["public"]["Enums"]["document_sensitivity"]
+          translates_document_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       webhook_inbox: {
         Row: {
           connected_account_id: string | null
@@ -3285,6 +3615,96 @@ export type Database = {
         Args: { p_due_on: string; p_timezone: string }
         Returns: string
       }
+      create_upload_intent: {
+        Args: {
+          p_audience: Database["public"]["Enums"]["document_audience"]
+          p_declared_byte_size: number
+          p_document_id: string | null
+          p_filename: string
+          p_language_tag: string | null
+          p_matter_id: string
+          p_person_id: string
+          p_purpose: string
+          p_sensitivity: Database["public"]["Enums"]["document_sensitivity"]
+          p_translation_of_version_id: string | null
+        }
+        Returns: Json
+      }
+      complete_document_upload: {
+        Args: { p_header_hex: string; p_sha256: string; p_version_id: string }
+        Returns: Json
+      }
+      apply_document_scan: {
+        Args: { p_result: string; p_version_id: string }
+        Returns: Database["public"]["Enums"]["document_upload_state"]
+      }
+      authorize_document_download: {
+        Args: { p_version_id: string }
+        Returns: Json
+      }
+      record_document_custody: {
+        Args: {
+          p_acknowledged: boolean
+          p_location: string | null
+          p_purpose: string
+          p_received_on: string | null
+          p_recipient: string | null
+          p_return_on: string | null
+          p_version_id: string
+        }
+        Returns: string
+      }
+      set_document_upload_limit: {
+        Args: { p_bytes: number }
+        Returns: number
+      }
+      create_document_request: {
+        Args: {
+          p_acceptable_formats: string[]
+          p_audience: Database["public"]["Enums"]["document_audience"]
+          p_due_on: string | null
+          p_explanation: string
+          p_expires_on: string | null
+          p_matter_id: string
+          p_person_id: string
+          p_purpose: string
+          p_review_criteria: string | null
+          p_rule_item_key: string | null
+          p_rule_version_id: string | null
+          p_sensitivity: Database["public"]["Enums"]["document_sensitivity"]
+        }
+        Returns: string
+      }
+      attach_upload_to_request: {
+        Args: { p_request_id: string; p_version_id: string }
+        Returns: undefined
+      }
+      review_document_version: {
+        Args: {
+          p_annotations: string | null
+          p_decision: Database["public"]["Enums"]["document_review_decision"]
+          p_expected_version: number
+          p_reason: string
+          p_version_id: string
+        }
+        Returns: number
+      }
+      waive_document_request: {
+        Args: { p_expected_version: number; p_reason: string; p_request_id: string }
+        Returns: number
+      }
+      set_document_expiry: {
+        Args: { p_expected_version: number; p_expires_on: string | null; p_version_id: string }
+        Returns: number
+      }
+      document_request_progress: {
+        Args: { p_matter_id: string }
+        Returns: Json
+      }
+      unlink_document_matter: {
+        Args: { p_reason: string; p_ref_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       access_grant_kind: "explicit" | "guardian"
@@ -3402,6 +3822,13 @@ export type Database = {
       task_status: "open" | "blocked" | "done" | "cancelled"
       deadline_kind: "legal" | "correspondence" | "internal"
       deadline_verification: "tentative" | "confirmed"
+      document_audience: "subject" | "matter" | "staff"
+      document_request_source: "rule" | "staff"
+      document_request_status: "open" | "fulfilled" | "waived" | "cancelled"
+      document_review_decision: "accepted" | "changes_requested"
+      document_review_state: "pending" | "accepted" | "rejected"
+      document_sensitivity: "ordinary" | "narrative" | "medical" | "criminal"
+      document_upload_state: "uploading" | "scanning" | "quarantined" | "clean" | "failed"
       reminder_status: "pending" | "sent" | "cancelled"
       membership_status: "invited" | "active" | "suspended" | "revoked"
       org_role:
@@ -3753,6 +4180,13 @@ export const Constants = {
       task_status: ["open", "blocked", "done", "cancelled"],
       deadline_kind: ["legal", "correspondence", "internal"],
       deadline_verification: ["tentative", "confirmed"],
+      document_audience: ["subject", "matter", "staff"],
+      document_request_source: ["rule", "staff"],
+      document_request_status: ["open", "fulfilled", "waived", "cancelled"],
+      document_review_decision: ["accepted", "changes_requested"],
+      document_review_state: ["pending", "accepted", "rejected"],
+      document_sensitivity: ["ordinary", "narrative", "medical", "criminal"],
+      document_upload_state: ["uploading", "scanning", "quarantined", "clean", "failed"],
       reminder_status: ["pending", "sent", "cancelled"],
       membership_status: ["invited", "active", "suspended", "revoked"],
       org_role: [

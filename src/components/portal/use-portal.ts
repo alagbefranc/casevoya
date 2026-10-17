@@ -98,7 +98,7 @@ export function usePortal(ref: RefObject<HTMLElement | null>, page: string) {
         if (!/Needs you|Accepted|All/.test(label) || !root.querySelector("#pc .fcard")) return;
         root.querySelectorAll<HTMLElement>("#pc .fcard").forEach((card) => {
           const status = card.querySelector(".states")?.textContent || "";
-          const hidden = /Needs you/.test(label) ? !/Changes needed/.test(status) : /Accepted/.test(label) ? !/Accepted/.test(status) : false;
+          const hidden = /Needs you/.test(label) ? !/Changes needed|Requested|Quarantined|Check failed|Expired/.test(status) : /Accepted/.test(label) ? !/Accepted/.test(status) : false;
           card.hidden = hidden;
           const alert = card.nextElementSibling;
           if (alert instanceof HTMLElement && alert.classList.contains("alert")) alert.hidden = hidden;
@@ -106,9 +106,10 @@ export function usePortal(ref: RefObject<HTMLElement | null>, page: string) {
       }, listen);
     });
 
+    const demo = Boolean(root.querySelector(".statusbar .demo"));
     const params = new URLSearchParams(location.search);
     const empty = EMPTY[page];
-    if (params.has("empty") && empty) {
+    if (demo && params.has("empty") && empty) {
       const pc = root.querySelector("#pc");
       const heading = pc?.querySelector(".ph");
       if (pc) {
@@ -118,9 +119,9 @@ export function usePortal(ref: RefObject<HTMLElement | null>, page: string) {
     }
 
     if (page === "pay") armPay(root, listen);
-    if (page === "upload") armUpload(root, listen);
-    if (narrow()) armSwipe(root);
-    armDocs(root, listen);
+    if (demo && page === "upload") armUpload(root, listen);
+    if (demo && narrow()) armSwipe(root);
+    if (demo) armDocs(root, listen);
 
     const sum = root.querySelector<HTMLDetailsElement>("#sum");
     if (sum && window.matchMedia("(max-width:860px)").matches) sum.open = false;

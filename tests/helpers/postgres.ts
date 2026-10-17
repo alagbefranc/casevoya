@@ -76,6 +76,28 @@ $roles$;
 -- Supabase grants these. auth.uid() / auth.jwt() are called from invoker triggers.
 grant usage on schema auth to anon, authenticated, service_role;
 grant execute on all functions in schema auth to anon, authenticated, service_role;
+
+-- Minimal Storage catalog so document migrations can create the private bucket.
+-- Hosted Supabase already has these tables; this stub is for the test database only.
+create schema if not exists storage;
+create table if not exists storage.buckets (
+  id text primary key,
+  name text not null,
+  public boolean not null default false
+);
+create table if not exists storage.objects (
+  id uuid primary key,
+  bucket_id text not null references storage.buckets (id),
+  name text not null,
+  owner uuid,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  unique (bucket_id, name)
+);
+grant usage on schema storage to anon, authenticated, service_role;
+grant select on storage.buckets to anon, authenticated, service_role;
+grant select, insert on storage.objects to authenticated;
+grant select, insert, update, delete on storage.objects to service_role;
 `;
 
 export type TestDb = PGlite;
