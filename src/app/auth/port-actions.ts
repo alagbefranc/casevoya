@@ -338,8 +338,14 @@ export async function verifyTotpCode(factorId: string, code: string): Promise<Po
   if (!hasPublicSupabaseEnv()) return nullResult();
   if (!/^[0-9a-f-]{36}$/i.test(factorId) || !/^\d{6}$/.test(code)) return fail("That code didn’t match.");
   const supabase = await createClient();
-  const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
-  if (error) return fail("That code didn’t match.");
+  const challenge = await supabase.auth.mfa.challenge({ factorId });
+  if (challenge.error || !challenge.data) return fail("That code didn’t match.");
+  const verified = await supabase.auth.mfa.verify({
+    factorId,
+    challengeId: challenge.data.id,
+    code,
+  });
+  if (verified.error) return fail("That code didn’t match.");
   return { ok: true };
 }
 

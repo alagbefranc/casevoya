@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import { clearBtn, icon, k2Count, k2Slider, k2Spark, morphText, runBtn, toast2, voPose } from "./kit";
 
 export type PortResult =
@@ -23,6 +23,7 @@ export function usePort(
   ref: RefObject<HTMLElement | null>,
   page: string,
   onAction?: (event: PortEvent) => Promise<PortResult>,
+  initialStep?: number,
 ) {
   const actionRef = useRef(onAction);
   useEffect(() => {
@@ -56,7 +57,8 @@ export function usePort(
     const go = (next: number, push = true) => {
       const panels = all<HTMLElement>(root, "[data-step]");
       if (!panels.length) return;
-      const index = Math.max(0, Math.min(panels.length - 1, next));
+      const requested = Number.isFinite(next) ? next : 0;
+      const index = Math.max(0, Math.min(panels.length - 1, requested));
       const back = index < current;
       panels.forEach((panel) => {
         const on = Number(panel.dataset.step) === index;
@@ -404,8 +406,9 @@ export function usePort(
     bindOtp();
     bindResend();
     bindOpts();
-    const step = params.get("step");
-    go(step != null ? Number(step) : 0, false);
+    const fromUrl = params.get("step");
+    const raw = initialStep != null ? initialStep : fromUrl != null ? Number(fromUrl) : 0;
+    go(Number.isFinite(raw) ? raw : 0, false);
     all<HTMLElement>(root, ".fld input,.fld select,.fld textarea").forEach((input) => {
       input.addEventListener("input", () => input.closest(".fld")?.classList.remove("err"), listen);
     });
@@ -488,5 +491,18 @@ export function usePort(
       ac.abort();
       delete root.dataset.ready;
     };
-  }, [page, ref]);
+  }, [page, ref, initialStep]);
+
+  // A suspense swap can replace the panels after the binder ran and drop `.on`.
+  // CSS hides every `[data-step]` without it, which is the blank card.
+  useLayoutEffect(() => {
+    const root = ref.current;
+    if (!root || root.querySelector("[data-step].on")) return;
+    const panels = [...root.querySelectorAll<HTMLElement>("[data-step]")];
+    if (!panels.length) return;
+    const fromUrl = new URLSearchParams(location.search).get("step");
+    const raw = initialStep != null ? initialStep : fromUrl != null ? Number(fromUrl) : 0;
+    const index = Number.isFinite(raw) ? raw : 0;
+    panels.forEach((panel) => panel.classList.toggle("on", Number(panel.dataset.step) === index));
+  });
 }

@@ -48,8 +48,14 @@ export async function verifyTotp(formData: FormData) {
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) redirect(`/sign-in?next=${encodeURIComponent(mfaPath(next))}`);
 
-  const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
-  if (error) redirect(mfaPath(next, "verify_failed"));
+  const challenge = await supabase.auth.mfa.challenge({ factorId });
+  if (challenge.error || !challenge.data) redirect(mfaPath(next, "verify_failed"));
+  const verified = await supabase.auth.mfa.verify({
+    factorId,
+    challengeId: challenge.data.id,
+    code,
+  });
+  if (verified.error) redirect(mfaPath(next, "verify_failed"));
   redirect(next);
 }
 
