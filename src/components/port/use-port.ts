@@ -387,7 +387,7 @@ export function usePort(
       root.querySelector<HTMLElement>(".wz-foot [data-next]")?.addEventListener(
         "click",
         (event) => {
-          if (current === last) {
+          if (current === last && !new URLSearchParams(location.search).has("token")) {
             event.stopImmediatePropagation();
             event.preventDefault();
             runBtn(event.currentTarget as HTMLElement);

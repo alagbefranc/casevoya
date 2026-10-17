@@ -132,7 +132,7 @@ body.wzb{background:#111;min-height:100dvh;height:auto}
 .who ul{padding-left:18px}
 .firmhd{display:flex;gap:12px;align-items:center;color:#fff;font-weight:500;font-size:15px;padding:2px 0 22px}
 .firmlogo{width:32px;height:32px;border-radius:9px;background:#fff;color:#111;display:grid;place-items:center;font-weight:600;font-size:13px}
-.pwrd{font-size:12.5px;color:#6f6a64}
+.pwrd{font-size:12.5px;color:#a39e98}
 @media (max-width:900px){
  .au-grid{grid-template-columns:1fr;min-height:0}
  .au-poster{grid-column:1;grid-row:1;align-self:auto;padding:22px 20px 26px}
@@ -185,3 +185,9 @@ body.wzb{background:#111;min-height:100dvh;height:auto}
 .m-wave{transform-origin:80px 60px;animation:vwave 2.4s var(--ease,ease) infinite}
 @keyframes vwave{0%,60%,100%{transform:rotate(0)}70%{transform:rotate(14deg)}80%{transform:rotate(-6deg)}90%{transform:rotate(10deg)}}
 @media (prefers-reduced-motion:reduce){.m-wave{animation:none}}
+/* VO18 3D Vo (sign-in, setup welcome) */
+.au-vo3d{display:block;width:80px;height:80px;margin-bottom:16px}.au-vo3d img,.wz-vo3d img{width:100%;height:100%;object-fit:contain;display:block}
+.wz-hi{display:flex;gap:14px;align-items:center;background:#e8f1fb;border-radius:14px;padding:12px 16px;margin-bottom:20px}.wz-hi p{margin:0;font-size:15px;line-height:1.45;color:#063f6e}.wz-hi b{font-weight:600;color:#063f6e}
+.wz-vo3d{flex:none;width:56px;height:56px}
+.pwrd img{vertical-align:-2px;margin-right:6px}
+.wz-wave{display:block;margin:0 0 10px}

@@ -1,0 +1,29 @@
+/* Stripe's Payment Element loads this in its iframe. The app itself uses next/font via --font-erode. */
+@font-face {
+  font-family: Erode;
+  src: url("/fonts/erode/Erode-Light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: Erode;
+  src: url("/fonts/erode/Erode-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: Erode;
+  src: url("/fonts/erode/Erode-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: Erode;
+  src: url("/fonts/erode/Erode-Semibold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
