@@ -49,3 +49,5 @@
 .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px}.kv span{color:var(--t2)}.kv b{font-weight:400}
 @media (max-width:480px){.kv{grid-template-columns:1fr;gap:2px}.kv b{margin-bottom:8px}}
 .fp-cards{grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))}
+/* AU14 offboarding checklist (final pass) */
+.ofl{list-style:none;padding:0;margin:16px 0;display:grid;gap:12px}.ofl li{display:grid;grid-template-columns:22px 1fr;gap:12px;align-items:start}.ofl b{font-weight:500;display:block}.ofl small{color:var(--t2);font-size:13.5px;line-height:1.45}
