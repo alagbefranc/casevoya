@@ -2,12 +2,15 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { safeNext } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/server";
-import { verifyTotp } from "./actions";
+import { redeemRecoveryCode, verifyTotp } from "./actions";
 import { EnrollPanel } from "./enroll-panel";
+import { PasskeyButton } from "./passkey-button";
 
 const ERRORS: Record<string, string> = {
   invalid_code: "Enter the 6-digit code from your authenticator app.",
   verify_failed: "That code was not accepted. Try again.",
+  invalid_recovery: "Enter a recovery code.",
+  recovery_failed: "That recovery code was not accepted.",
 };
 
 async function MfaFlow({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
@@ -21,10 +24,15 @@ async function MfaFlow({ searchParams }: { searchParams: Promise<Record<string, 
   if (!claims?.claims?.sub) redirect(`/sign-in?next=${encodeURIComponent(`/mfa?next=${encodeURIComponent(next)}`)}`);
 
   const { data: level } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (level?.currentLevel === "aal2") {
+  const { data: satisfied, error: satisfiedError } = await (
+    supabase as unknown as {
+      rpc: (fn: string) => Promise<{ data: boolean | null; error: { message: string } | null }>;
+    }
+  ).rpc("session_mfa_satisfied");
+  if (level?.currentLevel === "aal2" || (!satisfiedError && satisfied === true)) {
     return (
       <div className="flex flex-col gap-4">
-        <p role="status">Your authenticator app is confirmed for this session.</p>
+        <p role="status">This session is confirmed for staff access.</p>
         <a href={next} className="inline-flex h-11 items-center font-semibold text-action">
           Continue
         </a>
@@ -68,6 +76,22 @@ async function MfaFlow({ searchParams }: { searchParams: Promise<Record<string, 
       ) : (
         <EnrollPanel next={next} />
       )}
+      <form action={redeemRecoveryCode} className="flex flex-col gap-4 border-t border-line-strong pt-4">
+        <input type="hidden" name="next" value={next} />
+        <label className="flex flex-col gap-2">
+          <span className="font-semibold">Recovery code</span>
+          <input
+            name="code"
+            autoComplete="off"
+            spellCheck={false}
+            className="h-11 rounded-control border border-line-strong bg-surface px-3"
+          />
+        </label>
+        <button type="submit" className="h-11 rounded-control border border-line-strong bg-surface px-5 font-semibold">
+          Use a recovery code
+        </button>
+      </form>
+      <PasskeyButton next={next} />
     </div>
   );
 }

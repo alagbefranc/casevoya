@@ -61,8 +61,9 @@ async function insertPerson(
   await asMaintenance(db);
   const id = randomUUID();
   await db.query(
-    `insert into public.persons (id, organization_id, display_name, is_minor, user_id)
-     values ($1, $2, $3, $4, $5)`,
+    `insert into public.persons (id, organization_id, display_name, date_of_birth, birth_date_precision, user_id)
+     values ($1, $2, $3, case when $4::boolean then date '2016-06-15' else null end,
+             case when $4::boolean then 'day'::public.date_precision else null end, $5)`,
     [id, orgId, displayName, options.minor ?? false, options.userId ?? null],
   );
   return id;
@@ -374,7 +375,7 @@ describe("person, matter and household permissions", () => {
     await asUser(db, { userId: ownerB, aal: "aal2", orgId: orgA, totpAgeSeconds: 0 });
     expect(await visiblePersonIds()).toEqual([]);
     await asUser(db, { userId: ownerB, aal: "aal2", orgId: orgB, totpAgeSeconds: 0 });
-    expect(await visiblePersonIds()).toEqual([otherFirmPerson]);
+    expect(await visiblePersonIds()).toEqual([]);
 
     await asUser(db, { userId: adultAUser, aal: "aal1", orgId: orgA });
     expect(await visiblePersonIds()).toEqual([adultA]);
@@ -440,7 +441,13 @@ describe("person, matter and household permissions", () => {
     expect(grantedMatterIds).not.toContain(unrelatedMatter);
 
     await asMaintenance(db);
-    await db.query(`update public.persons set is_minor = false where id = $1`, [minor]);
+    await db.query(
+      `update public.persons
+       set date_of_birth = (current_date - interval '30 years')::date,
+           birth_date_precision = 'day'
+       where id = $1`,
+      [minor],
+    );
     await asUser(db, { userId: guardianUser, aal: "aal1", orgId: orgA });
     expect(await visiblePersonIds()).not.toContain(minor);
     const afterMajority = await db.query<{ id: string }>(`select id from public.matters`);
@@ -449,7 +456,13 @@ describe("person, matter and household permissions", () => {
     expect(afterMajorityIds).not.toContain(minorMatter);
 
     await asMaintenance(db);
-    await db.query(`update public.persons set is_minor = true where id = $1`, [minor]);
+    await db.query(
+      `update public.persons
+       set date_of_birth = date '2016-06-15',
+           birth_date_precision = 'day'
+       where id = $1`,
+      [minor],
+    );
     await db.query(
       `insert into public.access_grants (organization_id, grantee_person_id, subject_person_id, kind, purpose)
        values ($1, $2, $3, 'explicit', 'Synthetic shared record')`,
@@ -475,8 +488,8 @@ describe("person, matter and household permissions", () => {
 
     await asUser(db, { userId: ownerA, aal: "aal2", orgId: orgA, totpAgeSeconds: 0 });
     const ownerVisible = await visiblePersonIds();
-    expect(ownerVisible).toContain(adultA);
-    expect(ownerVisible).toContain(adultB);
+    expect(ownerVisible).not.toContain(adultA);
+    expect(ownerVisible).not.toContain(adultB);
     expect(ownerVisible).not.toContain(otherFirmPerson);
     const ownerHouseholds = await db.query(`select id from public.households`);
     expect(ownerHouseholds.rows).toHaveLength(1);
@@ -506,14 +519,15 @@ describe("webhook inbox", () => {
     );
     expect(countOf(rows.rows[0].n)).toBe(1);
     expect(rows.rows[0].payload).toEqual({ synthetic: true });
-    await expectDbError(
-      () =>
-        db.query(
-          `select app.ingest_webhook_event('stripe', 'evt_synthetic_1', 'acct_other', null, '{}'::jsonb, true, $1)`,
-          [orgId],
-        ),
-      /different provider account/,
+    const otherAccount = await db.query<{ id: string }>(
+      `select app.ingest_webhook_event('stripe', 'evt_synthetic_1', 'acct_other', null, '{}'::jsonb, true, $1) as id`,
+      [orgId],
     );
+    expect(otherAccount.rows[0].id).not.toBe(first.rows[0].id);
+    const distinctAccounts = await db.query<{ n: number }>(
+      `select count(*)::int as n from public.webhook_inbox where provider = 'stripe' and event_id = 'evt_synthetic_1'`,
+    );
+    expect(countOf(distinctAccounts.rows[0].n)).toBe(2);
 
     await asUser(db, { userId: owner, aal: "aal1", orgId });
     const hidden = await db.query(`select id from public.webhook_inbox`);
@@ -528,7 +542,9 @@ describe("webhook inbox", () => {
 
     await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
     const visible = await db.query<{ id: string }>(`select id from public.webhook_inbox`);
-    expect(visible.rows.map((row) => row.id)).toEqual([first.rows[0].id]);
+    expect(visible.rows.map((row) => row.id).sort()).toEqual(
+      [first.rows[0].id, otherAccount.rows[0].id].sort(),
+    );
 
     await asUser(db, { userId: other, aal: "aal2", orgId: otherOrg, totpAgeSeconds: 0 });
     const foreign = await db.query(`select id from public.webhook_inbox`);

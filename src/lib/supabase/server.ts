@@ -21,6 +21,7 @@ export async function createClient(options: Options = {}) {
   const { url, publishableKey } = getPublicSupabaseEnv();
 
   return createServerClient<Database>(url, publishableKey, {
+    auth: { experimental: { passkey: true } },
     global: { headers: tenantHeaders(options.organizationId, options.requestId) },
     cookies: {
       getAll() {

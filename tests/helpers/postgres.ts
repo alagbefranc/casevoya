@@ -17,6 +17,32 @@ create table if not exists auth.users (
   created_at timestamptz not null default now()
 );
 
+create table if not exists auth.sessions (
+  id uuid primary key,
+  user_id uuid not null references auth.users (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  factor_id uuid,
+  aal text,
+  not_after timestamptz,
+  refreshed_at timestamptz,
+  user_agent text,
+  ip inet,
+  tag text
+);
+
+create table if not exists auth.mfa_factors (
+  id uuid primary key,
+  user_id uuid not null references auth.users (id),
+  factor_type text not null,
+  status text not null
+);
+
+create table if not exists auth.webauthn_credentials (
+  id uuid primary key,
+  user_id uuid not null references auth.users (id)
+);
+
 create or replace function auth.uid()
 returns uuid
 language sql
@@ -85,8 +111,13 @@ export type Session = {
   userId: string;
   aal?: "aal1" | "aal2";
   orgId?: string | null;
-  /** Seconds since the TOTP amr timestamp. Omit for no TOTP method. */
+  /** Seconds since the amr timestamp. Omit for no second-factor method. */
   totpAgeSeconds?: number;
+  /** Defaults to totp when totpAgeSeconds is set. */
+  amrMethod?: "totp" | "passkey" | "mfa/webauthn" | "mfa/recovery_code";
+  sessionId?: string | null;
+  /** Absolute unix seconds. Defaults to the database clock. */
+  issuedAtSeconds?: number;
 };
 
 export async function asMaintenance(db: TestDb) {
@@ -111,15 +142,16 @@ export async function asUser(db: TestDb, session: Session) {
     `select extract(epoch from statement_timestamp())::bigint as epoch`,
   );
   const epoch = Number(now.rows[0]?.epoch ?? 0);
+  const method = session.amrMethod ?? (session.totpAgeSeconds == null ? null : "totp");
   const amr =
-    session.totpAgeSeconds == null
-      ? []
-      : [{ method: "totp", timestamp: epoch - session.totpAgeSeconds }];
+    method == null ? [] : [{ method, timestamp: epoch - (session.totpAgeSeconds ?? 0) }];
   const claims = JSON.stringify({
     aal: session.aal ?? "aal1",
     amr,
     sub: session.userId,
     role: "authenticated",
+    iat: session.issuedAtSeconds ?? epoch,
+    ...(session.sessionId ? { session_id: session.sessionId } : {}),
   });
   await db.query(`select set_config('request.jwt.claim.sub', $1, false)`, [session.userId]);
   await db.query(`select set_config('request.jwt.claims', $1, false)`, [claims]);

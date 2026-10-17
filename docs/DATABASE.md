@@ -14,13 +14,21 @@ Applied on the live project (versions recorded by `apply_migration`; do not edit
 | 20261017052636 | persons_matters_grants | persons, matters, participants, households, relationships, access grants, RLS |
 | 20261017052643 | webhook_inbox | provider event inbox, unique `(provider, event_id)`, `app.ingest_webhook_event` |
 | 20261017083908 | fk_covering_indexes | covering indexes for foreign keys flagged by the performance advisor. Additive only. |
+| 20261017113157 | source_governance | Official-host allowlist, source snapshots, check attempts, rule versions, evidence, professional reviews, pack versions, matter pins, impacts. Applied live. This branch still has the file as `20261017110000_source_governance.sql`; `cursor/post-pr4-sync` renames it to the live version. |
+| 20261017113202 | platform_admin_and_pnp_domains | `platform_admins` and `app.is_platform_admin()`, plus verified provincial nominee hosts. Applied live. This branch still has the file as `20261017130000_platform_admin_and_pnp_domains.sql`. No user id is seeded. |
 
 In the repository, not yet applied to the live project (do not edit the file in place once applied):
 
 | Version | Name | Contents |
 |---|---|---|
-| 20261017110000 | source_governance | Official-host allowlist, source snapshots, check attempts, rule versions, evidence, professional reviews, pack versions, matter pins, impacts. `src/types/database.types.ts` stays stale until this migration is applied and `pnpm db:types` is run against the live project. |
-| 20261017130000 | platform_admin_and_pnp_domains | `platform_admins` and `app.is_platform_admin()`, plus verified provincial nominee hosts. No user id is seeded. |
+| 20261017140000 | finance_matter_billing | Billing projection and audited `issue_invoice` / `approve_earned_fee_transfer`. No ledger tables. |
+| 20261017140100 | webhook_account_dedupe | Unique `(provider, connected_account_id, event_id)` with `NULLS NOT DISTINCT`. |
+| 20261017140200 | owner_person_access | Assignment-based person reads. Audited 60-minute break-glass. |
+| 20261017140300 | matter_stage_transitions | Stage changes only through `transition_matter_stage`, with evidence. |
+| 20261017140400 | person_date_of_birth | `date_of_birth`, derived minor status, firm `age_of_majority_years`. |
+| 20261017140500 | staff_recovery_sessions_passkey | Hashed recovery codes, session revocation, owner MFA reset, passkey assurance. |
+
+`src/types/database.types.ts` is intentionally stale. `cursor/post-pr4-sync` regenerates it. Do not run `pnpm db:types` against the live project from this branch.
 
 All tables have `ENABLE` + `FORCE ROW LEVEL SECURITY`. `anon` has no table privileges. There are
 no DELETE policies: deletion is a retention workflow (SEC-07), not a client action.
@@ -35,13 +43,17 @@ no DELETE policies: deletion is a retention workflow (SEC-07), not a client acti
 | `audit_log` | Append-only trail: actor, actor_type, db_role, tenant, action, object, result, request_id, redacted diff, context. | SELECT: `firm_owner` of that org at aal2. No writes; UPDATE/DELETE/TRUNCATE rejected by triggers for every role. `token_hash` is redacted. |
 | `outbox_events` | Transactional outbox (event envelope: id, organization_id, aggregate, version, type, schema_version, minimal payload ≤ 8 KB). Idempotency key unique per org. | SELECT: staff of that org at aal2. No writes; workers use functions. |
 | `invitations` | Expiring single-use staff invite. Stores `sha256(token)` only, bound to normalized email, role, and organization. TTL 7 days. | SELECT: `firm_owner` at aal2, and not the `token_hash` column. No direct writes. |
-| `persons` | Tenant-local person. Separate from `profiles`. `is_minor` is a staff-recorded flag. | SELECT/UPDATE via `app.can_read_person` / `app.can_write_person`. INSERT: operational staff in the active org at aal2. |
-| `matters` | Tenant matter. Stage is independent of government outcome. | SELECT via `app.can_read_matter`. INSERT: operational staff. UPDATE: readers who are staff at aal2. |
+| `persons` | Tenant-local person. Separate from `profiles`. `date_of_birth` plus `birth_date_precision` (`day`, `month`, `year`) is canonical. `birth_date` and `is_minor` are mirrors written by trigger. Grants use `app.person_is_minor`, not the mirror. | SELECT/UPDATE via `app.can_read_person` / `app.can_write_person`. A firm owner is not in that read. INSERT: operational staff in the active org at aal2. |
+| `matters` | Tenant matter. Stage is independent of government outcome. Direct stage updates are rejected. | SELECT via `app.can_read_matter`. INSERT: operational staff, stage `engagement_pending` only. UPDATE of other columns: readers who are staff at aal2. Stage: `public.transition_matter_stage`. |
 | `matter_participants` | A person or a staff membership on a matter, with a party role. Composite foreign keys include `organization_id`. | SELECT via `app.can_read_matter_participant`. Writes: operational staff. |
 | `households` / `household_members` | Grouping only. Never consulted by person or matter authorization. | Staff who can see the household. Portal roles see nothing here. |
 | `person_relationships` | Descriptive links, including `payer` and `sponsor`. Never consulted by authorization. | Same staff rule as households. |
-| `access_grants` | `explicit` or `guardian`. Guardian grants require a minor subject and a purpose. | SELECT: parties to the grant, or a firm owner at aal2. Writes: firm owner with a recent step-up. |
-| `webhook_inbox` | Provider events. Unique `(provider, event_id)`. `provider_account_id` is stored; a replay with a different account is rejected. | SELECT: staff of the row's organization at aal2. Unscoped rows (`organization_id` null) are invisible to tenants. No direct writes. |
+| `access_grants` | `explicit` or `guardian`. Guardian grants require a subject `app.person_is_minor` currently treats as a minor, and a purpose. | SELECT: parties to the grant, or a firm owner at aal2. Writes: firm owner with a recent step-up. |
+| `webhook_inbox` | Provider events. Unique `(provider, connected_account_id, event_id)`, nulls not distinct. Empty `provider_account_id` is stored as a null connected account. A different account is a different event. First payload wins. | SELECT: staff of the row's organization at aal2. Unscoped rows (`organization_id` null) are invisible to tenants. No direct writes. |
+| `person_break_glass` | One person, one owner, 60 minutes, reason required. Read only. | SELECT: the actor, or a firm owner of that org at aal2. Inserts and closes go through functions. |
+| `matter_stage_evidence` | Evidence required to enter a stage. `submission_confirmation` requires external reference, submission time, and receipt locator. | SELECT: matter readers. INSERT: owner, consultant, case manager, or assistant who can read the matter, at aal2. |
+| `matter_stage_transitions` | Append-only stage history, including reverse moves and a controlled reopen. | SELECT: matter readers. Inserts only from `app.transition_matter_stage`. |
+| `session_revocations`, `auth_session_cutoffs`, `mfa_recovery_codes`, `mfa_recovery_attempts`, `mfa_assurance_proofs` | Session cutoffs, hashed recovery codes, and session-bound assurance proofs. No policies. | No table privileges for `authenticated`. Functions only. |
 | `official_source_domains` | Official-host allowlist. Suffix match: exact host or a host that ends in `.` plus the registered host. Seed includes `canada.ca` (so `www.canada.ca` and `ircc.canada.ca`), `cic.gc.ca` (so `www.cic.gc.ca`), `college-ic.ca`, and the provincial hosts in the verification table below. `cic.gc.ca.evil.com` does not match. A match is an entry gate, not approval of a page. | SELECT: any active member with a workspace, or a platform admin at aal2. INSERT/UPDATE: `service_role`, or a platform admin at aal2. |
 | `platform_admins` | Platform operators, keyed by `auth.users.id`. Not an organization role. The first row is not seeded. | SELECT: own row, or a platform admin at aal2. INSERT/UPDATE: `service_role` (and the database owner). |
 | `official_sources` | Page identity. `organization_id` null is the platform catalog. A firm row is that firm's record of an allowlisted URL. Freshness columns move only from snapshot and check triggers. | SELECT: global rows for any active member; firm rows for that firm's staff at aal2. INSERT/UPDATE: practice writers of that firm. Global writes are `service_role`. |
@@ -64,10 +76,14 @@ Tenant and identity keys are immutable (`app.guard_immutable_keys()`).
 Staff: `firm_owner`, `licensed_consultant`, `case_manager`, `assistant`, `finance_user`
 (`app.staff_roles()`). Portal: `client`, `adult_dependant`, `sponsor`, `employer_contact`,
 `guardian`, `external_collaborator`. Portal memberships give org access only. Person visibility
-is self, an explicit grant, a guardian grant while the subject is a minor, firm-owner directory
-access in the active workspace, or assignment on a matter that includes the person. A household,
-payer, or sponsor link does not reveal another adult. A firm owner is not automatically a
-licensed consultant. Platform admin is intentionally **not** an org role.
+is self, an explicit grant, a guardian grant while `app.person_is_minor` is true, or assignment
+on a matter that includes the person. A firm owner does not have directory-wide person access.
+Break-glass is a 60-minute read of one person, with a recent step-up, and it is audited.
+`finance_user` does not read person rows. An assigned finance user, and a firm owner in the
+active workspace, can read a billing projection (matter id, title, stage, applicant display name)
+and call `issue_invoice` at aal2. `approve_earned_fee_transfer` also needs a recent step-up.
+A household, payer, or sponsor link does not reveal another adult. A firm owner is not
+automatically a licensed consultant. Platform admin is intentionally **not** an org role.
 
 ## Helpers (schema `app`, not exposed by the Data API, `search_path = ''`)
 
@@ -82,15 +98,23 @@ licensed consultant. Platform admin is intentionally **not** an org role.
 | `app.enqueue_event(...)` | Write in the same transaction as the domain change. Same idempotency key + same event ⇒ same id; different event ⇒ error. |
 | `app.claim_outbox_events(worker, limit, lease)` | service_role only. `FOR UPDATE SKIP LOCKED`, reclaims expired leases. |
 | `app.mark_outbox_published` / `app.mark_outbox_failed` / `app.replay_outbox_event` | service_role only. Exponential backoff to 60 min, dead-letter after 8 attempts, audited replay. |
-| `app.current_aal()`, `app.staff_mfa_satisfied()` | `aal2` from the JWT. Staff roles need it; portal roles return true from the staff check so clients are not forced. |
-| `app.mfa_step_up_satisfied(interval default 15 minutes)` | A `totp` entry in `amr` whose timestamp is inside the window. |
+| `app.current_aal()`, `app.staff_mfa_satisfied()` | Staff assurance is `aal2`, or a passkey `amr` entry, or a recovery-code proof for this session, and the session is not revoked. Portal roles are not redirected by the proxy. |
+| `app.mfa_step_up_satisfied(interval default 15 minutes)` | A fresh passkey `amr` entry, or `aal2` with a fresh `totp`, `mfa/webauthn`, or `mfa/recovery_code` entry, or an app recovery-code proof inside the window. |
 | `app.guard_staff_membership_mfa()` | BEFORE INSERT/UPDATE on memberships. Staff writes need aal2. Role and status changes need a recent step-up. Accepting one's own `invited` → `active` row is the exception. |
 | `app.hash_invitation_token`, `app.create_staff_invitation`, `app.accept_invitation`, `app.revoke_invitation` | Token is 32 random bytes, hex. Only the sha256 hex digest is stored. Public wrappers: `create_staff_invitation`, `accept_invitation`, `revoke_staff_invitation`. |
 | `app.guard_last_firm_owner()` | BEFORE UPDATE. Refuses to change the role or leave `active` when no other active `firm_owner` remains. |
 | `app.can_read_person`, `app.can_write_person`, `app.can_read_matter`, `app.can_read_matter_participant`, `app.can_read_household`, `app.can_read_relationship`, `app.can_read_grant` | Thin policies call these. Household and relationship tables are not inputs. |
-| `app.can_insert_practice_row` | `firm_owner`, `licensed_consultant`, or `case_manager`, active workspace, aal2. Assistants read and update assigned people; they do not insert practice rows. `finance_user` has no person or matter visibility. |
+| `app.can_insert_practice_row` | `firm_owner`, `licensed_consultant`, or `case_manager`, active workspace, aal2. Assistants read and update assigned people; they do not insert practice rows. `finance_user` has no person-row access and no full matter row. |
 | `app.can_manage_access` | Firm owner, aal2, recent step-up, active workspace. |
-| `app.ingest_webhook_event(...)` | service_role only. First payload wins. Duplicate `(provider, event_id)` returns the existing id; a different account raises an error. |
+| `app.ingest_webhook_event(...)` | service_role only. First payload wins. Duplicate `(provider, connected_account_id, event_id)` returns the existing id. Null and `''` are the same account. |
+| `app.can_read_matter_billing`, `public.list_matter_billing`, `public.perform_billing_action` | Billing projection and the two audited billing actions. Not person access. |
+| `public.open_person_break_glass`, `public.close_person_break_glass` | Owner, step-up, 60 minutes, one person, read only. |
+| `public.transition_matter_stage` | Allowed edge, evidence for the destination stage, optimistic `version`. Submitted and later stages require `licensed_consultant`. |
+| `app.derive_is_minor`, `app.person_is_minor` | Partial dates count as minor only when the oldest possible birthday is still under the firm's `age_of_majority_years` (default 19, range 18–21). That default is a product setting, not a legal finding. |
+| `public.generate_recovery_codes`, `public.consume_recovery_code` | Ten hashed single-use codes. Regenerate needs step-up and retires unused codes. Five failures lock the user for 15 minutes. |
+| `public.list_my_sessions`, `public.revoke_my_session`, `public.revoke_other_sessions` | Session inventory and revocation. A revoked session fails `app.staff_mfa_satisfied`. |
+| `public.reset_staff_mfa` | Owner, step-up, not self. Retires codes, cuts off old tokens, purges Auth factors and sessions. Audit stores `reason_length` only. |
+| `public.session_mfa_satisfied` | Invoker wrapper the proxy calls when the JWT is not yet `aal2`. |
 | `app.official_url_host(url)` / `app.host_is_allowlisted(host)` | HTTPS host parse, then exact or suffix match against `official_source_domains`. `cic.gc.ca.evil.com` is not `cic.gc.ca`. |
 | `app.is_platform_admin()` | Signed-in user is in `platform_admins` and the JWT `aal` is `aal2`. Does not read tenant tables. |
 
@@ -106,7 +130,7 @@ Replace `<auth.users.id>` with the person's id from `auth.users`. A platform adm
 
 ## Provincial hosts verified 2026-10-17
 
-Pages fetched that day. Hosts already in `20261017110000` were not inserted again.
+Pages fetched that day. Hosts already in the source-governance migration (live version `20261017113157`; this branch's file is still `20261017110000` until `cursor/post-pr4-sync` renames it) were not inserted again.
 
 | Host | Added now | Verification URL |
 |---|---|---|
@@ -131,7 +155,7 @@ Pages fetched that day. Hosts already in `20261017110000` were not inserted agai
 Excluded: `liveinnovascotia.ca` (DNS answered, TLS handshake failed, so the page was not confirmed). `gov.nu.ca` stays from the original government seed; this fetch was stopped by a Cloudflare challenge, and IRCC says Nunavut has no nominee program, so no second Nunavut host was added. `gov.pe.ca/immigration` returned 404; the immigration pages that loaded are on `princeedwardisland.ca`.
 | `app.rule_publication_blockers(version_id, content_revision)` | Not granted to `authenticated`. Blocks publish when claim, review date, tests, evidence, section, hash, retrieval time, or an approved review of that revision is missing, and when `effective_from` is only a copy of `retrieved_at`. |
 
-Staff MFA is enforced with new functions and RESTRICTIVE policies. Existing helpers are not replaced (`CREATE OR REPLACE` is forbidden). `public.create_organization` now requires aal2 because the membership trigger fires when it inserts an active `firm_owner`. Step-up is not required there because `user_id` is the caller.
+Staff MFA is enforced with new functions and RESTRICTIVE policies. A later migration may `CREATE OR REPLACE FUNCTION` and `DROP CONSTRAINT`. Dropping tables, deleting rows, and replacing views stay forbidden. `public.create_organization` requires aal2 because the membership trigger fires when it inserts an active `firm_owner`. Step-up is not required there because `user_id` is the caller.
 
 ## Verified (rolled-back test transaction, 16 Oct 2026)
 
@@ -143,9 +167,11 @@ idempotency key produced one outbox row. Profile display-name change was audited
 
 ## Known gaps (next tasks)
 
-* T006 is not done: session inventory, revocation, recovery, and login rate limits are still open. Client and guardian invitations remain T021; this slice invites staff only.
-* T007 is not done: negative tests cover SQL RLS (cross-tenant, household, payer, unassigned staff, guardian-without-grant, adult-to-adult). Storage URLs, search, exports, and jobs do not exist yet, so they are not tested. Sensitive document categories are not split. `finance_user` sees no person or matter rows in this slice.
-* T010 is not done: the inbox deduplicates. Signature verification, retry, and the business effect of a webhook are still the worker's job.
-* T011 is in the repository and not applied to the live project. There is no fetcher (T012), so a stored hash is attested by the caller and not checked against bytes. There is no review workbench (T013) and no client projection of rule claims (T017). The first `platform_admins` row is not seeded. `database.types.ts` does not include these tables until the migration is applied and types are regenerated.
+* T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.
+* T007 negative tests cover SQL RLS. Storage URLs, search, exports, and jobs do not exist yet. `finance_user` still has no person-row access. Billing is a projection plus two audited actions; invoices and the ledger are T030.
+* T010 dedupes on `(provider, connected_account_id, event_id)`. Signature verification, retry, and the business effect of a webhook are still the worker's job.
+* T011 source governance and platform admin are applied live as `20261017113157` and `20261017113202`. There is no fetcher (T012). There is no review workbench (T013) and no client projection of rule claims (T017). The first `platform_admins` row is not seeded. `database.types.ts` stays stale until `cursor/post-pr4-sync`.
+* T023 in this slice is the stage transition function and its evidence gate. Matter reference, on-hold workflow, and tasks are not built.
+* A firm owner can still read household membership ids. That is not person-row access.
 * External tamper-evident audit sink (DB owner can still disable triggers).
-* Age of majority is not calculated. `is_minor` is recorded by staff. An authority-review task when a child reaches majority is future work.
+* Majority review is an outbox event `person.majority_review_due`. The task itself waits on T026. `age_of_majority_years` defaults to 19 as a product setting.
