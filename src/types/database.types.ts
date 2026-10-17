@@ -3617,6 +3617,7 @@ export type Database = {
           message_id: string
           organization_id: string
           person_id: string | null
+          sender_verified: boolean
           subject: string | null
           text_body: string | null
           to_email: string
@@ -3635,6 +3636,7 @@ export type Database = {
           message_id: string
           organization_id: string
           person_id?: string | null
+          sender_verified?: boolean
           subject?: string | null
           text_body?: string | null
           to_email: string
@@ -3653,6 +3655,7 @@ export type Database = {
           message_id?: string
           organization_id?: string
           person_id?: string | null
+          sender_verified?: boolean
           subject?: string | null
           text_body?: string | null
           to_email?: string
@@ -4442,6 +4445,19 @@ export type Database = {
           p_from: string
           p_html: string
           p_message_id: string
+          p_subject: string
+          p_text: string
+          p_to: string
+        }
+        Returns: Json
+      }
+      begin_verified_inbound_message: {
+        Args: {
+          p_domain: string
+          p_from: string
+          p_html: string
+          p_message_id: string
+          p_sender_verified: boolean
           p_subject: string
           p_text: string
           p_to: string

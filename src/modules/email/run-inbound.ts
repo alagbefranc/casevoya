@@ -35,7 +35,7 @@ export async function runInboundEmail(payload: InboundPayload) {
   return processInboundEmail(payload, {
     domain: config.inboundDomain,
     async begin(input) {
-      const { data, error } = await supabase.rpc("begin_inbound_message", {
+      const { data, error } = await supabase.rpc("begin_verified_inbound_message", {
         p_to: input.to,
         p_from: input.from,
         p_message_id: input.messageId,
@@ -43,6 +43,7 @@ export async function runInboundEmail(payload: InboundPayload) {
         p_text: input.text ?? "",
         p_html: input.html ?? "",
         p_domain: input.domain,
+        p_sender_verified: input.senderVerified === true,
       });
       if (error) throw new Error(error.message);
       return asBegin(data);

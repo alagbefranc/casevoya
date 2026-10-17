@@ -71,9 +71,10 @@ function portalAcceptPayload(root: HTMLElement, preview: InvitePreview, page: st
     portal_terms_id: terms,
     privacy_notice_id: privacy,
     locale: portalLocale(root),
-    email_notices: root.querySelector("#c1") ? checked(root, "c1") : true,
-    sms_notices: root.querySelector("#c2") ? checked(root, "c2") : false,
-    deadline_reminders: root.querySelector("#c3") ? checked(root, "c3") : true,
+    // Only what the person ticked on this screen. A screen without the box records no consent.
+    email_notices: checked(root, "c1"),
+    sms_notices: checked(root, "c2"),
+    deadline_reminders: checked(root, "c3"),
     processing_consent: page === "accept-family" ? checked(root, "o1") : true,
     shares: page === "accept-family" ? shares : undefined,
   };
