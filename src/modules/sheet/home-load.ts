@@ -2,6 +2,7 @@ import "server-only";
 import type { RbarData } from "@/components/sheet/designer/frame";
 import type { HomeData, HomeTask } from "@/components/sheet/designer/home";
 import { createClient } from "@/lib/supabase/server";
+import { staffPerson } from "@/modules/sheet/avatar";
 import { loadSheetChrome, matterNames, memberNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { NOTICE, ago, dayMonth, greeting, isoDate, localNow, monthGrid, summary, taskBadge, zoneCity } from "@/modules/sheet/home-present";
@@ -72,6 +73,10 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
     matterNames(supabase, org, [...tasks.map((row) => row.matter_id), ...deadlines.map((row) => row.matter_id)].filter((id): id is string => Boolean(id))),
     memberNames(supabase, org),
   ]);
+  const ownerOf = (id: string | null) => {
+    const name = id ? memberName.get(id) : undefined;
+    return name ? staffPerson(name) : { name: "Unassigned" };
+  };
 
   const total = (result: { count: number | null }) => result.count ?? 0;
   const toReview = total(awaiting);
@@ -89,7 +94,7 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
     who: matterName(row.matter_id),
     when: row.due_on === today ? "Today" : row.due_on ? dayMonth(row.due_on) : "No due date",
     badge: taskBadge(row.status, row.due_on, today),
-    owner: { name: (row.owner_membership_id && memberName.get(row.owner_membership_id)) || "Unassigned" },
+    owner: ownerOf(row.owner_membership_id),
   }));
 
   const home: HomeData = {

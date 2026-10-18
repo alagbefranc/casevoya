@@ -5,6 +5,7 @@ import type {
 } from "@/components/sheet/designer/matters";
 import { createClient } from "@/lib/supabase/server";
 import { isLicensedMembership, LICENCE_FACT_COLUMNS } from "@/lib/tenant/roles";
+import { staffPerson } from "@/modules/sheet/avatar";
 import {
   loadSheetChrome,
   matterNames,
@@ -177,7 +178,7 @@ export async function loadSheetMatters(
       // Finance is not connected yet, so there is no money state to show.
       money: "—",
       nextDeadline: due ? dayMonth(due) : "—",
-      consultant: consultant ? { name: consultant } : null,
+      consultant: consultant ? staffPerson(consultant) : null,
     };
   });
 

@@ -2,6 +2,7 @@ import "server-only";
 import type { StatusbarData, TopBarData } from "@/components/sheet/designer/frame";
 import type { SidebarData } from "@/components/sheet/designer/sidebar";
 import { createClient } from "@/lib/supabase/server";
+import { staffPerson } from "@/modules/sheet/avatar";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { roleLabel } from "@/modules/sheet/present";
 
@@ -65,7 +66,7 @@ export async function loadSheetChrome(staff: SheetStaff, active: string): Promis
       active,
       counts: { tasks: openCount.count ?? 0, inbox: unsorted.count ?? 0 },
       pinned: pinned.map((id) => ({ href: `/sheet/matters/${id}`, name: name(id) })),
-      me: { name: staff.displayName, role: roleLabel(staff.role) },
+      me: { ...staffPerson(staff.displayName), role: roleLabel(staff.role) },
       tiles: { documents: "/sheet/documents", invoices: "/sheet/finance" },
       newMatter: { href: "/sheet/matters?new=1" },
       createBoard: { href: "/sheet/queue" },

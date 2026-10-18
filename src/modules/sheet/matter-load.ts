@@ -13,6 +13,7 @@ import {
 } from "@/components/sheet/designer/matter";
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import { createClient } from "@/lib/supabase/server";
+import { staffPerson } from "@/modules/sheet/avatar";
 import { isUuid } from "@/lib/tenant/context";
 import { isLicensedMembership, LICENCE_FACT_COLUMNS } from "@/lib/tenant/roles";
 import { loadSheetChrome, memberNames } from "@/modules/sheet/chrome-load";
@@ -262,7 +263,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     } else if (row.membership_id && !staffIds.has(row.membership_id)) {
       staffIds.add(row.membership_id);
       cards.push({
-        person: { name: memberName(row.membership_id) },
+        person: staffPerson(memberName(row.membership_id)),
         role: partyRole(row.role),
         parts: ["Firm staff"],
         pill: { label: row.membership_id === matter.responsible_consultant_membership_id ? "Responsible" : "Assigned" },
@@ -270,7 +271,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     }
   }
   if (matter.responsible_consultant_membership_id && !staffIds.has(matter.responsible_consultant_membership_id)) {
-    cards.push({ person: { name: memberName(matter.responsible_consultant_membership_id) }, role: "Licensed consultant", parts: ["Firm staff"], pill: { label: "Responsible" } });
+    cards.push({ person: staffPerson(memberName(matter.responsible_consultant_membership_id)), role: "Licensed consultant", parts: ["Firm staff"], pill: { label: "Responsible" } });
   }
   const relationRows: MatterRelationship[] = (relationships?.data ?? []).map((row) => ({
     from: firstName(personName(row.from_person_id)),
@@ -338,7 +339,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
           ...(due ? [due] : []),
         ],
         badge: taskRowBadge(row.status, row.due_on, today),
-        owner: { name: owner },
+        owner: row.owner_membership_id ? staffPerson(owner) : { name: owner },
       };
     });
   const deadline = next

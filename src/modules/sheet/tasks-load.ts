@@ -1,6 +1,7 @@
 import "server-only";
 import type { ClientTaskRow, DeadlineRow, InternalTaskRow, TasksData } from "@/components/sheet/designer/tasks";
 import { createClient } from "@/lib/supabase/server";
+import { staffPerson } from "@/modules/sheet/avatar";
 import { loadSheetChrome, matterNames, memberNames } from "@/modules/sheet/chrome-load";
 import { dayMonth, isoDate, localNow } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
@@ -87,7 +88,7 @@ async function loadInternal(supabase: Client, staff: SheetStaff, today: string, 
       flags,
       title: row.title,
       matter: matter(row.matter_id),
-      owner: owner ? { person: { name: owner }, label: firstName(owner) } : null,
+      owner: owner ? { person: staffPerson(owner), label: firstName(owner) } : null,
       due: dueLabel(row.due_on, row.due_at, row.due_timezone || staff.timezone, today),
       priority: priorityChip(row.priority),
       dependsOn: dependsOnLabel(dependsOn.get(row.id) ?? []),
