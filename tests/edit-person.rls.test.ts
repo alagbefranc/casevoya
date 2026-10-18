@@ -158,6 +158,26 @@ describe("Edit details through row-level security", () => {
     expect(audit.rows[0].diff.date_of_birth).toEqual({ old: null, new: "1990-04-04" });
   });
 
+  it("lets staff change only the editable details, never the login, sample flag, minor status or firm", async () => {
+    const ctx = await sampleMatter();
+    const other = await createUser(email("intruder"));
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    for (const [column, value] of [
+      ["user_id", other],
+      ["is_sample", false],
+      ["is_minor", true],
+      ["organization_id", randomUUID()],
+      ["created_by", other],
+    ] as const) {
+      await expectDbError(
+        () => db.query(`update public.persons set ${column} = $2 where id = $1`, [ctx.applicant, value]),
+        /permission denied/,
+      );
+    }
+    const ok = await db.query(`update public.persons set contact_phone = '+14165550111' where id = $1 returning id`, [ctx.applicant]);
+    expect(ok.rows).toHaveLength(1);
+  });
+
   it("refuses a save made against an older version", async () => {
     const ctx = await sampleMatter();
     const before = await versionOf(ctx.applicant);
@@ -200,7 +220,7 @@ describe("Edit details through row-level security", () => {
   it("does not let an edit change the sample flag", async () => {
     const ctx = await sampleMatter();
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
-    await expectDbError(() => db.query(`update public.persons set is_sample = false where id = $1`, [ctx.applicant]), /sample flag is immutable/);
+    await expectDbError(() => db.query(`update public.persons set is_sample = false where id = $1`, [ctx.applicant]), /permission denied|sample flag is immutable/);
   });
 
   it("opens a majority review task when a corrected date shows a former minor is an adult", async () => {
