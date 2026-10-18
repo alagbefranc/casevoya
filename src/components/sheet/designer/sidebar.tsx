@@ -30,12 +30,15 @@ export type SidebarData = {
 
 type Action = { href: string; toast?: string; toastSub?: string };
 
+/** First letters of the first and last words that contain a letter ("Sample permit (E2E)" → "SE"). */
 export function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  const first = parts[0][0] ?? "";
-  const last = parts.length > 1 ? (parts[parts.length - 1][0] ?? "") : "";
-  return (first + last).toUpperCase();
+  const letters = name
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.match(/\p{L}/u)?.[0])
+    .filter((letter): letter is string => Boolean(letter));
+  if (letters.length === 0) return "?";
+  return (letters[0] + (letters.length > 1 ? letters[letters.length - 1] : "")).toUpperCase();
 }
 
 /** The Designer's `.av` circle: a photo when there is one, otherwise initials in the same circle. */

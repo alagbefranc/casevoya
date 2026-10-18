@@ -1,0 +1,6 @@
+/*
+ * The Designer's CSS was written against browser defaults. Tailwind preflight makes every
+ * svg display:block, which stacks the inline Command-K glyph above its "K" in the sidebar
+ * search and the status bar. Restore the default for that glyph only.
+ */
+.cmdk{display:inline-block}

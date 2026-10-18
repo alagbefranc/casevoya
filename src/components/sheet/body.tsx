@@ -2,11 +2,13 @@ import { notFound, redirect } from "next/navigation";
 import { DemoSheet } from "@/components/sheet/demo";
 import { SheetFrame } from "@/components/sheet/designer/frame";
 import { SheetHome } from "@/components/sheet/designer/home";
+import { MattersTopBar, SheetMatters } from "@/components/sheet/designer/matters";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
 import { signInLocation } from "@/lib/auth/redirect";
 import { loadSheetHome } from "@/modules/sheet/home-load";
+import { loadSheetMatters } from "@/modules/sheet/matters-load";
 import { loadSheetAccess, loadSheetBundle } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 
@@ -45,6 +47,16 @@ export async function SheetBody({
       <SheetScreen page={page}>
         <SheetFrame sidebar={chrome.sidebar} top={chrome.top} rbar={rbar} statusbar={chrome.statusbar}>
           <SheetHome data={home} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  if (page === "matters" && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, matters } = await loadSheetMatters(access.staff, query);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={chrome.sidebar} header={<MattersTopBar counts={matters.counts} />} statusbar={chrome.statusbar}>
+          <SheetMatters data={matters} />
         </SheetFrame>
       </SheetScreen>
     );
@@ -88,5 +100,6 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     dlg: one("dlg"),
     q: one("q"),
     state: one("state"),
+    limit: one("limit"),
   };
 }

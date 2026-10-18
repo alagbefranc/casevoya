@@ -3,8 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { SheetFrame, type RbarData } from "@/components/sheet/designer/frame";
 import { SheetHome, type HomeData } from "@/components/sheet/designer/home";
+import { MattersTopBar, SheetMatters, type MattersData } from "@/components/sheet/designer/matters";
 import { SheetSidebar, type SidebarData } from "@/components/sheet/designer/sidebar";
 import { IndexMarkup } from "@/components/sheet/markup/index";
+import { MattersMarkup } from "@/components/sheet/markup/matters";
 
 /**
  * The data-driven Designer components must produce the same HTML as the captured
@@ -87,6 +89,27 @@ const DESIGNER_RBAR: RbarData = {
   vo: { draft: "Reply to Sofia Reyes offering Tuesday 11:00 or Wednesday 15:00.", sources: "Sources: firm calendar, template T-04" },
 };
 
+const AV = (name: string, file: string) => ({ name, avatarUrl: `/assets/${file}.png` });
+const AMARA_AV = AV("Amara Osei", "av-amara-consultant");
+const DANIEL_AV = AV("Daniel Ruiz", "av-daniel-casemanager");
+
+const DESIGNER_MATTERS: MattersData = {
+  title: "Matters",
+  counts: { active: 18, blocked: 2, mine: 4, everyone: 6 },
+  rows: [
+    { client: AV("Priya Sharma", "av-priya-applicant"), reference: "NL-2026-0142", program: "Spousal sponsorship", stage: { tone: "blue", label: "Evidence collection" }, government: { tone: "unv", label: "Not submitted" }, money: "Advance held", nextDeadline: "30 Oct", consultant: AMARA_AV },
+    { client: AV("Kofi Mensah", "av-kofi-client"), reference: "NL-2026-0131", program: "Express Entry PR", stage: { tone: "blue", label: "Government processing" }, government: { tone: "ok", label: "Submitted", detail: "verified" }, money: "Paid", nextDeadline: "2 Nov", consultant: AMARA_AV },
+    { client: AV("Tom\u00e1s Duarte", "av-tomas-client"), reference: "NL-2026-0150", program: "PR, family", stage: { tone: "blue", label: "Intake" }, government: { tone: "unv", label: "\u2014" }, money: "Invoice issued", nextDeadline: "9 Nov", consultant: DANIEL_AV },
+    { client: AV("Grace Okafor", "av-graceo-client"), reference: "NL-2026-0128", program: "Study permit", stage: { tone: "blue", label: "Consultant review" }, government: { tone: "unv", label: "Not submitted" }, money: "Partially paid", nextDeadline: "14 Nov", consultant: AMARA_AV },
+    { client: AV("Ana Ferreira", "av-ana-client"), reference: "NL-2026-0155", program: "Visitor record", stage: { tone: "blue", label: "Engagement pending" }, government: { tone: "unv", label: "\u2014" }, money: "Quote sent", nextDeadline: "21 Nov", consultant: DANIEL_AV },
+    { client: { name: "Mei Tanaka" }, reference: "NL-2026-0119", program: "Work permit", stage: { tone: "blue", label: "Submitted" }, government: { tone: "chg", label: "Submission unverified" }, money: "Paid", nextDeadline: "\u2014", consultant: AMARA_AV },
+  ],
+  shown: 6,
+  total: 18,
+  more: "#",
+  empty: null,
+};
+
 function withoutPreloads(html: string): string {
   return html.replace(/<link rel="preload"[^>]*\/>/g, "");
 }
@@ -156,5 +179,28 @@ describe("Designer fidelity", () => {
     expect(html).toContain('<span class="av" aria-hidden="true">DL</span>');
     expect(html).not.toMatch(/Northline|Amara|Priya|Kofi|Olena|Rafael|Tom\u00e1s|Tomás|DocuSign|prototype|Demo data/);
     expect(html).not.toContain('data-ai="ok"');
+  });
+
+  it("renders the Matters list exactly as the captured Designer markup", () => {
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(MattersMarkup)));
+    const live = withoutPreloads(
+      renderToStaticMarkup(
+        createElement(SheetFrame, {
+          sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/matters" },
+          header: createElement(MattersTopBar, { counts: DESIGNER_MATTERS.counts }),
+          statusbar: {
+            timezone: "America/Toronto",
+            queue: { label: "Reminder queue healthy", detail: "0 retries" },
+            sample: { label: "Demo data", detail: "fictional firm \u201cNorthline Immigration\u201d" },
+          },
+        }, createElement(SheetMatters, { data: DESIGNER_MATTERS })),
+      ),
+    );
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 120, i + 160) + "\nGOT " + live.slice(i - 120, i + 160));
+    }
+    expect(live).toBe(captured);
   });
 });

@@ -269,12 +269,15 @@ export function SheetStatusbar({ data }: { data: StatusbarData }) {
 export function SheetFrame({
   sidebar,
   top,
+  header,
   rbar,
   statusbar,
   children,
 }: {
   sidebar: SidebarData;
-  top: TopBarData;
+  top?: TopBarData;
+  /** A page's own top bar (the Designer gives some pages their own crumb and actions). */
+  header?: ReactNode;
   rbar?: RbarData | null;
   statusbar: StatusbarData;
   children?: ReactNode;
@@ -297,9 +300,9 @@ export function SheetFrame({
       </div>
       <div className={"frame"}>
         <SheetSidebar data={sidebar} />
-        <main className={"sheet wr"}>
+        <main className={rbar ? "sheet wr" : "sheet"}>
           <div className={"main"} id={"main"}>
-            <SheetTopBar data={top} />
+            {header ?? (top ? <SheetTopBar data={top} /> : null)}
             <div id={"content"}>{children}</div>
           </div>
           {rbar ? <SheetRbar data={rbar} /> : null}
