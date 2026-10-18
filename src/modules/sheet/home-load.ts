@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { staffPerson } from "@/modules/sheet/avatar";
 import { loadSheetChrome, matterNames, memberNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
+import { missingPolicies } from "@/modules/portal-policies/defaults";
+import { loadCurrentPolicies } from "@/modules/portal-policies/load";
 import { NOTICE, ago, dayMonth, greeting, isoDate, localNow, monthGrid, summary, taskBadge, zoneCity } from "@/modules/sheet/home-present";
 
 const SOURCE: Record<string, string> = {
@@ -38,6 +40,8 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
   const monthStart = isoDate(local.year, local.month, 1);
   const monthEnd = isoDate(local.year, local.month, new Date(Date.UTC(local.year, local.month, 0)).getUTCDate());
   const count = { count: "exact" as const, head: true };
+  // Clients can't accept an invitation until the firm publishes both portal documents.
+  const policies = loadCurrentPolicies(supabase, org);
 
   const [chrome, openTasks, dueToday, upcoming, monthDeadlines, tentative, accepted, awaiting, requested, onHold, activity] =
     await Promise.all([
@@ -143,5 +147,5 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
     vo: null,
   };
 
-  return { chrome, rbar, home };
+  return { chrome, rbar, home, missingPolicies: missingPolicies(await policies) };
 }

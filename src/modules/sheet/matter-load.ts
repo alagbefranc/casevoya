@@ -48,6 +48,8 @@ import { governmentBadge, programLabel } from "@/modules/sheet/matters-present";
 import { inviteEmailLines } from "@/modules/email/templates";
 import { acceptPath, portalRoleForParty, portalRoleLabel } from "@/modules/sheet/portal-invite";
 import { DEADLINE_KINDS, DEADLINE_ROLES, deadlineSource } from "@/modules/sheet/new-deadline";
+import { missingPolicies } from "@/modules/portal-policies/defaults";
+import { loadCurrentPolicies } from "@/modules/portal-policies/load";
 import {
   governmentLabel,
   isoDateInTimeZone,
@@ -81,6 +83,8 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     .eq("id", matterId)
     .maybeSingle();
   if (!matter) return null;
+  // Clients can't accept a portal invitation until the firm publishes its terms and privacy notice.
+  const policies = loadCurrentPolicies(supabase, org);
 
   const [chrome, members, staffRows, participants, tasks, deadlines, requests, refs, agreements, pack, ownLicence, invitations] = await Promise.all([
     loadSheetChrome(staff, `/sheet/matters/${matter.id}`),
@@ -436,6 +440,8 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     wire: { organizationId: org, matterId: matter.id },
     // public.create_portal_invitation needs a date of birth; the dialog asks for it when one is missing.
     birthDate: cards.some((card) => card.invite?.birthDateMissing) ? { max: todayIso() } : null,
+    // public.accept_portal_invitation needs both published; the dialog says so instead of sending.
+    policiesMissing: missingPolicies(await policies),
   };
 
   // A hold's owner is someone on the firm's staff, never a client. The responsible consultant comes first.

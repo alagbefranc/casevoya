@@ -9,6 +9,7 @@ import { MattersTopBar, NewMatterDialog, SheetMatters } from "@/components/sheet
 import { SampleCasePanel } from "@/components/sheet/designer/sample-case";
 import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
 import { SheetStaffTab, StaffAfter, StaffHeader } from "@/components/sheet/designer/invitations";
+import { PolicyMissingAlert, PortalPoliciesAfter, SettingsPortalHeader, SheetPortalPolicies } from "@/components/sheet/designer/portal-policies";
 import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
@@ -17,6 +18,7 @@ import { homeRoute } from "@/lib/auth/home-route";
 import { signInLocation } from "@/lib/auth/redirect";
 import { loadSheetClients } from "@/modules/sheet/clients-load";
 import { loadSheetHome } from "@/modules/sheet/home-load";
+import { loadSheetPortalPolicies } from "@/modules/sheet/portal-policies-load";
 import { loadSheetMatter } from "@/modules/sheet/matter-load";
 import { loadSheetMatters } from "@/modules/sheet/matters-load";
 import { loadSheetSample } from "@/modules/sheet/sample-load";
@@ -60,11 +62,13 @@ export async function SheetBody({
   }
   // The Designer home with the firm's own records, in sample mode too. Sample records are real rows marked sample.
   if (page === "index" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, rbar, home } = await loadSheetHome(access.staff);
+    const { chrome, rbar, home, missingPolicies } = await loadSheetHome(access.staff);
+    // Until the firm publishes its portal terms and privacy notice, no invited client can join: say so here.
+    const lead = missingPolicies.length ? <PolicyMissingAlert kinds={missingPolicies} style={{ marginBottom: "18px" }} /> : undefined;
     return (
       <SheetScreen page={page}>
         <SheetFrame sidebar={chrome.sidebar} top={chrome.top} rbar={rbar} statusbar={chrome.statusbar}>
-          <SheetHome data={home} />
+          <SheetHome data={home} lead={lead} />
         </SheetFrame>
       </SheetScreen>
     );
@@ -118,6 +122,22 @@ export async function SheetBody({
           after={<StaffAfter dialog={dialog} />}
         >
           <SheetStaffTab data={staff} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Client portal: the firm's portal terms and privacy notice. The other Settings tabs keep their old view.
+  if (page === "settings" && query.tab === "portal" && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, page: policies, dialogs } = await loadSheetPortalPolicies(access.staff);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={chrome.sidebar}
+          header={<SettingsPortalHeader firmName={policies.firmName} />}
+          statusbar={chrome.statusbar}
+          after={<PortalPoliciesAfter dialogs={dialogs} />}
+        >
+          <SheetPortalPolicies data={policies} />
         </SheetFrame>
       </SheetScreen>
     );

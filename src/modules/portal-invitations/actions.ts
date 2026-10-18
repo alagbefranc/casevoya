@@ -9,6 +9,7 @@ import type { Json } from "@/types/database.types";
 import { attachInviteEmailLink } from "@/modules/email/invite-link";
 import { acceptLink } from "@/modules/sheet/portal-invite";
 import { portalError } from "@/modules/portal-invitations/errors";
+import { policyPublishError, readPolicyDraft } from "@/modules/portal-policies/defaults";
 import { isPortalInviteRole, type PortalAcceptPayload, type PortalInviteRole } from "@/modules/portal-invitations/types";
 
 type RpcResult = { ok?: boolean; error?: string; status?: string; token?: string; invitation_id?: string; expires_at?: string; role?: string };
@@ -109,23 +110,31 @@ export async function revokePortalInvitation(input: { organizationId: string; in
   return { ok: true as const };
 }
 
+/**
+ * Publishes a new version of the firm's portal terms or privacy notice. A null code relies on the
+ * session's recent step-up (the Sheet's Settings > Client portal sends none and goes to
+ * /mfa?step=6 when the database asks for one). public.publish_portal_policy decides: a firm owner
+ * or licensed consultant, aal2 and a recent step-up. Published text never changes; this adds a row.
+ */
 export async function publishPortalPolicy(input: {
   organizationId: string;
-  kind: "portal_terms" | "privacy_notice";
+  kind: string;
   versionLabel: string;
   title: string;
   body: string;
-  code: string;
-}) {
+  code: string | null;
+}): Promise<{ id: string } | { error: string }> {
+  const read = readPolicyDraft(input);
+  if ("error" in read) return { error: read.error };
   const session = await staffClient(input.organizationId, input.code);
-  if ("error" in session) return { error: session.error };
+  if ("error" in session) return { error: session.error ?? "Sign in first." };
   const { data, error } = await session.supabase.rpc("publish_portal_policy", {
-    p_kind: input.kind,
-    p_version_label: input.versionLabel,
-    p_title: input.title,
-    p_body: input.body,
+    p_kind: read.input.kind,
+    p_version_label: read.input.versionLabel,
+    p_title: read.input.title,
+    p_body: read.input.body,
   });
-  if (error) return { error: safeAccessError(error.message) };
+  if (error) return { error: policyPublishError(error) ?? safeAccessError(error.message) };
   if (typeof data !== "string" || !isUuid(data)) return { error: "That policy could not be published." };
   return { id: data };
 }
