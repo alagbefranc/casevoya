@@ -1,6 +1,7 @@
 "use client";
 
 import { showFace, type InviteFace } from "@/lib/auth/invite-face";
+import { PortalSignInFields } from "./portal-sign-in";
 import { toast2 } from "../kit";
 /** Converted from site/app-v2/auth/accept-family.html. Same DOM, classes and copy. */
 export function AcceptFamilyMarkup({ face }: { face?: InviteFace } = {}) {
@@ -25,7 +26,8 @@ export function AcceptFamilyMarkup({ face }: { face?: InviteFace } = {}) {
 <label className="check"><input type="checkbox" id="o3" /><span>Share my school transcript with {applicant}</span></label>
 <p style={{ "marginTop": "14px", "fontSize": "14.5px" }}><a className="tl" href="#" onClick={(event) => { event.preventDefault(); toast2(`Message sent to ${consultant}`, { sub: "They’ll contact you before anything changes on the file." }); }}>I don’t want to take part</a></p></section>
 <section data-step="3" data-title="Sign-in" data-vo="lock" data-cta="Create my account"><div className="wz-head"><div className="wz-vo" data-size="64" data-pose="lock"></div><div><h1>Create your sign-in</h1><p className="lead">Your own account, not {applicant}’s.</p></div></div>
-<div role="radiogroup" aria-label="Sign-in method" style={{ "maxWidth": "520px" }}><button className="opt" role="radio" aria-checked="true" type="button"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-key" /></svg></span><span>Use a passkey<small>Face, fingerprint or phone PIN</small></span></button><button className="opt" role="radio" aria-checked="false" type="button"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-lock" /></svg></span><span>Create a password</span></button></div></section></main><footer className="wz-foot"><button className="btn" data-prev="" type="button"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-chevron-left" /></svg>Back</button><span className="save"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-check-circle" /></svg>Your answers are saved</span><span className="sp"></span><button className="btn p" data-next=""><span className="lab">Continue</span><span className="spin" aria-hidden="true"></span></button></footer></div></div>
+<div role="radiogroup" aria-label="Sign-in method" style={{ "maxWidth": "520px" }}><button className="opt" role="radio" aria-checked="false" type="button" data-v="passkey"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-key" /></svg></span><span>Use a passkey<small>Face, fingerprint or phone PIN</small></span></button><button className="opt" role="radio" aria-checked="true" type="button" data-v="password"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-lock" /></svg></span><span>Create a password</span></button></div>
+<PortalSignInFields email={email} then="/portal" /></section></main><footer className="wz-foot"><button className="btn" data-prev="" type="button"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-chevron-left" /></svg>Back</button><span className="save"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-check-circle" /></svg>Your answers are saved</span><span className="sp"></span><button className="btn p" data-next=""><span className="lab">Continue</span><span className="spin" aria-hidden="true"></span></button></footer></div></div>
 
 
     </>
