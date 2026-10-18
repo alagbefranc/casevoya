@@ -657,4 +657,38 @@ describe("real client invites and trial", () => {
     const coOwnerMembership = await activeMembership(orgId, coOwner, "firm_owner", owner);
     await expectDbError(() => declareLicence(owner, orgId, coOwnerMembership, "R700002"), /licence declaration denied/);
   });
+
+  it("creates one real sample case of sample rows, and only for staff", async () => {
+    const owner = await createUser(`owner-${randomUUID().slice(0, 8)}@example.test`);
+    const orgId = await createOrg(owner);
+    await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    const first = await db.query<{ id: string }>(`select public.ensure_sample_case() as id`);
+    const again = await db.query<{ id: string }>(`select public.ensure_sample_case() as id`);
+    expect(again.rows[0].id).toBe(first.rows[0].id);
+
+    await asMaintenance(db);
+    const rows = await db.query<{ matters: number; people: number; parties: number; real: number }>(
+      `select
+         (select count(*)::int from public.matters where organization_id = $1) as matters,
+         (select count(*)::int from public.persons where organization_id = $1) as people,
+         (select count(*)::int from public.matter_participants where organization_id = $1 and person_id is not null) as parties,
+         (select count(*)::int from public.persons where organization_id = $1 and not is_sample)
+           + (select count(*)::int from public.matters where organization_id = $1 and not is_sample) as real`,
+      [orgId],
+    );
+    expect(rows.rows[0]).toEqual({ matters: 1, people: 2, parties: 2, real: 0 });
+
+    // The owner who made it can read its sample people (they are assigned to the sample matter).
+    await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    const visible = await db.query<{ display_name: string }>(
+      `select display_name from public.persons where organization_id = $1 order by display_name`,
+      [orgId],
+    );
+    expect(visible.rows.map((row) => row.display_name)).toEqual(["Priya Sharma", "Rafael Sharma"]);
+
+    const assistant = await createUser(`assistant-${randomUUID().slice(0, 8)}@example.test`);
+    await activeMembership(orgId, assistant, "assistant", owner);
+    await asUser(db, { userId: assistant, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    await expectDbError(() => db.query(`select public.ensure_sample_case()`), /sample case denied/);
+  });
 });
