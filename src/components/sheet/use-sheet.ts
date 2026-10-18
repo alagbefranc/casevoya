@@ -7,7 +7,7 @@ import { dialogId, withoutDialog } from "@/modules/sheet/matter-wire";
 import { withoutNew } from "@/modules/sheet/new-matter";
 import { sheetStateCopy } from "@/modules/sheet/present";
 import { INVITE_DIALOG } from "@/modules/sheet/staff-present";
-import { reopenAgreementDialogs, runApproveTemplate, runNewAgreement, runNewTemplate } from "./agreement-acts";
+import { prefillAgreementTerms, reopenAgreementDialogs, runApproveTemplate, runNewAgreement, runNewTemplate } from "./agreement-acts";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { runNewTask, syncNewTask } from "./new-task-act";
@@ -416,6 +416,11 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
 
     const newAgreement = root.querySelector<HTMLDialogElement>("dialog#dlgNewQ");
     if (newAgreement?.querySelector("[data-new-agreement]")) {
+      // Choosing a template fills in its terms (fee, currency, not included, refund policy, government fees).
+      prefillAgreementTerms(newAgreement);
+      newAgreement.addEventListener("change", (event) => {
+        if ((event.target as Element | null)?.id === "nqT") prefillAgreementTerms(newAgreement);
+      }, listen);
       // ?dlg=agreement (from a matter page, or back from step-up) and ?dlg=template reopen the live dialogs.
       window.setTimeout(() => reopenAgreementDialogs(root, openDialog), 300);
       for (const live of [newAgreement, root.querySelector<HTMLDialogElement>("dialog#dlgTpl")]) {

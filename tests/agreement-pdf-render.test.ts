@@ -1,48 +1,13 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { inflateSync } from "node:zlib";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { FOOTER_NOTICE, renderAgreementPdf, renderCertificatePdf } from "@/modules/agreements/pdf-render";
 import { formatInZone, formatMoney, formatUtc, paragraphs, pdfSafeText, wrapText } from "@/modules/agreements/pdf-text";
 import { agreementTerms } from "@/modules/agreements/seal-source";
 import { SAMPLE_BODY, sampleLogo, sampleSource } from "./fixtures/agreement-seal-fixture";
-
-// Windows-1252 0x80-0x9F (Node's TextDecoder may lack it without full ICU).
-const CP1252_HIGH = "€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008dŽ\u008f\u0090‘’“”•–—˜™š›œ\u009džŸ";
-const decoder = {
-  decode: (bytes: Buffer) =>
-    Array.from(bytes, (byte) => (byte >= 0x80 && byte <= 0x9f ? CP1252_HIGH[byte - 0x80] : String.fromCharCode(byte))).join(""),
-};
-
-/** Every string drawn in the PDF, page by page, decoded from WinAnsi. */
-function pdfText(bytes: Uint8Array): string {
-  const raw = Buffer.from(bytes);
-  const out: string[] = [];
-  let index = 0;
-  while ((index = raw.indexOf("stream", index)) !== -1) {
-    let start = index + "stream".length;
-    if (raw[start] === 0x0d) start += 1;
-    if (raw[start] === 0x0a) start += 1;
-    const end = raw.indexOf("endstream", start);
-    if (end === -1) break;
-    const body = raw.subarray(start, end);
-    let content: Buffer | null = null;
-    try {
-      content = inflateSync(body);
-    } catch {
-      content = body;
-    }
-    const text = content.toString("latin1");
-    for (const match of text.matchAll(/<([0-9A-Fa-f]*)>\s*Tj/g)) {
-      out.push(decoder.decode(Buffer.from(match[1], "hex")));
-    }
-    for (const match of text.matchAll(/\(((?:\\.|[^\\)])*)\)\s*Tj/g)) out.push(match[1]);
-    index = end + "endstream".length;
-  }
-  return out.join("\n");
-}
+import { pdfText } from "./helpers/pdf-text";
 
 const measure = (value: string) => value.length * 5;
 

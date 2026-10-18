@@ -5,11 +5,16 @@ import {
   agreementStaffError,
   agreementStepUpLocation,
   agreementsHref,
+  DEFAULT_GOVERNMENT_FEE_NOTE,
+  feeInputValue,
   needsStepUp,
   newAgreementHref,
+  parseFeeMinor,
   readNewAgreement,
   readNewTemplate,
+  sameTerms,
   signersFor,
+  templateDefaults,
 } from "@/modules/sheet/agreements-present";
 
 const MATTER = "11111111-1111-4111-8111-111111111111";
@@ -38,8 +43,111 @@ describe("Agreements page words", () => {
     expect(readNewAgreement({ matter: MATTER, template: "", scope: "Prepare it" })).toEqual({ error: "Choose an approved agreement template." });
     expect(readNewAgreement({ matter: MATTER, template: TEMPLATE, scope: " a " })).toEqual({ error: "Describe the services this agreement covers." });
     expect(readNewAgreement({ matter: MATTER, template: TEMPLATE, scope: "  Prepare   the PR application " })).toEqual({
-      input: { matterId: MATTER, templateId: TEMPLATE, scope: "Prepare the PR application" },
+      input: {
+        matterId: MATTER,
+        templateId: TEMPLATE,
+        scope: "Prepare the PR application",
+        exclusions: null,
+        refundPolicy: null,
+        feeCents: null,
+        currency: "CAD",
+        governmentFeeNote: null,
+      },
     });
+  });
+
+  it("reads the agreement terms: fee in minor units, currency, and the notes with their line breaks", () => {
+    const base = { matter: MATTER, template: TEMPLATE, scope: "Prepare the PR application" };
+    expect(
+      readNewAgreement({
+        ...base,
+        fee: " 1,500.5 ",
+        currency: "usd",
+        exclusions: "  Appeals\r\nJudicial review   \n\n\n\nTranslations ",
+        refund: "Unearned advances are refunded.",
+        government: DEFAULT_GOVERNMENT_FEE_NOTE,
+      }),
+    ).toEqual({
+      input: {
+        matterId: MATTER,
+        templateId: TEMPLATE,
+        scope: "Prepare the PR application",
+        exclusions: "Appeals\nJudicial review\n\nTranslations",
+        refundPolicy: "Unearned advances are refunded.",
+        feeCents: 150050,
+        currency: "USD",
+        governmentFeeNote: DEFAULT_GOVERNMENT_FEE_NOTE,
+      },
+    });
+    expect(readNewAgreement({ ...base, fee: "-5" })).toEqual({ error: "A professional fee can’t be negative." });
+    expect(readNewAgreement({ ...base, fee: "1.234" })).toEqual({ error: "Enter the professional fee as an amount, like 1,500.00." });
+    expect(readNewAgreement({ ...base, currency: "C$" })).toEqual({ error: "Choose the currency." });
+    expect(readNewAgreement({ ...base, exclusions: "x".repeat(2001) })).toEqual({ error: "Keep what is not included to 2,000 characters." });
+    expect(readNewAgreement({ ...base, refund: "x".repeat(2001) })).toEqual({ error: "Keep the refund policy to 2,000 characters." });
+    expect(readNewAgreement({ ...base, government: "x".repeat(501) })).toEqual({ error: "Keep the government fees note to 500 characters." });
+    // The scope is still required before any term is looked at.
+    expect(readNewAgreement({ ...base, scope: "", fee: "100" })).toEqual({ error: "Describe the services this agreement covers." });
+  });
+
+  it("parses a professional fee without floating point", () => {
+    expect(parseFeeMinor("")).toEqual({ cents: null });
+    expect(parseFeeMinor("   ")).toEqual({ cents: null });
+    expect(parseFeeMinor("0")).toEqual({ cents: 0 });
+    expect(parseFeeMinor("1500")).toEqual({ cents: 150000 });
+    expect(parseFeeMinor("$1,500.00")).toEqual({ cents: 150000 });
+    expect(parseFeeMinor("CAD 1 500.1")).toEqual({ cents: 150010 });
+    expect(parseFeeMinor("0.29")).toEqual({ cents: 29 });
+    expect(parseFeeMinor(".5")).toEqual({ cents: 50 });
+    expect(parseFeeMinor("1500.")).toEqual({ cents: 150000 });
+    expect(parseFeeMinor("10000000")).toEqual({ cents: 1_000_000_000 });
+    expect(parseFeeMinor("10000000.01")).toEqual({ error: "That professional fee is too large." });
+    for (const bad of ["abc", "1.2.3", "1e5", ".", "12.345", "1,5O0"]) {
+      expect(parseFeeMinor(bad)).toEqual({ error: "Enter the professional fee as an amount, like 1,500.00." });
+    }
+    expect(feeInputValue(150050)).toBe("1500.50");
+    expect(feeInputValue("7")).toBe("0.07");
+    expect(feeInputValue(null)).toBe("");
+  });
+
+  it("reuses an unsent draft only when every term is the same", () => {
+    const terms = {
+      scope: "Prepare it",
+      exclusions: "Appeals",
+      refundPolicy: null,
+      feeCents: 150000,
+      currency: "CAD",
+      governmentFeeNote: DEFAULT_GOVERNMENT_FEE_NOTE,
+    };
+    const version = {
+      scope_summary: "Prepare it",
+      exclusions: "Appeals",
+      refund_policy: null,
+      fee_cents: 150000,
+      currency: "CAD",
+      government_fee_note: DEFAULT_GOVERNMENT_FEE_NOTE,
+    };
+    expect(sameTerms(version, terms)).toBe(true);
+    expect(sameTerms({ ...version, fee_cents: "150000" }, terms)).toBe(true);
+    expect(sameTerms(version, { ...terms, feeCents: 160000 })).toBe(false);
+    expect(sameTerms(version, { ...terms, feeCents: null })).toBe(false);
+    expect(sameTerms(version, { ...terms, currency: "USD" })).toBe(false);
+    expect(sameTerms(version, { ...terms, exclusions: null })).toBe(false);
+    expect(sameTerms(version, { ...terms, refundPolicy: "Refunds" })).toBe(false);
+    expect(sameTerms(version, { ...terms, governmentFeeNote: null })).toBe(false);
+    expect(sameTerms(version, { ...terms, scope: "Prepare more" })).toBe(false);
+  });
+
+  it("starts a template with its last agreement's terms, or a neutral government fees note with no amount", () => {
+    const fresh = templateDefaults(null);
+    expect(fresh).toEqual({ fee: "", currency: "CAD", exclusions: "", refund: "", government: DEFAULT_GOVERNMENT_FEE_NOTE });
+    expect(DEFAULT_GOVERNMENT_FEE_NOTE).not.toMatch(/\d/);
+    expect(
+      templateDefaults({ exclusions: "Appeals", refund_policy: "Refunds", fee_cents: 250000, currency: "USD", government_fee_note: "Paid to IRCC." }),
+    ).toEqual({ fee: "2500.00", currency: "USD", exclusions: "Appeals", refund: "Refunds", government: "Paid to IRCC." });
+    // An older agreement made before the terms were captured still starts with the neutral note.
+    expect(templateDefaults({ exclusions: null, refund_policy: null, fee_cents: null, currency: "CAD", government_fee_note: null }).government).toBe(
+      DEFAULT_GOVERNMENT_FEE_NOTE,
+    );
   });
 
   it("checks a new template and only offers kinds that are sent for signature", () => {

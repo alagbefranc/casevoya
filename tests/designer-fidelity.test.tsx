@@ -699,9 +699,21 @@ describe("Designer fidelity", () => {
             matterLabel: "Matter",
             templateLabel: "Approved template",
             matters: [{ value: "11111111-1111-4111-8111-111111111111", left: "Dana Lee · CV-2026-0001" }],
-            templates: [{ value: "22222222-2222-4222-8222-222222222222", left: "Service · Service agreement" }],
+            templates: [
+              {
+                value: "22222222-2222-4222-8222-222222222222",
+                left: "Service · Service agreement",
+                defaults: { fee: "1500.00", currency: "CAD", exclusions: "Appeals", refund: "Unearned advances", government: "Paid to IRCC." },
+              },
+            ],
             submit: "Create and send",
-            live: { organizationId: org, sampleMode: false, blocked: null },
+            live: {
+              organizationId: org,
+              sampleMode: false,
+              currencies: ["CAD", "USD"],
+              defaults: { fee: "1500.00", currency: "CAD", exclusions: "Appeals", refund: "Unearned advances", government: "Paid to IRCC." },
+              blocked: null,
+            },
           },
         }),
         createElement(TemplateDialog, {
@@ -711,6 +723,15 @@ describe("Designer fidelity", () => {
     );
     expect(html).toContain(`data-new-agreement="1" data-org="${org}"`);
     expect(html).not.toContain('data-goto-tab="quote"');
+    // Live, the dialog is the Designer's landscape dialog with the agreement terms as its own fields.
+    expect(html).toContain('<dialog class="dlg wide" id="dlgNewQ"');
+    expect(html).toMatch(/<div class="g2"><div class="fld"><label for="nqF">Professional fee<\/label>[\s\S]*?<label for="nqCur">Currency<\/label><select class="sel" id="nqCur"/);
+    for (const [id, label] of [["nqX", "Not included"], ["nqR", "Refund policy"], ["nqG", "Government fees"]]) {
+      expect(html).toContain(`<label for="${id}">${label}</label>`);
+      expect(html).toMatch(new RegExp(`<textarea class="ta" id="${id}"`));
+    }
+    expect(html).toMatch(/id="nqF" type="text" inputmode="decimal"/i);
+    expect(html).toContain('data-fee="1500.00" data-currency="CAD"');
     expect(html).toContain(`data-new-template="1" data-org="${org}"`);
     expect(html).toContain(`data-approve-template="44444444-4444-4444-8444-444444444444" data-org="${org}"`);
     // Never the New matter dialog's id or save attribute.

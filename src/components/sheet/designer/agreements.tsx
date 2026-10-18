@@ -3,10 +3,13 @@
  * the firm's records. Same DOM, classes and order. Rows carry `data-f` (the filter chips:
  * waiting, executed, quote, closed) so the kit can filter real rows; the captured rows have none.
  *
- * The header's button opens the Designer's `#dlgNewQ`. Given `live`, that dialog lists the firm's
- * matters and approved agreement templates, adds a scope field, and its submit button carries
- * `data-new-agreement` (create from the template, then send for in-house signature) in place of
- * the Designer's `data-close` / `data-goto-tab`. `#dlgTpl` (new agreement template, and approve a
+ * The header's button opens the Designer's `#dlgNewQ`. Given `live`, that dialog is the
+ * Designer's landscape `.dlg.wide` (its body scrolls), lists the firm's matters and approved
+ * agreement templates, and adds the agreement's terms as the Designer's own `.fld` fields, with
+ * the Quote builder's words: scope, professional fee and currency (a `.g2` pair), not included,
+ * refund policy and government fees. Its submit button carries `data-new-agreement` (create from
+ * the template, then send for in-house signature) in place of the Designer's `data-close` /
+ * `data-goto-tab`. `#dlgTpl` (new agreement template, and approve a
  * draft) has no Designer original; it uses the Designer's dialog anatomy (`.dlg`, `.fld`, `.inp`,
  * `.ta`, `.li`) and only renders live.
  */
@@ -48,7 +51,16 @@ export type AgreementsData = {
 
 export type AgreementsHeaderData = { records: number; waiting: number; create: string };
 
-export type DialogOption = { value?: string; left: string; right?: string };
+/** What choosing a template fills in (only fields the person has not changed). */
+export type AgreementTermDefaults = { fee: string; currency: string; exclusions: string; refund: string; government: string };
+
+export type DialogOption = {
+  value?: string;
+  left: string;
+  right?: string;
+  /** Live template options only: the terms this template starts with, as `data-*` on the option. */
+  defaults?: AgreementTermDefaults;
+};
 
 export type NewAgreementDialogData = {
   title: string;
@@ -61,6 +73,10 @@ export type NewAgreementDialogData = {
   live?: {
     organizationId: string;
     sampleMode: boolean;
+    /** The currency codes offered next to the fee. */
+    currencies: string[];
+    /** The first template's terms, filled in when the dialog renders. */
+    defaults: AgreementTermDefaults;
     /** Why the dialog cannot send yet (no approved template, no matter with an applicant). */
     blocked: { title: string; copy: string; action?: { label: string; dialog: string } } | null;
   };
@@ -251,7 +267,32 @@ export function SheetAgreements({ data }: { data: AgreementsData }) {
 }
 
 function Option({ option }: { option: DialogOption }) {
-  return <option value={option.value}>{option.right ? <Pair left={option.left} right={option.right} /> : option.left}</option>;
+  const terms = option.defaults;
+  return (
+    <option
+      value={option.value}
+      data-fee={terms?.fee}
+      data-currency={terms?.currency}
+      data-exclusions={terms?.exclusions}
+      data-refund={terms?.refund}
+      data-government={terms?.government}
+    >
+      {option.right ? <Pair left={option.left} right={option.right} /> : option.left}
+    </option>
+  );
+}
+
+/** A `.fld` textarea with a hint, the Designer's dialog anatomy. */
+function Area({ id, label, hint, max, rows, value }: { id: string; label: string; hint: string; max: number; rows: number; value: string }) {
+  return (
+    <div className={"fld"}>
+      <label htmlFor={id}>{label}</label>
+      <small className={"hint"} id={`${id}-h`}>
+        {hint}
+      </small>
+      <textarea className={"ta"} id={id} aria-describedby={`${id}-h`} maxLength={max} rows={rows} defaultValue={value} data-prefilled={value}></textarea>
+    </div>
+  );
 }
 
 function Select({ id, label, options }: { id: string; label: string; options: DialogOption[] }) {
@@ -283,7 +324,7 @@ function Alert({ tone, icon, title, children }: { tone: "warn" | "info"; icon: s
 export function NewAgreementDialog({ data }: { data: NewAgreementDialogData }) {
   const live = data.live;
   return (
-    <dialog className={"dlg"} id={"dlgNewQ"} aria-labelledby={"dlgNewQH"}>
+    <dialog className={live ? "dlg wide" : "dlg"} id={"dlgNewQ"} aria-labelledby={"dlgNewQH"}>
       <div className={"dh"}>
         <h2 id={"dlgNewQH"}>{data.title}</h2>
         <button className={"x"} aria-label={"Close"} data-close={"dlgNewQ"}>
@@ -300,8 +341,62 @@ export function NewAgreementDialog({ data }: { data: NewAgreementDialogData }) {
               <small className={"hint"} id={"nqS-h"}>
                 {"What the firm will do. The client sees it with the agreement text."}
               </small>
-              <textarea className={"ta"} id={"nqS"} aria-describedby={"nqS-h"} maxLength={2000}></textarea>
+              <textarea className={"ta"} id={"nqS"} aria-describedby={"nqS-h"} maxLength={2000} rows={3}></textarea>
             </div>
+            <div className={"g2"}>
+              <div className={"fld"}>
+                <label htmlFor={"nqF"}>{"Professional fee"}</label>
+                <small className={"hint"} id={"nqF-h"}>
+                  {"The firm’s fee for this scope. Leave blank if the agreement states no fee."}
+                </small>
+                <input
+                  className={"inp"}
+                  id={"nqF"}
+                  type={"text"}
+                  inputMode={"decimal"}
+                  autoComplete={"off"}
+                  placeholder={"0.00"}
+                  aria-describedby={"nqF-h"}
+                  maxLength={16}
+                  defaultValue={live.defaults.fee}
+                  data-prefilled={live.defaults.fee}
+                />
+              </div>
+              <div className={"fld"}>
+                <label htmlFor={"nqCur"}>{"Currency"}</label>
+                <select className={"sel"} id={"nqCur"} defaultValue={live.defaults.currency} data-prefilled={live.defaults.currency}>
+                  {live.currencies.map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <Area
+              id={"nqX"}
+              label={"Not included"}
+              hint={"Services this agreement does not cover. Optional."}
+              max={2000}
+              rows={3}
+              value={live.defaults.exclusions}
+            />
+            <Area
+              id={"nqR"}
+              label={"Refund policy"}
+              hint={"When fees are refunded. Optional; your professional reviewer owns the wording."}
+              max={2000}
+              rows={3}
+              value={live.defaults.refund}
+            />
+            <Area
+              id={"nqG"}
+              label={"Government fees"}
+              hint={"Government fees are separate from the professional fee. Don’t state amounts unless you checked the IRCC fee list."}
+              max={500}
+              rows={2}
+              value={live.defaults.government}
+            />
             {live.sampleMode ? (
               <Alert tone={"warn"} icon={"info"} title={"This firm is in sample mode"}>
                 {"Only sample matters take agreements until sample mode is turned off. Nobody real is asked to sign."}

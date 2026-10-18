@@ -42,17 +42,60 @@ function settle(router: Router) {
   router.refresh();
 }
 
+/** The New agreement dialog's term fields, by id, and the template option's `data-*` default for each. */
+const TERM_FIELDS = [
+  { id: "nqF", key: "fee" },
+  { id: "nqCur", key: "currency" },
+  { id: "nqX", key: "exclusions" },
+  { id: "nqR", key: "refund" },
+  { id: "nqG", key: "government" },
+] as const;
+
+function agreementFields(root: ParentNode) {
+  return {
+    matter: value(root, "nqC"),
+    template: value(root, "nqT"),
+    scope: value(root, "nqS"),
+    fee: value(root, "nqF"),
+    currency: value(root, "nqCur"),
+    exclusions: value(root, "nqX"),
+    refund: value(root, "nqR"),
+    government: value(root, "nqG"),
+  };
+}
+
+/**
+ * Fills the term fields from the chosen template's defaults. A field the person changed (its
+ * value is neither empty nor what was last filled in) keeps what they typed.
+ */
+export function prefillAgreementTerms(root: ParentNode) {
+  const template = root.querySelector<HTMLSelectElement>("#nqT");
+  const option = template?.selectedOptions[0];
+  if (!option) return;
+  for (const { id, key } of TERM_FIELDS) {
+    const field = root.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`#${id}`);
+    const next = option.dataset[key];
+    if (!field || next === undefined) continue;
+    const untouched = field.value === "" || field.value === (field.dataset.prefilled ?? "");
+    if (!untouched) continue;
+    if (field instanceof HTMLSelectElement && ![...field.options].some((choice) => choice.value === next)) continue;
+    field.value = next;
+    field.dataset.prefilled = next;
+  }
+}
+
 /** New agreement: create from the chosen approved template, then send it. The database decides. */
 export async function runNewAgreement(button: HTMLElement, router: Router) {
   const dialog = button.closest("dialog");
   if (!dialog) return;
-  const fields = { matter: value(dialog, "nqC"), template: value(dialog, "nqT"), scope: value(dialog, "nqS") };
+  const fields = agreementFields(dialog);
   const read = readNewAgreement(fields);
   if ("error" in read) {
     toast2(read.error, { kind: "warn", sub: "Nothing was sent." });
     return;
   }
-  const result = await createAndSendAgreement({ organizationId: button.dataset.org ?? "", ...read.input });
+  // The fee goes as typed; the server converts it to minor units and checks everything again.
+  const result = await createAndSendAgreement({ organizationId: button.dataset.org ?? "", ...fields });
   if ("error" in result) {
     if (needsStepUp(result.error)) {
       keep({ ...fields, dialog: AGREEMENT_DIALOG });
@@ -130,9 +173,10 @@ export function reopenAgreementDialogs(root: ParentNode, open: (id: string) => v
   } catch {
     draft = null;
   }
-  const set = (id: string, next: unknown) => {
+  // `blank`: an emptied field (no fee, no refund policy) comes back empty, not refilled.
+  const set = (id: string, next: unknown, blank = false) => {
     const field = root.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`#${id}`);
-    if (!field || typeof next !== "string" || !next) return;
+    if (!field || typeof next !== "string" || (!next && !blank)) return;
     if (field instanceof HTMLSelectElement && ![...field.options].some((option) => option.value === next)) return;
     field.value = next;
   };
@@ -141,7 +185,13 @@ export function reopenAgreementDialogs(root: ParentNode, open: (id: string) => v
     if (draft?.dialog === AGREEMENT_DIALOG) {
       set("nqC", draft.matter);
       set("nqT", draft.template);
+      prefillAgreementTerms(root);
       set("nqS", draft.scope);
+      set("nqF", draft.fee, true);
+      set("nqCur", draft.currency);
+      set("nqX", draft.exclusions, true);
+      set("nqR", draft.refund, true);
+      set("nqG", draft.government, true);
     }
     open("dlgNewQ");
     return;

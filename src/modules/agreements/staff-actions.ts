@@ -5,8 +5,10 @@ import { isUuid } from "@/lib/tenant/context";
 import {
   agreementStaffError,
   isSendableKind,
+  type NewAgreementFields,
   readNewAgreement,
   readNewTemplate,
+  sameTerms,
   signersFor,
 } from "@/modules/sheet/agreements-present";
 
@@ -60,22 +62,21 @@ export async function approveAgreementTemplate(input: {
 /**
  * Creates an agreement on a matter from an approved template, then sends it for in-house
  * signature: the applicant first, then the sponsor when there is one. A draft this firm already
- * made from the same template on the same matter, and never sent, is sent instead of making a
- * second one (so a retry after a step-up does not leave duplicate drafts).
+ * made from the same template on the same matter, with exactly the same terms (scope, fee,
+ * currency, exclusions, refund policy, government fees note), and never sent, is sent instead of
+ * making a second one (so a retry after a step-up does not leave duplicate drafts). The fee comes
+ * in as typed and is converted to minor units here.
  */
-export async function createAndSendAgreement(input: {
-  organizationId: string;
-  matterId: string;
-  templateId: string;
-  scope: string;
-}): Promise<{ agreementId: string; status: string } | { error: string; draftId?: string }> {
-  const read = readNewAgreement({ matter: input.matterId, template: input.templateId, scope: input.scope });
+export async function createAndSendAgreement(
+  input: { organizationId: string } & NewAgreementFields,
+): Promise<{ agreementId: string; status: string } | { error: string; draftId?: string }> {
+  const read = readNewAgreement(input);
   if ("error" in read) return { error: read.error };
   const session = await staffClient(input.organizationId);
   if ("error" in session) return { error: session.error ?? "Sign in first." };
   const { supabase } = session;
   const org = input.organizationId;
-  const { matterId, templateId, scope } = read.input;
+  const { matterId, templateId, ...terms } = read.input;
 
   const [template, participants] = await Promise.all([
     supabase.from("agreement_templates").select("id, kind, name, status").eq("organization_id", org).eq("id", templateId).maybeSingle(),
@@ -91,7 +92,7 @@ export async function createAndSendAgreement(input: {
   const signers = signersFor(participants.data ?? [], names);
   if (signers.length === 0) return { error: "This matter has no applicant to sign. Add the applicant to the matter first." };
 
-  // An unsent draft from this template on this matter, with the same scope, is reused.
+  // An unsent draft from this template on this matter, with the same terms, is reused.
   const drafts = await supabase
     .from("agreements")
     .select("id, current_version_id")
@@ -103,9 +104,14 @@ export async function createAndSendAgreement(input: {
     .limit(1);
   const draft = drafts.data?.[0];
   const draftVersion = draft?.current_version_id
-    ? await supabase.from("agreement_versions").select("scope_summary").eq("organization_id", org).eq("id", draft.current_version_id).maybeSingle()
+    ? await supabase
+        .from("agreement_versions")
+        .select("scope_summary, exclusions, refund_policy, fee_cents, currency, government_fee_note")
+        .eq("organization_id", org)
+        .eq("id", draft.current_version_id)
+        .maybeSingle()
     : null;
-  let agreementId = draft && draftVersion?.data?.scope_summary === scope ? draft.id : null;
+  let agreementId = draft && draftVersion?.data && sameTerms(draftVersion.data, terms) ? draft.id : null;
   if (!agreementId) {
     const created = await supabase.rpc("create_agreement", {
       p_matter_id: matterId,
@@ -113,12 +119,12 @@ export async function createAndSendAgreement(input: {
       p_title: template.data.name,
       // Null takes the approved template's text (the generated type says string; the function allows null).
       p_body: null as unknown as string,
-      p_scope: scope,
-      p_exclusions: null,
-      p_refund_policy: null,
-      p_fee_cents: null,
-      p_currency: "CAD",
-      p_government_fee_note: null,
+      p_scope: terms.scope,
+      p_exclusions: terms.exclusions,
+      p_refund_policy: terms.refundPolicy,
+      p_fee_cents: terms.feeCents,
+      p_currency: terms.currency,
+      p_government_fee_note: terms.governmentFeeNote,
       p_template_id: templateId,
       p_quote_expires_on: null,
       p_supersedes_id: null,
