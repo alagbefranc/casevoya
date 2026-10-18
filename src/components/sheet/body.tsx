@@ -2,7 +2,9 @@ import { notFound, redirect } from "next/navigation";
 import { DemoSheet } from "@/components/sheet/demo";
 import { AgreementsHeader, NewAgreementDialog, SheetAgreements, TemplateDialog } from "@/components/sheet/designer/agreements";
 import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet/designer/clients";
+import { FinanceHeader, NewInvoiceDialog, SheetFinance, SheetFinancePayments } from "@/components/sheet/designer/finance";
 import { SheetFrame } from "@/components/sheet/designer/frame";
+import { StripeConnectPanel } from "@/components/sheet/stripe-connect";
 import { SheetHome } from "@/components/sheet/designer/home";
 import { MatterDialogs, MatterRbar, MatterTopBar, SheetMatter } from "@/components/sheet/designer/matter";
 import { MATTER_CSS } from "@/components/sheet/designer/matter-css";
@@ -19,6 +21,7 @@ import { homeRoute } from "@/lib/auth/home-route";
 import { signInLocation } from "@/lib/auth/redirect";
 import { loadSheetAgreements } from "@/modules/sheet/agreements-load";
 import { loadSheetClients } from "@/modules/sheet/clients-load";
+import { loadSheetFinance } from "@/modules/sheet/finance-load";
 import { loadSheetHome } from "@/modules/sheet/home-load";
 import { loadSheetPortalPolicies } from "@/modules/sheet/portal-policies-load";
 import { loadSheetMatter } from "@/modules/sheet/matter-load";
@@ -184,6 +187,32 @@ export async function SheetBody({
           }
         >
           <SheetAgreements data={agreements} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Finance, Invoices and Payments tabs. Client funds, reconciliation, refunds and the single
+  // invoice view are not ported yet and keep their old view.
+  if (page === "finance" && (!query.tab || query.tab === "invoices" || query.tab === "payments") && (access.kind === "live" || access.kind === "sample")) {
+    const tab = query.tab === "payments" ? "payments" : "invoices";
+    const finance = await loadSheetFinance(access.staff, tab);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={finance.chrome.sidebar}
+          header={<FinanceHeader data={finance.header} />}
+          statusbar={finance.chrome.statusbar}
+          after={<NewInvoiceDialog data={finance.dialog} />}
+        >
+          {tab === "payments" ? (
+            <SheetFinancePayments
+              intro={`Clients pay ${finance.account.firmName}’s invoices by card into the firm’s own Stripe account. Stripe runs in test mode: no real card is charged. Casevoya never holds the money.`}
+            >
+              <StripeConnectPanel data={finance.account} />
+            </SheetFinancePayments>
+          ) : (
+            <SheetFinance data={finance.page} />
+          )}
         </SheetFrame>
       </SheetScreen>
     );

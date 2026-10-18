@@ -7,6 +7,8 @@ import { PortalScreen } from "@/components/portal/screen";
 import { signInLocation } from "@/lib/auth/redirect";
 import { loadPortalAgreements } from "@/modules/agreements/load";
 import { loadPortalDocuments } from "@/modules/documents/load";
+import { loadPortalInvoices } from "@/modules/finance/portal-load";
+import { isUuid } from "@/lib/tenant/context";
 import { loadPortalAccess } from "@/modules/portal/load";
 import { payStateFromQuery } from "@/modules/portal/pay";
 
@@ -23,7 +25,7 @@ async function Body({
   searchParams,
 }: {
   params: Promise<{ slug?: string[] }>;
-  searchParams: Promise<{ state?: string | string[] }>;
+  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[] }>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const page = slug?.[0] ?? "home";
@@ -50,9 +52,14 @@ async function Body({
   }
   const documents = page === "documents" || page === "upload" ? await loadPortalDocuments(access.viewer) : null;
   const agreements = page === "agreements" ? await loadPortalAgreements(access.viewer) : null;
+  const invoiceValue = Array.isArray(query.invoice) ? query.invoice[0] : query.invoice;
+  const payments =
+    page === "payments" || page === "pay"
+      ? { data: await loadPortalInvoices(access.viewer), invoiceId: isUuid(invoiceValue) ? invoiceValue : null }
+      : null;
   return (
     <PortalScreen page={page}>
-      <LivePortal page={page} viewer={access.viewer} documents={documents} agreements={agreements} />
+      <LivePortal page={page} viewer={access.viewer} documents={documents} agreements={agreements} payments={payments} />
     </PortalScreen>
   );
 }
@@ -62,7 +69,7 @@ export default function PortalPage({
   searchParams,
 }: {
   params: Promise<{ slug?: string[] }>;
-  searchParams: Promise<{ state?: string | string[] }>;
+  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[] }>;
 }) {
   return (
     <Suspense fallback={<PortalScreen page="home"><EmptyPortal /></PortalScreen>}>

@@ -4937,11 +4937,302 @@ export type Database = {
           },
         ]
       }
+      firm_payment_accounts: {
+        Row: {
+          account_id: string
+          card_payments_status: string
+          created_at: string
+          created_by: string | null
+          id: string
+          livemode: boolean
+          organization_id: string
+          payouts_status: string
+          provider: string
+          requirements_due: number
+          status_checked_at: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          account_id: string
+          card_payments_status?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          livemode?: boolean
+          organization_id: string
+          payouts_status?: string
+          provider?: string
+          requirements_due?: number
+          status_checked_at?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          account_id?: string
+          card_payments_status?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          livemode?: boolean
+          organization_id?: string
+          payouts_status?: string
+          provider?: string
+          requirements_due?: number
+          status_checked_at?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      invoices: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          created_by: string | null
+          currency: string
+          description: string
+          due_on: string
+          fee_category: string
+          id: string
+          idempotency_key: string
+          is_sample: boolean
+          issued_on: string | null
+          matter_id: string
+          number: string
+          organization_id: string
+          paid_cents: number
+          status: Database["public"]["Enums"]["invoice_status"]
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description: string
+          due_on: string
+          fee_category?: string
+          id?: string
+          idempotency_key: string
+          is_sample?: boolean
+          issued_on?: string | null
+          matter_id: string
+          number: string
+          organization_id: string
+          paid_cents?: number
+          status?: Database["public"]["Enums"]["invoice_status"]
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string
+          due_on?: string
+          fee_category?: string
+          id?: string
+          idempotency_key?: string
+          is_sample?: boolean
+          issued_on?: string | null
+          matter_id?: string
+          number?: string
+          organization_id?: string
+          paid_cents?: number
+          status?: Database["public"]["Enums"]["invoice_status"]
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      invoice_payments: {
+        Row: {
+          amount_cents: number
+          amount_received_cents: number
+          application_fee_cents: number
+          connected_account_id: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          invoice_id: string
+          last_event_id: string | null
+          livemode: boolean
+          organization_id: string
+          payment_intent_id: string
+          provider: string
+          status: Database["public"]["Enums"]["invoice_payment_status"]
+          succeeded_at: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          amount_cents: number
+          amount_received_cents?: number
+          application_fee_cents?: number
+          connected_account_id: string
+          created_at?: string
+          created_by?: string | null
+          currency: string
+          id?: string
+          invoice_id: string
+          last_event_id?: string | null
+          livemode?: boolean
+          organization_id: string
+          payment_intent_id: string
+          provider?: string
+          status?: Database["public"]["Enums"]["invoice_payment_status"]
+          succeeded_at?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          amount_cents?: number
+          amount_received_cents?: number
+          application_fee_cents?: number
+          connected_account_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          invoice_id?: string
+          last_event_id?: string | null
+          livemode?: boolean
+          organization_id?: string
+          payment_intent_id?: string
+          provider?: string
+          status?: Database["public"]["Enums"]["invoice_payment_status"]
+          succeeded_at?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      invoice_payment_events: {
+        Row: {
+          amount_cents: number | null
+          connected_account_id: string
+          created_at: string
+          currency: string | null
+          detail: string | null
+          event_id: string
+          event_type: string
+          id: string
+          invoice_id: string
+          invoice_status: Database["public"]["Enums"]["invoice_status"]
+          organization_id: string
+          outcome: string
+          payment_id: string
+          payment_status: Database["public"]["Enums"]["invoice_payment_status"]
+          provider: string
+          webhook_inbox_id: string
+        }
+        Insert: {
+          amount_cents?: number | null
+          connected_account_id: string
+          created_at?: string
+          currency?: string | null
+          detail?: string | null
+          event_id: string
+          event_type: string
+          id?: string
+          invoice_id: string
+          invoice_status: Database["public"]["Enums"]["invoice_status"]
+          organization_id: string
+          outcome: string
+          payment_id: string
+          payment_status: Database["public"]["Enums"]["invoice_payment_status"]
+          provider?: string
+          webhook_inbox_id: string
+        }
+        Update: {
+          amount_cents?: number | null
+          connected_account_id?: string
+          created_at?: string
+          currency?: string | null
+          detail?: string | null
+          event_id?: string
+          event_type?: string
+          id?: string
+          invoice_id?: string
+          invoice_status?: Database["public"]["Enums"]["invoice_status"]
+          organization_id?: string
+          outcome?: string
+          payment_id?: string
+          payment_status?: Database["public"]["Enums"]["invoice_payment_status"]
+          provider?: string
+          webhook_inbox_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      firm_payment_account_for_owner: {
+        Args: { p_org: string }
+        Returns: string | null
+      }
+      record_firm_payment_account: {
+        Args: { p_account_id: string; p_livemode: boolean; p_org: string }
+        Returns: string
+      }
+      sync_firm_payment_account: {
+        Args: {
+          p_account_id: string
+          p_card_payments_status: string
+          p_org: string
+          p_payouts_status: string
+          p_requirements_due: number
+        }
+        Returns: undefined
+      }
+      create_invoice: {
+        Args: {
+          p_amount_cents: number
+          p_currency: string
+          p_description: string
+          p_due_on: string
+          p_idempotency_key: string
+          p_matter_id: string
+        }
+        Returns: string
+      }
+      invoice_payment_context: {
+        Args: { p_invoice_id: string }
+        Returns: Json
+      }
+      record_invoice_payment_intent: {
+        Args: {
+          p_account_id: string
+          p_amount_cents: number
+          p_application_fee_cents: number
+          p_currency: string
+          p_invoice_id: string
+          p_livemode: boolean
+          p_payment_intent_id: string
+        }
+        Returns: string
+      }
+      apply_stripe_payment_event: {
+        Args: {
+          p_account_id: string
+          p_amount_cents: number | null
+          p_amount_received_cents: number | null
+          p_currency: string | null
+          p_event_id: string
+          p_event_type: string
+          p_invoice_id: string | null
+          p_livemode: boolean
+          p_payload: Json
+          p_payment_intent_id: string
+        }
+        Returns: Json
+      }
       accept_invitation: { Args: { token: string }; Returns: string }
       close_person_break_glass: {
         Args: { p_id: string }
@@ -5796,6 +6087,19 @@ export type Database = {
       }
     }
     Enums: {
+      invoice_status:
+        | "draft"
+        | "issued"
+        | "partially_paid"
+        | "paid"
+        | "voided"
+        | "credited"
+      invoice_payment_status:
+        | "requires_payment"
+        | "processing"
+        | "succeeded"
+        | "failed"
+        | "canceled"
       email_delivery_status:
         | "pending"
         | "sending"
@@ -6178,6 +6482,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      invoice_status: ["draft", "issued", "partially_paid", "paid", "voided", "credited"],
+      invoice_payment_status: ["requires_payment", "processing", "succeeded", "failed", "canceled"],
       email_delivery_status: [
         "pending",
         "sending",

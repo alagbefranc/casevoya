@@ -18,6 +18,17 @@ Do not commit secrets. Copy the names below into the host environment. Account i
 | `EMAIL_INBOUND_WEBHOOK_SECRET` | HMAC shared with the inbound Worker (`INBOUND_WEBHOOK_SECRET`). |
 | `CLOUDFLARE_ROUTING_API_TOKEN` | Email Routing Rules Write on zone `303990065795d627a9fd337b01258024`. Creates and deletes per-firm rules. |
 | `EMAIL_ROUTING_RECONCILE_SECRET` | Bearer for `POST /api/email/routing/reconcile`. |
+| `STRIPE_TEST_SECRET_KEY` | Stripe **test-mode** secret key (`sk_test_…`, or a restricted `rk_test_…` with Connect accounts (v2), Account Sessions and PaymentIntents write). Creates the firm's connected account, Account Sessions and PaymentIntents. A live key is refused: payments then show as not configured. |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret (`whsec_…`) of the test-mode Connect event destination that posts to `/api/stripe/webhook`. Applying events also needs `SUPABASE_SECRET_KEY`. |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe **test-mode** publishable key (`pk_test_…`). Public; Next.js inlines it at build time, so set it in the build environment (or `.env.production`). Without it the Payments pages say card payments aren't configured. |
+| `STRIPE_CONNECT_DASHBOARD` | Optional. `none` (default: the firm uses Connect embedded components in Casevoya only) or `full` (the firm also gets the Stripe Dashboard), for new connected accounts. Not a secret. |
+
+### Stripe (test mode only)
+
+- Firm = Stripe connected account (Accounts v2: merchant configuration with `card_payments`; Stripe collects fees and owns losses). Client payments are **direct charges** on that account, created as PaymentIntents and confirmed in the page with the Payment Element. No Checkout, no hosted pages.
+- In the Stripe test Dashboard: enable Connect for the platform, then add an event destination for **connected accounts** with URL `https://<app>/api/stripe/webhook` and events `payment_intent.processing`, `payment_intent.succeeded`, `payment_intent.payment_failed`, `payment_intent.canceled`. Put its signing secret in `STRIPE_WEBHOOK_SECRET`.
+- Locally: `stripe listen --forward-connect-to localhost:3000/api/stripe/webhook` prints a `whsec_…` to use as `STRIPE_WEBHOOK_SECRET`.
+- An invoice turns paid only when a verified webhook event is applied (`app.apply_stripe_payment_event`, service role, deduped on provider + connected account + event id). The browser redirect is never proof of payment.
 
 ## App Worker
 

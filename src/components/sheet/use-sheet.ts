@@ -8,6 +8,7 @@ import { withoutNew } from "@/modules/sheet/new-matter";
 import { sheetStateCopy } from "@/modules/sheet/present";
 import { INVITE_DIALOG } from "@/modules/sheet/staff-present";
 import { prefillAgreementTerms, reopenAgreementDialogs, runApproveTemplate, runNewAgreement, runNewTemplate } from "./agreement-acts";
+import { reopenInvoiceDialog, runNewInvoice } from "./finance-acts";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { runNewTask, syncNewTask } from "./new-task-act";
@@ -43,9 +44,14 @@ const FILTER_TOKEN: Record<string, string> = {
   Executed: "executed",
   Quotes: "quote",
   "Declined, voided, expired": "closed",
+  Draft: "draft",
+  Issued: "issued",
+  "Partially paid": "partial",
+  Paid: "paid",
+  "Voided or credited": "closed",
 };
 /** Pages whose `.fp-bar` chips and search filter real rows by their `data-f` tokens. */
-const FILTER_PAGES = new Set(["tasks", "clients", "agreements"]);
+const FILTER_PAGES = new Set(["tasks", "clients", "agreements", "finance"]);
 
 export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
   const router = useRouter();
@@ -150,6 +156,15 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (agreement.getAttribute("aria-busy") === "true" || agreement.hasAttribute("disabled")) return;
         agreement.setAttribute("aria-busy", "true");
         void runNewAgreement(agreement, router).finally(() => agreement.removeAttribute("aria-busy"));
+        return;
+      }
+      // The Finance page's New invoice.
+      const invoice = target.closest<HTMLElement>("[data-new-invoice]");
+      if (invoice && root.contains(invoice)) {
+        event.preventDefault();
+        if (invoice.getAttribute("aria-busy") === "true" || invoice.hasAttribute("disabled")) return;
+        invoice.setAttribute("aria-busy", "true");
+        void runNewInvoice(invoice, router).finally(() => invoice.removeAttribute("aria-busy"));
         return;
       }
       const template = target.closest<HTMLElement>("[data-new-template]");
@@ -434,6 +449,9 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         }, listen);
       }
     }
+
+    // ?dlg=invoice (back from step-up) reopens the live New invoice dialog with what was typed.
+    if (root.querySelector("dialog#dlgInv [data-new-invoice]")) window.setTimeout(() => reopenInvoiceDialog(root, openDialog), 300);
 
     const newTask = root.querySelector<HTMLDialogElement>("dialog#dlgTask");
     if (newTask?.querySelector("[data-new-task]")) {
