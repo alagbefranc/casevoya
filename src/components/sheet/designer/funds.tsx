@@ -8,7 +8,13 @@
  * Live differences from the capture, all in the Designer's own anatomy:
  *   * `#dlgPay` asks whose money it is (client and matter), takes a typed evidence note instead of
  *     an upload (files are not stored yet) and has no Reviewer: any billing person may verify.
- *   * `#dlgVer` adds a Reject with a reason for a payment that isn't on the statement.
+ *   * `#dlgVer` adds a Reject with a reason for a payment that isn't on the statement, and says
+ *     why the person who recorded a payment can't verify it (the firm owner may verify their own,
+ *     shown as "Verified by owner (own entry)"). Verifying issues the receipt (CICC Code s. 32(b)),
+ *     downloaded from the ledger row.
+ *   * An approved transfer reads "Approved — awaiting bank transfer" until the bank transfer is
+ *     recorded (`#dlgBank`, the Designer's "Record the bank transfer next"). A sub-ledger with money
+ *     to withdraw shows "Withdraw by <date>" (CICC Code s. 32(g): 30 days after the invoice).
  *   * `#dlgTr` adds a decline reason; its Approve says who approves. The requester can't approve
  *     their own transfer unless they are the firm owner (decided by Francis), and the dialog says so.
  *   * The "Last reconciliation" tile is "Available": reconciliation is not built.
@@ -87,6 +93,15 @@ function Panel({ panel, index }: { panel: FundsPanel; index: number }) {
                 <td>{row.date}</td>
                 <td>
                   <Parts parts={row.entry} />
+                  {row.receipt ? (
+                    <>
+                      {" "}
+                      <span className={"sep"} aria-hidden={"true"}></span>{" "}
+                      <a href={row.receipt.href} className={"num"} style={{ color: "var(--blue)" }} data-funds-receipt={"1"}>
+                        {row.receipt.label}
+                      </a>
+                    </>
+                  ) : null}
                 </td>
                 <td>
                   <Parts parts={row.evidence} />
@@ -407,9 +422,26 @@ export function VerifyPaymentDialog({ data }: { data: VerifyDialogData }) {
           <span>{"The amount, date and reference match the bank statement"}</span>
         </label>
         {live ? (
-          <Field id={"vWhy"} label={"If it doesn’t match"} hint={"Reject it with a reason. A rejected payment never counts in the client’s balance."}>
-            <textarea className={"ta"} id={"vWhy"} aria-describedby={"vWhy-h"} maxLength={500} rows={2}></textarea>
-          </Field>
+          <>
+            <div className={"alert warn"} id={"vSelf"} hidden>
+              <Icon name={"info"} />
+              <div>
+                <b>{"You recorded this payment"}</b>
+                {"A second person verifies it against the bank statement: the firm owner or another finance user on this matter. You can still reject it if it was recorded by mistake."}
+              </div>
+            </div>
+            <div className={"alert info"} id={"vOwn"} hidden>
+              <Icon name={"info"} />
+              <div>
+                <b>{"Your own entry"}</b>
+                {"As the firm owner you may verify a payment you recorded. It’s shown as “Verified by owner (own entry)” and kept in the audit log."}
+              </div>
+            </div>
+            <Field id={"vWhy"} label={"If it doesn’t match"} hint={"Reject it with a reason. A rejected payment never counts in the client’s balance."}>
+              <textarea className={"ta"} id={"vWhy"} aria-describedby={"vWhy-h"} maxLength={500} rows={2}></textarea>
+            </Field>
+            <p className={"fp-note"}>{"Verifying issues the client’s receipt for the advance (CICC Code s. 32(b)). They can download it from their portal."}</p>
+          </>
         ) : null}
       </div>
       <div className={"df"}>
@@ -457,7 +489,7 @@ export function ApproveTransferDialog({ data }: { data: TransferDialogData }) {
         { term: "For", parts: ["—"], id: "tFor" },
         { term: "Amount", parts: ["—"], id: "tA" },
         { term: "Approvals", parts: ["—"], id: "tAp" },
-        { term: "Bank transfer", parts: ["Made from the client account after approval"], id: "tB" },
+        { term: "Bank transfer", parts: ["Made from the client account after approval, then recorded here"], id: "tB" },
       ]
     : (data.designer?.rows ?? []);
   return (
@@ -537,6 +569,8 @@ export type FundsLiveDialogsData = {
   invoices: FundsOption[];
   /** Entries that can be corrected: value = entry id, data-ledger. */
   corrections: FundsOption[];
+  /** Approved transfers whose bank transfer isn't recorded: value = entry id, data-ledger, data-earliest (invoice date). */
+  bankTransfers: FundsOption[];
   /** Firm owner: may add the client account. */
   isOwner: boolean;
 };
@@ -632,6 +666,35 @@ export function FundsLiveDialogs({ data }: { data: FundsLiveDialogsData }) {
         </Field>
         <Alert tone={"info"} icon={"info"} title={"Nothing is edited or deleted"}>
           {"A correction adds a reversing entry; both stay on the ledger. A verified deposit or a refund can be reversed once. An approved transfer can’t be reversed here."}
+        </Alert>
+      </LiveDialog>
+      <LiveDialog
+        id={"dlgBank"}
+        title={"Record the bank transfer"}
+        submit={
+          <button className={"btn p"} data-funds-bank={"1"} data-org={data.organizationId} data-today={data.today} disabled={data.bankTransfers.length ? undefined : true}>
+            {"Record transfer"}
+          </button>
+        }
+      >
+        <Field id={"bkE"} label={"Approved transfer"}>
+          <select className={"sel"} id={"bkE"} data-ledger-filter={"1"}>
+            <Options options={data.bankTransfers} />
+          </select>
+        </Field>
+        <div className={"g2"}>
+          <Field id={"bkD"} label={"Sent by the bank on"}>
+            <input className={"inp"} id={"bkD"} type={"date"} max={data.today} defaultValue={data.today} />
+          </Field>
+          <Field id={"bkR"} label={"Bank reference"}>
+            <input className={"inp"} id={"bkR"} type={"text"} autoComplete={"off"} maxLength={80} />
+          </Field>
+        </div>
+        <Field id={"bkN"} label={"Note"} hint={"Optional"}>
+          <textarea className={"ta"} id={"bkN"} aria-describedby={"bkN-h"} maxLength={500} rows={2}></textarea>
+        </Field>
+        <Alert tone={"info"} icon={"info"} title={"Withdraw within 30 days of the invoice"}>
+          {"CICC Code s. 32(g): the invoiced amount leaves the client account no later than 30 days after the day the client is invoiced. Record it once your bank has sent it from the client account to the operating account. It can be recorded once."}
         </Alert>
       </LiveDialog>
       <LiveDialog

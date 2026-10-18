@@ -21,7 +21,17 @@ import type {
   TransferDialogData,
   VerifyDialogData,
 } from "@/components/sheet/designer/funds";
-import { ledgerBadge, ledgerLines, ledgerTotals, methodShort, type FundEntry } from "@/modules/finance/client-funds-present";
+import {
+  earliestWithdrawal,
+  ledgerBadge,
+  ledgerLines,
+  ledgerTotals,
+  methodShort,
+  withdrawalState,
+  withdrawalTiming,
+  type FundEntry,
+  type Withdrawal,
+} from "@/modules/finance/client-funds-present";
 import { createClient } from "@/lib/supabase/server";
 import { stripeServer } from "@/lib/stripe/server";
 import { publishableKey } from "@/modules/finance/keys";
@@ -238,21 +248,39 @@ export type ClientFundsPage = {
 async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: boolean, today: string): Promise<ClientFundsPage> {
   const org = staff.organizationId;
   const isOwner = staff.role === "firm_owner";
-  const [claims, accounts, ledgers, entries, partyResult, names] = await Promise.all([
+  const [claims, accounts, ledgers, entries, partyResult, names, receipts, banks, dues] = await Promise.all([
     supabase.auth.getClaims(),
     supabase.from("client_accounts").select("id, label, institution, account_last4, is_active").eq("organization_id", org).order("created_at"),
     supabase.from("client_fund_ledgers").select("id, client_account_id, matter_id, person_id, is_sample, created_at").eq("organization_id", org).order("created_at"),
     supabase
       .from("client_fund_entries")
       .select(
-        "id, ledger_id, number, kind, status, direction, amount_cents, occurred_on, method, external_reference, evidence_note, note, invoice_id, reverses_entry_id, requested_by, verified_by, approved_by, owner_self_approved, created_at",
+        "id, ledger_id, number, kind, status, direction, amount_cents, occurred_on, method, external_reference, evidence_note, note, invoice_id, reverses_entry_id, requested_by, verified_by, verified_by_owner_self, approved_by, owner_self_approved, created_at",
       )
       .eq("organization_id", org)
       .order("created_at", { ascending: true })
       .limit(FUNDS_READ),
     canBill ? supabase.rpc("list_client_fund_parties") : null,
     canBill ? supabase.rpc("client_fund_staff_names", { p_org: org }) : null,
+    supabase.from("client_fund_receipts").select("entry_id, number").eq("organization_id", org).limit(FUNDS_READ),
+    supabase.from("client_fund_bank_transfers").select("entry_id, transferred_on, bank_reference").eq("organization_id", org).limit(FUNDS_READ),
+    canBill ? supabase.rpc("list_client_fund_withdrawals") : null,
   ]);
+  const receiptOf = new Map((receipts.data ?? []).map((row) => [row.entry_id, row.number]));
+  const bankOf = new Map((banks.data ?? []).map((row) => [row.entry_id, { on: row.transferred_on, reference: row.bank_reference }]));
+  const withdrawals: Withdrawal[] = (dues?.data ?? [])
+    .filter((row) => row.organization_id === org)
+    .map((row) => ({
+      state: row.state === "awaiting_approval" || row.state === "awaiting_bank_transfer" ? row.state : "not_requested",
+      matterId: row.matter_id,
+      ledgerId: row.ledger_id,
+      entryId: row.entry_id,
+      invoiceNumber: row.invoice_number,
+      amountCents: Number(row.amount_cents),
+      withdrawBy: row.withdraw_by,
+      daysLeft: row.days_left,
+      overdue: row.overdue,
+    }));
   const viewer = typeof claims.data?.claims?.sub === "string" ? claims.data.claims.sub : "";
   const accountRows = (accounts.data ?? []).filter((row) => row.is_active);
   const ledgerRows = ledgers.data ?? [];
@@ -265,7 +293,7 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
   const [matters, invoices] = await Promise.all([
     matterIds.length ? supabase.from("matters").select("id, reference, title, is_sample").eq("organization_id", org).in("id", matterIds) : null,
     matterIds.length
-      ? supabase.from("invoices").select("id, number, matter_id, amount_cents, paid_cents, status, is_sample").eq("organization_id", org).in("matter_id", matterIds).limit(FUNDS_READ)
+      ? supabase.from("invoices").select("id, number, matter_id, amount_cents, paid_cents, status, issued_on, is_sample").eq("organization_id", org).in("matter_id", matterIds).limit(FUNDS_READ)
       : null,
   ]);
   const matterById = new Map((matters?.data ?? []).map((row) => [row.id, row]));
@@ -303,7 +331,11 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
     verifiedBy: staffName(row.verified_by),
     approvedBy: staffName(row.approved_by),
     ownerSelfApproved: row.owner_self_approved,
+    verifiedByOwnerSelf: row.verified_by_owner_self,
+    receiptNumber: receiptOf.get(row.id) ?? null,
+    bank: row.kind === "transfer" && row.status === "approved" ? (bankOf.get(row.id) ?? null) : undefined,
   });
+  const receiptHref = (entry: FundEntry) => `/api/client-funds/receipts/${entry.id}?organizationId=${org}`;
   const byLedger = new Map<string, FundEntry[]>();
   for (const row of entryRows) {
     const list = byLedger.get(row.ledger_id) ?? [];
@@ -314,6 +346,7 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
   const panels: FundsPanel[] = [];
   const ledgerOptions: FundsOption[] = [];
   const corrections: FundsOption[] = [];
+  const bankTransfers: FundsOption[] = [];
   let balance = 0;
   let pendingIn = 0;
   let pendingOut = 0;
@@ -338,6 +371,7 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
     if (canBill) {
       for (const entry of list) {
         if (entry.kind === "deposit" && entry.status === "pending_verification") {
+          const recordedByViewer = entryRows.find((item) => item.id === entry.id)?.requested_by === viewer;
           actions.push({
             label: `Verify ${entry.number}`,
             primary: true,
@@ -348,10 +382,23 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
               "data-reference": entry.reference ?? "No reference",
               "data-received": `${day(entry.occurredOn)} · ${methodShort(entry.method)}`,
               "data-evidence": entry.evidence ?? "No note",
-              "data-by": entry.recordedBy,
+              "data-by": recordedByViewer ? `${entry.recordedBy} (you)` : entry.recordedBy,
               "data-dest": accountLabel(ledger.client_account_id),
+              // Second person: the recorder can't verify it, unless they are the firm owner.
+              "data-can-verify": recordedByViewer && !isOwner ? "0" : "1",
+              "data-own-entry": recordedByViewer && isOwner ? "1" : "0",
             },
           });
+        }
+        if (entry.kind === "transfer" && entry.status === "approved" && entry.bank === null) {
+          const invoice = entryRows.find((item) => item.id === entry.id)?.invoice_id;
+          const issuedOn = invoice ? invoiceById.get(invoice)?.issued_on : null;
+          bankTransfers.push({
+            value: entry.id,
+            label: `${entry.number} · ${client} · ${entry.invoiceNumber ?? "Invoice"} · ${formatMoney(entry.amountCents, "CAD")}`,
+            data: { "data-ledger": ledger.id, ...(issuedOn ? { "data-earliest": issuedOn } : {}) },
+          });
+          actions.push({ label: `Record bank transfer ${entry.number}`, primary: true, attrs: { "data-funds-open": "dlgBank", "data-ledger": ledger.id, "data-entry": entry.id } });
         }
         if (entry.kind === "transfer" && entry.status === "pending_approval") {
           pendingCount += 1;
@@ -396,19 +443,25 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
         actions.push({ label: "Correct an entry", attrs: { "data-funds-open": "dlgFix", "data-ledger": ledger.id } });
       }
     }
+    const due = earliestWithdrawal(
+      withdrawals.filter((row) => row.ledgerId === ledger.id || (row.ledgerId === null && row.matterId === ledger.matter_id)),
+      day,
+    );
+    const dueNote = due ? `Withdraw by ${due.label}${due.overdue ? " (overdue)" : ""}: within 30 days of the invoice (CICC Code s. 32(g)). ` : "";
     panels.push({
       key: ledger.id,
       client,
       matter,
-      badge: ledgerBadge(list),
-      rows: ledgerLines(list, day),
+      badge: ledgerBadge(list, due),
+      rows: ledgerLines(list, day, "CAD", receiptHref),
       footer: actions.length
         ? {
             actions,
             note:
-              totals.pendingOutCents > 0
+              dueNote +
+              (totals.pendingOutCents > 0
                 ? `After approval: ${formatMoney(totals.balanceCents - totals.pendingOutCents, "CAD")} available. A ledger entry alone doesn’t move money; make the bank transfer from the client account.`
-                : `${formatMoney(totals.availableCents, "CAD")} available. A ledger entry alone doesn’t move money; the bank does.`,
+                : `${formatMoney(totals.availableCents, "CAD")} available. A ledger entry alone doesn’t move money; the bank does.`),
           }
         : null,
     });
@@ -448,6 +501,22 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
     },
     { href: "?tab=funds", label: "Available", value: { money: formatMoney(available, "CAD") }, note: "After transfers waiting for approval" },
   ];
+  // CICC Code s. 32(g): what is still to leave the client account, and by when.
+  const firstDue = [...withdrawals].sort((a, b) => a.withdrawBy.localeCompare(b.withdrawBy))[0];
+  if (firstDue) {
+    const overdue = withdrawals.filter((row) => row.overdue).length;
+    const totalDue = withdrawals.reduce((sum, row) => sum + row.amountCents, 0);
+    kpis.push({
+      href: "?tab=funds",
+      label: "Withdraw by",
+      value: { money: day(firstDue.withdrawBy) },
+      note: {
+        left: formatMoney(totalDue, "CAD"),
+        right: overdue ? `${overdue} overdue` : `${firstDue.invoiceNumber}, ${withdrawalState(firstDue)} · ${withdrawalTiming(firstDue).toLowerCase()}`,
+      },
+      tone: overdue ? "bad" : firstDue.daysLeft <= 7 ? "warn" : undefined,
+    });
+  }
 
   const emptyActions: FundsAction[] = !canBill
     ? []
@@ -503,7 +572,7 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
     },
     verify: { live: { organizationId: org } },
     transfer: { live: { organizationId: org } },
-    more: { organizationId: org, today, ledgers: ledgerOptions, invoices: invoiceOptions, corrections, isOwner },
+    more: { organizationId: org, today, ledgers: ledgerOptions, invoices: invoiceOptions, corrections, bankTransfers, isOwner },
   };
 }
 

@@ -5296,6 +5296,7 @@ export type Database = {
           updated_at: string
           verified_at: string | null
           verified_by: string | null
+          verified_by_owner_self: boolean
           version: number
         }
         Insert: {
@@ -5335,6 +5336,7 @@ export type Database = {
           updated_at?: string
           verified_at?: string | null
           verified_by?: string | null
+          verified_by_owner_self?: boolean
           version?: number
         }
         Update: {
@@ -5374,7 +5376,152 @@ export type Database = {
           updated_at?: string
           verified_at?: string | null
           verified_by?: string | null
+          verified_by_owner_self?: boolean
           version?: number
+        }
+        Relationships: []
+      }
+      client_fund_receipts: {
+        Row: {
+          account_institution: string
+          account_label: string
+          account_last4: string
+          amount_cents: number
+          client_name: string
+          consultant_licence: string | null
+          consultant_name: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          entry_id: string
+          external_reference: string | null
+          firm_display_name: string
+          firm_legal_name: string
+          firm_timezone: string
+          id: string
+          is_sample: boolean
+          issued_at: string
+          issued_by: string | null
+          ledger_id: string
+          matter_id: string
+          matter_label: string
+          method: Database["public"]["Enums"]["client_fund_method"]
+          number: string
+          organization_id: string
+          person_id: string
+          received_on: string
+        }
+        Insert: {
+          account_institution: string
+          account_label: string
+          account_last4: string
+          amount_cents: number
+          client_name: string
+          consultant_licence?: string | null
+          consultant_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency: string
+          entry_id: string
+          external_reference?: string | null
+          firm_display_name: string
+          firm_legal_name: string
+          firm_timezone: string
+          id?: string
+          is_sample?: boolean
+          issued_at?: string
+          issued_by?: string | null
+          ledger_id: string
+          matter_id: string
+          matter_label: string
+          method: Database["public"]["Enums"]["client_fund_method"]
+          number: string
+          organization_id: string
+          person_id: string
+          received_on: string
+        }
+        Update: {
+          account_institution?: string
+          account_label?: string
+          account_last4?: string
+          amount_cents?: number
+          client_name?: string
+          consultant_licence?: string | null
+          consultant_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          entry_id?: string
+          external_reference?: string | null
+          firm_display_name?: string
+          firm_legal_name?: string
+          firm_timezone?: string
+          id?: string
+          is_sample?: boolean
+          issued_at?: string
+          issued_by?: string | null
+          ledger_id?: string
+          matter_id?: string
+          matter_label?: string
+          method?: Database["public"]["Enums"]["client_fund_method"]
+          number?: string
+          organization_id?: string
+          person_id?: string
+          received_on?: string
+        }
+        Relationships: []
+      }
+      client_fund_bank_transfers: {
+        Row: {
+          amount_cents: number
+          bank_reference: string
+          created_at: string
+          created_by: string | null
+          entry_id: string
+          id: string
+          invoice_id: string
+          is_sample: boolean
+          ledger_id: string
+          matter_id: string
+          note: string | null
+          organization_id: string
+          recorded_by: string
+          transferred_on: string
+          withdraw_by: string
+        }
+        Insert: {
+          amount_cents: number
+          bank_reference: string
+          created_at?: string
+          created_by?: string | null
+          entry_id: string
+          id?: string
+          invoice_id: string
+          is_sample?: boolean
+          ledger_id: string
+          matter_id: string
+          note?: string | null
+          organization_id: string
+          recorded_by: string
+          transferred_on: string
+          withdraw_by: string
+        }
+        Update: {
+          amount_cents?: number
+          bank_reference?: string
+          created_at?: string
+          created_by?: string | null
+          entry_id?: string
+          id?: string
+          invoice_id?: string
+          is_sample?: boolean
+          ledger_id?: string
+          matter_id?: string
+          note?: string | null
+          organization_id?: string
+          recorded_by?: string
+          transferred_on?: string
+          withdraw_by?: string
         }
         Relationships: []
       }
@@ -5853,6 +6000,41 @@ export type Database = {
           p_reason: string
         }
         Returns: string
+      }
+      record_client_transfer_bank: {
+        Args: {
+          p_entry_id: string
+          p_note: string | null
+          p_reference: string
+          p_transferred_on: string
+        }
+        Returns: string
+      }
+      client_fund_receipt: {
+        Args: {
+          p_entry_id: string
+        }
+        Returns: Json
+      }
+      list_client_fund_withdrawals: {
+        Args: never
+        Returns: {
+          amount_cents: number
+          days_left: number
+          entry_id: string | null
+          entry_number: string | null
+          invoice_id: string
+          invoice_number: string
+          invoiced_on: string
+          is_sample: boolean
+          ledger_id: string | null
+          matter_id: string
+          organization_id: string
+          overdue: boolean
+          person_id: string | null
+          state: string
+          withdraw_by: string
+        }[]
       }
       client_fund_staff_names: {
         Args: {

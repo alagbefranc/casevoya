@@ -14,6 +14,11 @@ function i(n: number) {
   return { "--i": String(n) } as React.CSSProperties;
 }
 
+/** The receipt PDF for a verified advance (CICC Code s. 32(b)); the route checks access again. */
+export function receiptHref(entryId: string, organizationId: string): string {
+  return `/api/client-funds/receipts/${entryId}?organizationId=${organizationId}`;
+}
+
 /** A client-account ledger line as the client sees it (Designer: "Advance payment · bank transfer"). */
 export function fundsRow(entry: PortalFundsEntry, firm: string): { title: string[]; detail: string; paidTo: string; badge: { tone: string; label: string } } {
   const account = `${firm}, client account`;
@@ -48,8 +53,8 @@ export function fundsRow(entry: PortalFundsEntry, firm: string): { title: string
  * refunds. When the client has money in the firm's client account, the strip's middle tile is the
  * Designer's "Held for you in …’s client account", the Designer's explanation panel follows, and
  * the table ("Invoices and requests") lists the client-account entries that count (verified
- * deposits, transfers applied to invoices, refunds, corrections), read-only and without receipts
- * (receipts aren't generated yet).
+ * deposits, transfers applied to invoices, refunds, corrections), read-only. A verified deposit
+ * has a Receipt download (the advance-payment receipt, CICC Code s. 32(b)).
  */
 export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: PortalInvoices }) {
   const funds = data.clientFunds;
@@ -239,7 +244,13 @@ export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: Por
                       <td className="num" style={{ textAlign: "right" }}>
                         {formatMoney(entry.amountCents, "CAD")}
                       </td>
-                      <td></td>
+                      <td>
+                        {entry.receiptNumber ? (
+                          <a className="btn sm" href={receiptHref(entry.id, viewer.organizationId)} aria-label={`Download receipt ${entry.receiptNumber}`}>
+                            {"Receipt"}
+                          </a>
+                        ) : null}
+                      </td>
                     </tr>
                   );
                 })}

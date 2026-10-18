@@ -37,6 +37,8 @@ export type PortalFundsEntry = {
   reference: string | null;
   invoiceNumber: string | null;
   matterTitle: string;
+  /** "RC-0001" for a verified deposit: the receipt for the advance (CICC Code s. 32(b)). */
+  receiptNumber: string | null;
 };
 
 export type PortalClientFunds = {
@@ -83,6 +85,12 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
     .order("created_at", { ascending: true })
     .limit(500);
   const fundRows = funds.data ?? [];
+  // RLS: receipts for the client's own deposits.
+  const depositIds = fundRows.filter((row) => row.kind === "deposit").map((row) => row.id);
+  const receipts = depositIds.length
+    ? await supabase.from("client_fund_receipts").select("entry_id, number").eq("organization_id", viewer.organizationId).in("entry_id", depositIds)
+    : null;
+  const receiptOf = new Map((receipts?.data ?? []).map((row) => [row.entry_id, row.number]));
   const numbers = new Map(rows.map((row) => [row.id, row.number]));
   const clientFunds: PortalClientFunds | null = fundRows.length
     ? {
@@ -99,6 +107,7 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
           reference: row.external_reference,
           invoiceNumber: row.invoice_id ? (numbers.get(row.invoice_id) ?? null) : null,
           matterTitle: titles.get(row.matter_id) ?? "Your matter",
+          receiptNumber: row.kind === "deposit" ? (receiptOf.get(row.id) ?? null) : null,
         })),
       }
     : null;

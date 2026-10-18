@@ -3,16 +3,23 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PaymentsLive } from "@/components/portal/payments-live";
 import {
+  bankStepText,
   clientFundsError,
+  earliestWithdrawal,
   entryEffect,
   ledgerBadge,
   ledgerLines,
   ledgerTotals,
+  readBankTransfer,
   readClientAccount,
   readDeposit,
   readRefundToClient,
   readTransfer,
+  WITHDRAW_RULE,
+  withdrawalState,
+  withdrawalTiming,
   type FundEntry,
+  type Withdrawal,
 } from "@/modules/finance/client-funds-present";
 import type { PortalInvoices } from "@/modules/finance/portal-load";
 import type { PortalViewer } from "@/modules/portal/load";
@@ -142,8 +149,8 @@ describe("the client's portal", () => {
           clientFunds: {
             heldCents: 120_000,
             entries: [
-              { id: "d", kind: "deposit", direction: "in", amountCents: 150_000, occurredOn: "2026-10-14", method: "bank_transfer", reference: "TD-1", invoiceNumber: null, matterTitle: "Work permit" },
-              { id: "t", kind: "transfer", direction: "out", amountCents: 30_000, occurredOn: "2026-10-16", method: null, reference: null, invoiceNumber: "INV-0001", matterTitle: "Work permit" },
+              { id: "d", kind: "deposit", direction: "in", amountCents: 150_000, occurredOn: "2026-10-14", method: "bank_transfer", reference: "TD-1", invoiceNumber: null, matterTitle: "Work permit", receiptNumber: "RC-0001" },
+              { id: "t", kind: "transfer", direction: "out", amountCents: 30_000, occurredOn: "2026-10-16", method: null, reference: null, invoiceNumber: "INV-0001", matterTitle: "Work permit", receiptNumber: null },
             ],
           },
         },
@@ -155,5 +162,72 @@ describe("the client's portal", () => {
     expect(html).toContain('Advance payment <span class="sep" aria-hidden="true"></span> bank transfer');
     expect(html).toContain('INV-0001 <span class="sep" aria-hidden="true"></span> paid from your client account');
     expect(html).not.toMatch(/<button|data-funds/);
+    // The advance's receipt (s. 32(b)): one download, on the deposit only, through the checked route.
+    expect(html.match(/>Receipt<\/a>/g)).toHaveLength(1);
+    expect(html).toContain(`<a class="btn sm" href="/api/client-funds/receipts/d?organizationId=${A}" aria-label="Download receipt RC-0001">Receipt</a>`);
+  });
+});
+
+describe("client funds controls", () => {
+  it("says who verified a deposit, including the owner's own entry, and links its receipt", () => {
+    const lines = ledgerLines(
+      [
+        entry({ id: "own", verifiedBy: "Ana Owner", verifiedByOwnerSelf: true, receiptNumber: "RC-0001" }),
+        entry({ id: "two", verifiedBy: "Sam Roe", receiptNumber: "RC-0002" }),
+        entry({ id: "wait", status: "pending_verification", receiptNumber: null }),
+      ],
+      dayMonth,
+      "CAD",
+      (item) => `/r/${item.id}`,
+    );
+    expect(lines[0]).toMatchObject({ evidence: ["TD-1", "Verified by owner (own entry)"], receipt: { label: "Receipt RC-0001", href: "/r/own" } });
+    expect(lines[1]).toMatchObject({ evidence: ["TD-1", "Sam"], receipt: { label: "Receipt RC-0002", href: "/r/two" } });
+    expect(lines[2].receipt).toBeUndefined();
+    // Without a link builder (the Designer's rows), no receipt link.
+    expect(ledgerLines([entry({ receiptNumber: "RC-0003" })], dayMonth)[0].receipt).toBeUndefined();
+  });
+
+  it("shows an approved transfer as awaiting bank transfer until the bank transfer is recorded", () => {
+    const approved = (bank: FundEntry["bank"]) =>
+      ledgerLines([entry({ amountCents: 1_000 }), entry({ kind: "transfer", status: "approved", direction: "out", amountCents: 1_000, invoiceNumber: "INV-0002", approvedBy: "Sam Roe", bank })], dayMonth)[1];
+    expect(approved(null).evidence).toEqual(["Approved by Sam Roe", "Approved — awaiting bank transfer"]);
+    expect(approved({ on: "2026-10-20", reference: "BANK-77" }).evidence).toEqual(["Approved by Sam Roe", "Transferred 20 Oct", "BANK-77"]);
+    expect(bankStepText({ bank: null }, dayMonth)).toEqual(["Approved — awaiting bank transfer"]);
+  });
+
+  it("badges a ledger with its s. 32(g) withdrawal date, overdue first", () => {
+    const rows: Withdrawal[] = [
+      { state: "awaiting_bank_transfer", matterId: A, ledgerId: B, entryId: A, invoiceNumber: "INV-0002", amountCents: 100, withdrawBy: "2026-11-17", daysLeft: 30, overdue: false },
+      { state: "not_requested", matterId: A, ledgerId: null, entryId: null, invoiceNumber: "INV-0001", amountCents: 100, withdrawBy: "2026-11-02", daysLeft: 15, overdue: false },
+    ];
+    const due = earliestWithdrawal(rows, dayMonth);
+    expect(due).toEqual({ by: "2026-11-02", label: "2 Nov", overdue: false });
+    expect(earliestWithdrawal([], dayMonth)).toBeNull();
+    expect(ledgerBadge([entry({})], due)).toEqual({ tone: "chg", label: "Withdraw by 2 Nov" });
+    expect(ledgerBadge([entry({ status: "pending_verification" })], due)).toEqual({ tone: "rev", label: "Pending verification" });
+    const late = earliestWithdrawal([{ ...rows[1], daysLeft: -1, overdue: true }], dayMonth);
+    expect(ledgerBadge([entry({ status: "pending_verification" })], late)).toEqual({ tone: "bad", label: "Withdraw by 2 Nov", detail: "overdue" });
+    expect(withdrawalTiming({ daysLeft: 3, overdue: false })).toBe("Due in 3 days");
+    expect(withdrawalTiming({ daysLeft: 1, overdue: false })).toBe("Due in 1 day");
+    expect(withdrawalTiming({ daysLeft: 0, overdue: false })).toBe("Due today");
+    expect(withdrawalTiming({ daysLeft: -2, overdue: true })).toBe("2 days overdue");
+    expect(withdrawalState({ state: "awaiting_bank_transfer" })).toBe("approved — awaiting bank transfer");
+    expect(WITHDRAW_RULE).toMatch(/32\(g\).*30 days after the day the client is invoiced/);
+  });
+
+  it("reads a bank transfer: required reference, not in the future, not before the invoice", () => {
+    const fields = { entry: A, transferred: "2026-10-18", reference: " BANK-1 ", note: "" };
+    expect(readBankTransfer(fields, "2026-10-18", "2026-10-01")).toEqual({ input: { entryId: A, transferredOn: "2026-10-18", reference: "BANK-1", note: null } });
+    expect(readBankTransfer({ ...fields, reference: "  " }, "2026-10-18", null)).toEqual({ error: "Enter the bank’s reference for the transfer." });
+    expect(readBankTransfer({ ...fields, transferred: "2026-10-19" }, "2026-10-18", null)).toEqual({ error: "The date can’t be in the future." });
+    expect(readBankTransfer({ ...fields, transferred: "2026-09-30" }, "2026-10-18", "2026-10-01")).toEqual({ error: "The bank transfer can’t be before the invoice date." });
+    expect(readBankTransfer({ ...fields, entry: "x" }, "2026-10-18", null)).toHaveProperty("error");
+  });
+
+  it("words the new refusals", () => {
+    expect(clientFundsError("the person who recorded a deposit cannot verify it")).toMatch(/someone else verifies it.*firm owner may verify their own/);
+    expect(clientFundsError("the bank transfer was already recorded")).toMatch(/already recorded/);
+    expect(clientFundsError("the bank transfer can't be dated before the invoice (CICC Code s. 32(f))")).toMatch(/before the invoice date/);
+    expect(clientFundsError("only an approved transfer has a bank transfer to record")).toMatch(/Only an approved transfer/);
   });
 });

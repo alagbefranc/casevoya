@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import {
   clientFundsError,
+  readBankTransfer,
   readClientAccount,
   readDeposit,
   readEntryId,
@@ -11,6 +12,7 @@ import {
   readRefundToClient,
   readTransfer,
   type AccountFields,
+  type BankTransferFields,
   type DepositFields,
   type RefundToClientFields,
   type TransferFields,
@@ -132,6 +134,25 @@ export async function declineClientTransfer(input: { organizationId: string; ent
   const session = await staffClient(input.organizationId);
   if ("error" in session) return { error: session.error ?? "Sign in first." };
   const { data, error } = await session.supabase.rpc("decline_client_transfer", { p_entry_id: read.entryId, p_reason: reason.reason });
+  return done(data, error);
+}
+
+/**
+ * Records that the bank sent an approved transfer from the client account (the bank step after
+ * approval). The database checks access, step-up, the date (not before the invoice, s. 32(f)) and
+ * that it is recorded once. The invoice date isn't known here, so only the database checks it.
+ */
+export async function recordClientTransferBank(input: { organizationId: string; today: string } & BankTransferFields): Promise<Result> {
+  const read = readBankTransfer(input, input.today, null);
+  if ("error" in read) return read;
+  const session = await staffClient(input.organizationId);
+  if ("error" in session) return { error: session.error ?? "Sign in first." };
+  const { data, error } = await session.supabase.rpc("record_client_transfer_bank", {
+    p_entry_id: read.input.entryId,
+    p_transferred_on: read.input.transferredOn,
+    p_reference: read.input.reference,
+    p_note: read.input.note,
+  });
   return done(data, error);
 }
 

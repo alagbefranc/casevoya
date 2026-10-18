@@ -1328,7 +1328,7 @@ describe("Designer fidelity: Finance, Client funds", () => {
         createElement(ApproveTransferDialog, { key: "tr", data: { live: { organizationId: org } } }),
         createElement(FundsLiveDialogs, {
           key: "more",
-          data: { organizationId: org, today: "2026-10-18", ledgers: [{ value: ledger, label: "Dana Lee", data: { "data-matter": ledger, "data-available": "10000" } }], invoices: [], corrections: [], isOwner: false },
+          data: { organizationId: org, today: "2026-10-18", ledgers: [{ value: ledger, label: "Dana Lee", data: { "data-matter": ledger, "data-available": "10000" } }], invoices: [], corrections: [], bankTransfers: [], isOwner: false },
         }),
       ]),
     );
@@ -1346,5 +1346,12 @@ describe("Designer fidelity: Finance, Client funds", () => {
     expect(html).toContain(`data-funds-correct="1" data-org="${org}" disabled=""`);
     expect(html).toContain(`data-funds-account="1" data-org="${org}" disabled=""`);
     expect(html).not.toContain('id="mpV"');
+    // Second person to verify: the explanation is there, hidden until the recorder opens it.
+    expect(html).toContain('<div class="alert warn" id="vSelf" hidden="">');
+    expect(html).toContain('<div class="alert info" id="vOwn" hidden="">');
+    // Record the bank transfer: #dlgInv's anatomy, nothing to record yet.
+    expect(html).toMatch(/<dialog class="dlg" id="dlgBank" aria-labelledby="dlgBankH"><div class="dh"><h2 id="dlgBankH">Record the bank transfer<\/h2>/);
+    expect(html).toContain(`data-funds-bank="1" data-org="${org}" data-today="2026-10-18" disabled=""`);
+    expect(html).toContain("CICC Code s. 32(g)");
   });
 });
