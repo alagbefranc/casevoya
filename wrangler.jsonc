@@ -21,7 +21,10 @@
   "ai": { "binding": "AI" },
   "services": [
     // OpenNext self-reference; the service name must match the Worker name.
-    { "binding": "WORKER_SELF_REFERENCE", "service": "casevoya-app" }
+    { "binding": "WORKER_SELF_REFERENCE", "service": "casevoya-app" },
+    // Vo agent (Claude Agent SDK in a Cloudflare Container); requests are HMAC-signed with
+    // VO_AGENT_SECRET (a Worker secret). See docs/integrations/vo-agent.md.
+    { "binding": "VO_AGENT", "service": "casevoya-vo-agent" }
   ],
   "vars": {
     "NEXT_PUBLIC_SUPABASE_URL": "https://aqjtvqmojfamtspzyeqm.supabase.co",
