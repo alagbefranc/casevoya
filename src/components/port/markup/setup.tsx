@@ -1,17 +1,23 @@
 "use client";
 
-import { connectOrRun, uploadDemoLogo } from "../kit";
+import { useState } from "react";
+import { connectOrRun } from "../kit";
+import { FirmLogoUpload, type FirmLogo } from "../firm-logo-upload";
 import { LicenceProofCard } from "../licence-proof-card";
 /** Converted from site/app-v2/auth/setup.html. Same DOM, classes and copy. */
 export function SetupMarkup({
   jurisdictionCodes = ["CA", "ON"],
   firmName = "",
+  logo: savedLogo = null,
 }: {
   jurisdictionCodes?: readonly string[];
   firmName?: string;
+  /** The firm's saved logo, with a short-lived preview link. */
+  logo?: FirmLogo | null;
 } = {}) {
   const on = (code: string) => jurisdictionCodes.includes(code);
   const firm = firmName.trim();
+  const [logo, setLogo] = useState<FirmLogo | null>(savedLogo);
   return (
     <>
       <a className="sr" href="#main">Skip to content</a>
@@ -43,9 +49,9 @@ export function SetupMarkup({
 <p style={{ "fontSize": "14.5px" }}><a className="tl" href="/sheet/licence">See how the check works</a> · Other consultants add their own licence when they join.</p>
 </section>
 <section data-step="4" data-title="Branding" data-vo="wave"><div className="wz-head"><div><h1>Make the portal yours</h1><p className="lead">Clients see your logo and colour. Casevoya appears only as small “Powered by” text.</p></div><span className="wz-art" aria-hidden="true"><img src="/assets/generated/b2/branding-72@1x.webp" srcSet="/assets/generated/b2/branding-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span></div>
-<div className="g2"><div><div className="logo-up"><span className="ph">{firm ? firm.slice(0, 2).toUpperCase() : "Logo"}</span><div><b style={{ "fontWeight": "500" }}>Logo</b><small style={{ "display": "block", "color": "var(--t2)", "fontSize": "13px" }}>Square, at least 256 px. SVG or PNG.</small><button className="btn sm" type="button" style={{ "marginTop": "8px" }} onClick={uploadDemoLogo}><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-upload" /></svg>Upload logo</button></div></div>
+<div className="g2"><div><FirmLogoUpload initials={firm ? firm.slice(0, 2).toUpperCase() : ""} logo={logo} onChange={setLogo} />
 <fieldset className="fld" style={{ "border": "0" }}><legend>Accent colour</legend><span className="hint">We check that white text stays readable on it.</span><div className="sw" id="sw"><button type="button" aria-pressed="true" aria-label="Blue" data-c="#0075DE" style={{ "background": "#0075DE" }}></button><button type="button" aria-pressed="false" aria-label="Navy" data-c="#0a4b93" style={{ "background": "#0a4b93" }}></button><button type="button" aria-pressed="false" aria-label="Forest" data-c="#205c38" style={{ "background": "#205c38" }}></button><button type="button" aria-pressed="false" aria-label="Brick" data-c="#a12c20" style={{ "background": "#a12c20" }}></button><button type="button" aria-pressed="false" aria-label="Graphite" data-c="#4a4642" style={{ "background": "#4a4642" }}></button></div></fieldset></div>
-<div><p style={{ "fontSize": "13.5px", "color": "var(--t2)", "marginBottom": "8px" }}>Portal preview</p><div className="prev" id="prev"><div className="ps"><b><span className="firmlogo" style={{ "width": "22px", "height": "22px", "fontSize": "10px", "borderRadius": "6px" }}>{firm ? firm.slice(0, 2).toUpperCase() : ""}</span>{firm || "Your firm"}</b><i className="on"></i><i></i><i></i><i></i></div><div className="pm"><small style={{ "color": "var(--t2)" }}>Hi</small><div style={{ "fontSize": "18px", "fontWeight": "300" }}>Your next step</div><div className="bn">Upload your passport copy</div><p className="pwrd" style={{ "marginTop": "12px" }}>Powered by Casevoya</p></div></div></div></div>
+<div><p style={{ "fontSize": "13.5px", "color": "var(--t2)", "marginBottom": "8px" }}>Portal preview</p><div className="prev" id="prev"><div className="ps"><b><span className="firmlogo" style={{ "width": "22px", "height": "22px", "fontSize": "10px", "borderRadius": "6px" }}>{logo ? <img src={logo.previewUrl} alt="" width="22" height="22" style={{ "width": "100%", "height": "100%", "objectFit": "cover", "borderRadius": "inherit" }} /> : firm ? firm.slice(0, 2).toUpperCase() : ""}</span>{firm || "Your firm"}</b><i className="on"></i><i></i><i></i><i></i></div><div className="pm"><small style={{ "color": "var(--t2)" }}>Hi</small><div style={{ "fontSize": "18px", "fontWeight": "300" }}>Your next step</div><div className="bn">Upload your passport copy</div><p className="pwrd" style={{ "marginTop": "12px" }}>Powered by Casevoya</p></div></div></div></div>
 </section>
 <section data-step="5" data-title="Calendar and payments" data-vo="point"><div className="wz-head"><div><h1>Calendar and payments</h1><p className="lead">Connect what you already use. You can skip this and do it from Settings.</p></div><span className="wz-art" aria-hidden="true"><img src="/assets/generated/b2/calendar-link-72@1x.webp" srcSet="/assets/generated/b2/calendar-link-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span></div>
 <div className="conn"><img src="/assets/logos/googlecalendar.svg" alt="" /><div>Google Calendar<small>Consultation bookings and deadlines on your calendar</small></div><button className="btn sm" type="button" onClick={(event) => connectOrRun(event.currentTarget)}><span className="lab">Connect</span><span className="spin" aria-hidden="true"></span></button></div>
