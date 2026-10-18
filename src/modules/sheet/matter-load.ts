@@ -14,6 +14,7 @@ import {
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
+import { isLicensedMembership, LICENCE_FACT_COLUMNS } from "@/lib/tenant/roles";
 import { loadSheetChrome, memberNames } from "@/modules/sheet/chrome-load";
 import { dayMonth, isoDate, localNow } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
@@ -75,7 +76,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     .maybeSingle();
   if (!matter) return null;
 
-  const [chrome, members, staffRows, participants, tasks, deadlines, requests, refs, agreements, pack] = await Promise.all([
+  const [chrome, members, staffRows, participants, tasks, deadlines, requests, refs, agreements, pack, ownLicence] = await Promise.all([
     loadSheetChrome(staff, `/sheet/matters/${matter.id}`),
     memberNames(supabase, org),
     supabase.from("memberships").select("id").eq("organization_id", org).eq("status", "active").in("role", [...STAFF_ROLES]),
@@ -111,6 +112,10 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       .order("updated_at", { ascending: false })
       .limit(50),
     matter.program_pack_id ? supabase.from("rule_pack_versions").select("program_key, pack_version").eq("id", matter.program_pack_id).maybeSingle() : null,
+    // A firm owner's own licence makes them a licensed consultant for these controls.
+    staff.role === "firm_owner"
+      ? supabase.from("consultant_credentials").select(LICENCE_FACT_COLUMNS).eq("organization_id", org).eq("membership_id", staff.membershipId).maybeSingle()
+      : null,
   ]);
 
   const parties = participants.data ?? [];
@@ -405,7 +410,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     wire,
   };
   const confirmOutcome =
-    !matter.outcome && matter.government_status === "decision_evidence_on_file" && staff.role === "licensed_consultant"
+    !matter.outcome && matter.government_status === "decision_evidence_on_file" && isLicensedMembership(staff.role, ownLicence?.data)
       ? { options: MATTER_OUTCOMES.map((value) => ({ value, label: outcomeLabel(value) })), wire }
       : null;
 
