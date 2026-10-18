@@ -10,7 +10,7 @@
  *     an upload (files are not stored yet) and has no Reviewer: any billing person may verify.
  *   * `#dlgVer` adds a Reject with a reason for a payment that isn't on the statement, and says
  *     why the person who recorded a payment can't verify it (the firm owner may verify their own,
- *     shown as "Verified by owner (own entry)"). Verifying issues the receipt (CICC Code s. 32(b)),
+ *     after a fresh step-up, shown as "Verified by owner (own entry)"). Verifying issues the receipt (CICC Code s. 32(b)),
  *     downloaded from the ledger row.
  *   * An approved transfer reads "Approved — awaiting bank transfer" until the bank transfer is
  *     recorded (`#dlgBank`, the Designer's "Record the bank transfer next"). A sub-ledger with money
@@ -434,7 +434,7 @@ export function VerifyPaymentDialog({ data }: { data: VerifyDialogData }) {
               <Icon name={"info"} />
               <div>
                 <b>{"Your own entry"}</b>
-                {"As the firm owner you may verify a payment you recorded. It’s shown as “Verified by owner (own entry)” and kept in the audit log."}
+                {"As the firm owner you may verify a payment you recorded. You’ll confirm with your authenticator first. It’s shown as “Verified by owner (own entry)” and kept in the audit log."}
               </div>
             </div>
             <Field id={"vWhy"} label={"If it doesn’t match"} hint={"Reject it with a reason. A rejected payment never counts in the client’s balance."}>
