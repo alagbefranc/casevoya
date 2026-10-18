@@ -23,6 +23,8 @@ import { SampleCasePanel } from "@/components/sheet/designer/sample-case";
 import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
 import { SheetStaffTab, StaffAfter, StaffHeader } from "@/components/sheet/designer/invitations";
 import { PolicyMissingAlert, PortalPoliciesAfter, SettingsPortalHeader, SheetPortalPolicies } from "@/components/sheet/designer/portal-policies";
+import { SettingsBillingHeader, SheetRetention, SheetSubscription } from "@/components/sheet/designer/settings-billing";
+import { loadSheetRetention, loadSheetSubscription } from "@/modules/sheet/settings-billing-load";
 import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
 import { NotificationsHeader, SheetNotifications } from "@/components/sheet/designer/notifications";
 import { loadSheetNotifications } from "@/modules/sheet/notifications-load";
@@ -336,6 +338,37 @@ export async function SheetBody({
           after={<PortalPoliciesAfter dialogs={dialogs} />}
         >
           <SheetPortalPolicies data={policies} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Subscription (ADM-02): the firm's stored subscription state and real usage counts.
+  // Keyed per tab so the Sheet's scripts mount again when the tab changes.
+  if (page === "settings" && query.tab === "billing" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetSubscription(access.staff);
+    return (
+      <SheetScreen key={"settings-billing"} page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<SettingsBillingHeader firmName={access.staff.organizationName} pill={loaded.pill} tab={"billing"} />}
+          statusbar={loaded.chrome.statusbar}
+        >
+          <SheetSubscription data={loaded.page} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Retention (SEC-07): the firm's own retention period, its version and legal holds.
+  if (page === "settings" && query.tab === "retention" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetRetention(access.staff);
+    return (
+      <SheetScreen key={"settings-retention"} page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<SettingsBillingHeader firmName={access.staff.organizationName} pill={loaded.pill} tab={"retention"} />}
+          statusbar={loaded.chrome.statusbar}
+        >
+          <SheetRetention data={loaded.page} />
         </SheetFrame>
       </SheetScreen>
     );
