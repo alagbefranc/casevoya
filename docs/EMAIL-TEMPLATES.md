@@ -150,8 +150,8 @@ Email Templates, with the subject shown:
 | File | Supabase template | Subject | Notes |
 |---|---|---|---|
 | `confirm-signup.html` | Confirm signup | Verify your email | Has both `{{ .Token }}` (the app's accept flows verify a 6-digit code with `type: signup`) and `{{ .ConfirmationURL }}`. |
-| `magic-link.html` | Magic Link | Your sign-in code | The app's account recovery (`sendRecoveryEmail`) uses `signInWithOtp` and asks for the 6-digit `{{ .Token }}`. The design has no button. `src/app/sign-in/actions.ts` also calls `signInWithOtp` with `emailRedirectTo` (a link): if that path is used, add a `{{ .ConfirmationURL }}` button first. The copy says the code expires in 10 minutes: set Email OTP expiry to 600 seconds, or change the sentence. |
-| `reset-password.html` | Reset Password | Reset your password | Only used if the app calls `resetPasswordForEmail`; it does not today. Says 15 minutes: match the OTP expiry. |
+| `magic-link.html` | Magic Link | Your sign-in code | The app's account recovery (`sendRecoveryEmail`) uses `signInWithOtp` and asks for the 6-digit `{{ .Token }}`. The design has no button. `src/app/sign-in/actions.ts` also calls `signInWithOtp` with `emailRedirectTo` (a link): if that path is used, add a `{{ .ConfirmationURL }}` button first. The copy says the code expires in 1 hour, matching the project's Email OTP expiry (3600 s). Live in Supabase since 18 Oct 2026. |
+| `reset-password.html` | Reset Password | Reset your password | Only used if the app calls `resetPasswordForEmail`; it does not today. Says 1 hour, matching the project OTP expiry. |
 
 ## SMS (EM13): document only
 
