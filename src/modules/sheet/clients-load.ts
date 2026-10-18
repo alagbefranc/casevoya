@@ -25,6 +25,7 @@ import {
   type GrantFact,
 } from "@/modules/sheet/clients-present";
 import type { SheetStaff } from "@/modules/sheet/load";
+import { mayOfferPersonEdit, personEditData } from "@/modules/sheet/edit-person";
 import { loadNewMatterDialog } from "@/modules/sheet/matters-load";
 import { MATTERS_READ } from "@/modules/sheet/matters-present";
 import type { SheetQuery } from "@/modules/sheet/present";
@@ -32,7 +33,7 @@ import { firstName } from "@/modules/sheet/tasks-present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
-const PERSON_COLUMNS = "id, display_name, email, contact_phone, user_id, date_of_birth, birth_date_precision, is_minor, created_at";
+const PERSON_COLUMNS = "id, display_name, email, contact_phone, user_id, date_of_birth, birth_date_precision, is_minor, created_at, version";
 /** Participant, invitation and household rows read at once; each is a small row. */
 const LINKS_READ = 5000;
 const OPEN_TASK = ["open", "blocked"] as const;
@@ -50,6 +51,7 @@ type PersonRecord = {
   birth_date_precision: string | null;
   is_minor: boolean;
   created_at: string;
+  version: number;
 };
 
 type Party = { matterId: string; role: string };
@@ -290,6 +292,8 @@ export async function loadSheetClients(staff: SheetStaff, query: SheetQuery, now
         : undefined,
     person: personData,
     household: householdData,
+    // Edit details for the person shown; row-level security (app.can_write_person) decides the save.
+    edit: tab === "person" && personData && person && mayOfferPersonEdit(staff.role) ? personEditData(org, person) : null,
   };
   return { chrome, clients, newMatter };
 }

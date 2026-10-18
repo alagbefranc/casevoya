@@ -19,6 +19,7 @@ import {
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { runNewTask, syncNewTask } from "./new-task-act";
+import { inviteFromEdit, openPersonEdit, runPersonEdit } from "./person-edit-act";
 import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-invite-act";
 import { policyDialogId, restorePolicyDraft, runPublishPolicy } from "./portal-policy-act";
 import { POLICY_KINDS, policyKindForDialog } from "@/modules/portal-policies/defaults";
@@ -221,6 +222,27 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (palette && root.contains(palette)) {
         event.preventDefault();
         openPalette(root);
+        return;
+      }
+      // Edit details: opened from a person (Clients page person tab, a matter People card), saved through RLS.
+      const editOpen = target.closest<HTMLElement>("[data-edit-open]");
+      if (editOpen && root.contains(editOpen)) {
+        event.preventDefault();
+        openPersonEdit(editOpen, root);
+        return;
+      }
+      const editInvite = target.closest<HTMLElement>("[data-edit-invite]");
+      if (editInvite && root.contains(editInvite)) {
+        event.preventDefault();
+        inviteFromEdit(editInvite, root);
+        return;
+      }
+      const editSave = target.closest<HTMLElement>("[data-person-save]");
+      if (editSave && root.contains(editSave)) {
+        event.preventDefault();
+        if (editSave.getAttribute("aria-busy") === "true") return;
+        editSave.setAttribute("aria-busy", "true");
+        void runPersonEdit(editSave, router).finally(() => editSave.removeAttribute("aria-busy"));
         return;
       }
       const portalInvite = target.closest<HTMLElement>("[data-invite-open]");

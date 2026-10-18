@@ -1,11 +1,14 @@
 "use server";
 
 import { headers } from "next/headers";
+import { safeAccessError } from "@/lib/auth/step-up";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { clearMatterOnHold, overrideMatterStage, recordGovernmentStatus, recordMatterOutcome, setMatterOnHold } from "@/modules/matters/actions";
 import { createPortalInvitation } from "@/modules/portal-invitations/actions";
 import { acceptLink, guardianSubjects, readPortalInvite } from "@/modules/sheet/portal-invite";
+import { todayIso } from "@/modules/sheet/birth-date";
+import { editNotes, minorOn, readPersonEdit } from "@/modules/sheet/edit-person";
 import { readDeadline } from "@/modules/sheet/new-deadline";
 import { missingPolicies, POLICIES_MISSING } from "@/modules/portal-policies/defaults";
 import { loadCurrentPolicies } from "@/modules/portal-policies/load";
@@ -171,7 +174,7 @@ export async function invitePortalPerson(input: {
   email: string;
   /** Only when the dialog asked for it (the person has none on file). */
   dateOfBirth?: string;
-}): Promise<{ error: string } | { link: string; expiresAt: string | null; emailLink: boolean }> {
+}): Promise<{ error: string } | { link: string; expiresAt: string | null; emailLink: boolean; emailSaved: boolean }> {
   const read = readPortalInvite({ personId: input.personId, roleLabel: input.roleLabel, email: input.email, dateOfBirth: input.dateOfBirth });
   if ("error" in read) return { error: read.error };
   if (!isUuid(input.organizationId) || !isUuid(input.matterId)) return { error: "Choose a person and a matter." };
@@ -179,6 +182,13 @@ export async function invitePortalPerson(input: {
   // No client can accept until the firm publishes its portal terms and privacy notice, so nothing is sent before then.
   const missing = missingPolicies(await loadCurrentPolicies(await createClient({ organizationId: input.organizationId }), input.organizationId));
   if (missing.length) return { error: POLICIES_MISSING };
+
+  // public.create_portal_invitation refuses an email other than the one on the person's record.
+  // Say which, rather than the database's general refusal; the record is left as it is.
+  const onFile = await personEmail(input.organizationId, read.input.personId);
+  if (onFile && onFile !== read.input.email) {
+    return { error: `Their record has a different email on file (${onFile}). It was left as it is. Invite them at that address, or change it with Edit details first.` };
+  }
 
   if (read.input.dateOfBirth) {
     const saved = await recordMissingBirthDate(input.organizationId, read.input.personId, read.input.dateOfBirth);
@@ -212,6 +222,105 @@ export async function invitePortalPerson(input: {
     code: null,
   });
   if ("error" in created) return { error: created.error ?? "That invitation could not be sent." };
+  // The person had no email on file: keep the one they were invited at, so the People card shows it.
+  const emailSaved = onFile === read.input.email || (await recordMissingEmail(input.organizationId, read.input.personId, read.input.email));
   const origin = (await headers()).get("origin") ?? "";
-  return { link: acceptLink(origin, read.input.role, created.token), expiresAt: created.expiresAt, emailLink: created.emailLink };
+  return { link: acceptLink(origin, read.input.role, created.token), expiresAt: created.expiresAt, emailLink: created.emailLink, emailSaved };
 }
+
+/** The email on a person's record, read as the signed-in staff member; null when none (or not readable). */
+async function personEmail(organizationId: string, personId: string): Promise<string | null> {
+  const supabase = await createClient({ organizationId });
+  const { data } = await supabase.from("persons").select("email").eq("organization_id", organizationId).eq("id", personId).maybeSingle();
+  return data?.email ?? null;
+}
+
+/**
+ * Saves the invited email on a person who has none, through row-level security like any
+ * other edit. An email already on file is never overwritten here. True when it is on file now.
+ */
+async function recordMissingEmail(organizationId: string, personId: string, email: string): Promise<boolean> {
+  const supabase = await createClient({ organizationId });
+  const { data, error } = await supabase
+    .from("persons")
+    .update({ email })
+    .eq("organization_id", organizationId)
+    .eq("id", personId)
+    .is("email", null)
+    .select("id");
+  if (error) return false;
+  if ((data ?? []).length > 0) return true;
+  return (await personEmail(organizationId, personId)) === email;
+}
+
+/**
+ * The "Edit details" dialog: a person's name, email, phone and date of birth, saved as the
+ * signed-in staff member. Row-level security (persons_update, app.can_write_person) decides
+ * who may edit: staff on one of the person's matters, or the staff member who recorded them.
+ * app.sync_person_birth keeps birth_date and is_minor in step and refuses a future date; a
+ * person who stops being a minor gets a majority review task (persons_zz_majority_task); the
+ * persons_audit trigger records each change. A date of birth on file is corrected, never removed.
+ */
+export async function savePersonDetails(input: {
+  organizationId: string;
+  personId: string;
+  version: number | string;
+  name: string;
+  email: string;
+  phone: string;
+  /** Blank keeps the date of birth on file as it is. */
+  dateOfBirth: string;
+}): Promise<{ error: string } | { saved: true; notes: string[] }> {
+  const today = todayIso();
+  const read = readPersonEdit({ ...input, today });
+  if ("error" in read) return { error: read.error };
+  if (!isUuid(input.organizationId)) return { error: "Open Edit details from a person on this page." };
+  const org = input.organizationId;
+  const { personId, version, displayName, email, phone, dateOfBirth } = read.input;
+  const supabase = await createClient({ organizationId: org });
+
+  const { data: current } = await supabase
+    .from("persons")
+    .select("id, user_id, date_of_birth, is_minor, version")
+    .eq("organization_id", org)
+    .eq("id", personId)
+    .maybeSingle();
+  if (!current) return { error: "You can’t see this person’s record, so nothing was saved." };
+  if (current.version !== version) return { error: CHANGED_SINCE };
+
+  const changesBirth = dateOfBirth !== null && dateOfBirth !== current.date_of_birth;
+  if (changesBirth && current.user_id && !current.is_minor) {
+    // A minor cannot hold their own portal login (PRD §5); the database refuses minors at invitation and acceptance.
+    const { data: firm } = await supabase.from("organizations").select("age_of_majority_years").eq("id", org).maybeSingle();
+    if (minorOn(dateOfBirth, firm?.age_of_majority_years ?? 19, today)) {
+      return { error: "That date makes them a minor, and they hold their own portal login. A minor can’t hold one, so nothing was saved." };
+    }
+  }
+
+  const { data: updated, error } = await supabase
+    .from("persons")
+    .update({
+      display_name: displayName,
+      email,
+      contact_phone: phone,
+      ...(changesBirth ? { date_of_birth: dateOfBirth, birth_date_precision: "day" as const } : {}),
+    })
+    .eq("organization_id", org)
+    .eq("id", personId)
+    .eq("version", version)
+    .select("id, is_minor");
+  if (error) {
+    if (/future/i.test(error.message)) return { error: "The date of birth can’t be in the future." };
+    if (error.code === "23514") return { error: "One of those details isn’t accepted. Check the email and phone number." };
+    return { error: safeAccessError(error.message) };
+  }
+  const row = (updated ?? [])[0];
+  if (!row) {
+    const { data: after } = await supabase.from("persons").select("version").eq("organization_id", org).eq("id", personId).maybeSingle();
+    if (after && after.version !== version) return { error: CHANGED_SINCE };
+    return { error: "You can’t edit this person’s record. Only staff on one of their matters can." };
+  }
+  return { saved: true, notes: editNotes({ becameAdult: current.is_minor && !row.is_minor, becameMinor: !current.is_minor && row.is_minor }) };
+}
+
+const CHANGED_SINCE = "Someone changed this person’s details since you opened them. Reload the page and try again.";

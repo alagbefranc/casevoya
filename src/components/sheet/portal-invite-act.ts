@@ -48,7 +48,8 @@ export function openPortalInvite(button: HTMLElement, root: HTMLElement) {
 /** Coming back from step-up (`?dlg=invite&pid=`): reopen the dialog for the same person. */
 export function reopenPortalInvite(root: HTMLElement, personId: string | null) {
   if (!personId) return;
-  const button = [...root.querySelectorAll<HTMLElement>("[data-invite-open]")].find((item) => item.dataset.person === personId);
+  // A card's Manage button opens the invitation, or Edit details with the invitation offered in it (`data-role`).
+  const button = [...root.querySelectorAll<HTMLElement>("[data-invite-open], [data-edit-open][data-role]")].find((item) => item.dataset.person === personId);
   if (button) openPortalInvite(button, root);
 }
 
@@ -95,7 +96,8 @@ export async function runPortalInvite(button: HTMLElement, router: Router) {
   }
   const name = firstName(dialog.dataset.name ?? "");
   const expires = expiryLabel(result.expiresAt, Intl.DateTimeFormat().resolvedOptions().timeZone);
-  const when = expires ? `It works once and expires ${expires}.` : "It works once and expires in 7 days.";
+  const saved = result.emailSaved ? "" : " Their email wasn’t saved on their record; add it with Edit details.";
+  const when = `${expires ? `It works once and expires ${expires}.` : "It works once and expires in 7 days."}${saved}`;
   dialog.close();
   const copied = await copy(result.link);
   if (result.emailLink) {

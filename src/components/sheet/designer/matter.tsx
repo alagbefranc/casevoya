@@ -8,8 +8,10 @@ import { gaugeArcs, percent } from "./home";
 import { Badge, type MatterBadge } from "./matters";
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair, Sep } from "./frame";
+import { PersonEditDialog, personEditProps, type PersonEditDialogData } from "./person-edit";
 import { PolicyMissingAlert } from "./portal-policies";
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
+import type { PersonEditData } from "@/modules/sheet/edit-person";
 
 export const MATTER_TABS = [
   ["overview", "Overview"],
@@ -660,6 +662,8 @@ export type MatterDialogsData = {
   invite?: MatterInviteData | null;
   /** The Record a deadline dialog. Only rendered when wired; the Designer has no deadline dialog. */
   deadline?: MatterDeadlineDialog | null;
+  /** Edit details, opened from a client's People card. Absent, it is not rendered. */
+  edit?: PersonEditDialogData | null;
 };
 
 export type MatterDeadlineDialog = {
@@ -866,6 +870,7 @@ export function MatterDialogs({ data }: { data: MatterDialogsData }) {
         </div>
       </dialog>
       {data.invite ? <MatterInviteDialog data={data.invite} /> : null}
+      {data.edit ? <PersonEditDialog data={data.edit} /> : null}
       {data.wire && data.deadline ? <DeadlineDialog data={data.deadline} wire={data.wire} /> : null}
     </>
   );
@@ -972,10 +977,21 @@ export type MatterPersonCard = {
    * `birthDateMissing`: no date of birth on file, so the dialog asks for one.
    */
   invite?: { personId: string; role: string; email: string; birthDateMissing?: boolean } | null;
+  /**
+   * A client whose details the viewer may edit: Manage opens Edit details instead, and the
+   * invitation (when `invite` is set too) is offered from that dialog's footer.
+   */
+  edit?: PersonEditData | null;
 };
 
-/** The Manage button's `data-*` for the invitation dialog, or nothing for the Designer's inert button. */
-function inviteProps(card: MatterPersonCard) {
+/** The Manage button's `data-*`: Edit details, the invitation dialog, or nothing for the Designer's inert button. */
+function manageProps(card: MatterPersonCard) {
+  if (card.edit) {
+    return {
+      ...personEditProps(card.edit),
+      ...(card.invite ? { "data-role": card.invite.role, ...(card.invite.birthDateMissing ? { "data-dob": "missing" } : {}) } : {}),
+    };
+  }
   if (!card.invite) return {};
   return {
     "data-invite-open": "1",
@@ -1018,7 +1034,7 @@ export function MatterPeople({ cards, relationships }: { cards: MatterPersonCard
                 )}
               </span>
             </div>
-            <button className={"btn s sm"} aria-label={`Manage ${card.person.name}`} {...inviteProps(card)}>
+            <button className={"btn s sm"} aria-label={`Manage ${card.person.name}`} {...manageProps(card)}>
               <Icon name={"more"} cls={"ic s"} />
             </button>
           </div>

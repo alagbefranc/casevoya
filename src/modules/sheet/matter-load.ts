@@ -59,6 +59,7 @@ import {
 import type { CountersignDialogData } from "@/components/sheet/designer/agreements";
 import { inviteEmailLines } from "@/modules/email/templates";
 import { acceptPath, portalRoleForParty, portalRoleLabel } from "@/modules/sheet/portal-invite";
+import { mayOfferPersonEdit, personEditData } from "@/modules/sheet/edit-person";
 import { DEADLINE_KINDS, DEADLINE_ROLES, deadlineSource } from "@/modules/sheet/new-deadline";
 import { missingPolicies } from "@/modules/portal-policies/defaults";
 import { loadCurrentPolicies } from "@/modules/portal-policies/load";
@@ -201,7 +202,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     ),
   ];
   const [persons, signers, relationships, consentSetting] = await Promise.all([
-    personIds.length ? supabase.from("persons").select("id, display_name, email, user_id, date_of_birth").eq("organization_id", org).in("id", personIds) : null,
+    personIds.length ? supabase.from("persons").select("id, display_name, email, contact_phone, user_id, date_of_birth, birth_date_precision, version").eq("organization_id", org).in("id", personIds) : null,
     envelopeIds.length
       ? supabase
           .from("envelope_signers")
@@ -296,6 +297,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
   // People: clients from the matter's participants, then the staff on it.
   // public.create_portal_invitation lets an owner, or a consultant or case manager on the matter, invite.
   const canInvite = staff.role === "firm_owner" || staff.role === "licensed_consultant" || staff.role === "case_manager";
+  const canEdit = mayOfferPersonEdit(staff.role);
   const invitedOn = new Map<string, string>();
   for (const row of invitations?.data ?? []) {
     if (!invitedOn.has(row.person_id)) invitedOn.set(row.person_id, dayMonth(isoDateInTimeZone(new Date(row.created_at), staff.timezone)));
@@ -316,6 +318,8 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
           canInvite && record && !record.user_id && portalRole
             ? { personId: record.id, role: portalRoleLabel(portalRole), email: record.email ?? "", birthDateMissing: !record.date_of_birth }
             : null,
+        // Edit details; row-level security (app.can_write_person) decides whether the save goes through.
+        edit: canEdit && record ? personEditData(org, record) : null,
       });
     } else if (row.membership_id && !staffIds.has(row.membership_id)) {
       staffIds.add(row.membership_id);
@@ -508,6 +512,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     receivedOn: today,
     wire,
     invite: canInvite ? inviteDialog : null,
+    edit: cards.some((card) => card.edit) ? { maxBirthDate: todayIso(), invite: canInvite } : null,
     deadline: recordsDeadlines ? { timezone: staff.timezone, sampleMode: staff.sampleMode && !matter.is_sample, kinds: DEADLINE_KINDS } : null,
   };
   const confirmOutcome =
