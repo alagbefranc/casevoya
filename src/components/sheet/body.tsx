@@ -21,6 +21,7 @@ import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
 import { SheetStaffTab, StaffAfter, StaffHeader } from "@/components/sheet/designer/invitations";
 import { PolicyMissingAlert, PortalPoliciesAfter, SettingsPortalHeader, SheetPortalPolicies } from "@/components/sheet/designer/portal-policies";
 import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
+import { LeadScreen, PipelineScreen } from "@/components/sheet/lead-screens";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
@@ -41,6 +42,7 @@ import { loadSheetTasks } from "@/modules/sheet/tasks-load";
 import { loadSheetAccess, loadSheetBundle } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 import { loadSheetCalendar, loadSheetConsultations } from "@/modules/scheduling/sheet-load";
+import { loadSheetLead, loadSheetPipeline } from "@/modules/leads/load";
 
 const PUBLIC = new Set(["enquiry", "book"]);
 
@@ -308,6 +310,26 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
+  // Leads: the pipeline (Board, List, Timeline) and one lead (`/sheet/lead?id=`).
+  if (page === "pipeline" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetPipeline(access.staff, query);
+    return (
+      <SheetScreen page={page}>
+        <PipelineScreen loaded={loaded} />
+      </SheetScreen>
+    );
+  }
+  if (page === "lead" && (access.kind === "live" || access.kind === "sample")) {
+    // The Designer's + Lead goes to /sheet/lead?new=1: New lead is a dialog on the pipeline.
+    if (!query.id) redirect("/sheet/pipeline?new=1");
+    const loaded = await loadSheetLead(access.staff, query.id, { conflict: query.dlg === "conflict" });
+    if (!loaded) notFound();
+    return (
+      <SheetScreen page={page}>
+        <LeadScreen loaded={loaded} />
+      </SheetScreen>
+    );
+  }
   if (page === "matter" && (access.kind === "live" || access.kind === "sample")) {
     const loaded = matterId ? await loadSheetMatter(access.staff, matterId, query) : null;
     if (!loaded) notFound();
@@ -375,5 +397,8 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     limit: one("limit"),
     person: one("person"),
     week: one("week"),
+    id: one("id"),
+    stage: one("stage"),
+    owner: one("owner"),
   };
 }

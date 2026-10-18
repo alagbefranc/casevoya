@@ -24,6 +24,387 @@ export type Database = {
   }
   public: {
     Tables: {
+      lead_booking_links: {
+        Row: {
+          booking_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          lead_id: string
+          organization_id: string
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id: string
+          organization_id: string
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id?: string
+          organization_id?: string
+        }
+        Relationships: []
+      }
+      lead_consents: {
+        Row: {
+          captured_via: string
+          created_by: string | null
+          granted: boolean
+          id: string
+          lead_id: string
+          organization_id: string
+          policy_version: string | null
+          purpose: Database["public"]["Enums"]["lead_consent_purpose"]
+          recorded_at: string
+          statement_sha256: string
+          statement_text: string
+        }
+        Insert: {
+          captured_via: string
+          created_by?: string | null
+          granted: boolean
+          id?: string
+          lead_id: string
+          organization_id: string
+          policy_version?: string | null
+          purpose: Database["public"]["Enums"]["lead_consent_purpose"]
+          recorded_at?: string
+          statement_sha256: string
+          statement_text: string
+        }
+        Update: {
+          captured_via?: string
+          created_by?: string | null
+          granted?: boolean
+          id?: string
+          lead_id?: string
+          organization_id?: string
+          policy_version?: string | null
+          purpose?: Database["public"]["Enums"]["lead_consent_purpose"]
+          recorded_at?: string
+          statement_sha256?: string
+          statement_text?: string
+        }
+        Relationships: []
+      }
+      lead_duplicate_decisions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          lead_id: string
+          organization_id: string
+          other_lead_id: string
+          same_person: boolean
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id: string
+          organization_id: string
+          other_lead_id: string
+          same_person: boolean
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id?: string
+          organization_id?: string
+          other_lead_id?: string
+          same_person?: boolean
+        }
+        Relationships: []
+      }
+      lead_enquiry_attempts: {
+        Row: {
+          client_hash: string | null
+          created_at: string
+          id: string
+          organization_id: string
+        }
+        Insert: {
+          client_hash?: string | null
+          created_at?: string
+          id?: string
+          organization_id: string
+        }
+        Update: {
+          client_hash?: string | null
+          created_at?: string
+          id?: string
+          organization_id?: string
+        }
+        Relationships: []
+      }
+      lead_events: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          from_stage_id: string | null
+          id: string
+          kind: string
+          lead_id: string
+          organization_id: string
+          payload: Json
+          reason: string | null
+          to_stage_id: string | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          from_stage_id?: string | null
+          id?: string
+          kind: string
+          lead_id: string
+          organization_id: string
+          payload?: Json
+          reason?: string | null
+          to_stage_id?: string | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          from_stage_id?: string | null
+          id?: string
+          kind?: string
+          lead_id?: string
+          organization_id?: string
+          payload?: Json
+          reason?: string | null
+          to_stage_id?: string | null
+        }
+        Relationships: []
+      }
+      lead_follow_ups: {
+        Row: {
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          created_by: string | null
+          due_on: string | null
+          id: string
+          lead_id: string
+          organization_id: string
+          owner_membership_id: string | null
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_on?: string | null
+          id?: string
+          lead_id: string
+          organization_id: string
+          owner_membership_id?: string | null
+          title: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_on?: string | null
+          id?: string
+          lead_id?: string
+          organization_id?: string
+          owner_membership_id?: string | null
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      lead_notes: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          id: string
+          lead_id: string
+          organization_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id: string
+          organization_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id?: string
+          organization_id?: string
+        }
+        Relationships: []
+      }
+      lead_stages: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          key: string
+          kind: Database["public"]["Enums"]["lead_stage_kind"]
+          label: string
+          organization_id: string
+          position: number
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key: string
+          kind: Database["public"]["Enums"]["lead_stage_kind"]
+          label: string
+          organization_id: string
+          position: number
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key?: string
+          kind?: Database["public"]["Enums"]["lead_stage_kind"]
+          label?: string
+          organization_id?: string
+          position?: number
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      leads: {
+        Row: {
+          conflict_checked_at: string | null
+          conflict_checked_by: string | null
+          conflict_note: string | null
+          conflict_result: Database["public"]["Enums"]["lead_conflict_result"]
+          converted_at: string | null
+          converted_matter_id: string | null
+          converted_person_id: string | null
+          country_now: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          date_of_birth: string | null
+          display_name: string
+          email: string | null
+          id: string
+          is_sample: boolean
+          language: string | null
+          lost_at: string | null
+          lost_reason: string | null
+          organization_id: string
+          owner_membership_id: string | null
+          phone: string | null
+          preferred_contact: string | null
+          proposed_fee_cents: number | null
+          same_person_lead_id: string | null
+          service_interest: string | null
+          source: Database["public"]["Enums"]["lead_source"]
+          source_detail: string | null
+          stage_id: string
+          submission_key: string | null
+          tags: string[]
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          conflict_checked_at?: string | null
+          conflict_checked_by?: string | null
+          conflict_note?: string | null
+          conflict_result?: Database["public"]["Enums"]["lead_conflict_result"]
+          converted_at?: string | null
+          converted_matter_id?: string | null
+          converted_person_id?: string | null
+          country_now?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          date_of_birth?: string | null
+          display_name: string
+          email?: string | null
+          id?: string
+          is_sample?: boolean
+          language?: string | null
+          lost_at?: string | null
+          lost_reason?: string | null
+          organization_id: string
+          owner_membership_id?: string | null
+          phone?: string | null
+          preferred_contact?: string | null
+          proposed_fee_cents?: number | null
+          same_person_lead_id?: string | null
+          service_interest?: string | null
+          source: Database["public"]["Enums"]["lead_source"]
+          source_detail?: string | null
+          stage_id: string
+          submission_key?: string | null
+          tags?: string[]
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          conflict_checked_at?: string | null
+          conflict_checked_by?: string | null
+          conflict_note?: string | null
+          conflict_result?: Database["public"]["Enums"]["lead_conflict_result"]
+          converted_at?: string | null
+          converted_matter_id?: string | null
+          converted_person_id?: string | null
+          country_now?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          date_of_birth?: string | null
+          display_name?: string
+          email?: string | null
+          id?: string
+          is_sample?: boolean
+          language?: string | null
+          lost_at?: string | null
+          lost_reason?: string | null
+          organization_id?: string
+          owner_membership_id?: string | null
+          phone?: string | null
+          preferred_contact?: string | null
+          proposed_fee_cents?: number | null
+          same_person_lead_id?: string | null
+          service_interest?: string | null
+          source?: Database["public"]["Enums"]["lead_source"]
+          source_detail?: string | null
+          stage_id?: string
+          submission_key?: string | null
+          tags?: string[]
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       availability_overrides: {
         Row: {
           created_at: string
@@ -6565,6 +6946,195 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_lead_follow_up: {
+        Args: {
+          p_due_on: string | null
+          p_lead: string
+          p_org: string
+          p_owner_membership_id: string | null
+          p_title: string
+        }
+        Returns: string
+      }
+      add_lead_note: {
+        Args: {
+          p_body: string
+          p_lead: string
+          p_org: string
+        }
+        Returns: string
+      }
+      archive_lead_stage: {
+        Args: {
+          p_org: string
+          p_stage_id: string
+        }
+        Returns: undefined
+      }
+      close_lead_lost: {
+        Args: {
+          p_expected_version: number
+          p_lead: string
+          p_org: string
+          p_reason: string
+        }
+        Returns: number
+      }
+      complete_lead_follow_up: {
+        Args: {
+          p_follow_up: string
+          p_org: string
+        }
+        Returns: undefined
+      }
+      convert_lead_to_matter: {
+        Args: {
+          p_consultant_membership_id: string
+          p_expected_version: number
+          p_lead: string
+          p_org: string
+          p_rule_pack_version_id?: string | null
+        }
+        Returns: Json
+      }
+      create_lead: {
+        Args: {
+          p_country_now: string | null
+          p_email: string | null
+          p_language: string | null
+          p_marketing_consent: boolean
+          p_name: string
+          p_note: string | null
+          p_org: string
+          p_owner_membership_id: string | null
+          p_phone: string | null
+          p_preferred_contact: string | null
+          p_proposed_fee_cents: number | null
+          p_reply_consent: boolean
+          p_service_interest: string | null
+          p_source: Database["public"]["Enums"]["lead_source"]
+          p_source_detail: string | null
+          p_tags: string[]
+        }
+        Returns: string
+      }
+      create_lead_from_booking: {
+        Args: {
+          p_booking: string
+          p_org: string
+        }
+        Returns: string
+      }
+      decide_lead_duplicate: {
+        Args: {
+          p_lead: string
+          p_org: string
+          p_other: string
+          p_same_person: boolean
+        }
+        Returns: undefined
+      }
+      import_leads: {
+        Args: {
+          p_file_name: string
+          p_org: string
+          p_rows: Json
+        }
+        Returns: Json
+      }
+      lead_conflict_matches: {
+        Args: {
+          p_lead: string
+          p_org: string
+        }
+        Returns: Json
+      }
+      link_booking_to_lead: {
+        Args: {
+          p_booking: string
+          p_lead: string
+          p_org: string
+        }
+        Returns: undefined
+      }
+      move_lead_stage: {
+        Args: {
+          p_expected_version: number
+          p_lead: string
+          p_org: string
+          p_reason: string | null
+          p_to_stage: string
+        }
+        Returns: number
+      }
+      record_lead_conflict_check: {
+        Args: {
+          p_expected_version: number
+          p_lead: string
+          p_note: string | null
+          p_org: string
+          p_result: Database["public"]["Enums"]["lead_conflict_result"]
+        }
+        Returns: number
+      }
+      record_lead_consent: {
+        Args: {
+          p_granted: boolean
+          p_lead: string
+          p_org: string
+          p_purpose: Database["public"]["Enums"]["lead_consent_purpose"]
+        }
+        Returns: string
+      }
+      save_lead_stage: {
+        Args: {
+          p_label: string
+          p_org: string
+          p_position: number
+          p_stage_id: string | null
+        }
+        Returns: string
+      }
+      submit_enquiry: {
+        Args: {
+          p_client_hash: string | null
+          p_consent_version: string | null
+          p_contact: string
+          p_country_now: string | null
+          p_firm_slug: string
+          p_idempotency_key: string
+          p_language: string | null
+          p_marketing_consent: boolean
+          p_marketing_statement: string | null
+          p_name: string
+          p_preferred_contact: string | null
+          p_reply_consent: boolean
+          p_reply_statement: string
+          p_service_interest: string | null
+          p_source: Database["public"]["Enums"]["lead_source"]
+        }
+        Returns: Json
+      }
+      update_lead: {
+        Args: {
+          p_country_now: string | null
+          p_date_of_birth: string | null
+          p_email: string | null
+          p_expected_version: number
+          p_language: string | null
+          p_lead: string
+          p_name: string
+          p_org: string
+          p_owner_membership_id: string | null
+          p_phone: string | null
+          p_preferred_contact: string | null
+          p_proposed_fee_cents: number | null
+          p_service_interest: string | null
+          p_source_detail: string | null
+          p_tags: string[]
+        }
+        Returns: number
+      }
       booking_public_busy: {
         Args: { p_event_type_id: string; p_from: string; p_to: string }
         Returns: Json
@@ -7800,6 +8370,20 @@ export type Database = {
       }
     }
     Enums: {
+      lead_conflict_result: "not_checked" | "clear" | "possible_conflict" | "conflict"
+      lead_consent_purpose: "enquiry_reply" | "marketing"
+      lead_source:
+        | "web_form"
+        | "hosted_page"
+        | "booking_page"
+        | "phone"
+        | "email"
+        | "referral"
+        | "event"
+        | "walk_in"
+        | "csv_import"
+        | "other"
+      lead_stage_kind: "open" | "converted" | "lost" | "archived"
       booking_actor: "client" | "staff" | "system"
       booking_location_kind: "video" | "phone" | "in_person" | "meeting_link"
       booking_status:
@@ -8240,6 +8824,10 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      lead_conflict_result: ["not_checked", "clear", "possible_conflict", "conflict"],
+      lead_consent_purpose: ["enquiry_reply", "marketing"],
+      lead_source: ["web_form", "hosted_page", "booking_page", "phone", "email", "referral", "event", "walk_in", "csv_import", "other"],
+      lead_stage_kind: ["open", "converted", "lost", "archived"],
       booking_actor: ["client", "staff", "system"],
       booking_location_kind: ["video", "phone", "in_person", "meeting_link"],
       booking_status: ["held", "pending_payment", "confirmed", "cancelled", "expired", "no_show", "completed"],

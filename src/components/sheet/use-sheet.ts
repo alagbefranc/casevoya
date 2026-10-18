@@ -58,6 +58,7 @@ import {
 } from "./corrections-acts";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
+import { wireLead, wirePipeline } from "./pipeline-acts";
 import { runNewTask, syncNewTask } from "./new-task-act";
 import { inviteFromEdit, openPersonEdit, runPersonEdit } from "./person-edit-act";
 import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-invite-act";
@@ -712,6 +713,10 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       bookDialog.addEventListener("change", () => syncBookTimes(bookDialog), listen);
       if (dialogParam === "book") window.setTimeout(() => openDialog("dlgBook"), 300);
     }
+
+    // Leads: the pipeline board, filters, New lead and CSV import; the lead page's actions.
+    if (page === "pipeline") wirePipeline(root, router, ac.signal, openDialog);
+    if (page === "lead") wireLead(root, router, ac.signal, openDialog);
 
     window.addEventListener("resize", place, listen);
     return () => ac.abort();
