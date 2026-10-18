@@ -30,6 +30,8 @@ import { ROLE_MATRIX } from "@/modules/staff/role-matrix";
 import { SUSPENDED_CSS, SuspendedAlert, SuspendedPanel, SuspendedTopBar } from "@/components/sheet/designer/licence-suspended";
 import { loadSheetLicenceSuspended } from "@/modules/sheet/licence-suspended-load";
 import { SUSPENDED_REVEAL } from "@/modules/sheet/licence-suspended-present";
+import { GrantDialog, GrantsHeader, SheetGrants } from "@/components/sheet/designer/grants";
+import { loadSheetGrants } from "@/modules/sheet/grants-load";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
 import { homeRoute } from "@/lib/auth/home-route";
@@ -214,6 +216,23 @@ export async function SheetBody({
           after={<LicenceAfter dialogs={loaded.dialogs} />}
         >
           <SheetLicences data={loaded.page} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Practice > Access grants: person and matter grants, Support access and Office and team limits.
+  if (page === "grants" && (access.kind === "live" || access.kind === "sample")) {
+    const tab = query.tab === "support" || query.tab === "limits" ? query.tab : "grants";
+    const loaded = await loadSheetGrants(access.staff, tab);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<GrantsHeader tab={tab} pills={loaded.page.pills} />}
+          statusbar={loaded.chrome.statusbar}
+          after={<GrantDialog data={loaded.dialog} />}
+        >
+          <SheetGrants data={loaded.page} />
         </SheetFrame>
       </SheetScreen>
     );

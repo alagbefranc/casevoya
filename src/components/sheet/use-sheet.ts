@@ -64,6 +64,7 @@ import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-
 import { policyDialogId, restorePolicyDraft, runPublishPolicy } from "./portal-policy-act";
 import { POLICY_KINDS, policyKindForDialog } from "@/modules/portal-policies/defaults";
 import { restoreStaffInvite, runStaffInvite, runStaffResend, runStaffRevoke } from "./staff-invite-act";
+import { reopenGrantDialog, runGrantCreate } from "./grants-acts";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
@@ -340,6 +341,15 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
             ? runLicenceReport(licence, router)
             : runReassign(licence, router);
         void run.finally(() => licence.removeAttribute("aria-busy"));
+        return;
+      }
+      // Access grants: Create grant saves through the database (New grant opens #dlgG by data-dlg).
+      const grantCreate = target.closest<HTMLElement>("[data-grant-create]");
+      if (grantCreate && root.contains(grantCreate)) {
+        event.preventDefault();
+        if (grantCreate.getAttribute("aria-busy") === "true") return;
+        grantCreate.setAttribute("aria-busy", "true");
+        void runGrantCreate(grantCreate, router).finally(() => grantCreate.removeAttribute("aria-busy"));
         return;
       }
       // The Staff tab: Invite staff opens the Designer's dialog; Send, Resend and revoke go to the database.
@@ -731,6 +741,15 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       }
       const reassign = root.querySelector<HTMLDialogElement>("dialog#dlgRe");
       if (reassign) reassign.addEventListener("change", () => syncReassign(reassign), listen);
+    }
+
+    // Access grants: ?dlg=grant (back from step-up) reopens New access grant with what was typed.
+    const grantDialog = root.querySelector<HTMLDialogElement>("dialog#dlgG");
+    if (grantDialog?.querySelector("[data-grant-create]")) {
+      window.setTimeout(() => reopenGrantDialog(root, openDialog), 300);
+      grantDialog.addEventListener("close", () => {
+        if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
+      }, listen);
     }
 
     const newTask = root.querySelector<HTMLDialogElement>("dialog#dlgTask");

@@ -12,6 +12,8 @@ import { SheetHome, type HomeData } from "@/components/sheet/designer/home";
 import { SUSPENDED_CSS, SuspendedAlert, SuspendedPanel, SuspendedTopBar, type SuspendedData } from "@/components/sheet/designer/licence-suspended";
 import { LicenceSuspendedMarkup } from "@/components/sheet/markup/licence-suspended";
 import { SUSPENDED_REVEAL } from "@/modules/sheet/licence-suspended-present";
+import { GrantDialog, GrantsHeader, SheetGrants, type GrantDialogData, type GrantsData, type GrantsTab } from "@/components/sheet/designer/grants";
+import { GrantsMarkup } from "@/components/sheet/markup/grants";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 
@@ -317,5 +319,84 @@ describe("Designer fidelity: licence-suspended home", () => {
     expect(html).toContain('data-matter="66666666-6666-4666-8666-666666666666"');
     expect(html).toContain("Reassign 1 matter<");
     expect(html).not.toContain("Clients notified");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Access grants
+// ---------------------------------------------------------------------------
+const DESIGNER_GRANTS: GrantsData = {
+  tab: "grants",
+  pills: ["3 active", "1 support request"],
+  grants: [
+    { who: "M. Leblanc (translator, external)", canSee: "Marriage certificate v2 only", why: "Certified translation", grantedBy: "Amara Osei", expires: { num: "28 Oct 2026" }, state: { tone: "ok", label: "Active" } },
+    { who: "Grace Lin", canSee: { left: "NL-2026-0142", right: "read only" }, why: "Cover while Amara is away", grantedBy: "Amara Osei", expires: { num: "2 Nov 2026" }, state: { tone: "ok", label: "Active" } },
+    { who: "Rafael Sharma", canSee: "Shared application status", why: "Sponsor", grantedBy: "Priya Sharma (consent)", expires: "When Priya withdraws", state: { tone: "ok", label: "Active" } },
+    { who: "Northline auditor", canSee: "Client-account ledgers, Sept", why: "Annual review", grantedBy: "Lena Park", expires: "Expired 30 Sep", state: { tone: "gr", label: "Expired" } },
+  ],
+  grantsNote: "External collaborators see only the named documents or tasks. They can’t browse the directory or export in bulk.",
+  support: {
+    alert: {
+      title: "Support grant ends in 8 minutes",
+      parts: ["Casevoya support (Jordan Reid)", "NL-2026-0131 documents only", "approved by Amara Osei at 09:04", "reason: “Upload keeps failing for Kofi”."],
+    },
+    request: {
+      from: "Jordan Reid, Casevoya platform support",
+      scope: "Upload settings and failed upload records for NL-2026-0131",
+      notIncluded: "Document contents, messages, finance",
+      duration: "60 minutes from approval",
+      reason: { left: "Ticket CS-2291", right: "uploads time out over 20 MB" },
+    },
+    history: [
+      { when: "17 Oct 09:04–10:04", who: "Jordan Reid", scope: "NL-2026-0131 documents", approvedBy: "Amara Osei", opened: "2 records, both listed in Audit" },
+      { when: "2 Oct 15:10–16:10", who: "Jordan Reid", scope: "Firm settings only", approvedBy: "Amara Osei", opened: "Settings page" },
+    ],
+  },
+  supportIntro: "Casevoya support can’t see your client files unless you approve a grant. It’s scoped, lasts 60 minutes by default and ends on its own (SEC-09).",
+  limits: [
+    { person: "Daniel Ruiz", role: "Case manager", office: "Toronto", team: "Family class" },
+    { person: "Grace Lin", role: "Licensed consultant", office: "Toronto, Ottawa", team: "All" },
+    { person: "Lena Park", role: "Finance", office: "All offices", team: { left: "Finance only", right: "no narratives or medical" } },
+  ],
+  limitsIntro: "Narrow any role to an office or a team.",
+};
+
+const DESIGNER_GRANT_DIALOG: GrantDialogData = {
+  people: [{ label: "Grace Lin" }, { label: "External collaborator (email)…" }],
+  scopes: [{ label: { left: "One matter", right: "read only" } }, { label: "Named documents" }, { label: "Named tasks" }],
+};
+
+describe("Designer fidelity: Access grants", () => {
+  for (const [tab, variant] of [["grants", "default"], ["support", "tab-support"], ["limits", "tab-limits"]] as [GrantsTab, string][]) {
+    it(`renders the Access grants page (${tab} tab) and its dialog exactly as the captured Designer markup`, () => {
+      const captured = clean(renderToStaticMarkup(createElement(GrantsMarkup, { variant })));
+      const data = { ...DESIGNER_GRANTS, tab };
+      const live = frame("/sheet/grants", createElement(GrantsHeader, { tab, pills: data.pills }), createElement(SheetGrants, { data }), {
+        after: createElement(GrantDialog, { data: DESIGNER_GRANT_DIALOG }),
+      });
+      same(live, captured);
+    });
+  }
+
+  it("shows honest empty states and wires Create grant by data attributes", () => {
+    const html = renderToStaticMarkup(
+      createElement("div", null,
+        createElement(SheetGrants, { data: { ...DESIGNER_GRANTS, grants: [] } }),
+        createElement(SheetGrants, { data: { ...DESIGNER_GRANTS, tab: "support", support: { alert: null, request: null, history: [] } } }),
+        createElement(GrantDialog, {
+          data: {
+            organizationId: "33333333-3333-4333-8333-333333333333",
+            people: [{ label: "Ana Diaz", personId: "11111111-1111-4111-8111-111111111111" }],
+            scopes: [{ label: { left: "CA-2026-0001", right: "Ben Ito’s records, read only" }, matterId: "22222222-2222-4222-8222-222222222222", subjectId: "44444444-4444-4444-8444-444444444444" }],
+          },
+        }),
+      ),
+    );
+    expect(html).toContain("No grants yet");
+    expect(html).toContain("No support access");
+    expect(html).not.toContain("Request waiting for you");
+    expect(html).toContain('<option data-person="11111111-1111-4111-8111-111111111111">Ana Diaz</option>');
+    expect(html).toContain('data-matter="22222222-2222-4222-8222-222222222222" data-subject="44444444-4444-4444-8444-444444444444"');
+    expect(html).toContain('data-grant-create="1" data-org="33333333-3333-4333-8333-333333333333"');
   });
 });

@@ -138,7 +138,7 @@ export function reopenLicenceDialog(root: ParentNode, open: Open) {
   if (dialog === LICENCE_DIALOGS.add && root.querySelector("#dlgAdd")) {
     const select = el<HTMLSelectElement>(root, "adP");
     const option = select ? [...select.options].find((item) => item.dataset.membership === text("membershipId")) : undefined;
-    if (select && option) select.value = option.value;
+    if (option) option.selected = true;
     const regulator = el<HTMLSelectElement>(root, "adR");
     if (regulator && text("regulator")) regulator.value = text("regulator");
     const number = el(root, "adN");
@@ -161,7 +161,7 @@ export function reopenLicenceDialog(root: ParentNode, open: Open) {
     }
     const to = el<HTMLSelectElement>(root, "toC");
     const option = to ? [...to.options].find((item) => item.dataset.membership === text("to")) : undefined;
-    if (to && option) to.value = option.value;
+    if (option) option.selected = true;
     const reason = el<HTMLTextAreaElement>(root, "reN");
     if (reason && text("reason")) reason.value = text("reason");
     const dlg = root.querySelector("#dlgRe");

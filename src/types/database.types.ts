@@ -7319,6 +7319,46 @@ export type Database = {
           result: string | null
         }[]
       }
+      firm_access_grants: {
+        Args: { p_organization_id: string }
+        Returns: {
+          created_at: string
+          expires_at: string | null
+          granted_by_grantee: boolean
+          granted_by_name: string | null
+          grantee_name: string
+          id: string
+          kind: Database["public"]["Enums"]["access_grant_kind"]
+          matter_reference: string | null
+          purpose: string
+          revoked_at: string | null
+          subject_name: string
+        }[]
+      }
+      access_grant_choices: {
+        Args: { p_organization_id: string }
+        Returns: {
+          choice: string
+          matter_id: string | null
+          matter_reference: string | null
+          person_id: string
+          person_name: string
+        }[]
+      }
+      create_access_grant: {
+        Args: {
+          p_expires_on: string
+          p_grantee_person_id: string
+          p_matter_id: string
+          p_purpose: string
+          p_subject_person_id: string
+        }
+        Returns: string
+      }
+      revoke_access_grant: {
+        Args: { p_grant_id: string; p_reason: string }
+        Returns: undefined
+      }
       reassign_consultant_matters_selected: {
         Args: {
           p_from_membership: string
