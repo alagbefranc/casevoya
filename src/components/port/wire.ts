@@ -234,7 +234,10 @@ export function usePortActions(page: string, token?: string) {
         const mode = event.root.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.dataset.v;
         const pending = { firmName: val(event.root, "firm"), sampleMode: mode !== "pilot" };
         sessionStorage.setItem("cv-trial", JSON.stringify(pending));
-        return createTrialFirm(pending);
+        const created = await createTrialFirm(pending);
+        // Created now (already fully signed in): /setup must not create it again from storage.
+        if (created?.ok && created.href === "/setup") sessionStorage.removeItem("cv-trial");
+        return created;
       }
       if (page === "recovery" && el.hasAttribute("data-next") && event.step === 0) {
         return sendRecoveryEmail(val(event.root, "rem"));

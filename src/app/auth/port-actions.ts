@@ -201,6 +201,20 @@ export async function signUpForTrial(input: {
   return { ok: true };
 }
 
+async function ownsFirm(supabase: Awaited<ReturnType<typeof createClient>>): Promise<boolean> {
+  const { data: claims } = await supabase.auth.getClaims();
+  const userId = claims?.claims?.sub;
+  if (!userId) return false;
+  const { data } = await supabase
+    .from("memberships")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("role", "firm_owner")
+    .eq("status", "active")
+    .limit(1);
+  return Boolean(data?.length);
+}
+
 export async function createTrialFirm(input: { firmName: string; sampleMode: boolean }): Promise<PortResult | null> {
   if (!hasPublicSupabaseEnv()) return nullResult();
   const name = input.firmName.trim().slice(0, 200);
@@ -209,6 +223,8 @@ export async function createTrialFirm(input: { firmName: string; sampleMode: boo
   const ctx = await getAuthContext();
   if (!ctx.signedIn) return fail("Confirm your email before setting up the firm.");
   if (!ctx.assured) return { ok: true, href: "/mfa?step=2&next=/setup" };
+  // One trial firm per sign-up: a second click, a stale tab or /setup's resume must not make another.
+  if (await ownsFirm(supabase)) return { ok: true, href: "/setup" };
   const slug = firmSlug(name);
   const { data, error } = await supabase.rpc("create_organization", {
     legal_name: name,
