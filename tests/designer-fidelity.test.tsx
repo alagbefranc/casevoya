@@ -21,6 +21,8 @@ import { MatterMarkup } from "@/components/sheet/markup/matter";
 import { MattersMarkup } from "@/components/sheet/markup/matters";
 import { SampleModeMarkup } from "@/components/sheet/markup/sample-mode";
 import { SampleCasePanel, type SampleCaseData } from "@/components/sheet/designer/sample-case";
+import { SheetTasks, TasksDialog, TasksHeader, type TasksData, type TasksTab } from "@/components/sheet/designer/tasks";
+import { TasksMarkup } from "@/components/sheet/markup/tasks";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -125,6 +127,50 @@ const DESIGNER_MATTERS: MattersData = {
   total: 18,
   more: "#",
   empty: null,
+};
+
+const DANIEL_ROW = { person: DANIEL_AV, label: "Daniel" };
+const LENA_ROW = { person: AV("Lena Park", "av-lena-finance"), label: "Lena" };
+const AMARA_ROW = { person: AMARA_AV, label: "Amara" };
+const NORMAL = { tone: "gr", label: "Normal" } as const;
+
+const DESIGNER_TASKS: TasksData = {
+  tab: "internal",
+  counts: { open: 7, escalated: 1 },
+  internal: {
+    alert: {
+      title: "call Kofi Mensah about the bounced deadline notice",
+      detail: "Overdue critical task, escalated to Amara Osei (consultant) and the owner.",
+      href: "/sheet/inbox?tab=bounced",
+    },
+    rows: [
+      { title: "Call Kofi about bounced notice", matter: "NL-2026-0131", owner: DANIEL_ROW, due: "Today 12:00 ET", priority: { tone: "bad", label: "Critical" }, dependsOn: "\u2014", state: { tone: "bad", label: "Escalated" } },
+      { title: "Review marriage certificate v2", matter: "NL-2026-0142", owner: DANIEL_ROW, due: "Mon 19 Oct", priority: { tone: "chg", label: "High" }, dependsOn: "\u2014", state: { tone: "blue", label: "In progress" } },
+      { title: "Approve earned-fee transfer CAD 300", matter: "NL-2026-0142", owner: LENA_ROW, due: "Mon 19 Oct", priority: NORMAL, dependsOn: "Amara approved \u2713", state: "Waiting for you" },
+      { title: "Verify RBC-55102 payment", matter: "NL-2026-0131", owner: LENA_ROW, due: "Tue 20 Oct", priority: NORMAL, dependsOn: "\u2014", state: "Open" },
+      { title: "Consultant review of package v3", matter: "NL-2026-0142", owner: AMARA_ROW, due: "Wed 28 Oct", priority: { tone: "chg", label: "High" }, dependsOn: "Police certificate accepted", state: { tone: "gr", label: "Blocked" } },
+      { title: "Re-check Grace Lin\u2019s licence", matter: "\u2014", owner: AMARA_ROW, due: "Thu 22 Oct", priority: NORMAL, dependsOn: "\u2014", state: "Open" },
+    ],
+  },
+  client: {
+    rows: [
+      { title: "Upload police certificate (India)", person: "Priya Sharma", due: { num: "Fri 30 Oct" }, reminders: { offsets: [14, 7, 3, 1], quietHours: true }, state: { tone: "rev", label: "Requested" } },
+      { title: "Sign amendment 1", person: "Priya Sharma", due: { num: "Thu 29 Oct" }, reminders: { offsets: [3, 1], quietHours: false }, state: { tone: "blue", label: "Opened" } },
+      { title: "Add dates to relationship photos", person: "Rafael Sharma", due: { num: "Wed 21 Oct" }, reminders: null, state: { tone: "chg", label: "Changes requested" } },
+      { title: "Give consent for your own records", person: "Olena Sharma", due: "Done 10 Oct", reminders: null, state: { tone: "ok", label: "Done" } },
+    ],
+  },
+  deadlines: {
+    rows: [
+      { label: "Respond to IRCC request", matter: "NL-2026-0142", source: "IRCC letter, received 12 Oct", local: { left: "Fri 30 Oct 17:00 ET", right: "same zone" }, verifiedBy: "Amara Osei, 13 Oct", state: { tone: "ok", label: "Verified" } },
+      { label: "Medical exam", matter: "NL-2026-0131", source: "OCR from uploaded letter", local: { left: "Mon 2 Nov", right: "official time UTC" }, verifiedBy: "\u2014", state: { tone: "chg", label: "Tentative, confirm" } },
+    ],
+  },
+  dialog: {
+    owners: ["Daniel Ruiz", "Amara Osei", "Lena Park"],
+    dependsOn: ["Police certificate accepted", "Agreement signed"],
+    create: { toast: "Task created", kind: "ok" },
+  },
 };
 
 const PRIYA = AV("Priya Sharma", "av-priya-applicant");
@@ -371,5 +417,42 @@ describe("Designer fidelity", () => {
       console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
     }
     expect(live).toBe(captured);
+  });
+
+  for (const tab of ["internal", "client", "deadlines"] as TasksTab[]) {
+    it(`renders the Tasks page (${tab} tab) exactly as the captured Designer markup`, () => {
+      const captured = withoutPreloads(renderToStaticMarkup(createElement(TasksMarkup, { variant: `tab-${tab}` })));
+      const data = { ...DESIGNER_TASKS, tab };
+      const live = withoutPreloads(
+        renderToStaticMarkup(
+          createElement(SheetFrame, {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/tasks" },
+            header: createElement(TasksHeader, { tab, counts: data.counts }),
+            statusbar: {
+              timezone: "America/Toronto",
+              queue: { label: "Reminder queue healthy", detail: "0 retries" },
+              sample: { label: "Demo data", detail: "fictional firm \u201cNorthline Immigration\u201d" },
+            },
+            after: createElement(TasksDialog, { data: data.dialog }),
+          }, createElement(SheetTasks, { data })),
+        ),
+      );
+      if (live !== captured) {
+        let i = 0;
+        while (i < live.length && live[i] === captured[i]) i++;
+        console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+      }
+      expect(live).toBe(captured);
+    });
+  }
+
+  it("shows a firm without tasks the Designer's empty states, with no sample people", () => {
+    for (const tab of ["internal", "client", "deadlines"] as TasksTab[]) {
+      const html = renderToStaticMarkup(
+        createElement(SheetTasks, { data: { tab, counts: { open: 0, escalated: 0 }, internal: { alert: null, rows: [] }, client: { rows: [] }, deadlines: { rows: [] }, dialog: { owners: ["Dana Lee"], dependsOn: [], create: { toast: "x", kind: "warn" } } } }),
+      );
+      expect(html).toContain('class="emp"');
+      expect(html).not.toMatch(/Northline|Amara|Priya|Kofi|Olena|Rafael|Daniel|Lena|NL-2026/);
+    }
   });
 });

@@ -16,6 +16,8 @@ function art(name: string, px: number) {
   return `<span class="art" style="--a:${px}px" aria-hidden="true"><img src="/assets/generated/b2/${name}-160@1x.webp" srcset="/assets/generated/b2/${name}-160@2x.webp 2x" width="${px}" height="${px}" alt="" loading="lazy" decoding="async"></span>`;
 }
 
+const FILTER_TOKEN: Record<string, string> = { Mine: "mine", Overdue: "overdue", Blocked: "blocked", "High priority": "high" };
+
 export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
   const router = useRouter();
   useEffect(() => {
@@ -70,6 +72,28 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       dialog?.close();
     };
 
+    // The Tasks page's filter chips (All, Mine, Overdue, Blocked, High priority) and search
+    // narrow the real rows by their `data-f` tokens and text, and keep "N of M shown" true.
+    const filters = page === "tasks" ? root.querySelector<HTMLElement>(".fp-bar") : null;
+    const applyFilters = () => {
+      if (!filters) return;
+      const q = (filters.querySelector("input")?.value ?? "").trim().toLowerCase();
+      const token = FILTER_TOKEN[filters.querySelector(".fchip.on")?.textContent?.trim() ?? ""] ?? "";
+      const rows = [...root.querySelectorAll<HTMLElement>(".t tbody tr")];
+      let shown = 0;
+      for (const row of rows) {
+        const flags = (row.dataset.f ?? "").split(" ");
+        const hide = (Boolean(q) && !row.textContent.toLowerCase().includes(q)) || (Boolean(token) && !flags.includes(token));
+        row.hidden = hide;
+        if (!hide) shown++;
+      }
+      const count = root.querySelector<HTMLElement>("#content > p.sr");
+      if (count) count.textContent = `${shown} of ${rows.length} shown`;
+      const none = shown === 0 && rows.length > 0;
+      root.querySelector<HTMLElement>("#content > .tw")?.toggleAttribute("hidden", none);
+      root.querySelector<HTMLElement>("#content > .fp-fe")?.toggleAttribute("hidden", !none);
+    };
+
     root.addEventListener("click", (event) => {
       const target = event.target as HTMLElement;
       const palette = target.closest<HTMLElement>("[data-palette], #newB");
@@ -86,10 +110,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         void runMatterAct(act, root, router).finally(() => act.removeAttribute("aria-busy"));
         return;
       }
-      const opener = target.closest<HTMLElement>("[data-open], [data-stage], [data-letter], [data-hold]");
+      const opener = target.closest<HTMLElement>("[data-open], [data-dlg], [data-stage], [data-letter], [data-hold]");
       if (opener) {
         event.preventDefault();
-        const id = opener.dataset.open || (opener.hasAttribute("data-stage") ? "dStage" : opener.hasAttribute("data-letter") ? "dLetter" : "dHold");
+        const id =
+          opener.dataset.open ||
+          opener.dataset.dlg ||
+          (opener.hasAttribute("data-stage") ? "dStage" : opener.hasAttribute("data-letter") ? "dLetter" : "dHold");
         openDialog(id);
       }
       const closer = target.closest<HTMLElement>("[data-close], [data-x]");
@@ -141,6 +168,27 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
           row.hidden = mine && !row.hasAttribute("data-mine");
         });
       }
+      if (filters) {
+        const chip = target.closest<HTMLElement>(".fchip");
+        if (chip && filters.contains(chip)) {
+          event.preventDefault();
+          filters.querySelectorAll<HTMLElement>(".fchip").forEach((item) => {
+            item.classList.toggle("on", item === chip);
+            item.setAttribute("aria-pressed", String(item === chip));
+          });
+          applyFilters();
+        }
+        if (target.closest(".fp-fe button")) {
+          event.preventDefault();
+          const input = filters.querySelector("input");
+          if (input) input.value = "";
+          filters.querySelectorAll<HTMLElement>(".fchip").forEach((item, index) => {
+            item.classList.toggle("on", index === 0);
+            item.setAttribute("aria-pressed", String(index === 0));
+          });
+          applyFilters();
+        }
+      }
       const row = target.closest<HTMLElement>("tr[data-href]");
       if (row?.dataset.href && root.contains(row) && !target.closest("a, button, .ck")) {
         router.push(row.dataset.href);
@@ -148,6 +196,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     }, listen);
 
     root.querySelectorAll<HTMLInputElement>('.bar input').forEach((input) => {
+      if (filters?.contains(input)) {
+        const preset = new URLSearchParams(window.location.search).get("q");
+        if (preset && !input.value) input.value = preset;
+        input.addEventListener("input", applyFilters, listen);
+        applyFilters();
+        return;
+      }
       const apply = () => {
         const q = input.value.trim().toLowerCase();
         root.querySelectorAll<HTMLElement>(".t tbody tr").forEach((row) => {

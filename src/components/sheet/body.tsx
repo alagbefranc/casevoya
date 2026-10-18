@@ -7,6 +7,7 @@ import { MATTER_CSS } from "@/components/sheet/designer/matter-css";
 import { MattersTopBar, SheetMatters } from "@/components/sheet/designer/matters";
 import { SampleCasePanel } from "@/components/sheet/designer/sample-case";
 import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
+import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
@@ -16,6 +17,7 @@ import { loadSheetHome } from "@/modules/sheet/home-load";
 import { loadSheetMatter } from "@/modules/sheet/matter-load";
 import { loadSheetMatters } from "@/modules/sheet/matters-load";
 import { loadSheetSample } from "@/modules/sheet/sample-load";
+import { loadSheetTasks } from "@/modules/sheet/tasks-load";
 import { loadSheetAccess, loadSheetBundle } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 
@@ -80,6 +82,21 @@ export async function SheetBody({
       <SheetScreen page={page}>
         <SheetFrame sidebar={chrome.sidebar} header={<MattersTopBar counts={matters.counts} />} statusbar={chrome.statusbar}>
           <SheetMatters data={matters} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  if (page === "tasks" && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, tasks } = await loadSheetTasks(access.staff, query);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={chrome.sidebar}
+          header={<TasksHeader tab={tasks.tab} counts={tasks.counts} />}
+          statusbar={chrome.statusbar}
+          after={<TasksDialog data={tasks.dialog} />}
+        >
+          <SheetTasks data={tasks} />
         </SheetFrame>
       </SheetScreen>
     );
