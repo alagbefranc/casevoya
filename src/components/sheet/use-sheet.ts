@@ -88,6 +88,17 @@ import { mountIntakeBuilder } from "./intake-builder-acts";
 import { runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
 import { mountRetentionSlider, runRetentionSave } from "./retention-act";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
+import {
+  mountIntegrations,
+  runComposioEnable,
+  runComposioSwitch,
+  runIntConnect,
+  runIntDisconnect,
+  runIntSync,
+  runNotifPref,
+  runQuietHours,
+} from "./settings-integrations-acts";
+import { reopenFirmDialog, runFirmSave } from "./settings-firm-acts";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
 const NEW_MATTER = "/sheet/matters?new=1";
@@ -361,6 +372,15 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (approve.getAttribute("aria-busy") === "true") return;
         approve.setAttribute("aria-busy", "true");
         void runApproveTemplate(approve, router).finally(() => approve.removeAttribute("aria-busy"));
+        return;
+      }
+      // Settings > Firm, Offices, Branding, Language and time: the dialogs' Save and Remove office.
+      const firmSave = target.closest<HTMLElement>("[data-firm-save]");
+      if (firmSave && root.contains(firmSave)) {
+        event.preventDefault();
+        if (firmSave.getAttribute("aria-busy") === "true") return;
+        firmSave.setAttribute("aria-busy", "true");
+        void runFirmSave(firmSave, router).finally(() => firmSave.removeAttribute("aria-busy"));
         return;
       }
       // Licences: Add a licence and Report a change; the licence-suspended home's Reassign work.
@@ -646,6 +666,32 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(vo, run);
         return;
       }
+      // Settings > Integrations and Notifications: connected accounts, connections, busy times,
+      // the person's own email switches and the firm's quiet hours.
+      const setting = target.closest<HTMLElement>(
+        ".k2-sw[data-composio], [data-composio-enable], [data-int-connect], [data-int-disconnect], [data-int-sync], .k2-sw[data-notif-pref], .k2-sw[data-quiet]",
+      );
+      if (setting && root.contains(setting)) {
+        event.preventDefault();
+        if (setting.hasAttribute("disabled")) return;
+        const data = setting.dataset;
+        const run =
+          data.composio !== undefined
+            ? () => runComposioSwitch(setting, openDialog, router)
+            : data.composioEnable !== undefined
+              ? () => runComposioEnable(setting, router)
+              : data.intConnect !== undefined
+                ? () => runIntConnect(setting)
+                : data.intDisconnect !== undefined
+                  ? () => runIntDisconnect(setting, router)
+                  : data.intSync !== undefined
+                    ? () => runIntSync(setting, router)
+                    : data.notifPref !== undefined
+                      ? () => runNotifPref(setting, router)
+                      : () => runQuietHours(setting, router);
+        busyRun(setting, run);
+        return;
+      }
       const nav = target.closest<HTMLElement>("[data-nav]");
       if (nav?.dataset.nav?.startsWith("/sheet/") && root.contains(nav)) {
         event.preventDefault();
@@ -749,6 +795,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
 
     // The Intake form builder: select, rename, switches, add fields, autosave and publish.
     mountIntakeBuilder(root, router, ac.signal);
+    // Back from a Composio Connect Link on Settings > Integrations.
+    if (page === "settings") mountIntegrations(root, router);
 
     // "Hold to revoke" on a pending staff invitation: held for HOLD_MS, then revoked.
     let hold: number | undefined;
@@ -910,6 +958,18 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       }
       const reassign = root.querySelector<HTMLDialogElement>("dialog#dlgRe");
       if (reassign) reassign.addEventListener("change", () => syncReassign(reassign), listen);
+    }
+
+    // Settings > Firm, Offices, Branding, Language and time: ?dlg=<dialog id> (back from step-up)
+    // reopens that dialog with what was typed; closing a dialog drops ?dlg.
+    if (root.querySelector("[data-firm-save]")) {
+      window.setTimeout(() => reopenFirmDialog(root, openDialog), 300);
+      root.querySelectorAll<HTMLDialogElement>("dialog").forEach((dialog) => {
+        if (!dialog.querySelector("[data-firm-save]")) return;
+        dialog.addEventListener("close", () => {
+          if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
+        }, listen);
+      });
     }
 
     // Access grants: ?dlg=grant (back from step-up) reopens New access grant with what was typed.

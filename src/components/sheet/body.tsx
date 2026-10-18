@@ -23,11 +23,16 @@ import { SampleCasePanel } from "@/components/sheet/designer/sample-case";
 import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
 import { SheetStaffTab, StaffAfter, StaffHeader } from "@/components/sheet/designer/invitations";
 import { PolicyMissingAlert, PortalPoliciesAfter, SettingsPortalHeader, SheetPortalPolicies } from "@/components/sheet/designer/portal-policies";
+import { SettingsFirmAfter, SettingsFirmHeader, SheetSettingsBranding, SheetSettingsFirm, SheetSettingsLanguage, SheetSettingsOffices } from "@/components/sheet/designer/settings-firm";
+import { loadSheetSettingsFirm } from "@/modules/sheet/settings-firm-load";
+import { settingsTab } from "@/modules/sheet/settings-firm-present";
+import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam } from "@/components/sheet/designer/settings";
 import { SettingsBillingHeader, SheetRetention, SheetSubscription } from "@/components/sheet/designer/settings-billing";
 import { loadSheetRetention, loadSheetSubscription } from "@/modules/sheet/settings-billing-load";
-import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam } from "@/components/sheet/designer/settings";
 import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
 import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
+import { ComposioDialog, IntegrationsSettingsHeader, SheetIntegrations, SheetNotificationPrefs } from "@/components/sheet/designer/settings-integrations";
+import { loadSheetSettingsIntegrations } from "@/modules/sheet/settings-integrations-load";
 import { NotificationsHeader, SheetNotifications } from "@/components/sheet/designer/notifications";
 import { loadSheetNotifications } from "@/modules/sheet/notifications-load";
 import { LeadScreen, PipelineScreen } from "@/components/sheet/lead-screens";
@@ -344,6 +349,53 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
+  // Settings > Integrations and Notifications: real connection state and this person's email choices.
+  if (page === "settings" && (query.tab === "integrations" || query.tab === "notifications") && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetSettingsIntegrations(access.staff, query.tab);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<IntegrationsSettingsHeader tab={loaded.tab} pills={loaded.pills} />}
+          statusbar={loaded.chrome.statusbar}
+          after={loaded.dialog ? <ComposioDialog data={loaded.dialog} /> : undefined}
+        >
+          {loaded.integrations ? <SheetIntegrations data={loaded.integrations} /> : null}
+          {loaded.notifications ? <SheetNotificationPrefs data={loaded.notifications} /> : null}
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Firm (the default tab), Offices, Branding, Language and time: the firm's own values.
+  const firmTab = page === "settings" ? settingsTab(query.tab) : null;
+  if (firmTab && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetSettingsFirm(access.staff, firmTab);
+    const view = loaded.page;
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={loaded.chrome.sidebar} header={<SettingsFirmHeader data={loaded.header} />} statusbar={loaded.chrome.statusbar} after={<SettingsFirmAfter data={loaded.dialogs} />}>
+          {view.tab === "general" ? <SheetSettingsFirm data={view.data} /> : null}
+          {view.tab === "offices" ? <SheetSettingsOffices data={view.data} /> : null}
+          {view.tab === "branding" ? <SheetSettingsBranding data={view.data} /> : null}
+          {view.tab === "language" ? <SheetSettingsLanguage data={view.data} /> : null}
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Team and seats and Security: the firm's team, invitations, continuity contact and sign-in posture.
+  if (page === "settings" && (query.tab === "team" || query.tab === "security") && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, header, content } =
+      query.tab === "team"
+        ? await loadSheetSettingsTeam(access.staff).then((loaded) => ({ ...loaded, content: <SheetSettingsTeam data={loaded.page} /> }))
+        : await loadSheetSettingsSecurity(access.staff).then((loaded) => ({ ...loaded, content: <SheetSettingsSecurity data={loaded.page} /> }));
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={chrome.sidebar} header={<SettingsHeader data={header} />} statusbar={chrome.statusbar}>
+          {content}
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
   // Settings > Subscription (ADM-02): the firm's stored subscription state and real usage counts.
   // Keyed per tab so the Sheet's scripts mount again when the tab changes.
   if (page === "settings" && query.tab === "billing" && (access.kind === "live" || access.kind === "sample")) {
@@ -371,20 +423,6 @@ export async function SheetBody({
           statusbar={loaded.chrome.statusbar}
         >
           <SheetRetention data={loaded.page} />
-        </SheetFrame>
-      </SheetScreen>
-    );
-  }
-  // Settings > Team and seats and Security: the firm's team, invitations, continuity contact and sign-in posture.
-  if (page === "settings" && (query.tab === "team" || query.tab === "security") && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, header, content } =
-      query.tab === "team"
-        ? await loadSheetSettingsTeam(access.staff).then((loaded) => ({ ...loaded, content: <SheetSettingsTeam data={loaded.page} /> }))
-        : await loadSheetSettingsSecurity(access.staff).then((loaded) => ({ ...loaded, content: <SheetSettingsSecurity data={loaded.page} /> }));
-    return (
-      <SheetScreen page={page}>
-        <SheetFrame sidebar={chrome.sidebar} header={<SettingsHeader data={header} />} statusbar={chrome.statusbar}>
-          {content}
         </SheetFrame>
       </SheetScreen>
     );
