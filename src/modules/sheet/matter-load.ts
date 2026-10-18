@@ -45,6 +45,7 @@ import {
   clockTime,
 } from "@/modules/sheet/matter-present";
 import { governmentBadge, programLabel } from "@/modules/sheet/matters-present";
+import { agreementsHref, newAgreementHref } from "@/modules/sheet/agreements-present";
 import { inviteEmailLines } from "@/modules/email/templates";
 import { acceptPath, portalRoleForParty, portalRoleLabel } from "@/modules/sheet/portal-invite";
 import { DEADLINE_KINDS, DEADLINE_ROLES, deadlineSource } from "@/modules/sheet/new-deadline";
@@ -328,7 +329,8 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       parties: people.length ? people.map((signer) => firstName(signer.display_name)).join(", ") : "—",
       signatures: people.length ? `${people.filter((signer) => signer.status === "signed").length} of ${people.length}` : "—",
       state: agreementState(row.status),
-      href: "/sheet/agreements",
+      // The All agreements list, searched for this matter: the agreement with its state and signatures.
+      href: agreementsHref(matter.reference),
       action: envelope && row.status !== "completed" ? "Track envelope" : "Open",
     };
   });
@@ -482,7 +484,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       people: [...new Set(checklist.map((row) => firstName(personName(row.personId))))].slice(0, 4),
       rows: documentTable,
     },
-    agreements: { rows: agreementTable, signing },
+    agreements: { rows: agreementTable, signing, create: matter.stage === "closed" ? null : newAgreementHref(matter.id) },
     tasks: { deadline, tasks: taskTable, record: recordsDeadlines },
     outcome: matter.outcome ? outcomeLabel(matter.outcome) : null,
     confirmOutcome,

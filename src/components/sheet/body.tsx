@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { DemoSheet } from "@/components/sheet/demo";
+import { AgreementsHeader, NewAgreementDialog, SheetAgreements, TemplateDialog } from "@/components/sheet/designer/agreements";
 import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet/designer/clients";
 import { SheetFrame } from "@/components/sheet/designer/frame";
 import { SheetHome } from "@/components/sheet/designer/home";
@@ -15,6 +16,7 @@ import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
 import { homeRoute } from "@/lib/auth/home-route";
 import { signInLocation } from "@/lib/auth/redirect";
+import { loadSheetAgreements } from "@/modules/sheet/agreements-load";
 import { loadSheetClients } from "@/modules/sheet/clients-load";
 import { loadSheetHome } from "@/modules/sheet/home-load";
 import { loadSheetMatter } from "@/modules/sheet/matter-load";
@@ -140,6 +142,28 @@ export async function SheetBody({
           }
         >
           <SheetClients data={clients} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Agreements, All agreements tab. The other tabs (quote builder, editor, envelope, compare,
+  // representation authority) are not ported yet and keep their old view.
+  if (page === "agreements" && (!query.tab || query.tab === "list") && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, header, page: agreements, dialog, templateDialog } = await loadSheetAgreements(access.staff);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={chrome.sidebar}
+          header={<AgreementsHeader data={header} />}
+          statusbar={chrome.statusbar}
+          after={
+            <>
+              <NewAgreementDialog data={dialog} />
+              <TemplateDialog data={templateDialog} />
+            </>
+          }
+        >
+          <SheetAgreements data={agreements} />
         </SheetFrame>
       </SheetScreen>
     );
