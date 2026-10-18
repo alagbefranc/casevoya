@@ -62,7 +62,7 @@ Casevoya mail and calendar work as before.
 
 With connected accounts on, the content of mail in the staff member's Casevoya label and their
 calendar busy times pass through Composio (United States) and, when Vo drafts from them, the AI
-vendor. PRD S5 asks for cross-border transfer review; see the OPC's guidance on processing
-personal data across borders (https://www.priv.gc.ca/en/privacy-topics/airports-and-borders/gl_dab_090127/,
-to be confirmed by the reviewer) before any firm enables it. Default is off; only the owner can
+vendor. PRD S5 (OPC, "Guidelines for processing personal data across borders",
+https://www.priv.gc.ca/en/privacy-topics/airports-and-borders/gl_dab_090127/) frames the
+accountability review needed before any firm enables it. Default is off; only the owner can
 turn it on, after accepting a disclosure, and each staff member connects their own account.
