@@ -72,6 +72,84 @@ export function dateTimeIn(value: unknown, timeZone: unknown): string | null {
   }
 }
 
+/*
+ * fr-CA (OQLF) dates and times, composed from fixed month and day names so the output does not
+ * depend on the runtime's ICU data: "1er mai 2026", "vendredi 30 octobre 2026", "30 oct.",
+ * "jeudi 22 octobre 2026 à 10 h 30". Days and months are lowercase; the first day is "1er".
+ */
+const MONTHS_FR = [
+  "janvier",
+  "février",
+  "mars",
+  "avril",
+  "mai",
+  "juin",
+  "juillet",
+  "août",
+  "septembre",
+  "octobre",
+  "novembre",
+  "décembre",
+];
+const MONTHS_FR_SHORT = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juill.", "août", "sept.", "oct.", "nov.", "déc."];
+const WEEKDAYS_FR = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+
+function dayFr(day: number): string {
+  return day === 1 ? "1er" : String(day);
+}
+
+/** "6 novembre 2026" */
+export function longDateFr(value: unknown): string | null {
+  const date = parseDate(value);
+  return date ? `${dayFr(date.day)} ${MONTHS_FR[date.month - 1]} ${date.year}` : null;
+}
+
+/** "vendredi 30 octobre 2026" */
+export function dayDateFr(value: unknown): string | null {
+  const date = parseDate(value);
+  return date ? `${WEEKDAYS_FR[date.weekday]} ${dayFr(date.day)} ${MONTHS_FR[date.month - 1]} ${date.year}` : null;
+}
+
+/** "30 oct." */
+export function shortDateFr(value: unknown): string | null {
+  const date = parseDate(value);
+  return date ? `${dayFr(date.day)} ${MONTHS_FR_SHORT[date.month - 1]}` : null;
+}
+
+/** The calendar day and 24-hour time of an instant in a zone, with dateTimeIn's zone rules, or null. */
+function zonedParts(value: unknown, timeZone: unknown): { date: string; hour: string; minute: string } | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) return null;
+  const zone = typeof timeZone === "string" && timeZone.trim() ? timeZone.trim() : "America/Toronto";
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: zone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(instant);
+    const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
+    return { date: `${part("year")}-${part("month")}-${part("day")}`, hour: part("hour"), minute: part("minute") };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * "jeudi 22 octobre 2026 à 10 h 30" (on the hour: "à 10 h") in the given IANA zone, with the same
+ * zone handling as dateTimeIn.
+ */
+export function dateTimeInFr(value: unknown, timeZone: unknown): string | null {
+  const parts = zonedParts(value, timeZone);
+  const day = parts ? dayDateFr(parts.date) : null;
+  if (!parts || !day) return null;
+  return `${day} à ${Number(parts.hour)} h${parts.minute === "00" ? "" : ` ${parts.minute}`}`;
+}
+
 const STAFF_ROLES: Record<string, string> = {
   firm_owner: "Firm owner",
   licensed_consultant: "Licensed consultant",

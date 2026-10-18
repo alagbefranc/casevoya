@@ -49,6 +49,12 @@ export async function runEmailDispatch(limit = 20) {
         };
         return prepared;
       },
+      async locales(deliveryIds) {
+        const { data, error } = await supabase.rpc("email_delivery_locales", { p_delivery_ids: deliveryIds });
+        if (error) throw new Error(error.message);
+        const record = asRecord(data);
+        return Object.fromEntries(Object.entries(record).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+      },
       openLink(sealed, invitationId) {
         return openInviteLink(config.dispatchSecret, sealed, invitationId);
       },

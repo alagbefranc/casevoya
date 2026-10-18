@@ -15,6 +15,7 @@ import {
   waiveDocumentRequest,
 } from "@/modules/documents/actions";
 import type { PortalDocumentCard, PortalDocuments } from "@/modules/documents/load";
+import { draftInFrench } from "@/modules/i18n/actions";
 import type { PortalViewer } from "@/modules/portal/load";
 import { createClient } from "@/lib/supabase/client";
 
@@ -121,7 +122,7 @@ function Card({
       </article>
       {card.alert ? (
         <div className="alert warn">
-          <div><b>Why changes are needed</b> {card.alert}</div>
+          <div><b>Why changes are needed</b> {card.alertLang === "fr" ? <span lang="fr">{card.alert}</span> : card.alert}</div>
           <div className="acts"><a className="btn sm" href="/portal/upload">Fix now</a></div>
         </div>
       ) : null}
@@ -151,7 +152,13 @@ function Download({
   );
 }
 
-function Review({
+/**
+ * The firm's review form. Live-only portal control (not Designer markup). The French reason is a
+ * documented live-only addition (tests/designer-fidelity.test.tsx): a "Draft in French" button, a
+ * French reason field, and for a machine draft the "Machine draft: check before sending" note
+ * and a required check box. Existing classes only (inp, btn sm, lbl, kd-row); no new styles.
+ */
+export function Review({
   organizationId,
   versionId,
   expectedVersion,
@@ -163,6 +170,11 @@ function Review({
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [pending, start] = useTransition();
+  const [reason, setReason] = useState("");
+  const [french, setFrench] = useState("");
+  // True while the French field holds (an edit of) a machine draft; cleared when it is emptied.
+  const [machine, setMachine] = useState(false);
+  const [drafting, startDraft] = useTransition();
   return (
     <form
       style={{ marginTop: 12 }}
@@ -177,6 +189,9 @@ function Review({
             decision: String(form.get("decision") ?? ""),
             reason: String(form.get("reason") ?? ""),
             code: String(form.get("code") ?? ""),
+            reasonFr: french.trim() || null,
+            reasonFrMachine: machine && Boolean(french.trim()),
+            reasonFrReviewed: form.get("fr_checked") === "on",
           });
           if ("error" in result) setMessage(result.error ?? "The review was not saved.");
           else router.refresh();
@@ -189,7 +204,48 @@ function Review({
           <option value="changes_requested">Changes needed</option>
         </select>
       </label>
-      <input className="inp" name="reason" required minLength={3} maxLength={2000} aria-label="Review reason" placeholder="Reason" />
+      <input className="inp" name="reason" required minLength={3} maxLength={2000} aria-label="Review reason" placeholder="Reason" value={reason} onChange={(event) => setReason(event.target.value)} />
+      <div className="kd-row">
+        <button
+          type="button"
+          className="btn sm"
+          disabled={drafting || pending || reason.trim().length < 3}
+          onClick={() => {
+            startDraft(async () => {
+              const result = await draftInFrench({ organizationId, text: reason });
+              if ("error" in result) {
+                setMessage(result.error ?? "The French draft could not be made.");
+                return;
+              }
+              setFrench(result.text);
+              setMachine(true);
+              setMessage("");
+            });
+          }}
+        >
+          {drafting ? "Drafting" : "Draft in French"}
+        </button>
+      </div>
+      <textarea
+        className="inp"
+        name="reason_fr"
+        lang="fr"
+        maxLength={2000}
+        aria-label="Reason in French, for a client who prefers French"
+        aria-describedby={machine && french ? `fr-note-${versionId}` : undefined}
+        placeholder="Reason in French, optional"
+        value={french}
+        onChange={(event) => {
+          setFrench(event.target.value);
+          if (!event.target.value.trim()) setMachine(false);
+        }}
+      />
+      {machine && french ? (
+        <>
+          <p className="lbl" role="note" id={`fr-note-${versionId}`}>Machine draft: check before sending. Edit it until it says what you mean; the client sees it if they chose French.</p>
+          <label className="lbl"><input type="checkbox" name="fr_checked" required /> I checked this French</label>
+        </>
+      ) : null}
       <input className="inp" name="code" inputMode="numeric" autoComplete="one-time-code" required aria-label="Authenticator code" placeholder="Authenticator code" />
       <button className="btn sm p" type="submit" disabled={pending}>Save review</button>
       {message ? <p className="lbl" role="status">{message}</p> : null}

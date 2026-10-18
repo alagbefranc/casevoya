@@ -1,0 +1,309 @@
+{
+  "_shared": {
+    "your_firm": "Your firm",
+    "tagline": "Your immigration file",
+    "footer_firm": "Sent by {firm_name} via Casevoya",
+    "footer_platform": "Case management for immigration consultants · casevoya.ca",
+    "zone_label": "{city} time",
+    "invite_expiry": "Your private link works once and expires in 7 days.",
+    "invite_without_link": "The private link is not in this email. Use the link the firm gives you.",
+    "contact_to_change": "To change or cancel, contact {firm_name}.",
+    "role_firm_owner": "a Firm owner",
+    "role_licensed_consultant": "a Licensed consultant",
+    "role_case_manager": "a Case manager",
+    "role_assistant": "an Assistant",
+    "role_finance_user": "a Finance user",
+    "role_other": "a member of the team"
+  },
+  "EM01": {
+    "subject_inviter": "{inviter_name} invited you to {firm_name}",
+    "subject": "You’re invited to join {firm_name}",
+    "preheader": "Accept your invitation to join {firm_name} on Casevoya.",
+    "lead": "You’ve been invited as {role_phrase}. Set a password and two-step sign-in to join.",
+    "cta": "Accept invitation"
+  },
+  "EM02": {
+    "subject": "Your file with {firm_name} is ready",
+    "preheader": "Open your private link to set up your portal login.",
+    "invited_inviter": "{inviter_name} at {firm_name} invited you to your client portal.",
+    "invited": "{firm_name} invited you to your client portal.",
+    "first_step": "Open your portal to see your first step.",
+    "cta": "Open your portal"
+  },
+  "EM05": {
+    "subject": "Your other sessions were signed out",
+    "preheader": "This follows your password change.",
+    "body": "After your password change, every other session was signed out. This is recorded in your firm’s audit trail."
+  },
+  "EM06": {
+    "subject": "{firm_name} asked for a document",
+    "preheader": "Upload it securely in your portal.",
+    "body_due": "Please upload a document to your file by {due_date}. Details are in your portal.",
+    "body": "Please upload a document to your file. Details are in your portal.",
+    "cta": "Open your portal"
+  },
+  "EM07": {
+    "subject_due": "A step on your file is due {short_date}",
+    "subject": "A reminder from {firm_name}",
+    "preheader": "Your portal shows what to do next.",
+    "heading_due": "A step is due on {short_date}",
+    "heading": "A step on your file is coming up",
+    "body_due": "A step on your file is due {day_date}. Your portal shows what to do.",
+    "body": "A step on your file is coming up. Your portal shows what to do.",
+    "cta": "Open your portal"
+  },
+  "EM08": {
+    "subject": "An agreement from {firm_name} is ready to sign",
+    "preheader": "Review it and sign in your portal.",
+    "heading": "An agreement is ready to sign",
+    "body_service": "Your service agreement from {firm_name} is ready. Review it and sign in your portal.",
+    "body_consultation": "Your consultation agreement from {firm_name} is ready. Review it and sign in your portal.",
+    "body_amendment": "Your agreement amendment from {firm_name} is ready. Review it and sign in your portal.",
+    "body_consent": "Your consent form from {firm_name} is ready. Review it and sign in your portal.",
+    "body_quote": "Your quote from {firm_name} is ready. Review it and sign in your portal.",
+    "body": "Your agreement from {firm_name} is ready. Review it and sign in your portal.",
+    "cta": "Review and sign"
+  },
+  "EM08-staff": {
+    "subject": "Your countersignature is needed at {firm_name}",
+    "preheader": "Open Agreements in Casevoya to sign.",
+    "heading": "It’s your turn to countersign",
+    "body": "Everyone before you has signed an agreement. It is your turn to countersign it for {firm_name}. Open Agreements in Casevoya to sign.",
+    "cta": "Open agreements"
+  },
+  "EM09": {
+    "subject": "Your agreement with {firm_name} is signed",
+    "preheader": "Your copy and the completion certificate are in your portal.",
+    "heading": "Everyone has signed",
+    "body": "Your agreement with {firm_name} is signed by everyone. Your copy and the completion certificate are in your portal.",
+    "cta": "Download your copy"
+  },
+  "EM09-staff": {
+    "subject": "An agreement at {firm_name} is signed",
+    "preheader": "The firm’s copy is on the matter in Casevoya.",
+    "heading": "Everyone has signed",
+    "body": "An agreement you signed is now signed by everyone. The firm’s copy and the completion certificate are on the matter in Casevoya.",
+    "cta": "Open agreements"
+  },
+  "EM10": {
+    "subject": "New invoice from {firm_name}",
+    "preheader": "The amount and payment options are in your portal.",
+    "body_number_due": "Invoice {invoice_number} has a balance due on {due_date}. The amount and payment options are in your portal.",
+    "body_due": "Your invoice has a balance due on {due_date}. The amount and payment options are in your portal.",
+    "body_number": "Invoice {invoice_number} is ready. The amount and payment options are in your portal.",
+    "body": "Your invoice is ready. The amount and payment options are in your portal.",
+    "cta": "View invoice"
+  },
+  "EM11": {
+    "subject": "{firm_name} received your payment",
+    "preheader": "Your receipt is in your portal.",
+    "heading": "Payment received",
+    "body_number": "{firm_name} received your payment. Receipt {receipt_number} is in your portal.",
+    "body_advance_number": "{firm_name} received your advance payment. Receipt {receipt_number} is in your portal.",
+    "body": "{firm_name} received your payment. Your receipt is in your portal.",
+    "body_advance": "{firm_name} received your advance payment. Your receipt is in your portal.",
+    "cta": "View receipt"
+  },
+  "EM12": {
+    "subject": "A client notice was not delivered",
+    "preheader": "A follow-up task is open in Casevoya.",
+    "heading": "Critical notice not delivered",
+    "body_reference": "A notice on matter {matter_reference} bounced and was not delivered. A follow-up task was created.",
+    "body": "A client notice bounced and was not delivered. A follow-up task was created.",
+    "cta": "Open task"
+  },
+  "EM15": {
+    "subject": "There’s news on your file",
+    "preheader": "For your privacy, the details are in your portal.",
+    "body_consultant": "{firm_name} recorded a decision on your file. For your privacy, the details are in your portal. {consultant_name} will contact you about next steps.",
+    "body": "{firm_name} recorded a decision on your file. For your privacy, the details are in your portal. {firm_name} will contact you about next steps.",
+    "cta": "Open your portal"
+  },
+  "EM16a": {
+    "subject": "Your consultation with {firm_name} is booked",
+    "preheader": "Here’s when, and how you’ll meet.",
+    "heading": "Your consultation is booked",
+    "when_consultant": "{date_time} ({time_zone_label}) with {consultant_name}.",
+    "when": "{date_time} ({time_zone_label}).",
+    "consultant": "Your consultation with {consultant_name}.",
+    "plain": "Your consultation.",
+    "meet_phone": "{firm_name} will call you at the number you gave.",
+    "meet_link": "{firm_name} will send you the meeting link.",
+    "meet_address": "At {address}.",
+    "meet_confirm_address": "{firm_name} will confirm the address.",
+    "cta": "View booking"
+  },
+  "EM16b": {
+    "subject": "Your appointment with {firm_name} moved",
+    "preheader_portal": "The new time is in your portal.",
+    "preheader": "Here’s the new time.",
+    "heading": "Your appointment moved",
+    "moved_when": "Your consultation is now {date_time} ({time_zone_label}).",
+    "moved": "Your consultation has a new time.",
+    "reminders_moved": "Your reminders moved too.",
+    "portal_no_time": "Your consultation has a new time. It’s in your portal, and your reminders moved too.",
+    "cta": "View booking"
+  },
+  "EM16c": {
+    "subject": "{firm_name} cancelled your consultation",
+    "preheader_portal": "You can book another time in your portal.",
+    "preheader_page": "You can book another time online.",
+    "preheader": "To book another time, contact the firm.",
+    "heading": "Your consultation was cancelled",
+    "body_when": "Your consultation on {date_time} ({time_zone_label}) was cancelled by {firm_name}.",
+    "body": "Your consultation was cancelled by {firm_name}.",
+    "contact_to_book": "To book another time, contact {firm_name}.",
+    "cta": "Book another time"
+  },
+  "EM17": {
+    "subject": "You gave Casevoya support access",
+    "preheader": "Every action is in your audit trail. You can end it now.",
+    "default_approver": "A firm owner",
+    "approved_minutes": "{approver_name} approved {minutes} minutes of support access on one matter.",
+    "approved": "{approver_name} approved support access on one matter.",
+    "ends": "It ends {date_time}.",
+    "audit": "Every action is in your audit trail, and you can end it now.",
+    "cta": "Review or end access"
+  },
+  "EM18a": {
+    "subject": "Your Casevoya subscription is past due",
+    "preheader": "Nothing is deleted. Update billing to keep working.",
+    "body": "We couldn’t collect {firm_name}’s subscription payment. Nothing is deleted; new work pauses after notice if it stays unpaid.",
+    "cta": "Update billing"
+  },
+  "EM18b": {
+    "subject": "{firm_name}’s workspace is restricted",
+    "preheader": "Clients can still sign in, upload and pay. Nothing is deleted.",
+    "body_days": "Your subscription has been past due for {days} days, so new matters, invitations and submission releases are paused. Clients can still sign in, upload and pay, and nothing is deleted.",
+    "body": "Your subscription has been past due, so new matters, invitations and submission releases are paused. Clients can still sign in, upload and pay, and nothing is deleted.",
+    "cta": "Update billing"
+  },
+  "EM19a": {
+    "subject": "Your export is ready",
+    "preheader": "Sign in to download it.",
+    "body_hours": "The client-file export you started is ready. The link works for {hours} hours and needs you to sign in.",
+    "body": "The client-file export you started is ready. The link needs you to sign in.",
+    "cta": "Download export"
+  },
+  "EM19b": {
+    "subject": "Your client-file export expires soon",
+    "preheader": "Download it before the link expires.",
+    "expires_started_hour": "The export you started on {short_date} expires in 1 hour.",
+    "expires_started_hours": "The export you started on {short_date} expires in {hours} hours.",
+    "expires_started": "The export you started on {short_date} expires soon.",
+    "expires_hour": "The export you started expires in 1 hour.",
+    "expires_hours": "The export you started expires in {hours} hours.",
+    "expires": "The export you started expires soon.",
+    "after": "After that you can start a new one; nothing in the file changes.",
+    "cta": "Download export"
+  },
+  "EX02": {
+    "subject": "New sign-in to your Casevoya account",
+    "preheader": "If it wasn’t you, sign out everywhere now.",
+    "heading": "New sign-in to your account",
+    "body_device": "Someone signed in to {firm_name} on a new device ({device}). If it wasn’t you, sign out everywhere now.",
+    "body": "Someone signed in to {firm_name} on a new device. If it wasn’t you, sign out everywhere now.",
+    "cta": "Review sign-ins"
+  },
+  "EX03": {
+    "subject": "Your invitation to {firm_name} expired",
+    "preheader": "Ask the firm to send a new one.",
+    "heading": "Your invitation expired",
+    "body_inviter": "Your invitation to {firm_name} expired after 7 days. Ask {inviter_name} to send a new one.",
+    "body": "Your invitation to {firm_name} expired after 7 days. Ask the firm owner to send a new one."
+  },
+  "EX04": {
+    "subject": "{firm_name} opened your own login",
+    "preheader": "Set up your login. You choose what you share.",
+    "heading": "You’re invited to share your file",
+    "lead": "{firm_name} has opened your own login for the family file. You choose what you share.",
+    "cta": "Set up your login"
+  },
+  "EX05": {
+    "subject": "A document needs another look",
+    "preheader": "The reason is in your portal.",
+    "body": "{firm_name} asked for a clearer copy of one of your documents. The reason is in your portal.",
+    "cta": "Open your portal"
+  },
+  "EX06": {
+    "subject": "Your document was accepted",
+    "preheader": "Accepted by {firm_name}, not by the government.",
+    "body": "{firm_name} accepted one of your documents for your file. Accepted means accepted by {firm_name}, not by the government.",
+    "cta": "Open your portal"
+  },
+  "EX06-received": {
+    "subject": "{firm_name} received your document",
+    "preheader": "It’s in your portal.",
+    "heading": "Your document was received",
+    "body": "{firm_name} received a document on your file. It’s in your portal.",
+    "cta": "Open your portal"
+  },
+  "EX07": {
+    "subject": "New message from {firm_name}",
+    "preheader": "For your privacy, read it in your portal.",
+    "heading": "You have a new message",
+    "body": "{firm_name} sent you a message. For your privacy, read it in your portal.",
+    "cta": "Read message"
+  },
+  "EX08": {
+    "subject": "Your payment to {firm_name} didn’t go through",
+    "preheader": "You haven’t been charged. You can try again in your portal.",
+    "heading": "We couldn’t take your payment",
+    "body_number": "Your card payment to {firm_name} for invoice {invoice_number} didn’t go through. You haven’t been charged. You can try again in your portal.",
+    "body": "Your card payment to {firm_name} didn’t go through. You haven’t been charged. You can try again in your portal.",
+    "cta": "Open payments"
+  },
+  "EX09": {
+    "subject": "{firm_name} started a refund",
+    "preheader": "Refunds usually take 5 to 10 business days to appear.",
+    "heading": "Your refund is on its way",
+    "body": "{firm_name} started a refund to your card. Refunds usually take 5 to 10 business days to appear.",
+    "cta": "View payments"
+  },
+  "EX10": {
+    "subject": "Your refund from {firm_name} is complete",
+    "preheader": "The details are in your portal.",
+    "heading": "Your refund is complete",
+    "body": "{firm_name}’s refund has been sent. The details are in your portal.",
+    "cta": "View payments"
+  },
+  "EX11": {
+    "subject": "Casevoya support asked for access",
+    "preheader": "Nothing opens unless you approve.",
+    "heading": "Support access requested",
+    "body_minutes": "Casevoya support asked for {minutes} minutes of access to one matter at {firm_name}. Nothing opens unless you approve.",
+    "body": "Casevoya support asked for access to one matter at {firm_name}. Nothing opens unless you approve.",
+    "cta": "Review request"
+  },
+  "EX12": {
+    "subject": "A licence check needs attention",
+    "preheader": "Open Licences in Casevoya to review it.",
+    "body_consultant": "The register check couldn’t confirm {consultant_name}’s licence. New engagements and submission releases are paused.",
+    "body": "The register check couldn’t confirm a consultant’s licence. New engagements and submission releases are paused.",
+    "cta": "Open licences"
+  },
+  "EX13": {
+    "subject": "{firm_name} received your privacy request",
+    "preheader": "You can follow it in your portal.",
+    "heading": "We received your privacy request",
+    "body_by": "{firm_name} received your request to see your records. They’ll reply by {due_date}.",
+    "body": "{firm_name} received your request to see your records.",
+    "cta": "Open your portal"
+  },
+  "EX14": {
+    "subject": "{firm_name} received your complaint",
+    "preheader": "We’ll respond in writing.",
+    "heading": "We received your complaint",
+    "body_by_handler": "{firm_name} received your complaint and will respond by {due_date}. It’s handled by {handler_name}.",
+    "body_by": "{firm_name} received your complaint and will respond by {due_date}.",
+    "body_handler": "{firm_name} received your complaint and will respond in writing. It’s handled by {handler_name}.",
+    "body": "{firm_name} received your complaint and will respond in writing."
+  },
+  "generic": {
+    "subject": "An update from {firm_name}",
+    "preheader": "The details are in your portal.",
+    "heading": "There’s an update on your file",
+    "body": "{firm_name} has an update for you. For your privacy, the details are in your portal.",
+    "cta": "Open your portal"
+  }
+}

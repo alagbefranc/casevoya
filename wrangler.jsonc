@@ -16,6 +16,9 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // Workers AI, for staff "Draft in French" machine drafts only (src/modules/i18n/translate.ts,
+  // model @cf/meta/llama-3.3-70b-instruct-fp8-fast). Not available in next dev; no REST fallback.
+  "ai": { "binding": "AI" },
   "services": [
     // OpenNext self-reference; the service name must match the Worker name.
     { "binding": "WORKER_SELF_REFERENCE", "service": "casevoya-app" }

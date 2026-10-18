@@ -3364,6 +3364,69 @@ export type Database = {
         }
         Relationships: []
       }
+      document_review_translations: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          language: string
+          machine_drafted: boolean
+          model: string | null
+          organization_id: string
+          reason: string
+          review_id: string
+          version_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          language: string
+          machine_drafted: boolean
+          model?: string | null
+          organization_id: string
+          reason: string
+          review_id: string
+          version_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          language?: string
+          machine_drafted?: boolean
+          model?: string | null
+          organization_id?: string
+          reason?: string
+          review_id?: string
+          version_id?: string
+        }
+        Relationships: []
+      }
+      translation_draft_requests: {
+        Row: {
+          char_count: number
+          created_at: string
+          id: string
+          organization_id: string
+          user_id: string
+        }
+        Insert: {
+          char_count: number
+          created_at?: string
+          id?: string
+          organization_id: string
+          user_id: string
+        }
+        Update: {
+          char_count?: number
+          created_at?: string
+          id?: string
+          organization_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       document_versions: {
         Row: {
           byte_size: number | null
@@ -7583,6 +7646,27 @@ export type Database = {
           p_version_id: string
         }
         Returns: number
+      }
+      review_document_version_fr: {
+        Args: {
+          p_annotations: string | null
+          p_decision: Database["public"]["Enums"]["document_review_decision"]
+          p_expected_version: number
+          p_machine_drafted: boolean
+          p_model?: string | null
+          p_reason: string
+          p_reason_fr: string
+          p_version_id: string
+        }
+        Returns: number
+      }
+      consume_translation_draft: {
+        Args: { p_char_count: number; p_organization_id: string }
+        Returns: Json
+      }
+      email_delivery_locales: {
+        Args: { p_delivery_ids: string[] }
+        Returns: Json
       }
       waive_document_request: {
         Args: { p_expected_version: number; p_reason: string; p_request_id: string }
