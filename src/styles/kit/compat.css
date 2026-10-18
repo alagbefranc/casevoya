@@ -26,3 +26,16 @@
  */
 .iv .ivr>div{min-width:0}
 .iv .ivr>div>b,.iv .ivr>div>small{overflow-wrap:anywhere}
+
+/* Dialogs keep their title and buttons on screen; only the body scrolls when the form is taller
+   than the window. .dlg.wide is the Designer's landscape dialog (matter page), shared here. */
+.dlg[open]{display:flex;flex-direction:column;max-height:calc(100dvh - 32px)}
+.dlg[open] .dh,.dlg[open] .df{flex:none}
+.dlg[open] .db{overflow-y:auto;min-height:0;overscroll-behavior:contain}
+.dlg.wide{width:min(680px,calc(100vw - 32px))}
+.dlg .g2 .fld{align-self:start}
+/* New matter on a phone: one column, so the applicant's fields come first, then the sponsor's. */
+@media (max-width:600px){
+  #dlgNew .g2 .fld:has(#nmS),#dlgNew .g2 .fld:has(#nmSE),#dlgNew .g2 .fld:has(#nmSD){order:1}
+  #dlgNew .g2 .fld:has(#nmT),#dlgNew .g2 .fld:has(#nmC){order:2}
+}

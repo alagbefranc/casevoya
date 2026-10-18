@@ -121,7 +121,7 @@ describe("New matter dialog markup", () => {
         data: { organizationId: "org", consultants: [{ value: AMARA, label: "Amara Osei" }], programs: [], sampleMode: true },
       }),
     );
-    expect(html).toContain('<dialog class="dlg" id="dlgNew" aria-labelledby="dlgNewH"><div class="dh"><h2 id="dlgNewH">New matter</h2>');
+    expect(html).toContain('<dialog class="dlg wide" id="dlgNew" aria-labelledby="dlgNewH"><div class="dh"><h2 id="dlgNewH">New matter</h2>');
     expect(html).toContain('<div class="db">');
     expect(html).toContain('<div class="df"><button class="btn" data-close="dlgNew">Cancel</button><button class="btn p" data-new-matter="1" data-org="org">Create matter</button></div>');
     expect(html).toContain('<select class="sel" id="nmC">');
