@@ -4,6 +4,7 @@ import type { Json } from "@/types/database.types";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { passwordOk } from "@/lib/auth/password";
 import { safeAccessError } from "@/lib/auth/step-up";
+import { homeRoute } from "@/lib/auth/home-route";
 import { safeNext } from "@/lib/auth/redirect";
 import { clearPendingTotp, readPendingTotp, withQr, writePendingTotp, type TotpSetup } from "@/lib/auth/mfa-pending";
 import { firmSlug } from "@/lib/auth/slug";
@@ -160,7 +161,14 @@ export async function signInWithPassword(email: string, password: string, next: 
     return lockedMessage(error.message) ? fail(error.message, "locked") : fail("Email or password didn’t match", "error");
   }
   const dest = safeNext(next, "/app");
+  // Clients, sponsors and family sign in with a password only; two-step is for firm staff.
+  if ((await homeRoute()) === "/portal") return { ok: true, href: portalDestination(dest) };
   return { ok: true, href: `/mfa?next=${encodeURIComponent(dest)}` };
+}
+
+/** A portal-only account goes where it asked if that is a portal page, else to its portal. */
+function portalDestination(dest: string): string {
+  return dest === "/portal" || dest.startsWith("/portal/") || dest.startsWith("/portal?") ? dest : "/portal";
 }
 
 export async function sendRecoveryEmail(email: string): Promise<PortResult | null> {

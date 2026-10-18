@@ -1,4 +1,7 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
+import { homeRoute } from "@/lib/auth/home-route";
+import { safeNext } from "@/lib/auth/redirect";
 import type { Metadata } from "next";
 import { TwoStepMarkup, type TotpEnrollment } from "@/components/port/markup/two-step";
 import { PortScreen } from "@/components/port/screen";
@@ -18,7 +21,7 @@ export function mfaActiveStep(hasVerifiedFactor: boolean, requested: number | nu
   return 0;
 }
 
-async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: string }> }) {
+async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: string; next?: string }> }) {
   const params = await searchParams;
   const requested = Number(params.step);
   const asked = Number.isFinite(requested) ? requested : null;
@@ -36,6 +39,10 @@ async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: strin
       const verified = factors?.all?.find((factor) => factor.factor_type === "totp" && factor.status === "verified");
       if (verified) {
         activeStep = mfaActiveStep(true, asked);
+      } else if (asked === null && (await homeRoute()) === "/portal") {
+        // A client, sponsor or family member has no two-step to set up: send them to their portal.
+        const next = safeNext(params.next, "/portal");
+        redirect(next.startsWith("/portal") ? next : "/portal");
       } else {
         activeStep = mfaActiveStep(false, asked);
         // Never enrol while rendering: a reload would replace a QR the person already scanned.
@@ -56,7 +63,7 @@ async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: strin
   );
 }
 
-export default function MfaPage({ searchParams }: { searchParams: Promise<{ step?: string }> }) {
+export default function MfaPage({ searchParams }: { searchParams: Promise<{ step?: string; next?: string }> }) {
   return (
     <Suspense
       fallback={
