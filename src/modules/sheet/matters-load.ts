@@ -1,6 +1,7 @@
 import "server-only";
 import type { MatterRow, MattersData } from "@/components/sheet/designer/matters";
 import { createClient } from "@/lib/supabase/server";
+import { staffPerson } from "@/modules/sheet/avatar";
 import { loadSheetChrome, matterNames, memberNames } from "@/modules/sheet/chrome-load";
 import { dayMonth, isoDate, localNow } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
@@ -75,7 +76,7 @@ export async function loadSheetMatters(staff: SheetStaff, query: SheetQuery, now
       // Finance is not connected yet, so there is no money state to show.
       money: "—",
       nextDeadline: due ? dayMonth(due) : "—",
-      consultant: consultant ? { name: consultant } : null,
+      consultant: consultant ? staffPerson(consultant) : null,
     };
   });
 
