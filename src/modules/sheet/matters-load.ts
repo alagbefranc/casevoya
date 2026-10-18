@@ -50,9 +50,7 @@ export async function loadSheetMatters(
     deadlines,
     pending,
     refs,
-    consultants,
-    credentials,
-    published,
+    newMatter,
   ] = await Promise.all([
     loadSheetChrome(staff, "/sheet/matters"),
     supabase
@@ -83,24 +81,7 @@ export async function loadSheetMatters(
       .eq("organization_id", org)
       .is("removed_at", null)
       .limit(MATTERS_READ),
-    // The New matter dialog: who can be responsible, and which program templates are published.
-    // A firm owner counts when their own licence does (isLicensedMembership, like the database).
-    supabase
-      .from("memberships")
-      .select("id, role")
-      .eq("organization_id", org)
-      .eq("status", "active")
-      .in("role", ["licensed_consultant", "firm_owner"])
-      .order("created_at"),
-    supabase
-      .from("consultant_credentials")
-      .select(`membership_id, ${LICENCE_FACT_COLUMNS}`)
-      .eq("organization_id", org),
-    supabase
-      .from("rule_pack_versions")
-      .select("id, program_key, pack_version, status")
-      .in("status", ["published", "review_due"])
-      .limit(100),
+    loadNewMatterDialog(supabase, staff),
   ]);
   const rows = matters.data ?? [];
 
@@ -214,6 +195,37 @@ export async function loadSheetMatters(
             }
           : null,
   };
+  return { chrome, matters: data, newMatter };
+}
+
+type Client = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * The New matter dialog's options: who can be responsible, and which program templates are
+ * published. A firm owner counts when their own licence does (isLicensedMembership, like the
+ * database). Matters and Clients both open this dialog.
+ */
+export async function loadNewMatterDialog(supabase: Client, staff: SheetStaff): Promise<NewMatterDialogData> {
+  const org = staff.organizationId;
+  const [consultants, credentials, published, members] = await Promise.all([
+    supabase
+      .from("memberships")
+      .select("id, role")
+      .eq("organization_id", org)
+      .eq("status", "active")
+      .in("role", ["licensed_consultant", "firm_owner"])
+      .order("created_at"),
+    supabase
+      .from("consultant_credentials")
+      .select(`membership_id, ${LICENCE_FACT_COLUMNS}`)
+      .eq("organization_id", org),
+    supabase
+      .from("rule_pack_versions")
+      .select("id, program_key, pack_version, status")
+      .in("status", ["published", "review_due"])
+      .limit(100),
+    memberNames(supabase, org),
+  ]);
   const credentialRows = credentials.data ?? [];
   const credentialStatus = new Map(
     credentialRows.map((row) => [row.membership_id, row.status as string]),
@@ -221,7 +233,7 @@ export async function loadSheetMatters(
   const credentialFacts = new Map(
     credentialRows.map((row) => [row.membership_id, row]),
   );
-  const newMatter: NewMatterDialogData = {
+  return {
     organizationId: org,
     consultants: consultantOptions(
       (consultants.data ?? [])
@@ -237,5 +249,4 @@ export async function loadSheetMatters(
     programs: programOptions(published.data ?? []),
     sampleMode: staff.sampleMode,
   };
-  return { chrome, matters: data, newMatter };
 }

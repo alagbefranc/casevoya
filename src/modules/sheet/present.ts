@@ -153,6 +153,8 @@ export type SheetQuery = {
   q?: string;
   state?: string;
   limit?: string;
+  /** The person shown on the Clients page's person and household tabs. */
+  person?: string;
 };
 
 export function sheetVariant(page: string, query: SheetQuery): string {

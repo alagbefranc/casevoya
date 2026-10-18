@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { DemoSheet } from "@/components/sheet/demo";
+import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet/designer/clients";
 import { SheetFrame } from "@/components/sheet/designer/frame";
 import { SheetHome } from "@/components/sheet/designer/home";
 import { MatterDialogs, MatterRbar, MatterTopBar, SheetMatter } from "@/components/sheet/designer/matter";
@@ -14,6 +15,7 @@ import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
 import { homeRoute } from "@/lib/auth/home-route";
 import { signInLocation } from "@/lib/auth/redirect";
+import { loadSheetClients } from "@/modules/sheet/clients-load";
 import { loadSheetHome } from "@/modules/sheet/home-load";
 import { loadSheetMatter } from "@/modules/sheet/matter-load";
 import { loadSheetMatters } from "@/modules/sheet/matters-load";
@@ -120,6 +122,28 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
+  if (page === "clients" && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, clients, newMatter } = await loadSheetClients(access.staff, query);
+    const duplicate = clients.dir?.duplicate;
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={chrome.sidebar}
+          header={<ClientsHeader data={clients} />}
+          statusbar={chrome.statusbar}
+          after={
+            <>
+              {duplicate ? <DuplicateDialog data={duplicate} /> : null}
+              {/* "Add a client" opens New matter here: a client is recorded with the matter that lets the team read them. */}
+              <NewMatterDialog data={newMatter} />
+            </>
+          }
+        >
+          <SheetClients data={clients} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
   if (page === "matter" && (access.kind === "live" || access.kind === "sample")) {
     const loaded = matterId ? await loadSheetMatter(access.staff, matterId, query) : null;
     if (!loaded) notFound();
@@ -178,5 +202,6 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     q: one("q"),
     state: one("state"),
     limit: one("limit"),
+    person: one("person"),
   };
 }
