@@ -1,0 +1,209 @@
+/**
+ * Pure presentation for matter messaging (PRD OPS-04): thread summaries, audience lines, day
+ * grouping, read and acknowledgement state. No database access; the loaders hand rows in.
+ */
+
+export type ChatAttachment = {
+  documentId: string;
+  label: string;
+  /** The clean current version a portal reader downloads through the existing permission check. */
+  versionId: string | null;
+  /** Staff open attachments from the matter's Documents tab (download there needs a step-up). */
+  href: string | null;
+};
+
+export type ChatMessage = {
+  id: string;
+  threadId: string;
+  body: string;
+  createdAt: string;
+  mine: boolean;
+  authorName: string;
+  authorKind: "staff" | "client";
+  requiresAck: boolean;
+  /** For the reader: whether they acknowledged it (portal) or who did (staff). */
+  acknowledged: boolean;
+  acknowledgedBy: string[];
+  /** Staff view: the addressed people who have read it. Portal view: whether staff read it. */
+  readBy: string[];
+  unread: boolean;
+  attachments: ChatAttachment[];
+};
+
+export type ChatThread = {
+  id: string;
+  matterId: string;
+  matterTitle: string;
+  title: string;
+  audience: string[];
+  audienceIds: string[];
+  /** People on the matter who are NOT in this thread's audience (household boundary). */
+  excluded: string[];
+  lastAt: string;
+  preview: string;
+  unread: number;
+  sample: boolean;
+};
+
+export type ChatAudienceOption = { personId: string; name: string; role: string; email: boolean };
+
+export type ChatDocument = { id: string; label: string; personId: string; audience: string; sensitivity: string };
+
+export type ChatData = {
+  mode: "portal" | "staff";
+  organizationId: string;
+  firmName: string;
+  timezone: string;
+  now: string;
+  threads: ChatThread[];
+  messages: ChatMessage[];
+  selectedId: string | null;
+  /** The page was opened on a specific thread (?thread=), so a phone shows it straight away. */
+  opened: boolean;
+  /** Staff: start a conversation with one or more people on the matter. Portal: their matters. */
+  matters: { id: string; title: string }[];
+  audienceOptions: ChatAudienceOption[];
+  documents: ChatDocument[];
+  /** Portal: the viewer's own person id (a client writes to the firm only). */
+  selfPersonId: string | null;
+  /** Staff: the matter whose messages these are. */
+  matterId: string | null;
+};
+
+export const MAX_BODY = 4000;
+
+const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function zoned(iso: string, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    weekday: "short",
+  }).formatToParts(new Date(iso));
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return { date: `${get("year")}-${get("month")}-${get("day")}`, time: `${get("hour")}:${get("minute")}` };
+}
+
+function safeZone(zone: string): string {
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: zone });
+    return zone;
+  } catch {
+    return "UTC";
+  }
+}
+
+function daysBetween(a: string, b: string): number {
+  return Math.round((Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000);
+}
+
+/** "Today", "Yesterday", or "Mon 12 Oct" (with the year when it isn't this year), in the reader's zone. */
+export function dayLabel(iso: string, nowIso: string, timeZone: string): string {
+  const zone = safeZone(timeZone);
+  const day = zoned(iso, zone).date;
+  const today = zoned(nowIso, zone).date;
+  const diff = daysBetween(today, day);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  const d = new Date(`${day}T12:00:00Z`);
+  const label = `${WEEKDAY[d.getUTCDay()]} ${d.getUTCDate()} ${MONTH[d.getUTCMonth()]}`;
+  return day.slice(0, 4) === today.slice(0, 4) ? label : `${label} ${day.slice(0, 4)}`;
+}
+
+/** 24-hour clock time in the reader's zone. */
+export function clockLabel(iso: string, timeZone: string): string {
+  return zoned(iso, safeZone(timeZone)).time;
+}
+
+/** A thread row's time: the clock today, else the short day. */
+export function listTime(iso: string, nowIso: string, timeZone: string): string {
+  const label = dayLabel(iso, nowIso, timeZone);
+  if (label === "Today") return clockLabel(iso, timeZone);
+  return label === "Yesterday" ? label : label.split(" ").slice(1, 3).join(" ");
+}
+
+export type DayGroup = { key: string; label: string; messages: ChatMessage[] };
+
+/** Messages oldest first, grouped by the reader's calendar day. */
+export function groupByDay(messages: ChatMessage[], nowIso: string, timeZone: string): DayGroup[] {
+  const zone = safeZone(timeZone);
+  const sorted = [...messages].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  const groups: DayGroup[] = [];
+  for (const message of sorted) {
+    const key = zoned(message.createdAt, zone).date;
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) last.messages.push(message);
+    else groups.push({ key, label: dayLabel(message.createdAt, nowIso, zone), messages: [message] });
+  }
+  return groups;
+}
+
+/** Names joined for people: "A", "A and B", "A, B and C". */
+export function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/**
+ * Who can read a thread, said before anything is sent. Portal: "You and {firm} staff on your
+ * file", naming any other addressed person, then who can't. Staff: the addressed people and the
+ * firm's staff on the matter.
+ */
+export function audienceLine(input: {
+  mode: "portal" | "staff";
+  firmName: string;
+  audience: string[];
+  excluded: string[];
+  selfName?: string | null;
+}): { visible: string; hidden: string | null } {
+  if (input.mode === "portal") {
+    const others = input.audience.filter((name) => name !== input.selfName);
+    const visible = `You${others.length ? `, ${joinNames(others)}` : ""} and ${input.firmName} staff on your file`;
+    return { visible, hidden: input.excluded.length ? `Not ${joinNames(input.excluded).replace(/ and /g, " or ")}` : null };
+  }
+  const visible = `${joinNames(input.audience)} and staff on this matter`;
+  return { visible, hidden: input.excluded.length ? `Not ${joinNames(input.excluded).replace(/ and /g, " or ")}` : null };
+}
+
+/** Threads newest first; unread first among equals is not applied (time order is the contract). */
+export function sortThreads(threads: ChatThread[]): ChatThread[] {
+  return [...threads].sort((a, b) => b.lastAt.localeCompare(a.lastAt) || a.id.localeCompare(b.id));
+}
+
+export function totalUnread(threads: ChatThread[]): number {
+  return threads.reduce((sum, thread) => sum + thread.unread, 0);
+}
+
+/** One line of text for a thread row. */
+export function previewOf(body: string): string {
+  const line = body.replace(/\s+/g, " ").trim();
+  return line.length > 90 ? `${line.slice(0, 89)}…` : line;
+}
+
+/** First letter for an avatar. */
+export function initialOf(name: string): string {
+  const letter = name.trim().charAt(0);
+  return letter ? letter.toUpperCase() : "?";
+}
+
+/**
+ * The database's refusals, said plainly. Never the database text itself.
+ */
+export function messageError(raw: string): string {
+  if (/rate limit/i.test(raw)) return "You’ve sent a lot of messages in a short time. Please wait a few minutes and try again.";
+  if (/not shared with everyone/i.test(raw)) return "One of the documents can’t be shared with everyone who can read this conversation. Remove it and try again.";
+  if (/choose who can read/i.test(raw)) return "Choose who can read this message.";
+  if (/must be on this matter/i.test(raw)) return "Everyone you write to must be on this matter.";
+  if (/1 to 4000/i.test(raw)) return "Write a message of up to 4,000 characters.";
+  if (/at most 5/i.test(raw)) return "Attach up to 5 documents.";
+  if (/clients write to the firm only/i.test(raw)) return "You can write to your firm only.";
+  if (/addressed/i.test(raw)) return "Only the people this message is for can acknowledge it.";
+  if (/does not ask/i.test(raw)) return "This message doesn’t need an acknowledgement.";
+  return "That didn’t go through. Nothing was sent.";
+}

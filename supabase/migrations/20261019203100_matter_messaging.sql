@@ -96,6 +96,9 @@ create table public.matter_messages (
   author_membership_id uuid,
   body text not null check (length(btrim(body)) between 1 and 4000),
   requires_ack boolean not null default false,
+  -- The sender's name as shown to readers, copied when sent (portal readers cannot read staff
+  -- profiles).
+  author_name text not null check (length(btrim(author_name)) between 1 and 200),
   client_key text check (client_key is null or client_key ~ '^[A-Za-z0-9_-]{8,80}$'),
   created_at timestamptz not null default clock_timestamp(),
   unique (id, organization_id),
@@ -524,10 +527,18 @@ begin
 
   insert into public.matter_messages (
     organization_id, thread_id, matter_id, author_user_id, author_kind, author_person_id,
-    author_membership_id, body, requires_ack, client_key
+    author_membership_id, author_name, body, requires_ack, client_key
   ) values (
     matter.organization_id, thread.id, matter.id, actor, case when staff then 'staff' else 'client' end, me,
-    membership, text_body, coalesce(p_requires_ack, false), p_client_key
+    membership,
+    left(coalesce(
+      case when staff
+        then (select nullif(btrim(profile.display_name), '') from public.profiles profile where profile.id = actor)
+        else (select person.display_name from public.persons person where person.id = me)
+      end,
+      case when staff then 'Staff' else 'Client' end
+    ), 200),
+    text_body, coalesce(p_requires_ack, false), p_client_key
   )
   returning id into mid;
 

@@ -21,6 +21,8 @@ import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
 import { SheetStaffTab, StaffAfter, StaffHeader } from "@/components/sheet/designer/invitations";
 import { PolicyMissingAlert, PortalPoliciesAfter, SettingsPortalHeader, SheetPortalPolicies } from "@/components/sheet/designer/portal-policies";
 import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
+import { NotificationsHeader, SheetNotifications } from "@/components/sheet/designer/notifications";
+import { loadSheetNotifications } from "@/modules/sheet/notifications-load";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
@@ -308,6 +310,17 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
+  // Notifications: the signed-in staff member's in-app notifications (T034), Designer-exact.
+  if (page === "notifications" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetNotifications(access.staff, query);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={loaded.chrome.sidebar} header={<NotificationsHeader data={loaded.data} />} statusbar={loaded.chrome.statusbar}>
+          <SheetNotifications data={loaded.data} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
   if (page === "matter" && (access.kind === "live" || access.kind === "sample")) {
     const loaded = matterId ? await loadSheetMatter(access.staff, matterId, query) : null;
     if (!loaded) notFound();
@@ -375,5 +388,6 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     limit: one("limit"),
     person: one("person"),
     week: one("week"),
+    thread: one("thread"),
   };
 }

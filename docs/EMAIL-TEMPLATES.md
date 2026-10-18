@@ -92,7 +92,7 @@ portal choice "Email notices" is off is recorded as `skipped`, not emailed.
 | EX05 | Document needs another look | Staff reject a document version (outbox document.reviewed, decision not accepted). Currently skipped by prepare_email_delivery | client · firm | A document needs another look | The reason is in your portal. | Open your portal → `/portal/documents` | `firm_name` | ready-not-wired |
 | EX06 | Document accepted | Staff accept a document version (outbox document.reviewed, decision accepted, template document_receipt) | client · firm | Your document was accepted | Accepted by {firm_name}, not by the government. | Open your portal → `/portal/documents` | `firm_name` | wired |
 | EX06-received | Document received (variant of EX06) | A document upload passes the file check (outbox document.uploaded, template document_receipt) | client · firm | {firm_name} received your document | It’s in your portal. | Open your portal → `/portal/documents` | `firm_name` | wired |
-| EX07 | New message | Staff send a portal message. Matter messages are not built yet (T034) | client · firm | New message from {firm_name} | For your privacy, read it in your portal. | Read message → `/portal/messages` | `firm_name` | ready-not-wired |
+| EX07 | New message | Staff send a matter message (outbox message.sent, template message), to each person the thread is addressed to. Honours email_notices. Firm name only: never the message text, an attachment name or the matter | client · firm | New message from {firm_name} | For your privacy, read it in your portal. | Read message → `/portal/messages` | `firm_name` | wired |
 | EX08 | Payment failed | A card payment fails (Stripe payment_intent.payment_failed moves invoice_payments to failed; outbox invoice.payment_failed, template payment_failed). Honours email_notices | client · firm | Your payment to {firm_name} didn’t go through | You haven’t been charged. You can try again in your portal. | Open payments → `/portal/payments?invoice=<invoice id>` | `firm_name`, `invoice_id`, `invoice_number` | wired (new send) |
 | EX09 | Refund started | Billing staff refund a card payment (invoice_refunds row recorded; outbox invoice.refund_started, template refund_started). Honours email_notices | client · firm | {firm_name} started a refund | Refunds usually take 5 to 10 business days to appear. | View payments → `/portal/payments` | `firm_name` | wired (new send) |
 | EX10 | Refund complete | Stripe confirms the refund (refund.updated succeeded; outbox invoice.refund_succeeded, template refund_complete). Honours email_notices | client · firm | Your refund from {firm_name} is complete | The details are in your portal. | View payments → `/portal/payments` | `firm_name` | wired (new send) |
@@ -123,6 +123,7 @@ from {firm_name}", button to `/portal`) instead of failing the send.
 | `payment_failed` (new) | | EX08 |
 | `refund_started` (new) | | EX09 |
 | `refund_complete` (new) | | EX10 |
+| `message` (new) | firm name only | EX07 |
 | `payment_receipt` (hook, no enum value yet) | `receipt_number`, `advance` | EM11 |
 | `consultation_booked` (new) | `starts_at` (UTC), `time_zone` (the attendee's), `consultant_name`, `portal` (the attendee's person has a portal login), `location_kind`, `address` (in person only) | EM16a |
 | `consultation_rescheduled` (new) | `starts_at`, `time_zone`, `portal` | EM16b |

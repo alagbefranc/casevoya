@@ -139,6 +139,8 @@ describe("matter messaging", () => {
     const f = await firm();
     await client(f, f.applicant.userId);
     const own = await send(f, { body: "Synthetic: question from the applicant" });
+    const author = await db.query<{ author_name: string; author_kind: string }>(`select author_name, author_kind from public.matter_messages where id = $1`, [own.message_id]);
+    expect(author.rows[0]).toEqual({ author_name: "Synthetic Applicant", author_kind: "client" });
     await expectDbError(() => send(f, { people: [f.sponsor.personId], body: "Synthetic: try the sponsor" }), /clients write to the firm only/);
     await client(f, f.sponsor.userId);
     await expectDbError(() => send(f, { thread: own.thread_id, body: "Synthetic: forged reply" }), /message denied/);

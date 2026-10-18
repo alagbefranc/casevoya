@@ -157,6 +157,8 @@ export type SheetQuery = {
   person?: string;
   /** The Calendar page's week: any date in it, YYYY-MM-DD. */
   week?: string;
+  /** The open conversation on a matter's Messages tab. */
+  thread?: string;
 };
 
 export function sheetVariant(page: string, query: SheetQuery): string {

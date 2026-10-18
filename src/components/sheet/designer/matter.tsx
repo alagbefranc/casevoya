@@ -12,6 +12,8 @@ import { PersonEditDialog, personEditProps, type PersonEditDialogData } from "./
 import { PolicyMissingAlert } from "./portal-policies";
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
 import type { PersonEditData } from "@/modules/sheet/edit-person";
+import { ChatError, ChatView } from "@/components/messages/chat";
+import type { ChatData } from "@/modules/messages/present";
 
 export const MATTER_TABS = [
   ["overview", "Overview"],
@@ -1486,6 +1488,8 @@ export type MatterPageData = {
   /** Set when decision evidence is on file and no outcome is recorded yet. */
   confirmOutcome?: MatterOutcomeConfirm | null;
   closure: { closed: boolean; retention: string | null };
+  /** Messages tab: the chat view's data (null: it failed to load; absent: another tab). */
+  messages?: ChatData | null;
 };
 
 /** The open tab's content. */
@@ -1505,6 +1509,10 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
       return <MatterDecisions outcome={data.outcome} confirm={data.confirmOutcome} />;
     case "closure":
       return <MatterClosure closed={data.closure.closed} retention={data.closure.retention} />;
+    // Redesigned as a chat view at the owner's request (2026-10-18); the other tabs keep the Designer's markup.
+    case "messages":
+      if (data.messages === undefined) return <MatterTabEmpty tab={data.tab} />;
+      return data.messages ? <ChatView data={data.messages} /> : <ChatError />;
     default:
       return <MatterTabEmpty tab={data.tab} />;
   }

@@ -941,8 +941,9 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
     name: "New message",
     audience: "client",
     brand: "firm",
-    trigger: "Staff send a portal message. Matter messages are not built yet (T034)",
-    status: "ready-not-wired",
+    trigger:
+      "Staff send a matter message (outbox message.sent, template message), to each person the thread is addressed to. Honours email_notices. Firm name only: never the message text",
+    status: "wired",
     ctaTarget: PATHS.portalMessages,
     mergeFields: ["firm_name"],
     sample: { firmName: SYNTHETIC_FIRM },

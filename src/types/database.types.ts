@@ -1251,6 +1251,189 @@ export type Database = {
           },
         ]
       }
+      matter_message_attachments: {
+        Row: {
+          created_at: string
+          document_id: string
+          id: string
+          message_id: string
+          organization_id: string
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          id?: string
+          message_id: string
+          organization_id: string
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          id?: string
+          message_id?: string
+          organization_id?: string
+        }
+        Relationships: []
+      }
+      matter_message_receipts: {
+        Row: {
+          acknowledged_at: string | null
+          message_id: string
+          organization_id: string
+          person_id: string | null
+          read_at: string
+          user_id: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          message_id: string
+          organization_id: string
+          person_id?: string | null
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          message_id?: string
+          organization_id?: string
+          person_id?: string | null
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      matter_messages: {
+        Row: {
+          author_kind: string
+          author_membership_id: string | null
+          author_name: string
+          author_person_id: string | null
+          author_user_id: string
+          body: string
+          client_key: string | null
+          created_at: string
+          id: string
+          matter_id: string
+          organization_id: string
+          requires_ack: boolean
+          thread_id: string
+        }
+        Insert: {
+          author_kind: string
+          author_membership_id?: string | null
+          author_name: string
+          author_person_id?: string | null
+          author_user_id: string
+          body: string
+          client_key?: string | null
+          created_at?: string
+          id?: string
+          matter_id: string
+          organization_id: string
+          requires_ack?: boolean
+          thread_id: string
+        }
+        Update: {
+          author_kind?: string
+          author_membership_id?: string | null
+          author_name?: string
+          author_person_id?: string | null
+          author_user_id?: string
+          body?: string
+          client_key?: string | null
+          created_at?: string
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          requires_ack?: boolean
+          thread_id?: string
+        }
+        Relationships: []
+      }
+      matter_staff_notes: {
+        Row: {
+          author_membership_id: string
+          author_user_id: string
+          body: string
+          created_at: string
+          id: string
+          matter_id: string
+          organization_id: string
+        }
+        Insert: {
+          author_membership_id: string
+          author_user_id: string
+          body: string
+          created_at?: string
+          id?: string
+          matter_id: string
+          organization_id: string
+        }
+        Update: {
+          author_membership_id?: string
+          author_user_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+          matter_id?: string
+          organization_id?: string
+        }
+        Relationships: []
+      }
+      message_thread_people: {
+        Row: {
+          created_at: string
+          organization_id: string
+          person_id: string
+          thread_id: string
+        }
+        Insert: {
+          created_at?: string
+          organization_id: string
+          person_id: string
+          thread_id: string
+        }
+        Update: {
+          created_at?: string
+          organization_id?: string
+          person_id?: string
+          thread_id?: string
+        }
+        Relationships: []
+      }
+      message_threads: {
+        Row: {
+          audience_key: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_sample: boolean
+          last_message_at: string
+          matter_id: string
+          organization_id: string
+        }
+        Insert: {
+          audience_key: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_sample?: boolean
+          last_message_at?: string
+          matter_id: string
+          organization_id: string
+        }
+        Update: {
+          audience_key?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_sample?: boolean
+          last_message_at?: string
+          matter_id?: string
+          organization_id?: string
+        }
+        Relationships: []
+      }
       matters: {
         Row: {
           created_at: string
@@ -5282,6 +5465,27 @@ export type Database = {
           },
         ]
       }
+      staff_notification_reads: {
+        Row: {
+          organization_id: string
+          read_at: string
+          source_id: string
+          user_id: string
+        }
+        Insert: {
+          organization_id: string
+          read_at?: string
+          source_id: string
+          user_id: string
+        }
+        Update: {
+          organization_id?: string
+          read_at?: string
+          source_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           audience: Database["public"]["Enums"]["task_audience"]
@@ -7631,6 +7835,39 @@ export type Database = {
         }
         Returns: string
       }
+      send_matter_message: {
+        Args: {
+          p_body: string
+          p_client_key?: string | null
+          p_document_ids?: string[] | null
+          p_matter_id: string
+          p_organization_id: string
+          p_person_ids: string[] | null
+          p_requires_ack?: boolean
+          p_thread_id: string | null
+        }
+        Returns: Json
+      }
+      mark_message_thread_read: {
+        Args: { p_organization_id: string; p_thread_id: string }
+        Returns: number
+      }
+      acknowledge_matter_message: {
+        Args: { p_message_id: string; p_organization_id: string }
+        Returns: string
+      }
+      add_matter_staff_note: {
+        Args: { p_body: string; p_matter_id: string; p_organization_id: string }
+        Returns: string
+      }
+      staff_notifications: {
+        Args: { p_limit?: number; p_organization_id: string }
+        Returns: Json
+      }
+      mark_staff_notifications_read: {
+        Args: { p_ids?: string[] | null; p_organization_id: string }
+        Returns: number
+      }
       send_agreement: {
         Args: {
           p_agreement_id: string
@@ -7874,6 +8111,7 @@ export type Database = {
         | "consultation_booked"
         | "consultation_rescheduled"
         | "consultation_cancelled"
+        | "message"
       access_grant_kind: "explicit" | "guardian"
       agreement_kind: "quote" | "consultation" | "service" | "amendment" | "consent"
       agreement_status:
@@ -8285,6 +8523,7 @@ export const Constants = {
         "consultation_booked",
         "consultation_rescheduled",
         "consultation_cancelled",
+        "message",
       ],
       access_grant_kind: ["explicit", "guardian"],
       agreement_kind: ["quote", "consultation", "service", "amendment", "consent"],

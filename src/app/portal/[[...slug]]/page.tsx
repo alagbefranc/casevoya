@@ -9,6 +9,7 @@ import { loadPortalAgreements } from "@/modules/agreements/load";
 import { loadPortalDocuments } from "@/modules/documents/load";
 import { loadPortalInvoices } from "@/modules/finance/portal-load";
 import { isUuid } from "@/lib/tenant/context";
+import { loadPortalMessages } from "@/modules/messages/load";
 import { loadPortalAccess } from "@/modules/portal/load";
 import { payStateFromQuery } from "@/modules/portal/pay";
 import { loadPortalAppointments } from "@/modules/scheduling/portal-load";
@@ -26,7 +27,7 @@ async function Body({
   searchParams,
 }: {
   params: Promise<{ slug?: string[] }>;
-  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[] }>;
+  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[] }>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const page = slug?.[0] ?? "home";
@@ -59,9 +60,12 @@ async function Body({
       ? { data: await loadPortalInvoices(access.viewer), invoiceId: isUuid(invoiceValue) ? invoiceValue : null }
       : null;
   const appointments = page === "appointments" ? await loadPortalAppointments(access.viewer) : null;
+  const threadValue = Array.isArray(query.thread) ? query.thread[0] : query.thread;
+  // A failed read shows the chat's error state (null), not a broken page.
+  const messages = page === "messages" ? await loadPortalMessages(access.viewer, threadValue ?? null).catch(() => null) : undefined;
   return (
     <PortalScreen page={page}>
-      <LivePortal page={page} viewer={access.viewer} documents={documents} agreements={agreements} payments={payments} appointments={appointments} />
+      <LivePortal page={page} viewer={access.viewer} documents={documents} agreements={agreements} payments={payments} appointments={appointments} messages={messages} />
     </PortalScreen>
   );
 }
@@ -71,7 +75,7 @@ export default function PortalPage({
   searchParams,
 }: {
   params: Promise<{ slug?: string[] }>;
-  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[] }>;
+  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[] }>;
 }) {
   return (
     <Suspense fallback={<PortalScreen page="home"><EmptyPortal /></PortalScreen>}>

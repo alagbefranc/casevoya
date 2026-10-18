@@ -90,6 +90,8 @@ import {
   type WeekBlock,
 } from "@/components/sheet/designer/calendar";
 import { CalendarMarkup } from "@/components/sheet/markup/calendar";
+import { NotificationsHeader, SheetNotifications, type NotificationsData, type NotificationsTab } from "@/components/sheet/designer/notifications";
+import { NotificationsMarkup } from "@/components/sheet/markup/notifications";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -1992,5 +1994,77 @@ describe("Designer fidelity: Finance, Reconciliation and the single invoice", ()
     expect(view).toContain('<button class="btn sm" data-cn-review="n2" data-can-issue="0">Review</button>');
     expect(view).toContain("CAD 20.00 to refund to the client");
     expect(view).toContain('<button class="btn sm" data-dlg="dlgVoid">Void invoice</button>');
+  });
+});
+
+describe("Designer fidelity: Notifications", () => {
+  const P = (name: string, file: string) => ({ name, avatarUrl: `/assets/${file}.png` });
+  const DESIGNER_NOTIFICATIONS: Omit<NotificationsData, "tab"> = {
+    unread: 5,
+    groups: [
+      {
+        label: "Today",
+        rows: [
+          { lead: P("Priya Sharma", "av-priya-applicant"), parts: ["Priya uploaded ", { b: "Relationship photos" }, " (v2)"], time: "09:40", unread: true },
+          { lead: "vo", parts: ["Vo drafted a reply to Rafael. It needs your review"], time: "09:12", unread: true },
+          { lead: P("Kofi Mensah", "av-kofi-client"), parts: ["Deadline verified for ", { b: "Kofi Mensah" }, ": Fri 30 Oct, 17:00 ET"], time: "08:30", unread: true },
+          { lead: "system", parts: ["QuickBooks sync degraded. Retrying, no action needed yet"], time: "07:55", unread: true },
+        ],
+      },
+      {
+        label: "Yesterday",
+        rows: [
+          { lead: P("Lena", "av-lena-finance"), parts: ["Lena approved an earned-fee transfer (1 of 2 approvals)"], time: "16:20", unread: true },
+          { lead: P("Daniel", "av-daniel-casemanager"), parts: ["Daniel mentioned you on ", { b: "Tomás Duarte" }], time: "11:05", unread: false },
+          { lead: "system", parts: ["DocuSign connection expired. Reconnect in Settings"], time: "10:00", unread: false },
+        ],
+      },
+    ],
+  };
+
+  for (const tab of ["all", "mentions", "system"] as NotificationsTab[]) {
+    it(`renders the Notifications page (${tab} tab) exactly as the captured Designer markup`, () => {
+      const captured = withoutPreloads(renderToStaticMarkup(createElement(NotificationsMarkup, { variant: `tab-${tab}` })));
+      const data: NotificationsData = { ...DESIGNER_NOTIFICATIONS, tab };
+      const live = withoutPreloads(
+        renderToStaticMarkup(
+          createElement(SheetFrame, {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/notifications" },
+            header: createElement(NotificationsHeader, { data }),
+            statusbar: {
+              timezone: "America/Toronto",
+              queue: { label: "Reminder queue healthy", detail: "0 retries" },
+              sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+            },
+          }, createElement(SheetNotifications, { data })),
+        ),
+      );
+      if (live !== captured) {
+        let i = 0;
+        while (i < live.length && live[i] === captured[i]) i++;
+        console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+      }
+      expect(live).toBe(captured);
+    });
+  }
+
+  it("wires live rows and Mark all read by data attributes only, and shows an honest empty state", () => {
+    const data: NotificationsData = {
+      tab: "all",
+      unread: 1,
+      organizationId: "00000000-0000-4000-8000-000000000001",
+      groups: [{ label: "Today", rows: [{ id: "n1", href: "/sheet/matters/m1?tab=messages&thread=t1", lead: { name: "Synthetic Client" }, parts: ["Synthetic sent a message about ", { b: "Synthetic Client" }], time: "09:40", unread: true }] }],
+    };
+    const header = renderToStaticMarkup(createElement(NotificationsHeader, { data }));
+    expect(header).toContain('<button class="btn s sm" id="mar" data-org="00000000-0000-4000-8000-000000000001">Mark all read</button>');
+    expect(header).toContain('<span class="pill">1 unread</span>');
+    const view = renderToStaticMarkup(createElement(SheetNotifications, { data }));
+    expect(view).toContain('<div class="li nfr rv" style="--i:2" data-notif="n1" data-nav="/sheet/matters/m1?tab=messages&amp;thread=t1"><span class="av" aria-hidden="true">SC</span>');
+    // Stripping the live attributes leaves the Designer's row.
+    expect(view.replace(/ data-(notif|nav)="[^"]*"/g, "")).toContain('<div class="li nfr rv" style="--i:2"><span class="av"');
+    expect(view).not.toMatch(/Priya|Kofi|Northline|QuickBooks|DocuSign/);
+    const empty = renderToStaticMarkup(createElement(SheetNotifications, { data: { tab: "mentions", unread: 0, groups: [] } }));
+    expect(empty).toContain("No mentions");
+    expect(empty).not.toContain("nfr");
   });
 });

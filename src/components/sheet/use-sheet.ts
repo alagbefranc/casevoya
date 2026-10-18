@@ -58,6 +58,7 @@ import {
 } from "./corrections-acts";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
+import { markAllNotificationsRead, openNotification } from "./notification-acts";
 import { runNewTask, syncNewTask } from "./new-task-act";
 import { inviteFromEdit, openPersonEdit, runPersonEdit } from "./person-edit-act";
 import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-invite-act";
@@ -448,6 +449,19 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (typeSubmit && root.contains(typeSubmit)) {
         event.preventDefault();
         busyRun(typeSubmit, () => runBookingType(typeSubmit, router));
+        return;
+      }
+      // Notifications: a row is marked read and opens its record; Mark all read marks every row.
+      const notification = target.closest<HTMLElement>("[data-notif]");
+      if (notification && root.contains(notification)) {
+        event.preventDefault();
+        void openNotification(notification, root.querySelector<HTMLElement>("#mar")?.dataset.org ?? "", router);
+        return;
+      }
+      const markAll = target.closest<HTMLElement>("#mar[data-org]");
+      if (markAll && root.contains(markAll)) {
+        event.preventDefault();
+        busyRun(markAll, () => markAllNotificationsRead(markAll, router));
         return;
       }
       const nav = target.closest<HTMLElement>("[data-nav]");

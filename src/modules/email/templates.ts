@@ -84,6 +84,9 @@ export function designFor(context: Context): TemplateId | "generic" {
       return "EM16b";
     case "consultation_cancelled":
       return "EM16c";
+    // Matter messaging (20261019203100_matter_messaging.sql): a staff message. Firm name only.
+    case "message":
+      return "EX07";
     default:
       return "generic";
   }
@@ -179,6 +182,7 @@ export function renderEmail(context: Context, options: { origin?: string } = {})
     case "EX06-received":
     case "EX09":
     case "EX10":
+    case "EX07":
       copy = renderTemplate(design, { firmName: firm }, origin);
       break;
     default:

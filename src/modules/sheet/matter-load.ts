@@ -1,4 +1,5 @@
 import "server-only";
+import { loadMatterMessages } from "@/modules/messages/load";
 import {
   matterTab,
   type MatterAgreementRow,
@@ -465,6 +466,18 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       }
     : { agreement: { title: "No agreement yet", state: null, parts: ["Quotes and service agreements start from an approved template."] } };
 
+  // The Designer's "Pinned note": the matter's latest staff-only note (matter_staff_notes, never
+  // shown in the portal and never mixed with messages). RLS returns nothing to anyone else.
+  const pinned = await supabase
+    .from("matter_staff_notes")
+    .select("body, author_membership_id")
+    .eq("organization_id", staff.organizationId)
+    .eq("matter_id", matterId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (pinned.data) rbar.note = { text: pinned.data.body, parts: ["Staff only", firstName(memberName(pinned.data.author_membership_id))] };
+
   const hold = matter.on_hold
     ? {
         reason: matter.on_hold_reason,
@@ -477,6 +490,8 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     : null;
 
   const tab = matterTab(query.tab);
+  // Messages tab: the chat view (owner's request, 2026-10-18). A failed read shows its error state.
+  const messages = tab === "messages" ? await loadMatterMessages(staff, matterId, query.thread ?? null).catch(() => null) : undefined;
   // Every change is still checked by the database (role, version, step-up); this only says which matter.
   const wire = { organizationId: org, matterId: matter.id, version: matter.version };
   // public.record_deadline accepts these roles; anyone else is not offered the dialog.
@@ -547,6 +562,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     outcome: matter.outcome ? outcomeLabel(matter.outcome) : null,
     confirmOutcome,
     closure: { closed: matter.stage === "closed", retention: matter.retention_on ? longDate(matter.retention_on) : null },
+    messages,
   };
 
   return { chrome, header, rbar, dialogs, page, countersign };
