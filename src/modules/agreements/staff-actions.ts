@@ -2,15 +2,21 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
+import { isLicensedMembership, LICENCE_FACT_COLUMNS } from "@/lib/tenant/roles";
+import { clientEvidence } from "@/modules/agreements/evidence";
+import { sealEnvelope } from "@/modules/agreements/seal";
 import {
   agreementStaffError,
+  countersignerFor,
   isSendableKind,
   type NewAgreementFields,
+  readCountersign,
   readNewAgreement,
   readNewTemplate,
   sameTerms,
   signersFor,
 } from "@/modules/sheet/agreements-present";
+import { memberNames } from "@/modules/sheet/chrome-load";
 
 /**
  * The Sheet's agreement actions, run as the signed-in staff member. Every rule (role, licence,
@@ -25,6 +31,25 @@ async function staffClient(organizationId: string) {
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) return { error: "Sign in first." as const };
   return { supabase };
+}
+
+type StaffSupabase = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * The matter's responsible consultant, with whether they are licensed (mirrors
+ * app.membership_is_licensed, which send_agreement checks again) and their name.
+ */
+async function responsibleConsultant(supabase: StaffSupabase, org: string, membershipId: string | null) {
+  if (!membershipId) return null;
+  const [membership, credential, names] = await Promise.all([
+    supabase.from("memberships").select("id, role, status").eq("organization_id", org).eq("id", membershipId).maybeSingle(),
+    supabase.from("consultant_credentials").select(LICENCE_FACT_COLUMNS).eq("organization_id", org).eq("membership_id", membershipId).maybeSingle(),
+    memberNames(supabase, org),
+  ]);
+  const row = membership.data;
+  const licensed = Boolean(row && row.status === "active" && isLicensedMembership(row.role, credential.data ?? null));
+  const name = names.get(membershipId);
+  return { membershipId, licensed, name: name && name !== "Unassigned" ? name : null };
 }
 
 export async function createAgreementTemplate(input: {
@@ -78,9 +103,10 @@ export async function createAndSendAgreement(
   const org = input.organizationId;
   const { matterId, templateId, ...terms } = read.input;
 
-  const [template, participants] = await Promise.all([
+  const [template, participants, matter] = await Promise.all([
     supabase.from("agreement_templates").select("id, kind, name, status").eq("organization_id", org).eq("id", templateId).maybeSingle(),
     supabase.from("matter_participants").select("person_id, role").eq("organization_id", org).eq("matter_id", matterId),
+    supabase.from("matters").select("responsible_consultant_membership_id").eq("organization_id", org).eq("id", matterId).maybeSingle(),
   ]);
   if (!template.data || template.data.status !== "approved") return { error: "Choose an approved agreement template." };
   if (!isSendableKind(template.data.kind)) return { error: "Quotes and amendments are not sent from this dialog." };
@@ -89,8 +115,16 @@ export async function createAndSendAgreement(
     ? await supabase.from("persons").select("id, display_name").eq("organization_id", org).in("id", personIds)
     : null;
   const names = new Map((people?.data ?? []).map((row) => [row.id, row.display_name]));
-  const signers = signersFor(participants.data ?? [], names);
-  if (signers.length === 0) return { error: "This matter has no applicant to sign. Add the applicant to the matter first." };
+  // Clients sign first; the responsible licensed consultant countersigns last, for the firm.
+  const countersigner = countersignerFor(
+    template.data.kind,
+    await responsibleConsultant(supabase, org, matter.data?.responsible_consultant_membership_id ?? null),
+  );
+  if (countersigner && "error" in countersigner) return { error: countersigner.error };
+  const signers = signersFor(participants.data ?? [], names, countersigner);
+  if (!signers.some((signer) => signer.role === "client")) {
+    return { error: "This matter has no applicant to sign. Add the applicant to the matter first." };
+  }
 
   // An unsent draft from this template on this matter, with the same terms, is reused.
   const drafts = await supabase
@@ -144,4 +178,35 @@ export async function createAndSendAgreement(
   if (sent.error) return { error: agreementStaffError(sent.error.message), draftId: agreementId };
   const result = sent.data && typeof sent.data === "object" && !Array.isArray(sent.data) ? sent.data : {};
   return { agreementId, status: typeof result.status === "string" ? result.status : "sent" };
+}
+
+/**
+ * Countersign: the signed-in staff member signs an envelope where they are the current signer,
+ * with the same consent the portal records. The database checks the turn, the identity, the
+ * consultant's licence, aal2 and a recent step-up; a step-up refusal comes back as the step-up
+ * message so the page can send the person to /mfa?step=6 and reopen the dialog after. When this
+ * is the last signature, the laid-out sealed PDF is rendered and attached here (the first
+ * download does it otherwise).
+ */
+export async function countersignAgreement(input: {
+  organizationId: string;
+  envelopeId: string;
+  consent: boolean;
+}): Promise<{ status: string } | { error: string }> {
+  const read = readCountersign(input);
+  if ("error" in read) return { error: read.error };
+  const session = await staffClient(input.organizationId);
+  if ("error" in session) return { error: session.error ?? "Sign in first." };
+  const evidence = await clientEvidence();
+  const { data, error } = await session.supabase.rpc("sign_agreement", {
+    p_envelope_id: read.input.envelopeId,
+    p_consent: true,
+    p_idempotency_key: `sheet-countersign-${read.input.envelopeId}-${crypto.randomUUID()}`,
+    p_ip: evidence.ip,
+    p_user_agent: evidence.userAgent,
+  });
+  if (error) return { error: agreementStaffError(error.message) };
+  const status = data && typeof data === "object" && !Array.isArray(data) && typeof data.status === "string" ? data.status : "signed";
+  if (status === "completed") await sealEnvelope(read.input.envelopeId);
+  return { status };
 }

@@ -1137,7 +1137,17 @@ export function MatterDocuments({ checklist, people, rows }: { checklist: string
   );
 }
 
-export type MatterAgreementRow = { title: string; version: string[]; parties: string; signatures: string; state: MatterBadge; href: string; action: string };
+export type MatterAgreementRow = {
+  title: string;
+  version: string[];
+  parties: string;
+  signatures: string;
+  state: MatterBadge;
+  href: string;
+  action: string;
+  /** Live only: the action opens this dialog on the page (the signed-in consultant's countersignature). */
+  dialog?: string;
+};
 export type MatterSigning = {
   title: string;
   signers: { person: SidebarPerson; order: number; note: string; signed: boolean }[];
@@ -1186,7 +1196,7 @@ export function MatterAgreements({ rows, signing, create }: { rows: MatterAgreem
                   <Plain badge={row.state} />
                 </td>
                 <td>
-                  <a className={"btn s sm"} href={row.href}>
+                  <a className={"btn s sm"} href={row.href} data-dlg={row.dialog}>
                     {row.action}
                   </a>
                 </td>

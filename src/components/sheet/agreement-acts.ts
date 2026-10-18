@@ -1,11 +1,15 @@
 "use client";
 
 import { toast2 } from "@/components/port/kit";
-import { approveAgreementTemplate, createAgreementTemplate, createAndSendAgreement } from "@/modules/agreements/staff-actions";
+import { approveAgreementTemplate, countersignAgreement, createAgreementTemplate, createAndSendAgreement } from "@/modules/agreements/staff-actions";
 import {
   AGREEMENT_DIALOG,
   agreementStepUpLocation,
+  COUNTERSIGN_DIALOG,
+  countersignDialogId,
+  countersignTarget,
   needsStepUp,
+  readCountersign,
   readNewAgreement,
   readNewTemplate,
   TEMPLATE_DIALOG,
@@ -112,7 +116,7 @@ export async function runNewAgreement(button: HTMLElement, router: Router) {
   dialog.close();
   toast2("Agreement sent for signature", {
     kind: "ok",
-    sub: "The applicant signs in their portal. They get an email that it is ready.",
+    sub: "The applicant signs in their portal. They get an email that it is ready. When the firm countersigns, the consultant is emailed at their turn.",
   });
   settle(router);
 }
@@ -155,6 +159,54 @@ export async function runApproveTemplate(button: HTMLElement, router: Router) {
   button.closest("dialog")?.close();
   toast2("Template approved", { kind: "ok", sub: "It can now be used for new agreements." });
   settle(router);
+}
+
+/**
+ * Countersign: the consent box ticked, then the signed-in consultant signs this envelope. A
+ * step-up refusal goes to /mfa?step=6 and comes back here with this envelope's dialog open.
+ */
+export async function runCountersign(button: HTMLElement, router: Router) {
+  const dialog = button.closest("dialog");
+  if (!dialog) return;
+  const envelopeId = button.dataset.countersign ?? "";
+  const consent = Boolean(dialog.querySelector<HTMLInputElement>('input[type="checkbox"][data-consent]')?.checked);
+  const read = readCountersign({ envelopeId, consent });
+  if ("error" in read) {
+    toast2(read.error, { kind: "warn", sub: "Nothing was signed." });
+    return;
+  }
+  const result = await countersignAgreement({ organizationId: button.dataset.org ?? "", envelopeId, consent });
+  if ("error" in result) {
+    if (needsStepUp(result.error)) {
+      window.location.assign(
+        agreementStepUpLocation(window.location.pathname, window.location.search, COUNTERSIGN_DIALOG, { envelope: envelopeId }),
+      );
+      return;
+    }
+    toast2(result.error, { kind: "bad", sub: "Nothing was signed." });
+    return;
+  }
+  dialog.close();
+  toast2(result.status === "completed" ? "Agreement countersigned" : "Signed for the firm", {
+    kind: "ok",
+    sub:
+      result.status === "completed"
+        ? "Everyone has signed. The sealed copy and completion certificate are stored on the matter."
+        : "The next signer can sign now.",
+  });
+  const params = new URLSearchParams(window.location.search);
+  params.delete("dlg");
+  params.delete("envelope");
+  const query = params.toString();
+  router.replace(`${window.location.pathname}${query ? `?${query}` : ""}`);
+  router.refresh();
+}
+
+/** `?dlg=countersign&envelope=…` (back from step-up, or from the "your turn" email): reopen that dialog. */
+export function reopenCountersign(root: ParentNode, open: (id: string) => void) {
+  const envelopeId = countersignTarget(window.location.search);
+  if (!envelopeId) return;
+  if (root.querySelector(`dialog#${CSS.escape(countersignDialogId(envelopeId))}`)) open(countersignDialogId(envelopeId));
 }
 
 /**

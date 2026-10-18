@@ -3,6 +3,7 @@
  * filter-chip tokens, what the New agreement and New template dialogs send, how database
  * refusals read, and where a step-up goes. The database decides every create, approve and send.
  */
+import type { CountersignDialogData } from "@/components/sheet/designer/agreements";
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import { safeAccessError } from "@/lib/auth/step-up";
 
@@ -241,22 +242,143 @@ export function readNewTemplate(fields: { kind?: string | null; name?: string | 
   return { input: { kind, name, body } };
 }
 
-/** The applicant signs first, then the sponsor when the matter has one. */
+/** Kinds the firm countersigns: the responsible licensed consultant signs last, for the firm. */
+export const COUNTERSIGNED_KINDS = ["service", "consultation"] as const;
+
+export function firmCountersigns(kind: string): boolean {
+  return (COUNTERSIGNED_KINDS as readonly string[]).includes(kind);
+}
+
+export type PersonSigner = { role: "client" | "sponsor"; person_id: string; display_name: string };
+export type ConsultantSigner = { role: "consultant"; membership_id: string; display_name: string };
+export type AgreementSigner = PersonSigner | ConsultantSigner;
+
+/**
+ * The applicant signs first, then the sponsor when the matter has one. Given a countersigner
+ * (the matter's responsible licensed consultant), they sign last, for the firm.
+ */
 export function signersFor(
   participants: readonly { person_id: string | null; role: string }[],
   names: ReadonlyMap<string, string>,
-): { role: "client" | "sponsor"; person_id: string; display_name: string }[] {
+  countersigner?: { membershipId: string; name: string } | null,
+): AgreementSigner[] {
   const pick = (role: string) => participants.find((row) => row.role === role && row.person_id && names.get(row.person_id));
   const applicant = pick("applicant");
   const sponsor = pick("sponsor");
-  const out: { role: "client" | "sponsor"; person_id: string; display_name: string }[] = [];
+  const out: AgreementSigner[] = [];
   // The applicant is the client; without one there is nobody to send to.
   if (!applicant?.person_id) return out;
   out.push({ role: "client", person_id: applicant.person_id, display_name: names.get(applicant.person_id) as string });
   if (sponsor?.person_id && sponsor.person_id !== applicant.person_id) {
     out.push({ role: "sponsor", person_id: sponsor.person_id, display_name: names.get(sponsor.person_id) as string });
   }
+  if (countersigner?.membershipId) {
+    out.push({ role: "consultant", membership_id: countersigner.membershipId, display_name: countersigner.name.trim() || "Consultant" });
+  }
   return out;
+}
+
+/**
+ * Who countersigns an agreement of this kind on this matter: the responsible consultant, when
+ * licensed. `null` when this kind is not countersigned; `{ error }` when it is and nobody can.
+ */
+export function countersignerFor(
+  kind: string,
+  consultant: { membershipId: string | null; licensed: boolean; name: string | null } | null,
+): { membershipId: string; name: string } | null | { error: string } {
+  if (!firmCountersigns(kind)) return null;
+  if (!consultant?.membershipId) {
+    return { error: "This matter has no responsible consultant to countersign. Assign a licensed consultant to the matter first." };
+  }
+  if (!consultant.licensed) {
+    return { error: "The responsible consultant isn’t licensed, so they can’t countersign. Assign a licensed consultant to the matter first." };
+  }
+  return { membershipId: consultant.membershipId, name: consultant.name?.trim() || "Consultant" };
+}
+
+/** A signer row as the Sheet reads it from public.envelope_signers. */
+export type EnvelopeSignerRow = { envelope_id: string; membership_id: string | null; status: string };
+
+/** Whether this staff member is the current signer on the envelope: it is their turn to countersign. */
+export function countersignTurn(signers: readonly EnvelopeSignerRow[], envelopeId: string, membershipId: string): boolean {
+  return signers.some((row) => row.envelope_id === envelopeId && row.status === "current" && row.membership_id === membershipId);
+}
+
+/** The All agreements list's state badge while the signed-in consultant's countersignature is next. */
+export const COUNTERSIGN_BADGE: MatterBadge = { tone: "blue", label: "Countersign", detail: "your turn" };
+
+/** `?dlg=countersign&envelope=…` reopens that envelope's sign dialog (after a step-up, or from an email). */
+export const COUNTERSIGN_DIALOG = "countersign";
+
+/** The sign dialog's element id for one envelope. */
+export function countersignDialogId(envelopeId: string): string {
+  return `dlgSign-${envelopeId}`;
+}
+
+/** The All agreements page with this envelope's sign dialog open. */
+export function countersignHref(envelopeId: string): string {
+  return `/sheet/agreements?${new URLSearchParams({ dlg: COUNTERSIGN_DIALOG, envelope: envelopeId })}`;
+}
+
+/** The envelope a `?dlg=countersign&envelope=…` URL asks to reopen, or null. */
+export function countersignTarget(search: string): string | null {
+  const params = new URLSearchParams(search);
+  if (params.get("dlg") !== COUNTERSIGN_DIALOG) return null;
+  const envelope = params.get("envelope") ?? "";
+  return UUID.test(envelope) ? envelope : null;
+}
+
+/** What the sign dialog sends, or the first thing to fix. The database checks it again. */
+export function readCountersign(fields: { envelopeId?: string | null; consent?: boolean | null }):
+  | { input: { envelopeId: string } }
+  | { error: string } {
+  const envelopeId = clean(fields.envelopeId);
+  if (!UUID.test(envelopeId)) return { error: "Choose the agreement to sign." };
+  if (fields.consent !== true) return { error: "Confirm that you agree to sign electronically." };
+  return { input: { envelopeId } };
+}
+
+/** The consent wording when the setting cannot be read: the same text the portal falls back to. */
+export const DEFAULT_ESIGN_CONSENT =
+  "I agree to sign this document electronically. This electronic signature is my agreement to the locked text and its SHA-256 hash.";
+
+/** The sign dialog for one envelope: what is being signed, and the consent the portal shows. */
+export function countersignDialogData(input: {
+  organizationId: string;
+  envelopeId: string;
+  title: string;
+  versionNumber: number | null | undefined;
+  client: string;
+  matter: string;
+  contentSha: string | null | undefined;
+  signed: number;
+  total: number;
+  consent: { text: string; version: string };
+}): CountersignDialogData {
+  const sha = input.contentSha && /^[0-9a-f]{64}$/.test(input.contentSha) ? `${input.contentSha.slice(0, 4)}…${input.contentSha.slice(-4)} (SHA-256)` : "—";
+  return {
+    organizationId: input.organizationId,
+    envelopeId: input.envelopeId,
+    dialogId: countersignDialogId(input.envelopeId),
+    title: input.title,
+    facts: [
+      { label: "Client", value: input.client },
+      { label: "Matter", value: input.matter },
+      { label: "Document", value: input.versionNumber ? `${input.title} v${input.versionNumber}` : input.title },
+      { label: "Hash", value: sha },
+      { label: "Signed so far", value: `${input.signed} of ${input.total}` },
+    ],
+    consent: input.consent,
+  };
+}
+
+/** The configured e-sign consent (product_settings agreements.esign_consent), exactly as the portal shows it. */
+export function esignConsent(value: unknown): { text: string; version: string } {
+  const record = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  return {
+    text: typeof record.text === "string" && record.text.trim() ? record.text : DEFAULT_ESIGN_CONSENT,
+    version: typeof record.version === "string" && record.version.trim() ? record.version : "esign-consent-2026-10-17",
+  };
 }
 
 const STEP_UP_ERRORS = new Set([safeAccessError("step-up is required"), safeAccessError("aal2")]);
@@ -280,6 +402,15 @@ export function agreementStaffError(message: string): string {
   if (/signer must be a person on the matter/i.test(message)) return "The signer must be a person on this matter.";
   if (/at least one signer/i.test(message)) return "This matter has no applicant to sign.";
   if (/only a draft/i.test(message)) return "This agreement was already sent.";
+  if (/consultant signer must be licensed/i.test(message)) {
+    return "Only a licensed consultant countersigns. Assign a licensed responsible consultant to the matter.";
+  }
+  if (/firm signer must be an active staff member/i.test(message)) return "The countersigning consultant must be active staff in this firm.";
+  if (/consent/i.test(message)) return "Confirm that you agree to sign electronically.";
+  if (/not your turn/i.test(message)) return "Someone else signs before you.";
+  if (/identity does not match/i.test(message)) return "This signature is waiting for someone else.";
+  if (/envelope expired/i.test(message)) return "This envelope expired. Send a new one.";
+  if (/no longer open/i.test(message)) return "This agreement is no longer open for signature.";
   if (/agreement denied/i.test(message)) return "You can’t create agreements on this matter.";
   if (/staff access denied/i.test(message)) {
     return "Your role can’t do that. A licensed consultant approves templates; an owner, consultant or case manager sends agreements.";

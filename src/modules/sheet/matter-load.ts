@@ -1,6 +1,7 @@
 import "server-only";
 import {
   matterTab,
+  type MatterAgreementRow,
   type MatterDialogsData,
   type MatterDocumentRow,
   type MatterEvent,
@@ -45,7 +46,17 @@ import {
   clockTime,
 } from "@/modules/sheet/matter-present";
 import { governmentBadge, programLabel } from "@/modules/sheet/matters-present";
-import { agreementsHref, newAgreementHref } from "@/modules/sheet/agreements-present";
+import {
+  agreementsHref,
+  COUNTERSIGN_BADGE,
+  countersignDialogData,
+  countersignDialogId,
+  countersignHref,
+  countersignTurn,
+  esignConsent,
+  newAgreementHref,
+} from "@/modules/sheet/agreements-present";
+import type { CountersignDialogData } from "@/components/sheet/designer/agreements";
 import { inviteEmailLines } from "@/modules/email/templates";
 import { acceptPath, portalRoleForParty, portalRoleLabel } from "@/modules/sheet/portal-invite";
 import { DEADLINE_KINDS, DEADLINE_ROLES, deadlineSource } from "@/modules/sheet/new-deadline";
@@ -158,7 +169,12 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       ? supabase.from("document_versions").select("id, document_id, upload_state, review_state, version_number, expires_on").eq("organization_id", org).in("document_id", documentIds)
       : null,
     agreementIds.length
-      ? supabase.from("signature_envelopes").select("id, agreement_id, status, provider, sealed_sha256, sent_at, completed_at").eq("organization_id", org).in("agreement_id", agreementIds).order("sent_at", { ascending: false })
+      ? supabase
+          .from("signature_envelopes")
+          .select("id, agreement_id, status, provider, sealed_sha256, content_sha256, sent_at, completed_at")
+          .eq("organization_id", org)
+          .in("agreement_id", agreementIds)
+          .order("sent_at", { ascending: false })
       : null,
     versionIds.length ? supabase.from("agreement_versions").select("id, version_number").eq("organization_id", org).in("id", versionIds) : null,
     next ? supabase.from("reminder_schedules").select("offset_days, scheduled_for, status").eq("organization_id", org).eq("deadline_id", next.id).order("scheduled_for", { ascending: true }).limit(8) : null,
@@ -184,14 +200,21 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       [...parties.map((row) => row.person_id), ...requestRows.map((row) => row.person_id), ...documentRows.map((row) => row.person_id)].filter((id): id is string => Boolean(id)),
     ),
   ];
-  const [persons, signers, relationships] = await Promise.all([
+  const [persons, signers, relationships, consentSetting] = await Promise.all([
     personIds.length ? supabase.from("persons").select("id, display_name, email, user_id, date_of_birth").eq("organization_id", org).in("id", personIds) : null,
     envelopeIds.length
-      ? supabase.from("envelope_signers").select("envelope_id, display_name, signing_order, status, signed_at").eq("organization_id", org).in("envelope_id", envelopeIds).order("signing_order", { ascending: true })
+      ? supabase
+          .from("envelope_signers")
+          .select("envelope_id, membership_id, display_name, signing_order, status, signed_at")
+          .eq("organization_id", org)
+          .in("envelope_id", envelopeIds)
+          .order("signing_order", { ascending: true })
       : null,
     personIds.length
       ? supabase.from("person_relationships").select("from_person_id, to_person_id, relationship_type").eq("organization_id", org).in("from_person_id", personIds).in("to_person_id", personIds)
       : null,
+    // The e-sign consent the portal shows, for the countersign dialog.
+    supabase.from("product_settings").select("value").eq("key", "agreements.esign_consent").maybeSingle(),
   ]);
 
   const person = new Map((persons?.data ?? []).map((row) => [row.id, row]));
@@ -322,20 +345,44 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     const envelope = latestEnvelope.get(agreementId);
     return envelope ? signerRows.filter((row) => row.envelope_id === envelope.id) : [];
   };
-  const agreementTable = agreementRows.map((row) => {
+  // Envelopes where the signed-in staff member is the current signer: their turn to countersign.
+  const consent = esignConsent(consentSetting?.data?.value);
+  const countersign: CountersignDialogData[] = [];
+  const agreementTable: MatterAgreementRow[] = agreementRows.map((row) => {
     const people = signersOf(row.id);
     const envelope = latestEnvelope.get(row.id);
     const number = row.current_version_id ? versionNumber.get(row.current_version_id) : undefined;
     const sentOn = envelope?.sent_at ? `sent ${dayMonth(isoDateInTimeZone(new Date(envelope.sent_at), staff.timezone))}` : null;
+    const signedCount = people.filter((signer) => signer.status === "signed").length;
+    const turn = Boolean(
+      envelope && ["sent", "partially_signed"].includes(envelope.status) && countersignTurn(people, envelope.id, staff.membershipId),
+    );
+    if (turn && envelope) {
+      countersign.push(
+        countersignDialogData({
+          organizationId: org,
+          envelopeId: envelope.id,
+          title: row.title,
+          versionNumber: number,
+          client: clientName,
+          matter: matter.reference ?? matter.title,
+          contentSha: envelope.content_sha256,
+          signed: signedCount,
+          total: people.length,
+          consent,
+        }),
+      );
+    }
     return {
       title: row.title,
       version: [number ? `v${number}` : "—", ...(sentOn && row.status !== "completed" ? [sentOn] : [])],
       parties: people.length ? people.map((signer) => firstName(signer.display_name)).join(", ") : "—",
-      signatures: people.length ? `${people.filter((signer) => signer.status === "signed").length} of ${people.length}` : "—",
-      state: agreementState(row.status),
+      signatures: people.length ? `${signedCount} of ${people.length}` : "—",
+      state: turn ? COUNTERSIGN_BADGE : agreementState(row.status),
       // The All agreements list, searched for this matter: the agreement with its state and signatures.
-      href: agreementsHref(matter.reference),
-      action: envelope && row.status !== "completed" ? "Track envelope" : "Open",
+      href: turn && envelope ? countersignHref(envelope.id) : agreementsHref(matter.reference),
+      action: turn ? "Countersign" : envelope && row.status !== "completed" ? "Track envelope" : "Open",
+      ...(turn && envelope ? { dialog: countersignDialogId(envelope.id) } : {}),
     };
   });
   const signed = agreementRows.find((row) => signersOf(row.id).length > 0);
@@ -497,5 +544,5 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     closure: { closed: matter.stage === "closed", retention: matter.retention_on ? longDate(matter.retention_on) : null },
   };
 
-  return { chrome, header, rbar, dialogs, page };
+  return { chrome, header, rbar, dialogs, page, countersign };
 }
