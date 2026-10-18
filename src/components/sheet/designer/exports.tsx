@@ -201,7 +201,7 @@ export function SheetExports({ data }: { data: ExportsData }) {
         </div>
       ) : (
         <div className={"panel rv"} style={i(2)}>
-          <Empty art={"migration-box"} title={"No exports yet"} copy={"Start one with New export. Each export is listed here with who made it and when."} />
+          <Empty art={"multi-page"} title={"No exports yet"} copy={"Start one with New export. Each export is listed here with who made it and when."} />
         </div>
       )}
       <div className={"panel rv"} style={{ marginTop: "6px", "--i": "3" } as CSSProperties}>
