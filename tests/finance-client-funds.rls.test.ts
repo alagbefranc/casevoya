@@ -536,3 +536,300 @@ describe("who reads the ledger", () => {
     await expectDbError(() => db.query(`select public.client_fund_staff_names($1)`, [a.orgId]), /billing access denied/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Controls: second-person verification, receipts (CICC Code s. 32(b)), the s. 32(g) withdrawal
+// date, and the recorded bank transfer after an approved earned-fee transfer.
+// ---------------------------------------------------------------------------
+
+/** Setup-only writes that the guards would refuse (back-dating an invoice, naming a consultant). */
+async function unguarded(sql: string, params: unknown[] = []) {
+  await asMaintenance(db);
+  await db.exec("set session_replication_role = replica");
+  try {
+    await db.query(sql, params);
+  } finally {
+    await db.exec("set session_replication_role = origin");
+  }
+}
+
+async function firmToday(f: Firm) {
+  await asMaintenance(db);
+  return (await db.query<{ d: string }>(`select app.client_funds_today($1)::text as d`, [f.orgId])).rows[0].d;
+}
+
+function addDays(day: string, days: number) {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+type Withdrawal = { state: string; amount_cents: number; invoiced_on: string; withdraw_by: string; days_left: number; overdue: boolean; entry_id: string | null; invoice_id: string };
+
+async function withdrawals(f: Firm, userId: string) {
+  await as(f, userId, false);
+  return (
+    await db.query<Withdrawal>(
+      `select state, amount_cents, invoiced_on::text, withdraw_by::text, days_left, overdue, entry_id, invoice_id from public.list_client_fund_withdrawals()`,
+    )
+  ).rows;
+}
+
+async function receiptOf(entryId: string) {
+  await asMaintenance(db);
+  return (await db.query<Record<string, unknown>>(`select * from public.client_fund_receipts where entry_id = $1`, [entryId])).rows[0];
+}
+
+describe("second person to verify a deposit", () => {
+  it("refuses the recorder unless they are the firm owner; the owner's own entry is marked and audited", async () => {
+    const f = await firm({ secondFinance: true });
+    const byFinance = await deposit(f, 10_000);
+    await expectDbError(() => verify(f, byFinance, f.finance), /recorded a deposit cannot verify it/);
+    expect(await entry(byFinance)).toMatchObject({ status: "pending_verification" });
+    await verify(f, byFinance, f.secondFinance);
+    expect(await entry(byFinance)).toMatchObject({ status: "verified", verified_by: f.secondFinance, verified_by_owner_self: false });
+    // A verified deposit is refused as already verified, before the second-person rule.
+    await as(f, f.finance, false);
+    await expectDbError(() => db.query(`select public.verify_client_deposit($1)`, [byFinance]), /only a deposit pending verification/);
+
+    const byOwner = await deposit(f, 5_000, { userId: f.owner });
+    await verify(f, byOwner, f.owner);
+    expect(await entry(byOwner)).toMatchObject({ status: "verified", verified_by: f.owner, verified_by_owner_self: true });
+
+    const forOwner = await deposit(f, 2_000, { userId: f.finance });
+    await verify(f, forOwner, f.owner);
+    expect(await entry(forOwner)).toMatchObject({ verified_by: f.owner, verified_by_owner_self: false });
+
+    await asMaintenance(db);
+    const audit = await db.query<{ object_id: string; action: string }>(
+      `select object_id, action from public.audit_log where action like 'client_funds.deposit_verified%' and object_id = any($1::uuid[]) order by occurred_at`,
+      [[byFinance, byOwner, forOwner]],
+    );
+    expect(audit.rows).toEqual([
+      { object_id: byFinance, action: "client_funds.deposit_verified" },
+      { object_id: byOwner, action: "client_funds.deposit_verified_owner_self" },
+      { object_id: forOwner, action: "client_funds.deposit_verified" },
+    ]);
+  });
+
+  it("can't be forged by writing the entry directly", async () => {
+    const f = await firm();
+    const pending = await deposit(f, 10_000);
+    await asMaintenance(db);
+    await expectDbError(
+      () => db.query(`update public.client_fund_entries set status = 'verified', verified_by = requested_by, verified_at = now() where id = $1`, [pending]),
+      /client_fund_entries_second_person_verify/,
+    );
+    await expectDbError(
+      () =>
+        db.query(`update public.client_fund_entries set status = 'verified', verified_by = $2, verified_at = now(), verified_by_owner_self = true where id = $1`, [pending, f.owner]),
+      /client_fund_entries_owner_self_verify_shape/,
+    );
+  });
+});
+
+describe("receipts for advance payments (s. 32(b))", () => {
+  it("are issued once when a deposit is verified, numbered RC-0001 per firm, with the amount and who it is for", async () => {
+    const f = await firm();
+    const first = await deposit(f, 180_800);
+    expect(await receiptOf(first)).toBeUndefined();
+    await verify(f, first, f.owner);
+    expect(await receiptOf(first)).toMatchObject({
+      number: "RC-0001",
+      amount_cents: 180_800,
+      currency: "CAD",
+      method: "bank_transfer",
+      external_reference: "RBC-0001",
+      client_name: "Synthetic applicant",
+      matter_label: expect.stringMatching(/^[A-Z]{2}-\d{4}-\d{4} · Synthetic matter$/),
+      firm_legal_name: "Synthetic Legal Name",
+      firm_display_name: "Synthetic Firm",
+      account_label: "Client account",
+      account_institution: "Synthetic Bank",
+      account_last4: "4410",
+      issued_by: f.owner,
+      is_sample: true,
+      consultant_licence: null,
+    });
+
+    const rejected = await deposit(f, 1_000);
+    await as(f, f.owner, false);
+    await db.query(`select public.reject_client_deposit($1, 'Not on the statement')`, [rejected]);
+    expect(await receiptOf(rejected)).toBeUndefined();
+
+    const second = (await funded(f, 2_000)).depositId;
+    expect((await receiptOf(second)).number).toBe("RC-0002");
+
+    const other = await firm();
+    const otherFirst = (await funded(other, 1_000)).depositId;
+    expect((await receiptOf(otherFirst)).number).toBe("RC-0001");
+
+    await asMaintenance(db);
+    await expectDbError(() => db.query(`update public.client_fund_receipts set amount_cents = 1 where entry_id = $1`, [first]), /append-only/);
+    await expectDbError(() => db.query(`delete from public.client_fund_receipts where entry_id = $1`, [first]), /append-only/);
+  });
+
+  it("show the responsible consultant's CICC licence, copied when issued", async () => {
+    const f = await firm();
+    const consultant = await createUser("consultant");
+    const membership = await member(f.orgId, consultant, "licensed_consultant", f.owner);
+    await unguarded(`update public.profiles set display_name = 'Synthetic Consultant' where id = $1`, [consultant]);
+    await unguarded(`insert into public.consultant_credentials (organization_id, membership_id, licence_type, college_id) values ($1, $2, 'RCIC', 'R000001')`, [
+      f.orgId,
+      membership,
+    ]);
+    await unguarded(`update public.matters set responsible_consultant_membership_id = $2 where id = $1`, [f.matterId, membership]);
+    const { depositId } = await funded(f, 5_000);
+    expect(await receiptOf(depositId)).toMatchObject({ consultant_name: "Synthetic Consultant", consultant_licence: "RCIC R000001" });
+  });
+
+  it("are read by the matter's billing staff and by the client whose money it is, and each read is audited", async () => {
+    const f = await firm();
+    const { depositId } = await funded(f, 5_000);
+    const pending = await deposit(f, 1_000);
+
+    for (const userId of [f.owner, f.finance]) {
+      await as(f, userId, false);
+      const row = await db.query<{ r: { number: string; amount_cents: number } }>(`select public.client_fund_receipt($1) as r`, [depositId]);
+      expect(row.rows[0].r).toMatchObject({ number: "RC-0001", amount_cents: 5_000 });
+      expect((await db.query(`select id from public.client_fund_receipts`)).rows).toHaveLength(1);
+    }
+    for (const userId of [f.otherFinance, f.assistant]) {
+      await as(f, userId, false);
+      await expectDbError(() => db.query(`select public.client_fund_receipt($1)`, [depositId]), /receipt access denied/);
+      expect((await db.query(`select id from public.client_fund_receipts`)).rows).toHaveLength(0);
+    }
+    await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
+    expect((await db.query<{ r: { number: string } }>(`select public.client_fund_receipt($1) as r`, [depositId])).rows[0].r.number).toBe("RC-0001");
+    expect((await db.query(`select id from public.client_fund_receipts`)).rows).toHaveLength(1);
+    await expectDbError(() => db.query(`select public.client_fund_receipt($1)`, [pending]), /receipt access denied/);
+
+    await asUser(db, { userId: f.stranger, aal: "aal1", orgId: f.orgId });
+    await expectDbError(() => db.query(`select public.client_fund_receipt($1)`, [depositId]), /receipt access denied/);
+    expect((await db.query(`select id from public.client_fund_receipts`)).rows).toHaveLength(0);
+
+    // Another firm's owner, in their own workspace, can't read it.
+    const other = await firm();
+    await as(other, other.owner, false);
+    await expectDbError(() => db.query(`select public.client_fund_receipt($1)`, [depositId]), /receipt access denied/);
+
+    await asAnon(db);
+    await expectDbError(() => db.query(`select public.client_fund_receipt($1)`, [depositId]), /permission denied/);
+
+    await asMaintenance(db);
+    const reads = await db.query<{ actor_user_id: string }>(
+      `select audit.actor_user_id from public.audit_log audit join public.client_fund_receipts receipt on receipt.id = audit.object_id
+       where audit.action = 'client_funds.receipt_read' and receipt.entry_id = $1`,
+      [depositId],
+    );
+    expect(reads.rows.map((row) => row.actor_user_id).sort()).toEqual([f.owner, f.finance, f.client].sort());
+  });
+});
+
+describe("the s. 32(g) withdrawal date", () => {
+  it("is the invoice date plus 30 days", async () => {
+    await asMaintenance(db);
+    const row = await db.query<{ d: string; leap: string }>(`select app.client_funds_withdraw_by('2026-10-18')::text as d, app.client_funds_withdraw_by('2028-02-01')::text as leap`);
+    expect(row.rows[0]).toEqual({ d: "2026-11-17", leap: "2028-03-02" });
+  });
+
+  it("lists what is still to withdraw, overdue from day 31, for billing staff only", async () => {
+    const f = await firm();
+    await funded(f, 50_000);
+    const invoiceId = await issue(f, 80_000);
+    const day = await firmToday(f);
+
+    // Not requested yet: the smaller of what is due and what is held.
+    let rows = await withdrawals(f, f.owner);
+    expect(rows).toEqual([
+      expect.objectContaining({ state: "not_requested", invoice_id: invoiceId, entry_id: null, amount_cents: 50000, invoiced_on: day, withdraw_by: addDays(day, 30), days_left: 30, overdue: false }),
+    ]);
+
+    await unguarded(`update public.invoices set issued_on = $2::date where id = $1`, [invoiceId, addDays(day, -30)]);
+    rows = await withdrawals(f, f.finance);
+    expect(rows[0]).toMatchObject({ withdraw_by: day, days_left: 0, overdue: false });
+
+    await unguarded(`update public.invoices set issued_on = $2::date where id = $1`, [invoiceId, addDays(day, -31)]);
+    rows = await withdrawals(f, f.owner);
+    expect(rows[0]).toMatchObject({ withdraw_by: addDays(day, -1), days_left: -1, overdue: true });
+
+    for (const userId of [f.otherFinance, f.assistant]) expect(await withdrawals(f, userId)).toEqual([]);
+    await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
+    expect((await db.query(`select * from public.list_client_fund_withdrawals()`)).rows).toEqual([]);
+  });
+
+  it("does not list an invoice on a matter where the firm holds no client money", async () => {
+    const f = await firm();
+    await funded(f, 10_000);
+    await issue(f, 5_000, f.otherMatter);
+    expect(await withdrawals(f, f.owner)).toEqual([]);
+  });
+});
+
+describe("recording the bank transfer after approval", () => {
+  it("moves an approved transfer from awaiting bank transfer to transferred, once, with a step-up", async () => {
+    const f = await firm();
+    const { ledgerId } = await funded(f, 50_000);
+    const invoiceId = await issue(f, 30_000);
+    const day = await firmToday(f);
+    const transferId = await requestTransfer(f, ledgerId, invoiceId, 30_000);
+
+    expect(await withdrawals(f, f.owner)).toEqual([expect.objectContaining({ state: "awaiting_approval", entry_id: transferId, amount_cents: 30000, withdraw_by: addDays(day, 30) })]);
+    await as(f, f.owner);
+    await expectDbError(() => db.query(`select public.record_client_transfer_bank($1, $2::date, 'BANK-1', null)`, [transferId, day]), /only an approved transfer/);
+
+    await approve(f, transferId, f.owner);
+    // The invoice is paid at approval (unchanged); the bank step is tracked separately.
+    expect(await invoiceRow(invoiceId)).toMatchObject({ status: "paid", fromFunds: 30_000 });
+    expect(await withdrawals(f, f.owner)).toEqual([expect.objectContaining({ state: "awaiting_bank_transfer", entry_id: transferId })]);
+
+    await as(f, f.finance, false);
+    await expectDbError(() => db.query(`select public.record_client_transfer_bank($1, $2::date, 'BANK-1', null)`, [transferId, day]), /step-up/);
+    await as(f, f.assistant);
+    await expectDbError(() => db.query(`select public.record_client_transfer_bank($1, $2::date, 'BANK-1', null)`, [transferId, day]), /billing access denied/);
+    await as(f, f.finance);
+    await expectDbError(() => db.query(`select public.record_client_transfer_bank($1, $2::date, '  ', null)`, [transferId, day]), /bank reference is required/);
+    await expectDbError(() => db.query(`select public.record_client_transfer_bank($1, $2::date, 'BANK-1', null)`, [transferId, addDays(day, 1)]), /future/);
+    await expectDbError(() => db.query(`select public.record_client_transfer_bank($1, $2::date, 'BANK-1', null)`, [transferId, addDays(day, -1)]), /before the invoice/);
+
+    const recorded = (await db.query<{ id: string }>(`select public.record_client_transfer_bank($1, $2::date, 'BANK-1', 'Online banking') as id`, [transferId, day])).rows[0].id;
+    expect((await db.query<{ id: string }>(`select public.record_client_transfer_bank($1, $2::date, 'BANK-1', null) as id`, [transferId, day])).rows[0].id).toBe(recorded);
+    await expectDbError(() => db.query(`select public.record_client_transfer_bank($1, $2::date, 'BANK-2', null)`, [transferId, day]), /already recorded/);
+
+    expect(await withdrawals(f, f.owner)).toEqual([]);
+    expect(await invoiceRow(invoiceId)).toMatchObject({ status: "paid", fromFunds: 30_000 });
+    expect(await entry(transferId)).toMatchObject({ status: "approved" });
+
+    await asMaintenance(db);
+    const bank = (await db.query<Record<string, unknown>>(`select * from public.client_fund_bank_transfers where id = $1`, [recorded])).rows[0];
+    expect(bank).toMatchObject({ entry_id: transferId, invoice_id: invoiceId, amount_cents: 30_000, bank_reference: "BANK-1", note: "Online banking", recorded_by: f.finance, is_sample: true });
+    const audit = await db.query<{ context: Record<string, unknown> }>(`select context from public.audit_log where action = 'client_funds.bank_transfer_recorded' and object_id = $1`, [recorded]);
+    expect(audit.rows[0].context).toMatchObject({ entry_id: transferId, withdraw_by: addDays(day, 30), after_withdraw_by: false });
+    await expectDbError(() => db.query(`update public.client_fund_bank_transfers set bank_reference = 'X' where id = $1`, [recorded]), /append-only/);
+
+    for (const [userId, count] of [
+      [f.owner, 1],
+      [f.finance, 1],
+      [f.otherFinance, 0],
+      [f.assistant, 0],
+    ] as const) {
+      await as(f, userId, false);
+      expect((await db.query(`select id from public.client_fund_bank_transfers`)).rows, userId).toHaveLength(count);
+    }
+    await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
+    expect((await db.query(`select id from public.client_fund_bank_transfers`)).rows).toHaveLength(0);
+  });
+
+  it("drops a declined transfer back to the invoice, which is still to withdraw while the firm holds money", async () => {
+    const f = await firm();
+    const { ledgerId } = await funded(f, 50_000);
+    const invoiceId = await issue(f, 30_000);
+    const transferId = await requestTransfer(f, ledgerId, invoiceId, 10_000);
+    let rows = await withdrawals(f, f.owner);
+    expect(rows.map((row) => `${row.state}:${row.amount_cents}`).sort()).toEqual(["awaiting_approval:10000", "not_requested:20000"]);
+    await as(f, f.owner, false);
+    await db.query(`select public.decline_client_transfer($1, 'Wrong milestone')`, [transferId]);
+    rows = await withdrawals(f, f.owner);
+    expect(rows.map((row) => `${row.state}:${row.amount_cents}`)).toEqual(["not_requested:30000"]);
+  });
+});

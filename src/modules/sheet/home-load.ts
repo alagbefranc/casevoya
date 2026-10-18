@@ -30,7 +30,8 @@ function plural(count: number, one: string, many: string) {
 /**
  * Everything the Designer's frame and home need, read as the signed-in staff member so
  * row-level security decides what is visible. Features without a backend yet (Vo drafts,
- * leads, finance exceptions) report nothing rather than a made-up number.
+ * leads) report nothing rather than a made-up number. Financial exceptions are client-account
+ * withdrawals past their CICC Code s. 32(g) date.
  */
 export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
   const supabase = await createClient({ organizationId: staff.organizationId });
@@ -43,7 +44,7 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
   // Clients can't accept an invitation until the firm publishes both portal documents.
   const policies = loadCurrentPolicies(supabase, org);
 
-  const [chrome, openTasks, dueToday, upcoming, monthDeadlines, tentative, accepted, awaiting, requested, onHold, activity] =
+  const [chrome, openTasks, dueToday, upcoming, monthDeadlines, tentative, accepted, awaiting, requested, onHold, activity, withdrawals] =
     await Promise.all([
       loadSheetChrome(staff, "/sheet"),
       supabase
@@ -69,7 +70,9 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
         .eq("result", "success")
         .order("occurred_at", { ascending: false })
         .limit(3),
+      supabase.rpc("list_client_fund_withdrawals"),
     ]);
+  const overdueWithdrawals = (withdrawals.data ?? []).filter((row) => row.organization_id === org && row.overdue).length;
 
   const tasks = openTasks.data ?? [];
   const deadlines = upcoming.data ?? [];
@@ -120,7 +123,9 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
       { href: "/sheet/tasks", count: due, label: plural(due, "task due today", "tasks due today") },
       { href: "/sheet/matters?view=review", count: toReview, label: plural(toReview, "document awaiting review", "documents awaiting review") },
       { href: "/sheet/matters?view=blocked", count: held, label: plural(held, "blocked matter", "blocked matters") },
-      { href: "/sheet/finance", count: 0, label: "financial exceptions" },
+      // Client-account withdrawals past the CICC Code s. 32(g) date (invoice date + 30 days). Billing
+      // staff only: the function returns no rows to anyone else.
+      { href: "/sheet/finance?tab=funds", count: overdueWithdrawals, label: plural(overdueWithdrawals, "financial exception", "financial exceptions") },
     ],
     byDeadline: [...nextByMatter].slice(0, 5).map(([matter, date]) => ({ href: `/sheet/matters/${matter}`, name: matterName(matter), date: dayMonth(date) })),
     tasks: homeTasks,

@@ -39,6 +39,12 @@ export type FundEntry = {
   verifiedBy: string | null;
   approvedBy: string | null;
   ownerSelfApproved: boolean;
+  /** The firm owner verified a deposit they recorded themselves. */
+  verifiedByOwnerSelf?: boolean;
+  /** "RC-0001": the receipt issued when a deposit was verified (CICC Code s. 32(b)). */
+  receiptNumber?: string | null;
+  /** The recorded bank transfer of an approved earned-fee transfer. */
+  bank?: { on: string; reference: string } | null;
 };
 
 /** What an entry does to the client's balance once it counts (0 while pending, rejected or declined). */
@@ -63,7 +69,28 @@ export function ledgerTotals(entries: Pick<FundEntry, "kind" | "status" | "direc
 }
 
 /** The Designer's ledger row: date, entry, evidence, in, out, balance (amounts without currency). */
-export type LedgerLine = { key: string; date: string; entry: string[]; evidence: string[]; in: string; out: string; balance: string };
+export type LedgerLine = {
+  key: string;
+  date: string;
+  entry: string[];
+  evidence: string[];
+  in: string;
+  out: string;
+  balance: string;
+  /** A verified deposit's receipt download, after the entry text. */
+  receipt?: { label: string; href: string };
+};
+
+/** Who verified a deposit, as the ledger shows it. */
+export function verifiedByText(entry: Pick<FundEntry, "verifiedBy" | "verifiedByOwnerSelf">): string {
+  if (entry.verifiedByOwnerSelf) return "Verified by owner (own entry)";
+  return entry.verifiedBy ? entry.verifiedBy.split(" ")[0] : "verified";
+}
+
+/** An approved transfer's bank step: "Approved — awaiting bank transfer" until it is recorded. */
+export function bankStepText(entry: Pick<FundEntry, "bank">, day: (iso: string) => string): string[] {
+  return entry.bank ? [`Transferred ${day(entry.bank.on)}`, entry.bank.reference] : ["Approved — awaiting bank transfer"];
+}
 
 function shortText(text: string, max = 40): string {
   const clean = text.replace(/\s+/g, " ").trim();
@@ -75,7 +102,12 @@ function shortText(text: string, max = 40): string {
  * waiting for verification shows its amount in "In" and the balance as "… available" (it doesn't
  * count yet); a proposed transfer shows its amount in brackets in "Out" and leaves the balance.
  */
-export function ledgerLines(entries: FundEntry[], day: (iso: string) => string, currency = "CAD"): LedgerLine[] {
+export function ledgerLines(
+  entries: FundEntry[],
+  day: (iso: string) => string,
+  currency = "CAD",
+  receiptHref?: (entry: FundEntry) => string,
+): LedgerLine[] {
   let balance = 0;
   const amount = (cents: number) => formatAmount(cents, currency);
   return entries.map((entry) => {
@@ -100,7 +132,7 @@ export function ledgerLines(entries: FundEntry[], day: (iso: string) => string, 
           evidence = [reference, "rejected"];
         } else {
           label = ["Advance deposit", methodShort(entry.method)];
-          evidence = [reference, by(entry.verifiedBy) ?? "verified"];
+          evidence = [reference, verifiedByText(entry)];
           inText = amount(entry.amountCents);
         }
         break;
@@ -119,6 +151,7 @@ export function ledgerLines(entries: FundEntry[], day: (iso: string) => string, 
         } else {
           label = [`Earned-fee transfer → ${target}${note}`];
           evidence = [entry.ownerSelfApproved ? "Approved by owner (own request)" : `Approved by ${entry.approvedBy ?? "a second person"}`];
+          if (entry.bank !== undefined) evidence.push(...bankStepText(entry, day));
           outText = amount(entry.amountCents);
         }
         break;
@@ -134,16 +167,64 @@ export function ledgerLines(entries: FundEntry[], day: (iso: string) => string, 
         if (entry.direction === "in") inText = amount(entry.amountCents);
         else outText = amount(entry.amountCents);
     }
-    return { key: entry.id, date, entry: label, evidence, in: inText, out: outText, balance: balanceText };
+    const line: LedgerLine = { key: entry.id, date, entry: label, evidence, in: inText, out: outText, balance: balanceText };
+    if (entry.kind === "deposit" && entry.status === "verified" && entry.receiptNumber && receiptHref) {
+      line.receipt = { label: `Receipt ${entry.receiptNumber}`, href: receiptHref(entry) };
+    }
+    return line;
   });
 }
 
-export type FundsBadge = { tone: "ok" | "rev" | "chg" | "gr"; label: string };
+export type FundsBadge = { tone: "ok" | "rev" | "chg" | "gr" | "bad"; label: string; detail?: string };
 
-export function ledgerBadge(entries: FundEntry[]): FundsBadge {
+export function ledgerBadge(entries: FundEntry[], withdraw?: WithdrawDue | null): FundsBadge {
+  if (withdraw?.overdue) return { tone: "bad", label: `Withdraw by ${withdraw.label}`, detail: "overdue" };
   if (entries.some((entry) => entry.kind === "deposit" && entry.status === "pending_verification")) return { tone: "rev", label: "Pending verification" };
   if (entries.some((entry) => entry.kind === "transfer" && entry.status === "pending_approval")) return { tone: "chg", label: "Approval needed" };
+  if (withdraw) return { tone: "chg", label: `Withdraw by ${withdraw.label}` };
   return ledgerTotals(entries).balanceCents > 0 ? { tone: "ok", label: "Verified" } : { tone: "gr", label: "No balance" };
+}
+
+// ---------------------------------------------------------------------------
+// CICC Code s. 32(g): "not later than 30 days after the day on which the client is invoiced under
+// paragraph (f), withdraw the invoiced amount from the client account". The database computes the
+// date (invoice issue date + 30 days); these helpers only word it.
+// ---------------------------------------------------------------------------
+
+export const WITHDRAW_RULE =
+  "CICC Code s. 32(g): withdraw the invoiced amount from the client account no later than 30 days after the day the client is invoiced.";
+
+export type Withdrawal = {
+  state: "awaiting_approval" | "awaiting_bank_transfer" | "not_requested";
+  matterId: string;
+  ledgerId: string | null;
+  entryId: string | null;
+  invoiceNumber: string;
+  amountCents: number;
+  withdrawBy: string;
+  daysLeft: number;
+  overdue: boolean;
+};
+
+export type WithdrawDue = { by: string; label: string; overdue: boolean };
+
+/** The earliest withdrawal date among these, for a badge ("Withdraw by 17 Nov"). */
+export function earliestWithdrawal(rows: Withdrawal[], day: (iso: string) => string): WithdrawDue | null {
+  const first = [...rows].sort((a, b) => a.withdrawBy.localeCompare(b.withdrawBy))[0];
+  return first ? { by: first.withdrawBy, label: day(first.withdrawBy), overdue: rows.some((row) => row.overdue) } : null;
+}
+
+export function withdrawalState(row: Pick<Withdrawal, "state">): string {
+  if (row.state === "awaiting_approval") return "transfer waiting for approval";
+  if (row.state === "awaiting_bank_transfer") return "approved — awaiting bank transfer";
+  return "no transfer asked for yet";
+}
+
+/** "Due in 3 days", "Due today", "2 days overdue". */
+export function withdrawalTiming(row: Pick<Withdrawal, "daysLeft" | "overdue">): string {
+  if (row.overdue) return `${-row.daysLeft} ${-row.daysLeft === 1 ? "day" : "days"} overdue`;
+  if (row.daysLeft === 0) return "Due today";
+  return `Due in ${row.daysLeft} ${row.daysLeft === 1 ? "day" : "days"}`;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -204,6 +285,26 @@ export function readRefundToClient(fields: RefundToClientFields, today: string, 
   return { input: { ledgerId: fields.ledger, amountCents, method: fields.method, reference: reference || null, paidOn: fields.paid, reason: reason.reason } };
 }
 
+export type BankTransferFields = { entry: string; transferred: string; reference: string; note: string };
+
+/** `earliest` is the invoice's issue date: the money can't leave before the client is invoiced (s. 32(f)). */
+export function readBankTransfer(
+  fields: BankTransferFields,
+  today: string,
+  earliest: string | null,
+): { input: { entryId: string; transferredOn: string; reference: string; note: string | null } } | { error: string } {
+  if (!UUID.test(fields.entry)) return { error: "Choose the approved transfer." };
+  if (!DAY.test(fields.transferred)) return { error: "Choose the day the bank sent it." };
+  if (fields.transferred > today) return { error: "The date can’t be in the future." };
+  if (earliest && DAY.test(earliest) && fields.transferred < earliest) return { error: "The bank transfer can’t be before the invoice date." };
+  const reference = fields.reference.trim();
+  if (!reference) return { error: "Enter the bank’s reference for the transfer." };
+  if (reference.length > 80) return { error: "Keep the reference under 80 characters." };
+  const note = fields.note.trim();
+  if (note.length > 500) return { error: "Keep the note under 500 characters." };
+  return { input: { entryId: fields.entry, transferredOn: fields.transferred, reference, note: note || null } };
+}
+
 export function readReason(value: string): { reason: string } | { error: string } {
   const reason = value.trim();
   if (reason.length < 3) return { error: "Give a short reason." };
@@ -229,6 +330,12 @@ export function readClientAccount(fields: AccountFields): { input: AccountFields
 
 /** User-facing copy for a refused client-funds action. Never passes a database message through. */
 export function clientFundsError(message: string): string {
+  if (/recorded a deposit cannot verify it/i.test(message)) return "You recorded this payment, so someone else verifies it. The firm owner may verify their own entry.";
+  if (/bank transfer was already recorded/i.test(message)) return "The bank transfer for this entry was already recorded.";
+  if (/only an approved transfer/i.test(message)) return "Only an approved transfer has a bank transfer to record.";
+  if (/bank reference is required/i.test(message)) return "Enter the bank’s reference for the transfer.";
+  if (/before the invoice/i.test(message)) return "The bank transfer can’t be before the invoice date.";
+  if (/receipt access denied/i.test(message)) return "That receipt isn’t available to you.";
   if (/cannot approve their own transfer/i.test(message)) return "You asked for this transfer, so someone else approves it. The firm owner can approve any transfer.";
   if (/approving your own request needs a step-up/i.test(message)) return safeAccessError("step-up is required");
   if (/sample mode/i.test(message)) return "This firm is in sample mode, so only sample matters take client funds. Turn sample mode off to record a real client’s money.";

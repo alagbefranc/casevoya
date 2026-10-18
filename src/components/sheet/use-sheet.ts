@@ -23,6 +23,7 @@ import {
   openVerify,
   reopenFundsDialog,
   runApprove,
+  runBankTransfer,
   runClientAccount,
   runCorrection,
   runDecline,
@@ -55,7 +56,7 @@ function art(name: string, px: number) {
 
 /** The Client funds dialogs' submit buttons. */
 const FUNDS_SUBMIT =
-  "[data-funds-deposit], [data-funds-verify], [data-funds-reject], [data-funds-approve], [data-funds-decline], [data-funds-transfer], [data-funds-refund], [data-funds-correct], [data-funds-account]";
+  "[data-funds-deposit], [data-funds-verify], [data-funds-reject], [data-funds-approve], [data-funds-decline], [data-funds-transfer], [data-funds-refund], [data-funds-correct], [data-funds-account], [data-funds-bank]";
 
 function runFundsSubmit(button: HTMLElement, router: Parameters<typeof runDeposit>[1]): Promise<void> {
   const data = button.dataset;
@@ -67,6 +68,7 @@ function runFundsSubmit(button: HTMLElement, router: Parameters<typeof runDeposi
   if ("fundsTransfer" in data) return runTransfer(button, router);
   if ("fundsRefund" in data) return runRefundToClient(button, router);
   if ("fundsCorrect" in data) return runCorrection(button, router);
+  if ("fundsBank" in data) return runBankTransfer(button, router);
   return runClientAccount(button, router);
 }
 
