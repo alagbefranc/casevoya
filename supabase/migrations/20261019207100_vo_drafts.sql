@@ -4,8 +4,9 @@
 --
 -- Principle: Vo produces DRAFTS ONLY. Nothing reaches a client until a staff member opens the
 -- draft in the matter messaging composer, edits it if needed and presses Send. A draft that still
--- holds "[needs a sourced rule]" or "[needs a consultant]" cannot be sent. Vo has no tools: it can
--- not send, sign, submit, change records or read anything the requesting person cannot read.
+-- holds "[needs a sourced rule]" or "[needs a consultant]" cannot be sent. Vo (services/vo-agent,
+-- Claude Agent SDK) has read tools that run as the staff member and one write, a draft; it can not
+-- send, sign, submit, change records or read anything the requesting person cannot read.
 --
 -- Tables
 --   vo_settings  one row per firm: Vo on or off (the owner's switch), administrative reply drafts,
