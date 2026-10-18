@@ -4,6 +4,7 @@ import type {
   AgreementsData,
   AgreementsHeaderData,
   AgreementsKpi,
+  CountersignDialogData,
   NewAgreementDialogData,
   TemplateDialogData,
 } from "@/components/sheet/designer/agreements";
@@ -13,6 +14,11 @@ import {
   AGREEMENT_CURRENCIES,
   agreementBadge,
   agreementFlags,
+  COUNTERSIGN_BADGE,
+  countersignDialogData,
+  countersignDialogId,
+  countersignTurn,
+  esignConsent,
   isSendableKind,
   kindLabel,
   SENDABLE_KINDS,
@@ -30,7 +36,15 @@ const MATTERS_READ = 1000;
 
 const WAITING = new Set(["sent", "partially_signed"]);
 
-type EnvelopeRow = { id: string; agreement_id: string; status: string; expires_at: string; sent_at: string; completed_at: string | null };
+type EnvelopeRow = {
+  id: string;
+  agreement_id: string;
+  status: string;
+  expires_at: string;
+  sent_at: string;
+  completed_at: string | null;
+  content_sha256: string;
+};
 
 /**
  * The Designer's Agreements page (All agreements) for a firm, read as the signed-in staff member.
@@ -78,7 +92,7 @@ export async function loadSheetAgreements(staff: SheetStaff) {
     agreementIds.length
       ? supabase
           .from("signature_envelopes")
-          .select("id, agreement_id, status, expires_at, sent_at, completed_at")
+          .select("id, agreement_id, status, expires_at, sent_at, completed_at, content_sha256")
           .eq("organization_id", org)
           .in("agreement_id", agreementIds)
           .order("sent_at", { ascending: false })
@@ -110,10 +124,14 @@ export async function loadSheetAgreements(staff: SheetStaff) {
   const envelopeIds = [...latest.values()].map((row) => row.id);
 
   const personIds = [...new Set((participants?.data ?? []).map((row) => row.person_id).filter((id): id is string => Boolean(id)))];
-  const [signers, people] = await Promise.all([
-    envelopeIds.length ? supabase.from("envelope_signers").select("envelope_id, status").eq("organization_id", org).in("envelope_id", envelopeIds) : null,
+  const [signers, people, consentSetting] = await Promise.all([
+    envelopeIds.length
+      ? supabase.from("envelope_signers").select("envelope_id, status, membership_id").eq("organization_id", org).in("envelope_id", envelopeIds)
+      : null,
     personIds.length ? supabase.from("persons").select("id, display_name").eq("organization_id", org).in("id", personIds) : null,
+    supabase.from("product_settings").select("value").eq("key", "agreements.esign_consent").maybeSingle(),
   ]);
+  const consent = esignConsent(consentSetting.data?.value);
 
   const versionNumber = new Map((versions?.data ?? []).map((row) => [row.id, row.version_number]));
   const personName = new Map((people?.data ?? []).map((row) => [row.id, row.display_name]));
@@ -141,10 +159,30 @@ export async function loadSheetAgreements(staff: SheetStaff) {
     signerCount.set(row.envelope_id, count);
   }
 
+  // Envelopes where the signed-in staff member is the current signer: their turn to countersign.
+  const signerRows = signers?.data ?? [];
+  const countersign: CountersignDialogData[] = [];
   const tableRows: AgreementRow[] = rows.map((row) => {
     const envelope = latest.get(row.id);
     const count = envelope ? signerCount.get(envelope.id) : undefined;
     const number = row.current_version_id ? versionNumber.get(row.current_version_id) : undefined;
+    const turn = Boolean(envelope && WAITING.has(envelope.status) && countersignTurn(signerRows, envelope.id, staff.membershipId));
+    if (turn && envelope) {
+      countersign.push(
+        countersignDialogData({
+          organizationId: org,
+          envelopeId: envelope.id,
+          title: row.title,
+          versionNumber: number,
+          client: clientOf(row.matter_id),
+          matter: referenceOf(row.matter_id),
+          contentSha: envelope.content_sha256,
+          signed: count?.signed ?? 0,
+          total: count?.total ?? 0,
+          consent,
+        }),
+      );
+    }
     let date: AgreementRow["date"] = day(row.updated_at);
     if (row.status === "completed" && envelope?.completed_at) date = day(envelope.completed_at);
     else if (WAITING.has(row.status) && envelope?.expires_at) date = `Expires ${day(envelope.expires_at)}`;
@@ -156,9 +194,10 @@ export async function loadSheetAgreements(staff: SheetStaff) {
       client: { name: clientOf(row.matter_id) },
       matter: referenceOf(row.matter_id),
       record: { href: matterHref(row.matter_id), left: row.title, right: number ? `v${number}` : kindLabel(row.kind) },
-      state: agreementBadge(row.status, row.kind),
+      state: turn ? COUNTERSIGN_BADGE : agreementBadge(row.status, row.kind),
       signed: count ? `${count.signed} of ${count.total}` : "—",
       date,
+      ...(turn && envelope ? { action: { label: "Countersign", dialog: countersignDialogId(envelope.id) } } : {}),
     };
   });
 
@@ -271,5 +310,5 @@ export async function loadSheetAgreements(staff: SheetStaff) {
     drafts: drafts.map((row) => ({ id: row.id, name: row.name, kind: kindLabel(row.kind) })),
     canApprove: Boolean(own.data && isLicensedMembership(own.data.role, credential?.data ?? null)),
   };
-  return { chrome, header, page, dialog, templateDialog };
+  return { chrome, header, page, dialog, templateDialog, countersign };
 }

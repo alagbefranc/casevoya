@@ -387,6 +387,12 @@ function masthead(flow: Flow, source: SealSource, logo: PDFImage | null, label: 
   flow.y -= 22;
 }
 
+/** The consultant's licence under their name, when the firm countersigned. */
+function licenceLine(signer: SealSigner, size: number) {
+  const licence = signer.licence?.trim();
+  return licence ? [{ text: `CICC licence ${licence}`, style: { size } }] : [];
+}
+
 function signedLine(signer: SealSigner, timezone: string): string {
   if (!signer.signedAt) return `Status: ${signer.status}`;
   return `Signed electronically ${formatInZone(signer.signedAt, timezone)} (${formatUtc(signer.signedAt)})`;
@@ -466,6 +472,7 @@ export async function renderAgreementPdf(source: SealSource, logo?: FirmLogo | n
     flow.card([
       { text: signer.displayName, style: { font: "bold", size: 11 } },
       { text: `${roleLabel(signer.role)} · Signer ${signer.signingOrder} of ${source.signers.length}`, style: { size: 9, color: MUTED } },
+      ...licenceLine(signer, 9),
       { text: signedLine(signer, tz), style: { size: 9.5 } },
       { text: `Electronic signature consent: ${signer.consentVersion ?? "—"}`, style: { size: 8.5, color: MUTED } },
     ]);
@@ -540,6 +547,7 @@ export async function renderCertificatePdf(
     flow.card([
       { text: `${signer.signingOrder}. ${signer.displayName}`, style: { font: "bold", size: 10.5 } },
       { text: `${roleLabel(signer.role)} · ${signer.status === "signed" ? "Signed" : signer.status}`, style: { size: 9, color: MUTED } },
+      ...licenceLine(signer, 9),
       { text: `Signed: ${formatInZone(signer.signedAt, tz)} (${formatUtc(signer.signedAt)})`, style: { size: 9 } },
       { text: `IP address: ${signer.ip ?? "not recorded"}`, style: { size: 9, font: "regular" } },
       { text: `User agent: ${signer.userAgent ?? "not recorded"}`, style: { size: 8, font: "mono" } },

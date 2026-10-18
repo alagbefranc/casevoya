@@ -40,6 +40,22 @@ export type AgreementRow = {
   state: MatterBadge;
   signed: string;
   date: AgreementsText;
+  /** Live only: the signed-in consultant's turn to countersign opens this envelope's sign dialog. */
+  action?: { label: string; dialog: string };
+};
+
+/**
+ * The sign dialog for one envelope where the signed-in staff member is the current signer. No
+ * Designer original; it is the Designer's confirm-dialog anatomy (`#dlgVer`: `.dlg`, `.fp-dl`,
+ * `label.check`) with the portal Sign form's consent wording and version.
+ */
+export type CountersignDialogData = {
+  organizationId: string;
+  envelopeId: string;
+  dialogId: string;
+  title: string;
+  facts: { label: string; value: string }[];
+  consent: { text: string; version: string };
 };
 
 export type AgreementsData = {
@@ -184,6 +200,14 @@ function Row({ row }: { row: AgreementRow }) {
       </td>
       <td>
         <Badge badge={row.state} />
+        {row.action ? (
+          <>
+            {" "}
+            <button className={"btn s sm"} data-dlg={row.action.dialog}>
+              {row.action.label}
+            </button>
+          </>
+        ) : null}
       </td>
       <td>
         <span className={"num"}>{row.signed}</span>
@@ -416,7 +440,7 @@ export function NewAgreementDialog({ data }: { data: NewAgreementDialogData }) {
               </Alert>
             ) : (
               <Alert tone={"info"} icon={"signature"} title={"Sent for in-house signature"}>
-                {"The applicant signs first, then the sponsor if there is one, in their portal. The text is locked with its SHA-256 hash when it is sent."}
+                {"The applicant signs first, then the sponsor if there is one, in their portal. The matter’s responsible consultant countersigns last for a service or consultation agreement. The text is locked with its SHA-256 hash when it is sent."}
               </Alert>
             )}
           </>
@@ -504,6 +528,51 @@ export function TemplateDialog({ data }: { data: TemplateDialogData }) {
         </button>
         <button className={"btn p"} data-new-template={"1"} data-org={data.organizationId}>
           {"Save draft"}
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
+/** Countersign one envelope: consent, then sign. Live only; rendered on the Agreements and matter pages. */
+export function CountersignDialog({ data }: { data: CountersignDialogData }) {
+  const id = data.dialogId;
+  return (
+    <dialog className={"dlg"} id={id} aria-labelledby={`${id}H`} data-sign-envelope={data.envelopeId}>
+      <div className={"dh"}>
+        <h2 id={`${id}H`}>{`Countersign ${data.title}`}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={id}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <p style={{ marginBottom: "12px" }}>
+          {
+            "Everyone before you has signed. You countersign for the firm, on the same locked text. If your last authenticator check was more than 15 minutes ago, you confirm it first."
+          }
+        </p>
+        <dl className={"fp-dl"}>
+          {data.facts.map((fact) => (
+            <div key={fact.label}>
+              <dt>{fact.label}</dt>
+              <dd>{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
+        <label className={"check"} style={{ marginTop: "12px" }}>
+          <input type={"checkbox"} id={`${id}-ok`} data-consent={data.consent.version} />
+          <span>
+            {data.consent.text}
+            <small>{`Consent ${data.consent.version}`}</small>
+          </span>
+        </label>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={id}>
+          {"Not yet"}
+        </button>
+        <button className={"btn p"} data-countersign={data.envelopeId} data-org={data.organizationId}>
+          {"Sign for the firm"}
         </button>
       </div>
     </dialog>
