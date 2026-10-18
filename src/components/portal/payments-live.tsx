@@ -1,4 +1,5 @@
-import type { PortalInvoices } from "@/modules/finance/portal-load";
+import type { PortalFundsEntry, PortalInvoices } from "@/modules/finance/portal-load";
+import { methodShort } from "@/modules/finance/client-funds-present";
 import type { PortalViewer } from "@/modules/portal/load";
 import { formatMoney } from "@/modules/finance/money";
 import { dayMonth } from "@/modules/sheet/home-present";
@@ -13,14 +14,45 @@ function i(n: number) {
   return { "--i": String(n) } as React.CSSProperties;
 }
 
+/** A client-account ledger line as the client sees it (Designer: "Advance payment · bank transfer"). */
+export function fundsRow(entry: PortalFundsEntry, firm: string): { title: string[]; detail: string; paidTo: string; badge: { tone: string; label: string } } {
+  const account = `${firm}, client account`;
+  const ref = entry.reference ? `, ref ${entry.reference}` : "";
+  switch (entry.kind) {
+    case "deposit":
+      return { title: ["Advance payment", methodShort(entry.method)], detail: `Received ${dayMonth(entry.occurredOn)}${ref}`, paidTo: account, badge: { tone: "ok", label: "Received" } };
+    case "transfer":
+      return {
+        title: [entry.invoiceNumber ?? "Invoice", "paid from your client account"],
+        detail: `Moved ${dayMonth(entry.occurredOn)} to ${firm} for work done`,
+        paidTo: firm,
+        badge: { tone: "ok", label: "Paid" },
+      };
+    case "refund":
+      return { title: ["Refund from your client account", methodShort(entry.method)], detail: `Sent ${dayMonth(entry.occurredOn)}${ref}`, paidTo: "You", badge: { tone: "gr", label: "Refunded" } };
+    default:
+      return {
+        title: ["Correction"],
+        detail: `${entry.direction === "in" ? "Added back" : "Taken off"} ${dayMonth(entry.occurredOn)}, fixing an earlier entry`,
+        paidTo: account,
+        badge: { tone: "gr", label: "Corrected" },
+      };
+  }
+}
+
 /**
  * The Designer's Payments page (`markup/portal-payments.tsx`) for the client's real invoices.
  * Same anatomy: heading with art, the `.money` strip, and the `.t.pay` table with a Pay button on
  * each open invoice. A card refund shows on its invoice: a partly refunded invoice stays paid and
  * says how much went back, a fully refunded one reads "Refunded", and "Paid so far" is net of
- * refunds. Advances are not on file yet, so they are not shown.
+ * refunds. When the client has money in the firm's client account, the strip's middle tile is the
+ * Designer's "Held for you in …’s client account", the Designer's explanation panel follows, and
+ * the table ("Invoices and requests") lists the client-account entries that count (verified
+ * deposits, transfers applied to invoices, refunds, corrections), read-only and without receipts
+ * (receipts aren't generated yet).
  */
 export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: PortalInvoices }) {
+  const funds = data.clientFunds;
   const open = data.invoices.filter((invoice) => invoice.open);
   const next = [...open].sort((a, b) => a.dueOn.localeCompare(b.dueOn))[0];
   const toPay = open.filter((invoice) => !invoice.processing).reduce((sum, invoice) => sum + invoice.amountCents - invoice.paidCents, 0);
@@ -56,11 +88,19 @@ export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: Por
             )}
           </small>
         </div>
-        <div>
-          <span className="lbl">{"Processing"}</span>
-          <b className="num">{formatMoney(processing, "CAD")}</b>
-          <small className="lbl">{"Card payments your bank is still confirming"}</small>
-        </div>
+        {funds ? (
+          <div>
+            <span className="lbl">{`Held for you in ${viewer.organizationName}’s client account`}</span>
+            <b className="num">{formatMoney(funds.heldCents, "CAD")}</b>
+            <small className="lbl">{"Not yet earned. Shown on every statement."}</small>
+          </div>
+        ) : (
+          <div>
+            <span className="lbl">{"Processing"}</span>
+            <b className="num">{formatMoney(processing, "CAD")}</b>
+            <small className="lbl">{"Card payments your bank is still confirming"}</small>
+          </div>
+        )}
         <div>
           <span className="lbl">{"Paid so far"}</span>
           <b className="num">{formatMoney(paid, "CAD")}</b>
@@ -88,14 +128,25 @@ export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: Por
           </div>
         </div>
       ) : null}
+      {funds ? (
+        <div className="panel rv" style={{ ...i(1), display: "flex", gap: "16px", alignItems: "center", padding: "16px 20px" }}>
+          <span className="art " style={{ "--a": "56px" } as React.CSSProperties} aria-hidden="true">
+            <img src="/assets/generated/b2/client-funds-160@1x.webp" srcSet="/assets/generated/b2/client-funds-160@2x.webp 2x" width="56" height="56" alt="" loading="lazy" decoding="async" />
+          </span>
+          <p style={{ margin: "0", fontSize: "14px", color: "var(--t2)", maxWidth: "62ch" }}>
+            <b style={{ fontWeight: "500", color: "var(--t1)" }}>{"What “held in the client account” means."}</b>
+            {` An advance payment sits in ${viewer.organizationName}’s separate client (trust) account at its bank until the work it covers is done and invoiced. Only then does it move to the firm, and you’ll see that move here.`}
+          </p>
+        </div>
+      ) : null}
       <div className="panel rv" style={i(2)}>
         <h2>
           <svg className="ic s" aria-hidden="true">
             <use href={`${SPRITE}#i-invoice`} />
           </svg>
-          {"Invoices"}
+          {funds ? "Invoices and requests" : "Invoices"}
         </h2>
-        {data.invoices.length === 0 ? (
+        {data.invoices.length === 0 && !funds ? (
           <div className="emp">
             <b>{"Nothing to pay"}</b>
             <small>{"When your firm sends an invoice, it appears here."}</small>
@@ -156,6 +207,39 @@ export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: Por
                           <small>{"Refunded"}</small>
                         ) : null}
                       </td>
+                    </tr>
+                  );
+                })}
+                {(funds?.entries ?? []).map((entry) => {
+                  const row = fundsRow(entry, viewer.organizationName);
+                  return (
+                    <tr key={entry.id}>
+                      <td>
+                        <b style={{ fontWeight: 500 }}>
+                          {row.title.length > 1 ? (
+                            <>
+                              {`${row.title[0]} `}
+                              <Sep />
+                              {` ${row.title[1]}`}
+                            </>
+                          ) : (
+                            row.title[0]
+                          )}
+                        </b>
+                        <br />
+                        <small>{row.detail}</small>
+                      </td>
+                      <td>{row.paidTo}</td>
+                      <td>
+                        <span className={`bd ${row.badge.tone}`}>
+                          <i></i>
+                          {row.badge.label}
+                        </span>
+                      </td>
+                      <td className="num" style={{ textAlign: "right" }}>
+                        {formatMoney(entry.amountCents, "CAD")}
+                      </td>
+                      <td></td>
                     </tr>
                   );
                 })}

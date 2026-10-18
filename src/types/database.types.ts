@@ -5001,6 +5001,7 @@ export type Database = {
           matter_id: string
           number: string
           organization_id: string
+          client_funds_paid_cents: number
           paid_cents: number
           refunded_cents: number
           status: Database["public"]["Enums"]["invoice_status"]
@@ -5022,6 +5023,7 @@ export type Database = {
           matter_id: string
           number: string
           organization_id: string
+          client_funds_paid_cents?: number
           paid_cents?: number
           refunded_cents?: number
           status?: Database["public"]["Enums"]["invoice_status"]
@@ -5043,6 +5045,7 @@ export type Database = {
           matter_id?: string
           number?: string
           organization_id?: string
+          client_funds_paid_cents?: number
           paid_cents?: number
           refunded_cents?: number
           status?: Database["public"]["Enums"]["invoice_status"]
@@ -5171,6 +5174,207 @@ export type Database = {
           payment_status?: Database["public"]["Enums"]["invoice_payment_status"]
           provider?: string
           webhook_inbox_id?: string
+        }
+        Relationships: []
+      }
+      client_accounts: {
+        Row: {
+          account_last4: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          institution: string
+          is_active: boolean
+          label: string
+          organization_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          account_last4: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          institution: string
+          is_active?: boolean
+          label: string
+          organization_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          account_last4?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          institution?: string
+          is_active?: boolean
+          label?: string
+          organization_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      client_fund_ledgers: {
+        Row: {
+          client_account_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_sample: boolean
+          matter_id: string
+          organization_id: string
+          person_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          client_account_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_sample?: boolean
+          matter_id: string
+          organization_id: string
+          person_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          client_account_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_sample?: boolean
+          matter_id?: string
+          organization_id?: string
+          person_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      client_fund_entries: {
+        Row: {
+          amount_cents: number
+          approved_at: string | null
+          approved_by: string | null
+          client_account_id: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          decline_reason: string | null
+          declined_at: string | null
+          declined_by: string | null
+          direction: string
+          evidence_note: string | null
+          external_reference: string | null
+          id: string
+          idempotency_key: string
+          invoice_id: string | null
+          is_sample: boolean
+          kind: Database["public"]["Enums"]["client_fund_entry_kind"]
+          ledger_id: string
+          matter_id: string
+          method: Database["public"]["Enums"]["client_fund_method"] | null
+          note: string | null
+          number: string
+          occurred_on: string
+          organization_id: string
+          owner_self_approved: boolean
+          person_id: string
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          requested_by: string
+          reverses_entry_id: string | null
+          status: Database["public"]["Enums"]["client_fund_entry_status"]
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+          version: number
+        }
+        Insert: {
+          amount_cents: number
+          approved_at?: string | null
+          approved_by?: string | null
+          client_account_id: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          decline_reason?: string | null
+          declined_at?: string | null
+          declined_by?: string | null
+          direction: string
+          evidence_note?: string | null
+          external_reference?: string | null
+          id?: string
+          idempotency_key: string
+          invoice_id?: string | null
+          is_sample?: boolean
+          kind: Database["public"]["Enums"]["client_fund_entry_kind"]
+          ledger_id: string
+          matter_id: string
+          method?: Database["public"]["Enums"]["client_fund_method"] | null
+          note?: string | null
+          number: string
+          occurred_on: string
+          organization_id: string
+          owner_self_approved?: boolean
+          person_id: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          requested_by: string
+          reverses_entry_id?: string | null
+          status: Database["public"]["Enums"]["client_fund_entry_status"]
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+          version?: number
+        }
+        Update: {
+          amount_cents?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          client_account_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          decline_reason?: string | null
+          declined_at?: string | null
+          declined_by?: string | null
+          direction?: string
+          evidence_note?: string | null
+          external_reference?: string | null
+          id?: string
+          idempotency_key?: string
+          invoice_id?: string | null
+          is_sample?: boolean
+          kind?: Database["public"]["Enums"]["client_fund_entry_kind"]
+          ledger_id?: string
+          matter_id?: string
+          method?: Database["public"]["Enums"]["client_fund_method"] | null
+          note?: string | null
+          number?: string
+          occurred_on?: string
+          organization_id?: string
+          owner_self_approved?: boolean
+          person_id?: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          requested_by?: string
+          reverses_entry_id?: string | null
+          status?: Database["public"]["Enums"]["client_fund_entry_status"]
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+          version?: number
         }
         Relationships: []
       }
@@ -5569,6 +5773,106 @@ export type Database = {
       generate_recovery_codes: {
         Args: never
         Returns: string[]
+      }
+      create_client_account: {
+        Args: {
+          p_institution: string
+          p_label: string
+          p_last4: string
+          p_org: string
+        }
+        Returns: string
+      }
+      record_client_deposit: {
+        Args: {
+          p_amount_cents: number
+          p_client_account_id: string
+          p_currency: string
+          p_evidence: string | null
+          p_idempotency_key: string
+          p_matter_id: string
+          p_method: string
+          p_person_id: string
+          p_received_on: string
+          p_reference: string | null
+        }
+        Returns: string
+      }
+      verify_client_deposit: {
+        Args: {
+          p_entry_id: string
+        }
+        Returns: string
+      }
+      reject_client_deposit: {
+        Args: {
+          p_entry_id: string
+          p_reason: string
+        }
+        Returns: string
+      }
+      request_client_transfer: {
+        Args: {
+          p_amount_cents: number
+          p_idempotency_key: string
+          p_invoice_id: string
+          p_ledger_id: string
+          p_note: string | null
+        }
+        Returns: string
+      }
+      approve_client_transfer: {
+        Args: {
+          p_entry_id: string
+        }
+        Returns: Json
+      }
+      decline_client_transfer: {
+        Args: {
+          p_entry_id: string
+          p_reason: string
+        }
+        Returns: string
+      }
+      record_client_refund: {
+        Args: {
+          p_amount_cents: number
+          p_idempotency_key: string
+          p_ledger_id: string
+          p_method: string
+          p_paid_on: string
+          p_reason: string
+          p_reference: string | null
+        }
+        Returns: string
+      }
+      record_client_fund_correction: {
+        Args: {
+          p_entry_id: string
+          p_idempotency_key: string
+          p_reason: string
+        }
+        Returns: string
+      }
+      client_fund_staff_names: {
+        Args: {
+          p_org: string
+        }
+        Returns: {
+          display_name: string
+          user_id: string
+        }[]
+      }
+      list_client_fund_parties: {
+        Args: never
+        Returns: {
+          display_name: string
+          is_sample: boolean
+          matter_id: string
+          organization_id: string
+          person_id: string
+          role: string
+        }[]
       }
       list_matter_billing: {
         Args: never
@@ -6352,6 +6656,16 @@ export type Database = {
       }
     }
     Enums: {
+      client_fund_entry_kind: "deposit" | "transfer" | "refund" | "correction"
+      client_fund_entry_status:
+        | "pending_verification"
+        | "verified"
+        | "rejected"
+        | "pending_approval"
+        | "approved"
+        | "declined"
+        | "recorded"
+      client_fund_method: "bank_transfer" | "interac_e_transfer" | "cheque" | "cash"
       invoice_status:
         | "draft"
         | "issued"
@@ -6765,6 +7079,9 @@ export const Constants = {
     Enums: {
       invoice_status: ["draft", "issued", "partially_paid", "paid", "voided", "credited", "refunded"],
       invoice_payment_status: ["requires_payment", "processing", "succeeded", "failed", "canceled"],
+      client_fund_entry_kind: ["deposit", "transfer", "refund", "correction"],
+      client_fund_entry_status: ["pending_verification", "verified", "rejected", "pending_approval", "approved", "declined", "recorded"],
+      client_fund_method: ["bank_transfer", "interac_e_transfer", "cheque", "cash"],
       invoice_refund_status: ["pending", "requires_action", "succeeded", "failed", "canceled"],
       invoice_dispute_status: [
         "warning_needs_response",

@@ -33,7 +33,7 @@ export type FinanceHeaderData = {
   recordPayment: boolean;
   /** The Designer's last tab, one open invoice ("INV-0218"). */
   invoiceTab: string | null;
-  tab: "invoices" | "payments" | "refunds";
+  tab: "invoices" | "payments" | "funds" | "refunds";
 };
 
 export type FinanceKpi = {
@@ -88,7 +88,7 @@ export type NewInvoiceDialogData = {
   };
 };
 
-function i(n: number) {
+export function i(n: number) {
   return { "--i": String(n) } as React.CSSProperties;
 }
 
@@ -97,7 +97,7 @@ function Text({ value }: { value: FinanceText }) {
 }
 
 /** "a ", sep, " b ", sep, " c": the Designer's separated list in one cell. */
-function Parts({ parts }: { parts: string[] }) {
+export function Parts({ parts }: { parts: string[] }) {
   return (
     <>
       {parts.flatMap((part, index) => {
@@ -121,6 +121,7 @@ const TABS: [string, string][] = [
 const UNDERLINE: Record<FinanceHeaderData["tab"], { left: string; width: string }> = {
   invoices: { left: "0px", width: "49px" },
   payments: { left: "75px", width: "56px" },
+  funds: { left: "158px", width: "71px" },
   refunds: { left: "365px", width: "124px" },
 };
 
@@ -182,7 +183,7 @@ export function FinanceHeader({ data }: { data: FinanceHeaderData }) {
   );
 }
 
-function Kpi({ kpi }: { kpi: FinanceKpi }) {
+export function Kpi({ kpi }: { kpi: FinanceKpi }) {
   return (
     <a className={kpi.tone ? `fp-k ${kpi.tone} k2-spot` : "fp-k k2-spot"} href={kpi.href} data-spot={"1"}>
       <small>{kpi.label}</small>
@@ -200,7 +201,7 @@ function Kpi({ kpi }: { kpi: FinanceKpi }) {
   );
 }
 
-const RIGHT = { textAlign: "right" } as const;
+export const RIGHT = { textAlign: "right" } as const;
 
 function Row({ row }: { row: InvoiceRow }) {
   return (
@@ -320,11 +321,11 @@ export function SheetFinance({ data }: { data: FinanceData }) {
   );
 }
 
-function Option({ option }: { option: InvoiceOption }) {
+export function Option({ option }: { option: InvoiceOption }) {
   return <option value={option.value}>{option.right ? <Pair left={option.left} right={option.right} /> : option.left}</option>;
 }
 
-function Alert({ tone, icon, title, children }: { tone: "warn" | "info"; icon: string; title: string; children: ReactNode }) {
+export function Alert({ tone, icon, title, children }: { tone: "warn" | "info"; icon: string; title: string; children: ReactNode }) {
   return (
     <div className={`alert ${tone}`}>
       <Icon name={icon} />

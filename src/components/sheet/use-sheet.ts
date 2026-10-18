@@ -17,6 +17,22 @@ import {
   runNewTemplate,
 } from "./agreement-acts";
 import { openRefund, reopenInvoiceDialog, reopenRefundDialog, runNewInvoice, runRefund } from "./finance-acts";
+import {
+  openFunds,
+  openReview,
+  openVerify,
+  reopenFundsDialog,
+  runApprove,
+  runClientAccount,
+  runCorrection,
+  runDecline,
+  runDeposit,
+  runRefundToClient,
+  runReject,
+  runTransfer,
+  runVerify,
+  syncFundsLedger,
+} from "./funds-acts";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { runNewTask, syncNewTask } from "./new-task-act";
@@ -35,6 +51,23 @@ function icon(name: string, cls = ""): string {
 
 function art(name: string, px: number) {
   return `<span class="art" style="--a:${px}px" aria-hidden="true"><img src="/assets/generated/b2/${name}-160@1x.webp" srcset="/assets/generated/b2/${name}-160@2x.webp 2x" width="${px}" height="${px}" alt="" loading="lazy" decoding="async"></span>`;
+}
+
+/** The Client funds dialogs' submit buttons. */
+const FUNDS_SUBMIT =
+  "[data-funds-deposit], [data-funds-verify], [data-funds-reject], [data-funds-approve], [data-funds-decline], [data-funds-transfer], [data-funds-refund], [data-funds-correct], [data-funds-account]";
+
+function runFundsSubmit(button: HTMLElement, router: Parameters<typeof runDeposit>[1]): Promise<void> {
+  const data = button.dataset;
+  if ("fundsDeposit" in data) return runDeposit(button, router);
+  if ("fundsVerify" in data) return runVerify(button, router);
+  if ("fundsReject" in data) return runReject(button, router);
+  if ("fundsApprove" in data) return runApprove(button, router);
+  if ("fundsDecline" in data) return runDecline(button, router);
+  if ("fundsTransfer" in data) return runTransfer(button, router);
+  if ("fundsRefund" in data) return runRefundToClient(button, router);
+  if ("fundsCorrect" in data) return runCorrection(button, router);
+  return runClientAccount(button, router);
 }
 
 /** How long "Hold to revoke" must be held. */
@@ -189,6 +222,23 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (refund.getAttribute("aria-busy") === "true" || refund.hasAttribute("disabled")) return;
         refund.setAttribute("aria-busy", "true");
         void runRefund(refund, router).finally(() => refund.removeAttribute("aria-busy"));
+        return;
+      }
+      // The Client funds tab: openers fill and open its dialogs; each submit is keyed by its own attribute.
+      const fundsOpener = target.closest<HTMLElement>("[data-funds-open], [data-funds-verify-open], [data-funds-review]");
+      if (fundsOpener && root.contains(fundsOpener)) {
+        event.preventDefault();
+        if (fundsOpener.hasAttribute("data-funds-open")) openFunds(fundsOpener, root, openDialog);
+        else if (fundsOpener.hasAttribute("data-funds-verify-open")) openVerify(fundsOpener, root, openDialog);
+        else openReview(fundsOpener, root, openDialog);
+        return;
+      }
+      const fundsSubmit = target.closest<HTMLElement>(FUNDS_SUBMIT);
+      if (fundsSubmit && root.contains(fundsSubmit)) {
+        event.preventDefault();
+        if (fundsSubmit.getAttribute("aria-busy") === "true" || fundsSubmit.hasAttribute("disabled")) return;
+        fundsSubmit.setAttribute("aria-busy", "true");
+        void runFundsSubmit(fundsSubmit, router).finally(() => fundsSubmit.removeAttribute("aria-busy"));
         return;
       }
       // Countersign: the signed-in consultant signs an envelope where it is their turn.
@@ -508,6 +558,17 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     if (root.querySelector("dialog#dlgInv [data-new-invoice]")) window.setTimeout(() => reopenInvoiceDialog(root, openDialog), 300);
     // ?dlg=refund (back from step-up) reopens Refund for the same payment with what was typed.
     if (root.querySelector("dialog#dlgRefund [data-refund-submit]")) window.setTimeout(() => reopenRefundDialog(root, openDialog), 300);
+    // ?dlg=funds (back from step-up) reopens the Client funds dialog with what was typed; the
+    // chosen client ledger narrows the invoices a transfer can pay.
+    if (root.querySelector(FUNDS_SUBMIT)) {
+      window.setTimeout(() => reopenFundsDialog(root, openDialog), 300);
+      for (const fundsDialog of root.querySelectorAll<HTMLDialogElement>("dialog")) {
+        if (!fundsDialog.querySelector("select[data-ledger-select]")) continue;
+        fundsDialog.addEventListener("change", (event) => {
+          if ((event.target as Element | null)?.matches("select[data-ledger-select]")) syncFundsLedger(fundsDialog);
+        }, listen);
+      }
+    }
     // ?dlg=countersign&envelope=… (back from step-up, or from the "your turn" email) reopens that
     // envelope's sign dialog on the Agreements or matter page; closing it drops the flag.
     const signDialogs = [...root.querySelectorAll<HTMLDialogElement>("dialog[data-sign-envelope]")];
