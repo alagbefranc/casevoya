@@ -132,8 +132,9 @@ export async function completeTaskFromSheet(form: FormData) {
 /**
  * The matter page's "Invite to the portal" dialog. public.create_portal_invitation decides
  * (role on the matter, adults only, guardian subjects, sample versus real, the real-client
- * lock, rate limits, step-up) and queues the invitation email in the outbox. The email
- * carries no link: the private link comes back here once, for the inviter to give them.
+ * lock, rate limits, step-up) and queues the invitation email in the outbox. The private link
+ * is sealed into that email (createPortalInvitation) and also comes back here once, as a backup
+ * for the inviter. emailLink says whether the email will carry it.
  */
 export async function invitePortalPerson(input: {
   organizationId: string;
@@ -141,7 +142,7 @@ export async function invitePortalPerson(input: {
   personId: string;
   roleLabel: string;
   email: string;
-}): Promise<{ error: string } | { link: string; expiresAt: string | null }> {
+}): Promise<{ error: string } | { link: string; expiresAt: string | null; emailLink: boolean }> {
   const read = readPortalInvite({ personId: input.personId, roleLabel: input.roleLabel, email: input.email });
   if ("error" in read) return { error: read.error };
   if (!isUuid(input.organizationId) || !isUuid(input.matterId)) return { error: "Choose a person and a matter." };
@@ -174,5 +175,5 @@ export async function invitePortalPerson(input: {
   });
   if ("error" in created) return { error: created.error ?? "That invitation could not be sent." };
   const origin = (await headers()).get("origin") ?? "";
-  return { link: acceptLink(origin, read.input.role, created.token), expiresAt: created.expiresAt };
+  return { link: acceptLink(origin, read.input.role, created.token), expiresAt: created.expiresAt, emailLink: created.emailLink };
 }

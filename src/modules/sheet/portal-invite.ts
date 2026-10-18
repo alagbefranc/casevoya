@@ -46,7 +46,7 @@ export function acceptPath(role: PortalInviteRole): string {
   return "/accept/family";
 }
 
-/** The private link the invitee opens. Only the inviter sees it; the email does not carry it. */
+/** The private link the invitee opens. The invitation email carries it sealed; the inviter gets it as a backup. */
 export function acceptLink(origin: string, role: PortalInviteRole, token: string): string {
   const path = `${acceptPath(role)}?token=${encodeURIComponent(token)}`;
   return origin ? `${origin.replace(/\/+$/, "")}${path}` : path;

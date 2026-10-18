@@ -57,7 +57,7 @@ async function copy(text: string): Promise<boolean> {
 /**
  * Sends the invitation through the server action. The database decides; a step-up refusal
  * sends the person to /mfa?step=6 and back here with the dialog open for the same person.
- * The email is queued without the link, so the private link is copied for the inviter to give.
+ * The email carries their private link; it is also copied for the inviter, as a backup.
  */
 export async function runPortalInvite(button: HTMLElement, router: Router) {
   const dialog = button.closest("dialog");
@@ -82,10 +82,19 @@ export async function runPortalInvite(button: HTMLElement, router: Router) {
   const expires = expiryLabel(result.expiresAt, Intl.DateTimeFormat().resolvedOptions().timeZone);
   const when = expires ? `It works once and expires ${expires}.` : "It works once and expires in 7 days.";
   dialog.close();
-  if (await copy(result.link)) {
-    toast2(`Invitation sent to ${name}`, { kind: "ok", sub: `Their private link is copied. The email has no link, so give it to them yourself. ${when}`, duration: 12000 });
+  const copied = await copy(result.link);
+  if (result.emailLink) {
+    toast2(`Invitation sent to ${name}`, {
+      kind: "ok",
+      sub: copied
+        ? `The email contains their private link. Link also copied. ${when}`
+        : `The email contains their private link. Here it is too: ${result.link} ${when}`,
+      duration: copied ? 12000 : 60000,
+    });
+  } else if (copied) {
+    toast2(`Invitation sent to ${name}`, { kind: "ok", sub: `Their private link is copied. The email goes without it this time, so give it to them yourself. ${when}`, duration: 12000 });
   } else {
-    toast2(`Invitation sent to ${name}`, { kind: "ok", sub: `The email has no link. Give them this one yourself: ${result.link} ${when}`, duration: 60000 });
+    toast2(`Invitation sent to ${name}`, { kind: "ok", sub: `The email goes without the link this time. Give them this one yourself: ${result.link} ${when}`, duration: 60000 });
   }
   router.replace(withoutInvite(window.location.pathname, window.location.search));
   router.refresh();

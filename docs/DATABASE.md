@@ -42,6 +42,8 @@ In the repository, not yet applied to the live project (do not edit the file in 
 | 20261018010400 | document_download_grants | `authorize_document_download` writes an expiring grant; documents-bucket reads of clean objects require it. Function bodies only; no storage DDL. |
 | 20261018010500 | verified_document_upload | `finish_verified_document_upload` (service_role only) completes uploads with server-measured hash, size, and type. `complete_document_upload` revoked from authenticated. |
 | 20261018010600 | revoke_anon_app_usage | Revokes `usage on schema app` from anon. |
+| 20261018190000 | invitation_email_link | `attach_invitation_email_link` puts a sealed (AES-256-GCM) accept link on a pending invitation email event; `app.scrub_invitation_link`. Never a plaintext token. |
+| 20261018190100 | invitation_email_link_mail_worker | `claim_mail_events` waits up to 10 minutes for the sealed link; `prepare_email_delivery` passes it to the worker; `finish_email_delivery` scrubs it once final. |
 
 `src/types/database.types.ts` includes the live schema through `20261017113202`, extended in this branch for the unapplied migrations above. Do not run `pnpm db:types` until those migrations are applied; a live regeneration would drop the extension.
 
@@ -212,7 +214,7 @@ A sent version stores SHA-256 of its canonical text and cannot be edited. A fee 
 
 Not applied on the live project. Do not run `pnpm db:types` or `supabase db push` for them. Do not deploy the Worker from CI.
 
-Outbound mail is claimed from the outbox by `POST /api/email/dispatch` (bearer `EMAIL_DISPATCH_SECRET`) and sent with the Cloudflare Email Sending REST API. `from` and `reply_to` are `{address, name}`. The visible name is the firm display name. The default From address is `notices@casevoya.ca` (`email.from_address`, confirmed, still configurable via `CLOUDFLARE_EMAIL_FROM`).
+Outbound mail is claimed from the outbox by `POST /api/email/dispatch` (bearer `EMAIL_DISPATCH_SECRET`) and sent with the Cloudflare Email Sending REST API. Invitation emails carry the private accept link: the server action that gets the raw token seals the absolute link (AES-256-GCM, key from HKDF-SHA-256 over `EMAIL_DISPATCH_SECRET`, invitation id as associated data) and attaches it with `attach_invitation_email_link`. The worker opens it, sends, and `finish_email_delivery` removes `sealed_link` from the payload and delivery context. Without a sealed link after 10 minutes, or if it does not open, the linkless email goes out. `from` and `reply_to` are `{address, name}`. The visible name is the firm display name. The default From address is `notices@casevoya.ca` (`email.from_address`, confirmed, still configurable via `CLOUDFLARE_EMAIL_FROM`).
 
 Inbound addresses are `<firm-slug>@docs.casevoya.ca`. A matter reply is `<firm-slug>+<32 hex>@` the same domain. `INBOUND_EMAIL_DOMAIN` overrides `email.inbound_domain` (default `docs.casevoya.ca`, confirmed). These slugs cannot be claimed: `support`, `billing`, `admin`, `hello`, `noreply`, `postmaster`, `abuse`, `security`, `help`, `info`, `team`. The Worker in `workers/inbound-email` buffers `message.raw` once, parses with postal-mime, and POSTs to `/api/email/inbound` with `x-casevoya-timestamp` and `x-casevoya-signature` (HMAC-SHA256 of `timestamp.body`, five-minute skew).
 

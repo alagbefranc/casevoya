@@ -158,12 +158,14 @@ describe("outbound and inbound email", () => {
     ]);
   });
 
+  // Invitation events without a sealed link wait 10 minutes before the linkless email is claimed
+  // (20261018190100), so these invitation rows are written as already 11 minutes old.
   it("sends a claimed event once, suppresses a repeat, and opens one bounce task", async () => {
     const ctx = await firm();
     await asMaintenance(db);
     const event = await db.query<{ id: string }>(
-      `insert into public.outbox_events (organization_id, aggregate_type, aggregate_id, event_type, payload, idempotency_key)
-       values ($1, 'invitation', $2, 'portal_invitation.email_requested', $3::jsonb, $4)
+      `insert into public.outbox_events (organization_id, aggregate_type, aggregate_id, event_type, payload, idempotency_key, occurred_at)
+       values ($1, 'invitation', $2, 'portal_invitation.email_requested', $3::jsonb, $4, now() - interval '11 minutes')
        returning id`,
       [
         ctx.orgId,
@@ -208,8 +210,8 @@ describe("outbound and inbound email", () => {
       [ctx.orgId],
     );
     const suppressedEvent = await db.query<{ id: string }>(
-      `insert into public.outbox_events (organization_id, aggregate_type, aggregate_id, event_type, payload, idempotency_key)
-       values ($1, 'invitation', $2, 'staff_invitation.email_requested', $3::jsonb, $4)
+      `insert into public.outbox_events (organization_id, aggregate_type, aggregate_id, event_type, payload, idempotency_key, occurred_at)
+       values ($1, 'invitation', $2, 'staff_invitation.email_requested', $3::jsonb, $4, now() - interval '11 minutes')
        returning id`,
       [ctx.orgId, randomUUID(), JSON.stringify({ recipient_email: "client@example.test", role: "assistant" }), `staff-${randomUUID()}`],
     );
@@ -247,8 +249,8 @@ describe("outbound and inbound email", () => {
     await asMaintenance(db);
     const eventId = (
       await db.query<{ id: string }>(
-        `insert into public.outbox_events (organization_id, aggregate_type, aggregate_id, event_type, payload, idempotency_key)
-         values ($1, 'invitation', $2, 'portal_invitation.email_requested', $3::jsonb, $4)
+        `insert into public.outbox_events (organization_id, aggregate_type, aggregate_id, event_type, payload, idempotency_key, occurred_at)
+         values ($1, 'invitation', $2, 'portal_invitation.email_requested', $3::jsonb, $4, now() - interval '11 minutes')
          returning id`,
         [
           ctx.orgId,

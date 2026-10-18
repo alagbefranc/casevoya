@@ -5755,6 +5755,14 @@ export type Database = {
         }
         Returns: Json
       }
+      attach_invitation_email_link: {
+        Args: {
+          p_invitation_id: string
+          p_sealed: string
+          p_token_hash: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       email_delivery_status:

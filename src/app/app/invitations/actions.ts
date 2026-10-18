@@ -7,8 +7,9 @@ import { safeAccessError } from "@/lib/auth/step-up";
 import { verifyTotpCode } from "@/lib/auth/verify-totp";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
+import { attachStaffInviteEmailLink } from "@/modules/email/invite-link";
 
-export type InviteFormState = { error?: string; link?: string } | null;
+export type InviteFormState = { error?: string; link?: string; emailLink?: boolean } | null;
 
 export async function createStaffInvitation(
   _previous: InviteFormState,
@@ -38,9 +39,10 @@ export async function createStaffInvitation(
     return { error: safeAccessError(error?.message ?? "") };
   }
 
+  const emailLink = await attachStaffInviteEmailLink(supabase, { organizationId, email, role, token });
   const origin = (await headers()).get("origin") ?? "";
   const path = `/invite/${token}`;
-  return { link: origin ? `${origin}${path}` : path };
+  return { link: origin ? `${origin}${path}` : path, emailLink };
 }
 
 export async function revokeInvitation(formData: FormData) {
