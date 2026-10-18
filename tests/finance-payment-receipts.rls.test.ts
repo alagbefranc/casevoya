@@ -482,3 +482,180 @@ describe("backfill", () => {
     }
   }, 240_000);
 });
+
+/** The webhook's card record call (public.record_invoice_payment_card), as service_role. */
+async function recordCard(f: Firm, intent: string, brand = "visa", last4 = "4242", options: { account?: string; livemode?: boolean } = {}) {
+  await asServiceRole(f.target);
+  const row = await f.target.query<{ r: { outcome: string; receipt_filled?: boolean; reason?: string } }>(
+    `select public.record_invoice_payment_card($1, $2, $3, $4, $5) as r`,
+    [options.account ?? f.account, intent, brand, last4, options.livemode ?? false],
+  );
+  return row.rows[0].r;
+}
+
+async function cardOf(f: Firm, table: "invoice_payments" | "invoice_payment_receipts", column: "id" | "payment_id", id: string) {
+  await asMaintenance(f.target);
+  const row = await f.target.query<{ card_brand: string | null; card_last4: string | null }>(
+    `select card_brand, card_last4 from public.${table} where ${column} = $1`,
+    [id],
+  );
+  return row.rows[0];
+}
+
+describe("card brand and last 4 on the receipt (decided by Francis)", () => {
+  it("copies the card recorded before the succeeded event onto the receipt, and the read returns it", async () => {
+    const f = await firm();
+    const invoiceId = await issue(f);
+    const intent = await startPayment(f, invoiceId);
+    const payment = await paymentId(f, intent);
+    // The webhook records the card first, then applies the event.
+    expect(await recordCard(f, intent, "Visa", "4242")).toEqual({ outcome: "recorded", receipt_filled: false });
+    expect(await cardOf(f, "invoice_payments", "id", payment)).toEqual({ card_brand: "visa", card_last4: "4242" });
+    await deliver(f, { type: "payment_intent.succeeded", intent, received: 113_000 });
+    const [receipt] = await receiptFor(f, { paymentId: payment });
+    expect(receipt).toMatchObject({ number: "PR-0001", method: "card", card_brand: "visa", card_last4: "4242", account_last4: null });
+
+    await as(f, f.owner, false);
+    const read = await db.query<{ r: Record<string, unknown> }>(`select public.invoice_payment_receipt($1) as r`, [receipt.id]);
+    expect(read.rows[0].r).toMatchObject({ method: "card", card_brand: "visa", card_last4: "4242" });
+
+    // After success the stored card is kept: a later record with another card changes nothing.
+    expect(await recordCard(f, intent, "mastercard", "4444")).toEqual({ outcome: "unchanged", receipt_filled: false });
+    expect(await cardOf(f, "invoice_payment_receipts", "payment_id", payment)).toEqual({ card_brand: "visa", card_last4: "4242" });
+    expect(await cardOf(f, "invoice_payments", "id", payment)).toEqual({ card_brand: "visa", card_last4: "4242" });
+  });
+
+  it("leaves the card null (the receipt reads \"Card\") when none was recorded, and a transfer never has one", async () => {
+    const f = await firm();
+    const { intent } = await payByCard(f, await issue(f));
+    const [receipt] = await receiptFor(f, { paymentId: await paymentId(f, intent) });
+    expect(receipt).toMatchObject({ method: "card", card_brand: null, card_last4: null });
+    await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
+    const read = await db.query<{ r: Record<string, unknown> }>(`select public.invoice_payment_receipt($1) as r`, [receipt.id]);
+    expect(read.rows[0].r).toMatchObject({ card_brand: null, card_last4: null });
+
+    const ledgerId = await funded(f, 50_000);
+    const transfer = await requestTransfer(f, ledgerId, await issue(f, 20_000), 20_000);
+    await approve(f, transfer);
+    const [transferReceipt] = await receiptFor(f, { entryId: transfer });
+    expect(transferReceipt).toMatchObject({ method: "client_account", card_brand: null, card_last4: null });
+    await asMaintenance(db);
+    await expectDbError(
+      () =>
+        db.query(
+          `insert into public.invoice_payment_receipts
+           select (jsonb_populate_record(t, jsonb_build_object('id', gen_random_uuid(), 'number', 'PR-0999', 'card_brand', 'visa', 'card_last4', '4242'))).*
+           from public.invoice_payment_receipts t where t.id = $1`,
+          [transferReceipt.id],
+        ),
+      /invoice_payment_receipts_card_only_for_card/,
+    );
+  });
+
+  it("fills an earlier receipt's card once, only while it is null, only through the service_role function", async () => {
+    const f = await firm();
+    const { intent } = await payByCard(f, await issue(f));
+    const payment = await paymentId(f, intent);
+    const [before] = await receiptFor(f, { paymentId: payment });
+    expect(before).toMatchObject({ number: "PR-0001", card_brand: null, card_last4: null });
+
+    // Nobody but service_role may record a card or fill a receipt.
+    await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
+    await expectDbError(() => db.query(`select public.record_invoice_payment_card($1, $2, 'visa', '4242', false)`, [f.account, intent]), /permission denied/);
+    await expectDbError(() => db.query(`select app.fill_invoice_payment_receipt_card($1)`, [payment]), /permission denied/);
+    await as(f, f.owner);
+    await expectDbError(() => db.query(`select public.record_invoice_payment_card($1, $2, 'visa', '4242', false)`, [f.account, intent]), /permission denied/);
+    await expectDbError(() => db.query(`select app.record_invoice_payment_card($1, $2, 'visa', '4242', false)`, [f.account, intent]), /permission denied/);
+    await expectDbError(() => db.query(`select app.fill_invoice_payment_receipt_card($1)`, [payment]), /permission denied/);
+    await asAnon(db);
+    await expectDbError(() => db.query(`select public.record_invoice_payment_card($1, $2, 'visa', '4242', false)`, [f.account, intent]), /permission denied/);
+    await expectDbError(() => db.query(`select app.fill_invoice_payment_receipt_card($1)`, [payment]), /permission denied/);
+    // service_role can't update the receipt directly either, even naming it in the fill setting.
+    await asServiceRole(db);
+    await db.query(`select set_config('casevoya.receipt_card_fill', $1, false)`, [before.id]);
+    await expectDbError(() => db.query(`update public.invoice_payment_receipts set card_brand = 'visa', card_last4 = '4242' where id = $1`, [before.id]), /permission denied/);
+    await db.query(`select set_config('casevoya.receipt_card_fill', '', false)`);
+    // Filling while the payment has no card does nothing.
+    expect((await db.query<{ ok: boolean }>(`select app.fill_invoice_payment_receipt_card($1) as ok`, [payment])).rows[0].ok).toBe(false);
+
+    // The backfill (ops script) path: record the card read from Stripe; the receipt is filled once.
+    expect(await recordCard(f, intent, "visa", "4242")).toEqual({ outcome: "recorded", receipt_filled: true });
+    const [after] = await receiptFor(f, { paymentId: payment });
+    expect(after).toEqual({ ...before, card_brand: "visa", card_last4: "4242" });
+    await asMaintenance(db);
+    const audit = await db.query<{ n: string }>(`select count(*) as n from public.audit_log where action = 'invoice.payment_receipt_card_filled' and object_id = $1`, [before.id]);
+    expect(Number(audit.rows[0].n)).toBe(1);
+
+    // Once filled, it never changes again.
+    expect(await recordCard(f, intent, "mastercard", "4444")).toEqual({ outcome: "unchanged", receipt_filled: false });
+    await asServiceRole(db);
+    expect((await db.query<{ ok: boolean }>(`select app.fill_invoice_payment_receipt_card($1) as ok`, [payment])).rows[0].ok).toBe(false);
+    expect(await cardOf(f, "invoice_payment_receipts", "payment_id", payment)).toEqual({ card_brand: "visa", card_last4: "4242" });
+
+    // The append-only guard still refuses every other change, with or without the fill setting.
+    await asMaintenance(db);
+    await expectDbError(() => db.query(`update public.invoice_payment_receipts set card_last4 = '0000' where id = $1`, [before.id]), /append-only/);
+    await db.query(`select set_config('casevoya.receipt_card_fill', $1, false)`, [before.id]);
+    await expectDbError(() => db.query(`update public.invoice_payment_receipts set card_last4 = '0000' where id = $1`, [before.id]), /append-only/);
+    await expectDbError(() => db.query(`update public.invoice_payment_receipts set amount_cents = 1 where id = $1`, [before.id]), /append-only/);
+    await db.query(`select set_config('casevoya.receipt_card_fill', '', false)`);
+    await expectDbError(() => db.query(`delete from public.invoice_payment_receipts where id = $1`, [before.id]), /append-only/);
+  });
+
+  it("refuses a fill that would change anything besides the card, even with the setting", async () => {
+    const f = await firm();
+    const { intent } = await payByCard(f, await issue(f, 5_000), 5_000);
+    const payment = await paymentId(f, intent);
+    const [receipt] = await receiptFor(f, { paymentId: payment });
+    await asMaintenance(db);
+    await db.query(`select set_config('casevoya.receipt_card_fill', $1, false)`, [receipt.id]);
+    await expectDbError(
+      () => db.query(`update public.invoice_payment_receipts set card_brand = 'visa', card_last4 = '4242', client_name = 'Someone else' where id = $1`, [receipt.id]),
+      /append-only/,
+    );
+    await db.query(`select set_config('casevoya.receipt_card_fill', '', false)`);
+    expect(await cardOf(f, "invoice_payment_receipts", "payment_id", payment)).toEqual({ card_brand: null, card_last4: null });
+    // Other append-only tables keep refusing updates even with the setting naming their row.
+    await asMaintenance(db);
+    const advance = await funded(f, 10_000);
+    const rc = await db.query<{ id: string }>(`select r.id from public.client_fund_receipts r join public.client_fund_entries e on e.id = r.entry_id where e.ledger_id = $1`, [advance]);
+    await db.query(`select set_config('casevoya.receipt_card_fill', $1, false)`, [rc.rows[0].id]);
+    await expectDbError(() => db.query(`update public.client_fund_receipts set number = number where id = $1`, [rc.rows[0].id]), /append-only/);
+    await db.query(`select set_config('casevoya.receipt_card_fill', '', false)`);
+  });
+
+  it("records the card after a payment the webhook recovered, and fills its receipt", async () => {
+    const f = await firm();
+    const invoiceId = await issue(f);
+    const intent = `pi_3Syn${hex(16)}`;
+    expect(await recordCard(f, intent)).toEqual({ outcome: "unknown_payment" });
+    expect((await deliver(f, { type: "payment_intent.succeeded", intent, received: 113_000, invoiceId })).outcome).toBe("applied");
+    expect(await recordCard(f, intent)).toEqual({ outcome: "recorded", receipt_filled: true });
+    const [receipt] = await receiptFor(f, { paymentId: await paymentId(f, intent) });
+    expect(receipt).toMatchObject({ card_brand: "visa", card_last4: "4242", client_name: "Synthetic applicant" });
+  });
+
+  it("ignores live mode and another firm's account, and refuses malformed card values", async () => {
+    const f = await firm();
+    const invoiceId = await issue(f);
+    const intent = await startPayment(f, invoiceId);
+    const payment = await paymentId(f, intent);
+    expect(await recordCard(f, intent, "visa", "4242", { livemode: true })).toEqual({ outcome: "ignored", reason: "livemode" });
+    expect(await recordCard(f, intent, "visa", "4242", { account: `acct_1Other${hex(12)}` })).toMatchObject({ outcome: "rejected" });
+    for (const [brand, last4] of [
+      ["visa", "424"],
+      ["visa", "42a2"],
+      ["", "4242"],
+      ["visa; drop table", "4242"],
+    ]) {
+      await expectDbError(() => recordCard(f, intent, brand, last4), /card brand or last 4 is invalid/);
+    }
+    expect(await cardOf(f, "invoice_payments", "id", payment)).toEqual({ card_brand: null, card_last4: null });
+    // Before success, a retry with another card replaces the stored one.
+    await recordCard(f, intent, "visa", "4242");
+    expect(await recordCard(f, intent, "amex", "0005")).toEqual({ outcome: "recorded", receipt_filled: false });
+    expect(await cardOf(f, "invoice_payments", "id", payment)).toEqual({ card_brand: "amex", card_last4: "0005" });
+    await asMaintenance(db);
+    await expectDbError(() => db.query(`update public.invoice_payments set card_last4 = null where id = $1`, [payment]), /invoice_payments_card_both_or_neither/);
+  });
+});

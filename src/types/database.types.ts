@@ -5060,6 +5060,8 @@ export type Database = {
           amount_received_cents: number
           refunded_cents: number
           application_fee_cents: number
+          card_brand: string | null
+          card_last4: string | null
           connected_account_id: string
           created_at: string
           created_by: string | null
@@ -5081,6 +5083,8 @@ export type Database = {
           amount_received_cents?: number
           refunded_cents?: number
           application_fee_cents?: number
+          card_brand?: string | null
+          card_last4?: string | null
           connected_account_id: string
           created_at?: string
           created_by?: string | null
@@ -5102,6 +5106,8 @@ export type Database = {
           amount_received_cents?: number
           refunded_cents?: number
           application_fee_cents?: number
+          card_brand?: string | null
+          card_last4?: string | null
           connected_account_id?: string
           created_at?: string
           created_by?: string | null
@@ -5477,6 +5483,8 @@ export type Database = {
           account_label: string | null
           account_last4: string | null
           amount_cents: number
+          card_brand: string | null
+          card_last4: string | null
           client_name: string
           consultant_licence: string | null
           consultant_name: string | null
@@ -5513,6 +5521,8 @@ export type Database = {
           account_label?: string | null
           account_last4?: string | null
           amount_cents: number
+          card_brand?: string | null
+          card_last4?: string | null
           client_name: string
           consultant_licence?: string | null
           consultant_name?: string | null
@@ -5549,6 +5559,8 @@ export type Database = {
           account_label?: string | null
           account_last4?: string | null
           amount_cents?: number
+          card_brand?: string | null
+          card_last4?: string | null
           client_name?: string
           consultant_licence?: string | null
           consultant_name?: string | null
@@ -6124,6 +6136,16 @@ export type Database = {
       invoice_payment_receipt: {
         Args: {
           p_receipt_id: string
+        }
+        Returns: Json
+      }
+      record_invoice_payment_card: {
+        Args: {
+          p_account_id: string
+          p_card_brand: string
+          p_card_last4: string
+          p_livemode: boolean
+          p_payment_intent_id: string
         }
         Returns: Json
       }

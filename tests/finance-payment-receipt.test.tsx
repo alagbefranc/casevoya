@@ -6,6 +6,7 @@ import { PaymentsLive } from "@/components/portal/payments-live";
 import { SheetFinancePayments } from "@/components/sheet/designer/finance";
 import { ledgerLines, type FundEntry } from "@/modules/finance/client-funds-present";
 import {
+  cardBrandName,
   invoiceLine,
   PAYMENT_RECEIPT_REFUNDS,
   PAYMENT_RECEIPT_RULE,
@@ -136,6 +137,34 @@ describe("invoice payment receipt presenter (CICC Code s. 33(3))", () => {
     expect(text).not.toContain(SAMPLE_NOTICE);
     expect(Buffer.from(await renderPaymentReceiptPdf(parse(CARD))).equals(Buffer.from(bytes))).toBe(true);
     expect(pdfText(await renderPaymentReceiptPdf(parse({ ...TRANSFER, is_sample: true })))).toContain(SAMPLE_NOTICE);
+  });
+
+  it("prints the card brand and last 4 when Stripe gave them, and \"Card\" when not", async () => {
+    const visa = parse({ ...CARD, card_brand: "visa", card_last4: "4242" });
+    expect(visa).toMatchObject({ cardBrand: "visa", cardLast4: "4242" });
+    expect(paymentMethodLine(visa)).toBe("Visa ••••4242");
+    expect(Object.fromEntries(paymentReceiptRows(visa)).Method).toBe("Visa ••••4242");
+    expect(paymentMethodLine(parse({ ...CARD, card_brand: "mastercard", card_last4: "4444" }))).toBe("Mastercard ••••4444");
+    expect(paymentMethodLine(parse({ ...CARD, card_brand: "amex", card_last4: "0005" }))).toBe("American Express ••••0005");
+    expect(paymentMethodLine(parse({ ...CARD, card_brand: "unknown", card_last4: "1234" }))).toBe("Card ••••1234");
+    expect(paymentMethodLine(parse({ ...CARD, card_brand: null, card_last4: null }))).toBe("Card");
+    // Half a card, a malformed last 4, or a card on a transfer is not shown.
+    expect(paymentMethodLine(parse({ ...CARD, card_brand: "visa", card_last4: null }))).toBe("Card");
+    expect(paymentMethodLine(parse({ ...CARD, card_brand: "visa", card_last4: "42" }))).toBe("Card");
+    expect(parse({ ...TRANSFER, card_brand: "visa", card_last4: "4242" })).toMatchObject({ cardBrand: null, cardLast4: null });
+    expect(cardBrandName("discover")).toBe("Discover");
+    expect(cardBrandName("jcb")).toBe("JCB");
+    expect(cardBrandName("unionpay")).toBe("UnionPay");
+    expect(cardBrandName("diners")).toBe("Diners Club");
+    expect(cardBrandName("cartes_bancaires")).toBe("Cartes Bancaires");
+    expect(cardBrandName("interac")).toBe("Interac");
+    expect(cardBrandName(null)).toBe("Card");
+
+    const text = pdfText(await renderPaymentReceiptPdf(visa));
+    expect(text).toContain("Visa ••••4242");
+    const plain = pdfText(await renderPaymentReceiptPdf(parse(CARD)));
+    expect(plain).not.toContain("••••");
+    expect(plain).not.toContain("Visa");
   });
 
   it("leaves the advance receipt's layout and rule as they were", async () => {
