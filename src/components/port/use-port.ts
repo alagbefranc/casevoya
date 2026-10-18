@@ -246,8 +246,22 @@ export function usePort(
           });
         };
         inputs.forEach((input, index) => {
+          // maxlength=1 would cut an autofilled or pasted-by-keyboard code to its first digit.
+          input.removeAttribute("maxlength");
           input.addEventListener("input", () => {
-            input.value = input.value.replace(/\D/g, "").slice(-1);
+            const digits = input.value.replace(/\D/g, "");
+            // Phone keyboards and password managers can drop the whole code into one box.
+            // Two digits is a keypress over an existing one; more is a whole code arriving at once.
+            if (digits.length > 2) {
+              digits.slice(0, 6 - index).split("").forEach((char, j) => {
+                inputs[index + j].value = char;
+                inputs[index + j].classList.add("filled");
+              });
+              inputs[Math.min(5, index + digits.length)]?.focus();
+              done();
+              return;
+            }
+            input.value = digits.slice(-1);
             input.classList.toggle("filled", Boolean(input.value));
             if (input.value && index < 5) inputs[index + 1]?.focus();
             done();
