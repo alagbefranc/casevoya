@@ -55,7 +55,7 @@ export function faceFromPortalPreview(value: unknown): InviteFace {
 }
 
 export function faceFromStaffPreview(
-  value: { email?: string | null; organization_name?: string | null; role?: string | null } | null,
+  value: { email?: string | null; organization_name?: string | null; role?: string | null; inviter?: string | null } | null,
 ): InviteFace {
   if (!value) return { ...BLANK_FACE };
   return {
@@ -63,5 +63,6 @@ export function faceFromStaffPreview(
     firm: value.organization_name?.trim() ?? "",
     email: value.email?.trim() ?? "",
     role: value.role?.replaceAll("_", " ") ?? "",
+    consultant: value.inviter?.trim() ?? "",
   };
 }
