@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { toast2 } from "@/components/port/kit";
+import { dialogId } from "@/modules/sheet/matter-wire";
 import { withoutNew } from "@/modules/sheet/new-matter";
 import { sheetStateCopy } from "@/modules/sheet/present";
 import { runMatterAct } from "./matter-acts";
@@ -243,10 +244,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     });
 
     const params = new URLSearchParams(window.location.search);
-    const dialog = params.get("dlg");
-    if (dialog === "stage" || dialog === "hold" || dialog === "letter") {
-      window.setTimeout(() => openDialog(dialog === "stage" ? "dStage" : dialog === "hold" ? "dHold" : "dLetter"), 300);
-    }
+    const dialog = dialogId(params.get("dlg"));
+    if (dialog) window.setTimeout(() => openDialog(dialog), 300);
     const newMatter = root.querySelector<HTMLDialogElement>("#dlgNew");
     if (newMatter) {
       // ?new=1 (the sidebar link, or coming back from step-up) opens the dialog; closing it drops the flag.

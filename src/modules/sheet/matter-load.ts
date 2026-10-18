@@ -43,6 +43,7 @@ import {
   clockTime,
 } from "@/modules/sheet/matter-present";
 import { governmentBadge, programLabel } from "@/modules/sheet/matters-present";
+import { DEADLINE_KINDS, DEADLINE_ROLES, deadlineSource } from "@/modules/sheet/new-deadline";
 import {
   governmentLabel,
   isoDateInTimeZone,
@@ -70,7 +71,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
   const { data: matter } = await supabase
     .from("matters")
     .select(
-      "id, title, reference, stage, government_status, on_hold, on_hold_reason, on_hold_owner_membership_id, on_hold_review_on, outcome, retention_on, program_pack_id, responsible_consultant_membership_id, version, created_at, updated_at",
+      "id, title, reference, stage, government_status, on_hold, on_hold_reason, on_hold_owner_membership_id, on_hold_review_on, outcome, retention_on, program_pack_id, responsible_consultant_membership_id, is_sample, version, created_at, updated_at",
     )
     .eq("organization_id", org)
     .eq("id", matterId)
@@ -91,7 +92,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       .limit(100),
     supabase
       .from("deadlines")
-      .select("id, label, kind, due_on, due_at, timezone, verification, verifying_membership_id, evidence_locator, calculation_note, rule_version_id, source_retrieved_on, updated_at")
+      .select("id, label, kind, due_on, due_at, timezone, verification, verifying_membership_id, evidence_locator, calculation_note, rule_version_id, source_url, source_retrieved_on, updated_at")
       .eq("organization_id", org)
       .eq("matter_id", matter.id)
       .order("due_on", { ascending: true, nullsFirst: false })
@@ -350,7 +351,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
           next.verification === "confirmed"
             ? ({ tone: "ok", label: next.verifying_membership_id ? `Verified by ${memberName(next.verifying_membership_id)}` : "Verified" } as MatterBadge)
             : ({ tone: "chg", label: "Not verified yet" } as MatterBadge),
-        source: [next.evidence_locator || "No source recorded", ...(next.source_retrieved_on ? [`retrieved ${dayMonth(next.source_retrieved_on)}`] : [])],
+        source: deadlineSource(next.evidence_locator, next.source_url, next.source_retrieved_on ? dayMonth(next.source_retrieved_on) : null),
         origin: `${next.rule_version_id ? "Derived from a program rule." : "Not derived from a rule."}${next.calculation_note ? ` ${next.calculation_note}` : ""}`,
         reminders: (reminders?.data ?? []).map((row) => ({
           label: row.offset_days != null ? `${row.offset_days} ${row.offset_days === 1 ? "day" : "days"}` : "Reminder",
@@ -393,7 +394,9 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
   const tab = matterTab(query.tab);
   // Every change is still checked by the database (role, version, step-up); this only says which matter.
   const wire = { organizationId: org, matterId: matter.id, version: matter.version };
-  const header: MatterHeaderData = { client, pills: headerPills(matter.updated_at, matter.created_at, staff.timezone, now), hold, tab, wire };
+  // public.record_deadline accepts these roles; anyone else is not offered the dialog.
+  const recordsDeadlines = (DEADLINE_ROLES as readonly string[]).includes(staff.role);
+  const header: MatterHeaderData = { client, pills: headerPills(matter.updated_at, matter.created_at, staff.timezone, now), hold, tab, wire, deadline: recordsDeadlines };
 
   // A hold's owner is someone on the firm's staff, never a client. The responsible consultant comes first.
   const holdStaff = (staffRows.data ?? []).map((row) => row.id);
@@ -409,6 +412,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     reviewOn: matter.on_hold_review_on ?? defaultReview(today),
     receivedOn: today,
     wire,
+    deadline: recordsDeadlines ? { timezone: staff.timezone, sampleMode: staff.sampleMode && !matter.is_sample, kinds: DEADLINE_KINDS } : null,
   };
   const confirmOutcome =
     !matter.outcome && matter.government_status === "decision_evidence_on_file" && isLicensedMembership(staff.role, ownLicence?.data)
@@ -438,7 +442,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       rows: documentTable,
     },
     agreements: { rows: agreementTable, signing },
-    tasks: { deadline, tasks: taskTable },
+    tasks: { deadline, tasks: taskTable, record: recordsDeadlines },
     outcome: matter.outcome ? outcomeLabel(matter.outcome) : null,
     confirmOutcome,
     closure: { closed: matter.stage === "closed", retention: matter.retention_on ? longDate(matter.retention_on) : null },

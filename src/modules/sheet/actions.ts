@@ -1,6 +1,8 @@
 "use server";
 
 import { clearMatterOnHold, overrideMatterStage, recordGovernmentStatus, recordMatterOutcome, setMatterOnHold } from "@/modules/matters/actions";
+import { readDeadline } from "@/modules/sheet/new-deadline";
+import { createTask, recordDeadline, scheduleDeadlineReminders, setTaskStatus } from "@/modules/tasks/actions";
 
 /**
  * The Designer matter page's dialogs. They send no authenticator code: the database
@@ -36,7 +38,20 @@ export async function recordMatterLetter(input: MatterRef & { status: string; no
 export async function confirmMatterOutcome(input: MatterRef & { outcome: string; note: string }) {
   return recordMatterOutcome({ organizationId: input.organizationId, matterId: input.matterId, outcome: input.outcome, expectedVersion: input.version, note: input.note, code: null });
 }
-import { createTask, setTaskStatus } from "@/modules/tasks/actions";
+
+/**
+ * Records a deadline on the matter (public.record_deadline), then proposes its reminders
+ * (public.schedule_deadline_reminders). It starts tentative; confirming it is a separate,
+ * licensed step. The database re-checks the official source and the staff role.
+ */
+export async function recordMatterDeadline(input: MatterRef & { fields: Parameters<typeof readDeadline>[0] }) {
+  const read = readDeadline(input.fields);
+  if ("error" in read) return { error: read.error };
+  const recorded = await recordDeadline({ organizationId: input.organizationId, matterId: input.matterId, ...read.input });
+  if ("error" in recorded) return { error: recorded.error };
+  const reminders = await scheduleDeadlineReminders({ organizationId: input.organizationId, deadlineId: recorded.id, asOf: new Date().toISOString() });
+  return { id: recorded.id, remindersScheduled: !("error" in reminders) };
+}
 
 function field(form: FormData, key: string): string {
   const value = form.get(key);
