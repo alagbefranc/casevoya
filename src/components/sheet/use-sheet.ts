@@ -9,6 +9,7 @@ import { sheetStateCopy } from "@/modules/sheet/present";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { runNewTask, syncNewTask } from "./new-task-act";
+import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-invite-act";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
 const NEW_MATTER = "/sheet/matters?new=1";
@@ -129,6 +130,20 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (palette && root.contains(palette)) {
         event.preventDefault();
         openPalette(root);
+        return;
+      }
+      const invite = target.closest<HTMLElement>("[data-invite-open]");
+      if (invite && root.contains(invite)) {
+        event.preventDefault();
+        openPortalInvite(invite, root);
+        return;
+      }
+      const send = target.closest<HTMLElement>("[data-invite]");
+      if (send && root.contains(send)) {
+        event.preventDefault();
+        if (send.getAttribute("aria-busy") === "true") return;
+        send.setAttribute("aria-busy", "true");
+        void runPortalInvite(send, router).finally(() => send.removeAttribute("aria-busy"));
         return;
       }
       const act = target.closest<HTMLElement>("[data-act]");
@@ -253,8 +268,10 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     });
 
     const params = new URLSearchParams(window.location.search);
-    const dialog = dialogId(params.get("dlg"));
+    const dialogParam = params.get("dlg");
+    const dialog = dialogId(dialogParam);
     if (dialog) window.setTimeout(() => openDialog(dialog), 300);
+    if (dialogParam === "invite") window.setTimeout(() => reopenPortalInvite(root, params.get("pid")), 300);
     const newMatter = root.querySelector<HTMLDialogElement>("#dlgNew");
     if (newMatter) {
       // ?new=1 (the sidebar link, or coming back from step-up) opens the dialog; closing it drops the flag.

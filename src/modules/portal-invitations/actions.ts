@@ -6,22 +6,29 @@ import { verifyTotpCode } from "@/lib/auth/verify-totp";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import type { Json } from "@/types/database.types";
+import { portalError } from "@/modules/portal-invitations/errors";
 import { isPortalInviteRole, type PortalAcceptPayload, type PortalInviteRole } from "@/modules/portal-invitations/types";
 
-type RpcResult = { ok?: boolean; error?: string; status?: string; token?: string; invitation_id?: string };
+type RpcResult = { ok?: boolean; error?: string; status?: string; token?: string; invitation_id?: string; expires_at?: string };
 
 function asResult(data: unknown): RpcResult {
   if (data && typeof data === "object" && !Array.isArray(data)) return data as RpcResult;
   return {};
 }
 
-async function staffClient(organizationId: string, code: string) {
+/**
+ * A null code relies on the session's recent step-up (the Sheet's matter page sends none);
+ * the database checks app.mfa_step_up_satisfied() on every invitation either way.
+ */
+async function staffClient(organizationId: string, code: string | null) {
   if (!isUuid(organizationId)) return { error: "Choose a firm." as const };
   const supabase = await createClient({ organizationId });
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) return { error: "Sign in first." as const };
-  const verified = await verifyTotpCode(supabase, code);
-  if (!verified.ok) return { error: verified.error };
+  if (code != null) {
+    const verified = await verifyTotpCode(supabase, code);
+    if (!verified.ok) return { error: verified.error };
+  }
   return { supabase };
 }
 
@@ -32,7 +39,7 @@ export async function createPortalInvitation(input: {
   role: string;
   email: string;
   guardianSubjectIds?: string[];
-  code: string;
+  code: string | null;
 }) {
   const email = normalizeEmail(input.email);
   if (!email) return { error: "Enter a valid email address." };
@@ -55,7 +62,7 @@ export async function createPortalInvitation(input: {
   if (!result.ok || !result.token || !isInvitationToken(result.token)) {
     return { error: portalError(result.error) };
   }
-  return { token: result.token, invitationId: result.invitation_id ?? null };
+  return { token: result.token, invitationId: result.invitation_id ?? null, expiresAt: result.expires_at ?? null };
 }
 
 export async function resendPortalInvitation(input: { organizationId: string; invitationId: string; code: string }) {
@@ -218,33 +225,4 @@ export async function saveMyContactPreferences(input: {
   });
   if (error) return { error: "Those contact choices could not be saved." };
   return { ok: true as const };
-}
-
-function portalError(code: string | undefined): string {
-  switch (code) {
-    case "real_client_invitations_locked":
-      return "Real client invitations stay locked until the firm finishes sample proofs, a good-standing licence check, and an active trial or subscription.";
-    case "minor_cannot_hold_login":
-      return "A minor cannot hold their own login. Invite a guardian instead.";
-    case "date_of_birth_required":
-      return "Record a date of birth before sending this invitation.";
-    case "guardian_subject_required":
-    case "guardian_subject_not_minor":
-      return "A guardian invitation needs the minor they act for.";
-    case "rate_limited":
-      return "Too many attempts. Wait and try again.";
-    case "confirmed_email_required":
-      return "Confirm the invited email before accepting.";
-    case "portal_terms_required":
-    case "privacy_notice_required":
-      return "The current terms and privacy notice have to be accepted.";
-    case "processing_consent_required":
-      return "Processing consent is required for this invitation.";
-    case "contact_phone_required":
-      return "Add a phone number before choosing text reminders.";
-    case "invitation_cannot_be_accepted":
-      return "This invitation can no longer be used.";
-    default:
-      return "That action could not be completed.";
-  }
 }
