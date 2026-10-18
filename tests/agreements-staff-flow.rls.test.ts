@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { pdfText } from "./helpers/pdf-text";
+import { renderAgreementPdf } from "@/modules/agreements/pdf-render";
+import { agreementTerms, parseSealSource } from "@/modules/agreements/seal-source";
+import { DEFAULT_GOVERNMENT_FEE_NOTE, readNewAgreement, sameTerms } from "@/modules/sheet/agreements-present";
 
 /**
  * The Sheet's Agreements flow, exactly as staff-actions.ts calls it: a template is created and
@@ -205,6 +209,102 @@ describe("the Sheet's agreement flow", () => {
       [envelopeId, `sign-${randomUUID()}`, IP, AGENT],
     );
     expect(second.rows[0].result.status).toBe("completed");
+  });
+
+  it("stores the dialog's terms on the version and seals them into the laid-out PDF", async () => {
+    const ctx = await firm();
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const templateId = (
+      await db.query<{ id: string }>(`select public.create_agreement_template('service'::public.agreement_kind, 'Synthetic service', $1) as id`, [BODY])
+    ).rows[0].id;
+    await db.query(`select public.approve_agreement_template($1)`, [templateId]);
+
+    // What the New agreement dialog sends, read exactly as the server action reads it.
+    const read = readNewAgreement({
+      matter: ctx.matterId,
+      template: templateId,
+      scope: SCOPE,
+      fee: "1,500.50",
+      currency: "CAD",
+      exclusions: "Appeals and judicial review.\nTranslations beyond 10 pages.",
+      refund: "Unearned advances are refunded within 10 business days of a written request.",
+      government: DEFAULT_GOVERNMENT_FEE_NOTE,
+    });
+    if ("error" in read) throw new Error(read.error);
+    const terms = read.input;
+    expect(terms.feeCents).toBe(150050);
+    const create = (feeCents: number | null) =>
+      db.query<{ id: string }>(
+        `select public.create_agreement($1, 'service'::public.agreement_kind, 'Synthetic service', null, $2,
+           $3, $4, $5, $6, $7, $8, null, null, null) as id`,
+        [ctx.matterId, terms.scope, terms.exclusions, terms.refundPolicy, feeCents, terms.currency, terms.governmentFeeNote, templateId],
+      );
+    const agreementId = (await create(terms.feeCents)).rows[0].id;
+    const version = (
+      await db.query<{
+        scope_summary: string;
+        exclusions: string | null;
+        refund_policy: string | null;
+        fee_cents: number | string | null;
+        currency: string;
+        government_fee_note: string | null;
+        canonical_body: string;
+      }>(
+        `select scope_summary, exclusions, refund_policy, fee_cents, currency, government_fee_note, canonical_body
+         from public.agreement_versions where agreement_id = $1`,
+        [agreementId],
+      )
+    ).rows[0];
+    expect(version).toMatchObject({
+      scope_summary: SCOPE,
+      exclusions: "Appeals and judicial review.\nTranslations beyond 10 pages.",
+      refund_policy: "Unearned advances are refunded within 10 business days of a written request.",
+      currency: "CAD",
+      government_fee_note: DEFAULT_GOVERNMENT_FEE_NOTE,
+    });
+    expect(Number(version.fee_cents)).toBe(150050);
+    // The unsent draft is reused only for the same terms; a different fee is a new draft.
+    expect(sameTerms(version, terms)).toBe(true);
+    expect(sameTerms(version, { ...terms, feeCents: 160000 })).toBe(false);
+    // The database still refuses a negative fee, whatever the dialog sends.
+    await expectDbError(() => create(-1), /negative/i);
+
+    const sent = await db.query<{ result: { envelope_id: string } }>(
+      `select public.send_agreement($1, $2::jsonb, $3, null) as result`,
+      [
+        agreementId,
+        JSON.stringify([
+          { role: "client", person_id: ctx.applicant, display_name: "Synthetic applicant" },
+          { role: "sponsor", person_id: ctx.sponsorPerson, display_name: "Synthetic sponsor" },
+        ]),
+        `sheet-send-${agreementId}`,
+      ],
+    );
+    const envelopeId = sent.rows[0].result.envelope_id;
+    for (const userId of [ctx.client, ctx.sponsor]) {
+      await asUser(db, { userId, aal: "aal1", orgId: ctx.orgId });
+      await db.query(`select public.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `sign-${randomUUID()}`, IP, AGENT]);
+    }
+
+    // The sealed-PDF renderer's input carries every term, and the PDF prints them.
+    await asServiceRole(db);
+    const raw = (await db.query<{ source: unknown }>(`select public.agreement_seal_source($1) as source`, [envelopeId])).rows[0].source;
+    const source = parseSealSource(raw);
+    expect(source.version).toMatchObject({
+      scopeSummary: SCOPE,
+      exclusions: "Appeals and judicial review.\nTranslations beyond 10 pages.",
+      refundPolicy: "Unearned advances are refunded within 10 business days of a written request.",
+      currency: "CAD",
+      governmentFeeNote: DEFAULT_GOVERNMENT_FEE_NOTE,
+    });
+    expect(Number(source.version.feeCents)).toBe(150050);
+    expect(agreementTerms(source)).toEqual({ terms: BODY, exact: true });
+    const text = pdfText(await renderAgreementPdf(source)).replace(/\s+/g, " ");
+    for (const expected of ["CAD 1,500.50", "Appeals and judicial review.", "Translations beyond 10 pages.", "Unearned advances are refunded"]) {
+      expect(text).toContain(expected);
+    }
+    expect(text).toContain("Government fees are paid by the client directly to IRCC");
+    expect(text).not.toContain("No professional fee is stated");
   });
 
   it("refuses an agreement on a real matter while the firm is in sample mode", async () => {

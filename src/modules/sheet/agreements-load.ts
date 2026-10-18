@@ -10,12 +10,14 @@ import type {
 import { createClient } from "@/lib/supabase/server";
 import { isLicensedMembership, LICENCE_FACT_COLUMNS } from "@/lib/tenant/roles";
 import {
+  AGREEMENT_CURRENCIES,
   agreementBadge,
   agreementFlags,
   isSendableKind,
   kindLabel,
   SENDABLE_KINDS,
   signersFor,
+  templateDefaults,
 } from "@/modules/sheet/agreements-present";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import { dayMonth } from "@/modules/sheet/home-present";
@@ -43,7 +45,7 @@ export async function loadSheetAgreements(staff: SheetStaff) {
     loadSheetChrome(staff, "/sheet/agreements"),
     supabase
       .from("agreements")
-      .select("id, matter_id, kind, title, status, current_version_id, created_at, updated_at")
+      .select("id, matter_id, kind, title, status, template_id, current_version_id, created_at, updated_at")
       .eq("organization_id", org)
       .order("updated_at", { ascending: false })
       .limit(AGREEMENTS_READ),
@@ -62,8 +64,17 @@ export async function loadSheetAgreements(staff: SheetStaff) {
   const versionIds = rows.map((row) => row.current_version_id).filter((id): id is string => Boolean(id));
   const matterRows = matters.data ?? [];
   const matterIds = [...new Set([...rows.map((row) => row.matter_id), ...matterRows.map((row) => row.id)])];
+  // Each template starts the New agreement dialog with the terms of the firm's latest agreement
+  // made from it (templates keep only their text).
+  const lastFromTemplate = new Map<string, string>();
+  for (const row of [...rows].sort((a, b) => b.created_at.localeCompare(a.created_at))) {
+    if (row.template_id && row.current_version_id && !lastFromTemplate.has(row.template_id)) {
+      lastFromTemplate.set(row.template_id, row.current_version_id);
+    }
+  }
+  const termVersionIds = [...new Set(lastFromTemplate.values())];
 
-  const [envelopes, versions, participants, refs, credential] = await Promise.all([
+  const [envelopes, versions, participants, refs, credential, termVersions] = await Promise.all([
     agreementIds.length
       ? supabase
           .from("signature_envelopes")
@@ -80,7 +91,19 @@ export async function loadSheetAgreements(staff: SheetStaff) {
     own.data?.role === "firm_owner"
       ? supabase.from("consultant_credentials").select(`membership_id, ${LICENCE_FACT_COLUMNS}`).eq("organization_id", org).eq("membership_id", staff.membershipId).maybeSingle()
       : null,
+    termVersionIds.length
+      ? supabase
+          .from("agreement_versions")
+          .select("id, exclusions, refund_policy, fee_cents, currency, government_fee_note")
+          .eq("organization_id", org)
+          .in("id", termVersionIds)
+      : null,
   ]);
+  const termsById = new Map((termVersions?.data ?? []).map((row) => [row.id, row]));
+  const defaultsFor = (templateId: string) => {
+    const versionId = lastFromTemplate.get(templateId);
+    return templateDefaults(versionId ? termsById.get(versionId) : null);
+  };
 
   const latest = new Map<string, EnvelopeRow>();
   for (const row of envelopes?.data ?? []) if (!latest.has(row.agreement_id)) latest.set(row.agreement_id, row);
@@ -209,6 +232,9 @@ export async function loadSheetAgreements(staff: SheetStaff) {
 
   const signable = matterRows.filter((row) => signersFor(partiesOf.get(row.id) ?? [], personName).length > 0);
   const header: AgreementsHeaderData = { records: rows.length, waiting: waiting.length, create: "New agreement" };
+  const templateOptions = approved.map((row) => ({ value: row.id, left: `${row.name} · ${kindLabel(row.kind)}`, defaults: defaultsFor(row.id) }));
+  const firstDefaults = templateOptions[0]?.defaults ?? templateDefaults(null);
+  const currencies = [...new Set<string>([...AGREEMENT_CURRENCIES, ...templateOptions.map((option) => option.defaults.currency)])];
   const dialog: NewAgreementDialogData = {
     title: "New agreement",
     matterLabel: "Matter",
@@ -219,13 +245,13 @@ export async function loadSheetAgreements(staff: SheetStaff) {
           left: `${clientOf(row.id)} · ${row.reference ?? row.title}${row.is_sample ? " (sample)" : ""}`,
         }))
       : [{ value: "", left: "No open matter with an applicant" }],
-    templates: approved.length
-      ? approved.map((row) => ({ value: row.id, left: `${row.name} · ${kindLabel(row.kind)}` }))
-      : [{ value: "", left: "No approved template yet" }],
+    templates: templateOptions.length ? templateOptions : [{ value: "", left: "No approved template yet" }],
     submit: "Create and send",
     live: {
       organizationId: org,
       sampleMode: staff.sampleMode,
+      currencies,
+      defaults: firstDefaults,
       blocked: noTemplate
         ? {
             title: "No approved agreement template",

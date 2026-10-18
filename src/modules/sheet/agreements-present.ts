@@ -65,7 +65,32 @@ export function agreementFlags(status: string, kind: string): string[] {
   return flags;
 }
 
-export type AgreementInput = { matterId: string; templateId: string; scope: string };
+/** The terms an agreement version stores next to its text (public.agreement_versions). */
+export type AgreementTerms = {
+  scope: string;
+  exclusions: string | null;
+  refundPolicy: string | null;
+  /** Professional fee in integer minor units (cents). Null: the agreement states no professional fee. */
+  feeCents: number | null;
+  currency: string;
+  governmentFeeNote: string | null;
+};
+
+export type AgreementInput = AgreementTerms & { matterId: string; templateId: string };
+
+/** The currencies the dialog offers. The database accepts any three-letter code. */
+export const AGREEMENT_CURRENCIES = ["CAD", "USD", "EUR", "GBP"] as const;
+export const DEFAULT_CURRENCY = "CAD";
+
+/**
+ * The government fee note the dialog starts with. It names who pays and where the amounts come
+ * from; it never states an amount (Casevoya does not keep a government fee schedule).
+ */
+export const DEFAULT_GOVERNMENT_FEE_NOTE =
+  "Government fees are paid by the client directly to IRCC at the amounts on the IRCC fee list on the day of payment.";
+
+/** The largest professional fee the dialog accepts: 10,000,000.00 in major units. */
+const MAX_FEE_CENTS = 1_000_000_000;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -73,10 +98,57 @@ function clean(value: string | null | undefined): string {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
 }
 
+/** Multi-line text as typed: line breaks kept, trailing spaces and blank edges dropped. Empty is null. */
+function paragraphs(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const text = value
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+$/g, ""))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return text ? text : null;
+}
+
+/**
+ * A professional fee typed in major units ("1500", "1,500.00", "$1 500.5") as integer minor units.
+ * Blank means no fee. String arithmetic only, so 0.1 + 0.2 never creeps in.
+ */
+export function parseFeeMinor(value: string | null | undefined): { cents: number | null } | { error: string } {
+  const text = typeof value === "string" ? value.replace(/[\s$, ]/g, "").replace(/^(CAD|USD|EUR|GBP|€|£)/i, "") : "";
+  if (!text) return { cents: null };
+  if (text.startsWith("-")) return { error: "A professional fee can’t be negative." };
+  const match = /^(\d{0,8})(?:\.(\d{0,2}))?$/.exec(text);
+  if (!match || !/\d/.test(text)) return { error: "Enter the professional fee as an amount, like 1,500.00." };
+  const whole = Number(match[1] || "0");
+  const minor = Number((match[2] ?? "").padEnd(2, "0"));
+  const cents = whole * 100 + minor;
+  if (cents > MAX_FEE_CENTS) return { error: "That professional fee is too large." };
+  return { cents };
+}
+
+/** Minor units as the dialog shows them in its fee field ("1500.00"); null is blank. */
+export function feeInputValue(cents: number | string | null | undefined): string {
+  if (cents == null || cents === "") return "";
+  const value = Math.trunc(Number(cents));
+  if (!Number.isFinite(value) || value < 0) return "";
+  return `${Math.floor(value / 100)}.${String(value % 100).padStart(2, "0")}`;
+}
+
+export type NewAgreementFields = {
+  matter?: string | null;
+  template?: string | null;
+  scope?: string | null;
+  fee?: string | null;
+  currency?: string | null;
+  exclusions?: string | null;
+  refund?: string | null;
+  government?: string | null;
+};
+
 /** What the New agreement dialog sends, or the first thing to fix. The database checks it again. */
-export function readNewAgreement(fields: { matter?: string | null; template?: string | null; scope?: string | null }):
-  | { input: AgreementInput }
-  | { error: string } {
+export function readNewAgreement(fields: NewAgreementFields): { input: AgreementInput } | { error: string } {
   const matterId = clean(fields.matter);
   const templateId = clean(fields.template);
   const scope = clean(fields.scope);
@@ -84,7 +156,72 @@ export function readNewAgreement(fields: { matter?: string | null; template?: st
   if (!UUID.test(templateId)) return { error: "Choose an approved agreement template." };
   if (scope.length < 3) return { error: "Describe the services this agreement covers." };
   if (scope.length > 2000) return { error: "Keep the scope to 2,000 characters." };
-  return { input: { matterId, templateId, scope } };
+  const fee = parseFeeMinor(fields.fee);
+  if ("error" in fee) return { error: fee.error };
+  const currency = clean(fields.currency).toUpperCase() || DEFAULT_CURRENCY;
+  if (!/^[A-Z]{3}$/.test(currency)) return { error: "Choose the currency." };
+  const exclusions = paragraphs(fields.exclusions);
+  if (exclusions && exclusions.length > 2000) return { error: "Keep what is not included to 2,000 characters." };
+  const refundPolicy = paragraphs(fields.refund);
+  if (refundPolicy && refundPolicy.length > 2000) return { error: "Keep the refund policy to 2,000 characters." };
+  const governmentFeeNote = paragraphs(fields.government);
+  if (governmentFeeNote && governmentFeeNote.length > 500) return { error: "Keep the government fees note to 500 characters." };
+  return {
+    input: { matterId, templateId, scope, exclusions, refundPolicy, feeCents: fee.cents, currency, governmentFeeNote },
+  };
+}
+
+/**
+ * Whether an unsent draft's version carries exactly these terms. Only then is the draft sent in
+ * place of a new one: a different fee, currency, scope or clause makes a new draft.
+ */
+export function sameTerms(
+  version: {
+    scope_summary: string;
+    exclusions: string | null;
+    refund_policy: string | null;
+    fee_cents: number | string | null;
+    currency: string;
+    government_fee_note: string | null;
+  },
+  terms: AgreementTerms,
+): boolean {
+  const fee = version.fee_cents == null ? null : String(version.fee_cents);
+  return (
+    version.scope_summary === terms.scope &&
+    (version.exclusions ?? null) === terms.exclusions &&
+    (version.refund_policy ?? null) === terms.refundPolicy &&
+    fee === (terms.feeCents == null ? null : String(terms.feeCents)) &&
+    version.currency === terms.currency &&
+    (version.government_fee_note ?? null) === terms.governmentFeeNote
+  );
+}
+
+/** What a template starts the dialog with: the terms of the firm's last agreement from it. */
+export type TemplateDefaults = {
+  fee: string;
+  currency: string;
+  exclusions: string;
+  refund: string;
+  government: string;
+};
+
+export function templateDefaults(
+  version: {
+    exclusions: string | null;
+    refund_policy: string | null;
+    fee_cents: number | string | null;
+    currency: string | null;
+    government_fee_note: string | null;
+  } | null | undefined,
+): TemplateDefaults {
+  return {
+    fee: feeInputValue(version?.fee_cents),
+    currency: version?.currency && /^[A-Z]{3}$/.test(version.currency) ? version.currency : DEFAULT_CURRENCY,
+    exclusions: version?.exclusions ?? "",
+    refund: version?.refund_policy ?? "",
+    government: version?.government_fee_note || DEFAULT_GOVERNMENT_FEE_NOTE,
+  };
 }
 
 export type TemplateInput = { kind: SendableKind; name: string; body: string };
@@ -138,6 +275,8 @@ export function agreementStaffError(message: string): string {
   if (/template name and body/i.test(message)) return "Name the template and add its text.";
   if (/agreement template denied/i.test(message)) return "That template can’t be approved. It may already be approved.";
   if (/scope is required/i.test(message)) return "Describe the services this agreement covers.";
+  if (/fee cannot be negative/i.test(message)) return "A professional fee can’t be negative.";
+  if (/check constraint|violates check/i.test(message)) return "One of the agreement terms is too long or not valid. Check the fee, currency and notes.";
   if (/signer must be a person on the matter/i.test(message)) return "The signer must be a person on this matter.";
   if (/at least one signer/i.test(message)) return "This matter has no applicant to sign.";
   if (/only a draft/i.test(message)) return "This agreement was already sent.";
