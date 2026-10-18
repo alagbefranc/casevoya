@@ -8055,6 +8055,33 @@ export type Database = {
         }
         Relationships: []
       }
+      staff_notification_preferences: {
+        Row: {
+          email: boolean
+          kind: string
+          membership_id: string
+          organization_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          email: boolean
+          kind: string
+          membership_id: string
+          organization_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          email?: boolean
+          kind?: string
+          membership_id?: string
+          organization_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       submission_handoffs: {
         Row: {
           acknowledged_on: string | null
@@ -10695,6 +10722,10 @@ export type Database = {
       set_vo_settings: {
         Args: { p_changes: Json; p_organization_id: string }
         Returns: Json
+      }
+      set_staff_notification_preference: {
+        Args: { p_email: boolean; p_kind: string; p_organization_id: string }
+        Returns: undefined
       }
       verify_client_deposit: {
         Args: {

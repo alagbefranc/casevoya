@@ -29,6 +29,8 @@ import { settingsTab } from "@/modules/sheet/settings-firm-present";
 import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam } from "@/components/sheet/designer/settings";
 import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
 import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
+import { ComposioDialog, IntegrationsSettingsHeader, SheetIntegrations, SheetNotificationPrefs } from "@/components/sheet/designer/settings-integrations";
+import { loadSheetSettingsIntegrations } from "@/modules/sheet/settings-integrations-load";
 import { NotificationsHeader, SheetNotifications } from "@/components/sheet/designer/notifications";
 import { loadSheetNotifications } from "@/modules/sheet/notifications-load";
 import { LeadScreen, PipelineScreen } from "@/components/sheet/lead-screens";
@@ -341,6 +343,23 @@ export async function SheetBody({
           after={<PortalPoliciesAfter dialogs={dialogs} />}
         >
           <SheetPortalPolicies data={policies} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Integrations and Notifications: real connection state and this person's email choices.
+  if (page === "settings" && (query.tab === "integrations" || query.tab === "notifications") && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetSettingsIntegrations(access.staff, query.tab);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<IntegrationsSettingsHeader tab={loaded.tab} pills={loaded.pills} />}
+          statusbar={loaded.chrome.statusbar}
+          after={loaded.dialog ? <ComposioDialog data={loaded.dialog} /> : undefined}
+        >
+          {loaded.integrations ? <SheetIntegrations data={loaded.integrations} /> : null}
+          {loaded.notifications ? <SheetNotificationPrefs data={loaded.notifications} /> : null}
         </SheetFrame>
       </SheetScreen>
     );

@@ -311,7 +311,8 @@ export async function setQuietHours(input: {
   organizationId: string;
   start: string | null;
   end: string | null;
-  code: string;
+  /** Null when the session already holds a recent step-up (Settings > Notifications). */
+  code: string | null;
 }) {
   const session = await clientFor(input.organizationId, input.code);
   if ("error" in session) return { error: session.error };
