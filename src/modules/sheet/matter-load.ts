@@ -1,4 +1,5 @@
 import "server-only";
+import { loadMatterMessages } from "@/modules/messages/load";
 import {
   matterTab,
   type MatterAgreementRow,
@@ -60,9 +61,11 @@ import type { CountersignDialogData } from "@/components/sheet/designer/agreemen
 import { inviteEmailLines } from "@/modules/email/templates";
 import { acceptPath, portalRoleForParty, portalRoleLabel } from "@/modules/sheet/portal-invite";
 import { mayOfferPersonEdit, personEditData } from "@/modules/sheet/edit-person";
+import { loadMatterGovernment } from "@/modules/sheet/government-load";
 import { DEADLINE_KINDS, DEADLINE_ROLES, deadlineSource } from "@/modules/sheet/new-deadline";
 import { missingPolicies } from "@/modules/portal-policies/defaults";
 import { loadCurrentPolicies } from "@/modules/portal-policies/load";
+import { loadClosurePanel } from "@/modules/sheet/closure-load";
 import {
   governmentLabel,
   isoDateInTimeZone,
@@ -465,6 +468,18 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       }
     : { agreement: { title: "No agreement yet", state: null, parts: ["Quotes and service agreements start from an approved template."] } };
 
+  // The Designer's "Pinned note": the matter's latest staff-only note (matter_staff_notes, never
+  // shown in the portal and never mixed with messages). RLS returns nothing to anyone else.
+  const pinned = await supabase
+    .from("matter_staff_notes")
+    .select("body, author_membership_id")
+    .eq("organization_id", staff.organizationId)
+    .eq("matter_id", matterId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (pinned.data) rbar.note = { text: pinned.data.body, parts: ["Staff only", firstName(memberName(pinned.data.author_membership_id))] };
+
   const hold = matter.on_hold
     ? {
         reason: matter.on_hold_reason,
@@ -477,6 +492,8 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     : null;
 
   const tab = matterTab(query.tab);
+  // Messages tab: the chat view (owner's request, 2026-10-18). A failed read shows its error state.
+  const messages = tab === "messages" ? await loadMatterMessages(staff, matterId, query.thread ?? null).catch(() => null) : undefined;
   // Every change is still checked by the database (role, version, step-up); this only says which matter.
   const wire = { organizationId: org, matterId: matter.id, version: matter.version };
   // public.record_deadline accepts these roles; anyone else is not offered the dialog.
@@ -515,6 +532,16 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     edit: cards.some((card) => card.edit) ? { maxBirthDate: todayIso(), invite: canInvite } : null,
     deadline: recordsDeadlines ? { timezone: staff.timezone, sampleMode: staff.sampleMode && !matter.is_sample, kinds: DEADLINE_KINDS } : null,
   };
+  // Submissions and Decisions (T036 to T039), read as this member like everything above.
+  const government = await loadMatterGovernment(supabase, {
+    staff,
+    matter,
+    members,
+    licensed: isLicensedMembership(staff.role, ownLicence?.data),
+    today,
+    now,
+  });
+  if (dialogs.deadline) dialogs.deadline.letters = government.letters;
   const confirmOutcome =
     !matter.outcome && matter.government_status === "decision_evidence_on_file" && isLicensedMembership(staff.role, ownLicence?.data)
       ? { options: MATTER_OUTCOMES.map((value) => ({ value, label: outcomeLabel(value) })), wire }
@@ -547,7 +574,21 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     outcome: matter.outcome ? outcomeLabel(matter.outcome) : null,
     confirmOutcome,
     closure: { closed: matter.stage === "closed", retention: matter.retention_on ? longDate(matter.retention_on) : null },
+    messages,
+    submissions: government.submissions,
+    decisions: government.decisions,
   };
+  // The Closure tab's checklist (T040): money, tasks, retention setting and legal hold.
+  if (tab === "closure") {
+    page.closure.panel = await loadClosurePanel(supabase, {
+      organizationId: org,
+      matterId: matter.id,
+      openTasks: taskRows.filter((row) => row.status === "open" || row.status === "blocked").length,
+      consultant: matter.responsible_consultant_membership_id ? (members.get(matter.responsible_consultant_membership_id) ?? null) : null,
+      outcome: matter.outcome ? outcomeLabel(matter.outcome) : null,
+      closed: matter.stage === "closed",
+    });
+  }
 
-  return { chrome, header, rbar, dialogs, page, countersign };
+  return { chrome, header, rbar, dialogs, page, countersign, governmentDialogs: government.dialogs };
 }

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AccountForm } from "./account-form";
 import { AgreementsLive } from "./agreements-live";
 import { AppointmentsLive } from "./appointments-live";
+import { ChatError, ChatView } from "@/components/messages/chat";
 import { DocumentsLive } from "./documents-live";
 import { PayLive } from "./pay-live";
 import { PaymentsLive } from "./payments-live";
@@ -11,6 +12,7 @@ import type { PortalDocuments } from "@/modules/documents/load";
 import type { PortalInvoices } from "@/modules/finance/portal-load";
 import type { PortalViewer } from "@/modules/portal/load";
 import type { PortalAppointments } from "@/modules/scheduling/portal-load";
+import type { ChatData } from "@/modules/messages/present";
 
 export type PortalPayments = { data: PortalInvoices; invoiceId: string | null };
 
@@ -40,6 +42,7 @@ export function LivePortal({
   agreements,
   payments,
   appointments,
+  messages,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -47,6 +50,8 @@ export function LivePortal({
   agreements?: PortalAgreements | null;
   payments?: PortalPayments | null;
   appointments?: PortalAppointments | null;
+  /** The Messages page's data; null when it failed to load. */
+  messages?: ChatData | null;
 }) {
   const name = viewer.person?.displayName ?? "Your account";
   const matter = viewer.matters[0];
@@ -86,7 +91,7 @@ export function LivePortal({
               <span className="pill">{matter ? matter.title : viewer.organizationName}</span>
               <span className="acts"><a className="btn s sm" href="/help/client-home-screen" id="help">Help</a></span>
             </header>
-            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} />
+            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} messages={messages} />
           </div>
         </main>
         <footer className="statusbar">
@@ -106,6 +111,7 @@ function LiveMain({
   agreements,
   payments,
   appointments,
+  messages,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -113,7 +119,17 @@ function LiveMain({
   agreements: PortalAgreements | null;
   payments: PortalPayments | null;
   appointments: PortalAppointments | null;
+  messages?: ChatData | null;
 }) {
+  // Messages: the chat view (redesigned as a chat view at the owner's request, 2026-10-18).
+  if (page === "messages" && messages !== undefined) {
+    return (
+      <div id="pc">
+        <h1 className="sr">Messages</h1>
+        {messages ? <ChatView data={messages} /> : <ChatError />}
+      </div>
+    );
+  }
   if (page === "appointments") {
     return appointments ? <AppointmentsLive viewer={viewer} data={appointments} /> : <Stub page={page} />;
   }

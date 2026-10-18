@@ -15,7 +15,8 @@ example data (Northline Immigration, Amara Osei, …) is replaced by merge field
 | Mail worker | `src/modules/email/dispatch.ts`, `run-dispatch.ts` (passes `appOrigin()`) |
 | Database: new enum values, invoice/payment/refund events, mail context | `supabase/migrations/20261019170000_email_design_template_enum.sql`, `20261019170100_email_design_events.sql` |
 | Database: consultation mail (EM16a–c) | `supabase/migrations/20261019180000_scheduling_enums.sql` (enum values), `20261019180200_scheduling_mail.sql` (claim/prepare, copied from 20261019170100), `20261019190000_booking_practice_pages.sql` (prepare: `portal`, `location_kind`, `address`, `booking_page`) |
-| Review previews (synthetic data) | `docs/email/previews/*.html` (open `index.html`) |
+| Review previews (synthetic data) | `docs/email/previews/*.html` (open `index.html`); French drafts `docs/email/previews/fr/*.html` |
+| French (fr-CA): English source table, drafts with status and reviewer, parallel builders, sending gate | `designs/i18n-source.json`, `designs/fr-drafts.json`, `designs/localized.ts`, `designs/french.ts`; how-to in `docs/i18n/README.md`; review package `docs/i18n/email-fr-review.md` |
 | Supabase Auth templates, ready to paste | `docs/email/supabase-auth/*.html` |
 | Tests | `tests/email-designs.test.ts`, `tests/email-designs.rls.test.ts`, `tests/email-previews.test.ts` |
 
@@ -73,9 +74,9 @@ portal choice "Email notices" is off is recorded as `skipped`, not emailed.
 | EM11 | Payment receipt | An invoice payment receipt (`PR-0001`) or a client-funds advance receipt (`RC-0001`) is issued. Hook: template `payment_receipt`; needs its enum value and an outbox event from `app.issue_invoice_payment_receipt` | client · firm | {firm_name} received your payment | Your receipt is in your portal. | View receipt → `/portal/payments` | `firm_name`, `receipt_number`, `advance` | ready-not-wired |
 | EM12 | Bounced notice staff follow up | A critical client email bounces (finish_email_delivery opens the “Email was not delivered” task). No email yet | staff · platform | A client notice was not delivered | A follow-up task is open in Casevoya. | Open task → `/sheet/tasks` | `matter_reference` | ready-not-wired |
 | EM13a–c | SMS: deadline reminder, sign-in code, appointment | Telnyx is not wired for these | client / staff · SMS | — | — | — | see SMS below | deferred (document only) |
-| EM14a | French client invite (draft) | French client invitation (fr-CA). Draft translation: needs a certified translator. Never sent | client · firm | Votre dossier avec {firm_name} est prêt | Ouvrez votre lien privé pour créer votre accès au portail. | Ouvrir votre portail → `Sealed accept link` | `firm_name`, `accept_url (sealed)` | deferred |
-| EM14b | French document requested (draft) | French document request (fr-CA). Draft translation: needs a certified translator. Never sent | client · firm | {firm_name} vous demande un document | Téléversez-le en toute sécurité dans votre portail. | Ouvrir votre portail → `/portal/documents` | `firm_name` | deferred |
-| EM14c | French deadline reminder (draft) | French reminder (fr-CA). Draft translation: needs a certified translator. Never sent | client · firm | Une étape de votre dossier arrive à échéance | Votre portail indique quoi faire. | Ouvrir votre portail → `/portal` | `firm_name`, `due_on` | deferred |
+| EM14a | French client invite (draft) | Preview of EM02's French draft (`fr-drafts.json`, EM14a hand draft folded in). Sent as EM02 only to a French-preferring recipient after EM02's French is approved | client · firm | Votre dossier avec {firm_name} est prêt | Ouvrez votre lien privé pour créer votre accès au portail. | Ouvrir votre portail → `Sealed accept link` | as EM02 | deferred (preview) |
+| EM14b | French document requested (draft) | Preview of EM06's French draft (EM14b hand draft folded in). Sent as EM06 only after approval | client · firm | {firm_name} vous demande un document | Téléversez-le en toute sécurité dans votre portail. | Ouvrir votre portail → `/portal/documents` | as EM06 | deferred (preview) |
+| EM14c | French deadline reminder (draft) | Preview of EM07's French draft (EM14c hand draft folded in). Sent as EM07 only after approval | client · firm | as EM07 (draft: Une étape de votre dossier est prévue {short_date}) | Votre portail indique quoi faire. | Ouvrir votre portail → `/portal` | as EM07 | deferred (preview) |
 | EM15 | Decision recorded | Staff record a government decision on the matter. No outbox mail event yet | client · firm | There’s news on your file | For your privacy, the details are in your portal. | Open your portal → `/portal` | `firm_name`, `consultant_name` | ready-not-wired |
 | EM16a | Consultation booked | A consultation is booked on the public booking page (or a practice page in sample mode: a sample booking, mailed like other sample records) or by staff (outbox booking.confirmed, template consultation_booked), to the attendee. Honours email_notices when the attendee is linked to a person. Says how they meet: phone "{firm} will call you at the number you gave.", video or meeting link "{firm} will send you the meeting link." (never the link itself), in person "At {address}." or "{firm} will confirm the address.". Without a portal login it ends "To change or cancel, contact {firm}." | client · firm | Your consultation with {firm_name} is booked | Here’s when, and how you’ll meet. | View booking → `/portal/appointments`, only when `portal` is true; otherwise no button | `firm_name`, `starts_at`, `time_zone`, `consultant_name`, `portal`, `location_kind`, `address` | wired (new send) |
 | EM16b | Consultation rescheduled | Staff move a confirmed consultation (outbox booking.rescheduled, template consultation_rescheduled), to the attendee. Without a portal login it ends "To change or cancel, contact {firm}." | client · firm | Your appointment with {firm_name} moved | The new time is in your portal. (no portal: Here’s the new time.) | View booking → `/portal/appointments`, only when `portal` is true; otherwise no button | `firm_name`, `starts_at`, `time_zone`, `portal` | wired (new send) |
@@ -92,7 +93,7 @@ portal choice "Email notices" is off is recorded as `skipped`, not emailed.
 | EX05 | Document needs another look | Staff reject a document version (outbox document.reviewed, decision not accepted). Currently skipped by prepare_email_delivery | client · firm | A document needs another look | The reason is in your portal. | Open your portal → `/portal/documents` | `firm_name` | ready-not-wired |
 | EX06 | Document accepted | Staff accept a document version (outbox document.reviewed, decision accepted, template document_receipt) | client · firm | Your document was accepted | Accepted by {firm_name}, not by the government. | Open your portal → `/portal/documents` | `firm_name` | wired |
 | EX06-received | Document received (variant of EX06) | A document upload passes the file check (outbox document.uploaded, template document_receipt) | client · firm | {firm_name} received your document | It’s in your portal. | Open your portal → `/portal/documents` | `firm_name` | wired |
-| EX07 | New message | Staff send a portal message. Matter messages are not built yet (T034) | client · firm | New message from {firm_name} | For your privacy, read it in your portal. | Read message → `/portal/messages` | `firm_name` | ready-not-wired |
+| EX07 | New message | Staff send a matter message (outbox message.sent, template message), to each person the thread is addressed to. Honours email_notices. Firm name only: never the message text, an attachment name or the matter | client · firm | New message from {firm_name} | For your privacy, read it in your portal. | Read message → `/portal/messages` | `firm_name` | wired |
 | EX08 | Payment failed | A card payment fails (Stripe payment_intent.payment_failed moves invoice_payments to failed; outbox invoice.payment_failed, template payment_failed). Honours email_notices | client · firm | Your payment to {firm_name} didn’t go through | You haven’t been charged. You can try again in your portal. | Open payments → `/portal/payments?invoice=<invoice id>` | `firm_name`, `invoice_id`, `invoice_number` | wired (new send) |
 | EX09 | Refund started | Billing staff refund a card payment (invoice_refunds row recorded; outbox invoice.refund_started, template refund_started). Honours email_notices | client · firm | {firm_name} started a refund | Refunds usually take 5 to 10 business days to appear. | View payments → `/portal/payments` | `firm_name` | wired (new send) |
 | EX10 | Refund complete | Stripe confirms the refund (refund.updated succeeded; outbox invoice.refund_succeeded, template refund_complete). Honours email_notices | client · firm | Your refund from {firm_name} is complete | The details are in your portal. | View payments → `/portal/payments` | `firm_name` | wired (new send) |
@@ -103,6 +104,22 @@ portal choice "Email notices" is off is recorded as `skipped`, not emailed.
 
 A database template the renderer does not know falls back to a neutral firm notice ("An update
 from {firm_name}", button to `/portal`) instead of failing the send.
+
+### French (fr-CA)
+
+Every template above except EM14a–c, plus the generic notice, has a French draft in
+`src/modules/email/designs/fr-drafts.json`, built by a parallel builder (`localized.ts`) that the
+tests prove has the same branches, values and links as the English. Drafted 2026-10-18 with
+Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast` (prompt `fr-ca-2026-10-18.3`), with the
+EM14a–c hand drafts folded in.
+
+**French status of every template: `machine_draft`, no reviewer.** So every recipient, including
+one who chose Français, gets the English email today. A template is sent in French only to a
+recipient whose language is `fr-CA` and only after its status is `approved` with a named reviewer
+and date (and the shared shell strings likewise), with English unchanged since. The current status
+per template is the "Status" table of `docs/i18n/email-fr-review.md`; how to approve is in
+`docs/i18n/README.md`. The mail worker gets each recipient's language from
+`public.email_delivery_locales` (`20261019210000_french_drafts.sql`).
 
 ### How each database template maps to a design
 
@@ -123,6 +140,7 @@ from {firm_name}", button to `/portal`) instead of failing the send.
 | `payment_failed` (new) | | EX08 |
 | `refund_started` (new) | | EX09 |
 | `refund_complete` (new) | | EX10 |
+| `message` (new) | firm name only | EX07 |
 | `payment_receipt` (hook, no enum value yet) | `receipt_number`, `advance` | EM11 |
 | `consultation_booked` (new) | `starts_at` (UTC), `time_zone` (the attendee's), `consultant_name`, `portal` (the attendee's person has a portal login), `location_kind`, `address` (in person only) | EM16a |
 | `consultation_rescheduled` (new) | `starts_at`, `time_zone`, `portal` | EM16b |
@@ -183,8 +201,10 @@ case detail), for example:
    reviews that are not accepted (`review_not_accepted`). Removing that skip would wire EX05.
 7. **Firm header** is text-only (logo bucket is private). A public, signed-at-send or proxied logo
    URL would be needed to show a firm's logo; the tile colour does not follow `branding.accent`.
-8. **French (EM14a–c)** copy is a draft and is never sent until a certified translator reviews it;
-   the header tagline stays English ("Your immigration file") as in the export.
+8. **French** (decided 2026-10-18): every email has a French draft (see "French (fr-CA)" above);
+   none is sent until a named reviewer approves the template in `fr-drafts.json`. A French email
+   uses French for the header tagline and footers too (from `_shared`); markup and styles are the
+   Designer's.
 9. **Staff signers of an executed agreement** now get a staff copy (EM09-staff, Sheet link) instead
    of the client wording.
 10. Supabase Auth templates are not switched; see the table above for the expiry settings.

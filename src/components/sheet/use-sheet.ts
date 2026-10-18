@@ -58,14 +58,33 @@ import {
 } from "./corrections-acts";
 import { openDocReview, reopenDocReview, runDocFile, runDocReview } from "./documents-acts";
 import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
+import { bindGovControls } from "./gov-acts";
+import {
+  openRedaction,
+  reopenComplianceDialog,
+  runComplaintNew,
+  runComplaintStep,
+  runComplianceSettings,
+  runPrivacyClose,
+  runPrivacyNew,
+  runPrivacyStep,
+  runRedaction,
+} from "./compliance-acts";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
+import { markAllNotificationsRead, openNotification } from "./notification-acts";
+import { wireLead, wirePipeline } from "./pipeline-acts";
 import { runNewTask, syncNewTask } from "./new-task-act";
+import { runReportExport } from "./report-acts";
+import { runExportAct } from "./export-acts";
 import { inviteFromEdit, openPersonEdit, runPersonEdit } from "./person-edit-act";
 import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-invite-act";
 import { policyDialogId, restorePolicyDraft, runPublishPolicy } from "./portal-policy-act";
 import { POLICY_KINDS, policyKindForDialog } from "@/modules/portal-policies/defaults";
 import { restoreStaffInvite, runStaffInvite, runStaffResend, runStaffRevoke } from "./staff-invite-act";
+import { reopenGrantDialog, runGrantCreate } from "./grants-acts";
+import { mountIntakeBuilder } from "./intake-builder-acts";
+import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
 const NEW_MATTER = "/sheet/matters?new=1";
@@ -131,12 +150,15 @@ const FILTER_TOKEN: Record<string, string> = {
   "Partially paid": "partial",
   Paid: "paid",
   "Voided or credited": "closed",
+  Unassigned: "unassigned",
+  Money: "money",
+  Government: "government",
   "Awaiting review": "review",
   Quarantined: "quarantined",
   "Expiring soon": "expiring",
 };
 /** Pages whose `.fp-bar` chips and search filter real rows by their `data-f` tokens. */
-const FILTER_PAGES = new Set(["tasks", "clients", "agreements", "finance", "documents"]);
+const FILTER_PAGES = new Set(["tasks", "clients", "agreements", "finance", "documents", "queue"]);
 
 export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
   const router = useRouter();
@@ -158,6 +180,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     }, listen);
     root.querySelector("#mClose")?.addEventListener("click", shut, listen);
     scrim?.addEventListener("click", shut, listen);
+    // Government status, Submissions and Decisions (T036 to T039): `data-gov` controls and file picks.
+    bindGovControls(root, router, listen);
 
     root.querySelectorAll<HTMLButtonElement>(".grp>button").forEach((button) => {
       button.addEventListener("click", () => {
@@ -195,12 +219,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     // The Tasks page's filter chips (All, Mine, Overdue, Blocked, High priority) and the Clients
     // page's (All, Applicants, Sponsors, Dependants, Leads), with search, narrow the real rows by
     // their `data-f` tokens and text, and keep "N of M shown" true where the page has it.
-    const filters = FILTER_PAGES.has(page) ? root.querySelector<HTMLElement>(".fp-bar") : null;
+    // The Team queue's bar is the Designer's plain `.bar`, and its rows are the `#ql` list items.
+    const filters = FILTER_PAGES.has(page) ? root.querySelector<HTMLElement>(page === "queue" ? "#content > .bar" : ".fp-bar") : null;
     const applyFilters = () => {
       if (!filters) return;
       const q = (filters.querySelector("input")?.value ?? "").trim().toLowerCase();
       const token = FILTER_TOKEN[filters.querySelector(".fchip.on")?.textContent?.trim() ?? ""] ?? "";
-      const rows = [...root.querySelectorAll<HTMLElement>(".t tbody tr")];
+      const rows = [...root.querySelectorAll<HTMLElement>(page === "queue" ? "#ql .li" : ".t tbody tr")];
       let shown = 0;
       for (const row of rows) {
         const flags = (row.dataset.f ?? "").split(" ");
@@ -221,6 +246,11 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       const create = target.closest<HTMLElement>(`#newB, a[href="${NEW_MATTER}"], a.add`);
       if (create && root.contains(create) && (!create.matches("a.add") || create.textContent.trim() === "New matter")) {
         event.preventDefault();
+        // The licence-suspended home pauses New: the database refuses a new matter anyway.
+        if (create.getAttribute("aria-disabled") === "true") {
+          toast2(create.getAttribute("title") || "Paused", { kind: "warn", sub: "Your licence check needs to confirm good standing first." });
+          return;
+        }
         if (root.querySelector("#dlgNew")) openDialog("dlgNew");
         else window.location.assign(NEW_MATTER);
         return;
@@ -325,6 +355,31 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         void runApproveTemplate(approve, router).finally(() => approve.removeAttribute("aria-busy"));
         return;
       }
+      // Licences: Add a licence and Report a change; the licence-suspended home's Reassign work.
+      const licence = target.closest<HTMLElement>("[data-licence-add], [data-licence-report], [data-licence-send], [data-reassign-from]");
+      if (licence && root.contains(licence)) {
+        event.preventDefault();
+        if (licence.dataset.licenceAdd === "open") return openDialog("dlgAdd");
+        if (licence.hasAttribute("data-licence-report")) return openLicenceReport(licence, root, openDialog);
+        if (licence.getAttribute("aria-busy") === "true") return;
+        licence.setAttribute("aria-busy", "true");
+        const run = licence.hasAttribute("data-licence-add")
+          ? runLicenceAdd(licence, router)
+          : licence.hasAttribute("data-licence-send")
+            ? runLicenceReport(licence, router)
+            : runReassign(licence, router);
+        void run.finally(() => licence.removeAttribute("aria-busy"));
+        return;
+      }
+      // Access grants: Create grant saves through the database (New grant opens #dlgG by data-dlg).
+      const grantCreate = target.closest<HTMLElement>("[data-grant-create]");
+      if (grantCreate && root.contains(grantCreate)) {
+        event.preventDefault();
+        if (grantCreate.getAttribute("aria-busy") === "true") return;
+        grantCreate.setAttribute("aria-busy", "true");
+        void runGrantCreate(grantCreate, router).finally(() => grantCreate.removeAttribute("aria-busy"));
+        return;
+      }
       // The Staff tab: Invite staff opens the Designer's dialog; Send, Resend and revoke go to the database.
       if (target.closest("#invB") && root.querySelector("#dlgS [data-org]")) {
         event.preventDefault();
@@ -355,6 +410,23 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (task.getAttribute("aria-busy") === "true") return;
         task.setAttribute("aria-busy", "true");
         void runNewTask(task, router).finally(() => task.removeAttribute("aria-busy"));
+        return;
+      }
+      // Reports > Export, and the Client-file exports page (start, cancel, download, closure, legal hold).
+      const reportExport = target.closest<HTMLElement>("[data-report-export]");
+      if (reportExport && root.contains(reportExport)) {
+        event.preventDefault();
+        if (reportExport.getAttribute("aria-busy") === "true" || reportExport.hasAttribute("disabled")) return;
+        reportExport.setAttribute("aria-busy", "true");
+        void runReportExport(reportExport).finally(() => reportExport.removeAttribute("aria-busy"));
+        return;
+      }
+      const exportAct = target.closest<HTMLElement>("[data-export-act]");
+      if (exportAct && root.contains(exportAct)) {
+        event.preventDefault();
+        if (exportAct.getAttribute("aria-busy") === "true" || exportAct.hasAttribute("disabled")) return;
+        exportAct.setAttribute("aria-busy", "true");
+        void runExportAct(exportAct, root, router).finally(() => exportAct.removeAttribute("aria-busy"));
         return;
       }
       const palette = target.closest<HTMLElement>("[data-palette]");
@@ -455,6 +527,19 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(typeSubmit, () => runBookingType(typeSubmit, router));
         return;
       }
+      // Notifications: a row is marked read and opens its record; Mark all read marks every row.
+      const notification = target.closest<HTMLElement>("[data-notif]");
+      if (notification && root.contains(notification)) {
+        event.preventDefault();
+        void openNotification(notification, root.querySelector<HTMLElement>("#mar")?.dataset.org ?? "", router);
+        return;
+      }
+      const markAll = target.closest<HTMLElement>("#mar[data-org]");
+      if (markAll && root.contains(markAll)) {
+        event.preventDefault();
+        busyRun(markAll, () => markAllNotificationsRead(markAll, router));
+        return;
+      }
       // Documents: a To review link opens the review dialog; Save review and Open file go to the database.
       const docReview = target.closest<HTMLElement>("[data-doc-review]");
       if (docReview && root.contains(docReview) && root.querySelector("#dlgDocRev")) {
@@ -491,6 +576,36 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (inboxDismiss && root.contains(inboxDismiss)) {
         event.preventDefault();
         busyRun(inboxDismiss, () => runInboxDismiss(inboxDismiss, router));
+        return;
+      }
+      // Compliance: privacy requests, the complaints register and their settings.
+      const redactionOpen = target.closest<HTMLElement>("[data-redaction-new], [data-redaction-edit]");
+      if (redactionOpen && root.contains(redactionOpen)) {
+        event.preventDefault();
+        openRedaction(redactionOpen, root, openDialog);
+        return;
+      }
+      const compliance = target.closest<HTMLElement>(
+        "[data-privacy-new], [data-privacy-step], [data-privacy-redaction], [data-privacy-close], [data-complaint-new], [data-complaint-step], [data-compliance-settings]",
+      );
+      if (compliance && root.contains(compliance)) {
+        event.preventDefault();
+        const data = compliance.dataset;
+        const run =
+          data.privacyNew !== undefined
+            ? runPrivacyNew
+            : data.privacyStep !== undefined
+              ? runPrivacyStep
+              : data.privacyRedaction !== undefined
+                ? runRedaction
+                : data.privacyClose !== undefined
+                  ? runPrivacyClose
+                  : data.complaintNew !== undefined
+                    ? runComplaintNew
+                    : data.complaintStep !== undefined
+                      ? runComplaintStep
+                      : runComplianceSettings;
+        busyRun(compliance, () => run(compliance, router));
         return;
       }
       const nav = target.closest<HTMLElement>("[data-nav]");
@@ -588,11 +703,14 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
           applyFilters();
         }
       }
-      const row = target.closest<HTMLElement>("tr[data-href]");
+      const row = target.closest<HTMLElement>("tr[data-href], #ql .li[data-href]");
       if (row?.dataset.href && root.contains(row) && !target.closest("a, button, .ck")) {
         router.push(row.dataset.href);
       }
     }, listen);
+
+    // The Intake form builder: select, rename, switches, add fields, autosave and publish.
+    mountIntakeBuilder(root, router, ac.signal);
 
     // "Hold to revoke" on a pending staff invitation: held for HOLD_MS, then revoked.
     let hold: number | undefined;
@@ -741,6 +859,28 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       }
     }
 
+    // Licences and the licence-suspended home: ?dlg=licence-add|licence-change|reassign (back from
+    // step-up) reopens the dialog with what was typed; ticking matters keeps Reassign's count true.
+    if (root.querySelector("[data-licence-send], [data-reassign-from]")) {
+      window.setTimeout(() => reopenLicenceDialog(root, openDialog), 300);
+      for (const id of ["dlgAdd", "dlgChg", "dlgRe"]) {
+        root.querySelector<HTMLDialogElement>(`dialog#${id}`)?.addEventListener("close", () => {
+          if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
+        }, listen);
+      }
+      const reassign = root.querySelector<HTMLDialogElement>("dialog#dlgRe");
+      if (reassign) reassign.addEventListener("change", () => syncReassign(reassign), listen);
+    }
+
+    // Access grants: ?dlg=grant (back from step-up) reopens New access grant with what was typed.
+    const grantDialog = root.querySelector<HTMLDialogElement>("dialog#dlgG");
+    if (grantDialog?.querySelector("[data-grant-create]")) {
+      window.setTimeout(() => reopenGrantDialog(root, openDialog), 300);
+      grantDialog.addEventListener("close", () => {
+        if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
+      }, listen);
+    }
+
     const newTask = root.querySelector<HTMLDialogElement>("dialog#dlgTask");
     if (newTask?.querySelector("[data-new-task]")) {
       // The live New task form: owners and dependencies follow the chosen matter and kind.
@@ -756,6 +896,11 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (dialogParam === "book") window.setTimeout(() => openDialog("dlgBook"), 300);
     }
 
+    // Leads: the pipeline board, filters, New lead and CSV import; the lead page's actions.
+    if (page === "pipeline") wirePipeline(root, router, ac.signal, openDialog);
+    if (page === "lead") wireLead(root, router, ac.signal, openDialog);
+    // ?dlg=compliance (back from step-up) reopens the privacy or complaints dialog with what was typed.
+    if (dialogParam === "compliance") window.setTimeout(() => reopenComplianceDialog(root, openDialog), 300);
     // ?dlg=review&doc= (back from step-up) reopens the document review with what was typed.
     if (root.querySelector("dialog#dlgDocRev")) window.setTimeout(() => reopenDocReview(root, openDialog), 300);
 

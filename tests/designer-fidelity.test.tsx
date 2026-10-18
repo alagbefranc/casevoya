@@ -90,10 +90,47 @@ import {
   type WeekBlock,
 } from "@/components/sheet/designer/calendar";
 import { CalendarMarkup } from "@/components/sheet/markup/calendar";
+import { NotificationsHeader, SheetNotifications, type NotificationsData, type NotificationsTab } from "@/components/sheet/designer/notifications";
+import { NotificationsMarkup } from "@/components/sheet/markup/notifications";
 import { DocumentReviewDialog, DocumentsHeader, SheetDocuments, type DocumentsData, type DocumentsTab } from "@/components/sheet/designer/documents";
 import { DocumentsMarkup } from "@/components/sheet/markup/documents";
 import { ComposeDialog, InboxHeader, SheetInbox, type ComposeData, type InboxData, type InboxTab } from "@/components/sheet/designer/inbox";
 import { InboxMarkup } from "@/components/sheet/markup/inbox";
+import { GOVERNMENT_CSS, GovernmentHeader, SheetGovernment, type GovernmentPageData } from "@/components/sheet/designer/government";
+import { GovernmentMarkup } from "@/components/sheet/markup/government";
+import {
+  MatterDecisionsLive,
+  MatterSubmissions,
+  type MatterDecisionsData,
+  type MatterSubmissionsData,
+} from "@/components/sheet/designer/matter-government";
+import {
+  CsvDialog,
+  NewLeadDialog,
+  PipelineHeader,
+  SheetPipeline,
+  type CsvDialogData,
+  type LeadCard,
+  type PipelineColumn,
+  type PipelineData,
+  type PipelineRow,
+  type PipelineTab,
+} from "@/components/sheet/designer/pipeline";
+import {
+  ConflictPanel,
+  ConvertDialog,
+  DuplicateCompareDialog,
+  LeadHeader,
+  LostDialog,
+  SheetLead,
+  type ConvertDialogData,
+  type DuplicateCompareData,
+  type LeadData,
+} from "@/components/sheet/designer/lead";
+import { PipelineMarkup } from "@/components/sheet/markup/pipeline";
+import { LeadMarkup } from "@/components/sheet/markup/lead";
+import { barColor, buildPipeline, ringOffset, type LeadRow, type StageRow } from "@/modules/leads/present";
+import { Review } from "@/components/portal/documents-live";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -1999,6 +2036,78 @@ describe("Designer fidelity: Finance, Reconciliation and the single invoice", ()
   });
 });
 
+describe("Designer fidelity: Notifications", () => {
+  const P = (name: string, file: string) => ({ name, avatarUrl: `/assets/${file}.png` });
+  const DESIGNER_NOTIFICATIONS: Omit<NotificationsData, "tab"> = {
+    unread: 5,
+    groups: [
+      {
+        label: "Today",
+        rows: [
+          { lead: P("Priya Sharma", "av-priya-applicant"), parts: ["Priya uploaded ", { b: "Relationship photos" }, " (v2)"], time: "09:40", unread: true },
+          { lead: "vo", parts: ["Vo drafted a reply to Rafael. It needs your review"], time: "09:12", unread: true },
+          { lead: P("Kofi Mensah", "av-kofi-client"), parts: ["Deadline verified for ", { b: "Kofi Mensah" }, ": Fri 30 Oct, 17:00 ET"], time: "08:30", unread: true },
+          { lead: "system", parts: ["QuickBooks sync degraded. Retrying, no action needed yet"], time: "07:55", unread: true },
+        ],
+      },
+      {
+        label: "Yesterday",
+        rows: [
+          { lead: P("Lena", "av-lena-finance"), parts: ["Lena approved an earned-fee transfer (1 of 2 approvals)"], time: "16:20", unread: true },
+          { lead: P("Daniel", "av-daniel-casemanager"), parts: ["Daniel mentioned you on ", { b: "Tomás Duarte" }], time: "11:05", unread: false },
+          { lead: "system", parts: ["DocuSign connection expired. Reconnect in Settings"], time: "10:00", unread: false },
+        ],
+      },
+    ],
+  };
+
+  for (const tab of ["all", "mentions", "system"] as NotificationsTab[]) {
+    it(`renders the Notifications page (${tab} tab) exactly as the captured Designer markup`, () => {
+      const captured = withoutPreloads(renderToStaticMarkup(createElement(NotificationsMarkup, { variant: `tab-${tab}` })));
+      const data: NotificationsData = { ...DESIGNER_NOTIFICATIONS, tab };
+      const live = withoutPreloads(
+        renderToStaticMarkup(
+          createElement(SheetFrame, {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/notifications" },
+            header: createElement(NotificationsHeader, { data }),
+            statusbar: {
+              timezone: "America/Toronto",
+              queue: { label: "Reminder queue healthy", detail: "0 retries" },
+              sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+            },
+          }, createElement(SheetNotifications, { data })),
+        ),
+      );
+      if (live !== captured) {
+        let i = 0;
+        while (i < live.length && live[i] === captured[i]) i++;
+        console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+      }
+      expect(live).toBe(captured);
+    });
+  }
+
+  it("wires live rows and Mark all read by data attributes only, and shows an honest empty state", () => {
+    const data: NotificationsData = {
+      tab: "all",
+      unread: 1,
+      organizationId: "00000000-0000-4000-8000-000000000001",
+      groups: [{ label: "Today", rows: [{ id: "n1", href: "/sheet/matters/m1?tab=messages&thread=t1", lead: { name: "Synthetic Client" }, parts: ["Synthetic sent a message about ", { b: "Synthetic Client" }], time: "09:40", unread: true }] }],
+    };
+    const header = renderToStaticMarkup(createElement(NotificationsHeader, { data }));
+    expect(header).toContain('<button class="btn s sm" id="mar" data-org="00000000-0000-4000-8000-000000000001">Mark all read</button>');
+    expect(header).toContain('<span class="pill">1 unread</span>');
+    const view = renderToStaticMarkup(createElement(SheetNotifications, { data }));
+    expect(view).toContain('<div class="li nfr rv" style="--i:2" data-notif="n1" data-nav="/sheet/matters/m1?tab=messages&amp;thread=t1"><span class="av" aria-hidden="true">SC</span>');
+    // Stripping the live attributes leaves the Designer's row.
+    expect(view.replace(/ data-(notif|nav)="[^"]*"/g, "")).toContain('<div class="li nfr rv" style="--i:2"><span class="av"');
+    expect(view).not.toMatch(/Priya|Kofi|Northline|QuickBooks|DocuSign/);
+    const empty = renderToStaticMarkup(createElement(SheetNotifications, { data: { tab: "mentions", unread: 0, groups: [] } }));
+    expect(empty).toContain("No mentions");
+    expect(empty).not.toContain("nfr");
+  });
+});
+
 const RECORDS_STATUSBAR = {
   timezone: "America/Toronto",
   queue: { label: "Reminder queue healthy", detail: "0 retries" },
@@ -2249,3 +2358,680 @@ describe("Designer fidelity: Documents and Inbox", () => {
     expect(html).not.toMatch(/Northline|Priya|NL-2026/);
   });
 });
+
+describe("Designer fidelity: Government status", () => {
+  const DESIGNER_GOVERNMENT: GovernmentPageData = {
+    intro: "What we know from IRCC, who recorded it, from what evidence, and when we last checked. This is a record kept by the firm, not a live feed.",
+    alert: { copy: "The matter is at \u201cSubmitted\u201d in our stages, but no submission confirmation is on file. Upload the IRCC confirmation to verify it." },
+    rows: [
+      { item: "Submission", status: { tone: "unv", label: "Submission unverified" }, recordedBy: "Amara Osei", evidence: "No confirmation uploaded yet", verified: "\u2014", lastChecked: "Today 09:12" },
+      { item: "Application number", status: { tone: "gr", label: "Not yet issued" }, recordedBy: "\u2014", evidence: "\u2014", verified: "\u2014", lastChecked: "\u2014" },
+      { item: "Biometrics", status: { tone: "gr", label: "Not requested" }, recordedBy: "\u2014", evidence: "\u2014", verified: "\u2014", lastChecked: "\u2014" },
+      {
+        item: "Client-uploaded letter",
+        status: { tone: "chg", label: "Received", detail: "unverified" },
+        recordedBy: "Priya Sharma (client)",
+        evidence: "PDF, \u201cIRCC request for info\u201d, 14 Oct",
+        verified: "Not verified by staff",
+        lastChecked: "14 Oct 18:40",
+      },
+    ],
+    record: { options: [{ label: "Submitted" }, { label: "Application number issued" }, { label: "Biometrics requested" }] },
+    history: [
+      { text: "Amara checked the IRCC portal. No change.", when: "Today 09:12" },
+      { text: "Priya uploaded a letter (unverified).", when: "14 Oct 18:40" },
+      { text: "Stage moved to Submitted by Amara.", when: "12 Oct 11:05" },
+    ],
+  };
+
+  it("renders the Government status page exactly as the captured Designer markup", () => {
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(GovernmentMarkup)));
+    const live = withoutPreloads(
+      renderToStaticMarkup(
+        createElement(
+          SheetFrame,
+          {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/government" },
+            styles: GOVERNMENT_CSS,
+            header: createElement(GovernmentHeader, {
+              data: {
+                back: "/sheet/matters/priya",
+                client: { name: "Priya Sharma", avatarUrl: "/assets/av-priya-applicant.png" },
+                pills: ["No live IRCC connection", "Every entry needs a source"],
+              },
+            }),
+            statusbar: {
+              timezone: "America/Toronto",
+              queue: { label: "Reminder queue healthy", detail: "0 retries" },
+              sample: { label: "Demo data", detail: "fictional firm \u201cNorthline Immigration\u201d" },
+            },
+          },
+          createElement(SheetGovernment, { data: DESIGNER_GOVERNMENT }),
+        ),
+      ),
+    );
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 120, i + 160) + "\nGOT " + live.slice(i - 120, i + 160));
+    }
+    expect(live).toBe(captured);
+  });
+
+  it("wires live rows by data attributes only, with the Verify and Record status additions", () => {
+    const html = renderToStaticMarkup(
+      createElement(SheetGovernment, {
+        data: {
+          ...DESIGNER_GOVERNMENT,
+          alert: null,
+          rows: [{ ...DESIGNER_GOVERNMENT.rows[3], verify: { "data-gov": "verify-letter", "data-id": "l1", "data-version": "1", "data-org": "o1" } }],
+          record: { options: [{ value: "acknowledgement", label: "Acknowledgement of receipt" }], save: { "data-gov": "status", "data-matter": "m1", "data-org": "o1" } },
+        },
+      }),
+    );
+    expect(html).not.toContain("Submission unverified");
+    expect(html).toContain('<button class="btn s sm" data-gov="verify-letter" data-id="l1" data-version="1" data-org="o1">Verify</button>');
+    expect(html).toContain('<input placeholder="Attach the IRCC letter or screenshot" readOnly="" data-gov-file="1"/>');
+    expect(html).toContain('<button class="btn p" data-gov="status" data-matter="m1" data-org="o1">Record status</button>');
+  });
+});
+
+describe("Designer fidelity: matter Submissions and Decisions tabs", () => {
+  /** The captured tab's own content, from `#content` to the end of it. */
+  function tabContent(variant: string): string {
+    const html = renderToStaticMarkup(createElement(MatterMarkup, { variant }));
+    const start = html.indexOf('<div id="content">');
+    const end = html.indexOf('</div><aside id="rbar"', start);
+    // `#content` ends where `#main` closes, just before the right column.
+    return html.slice(start, end);
+  }
+  const content = (child: ReturnType<typeof createElement>) => withoutPreloads(renderToStaticMarkup(createElement("div", { id: "content" }, child)));
+  function same(live: string, captured: string) {
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 160) + "\nGOT " + live.slice(i - 160, i + 160));
+    }
+    expect(live).toBe(captured);
+  }
+  const AMARA_AV = { name: "Amara Osei", avatarUrl: "/assets/av-amara-consultant.png" };
+  const DANIEL_AV = { name: "Daniel Ruiz", avatarUrl: "/assets/av-daniel-casemanager.png" };
+  const LENA_AV = { name: "Lena", avatarUrl: "/assets/av-lena-finance.png" };
+
+  function submissions(ready: boolean): MatterSubmissionsData {
+    const check = (title: string, done: boolean, note?: string) => ({ title, done, note: note ?? null });
+    return {
+      package: {
+        title: ["Package v3", "draft"],
+        badge: ready ? { tone: "blue", label: "Ready for consultant review" } : { tone: "chg", label: "Not ready to submit" },
+        hash: "sha256 9be2…11c4",
+        manifest: { title: "Manifest · package v3", label: ["Manifest", "package v3"] },
+        checks: [
+          check("Intake answers reviewed", true),
+          check("All required documents accepted by firm", ready, ready ? undefined : "3 outstanding"),
+          check("Forms filled from approved facts", ready, ready ? undefined : "IMM 5406 missing 2 facts"),
+          check("Consultant review of package v3", false),
+          check("Client confirmation, Priya and Rafael", false),
+          check("Representative authority (IMM 5476) signed", true),
+          check("Government fees recorded with source", true),
+        ],
+        approvals: [
+          { person: AMARA_AV, title: "Consultant review", who: ["Amara Osei", "licensed consultant"], badge: { tone: "gr", label: "Waiting for checklist" } },
+          { person: { name: "Priya Sharma", avatarUrl: "/assets/av-priya-applicant.png" }, title: "Client confirmation", who: ["Priya Sharma", "applicant"], badge: { tone: "gr", label: "Not sent" } },
+          { person: { name: "Rafael Sharma", avatarUrl: "/assets/av-rafael-sponsor.png" }, title: "Client confirmation", who: ["Rafael Sharma", "sponsor"], badge: { tone: "gr", label: "Not sent" } },
+        ],
+        note: "Approvals are tied to this exact package hash. Changing a reviewed fact or document makes a new version and clears these approvals.",
+        hold: ready ? {} : null,
+        why: ready ? null : { text: "Opens when every checklist item is done", link: { href: "?tab=submissions&ready=1", label: "Preview a ready package" } },
+        preview: "Package manifest, v3 draft",
+      },
+      records: [],
+      record: null,
+      earlier: [],
+    };
+  }
+
+  it("renders the Submissions tab (not ready and ready) exactly as the captured Designer markup", () => {
+    same(content(createElement(MatterSubmissions, { data: submissions(false) })), tabContent("tab-submissions"));
+    same(content(createElement(MatterSubmissions, { data: submissions(true) })), tabContent("tab-submissions--ready-1"));
+  });
+
+  const PREVIEW_NOTE = "Sample previews. Priya’s real file has no decision yet.";
+
+  it("renders the Decisions tab with no decision exactly as the captured Designer markup", () => {
+    const data: MatterDecisionsData = {
+      preview: { selected: "none", note: PREVIEW_NOTE },
+      decision: null,
+      letter: true,
+      letters: [
+        {
+          dot: "#0075DE",
+          title: ["IRCC request letter", "additional documents"],
+          parts: ["Received 12 Oct by portal message", "recorded by Daniel", "created the 30 Oct deadline"],
+          badge: { tone: "ok", label: "Deadline verified" },
+          thumb: "IRCC request letter, 8 Oct",
+        },
+        { dot: "#2e9d5b", title: "Acknowledgement of receipt", parts: ["Received 20 Sep", "recorded by Daniel"], badge: { tone: "gr", label: "Filed" } },
+      ],
+    };
+    same(content(createElement(MatterDecisionsLive, { data })), tabContent("tab-decisions"));
+  });
+
+  it("renders the approved, refused and withdrawn decisions exactly as the captured Designer markup", () => {
+    const approved: MatterDecisionsData = {
+      preview: { selected: "approved", note: PREVIEW_NOTE },
+      letter: true,
+      letters: [],
+      decision: {
+        outcome: "approved",
+        heading: "Approved",
+        milestoneLabel: "final approval",
+        tint: { art: "post-decision", title: "Follow-ups after the decision", copy: "Renewal and expiry reminders are proposed here for your review." },
+        badge: { tone: "ok", label: "Confirmed by Amara Osei, 3 Mar 2027" },
+        evidence: { line: ["IRCC decision letter", "received 2 Mar 2027", "recorded by Daniel"], thumb: { title: "IRCC decision letter, 2 Mar 2027" } },
+        milestones: [
+          { label: "Approval in principle", badge: { tone: "ok", label: "18 Jan" } },
+          { label: "Final approval", badge: { tone: "ok", label: "2 Mar" } },
+          { label: "Documents issued", badge: { tone: "rev", label: "Waiting" } },
+          { label: "Landing confirmed", badge: { tone: "gr", label: "Not yet" } },
+          { label: "Status expiry", badge: { tone: "gr", label: "Add when issued" } },
+        ],
+        summary: { title: "Conditions summary", copy: "Draft by Vo from the letter. Amara must approve it before Priya sees it.", review: true },
+        followUps: [
+          { title: "Send consultant-approved conditions summary to Priya", note: "Due 6 Mar", owner: AMARA_AV },
+          { title: "Record document delivery", note: "When issued", owner: DANIEL_AV },
+          { title: "Add status expiry reminder", note: "When issued", owner: DANIEL_AV },
+          { title: "Closure checklist", note: "After landing", owner: AMARA_AV },
+        ],
+      },
+    };
+    same(content(createElement(MatterDecisionsLive, { data: approved })), tabContent("tab-decisions--outcome-approved"));
+
+    const decided = { art: "p3-decision", title: "Decision recorded from the letter", copy: "Any reconsideration or new-application deadline is proposed for your review, never set automatically." };
+    const refused: MatterDecisionsData = {
+      preview: { selected: "refused", note: PREVIEW_NOTE },
+      letter: true,
+      letters: [],
+      decision: {
+        outcome: "refused",
+        heading: "Refused",
+        tint: decided,
+        badge: { tone: "bad", label: "Urgent consultant review" },
+        record: { received: "2 Mar 2027", recordedBy: "Daniel Ruiz", confirmedBy: "Waiting for Amara" },
+        reasons: "The officer is not satisfied that the relationship is genuine…",
+        reasonsSource: "Quoted from the letter, page 1",
+        interpretation: null,
+        consultantFirst: "Amara",
+        followUps: [
+          { title: "Urgent: consultant review of refusal", note: "Due today", owner: AMARA_AV, urgent: true },
+          { title: "Explain the decision to Priya and Rafael", note: "After review", owner: AMARA_AV },
+          { title: "Decide next steps with the client (new linked matter if any)", note: "After meeting", owner: AMARA_AV },
+          { title: "Reconcile the client account", note: "Within 7 days", owner: LENA_AV },
+        ],
+      },
+    };
+    same(content(createElement(MatterDecisionsLive, { data: refused })), tabContent("tab-decisions--outcome-refused"));
+
+    const step = (title: string, note: string, done: boolean) => ({ title, note, done });
+    const withdrawn: MatterDecisionsData = {
+      preview: { selected: "withdrawn", note: PREVIEW_NOTE },
+      letter: true,
+      letters: [],
+      decision: {
+        outcome: "withdrawn",
+        heading: "Withdrawal",
+        tint: decided,
+        badge: { tone: "chg", label: "In progress, 2 of 5" },
+        steps: [
+          step("Written instructions from Priya", "Signed in portal, 1 Feb", true),
+          step("Consultant review", "Amara Osei, 2 Feb", true),
+          step("Withdrawal request sent to IRCC", "Record the confirmation", false),
+          step("IRCC acknowledgement received", "Add the letter when it arrives", false),
+          step("Financial reconciliation", "Advance CAD 1,500 to refund or apply", false),
+        ],
+        followUps: [],
+      },
+    };
+    same(content(createElement(MatterDecisionsLive, { data: withdrawn })), tabContent("tab-decisions--outcome-withdrawn"));
+  });
+});
+
+describe("Designer fidelity: Lead pipeline", () => {
+  const DANIEL = { name: "Daniel Ruiz", avatarUrl: "/assets/av-daniel-casemanager.png" };
+  const card = (
+    id: string,
+    bar: string,
+    name: string,
+    program: string,
+    source: string,
+    owner: typeof AMARA,
+    fee: string,
+    extra: Partial<LeadCard> = {},
+  ): LeadCard => ({ id, bar, name, program, source, owner, fee, ...extra });
+  const columns: PipelineColumn[] = [
+    {
+      label: "New",
+      total: "CAD 6,200",
+      count: "2 leads",
+      offset: "21.980000000000004",
+      cards: [
+        card("L1", "#0075DE", "Wei & Lin Zhang", "Study permit", "Website form", DANIEL, "CAD 2,400", { chip: { tone: "dt", label: "Today" } }),
+        card("L2", "#111", "Kofi Mensah", "Express Entry", "Referral", AMARA, "CAD 3,800"),
+      ],
+    },
+    {
+      label: "Contacted",
+      total: "CAD 7,100",
+      count: "2 leads",
+      offset: "21.980000000000004",
+      cards: [
+        card("L3", "#62aef0", "Sofia Reyes", "Spousal sponsorship", "Hosted page", AMARA, "CAD 4,200", { chip: { tone: "od", label: "3d" }, ai: "Send consultation booking link" }),
+        card("L4", "#0075DE", "Hamid Rahimi", "Work permit", "Phone", DANIEL, "CAD 2,900", { flag: "Possible duplicate of H. Rahimi (2024)" }),
+      ],
+    },
+    {
+      label: "Consultation scheduled",
+      total: "CAD 900",
+      count: "1 lead",
+      offset: "34.54",
+      cards: [card("L5", "#8c8781", "Ana Ferreira", "Visitor record", "Website form", AMARA, "CAD 900", { chip: { tone: "dt", label: "Thu 10:30" } })],
+    },
+    {
+      label: "Consultation completed",
+      total: "CAD 5,200",
+      count: "1 lead",
+      offset: "34.54",
+      cards: [card("L6", "#62aef0", "Tomás Duarte", "PR — family", "Referral", AMARA, "CAD 5,200", { ai: "Draft a proposal from consultation notes" })],
+    },
+    {
+      label: "Qualified",
+      total: "CAD 6,000",
+      count: "2 leads",
+      offset: "21.980000000000004",
+      cards: [
+        card("L7", "#0075DE", "Grace Okafor", "Study permit", "Event", DANIEL, "CAD 2,400", { chip: { tone: "od", label: "1d" } }),
+        card("L8", "#111", "Yusuf Demir", "Express Entry", "Website form", AMARA, "CAD 3,600"),
+      ],
+    },
+    {
+      label: "Proposal sent",
+      total: "CAD 3,100",
+      count: "1 lead",
+      offset: "34.54",
+      cards: [card("L9", "#0075DE", "Mei Tanaka", "Work permit", "Referral", AMARA, "CAD 3,100", { ai: "Follow up on proposal sent 6 days ago" })],
+    },
+    {
+      label: "Converted",
+      total: "CAD 4,600",
+      count: "1 lead",
+      offset: "34.54",
+      cards: [card("L10", "#62aef0", "Priya Sharma", "Spousal sponsorship", "Referral", AMARA, "CAD 4,600")],
+    },
+    { label: "Lost", total: "CAD 0", count: "0 leads", offset: "47.099999999999994", cards: [] },
+  ];
+  const row = (n: number, name: string, stage: string, program: string, source: string, owner: string, fee: string, next: string, duplicate = false): PipelineRow => ({
+    href: `/sheet/lead?id=L${n}`,
+    name,
+    duplicate,
+    stage,
+    program,
+    source,
+    owner,
+    fee,
+    next,
+  });
+  const rows: PipelineRow[] = [
+    row(1, "Wei & Lin Zhang", "New", "Study permit", "Website form", "Daniel Ruiz", "2,400.00", "Today"),
+    row(2, "Kofi Mensah", "New", "Express Entry", "Referral", "Amara Osei", "3,800.00", "—"),
+    row(3, "Sofia Reyes", "Contacted", "Spousal sponsorship", "Hosted page", "Amara Osei", "4,200.00", "3d"),
+    row(4, "Hamid Rahimi", "Contacted", "Work permit", "Phone", "Daniel Ruiz", "2,900.00", "—", true),
+    row(5, "Ana Ferreira", "Consultation scheduled", "Visitor record", "Website form", "Amara Osei", "900.00", "Thu 10:30"),
+    row(6, "Tomás Duarte", "Consultation completed", "PR — family", "Referral", "Amara Osei", "5,200.00", "—"),
+    row(7, "Grace Okafor", "Qualified", "Study permit", "Event", "Daniel Ruiz", "2,400.00", "1d"),
+    row(8, "Yusuf Demir", "Qualified", "Express Entry", "Website form", "Amara Osei", "3,600.00", "—"),
+    row(9, "Mei Tanaka", "Proposal sent", "Work permit", "Referral", "Amara Osei", "3,100.00", "—"),
+    row(10, "Priya Sharma", "Converted", "Spousal sponsorship", "Referral", "Amara Osei", "4,600.00", "—"),
+  ];
+  const timeline = [
+    { when: "Today", who: "Wei & Lin Zhang", what: "first reply due" },
+    { when: "Thu 10:30", who: "Ana Ferreira", what: "consultation" },
+    { when: "Fri", who: "Mei Tanaka", what: "proposal follow-up (6 days)" },
+    { when: "Mon", who: "Grace Okafor", what: "qualified, send quote" },
+  ];
+  const STAGE_COUNTS: [string, string][] = [
+    ["New", "2"],
+    ["Contacted", "2"],
+    ["Consultation scheduled", "1"],
+    ["Consultation completed", "1"],
+    ["Qualified", "2"],
+    ["Proposal sent", "1"],
+    ["Converted", "1"],
+    ["Lost", "0"],
+  ];
+  const IDS: Record<PipelineTab, [string, string]> = { list: ["gsvh6uu", "gswwjna"], timeline: ["gsgnass", "gss4e7a"], board: ["gs0h2y1", "gszrsyz"] };
+  const filters = (tab: PipelineTab): PipelineData["filters"] => [
+    {
+      id: "gsS",
+      listId: IDS[tab][0],
+      key: "Stage",
+      value: "All stages",
+      options: [{ label: "All stages", selected: true }, ...STAGE_COUNTS.map(([label, count]) => ({ label, count, selected: false }))],
+    },
+    {
+      id: "gsO",
+      listId: IDS[tab][1],
+      key: "Owner",
+      value: "Anyone",
+      options: [
+        { label: "Anyone", selected: true },
+        { label: "Daniel Ruiz", count: "3", selected: false },
+        { label: "Amara Osei", count: "7", selected: false },
+      ],
+    },
+  ];
+  const CSV: CsvDialogData = {
+    file: { name: "leads-oct.csv", rows: "26 rows" },
+    map: [
+      { column: "Name", sample: "Mina Tehrani", field: "Name" },
+      { column: "Contact", sample: "mina.t@example.com", field: "Email" },
+      { column: "Phone", sample: "+1 416 555 0182", field: "Phone" },
+      { column: "Interest", sample: "Study permit", field: "Service interest" },
+      { column: "Heard via", sample: "Instagram", field: "Source" },
+      { column: "Notes", sample: "“wants Jan intake”", field: "First note" },
+    ],
+    duplicates: { title: "2 possible duplicates", copy: "Matched on name and phone. You’ll compare each one before anything is linked." },
+    submit: { label: "Import 26 leads", toast: { title: "26 leads imported", sub: "2 possible duplicates are waiting in New for you to compare." } },
+  };
+  const statusbar = {
+    timezone: "America/Toronto",
+    queue: { label: "Reminder queue healthy", detail: "0 retries" },
+    sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+  };
+
+  for (const tab of ["board", "list", "timeline"] as PipelineTab[]) {
+    it(`renders the Lead pipeline (${tab} tab) and the CSV dialog exactly as the captured Designer markup`, () => {
+      const captured = withoutPreloads(renderToStaticMarkup(createElement(PipelineMarkup, { variant: `tab-${tab}` })));
+      const live = withoutPreloads(
+        renderToStaticMarkup(
+          createElement(
+            SheetFrame,
+            {
+              sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/pipeline" },
+              header: createElement(PipelineHeader, { data: { tab, pills: ["10 open leads", "Proposed fees CAD 33,100"] } }),
+              statusbar,
+              title: "Lead pipeline",
+              trailing: createElement(CsvDialog, { data: CSV }),
+            },
+            createElement(SheetPipeline, { data: { tab, filters: filters(tab), columns, rows, timeline } }),
+          ),
+        ),
+      );
+      if (live !== captured) {
+        let i = 0;
+        while (i < live.length && live[i] === captured[i]) i++;
+        console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+      }
+      expect(live).toBe(captured);
+    });
+  }
+
+  it("renders the board from real leads shaped like the Designer sample exactly as captured, apart from the documented live attributes", () => {
+    // buildPipeline from database rows: one stage per Designer column, leads with the Designer's
+    // names, owners and fees. The live-only attributes (data-org, data-stage-id, data-kind,
+    // data-version, data-href) are stripped. What live data has differently from the sample is put
+    // into the expected render: no Vo drafts (Vo is off), and no follow-up chips or duplicate flags
+    // (these rows have none), the computed ring and bar colour, and this firm's filter ids.
+    const now = new Date("2026-10-16T14:00:00Z");
+    const stageKeys = ["new", "contacted", "consultation_scheduled", "consultation_completed", "qualified", "proposal_sent", "converted", "lost"];
+    const stages: StageRow[] = STAGE_COUNTS.map(([label], index) => ({
+      id: `s${index}`,
+      key: stageKeys[index],
+      label,
+      kind: index === 6 ? "converted" : index === 7 ? "lost" : "open",
+      position: index + 1,
+    }));
+    const owners = new Map([
+      ["m-daniel", DANIEL],
+      ["m-amara", AMARA],
+    ]);
+    const SOURCES: Record<string, string> = { "Website form": "web_form", Referral: "referral", "Hosted page": "hosted_page", Phone: "phone", Event: "event" };
+    const leads: LeadRow[] = columns.flatMap((column, index) =>
+      column.cards.map((c) => ({
+        id: c.id,
+        display_name: c.name,
+        email: null,
+        phone: null,
+        date_of_birth: null,
+        service_interest: c.program,
+        source: SOURCES[c.source] ?? "other",
+        source_detail: null,
+        stage_id: `s${index}`,
+        owner_membership_id: c.owner === DANIEL ? "m-daniel" : "m-amara",
+        proposed_fee_cents: Number(c.fee.replace(/\D/g, "")) * 100,
+        same_person_lead_id: null,
+        converted_at: index === 6 ? "2026-10-10T00:00:00Z" : null,
+        lost_at: null,
+        created_at: "2026-10-01T00:00:00Z",
+        updated_at: "2026-10-01T00:00:00Z",
+        version: 1,
+        is_sample: false,
+      })),
+    );
+    const built = buildPipeline({
+      tab: "board",
+      stages,
+      leads,
+      followUps: [],
+      bookings: [],
+      decisions: [],
+      owners,
+      filter: { stage: null, owner: null },
+      organizationId: "org-1",
+      timeZone: "America/Toronto",
+      now,
+    });
+    const strip = (html: string) => html.replace(/ data-(org|stage-id|kind|version|href)="[^"]*"/g, "");
+    const real = strip(renderToStaticMarkup(createElement(SheetPipeline, { data: built.data })));
+    const designer = renderToStaticMarkup(
+      createElement(SheetPipeline, {
+        data: {
+          tab: "board",
+          filters: [
+            { ...built.data.filters[0], options: built.data.filters[0].options.map((o) => ({ ...o, data: undefined })) },
+            { ...built.data.filters[1], options: built.data.filters[1].options.map((o) => ({ ...o, data: undefined })) },
+          ],
+          columns: columns.map((column) => ({
+            ...column,
+            offset: ringOffset(column.cards.length),
+            cards: column.cards.map((c) => ({ ...c, ai: null, flag: null, chip: null, bar: barColor(c.program) })),
+          })),
+          rows: [],
+          timeline: [],
+        },
+      }),
+    );
+    expect(real).toBe(designer);
+    // The Designer's own column totals and counts come out of the real rows unchanged.
+    for (const column of columns) expect(real).toContain(`<span class="num">${column.total}</span> <span class="sep" aria-hidden="true"></span> ${column.count}`);
+    expect(built.pills).toEqual(["9 open leads", "Proposed fees CAD 28,500"]);
+    expect(real).not.toContain("aichip");
+  });
+
+  it("shows a firm without leads the Designer's empty columns and empty states, with no sample people", () => {
+    const now = new Date("2026-10-16T14:00:00Z");
+    const stages: StageRow[] = [
+      { id: "a", key: "new", label: "New", kind: "open", position: 1 },
+      { id: "b", key: "converted", label: "Converted", kind: "converted", position: 7 },
+      { id: "c", key: "lost", label: "Lost", kind: "lost", position: 8 },
+      { id: "d", key: "archived", label: "Archived", kind: "archived", position: 9 },
+    ];
+    for (const tab of ["board", "list", "timeline"] as PipelineTab[]) {
+      const built = buildPipeline({ tab, stages, leads: [], followUps: [], bookings: [], decisions: [], owners: new Map(), filter: { stage: null, owner: null }, organizationId: "o", timeZone: "America/Toronto", now });
+      const html = renderToStaticMarkup(createElement(SheetPipeline, { data: built.data }));
+      expect(html).not.toMatch(/Northline|Amara|Daniel|Hamid|Priya|Wei &amp; Lin|demo/);
+      expect(html).not.toContain("Archived");
+      if (tab === "board") expect(html.match(/No leads here yet\./g)).toHaveLength(3);
+      else expect(html).toContain('class="emp"');
+      expect(built.pills).toEqual(["0 open leads", "Proposed fees CAD 0"]);
+    }
+  });
+
+  it("wires the live header, board and CSV dialog by data attributes, with no Designer toast", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        "div",
+        null,
+        createElement(PipelineHeader, { data: { tab: "board", pills: ["1 open lead"], csv: { "data-dlg": "dlgCsv", "data-fpd": "1" }, newLead: { "data-lead-open": "new" } } }),
+        createElement(CsvDialog, { data: { file: null, map: [], submit: { label: "Import leads", data: { "data-lead-act": "import", "data-org": "o1" } }, input: createElement("input", { type: "file", id: "csvIn", hidden: true }) } }),
+        createElement(NewLeadDialog, { data: { organizationId: "o1", owners: [{ value: "m1", label: "Kim Host" }], owner: "m1", sampleMode: false } }),
+      ),
+    );
+    expect(html).toContain('<button class="btn s sm" data-dlg="dlgCsv" data-fpd="1">');
+    expect(html).toContain('href="/sheet/lead?new=1" data-lead-open="new"');
+    expect(html).toContain('<button class="btn p" data-lead-act="import" data-org="o1">Import leads</button>');
+    expect(html).toContain('<h4 style="font-size:14px;font-weight:500;margin:14px 0 6px" id="csvName" hidden=""></h4>');
+    expect(html).toContain('data-csv-choose="1"');
+    expect(html).toContain('data-lead-act="create" data-org="o1"');
+    // Reply consent and marketing consent are two separate boxes, neither ticked.
+    expect(html).toContain('id="nlR"');
+    expect(html).toContain('id="nlM"');
+    expect(html).not.toMatch(/checked/);
+    expect(html).not.toContain("data-toast");
+    expect(html).not.toMatch(/Northline|Mina Tehrani|leads-oct/);
+  });
+});
+
+describe("Designer fidelity: Lead", () => {
+  const LEAD: LeadData = {
+    name: "Hamid Rahimi",
+    summary: { left: "Work permit", right: "from phone. Passports and detailed histories wait until they’re needed (CRM-01)." },
+    duplicate: { title: "Possible duplicate: Hamid Rahimi (2024 lead)", copy: "Same name and date of birth; different email. Nothing is merged until you confirm." },
+    notes: [{ who: "Daniel Ruiz", when: "15 Oct", body: "Called. Works in Toronto on a closed work permit expiring Feb 2027. Wants to know about an LMIA-based renewal." }],
+    followUps: [
+      { task: "Send consultation link", owner: "Daniel Ruiz", due: "Mon 19 Oct" },
+      { task: "Conflict check", owner: "Amara Osei", due: "Before booking" },
+    ],
+    contact: [
+      { term: "Preferred contact", value: "Phone, then email" },
+      { term: "Language", value: "English, Dari" },
+      { term: "Country now", value: "Canada" },
+      { term: "Consent", value: { left: "Service messages", right: "15 Oct, web form" } },
+      { term: "Marketing", value: "Opted out" },
+      { term: "Tags", value: "work permit, renewal" },
+      { term: "Owner", value: "Daniel Ruiz" },
+      { term: "Proposed fee", value: "CAD 2,900.00 (firm’s fee, demo)" },
+    ],
+  };
+  const CONVERT: ConvertDialogData = {
+    programs: [{ label: { left: "Work permit (LMIA-based)", right: "v2 draft" } }, { label: { left: "Visitor record", right: "v3" } }],
+    consultants: [{ label: "Amara Osei" }, { label: "Grace Lin (licence check pending: can’t sign yet)" }],
+    submit: { toast: { title: "Matter NL-2026-0151 created", sub: "Stage: Engagement pending." } },
+  };
+  const DUP: DuplicateCompareData = {
+    other: "2024 lead",
+    rows: [
+      { label: "Name", other: "Hamid Rahimi", mine: "Hamid Rahimi" },
+      { label: "Date of birth", other: "1990-06-02", mine: "1990-06-02" },
+      { label: "Email", other: "h.rahimi@example.com", mine: "hamid.r@example.org" },
+    ],
+    different: {},
+    same: { toast: { title: "Linked to the same person", sub: "Both leads stay, under one person." } },
+  };
+
+  it("renders the lead page and its Convert and Compare dialogs exactly as the captured Designer markup", () => {
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(LeadMarkup, {})));
+    const live = withoutPreloads(
+      renderToStaticMarkup(
+        createElement(
+          SheetFrame,
+          {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/lead" },
+            header: createElement(LeadHeader, { data: { name: "Hamid Rahimi", pills: ["Contacted", "Phone"], book: { href: "/sheet/consultations" } } }),
+            statusbar: {
+              timezone: "America/Toronto",
+              queue: { label: "Reminder queue healthy", detail: "0 retries" },
+              sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+            },
+            after: createElement(Fragment, null, createElement(ConvertDialog, { data: CONVERT }), createElement(DuplicateCompareDialog, { data: DUP })),
+          },
+          createElement(SheetLead, { data: LEAD }),
+        ),
+      ),
+    );
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+    }
+    expect(live).toBe(captured);
+  });
+
+  it("wires the live lead page by data attributes, with its live panels, and no Designer toast or sample values", () => {
+    const wire = { "data-org": "o1", "data-lead": "l1", "data-version": "4" };
+    const html = renderToStaticMarkup(
+      createElement(
+        "div",
+        null,
+        createElement(LeadHeader, { data: { name: "Sam Example", pills: ["New", "Phone"], book: { href: "/book/maple/initial" }, convert: {} } }),
+        createElement(SheetLead, {
+          data: {
+            name: "Sam Example",
+            summary: { left: "Study", right: "from phone." },
+            notes: [],
+            noteSave: { "data-lead-act": "note", ...wire },
+            followUps: [{ task: "Call back", owner: "Kim Host", due: "Mon 19 Oct", done: { "data-lead-act": "follow-done", "data-follow-up": "f1", "data-org": "o1" } }],
+            followUpLive: { add: { "data-lead-open": "follow-up" }, empty: "No follow-ups yet." },
+            contact: [{ term: "Marketing", value: "Not given" }],
+            leftAfter: createElement(ConflictPanel, { data: { state: { tone: "unv", label: "Not checked yet" }, checked: null, note: null, open: { "data-lead-open": "conflict", ...wire } } }),
+          },
+        }),
+        createElement(ConvertDialog, {
+          data: {
+            programs: [{ label: "Choose later", value: "" }],
+            consultants: [{ label: "Kim Host", value: "m1" }],
+            warning: { title: "Run the conflict check first", copy: "A lead converts after a conflict check with no conflict is recorded." },
+            submit: { data: { "data-lead-act": "convert", ...wire } },
+          },
+        }),
+        createElement(DuplicateCompareDialog, {
+          data: { other: "2025 lead", rows: [], different: { data: { "data-lead-act": "dup-different", "data-other": "l0", ...wire } }, same: { data: { "data-lead-act": "dup-same", "data-other": "l0", ...wire } } },
+        }),
+        createElement(LostDialog, { data: { "data-lead-act": "lost", ...wire } }),
+      ),
+    );
+    expect(html).toContain('<a class="btn sm" href="/book/maple/initial">Book consultation</a>');
+    expect(html).toContain('data-fpr="1" data-lead-act="note" data-org="o1" data-lead="l1" data-version="4"');
+    expect(html).toContain('data-lead-act="follow-done" data-follow-up="f1"');
+    expect(html).toContain('<button class="btn p" data-lead-act="convert" data-org="o1" data-lead="l1" data-version="4">Create matter</button>');
+    expect(html).toContain("Run the conflict check first");
+    expect(html).toContain('data-lead-act="dup-same" data-other="l0"');
+    expect(html).toContain('data-lead-act="lost"');
+    expect(html).toContain("Not checked yet");
+    expect(html).not.toContain("data-toast");
+    expect(html).not.toMatch(/Northline|Hamid|Daniel|Amara|NL-2026|CRM-01/);
+  });
+});
+
+describe("Designer fidelity: portal document review, French reason (live-only addition)", () => {
+  it("adds Draft in French with existing classes only and no new styles", () => {
+    // Documented live-only addition (2026-10-18, docs/i18n/README.md): the portal Documents page's
+    // firm review form (a live control, not Designer markup) gains a "Draft in French" button
+    // (btn sm, in a kd-row), a French reason textarea (inp, lang="fr"), and after a machine draft
+    // a "Machine draft: check before sending" note (lbl, role="note") with a required check box
+    // (lbl). No class, colour, spacing, transition or style is new: the only inline style is the
+    // form's existing margin-top. A client who chose French sees the saved French reason in the
+    // existing "Why changes are needed" alert, inside <span lang="fr">; English is unchanged.
+    const html = renderToStaticMarkup(
+      createElement(Review, { organizationId: "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d", versionId: "v1", expectedVersion: 1 }),
+    );
+    const classes = new Set([...html.matchAll(/class="([^"]*)"/g)].map((match) => match[1]));
+    expect([...classes].sort()).toEqual(["btn sm", "btn sm p", "inp", "kd-row", "lbl"]);
+    expect([...html.matchAll(/style="([^"]*)"/g)].map((match) => match[1])).toEqual(["margin-top:12px"]);
+    expect(html).toMatch(/<div class="kd-row"><button type="button" class="btn sm" disabled="">Draft in French<\/button><\/div>/);
+    expect(html).toContain('lang="fr"');
+    expect(html).toContain('aria-label="Reason in French, for a client who prefers French"');
+    // The machine-draft note and its check box appear only once there is a machine draft.
+    expect(html).not.toContain("Machine draft");
+  });
+});
+

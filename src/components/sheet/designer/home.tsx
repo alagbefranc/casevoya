@@ -52,18 +52,22 @@ export function percent(count: number, total: number): string {
 
 const NUM_STYLE = { fontSize: "30px", fontWeight: "300", minWidth: "44px" };
 
+export type HomeReveal = { ph: string; quick: string; panel: string; bar: string; tasks: string };
+
 /**
  * `lead` sits between the greeting and the quick actions (the sample-mode page puts its
- * sample-case panel there).
+ * sample-case panel there). `before` sits above the greeting and `reveal` overrides the
+ * reveal order (the licence-suspended home puts its alert first).
  */
-export function SheetHome({ data, lead }: { data: HomeData; lead?: ReactNode }) {
+export function SheetHome({ data, lead, before, reveal }: { data: HomeData; lead?: ReactNode; before?: ReactNode; reveal?: HomeReveal }) {
   const total = data.gauge.reduce((sum, segment) => sum + segment.count, 0);
   const arcs = gaugeArcs(data.gauge);
   // Reveal order (`--i`) as the Designer numbers it, with and without the lead panel.
-  const order = lead ? { quick: "2", panel: "2", bar: "4", tasks: "5" } : { quick: "1", panel: "2", bar: "3", tasks: "4" };
+  const order = reveal ?? (lead ? { ph: "0", quick: "2", panel: "2", bar: "4", tasks: "5" } : { ph: "0", quick: "1", panel: "2", bar: "3", tasks: "4" });
   return (
     <>
-      <div className={"ph rv"} style={{ "--i": "0" } as React.CSSProperties}>
+      {before}
+      <div className={"ph rv"} style={{ "--i": order.ph } as React.CSSProperties}>
         <h1 className={"display"} id={"hi"}>
           {data.greeting}
         </h1>

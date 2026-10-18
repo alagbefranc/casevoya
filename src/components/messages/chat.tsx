@@ -1,0 +1,737 @@
+"use client";
+
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { authorizeDocumentDownload } from "@/modules/documents/actions";
+import { acknowledgeMessage, markThreadRead, sendMessage } from "@/modules/messages/actions";
+import {
+  MAX_BODY,
+  audienceLine,
+  clockLabel,
+  groupByDay,
+  initialOf,
+  listTime,
+  type ChatData,
+  type ChatDocument,
+  type ChatMessage,
+  type ChatThread,
+} from "@/modules/messages/present";
+// HOOK(i18n/translate): "Draft in French". Null until src/modules/i18n/translate.ts lands; see the module.
+import { draftTranslation } from "@/modules/messages/translation-hook";
+import { CHAT_CSS } from "./chat-css";
+
+const SPRITE = "/assets/icons-coreui/sprite.svg";
+const NEW = "new";
+
+function Icon({ name }: { name: string }) {
+  return (
+    <svg className="ic s" aria-hidden="true">
+      <use href={`${SPRITE}#i-${name}`} />
+    </svg>
+  );
+}
+
+type Pending = {
+  key: string;
+  threadId: string;
+  body: string;
+  documentIds: string[];
+  requiresAck: boolean;
+  createdAt: string;
+  state: "sending" | "failed";
+  error?: string;
+  /** Set once the database accepted it; the row is dropped when the refreshed list has it. */
+  messageId?: string;
+  personIds: string[] | null;
+  matterId: string;
+};
+
+function newKey(): string {
+  const random = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  return random.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40).padEnd(8, "0");
+}
+
+/** Whether a document may go to everyone in an audience: the same rule the database applies. */
+function shareable(doc: ChatDocument, people: string[]): boolean {
+  if (doc.audience === "staff") return false;
+  if (doc.audience === "matter" && doc.sensitivity === "ordinary") return true;
+  return people.length > 0 && people.every((id) => id === doc.personId);
+}
+
+/** Sizes the chat to the visible viewport (the on-screen keyboard included). */
+function useFit(ref: React.RefObject<HTMLElement | null>, view: string) {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      const vv = window.visualViewport;
+      const viewH = vv ? vv.height : window.innerHeight;
+      const narrow = window.matchMedia("(max-width:900px)").matches;
+      if (narrow && view === "thread") {
+        el.style.setProperty("--cv-top", `${vv ? vv.offsetTop : 0}px`);
+        el.style.setProperty("--cv-h", `${Math.round(viewH)}px`);
+        return;
+      }
+      const sheet = el.closest<HTMLElement>(".sheet");
+      const rect = el.getBoundingClientRect();
+      if (!narrow && sheet) {
+        const box = sheet.getBoundingClientRect();
+        const top = rect.top - box.top + sheet.scrollTop;
+        el.style.setProperty("--cv-h", `${Math.max(360, Math.round(sheet.clientHeight - top - 12))}px`);
+      } else {
+        const top = rect.top + window.scrollY;
+        el.style.setProperty("--cv-h", `${Math.max(360, Math.round(viewH - top - 12))}px`);
+      }
+    };
+    fit();
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", fit);
+    vv?.addEventListener("scroll", fit);
+    window.addEventListener("resize", fit);
+    return () => {
+      vv?.removeEventListener("resize", fit);
+      vv?.removeEventListener("scroll", fit);
+      window.removeEventListener("resize", fit);
+    };
+  }, [ref, view]);
+}
+
+/**
+ * The chat page for portal Messages and the matter's Messages tab: conversations on the left, the
+ * open thread on the right (one screen at a time on a phone), the audience always shown above the
+ * composer. Every write goes through the database's checks; this view only asks.
+ */
+export function ChatView({ data }: { data: ChatData }) {
+  const router = useRouter();
+  const root = useRef<HTMLElement>(null);
+  const log = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
+  const attach = useRef<HTMLDialogElement>(null);
+  const [selected, setSelected] = useState<string | null>(data.selectedId ?? (data.threads.length ? null : NEW));
+  // On a phone the list shows first unless a thread was linked (?thread=); on a desktop both show.
+  const [view, setView] = useState<"list" | "thread">(data.opened && data.selectedId ? "thread" : "list");
+  const [text, setText] = useState("");
+  const [docs, setDocs] = useState<string[]>([]);
+  const [critical, setCritical] = useState(false);
+  const [people, setPeople] = useState<string[]>([]);
+  const [matterId, setMatterId] = useState<string>(data.matterId ?? data.matters[0]?.id ?? "");
+  const [pending, setPending] = useState<Pending[]>([]);
+  const [readThreads, setReadThreads] = useState<string[]>([]);
+  const [acked, setAcked] = useState<string[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [atBottom, setAtBottom] = useState(true);
+  useFit(root, view);
+
+  const thread = data.threads.find((row) => row.id === selected) ?? null;
+  const composing = selected === NEW;
+  const confirmed = new Set(data.messages.map((message) => message.id));
+  const live = pending.filter((row) => !row.messageId || !confirmed.has(row.messageId));
+
+  const messages = useMemo(
+    () => (thread ? data.messages.filter((message) => message.threadId === thread.id) : []),
+    [data.messages, thread],
+  );
+  const groups = useMemo(() => groupByDay(messages, data.now, data.timezone), [messages, data.now, data.timezone]);
+  const firstUnread = messages
+    .filter((message) => message.unread && !readThreads.includes(message.threadId))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]?.id;
+
+  // Audience for the composer: the open thread's, or the new conversation's choice.
+  const audiencePeople = composing ? (data.mode === "portal" ? (data.selfPersonId ? [data.selfPersonId] : []) : people) : null;
+  const optionName = new Map(data.audienceOptions.map((option) => [option.personId, option.name]));
+  const audience = thread
+    ? audienceLine({
+        mode: data.mode,
+        firmName: data.firmName,
+        // The portal says "You" for the reader's own person.
+        audience: data.mode === "portal" ? thread.audience.filter((_, index) => thread.audienceIds[index] !== data.selfPersonId) : thread.audience,
+        excluded: thread.excluded,
+      })
+    : data.mode === "staff"
+      ? people.length
+        ? audienceLine({
+            mode: "staff",
+            firmName: data.firmName,
+            audience: people.map((id) => optionName.get(id) ?? "Client"),
+            excluded: data.audienceOptions.filter((option) => !people.includes(option.personId)).map((option) => option.name),
+          })
+        : null
+      : audienceLine({ mode: "portal", firmName: data.firmName, audience: [], excluded: [] });
+
+  // The thread open on arrival is marked read on the server; the next refresh clears its badge.
+  const markedOnLoad = useRef(false);
+  useEffect(() => {
+    if (markedOnLoad.current || !thread || !thread.unread) return;
+    markedOnLoad.current = true;
+    void markThreadRead({ organizationId: data.organizationId, threadId: thread.id }).then(() => router.refresh());
+  }, [thread, data.organizationId, router]);
+
+  const scrollToEnd = useCallback((smooth = false) => {
+    const el = log.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+  }, []);
+
+  // Newest on open.
+  useLayoutEffect(() => {
+    scrollToEnd(false);
+  }, [selected, view, scrollToEnd]);
+
+  // New messages: followed when at the bottom; otherwise the "New messages" pill shows.
+  const count = messages.length + live.filter((row) => row.threadId === selected).length;
+  const [seenCount, setSeenCount] = useState(count);
+  const fresh = !atBottom && count > seenCount;
+  useEffect(() => {
+    if (atBottom) scrollToEnd(true);
+  }, [count, atBottom, scrollToEnd]);
+
+  const onScroll = () => {
+    const el = log.current;
+    if (!el) return;
+    const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    setAtBottom(bottom);
+    if (bottom) setSeenCount(count);
+  };
+
+  const grow = () => {
+    const el = input.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 156)}px`;
+  };
+
+  const open = (id: string) => {
+    const target = data.threads.find((row) => row.id === id);
+    if (target?.unread && !readThreads.includes(id)) {
+      setReadThreads((list) => [...list, id]);
+      void markThreadRead({ organizationId: data.organizationId, threadId: id });
+    }
+    setSeenCount(Number.MAX_SAFE_INTEGER);
+    setAtBottom(true);
+    setSelected(id);
+    setView("thread");
+    setDocs([]);
+    setNotice(null);
+    const url = new URL(window.location.href);
+    if (id === NEW) url.searchParams.delete("thread");
+    else url.searchParams.set("thread", id);
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
+  };
+
+  const submit = async (row: Pending) => {
+    setPending((list) => list.map((item) => (item.key === row.key ? { ...item, state: "sending", error: undefined } : item)));
+    const result = await sendMessage({
+      organizationId: data.organizationId,
+      matterId: row.matterId,
+      threadId: row.threadId === NEW ? null : row.threadId,
+      personIds: row.threadId === NEW ? row.personIds : null,
+      body: row.body,
+      requiresAck: row.requiresAck,
+      documentIds: row.documentIds,
+      clientKey: row.key,
+    });
+    if ("error" in result) {
+      setPending((list) => list.map((item) => (item.key === row.key ? { ...item, state: "failed", error: result.error } : item)));
+      return;
+    }
+    setPending((list) => list.map((item) => (item.key === row.key ? { ...item, messageId: result.messageId, threadId: result.threadId } : item)));
+    if (row.threadId === NEW) open(result.threadId);
+    router.refresh();
+  };
+
+  const send = () => {
+    const body = text.trim();
+    if (!body) return;
+    if (body.length > MAX_BODY) return setNotice("Write a message of up to 4,000 characters.");
+    if (composing && data.mode === "staff" && people.length === 0) return setNotice("Choose who can read this message.");
+    if (composing && !matterId) return setNotice("Choose a matter.");
+    const target = thread?.matterId ?? matterId;
+    const row: Pending = {
+      key: newKey(),
+      threadId: thread?.id ?? NEW,
+      body,
+      documentIds: docs,
+      requiresAck: data.mode === "staff" && critical,
+      createdAt: new Date().toISOString(),
+      state: "sending",
+      personIds: composing ? audiencePeople : null,
+      matterId: target,
+    };
+    setPending((list) => [...list, row]);
+    setText("");
+    setDocs([]);
+    setCritical(false);
+    setNotice(null);
+    requestAnimationFrame(() => {
+      grow();
+      scrollToEnd(true);
+    });
+    void submit(row);
+  };
+
+  const onKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+    // Enter sends on a keyboard-and-pointer device; on a phone it is a new line.
+    if (!window.matchMedia("(pointer:fine)").matches) return;
+    event.preventDefault();
+    send();
+  };
+
+  const acknowledge = async (message: ChatMessage) => {
+    setAcked((list) => [...list, message.id]);
+    const result = await acknowledgeMessage({ organizationId: data.organizationId, messageId: message.id });
+    if ("error" in result) {
+      setAcked((list) => list.filter((id) => id !== message.id));
+      setNotice(result.error);
+      return;
+    }
+    router.refresh();
+  };
+
+  const download = async (versionId: string) => {
+    const result = await authorizeDocumentDownload({ organizationId: data.organizationId, versionId });
+    if ("error" in result) return setNotice(result.error ?? "That file can’t be opened.");
+    window.location.assign(result.url);
+  };
+
+  const sendingHere = live.filter((row) => row.threadId === (thread?.id ?? NEW));
+  const busy = sendingHere.some((row) => row.state === "sending");
+  const attachTo = thread ? thread.audienceIds : audiencePeople ?? [];
+  const docName = new Map(data.documents.map((doc) => [doc.id, doc.label]));
+  const title = composing
+    ? data.mode === "staff"
+      ? "New conversation"
+      : `Write to ${data.firmName}`
+    : thread?.title ?? "Messages";
+
+  return (
+    <section ref={root} className="cv" data-view={view} aria-label="Messages">
+      <style dangerouslySetInnerHTML={{ __html: CHAT_CSS }} />
+      <aside className="cv-list" aria-label="Conversations">
+        <div className="cv-lh">
+          <h2>Conversations</h2>
+          {data.mode === "staff" ? (
+            data.audienceOptions.length ? (
+              <button type="button" className="btn p sm" onClick={() => open(NEW)}>
+                <Icon name="plus" />
+                New
+              </button>
+            ) : null
+          ) : data.matters.length ? (
+            <button type="button" className="btn p sm" onClick={() => open(NEW)}>
+              <Icon name="edit" />
+              Write
+            </button>
+          ) : null}
+        </div>
+        <div className="cv-threads">
+          {data.threads.length === 0 ? (
+            <p className="cv-none">
+              {data.mode === "staff"
+                ? data.audienceOptions.length
+                  ? "No conversations on this matter yet."
+                  : "Add a client to this matter to message them."
+                : "No messages yet."}
+            </p>
+          ) : (
+            <ul style={{ listStyle: "none" }}>
+              {data.threads.map((row) => (
+                <li key={row.id}>
+                  <ThreadRow row={row} data={data} current={row.id === selected} unread={readThreads.includes(row.id) ? 0 : row.unread} onOpen={() => open(row.id)} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </aside>
+
+      <div className="cv-pane">
+        <header className="cv-ph">
+          <button type="button" className="cv-back" aria-label="Back to conversations" onClick={() => setView("list")}>
+            <Icon name="chevron-left" />
+          </button>
+          {thread ? <span className={`cv-av${data.mode === "portal" ? " st" : ""}`} aria-hidden="true">{initialOf(thread.title)}</span> : null}
+          <div>
+            <b>{title}</b>
+            <small>{thread ? thread.matterTitle : data.mode === "staff" ? data.matters[0]?.title ?? "" : "Before you send, you’ll see who can read it."}</small>
+          </div>
+        </header>
+
+        {!thread && !composing ? (
+          <div className="cv-empty">
+            <div>
+              <b>No messages yet</b>
+              <small>
+                {data.mode === "portal"
+                  ? `Write to ${data.firmName} any time. You’ll see who can read it before you send.`
+                  : "Start a conversation with someone on this matter. You choose who can read it."}
+              </small>
+              {(data.mode === "portal" ? data.matters.length : data.audienceOptions.length) ? (
+                <button type="button" className="btn p sm" onClick={() => open(NEW)}>
+                  {data.mode === "portal" ? "Write a message" : "New conversation"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div ref={log} className="cv-log" role="log" aria-live="polite" aria-label={`Messages${thread ? ` with ${thread.title}` : ""}`} onScroll={onScroll}>
+              {groups.length === 0 && sendingHere.length === 0 ? (
+                <div className="cv-empty">
+                  <div>
+                    <b>{composing ? "A new conversation" : "No messages yet"}</b>
+                    <small>{composing ? "Only the people shown above the box can read it, with the firm’s staff on the matter." : "Write the first message below."}</small>
+                  </div>
+                </div>
+              ) : null}
+              {groups.map((group) => (
+                <DayBlock key={group.key} label={group.label}>
+                  {group.messages.map((message, index) => (
+                    <Bubble
+                      key={message.id}
+                      message={message}
+                      data={data}
+                      cont={index > 0 && group.messages[index - 1].authorName === message.authorName && group.messages[index - 1].mine === message.mine}
+                      newMarker={message.id === firstUnread}
+                      acked={message.acknowledged || acked.includes(message.id)}
+                      onAck={() => void acknowledge(message)}
+                      onDownload={(versionId) => void download(versionId)}
+                    />
+                  ))}
+                </DayBlock>
+              ))}
+              {sendingHere.map((row) => (
+                <div key={row.key} className={`cv-row me${row.state === "sending" ? " cv-sending" : ""}`}>
+                  <div className="cv-b">
+                    {row.requiresAck ? <span className="cv-crit"><Icon name="alert" />Critical instruction</span> : null}
+                    {row.body}
+                    {row.documentIds.length ? (
+                      <span className="cv-chips">
+                        {row.documentIds.map((id) => (
+                          <span key={id} className="cv-chip"><Icon name="paperclip" />{docName.get(id) ?? "Document"}</span>
+                        ))}
+                      </span>
+                    ) : null}
+                    <span className="cv-foot">
+                      {row.state === "sending" ? (
+                        "Sending…"
+                      ) : (
+                        <>
+                          <span className="cv-fail" role="alert">Not sent. {row.error}</span>
+                          <button type="button" className="cv-retry" onClick={() => void submit(row)}>Retry</button>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {fresh ? (
+              <button type="button" className="cv-jump" onClick={() => scrollToEnd(true)}>
+                <Icon name="move-down" />
+                New messages
+              </button>
+            ) : null}
+
+            <div className="cv-compose">
+              {notice ? (
+                <div className="cv-err" role="alert">
+                  <span>{notice}</span>
+                  <button type="button" className="cv-retry" onClick={() => setNotice(null)}>Dismiss</button>
+                </div>
+              ) : null}
+              {composing && data.mode === "portal" && data.matters.length > 1 ? (
+                <label className="cv-aud">
+                  <span>About</span>
+                  <select className="sel" value={matterId} onChange={(event) => setMatterId(event.target.value)} style={{ height: 34 }}>
+                    {data.matters.map((matter) => (
+                      <option key={matter.id} value={matter.id}>{matter.title}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {composing && data.mode === "staff" ? (
+                <fieldset className="cv-pick">
+                  <legend className="cv-sr">Who can read it</legend>
+                  {data.audienceOptions.map((option) => (
+                    <label key={option.personId}>
+                      <input
+                        type="checkbox"
+                        checked={people.includes(option.personId)}
+                        onChange={(event) =>
+                          setPeople((list) => (event.target.checked ? [...list, option.personId] : list.filter((id) => id !== option.personId)))
+                        }
+                      />
+                      {option.name}
+                      <span style={{ color: "var(--t2)" }}>{option.role}</span>
+                    </label>
+                  ))}
+                </fieldset>
+              ) : null}
+              <p className="cv-aud" id="cv-aud">
+                <Icon name="eye" />
+                {audience ? (
+                  <span>
+                    Visible to: <b>{audience.visible}</b>
+                    {audience.hidden ? `. ${audience.hidden}.` : "."}
+                  </span>
+                ) : (
+                  <span>Choose who can read it before you write.</span>
+                )}
+              </p>
+              {docs.length ? (
+                <div className="cv-sel">
+                  {docs.map((id) => (
+                    <span key={id} className="cv-chip">
+                      <Icon name="paperclip" />
+                      {docName.get(id) ?? "Document"}
+                      <button type="button" aria-label={`Remove ${docName.get(id) ?? "document"}`} onClick={() => setDocs((list) => list.filter((doc) => doc !== id))}>
+                        <Icon name="close" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              <div className="cv-row2">
+                <button
+                  type="button"
+                  className="cv-ib"
+                  aria-label="Attach a document"
+                  disabled={!data.documents.length}
+                  title={data.documents.length ? "Attach a document" : "No documents to attach yet"}
+                  onClick={() => attach.current?.showModal()}
+                >
+                  <Icon name="paperclip" />
+                </button>
+                <label className="cv-sr" htmlFor="cv-input">Message</label>
+                <textarea
+                  id="cv-input"
+                  ref={input}
+                  className="cv-ta"
+                  rows={1}
+                  value={text}
+                  maxLength={MAX_BODY}
+                  placeholder="Write a message"
+                  aria-describedby="cv-aud"
+                  onChange={(event) => {
+                    setText(event.target.value);
+                    grow();
+                  }}
+                  onKeyDown={onKey}
+                />
+                <button type="button" className="btn p cv-send" onClick={send} disabled={!text.trim() || busy}>
+                  {busy ? "Sending…" : "Send"}
+                </button>
+              </div>
+              {data.mode === "staff" || draftTranslation ? (
+                <div className="cv-opts">
+                  {data.mode === "staff" ? (
+                    <label>
+                      <input type="checkbox" checked={critical} onChange={(event) => setCritical(event.target.checked)} />
+                      Critical instruction: ask them to acknowledge it
+                    </label>
+                  ) : null}
+                  {/* HOOK(i18n/translate): render a "Draft in French" button here when draftTranslation is set. */}
+                </div>
+              ) : null}
+            </div>
+          </>
+        )}
+      </div>
+
+      <dialog ref={attach} className="dlg" aria-labelledby="cv-attach-h">
+        <div className="dh">
+          <h2 id="cv-attach-h">Attach a document</h2>
+          <button type="button" className="x" aria-label="Close" onClick={() => attach.current?.close()}>
+            <Icon name="close" />
+          </button>
+        </div>
+        <div className="db">
+          <p className="lbl" style={{ marginBottom: 10 }}>
+            The message links to the document already on file. Each reader opens it with their own access; nothing is copied.
+          </p>
+          <div className="cv-docs">
+            {data.documents.map((doc) => {
+              const allowed = attachTo.length ? shareable(doc, attachTo) : true;
+              return (
+                <label key={doc.id}>
+                  <input
+                    type="checkbox"
+                    disabled={!allowed}
+                    checked={docs.includes(doc.id)}
+                    onChange={(event) => setDocs((list) => (event.target.checked ? [...list, doc.id].slice(0, 5) : list.filter((id) => id !== doc.id)))}
+                  />
+                  <span>
+                    {doc.label}
+                    <small>{allowed ? "Everyone who can read this conversation can open it." : "Not shared with everyone in this conversation."}</small>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+        <div className="df">
+          <button type="button" className="btn p" onClick={() => attach.current?.close()}>
+            Done
+          </button>
+        </div>
+      </dialog>
+    </section>
+  );
+}
+
+function ThreadRow({ row, data, current, unread, onOpen }: { row: ChatThread; data: ChatData; current: boolean; unread: number; onOpen: () => void }) {
+  return (
+    <button type="button" className={`cv-tr${unread ? " un" : ""}`} aria-current={current ? "true" : undefined} onClick={onOpen}>
+      <span className={`cv-av${data.mode === "portal" ? " st" : ""}`} aria-hidden="true">{initialOf(row.title)}</span>
+      <span className="cv-tm">
+        <b>{row.title}</b>
+        <small>{row.preview || row.matterTitle}</small>
+        {data.mode === "portal" && data.matters.length > 1 ? <small>{row.matterTitle}</small> : null}
+      </span>
+      <span className="cv-meta">
+        <time dateTime={row.lastAt}>{listTime(row.lastAt, data.now, data.timezone)}</time>
+        {unread ? <span className="cv-badge" aria-label={`${unread} unread`}>{unread}</span> : null}
+      </span>
+    </button>
+  );
+}
+
+function DayBlock({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <>
+      <div className="cv-day" role="separator">{label}</div>
+      {children}
+    </>
+  );
+}
+
+function Bubble({
+  message,
+  data,
+  cont,
+  newMarker,
+  acked,
+  onAck,
+  onDownload,
+}: {
+  message: ChatMessage;
+  data: ChatData;
+  cont: boolean;
+  newMarker: boolean;
+  acked: boolean;
+  onAck: () => void;
+  onDownload: (versionId: string) => void;
+}) {
+  const staffAuthor = message.authorKind === "staff";
+  const status = message.mine
+    ? data.mode === "staff"
+      ? message.readBy.length
+        ? `Read by ${message.readBy.join(", ")}`
+        : "Sent"
+      : "Sent"
+    : null;
+  return (
+    <>
+      {newMarker ? <div className="cv-new">New</div> : null}
+      <div className={`cv-row${message.mine ? " me" : ""}${cont ? " cont" : ""}`}>
+        {!message.mine ? <span className={`cv-av${staffAuthor ? " st" : ""}`} aria-hidden="true">{initialOf(message.authorName)}</span> : null}
+        <div className="cv-b">
+          {!message.mine && !cont ? <span className="cv-who">{message.authorName}</span> : null}
+          {message.requiresAck ? (
+            <span className="cv-crit">
+              <Icon name="alert" />
+              Critical instruction
+            </span>
+          ) : null}
+          {message.body}
+          {message.attachments.length ? (
+            <span className="cv-chips">
+              {message.attachments.map((file) =>
+                file.href ? (
+                  <a key={file.documentId} className="cv-chip" href={file.href}>
+                    <Icon name="paperclip" />
+                    {file.label}
+                  </a>
+                ) : file.versionId ? (
+                  <button key={file.documentId} type="button" className="cv-chip" onClick={() => onDownload(file.versionId ?? "")}>
+                    <Icon name="paperclip" />
+                    {file.label}
+                  </button>
+                ) : (
+                  <span key={file.documentId} className="cv-chip">
+                    <Icon name="paperclip" />
+                    {file.label}
+                  </span>
+                ),
+              )}
+            </span>
+          ) : null}
+          {message.requiresAck ? (
+            <span className="cv-ack">
+              {data.mode === "portal" && !message.mine ? (
+                acked ? (
+                  <span className="cv-acked"><Icon name="check-circle" />Acknowledged</span>
+                ) : (
+                  <button type="button" className="btn p sm" onClick={onAck}>Acknowledge</button>
+                )
+              ) : message.acknowledgedBy.length ? (
+                <span className="cv-acked"><Icon name="check-circle" />{`Acknowledged by ${message.acknowledgedBy.join(", ")}`}</span>
+              ) : (
+                <span>Waiting for acknowledgement</span>
+              )}
+            </span>
+          ) : null}
+          <span className="cv-foot">
+            <time dateTime={message.createdAt}>{clockLabel(message.createdAt, data.timezone)}</time>
+            {status ? <span>· {status}</span> : null}
+          </span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Shown while the conversations load again after an error. */
+export function ChatSkeleton() {
+  return (
+    <section className="cv" aria-busy="true" aria-label="Loading messages">
+      <style dangerouslySetInnerHTML={{ __html: CHAT_CSS }} />
+      <div className="cv-list">
+        <div className="cv-sk"><i /><i /><i /></div>
+      </div>
+      <div className="cv-pane">
+        <div className="cv-sk"><i /><i /><i /><i /></div>
+      </div>
+    </section>
+  );
+}
+
+/** The loader failed: say so, and try again. */
+export function ChatError() {
+  const router = useRouter();
+  const [retrying, setRetrying] = useState(false);
+  if (retrying) return <ChatSkeleton />;
+  return (
+    <section className="cv" aria-label="Messages">
+      <style dangerouslySetInnerHTML={{ __html: CHAT_CSS }} />
+      <div className="cv-empty" style={{ gridColumn: "1 / -1" }}>
+        <div>
+          <b>Messages didn’t load</b>
+          <small>Nothing was lost. Try again in a moment.</small>
+          <button
+            type="button"
+            className="btn p sm"
+            onClick={() => {
+              setRetrying(true);
+              router.refresh();
+              window.setTimeout(() => setRetrying(false), 4000);
+            }}
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}

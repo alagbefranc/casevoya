@@ -33,7 +33,22 @@ export type DispatchDeps = {
   ) => Promise<void>;
   /** Opens a sealed invitation link (context.sealed_link) for that invitation. Null when it cannot. */
   openLink?: (sealed: string, invitationId: string) => Promise<string | null>;
+  /**
+   * Each delivery's recipient locale ('en-CA' | 'fr-CA'), from public.email_delivery_locales.
+   * Optional; a failure or a missing entry means English. Even 'fr-CA' sends French only for a
+   * template whose French is approved (designs/french.ts).
+   */
+  locales?: (deliveryIds: string[]) => Promise<Record<string, string>>;
 };
+
+async function recipientLocales(deps: DispatchDeps, messages: MailDelivery[]): Promise<Record<string, string>> {
+  if (!deps.locales || messages.length === 0) return {};
+  try {
+    return await deps.locales(messages.map((message) => message.delivery_id));
+  } catch {
+    return {};
+  }
+}
 
 /**
  * The invitation link, opened from its sealed form, or null. Any failure (no key, tampered or
@@ -64,6 +79,7 @@ export async function dispatchOutbound(
   for (const event of events) {
     const prepared = await deps.prepare(event.id, options.worker, options.inboundDomain, options.fromAddress);
     if (prepared.action !== "send" || !prepared.messages) continue;
+    const locales = await recipientLocales(deps, prepared.messages);
     for (const message of prepared.messages) {
       // Only a link this worker opened reaches the template; never the sealed form. Every other
       // button (portal, Sheet) is a fixed path the renderer joins to the app origin; nothing from
@@ -72,6 +88,9 @@ export async function dispatchOutbound(
       const sealed = context.sealed_link;
       delete context.sealed_link;
       delete context.link;
+      delete context.locale;
+      const locale = locales[message.delivery_id];
+      if (locale === "fr-CA") context.locale = locale;
       const link = await openSealedLink(deps, sealed, context.invitation_id);
       const rendered = renderEmail(
         { ...context, template: message.template, ...(link ? { link } : {}) },

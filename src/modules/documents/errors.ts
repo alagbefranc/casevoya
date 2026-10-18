@@ -17,6 +17,8 @@ export function documentError(message: string): string {
   if (/expired/i.test(message)) return "That upload authorization expired. Start again.";
   if (/published rule/i.test(message)) return "Choose a published rule version, or leave the rule blank.";
   if (/replacement must be a new version/i.test(message)) return "Send a new version of the same document.";
+  if (/French reason/i.test(message)) return "Add the French reason (3 to 2000 characters), or leave it empty.";
+  if (/machine-drafted/i.test(message)) return "The French draft could not be recorded. Draft it again.";
   if (/review reason|waiver reason|removal reason|custody purpose/i.test(message)) {
     return "Add a short reason before continuing.";
   }

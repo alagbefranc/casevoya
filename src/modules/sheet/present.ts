@@ -157,6 +157,16 @@ export type SheetQuery = {
   person?: string;
   /** The Calendar page's week: any date in it, YYYY-MM-DD. */
   week?: string;
+  /** The open conversation on a matter's Messages tab. */
+  thread?: string;
+  /** The Intake form builder's form (stable key) and selected field (field key). */
+  form?: string;
+  field?: string;
+  /** The lead shown on the lead page. */
+  id?: string;
+  /** The Lead pipeline's Stage (a stage key) and Owner (a membership id, or "none") filters. */
+  stage?: string;
+  owner?: string;
 };
 
 export function sheetVariant(page: string, query: SheetQuery): string {

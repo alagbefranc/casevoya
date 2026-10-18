@@ -3,15 +3,18 @@
  * Same DOM, classes and order as the capture. Tabs whose records are not stored yet
  * show the Designer's empty-state panel instead of sample rows.
  */
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { gaugeArcs, percent } from "./home";
 import { Badge, type MatterBadge } from "./matters";
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair, Sep } from "./frame";
 import { PersonEditDialog, personEditProps, type PersonEditDialogData } from "./person-edit";
 import { PolicyMissingAlert } from "./portal-policies";
+import { MatterDecisionsLive, MatterSubmissions, type MatterDecisionsData, type MatterSubmissionsData } from "./matter-government";
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
 import type { PersonEditData } from "@/modules/sheet/edit-person";
+import { ChatError, ChatView } from "@/components/messages/chat";
+import type { ChatData } from "@/modules/messages/present";
 
 export const MATTER_TABS = [
   ["overview", "Overview"],
@@ -672,6 +675,8 @@ export type MatterDeadlineDialog = {
   /** The firm is in sample mode and this matter is real: the database refuses the deadline. */
   sampleMode: boolean;
   kinds: readonly { value: string; label: string }[];
+  /** Government letters on the matter; the deadline is linked to the one chosen (T037). */
+  letters?: { id: string; label: string }[];
 };
 
 /** The record a dialog's confirm button saves to; the kit reads these from the button. */
@@ -930,6 +935,19 @@ function DeadlineDialog({ data, wire }: { data: MatterDeadlineDialog; wire: Matt
             {"Where it’s written"}
             <input id={"ddE"} placeholder={"For example: IRCC request letter, page 2"} autoComplete={"off"} />
           </label>
+          {data.letters?.length ? (
+            <label className={"fl"}>
+              {"From a government letter (optional)"}
+              <select id={"ddC"} defaultValue={""}>
+                <option value={""}>{"None"}</option>
+                {data.letters.map((letter) => (
+                  <option key={letter.id} value={letter.id}>
+                    {letter.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label className={"fl"}>
             {"Official source URL"}
             <input id={"ddU"} type={"url"} placeholder={"https://www.canada.ca/…"} autoComplete={"off"} />
@@ -1428,27 +1446,82 @@ export function MatterDecisions({ outcome, confirm }: { outcome: string | null; 
   );
 }
 
-/** Closure: an open matter shows the Designer's "still open" state; a closed one its retention date. */
-export function MatterClosure({ closed, retention }: { closed: boolean; retention: string | null }) {
-  if (!closed) {
-    return (
-      <div className={"empty rv"} style={css({ "--i": "0" })}>
-        <span className={"spot"}>
-          <img src={"/assets/generated/spots/archive@1x.webp"} srcSet={"/assets/generated/spots/archive@2x.webp 2x"} width={88} height={88} alt={""} />
+/** The Designer's closure checklist panel, from the matter's own records (T040). */
+export type ClosurePanelData = {
+  status: { tone: "gr" | "ok" | "chg"; label: string; detail: string };
+  items: { label: string; done: boolean; note?: string }[];
+  /** The Retention column's key/value rows (no slider: the period is the firm's setting, not chosen per matter). */
+  retention: [string, string][];
+  note: string;
+};
+
+function ClosureChecklist({ data }: { data: ClosurePanelData }) {
+  return (
+    <div className={"panel rv"} style={css({ "--i": "0" })}>
+      <h2>
+        <Icon name={"folder"} />
+        {"Closure checklist"}
+        <span className={"r"}>
+          <span className={`bd ${data.status.tone}`}>
+            <i></i>
+            <span>
+              {`${data.status.label} `}
+              <Sep />
+              {` ${data.status.detail}`}
+            </span>
+          </span>
         </span>
+      </h2>
+      <div className={"split"} style={css({ "--n": "2" })}>
         <div>
-          <h3>{"This matter is still open"}</h3>
-          <p>{"Closing is a controlled step: finish the checklist and the retention date is set. You can reopen later, and the closure stays on record."}</p>
-          <div className={"ea"}>
-            <button className={"btn s sm"} data-stage={""}>
-              <Icon name={"workflow"} cls={"ic s"} />
-              {"Change stage"}
-            </button>
+          <ul className={"clist"}>
+            {data.items.map((item) => (
+              <li key={item.label}>
+                <span
+                  className={item.done ? "ck on" : "ck"}
+                  role={"checkbox"}
+                  aria-checked={item.done ? "true" : "false"}
+                  tabIndex={0}
+                  aria-label={item.label}
+                ></span>
+                <div>
+                  <b>{item.label}</b>
+                  {item.note ? <small>{item.note}</small> : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h3>{"Retention"}</h3>
+          <div className={"kv"} style={css({ marginTop: "14px" })}>
+            {data.retention.map(([label, value]) => (
+              <Fragment key={label}>
+                <span>{label}</span>
+                <b>{value}</b>
+              </Fragment>
+            ))}
           </div>
+          <p className={"mu"} style={css({ fontSize: "13.5px", marginTop: "12px" })}>
+            {data.note}
+          </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Closure: the checklist (when loaded), then the Designer's "still open" state, or a closed matter's retention date. */
+export function MatterClosure({ closed, retention, panel }: { closed: boolean; retention: string | null; panel?: ClosurePanelData | null }) {
+  if (panel) {
+    return (
+      <>
+        <ClosureChecklist data={panel} />
+        {closed ? null : <StillOpen index={1} />}
+      </>
     );
   }
+  if (!closed) return <StillOpen index={0} />;
   return (
     <Panel>
       <h2>
@@ -1460,6 +1533,26 @@ export function MatterClosure({ closed, retention }: { closed: boolean; retentio
         <b className={"num"}>{retention ?? "Not set yet"}</b>
       </div>
     </Panel>
+  );
+}
+
+function StillOpen({ index }: { index: number }) {
+  return (
+    <div className={"empty rv"} style={css({ "--i": String(index) })}>
+      <span className={"spot"}>
+        <img src={"/assets/generated/spots/archive@1x.webp"} srcSet={"/assets/generated/spots/archive@2x.webp 2x"} width={88} height={88} alt={""} />
+      </span>
+      <div>
+        <h3>{"This matter is still open"}</h3>
+        <p>{"Closing is a controlled step: finish the checklist and the retention date is set. You can reopen later, and the closure stays on record."}</p>
+        <div className={"ea"}>
+          <button className={"btn s sm"} data-stage={""}>
+            <Icon name={"workflow"} cls={"ic s"} />
+            {"Change stage"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1485,7 +1578,13 @@ export type MatterPageData = {
   outcome: string | null;
   /** Set when decision evidence is on file and no outcome is recorded yet. */
   confirmOutcome?: MatterOutcomeConfirm | null;
-  closure: { closed: boolean; retention: string | null };
+  closure: { closed: boolean; retention: string | null; panel?: ClosurePanelData | null };
+  /** Messages tab: the chat view's data (null: it failed to load; absent: another tab). */
+  messages?: ChatData | null;
+  /** T036 submission handoff; absent, the tab keeps its empty state. */
+  submissions?: MatterSubmissionsData | null;
+  /** T037 and T038 letters and decisions; absent, the tab keeps the outcome-only view. */
+  decisions?: MatterDecisionsData | null;
 };
 
 /** The open tab's content. */
@@ -1501,10 +1600,16 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
       return <MatterAgreements rows={data.agreements.rows} signing={data.agreements.signing} create={data.agreements.create} />;
     case "tasks":
       return <MatterTasks deadline={data.tasks.deadline} tasks={data.tasks.tasks} record={data.tasks.record} />;
+    case "submissions":
+      return data.submissions ? <MatterSubmissions data={data.submissions} /> : <MatterTabEmpty tab={data.tab} />;
     case "decisions":
-      return <MatterDecisions outcome={data.outcome} confirm={data.confirmOutcome} />;
+      return data.decisions ? <MatterDecisionsLive data={data.decisions} /> : <MatterDecisions outcome={data.outcome} confirm={data.confirmOutcome} />;
     case "closure":
-      return <MatterClosure closed={data.closure.closed} retention={data.closure.retention} />;
+      return <MatterClosure closed={data.closure.closed} retention={data.closure.retention} panel={data.closure.panel} />;
+    // Redesigned as a chat view at the owner's request (2026-10-18); the other tabs keep the Designer's markup.
+    case "messages":
+      if (data.messages === undefined) return <MatterTabEmpty tab={data.tab} />;
+      return data.messages ? <ChatView data={data.messages} /> : <ChatError />;
     default:
       return <MatterTabEmpty tab={data.tab} />;
   }

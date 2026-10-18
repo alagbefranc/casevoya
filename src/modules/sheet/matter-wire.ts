@@ -2,10 +2,19 @@
 import { safeAccessError } from "@/lib/auth/step-up";
 import { MATTER_STAGES } from "@/modules/sheet/present";
 
-export type MatterDialog = "stage" | "hold" | "letter" | "deadline";
+export type MatterDialog = "stage" | "hold" | "letter" | "deadline" | "handoff" | "submission" | "receipt";
 
 /** The `<dialog>` each `?dlg=` value reopens. */
-export const DIALOG_ID: Record<MatterDialog, string> = { stage: "dStage", hold: "dHold", letter: "dLetter", deadline: "dDeadline" };
+export const DIALOG_ID: Record<MatterDialog, string> = {
+  stage: "dStage",
+  hold: "dHold",
+  letter: "dLetter",
+  deadline: "dDeadline",
+  // The submission handoff dialogs (T036).
+  handoff: "dSubPrep",
+  submission: "dSubRec",
+  receipt: "dSubRcpt",
+};
 
 export function dialogId(value: string | null | undefined): string | null {
   return value && Object.hasOwn(DIALOG_ID, value) ? DIALOG_ID[value as MatterDialog] : null;

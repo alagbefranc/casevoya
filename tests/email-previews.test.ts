@@ -33,6 +33,7 @@ const WIRED: Record<string, Record<string, unknown>> = {
   EX08: { template: "payment_failed", firm: FIRM, invoice_id: INVOICE, invoice_number: "INV-0001", due_on: "2026-11-06" },
   EX09: { template: "refund_started", firm: FIRM, invoice_id: INVOICE, invoice_number: "INV-0001" },
   EX10: { template: "refund_complete", firm: FIRM, invoice_id: INVOICE, invoice_number: "INV-0001" },
+  EX07: { template: "message", firm: FIRM },
   // EM16a and EM16c show a visitor who booked on the public page (no portal login); EM16b a portal
   // client. tests/scheduling-portal-mail.test.tsx covers the other variant of each.
   EM16a: { template: "consultation_booked", firm: FIRM, starts_at: "2026-10-22T14:30:00Z", time_zone: "America/Vancouver", consultant_name: "Sam Example", portal: false, location_kind: "phone" },
