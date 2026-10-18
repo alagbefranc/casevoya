@@ -281,8 +281,10 @@ export function SheetFrame({
   top,
   header,
   rbar,
+  aside,
+  styles,
+  after,
   statusbar,
-  overlay,
   children,
 }: {
   sidebar: SidebarData;
@@ -290,14 +292,22 @@ export function SheetFrame({
   /** A page's own top bar (the Designer gives some pages their own crumb and actions). */
   header?: ReactNode;
   rbar?: RbarData | null;
+  /** A page's own right column in place of the calendar one. */
+  aside?: ReactNode;
+  /** A page's own stylesheets, placed after the frame's. */
+  styles?: readonly string[];
+  /** A page's dialogs, placed after the frame where the capture has them. */
+  after?: ReactNode;
   statusbar: StatusbarData;
-  /** A page's own dialogs, which the Designer places after the scrim. */
-  overlay?: ReactNode;
   children?: ReactNode;
 }) {
+  const right = aside ?? (rbar ? <SheetRbar data={rbar} /> : null);
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: WAVE }} />
+      {(styles ?? []).map((sheet, index) => (
+        <style key={index} dangerouslySetInnerHTML={{ __html: sheet }} />
+      ))}
       <div className={"mhead"}>
         <a href={"/sheet"}>
           <img src={"/assets/brand/casevoya-wordmark-white.svg"} alt={"Casevoya"} width={126} height={20} />
@@ -313,17 +323,17 @@ export function SheetFrame({
       </div>
       <div className={"frame"}>
         <SheetSidebar data={sidebar} />
-        <main className={rbar ? "sheet wr" : "sheet"}>
+        <main className={right ? "sheet wr" : "sheet"}>
           <div className={"main"} id={"main"}>
             {header ?? (top ? <SheetTopBar data={top} /> : null)}
             <div id={"content"}>{children}</div>
           </div>
-          {rbar ? <SheetRbar data={rbar} /> : null}
+          {right}
         </main>
         <SheetStatusbar data={statusbar} />
       </div>
       <div className={"scrimd"} id={"scrimd"}></div>
-      {overlay}
+      {after}
       <div id={"k2wt"} className={"k2-wt"} role={"tooltip"} aria-hidden={"true"}></div>
     </>
   );

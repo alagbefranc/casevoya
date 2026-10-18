@@ -4,27 +4,7 @@ import type { HomeData, HomeTask } from "@/components/sheet/designer/home";
 import { createClient } from "@/lib/supabase/server";
 import { loadSheetChrome, matterNames, memberNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
-import { ago, dayMonth, greeting, isoDate, localNow, monthGrid, summary, taskBadge, zoneCity } from "@/modules/sheet/home-present";
-
-/** What a firm activity looks like in the Designer's notification list. Other actions are not shown. */
-export const NOTICE: Record<string, string> = {
-  "document.uploaded": "Document uploaded",
-  "document.reviewed": "Document reviewed",
-  "document.request_created": "Document requested",
-  "agreement.sent": "Agreement sent for signature",
-  "agreement.signed": "Agreement signed",
-  "agreement.executed": "Agreement fully signed",
-  "agreement.quote_accepted": "Quote accepted",
-  "email.received": "Email received",
-  "email.bounced": "Email could not be delivered",
-  "invitation.accepted": "Invitation accepted",
-  "intake.submitted": "Questionnaire submitted",
-  "matter.create": "Matter opened",
-  "matter.stage_transition": "Matter stage changed",
-  "matter.government_status_recorded": "Government status recorded",
-  "task.overdue": "Task overdue",
-  "deadline.confirmed": "Deadline confirmed",
-};
+import { NOTICE, ago, dayMonth, greeting, isoDate, localNow, monthGrid, summary, taskBadge, zoneCity } from "@/modules/sheet/home-present";
 
 const SOURCE: Record<string, string> = {
   document: "Documents",
@@ -35,6 +15,7 @@ const SOURCE: Record<string, string> = {
   matter: "Matters",
   task: "Tasks",
   deadline: "Deadlines",
+  firm: "Sample case",
 };
 
 const OPEN_TASK = ["open", "blocked"] as const;

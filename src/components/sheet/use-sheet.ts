@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { toast2 } from "@/components/port/kit";
 import { sheetStateCopy } from "@/modules/sheet/present";
+import { runMatterAct } from "./matter-acts";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
 
@@ -99,6 +100,14 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (palette && root.contains(palette)) {
         event.preventDefault();
         openPalette(root);
+        return;
+      }
+      const act = target.closest<HTMLElement>("[data-act]");
+      if (act && root.contains(act)) {
+        event.preventDefault();
+        if (act.getAttribute("aria-busy") === "true") return;
+        act.setAttribute("aria-busy", "true");
+        void runMatterAct(act, root, router).finally(() => act.removeAttribute("aria-busy"));
         return;
       }
       const opener = target.closest<HTMLElement>("[data-open], [data-dlg], [data-stage], [data-letter], [data-hold]");

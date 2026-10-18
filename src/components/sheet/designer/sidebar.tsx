@@ -42,10 +42,10 @@ export function initials(name: string): string {
 }
 
 /** The Designer's `.av` circle: a photo when there is one, otherwise initials in the same circle. */
-export function Avatar({ person }: { person: SidebarPerson }) {
-  if (person.avatarUrl) return <img className={"av"} src={person.avatarUrl} alt={""} />;
+export function Avatar({ person, cls = "av" }: { person: SidebarPerson; cls?: string }) {
+  if (person.avatarUrl) return <img className={cls} src={person.avatarUrl} alt={""} />;
   return (
-    <span className={"av"} aria-hidden={"true"}>
+    <span className={cls} aria-hidden={"true"}>
       {initials(person.name)}
     </span>
   );
