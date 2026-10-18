@@ -2,7 +2,7 @@ import "server-only";
 import { sendCloudflareEmail } from "@/modules/email/cloudflare";
 import { dispatchOutbound, type MailDelivery, type PreparedMail } from "@/modules/email/dispatch";
 import { openInviteLink } from "@/modules/email/invite-link-seal";
-import { emailRuntimeConfig } from "@/lib/email/env";
+import { appOrigin, emailRuntimeConfig } from "@/lib/email/env";
 import { createServiceClient } from "@/lib/supabase/service";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -71,6 +71,7 @@ export async function runEmailDispatch(limit = 20) {
       limit,
       inboundDomain: config.inboundDomain,
       fromAddress: config.fromAddress,
+      appOrigin: appOrigin(),
     },
   );
 }

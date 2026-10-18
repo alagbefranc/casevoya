@@ -1,4 +1,4 @@
-import { renderEmail } from "@/modules/email/templates";
+import { COUNTERSIGN_PATH, renderEmail } from "@/modules/email/templates";
 import type { OutboundEmail, SendOutcome } from "@/modules/email/cloudflare";
 
 export type MailDelivery = {
@@ -50,6 +50,19 @@ async function openSealedLink(deps: DispatchDeps, sealed: unknown, invitationId:
   }
 }
 
+/**
+ * The staff copy of the agreement email (a consultant's turn to countersign) links to the Sheet's
+ * Agreements page on the app origin. The path is fixed here; nothing from the database is a link.
+ */
+function staffLink(appOrigin: string | undefined, template: string, context: Record<string, unknown>): string | null {
+  if (!appOrigin || template !== "agreement" || context.audience !== "staff") return null;
+  try {
+    return new URL(COUNTERSIGN_PATH, appOrigin).href;
+  } catch {
+    return null;
+  }
+}
+
 function includesAddress(list: string[], email: string): boolean {
   const target = email.toLowerCase();
   return list.some((item) => item.toLowerCase() === target);
@@ -57,7 +70,7 @@ function includesAddress(list: string[], email: string): boolean {
 
 export async function dispatchOutbound(
   deps: DispatchDeps,
-  options: { worker: string; limit: number; inboundDomain: string; fromAddress: string },
+  options: { worker: string; limit: number; inboundDomain: string; fromAddress: string; appOrigin?: string },
 ): Promise<{ processed: number; sent: number }> {
   const events = await deps.claim(options.worker, options.limit);
   let sent = 0;
@@ -70,7 +83,7 @@ export async function dispatchOutbound(
       const sealed = context.sealed_link;
       delete context.sealed_link;
       delete context.link;
-      const link = await openSealedLink(deps, sealed, context.invitation_id);
+      const link = (await openSealedLink(deps, sealed, context.invitation_id)) ?? staffLink(options.appOrigin, message.template, context);
       const rendered = renderEmail({ ...context, template: message.template, ...(link ? { link } : {}) });
       const outcome = await deps.send({
         to: message.to,

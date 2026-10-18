@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { DemoSheet } from "@/components/sheet/demo";
-import { AgreementsHeader, NewAgreementDialog, SheetAgreements, TemplateDialog } from "@/components/sheet/designer/agreements";
+import { AgreementsHeader, CountersignDialog, NewAgreementDialog, SheetAgreements, TemplateDialog } from "@/components/sheet/designer/agreements";
 import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet/designer/clients";
 import { SheetFrame } from "@/components/sheet/designer/frame";
 import { SheetHome } from "@/components/sheet/designer/home";
@@ -172,7 +172,7 @@ export async function SheetBody({
   // Agreements, All agreements tab. The other tabs (quote builder, editor, envelope, compare,
   // representation authority) are not ported yet and keep their old view.
   if (page === "agreements" && (!query.tab || query.tab === "list") && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, header, page: agreements, dialog, templateDialog } = await loadSheetAgreements(access.staff);
+    const { chrome, header, page: agreements, dialog, templateDialog, countersign } = await loadSheetAgreements(access.staff);
     return (
       <SheetScreen page={page}>
         <SheetFrame
@@ -183,6 +183,9 @@ export async function SheetBody({
             <>
               <NewAgreementDialog data={dialog} />
               <TemplateDialog data={templateDialog} />
+              {countersign.map((sign) => (
+                <CountersignDialog key={sign.envelopeId} data={sign} />
+              ))}
             </>
           }
         >
@@ -201,7 +204,14 @@ export async function SheetBody({
           header={<MatterTopBar data={loaded.header} />}
           aside={<MatterRbar data={loaded.rbar} />}
           styles={MATTER_CSS}
-          after={<MatterDialogs data={loaded.dialogs} />}
+          after={
+            <>
+              <MatterDialogs data={loaded.dialogs} />
+              {loaded.countersign.map((sign) => (
+                <CountersignDialog key={sign.envelopeId} data={sign} />
+              ))}
+            </>
+          }
           statusbar={loaded.chrome.statusbar}
         >
           <SheetMatter data={loaded.page} />

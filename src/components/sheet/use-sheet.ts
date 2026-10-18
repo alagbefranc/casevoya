@@ -7,7 +7,15 @@ import { dialogId, withoutDialog } from "@/modules/sheet/matter-wire";
 import { withoutNew } from "@/modules/sheet/new-matter";
 import { sheetStateCopy } from "@/modules/sheet/present";
 import { INVITE_DIALOG } from "@/modules/sheet/staff-present";
-import { prefillAgreementTerms, reopenAgreementDialogs, runApproveTemplate, runNewAgreement, runNewTemplate } from "./agreement-acts";
+import {
+  prefillAgreementTerms,
+  reopenAgreementDialogs,
+  reopenCountersign,
+  runApproveTemplate,
+  runCountersign,
+  runNewAgreement,
+  runNewTemplate,
+} from "./agreement-acts";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { runNewTask, syncNewTask } from "./new-task-act";
@@ -151,6 +159,15 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (agreement.getAttribute("aria-busy") === "true" || agreement.hasAttribute("disabled")) return;
         agreement.setAttribute("aria-busy", "true");
         void runNewAgreement(agreement, router).finally(() => agreement.removeAttribute("aria-busy"));
+        return;
+      }
+      // Countersign: the signed-in consultant signs an envelope where it is their turn.
+      const countersign = target.closest<HTMLElement>("[data-countersign]");
+      if (countersign && root.contains(countersign)) {
+        event.preventDefault();
+        if (countersign.getAttribute("aria-busy") === "true") return;
+        countersign.setAttribute("aria-busy", "true");
+        void runCountersign(countersign, router).finally(() => countersign.removeAttribute("aria-busy"));
         return;
       }
       const template = target.closest<HTMLElement>("[data-new-template]");
@@ -451,6 +468,23 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
           if (!search.has("dlg") || root.querySelector("dialog[open]")) return;
           search.delete("dlg");
           search.delete("matter");
+          const query = search.toString();
+          router.replace(`${window.location.pathname}${query ? `?${query}` : ""}`);
+        }, listen);
+      }
+    }
+
+    // ?dlg=countersign&envelope=… (back from step-up, or from the "your turn" email) reopens that
+    // envelope's sign dialog on the Agreements or matter page; closing it drops the flag.
+    const signDialogs = [...root.querySelectorAll<HTMLDialogElement>("dialog[data-sign-envelope]")];
+    if (signDialogs.length) {
+      window.setTimeout(() => reopenCountersign(root, openDialog), 300);
+      for (const sign of signDialogs) {
+        sign.addEventListener("close", () => {
+          const search = new URLSearchParams(window.location.search);
+          if (!search.has("envelope") || root.querySelector("dialog[open]")) return;
+          search.delete("dlg");
+          search.delete("envelope");
           const query = search.toString();
           router.replace(`${window.location.pathname}${query ? `?${query}` : ""}`);
         }, listen);
