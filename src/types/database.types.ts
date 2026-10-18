@@ -4286,6 +4286,10 @@ export type Database = {
           subject: string | null
           text_body: string | null
           to_email: string
+          triage_note: string | null
+          triage_state: string
+          triaged_at: string | null
+          triaged_by: string | null
           updated_at: string
           version: number
         }
@@ -4305,6 +4309,10 @@ export type Database = {
           subject?: string | null
           text_body?: string | null
           to_email: string
+          triage_note?: string | null
+          triage_state?: string
+          triaged_at?: string | null
+          triaged_by?: string | null
           updated_at?: string
           version?: number
         }
@@ -4324,6 +4332,10 @@ export type Database = {
           subject?: string | null
           text_body?: string | null
           to_email?: string
+          triage_note?: string | null
+          triage_state?: string
+          triaged_at?: string | null
+          triaged_by?: string | null
           updated_at?: string
           version?: number
         }
@@ -7990,6 +8002,14 @@ export type Database = {
       }
       complete_unsorted_assignment: {
         Args: { p_item_id: string }
+        Returns: undefined
+      }
+      file_inbound_email: {
+        Args: { p_email_id: string; p_matter_id: string; p_person_id: string }
+        Returns: Json
+      }
+      dismiss_inbound_email: {
+        Args: { p_email_id: string; p_note?: string | null }
         Returns: undefined
       }
       create_email_upload_intent: {
