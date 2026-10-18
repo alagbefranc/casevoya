@@ -130,6 +130,7 @@ import {
 import { PipelineMarkup } from "@/components/sheet/markup/pipeline";
 import { LeadMarkup } from "@/components/sheet/markup/lead";
 import { barColor, buildPipeline, ringOffset, type LeadRow, type StageRow } from "@/modules/leads/present";
+import { Review } from "@/components/portal/documents-live";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -3008,6 +3009,29 @@ describe("Designer fidelity: Lead", () => {
     expect(html).toContain("Not checked yet");
     expect(html).not.toContain("data-toast");
     expect(html).not.toMatch(/Northline|Hamid|Daniel|Amara|NL-2026|CRM-01/);
+  });
+});
+
+describe("Designer fidelity: portal document review, French reason (live-only addition)", () => {
+  it("adds Draft in French with existing classes only and no new styles", () => {
+    // Documented live-only addition (2026-10-18, docs/i18n/README.md): the portal Documents page's
+    // firm review form (a live control, not Designer markup) gains a "Draft in French" button
+    // (btn sm, in a kd-row), a French reason textarea (inp, lang="fr"), and after a machine draft
+    // a "Machine draft: check before sending" note (lbl, role="note") with a required check box
+    // (lbl). No class, colour, spacing, transition or style is new: the only inline style is the
+    // form's existing margin-top. A client who chose French sees the saved French reason in the
+    // existing "Why changes are needed" alert, inside <span lang="fr">; English is unchanged.
+    const html = renderToStaticMarkup(
+      createElement(Review, { organizationId: "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d", versionId: "v1", expectedVersion: 1 }),
+    );
+    const classes = new Set([...html.matchAll(/class="([^"]*)"/g)].map((match) => match[1]));
+    expect([...classes].sort()).toEqual(["btn sm", "btn sm p", "inp", "kd-row", "lbl"]);
+    expect([...html.matchAll(/style="([^"]*)"/g)].map((match) => match[1])).toEqual(["margin-top:12px"]);
+    expect(html).toMatch(/<div class="kd-row"><button type="button" class="btn sm" disabled="">Draft in French<\/button><\/div>/);
+    expect(html).toContain('lang="fr"');
+    expect(html).toContain('aria-label="Reason in French, for a client who prefers French"');
+    // The machine-draft note and its check box appear only once there is a machine draft.
+    expect(html).not.toContain("Machine draft");
   });
 });
 

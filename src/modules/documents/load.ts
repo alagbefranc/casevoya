@@ -1,6 +1,7 @@
 import "server-only";
 
 import { documentCardFlags, progressLine, type ReviewState, type UploadState } from "@/modules/documents/present";
+import { textForViewer, type ShownText } from "@/modules/i18n/display";
 import type { PortalViewer } from "@/modules/portal/load";
 import { createClient } from "@/lib/supabase/server";
 
@@ -18,6 +19,8 @@ export type PortalDocumentCard = {
   countsAsAccepted: boolean;
   canDownload: boolean;
   alert: string | null;
+  /** The language of `alert`: "fr" when a French-preferring viewer sees the reviewed French. */
+  alertLang: "en" | "fr";
   versionId: string | null;
   expectedVersion: number | null;
   requestId: string | null;
@@ -80,7 +83,7 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
   const supabase = await createClient({ organizationId: viewer.organizationId });
   const canReview = REVIEW_ROLES.has(viewer.role);
   const matterId = viewer.matters[0]?.id ?? null;
-  const [{ data: requests }, { data: documents }, { data: versions }, { data: refs }, { data: reviews }, progress] =
+  const [{ data: requests }, { data: documents }, { data: versions }, { data: refs }, { data: reviews }, { data: translations }, progress] =
     await Promise.all([
       supabase
         .from("document_requests")
@@ -95,7 +98,9 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
         .order("version_number", { ascending: false })
         .limit(160),
       supabase.from("document_matter_refs").select("id, document_id, matter_id, removed_at").is("removed_at", null).limit(160),
-      supabase.from("document_reviews").select("version_id, reason, created_at").order("created_at", { ascending: false }).limit(160),
+      supabase.from("document_reviews").select("id, version_id, reason, created_at").order("created_at", { ascending: false }).limit(160),
+      // The French a staff member reviewed and saved with a review (RLS: readable where the review is).
+      supabase.from("document_review_translations").select("review_id, reason").eq("language", "fr-CA").limit(160),
       matterId
         ? supabase.rpc("document_request_progress", { p_matter_id: matterId })
         : Promise.resolve({ data: null }),
@@ -103,10 +108,17 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
 
   const names = new Map(viewer.people.map((person) => [person.id, person.displayName]));
   const docs = new Map((documents ?? []).map((row) => [row.id, row]));
-  const reasonByVersion = new Map<string, string>();
+  const frenchByReview = new Map((translations ?? []).map((row) => [row.review_id, row.reason]));
+  const reasonByVersion = new Map<string, ShownText>();
   for (const review of reviews ?? []) {
-    if (!reasonByVersion.has(review.version_id)) reasonByVersion.set(review.version_id, review.reason);
+    if (!reasonByVersion.has(review.version_id)) {
+      reasonByVersion.set(review.version_id, textForViewer(review.reason, frenchByReview.get(review.id), viewer.prefs?.locale));
+    }
   }
+  const alertFor = (versionId: string | null | undefined, changes: boolean) => {
+    const shown = changes && versionId ? reasonByVersion.get(versionId) : undefined;
+    return { alert: shown?.text ?? null, alertLang: shown?.lang ?? ("en" as const) };
+  };
   const refByDocument = new Map<string, { id: string; matterId: string }>();
   for (const ref of refs ?? []) {
     if (!refByDocument.has(ref.document_id)) refByDocument.set(ref.document_id, { id: ref.id, matterId: ref.matter_id });
@@ -144,7 +156,7 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
       needsYou: flags.needsYou && request.status !== "waived",
       countsAsAccepted: flags.countsAsAccepted,
       canDownload: flags.canDownload,
-      alert: flags.labels.includes("Changes needed") ? (version ? reasonByVersion.get(version.id) ?? null : null) : null,
+      ...alertFor(version?.id, flags.labels.includes("Changes needed")),
       versionId: version?.id ?? null,
       expectedVersion: version?.version ?? null,
       requestId: request.id,
@@ -182,7 +194,7 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
       needsYou: flags.needsYou,
       countsAsAccepted: flags.countsAsAccepted,
       canDownload: flags.canDownload,
-      alert: flags.labels.includes("Changes needed") ? reasonByVersion.get(version.id) ?? null : null,
+      ...alertFor(version.id, flags.labels.includes("Changes needed")),
       versionId: version.id,
       expectedVersion: version.version,
       requestId: null,

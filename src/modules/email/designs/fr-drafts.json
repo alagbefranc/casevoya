@@ -1,0 +1,1610 @@
+{
+  "_readme": "French (fr-CA) email copy. Machine and hand drafts are drafts: a template is sent in French only when its status is approved with reviewer and reviewedOn set, _shared is approved too, and the English hash still matches. See docs/i18n/README.md.",
+  "templates": {
+    "_shared": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:0f2d34633cbb1c642066b8baf07c3dfdd2f958e602ab0f4ee2d4e242b18c3cb4",
+      "strings": {
+        "your_firm": {
+          "en": "Your firm",
+          "fr": "votre cabinet",
+          "origin": "machine"
+        },
+        "tagline": {
+          "en": "Your immigration file",
+          "fr": "Votre dossier d’immigration",
+          "origin": "machine"
+        },
+        "footer_firm": {
+          "en": "Sent by {firm_name} via Casevoya",
+          "fr": "Envoyé par {firm_name} au moyen de Casevoya",
+          "origin": "hand",
+          "note": "Existing hand draft (layout.ts footer)."
+        },
+        "footer_platform": {
+          "en": "Case management for immigration consultants · casevoya.ca",
+          "fr": "Gestion de dossiers pour les consultants en immigration · casevoya.ca",
+          "origin": "machine"
+        },
+        "zone_label": {
+          "en": "{city} time",
+          "fr": "heure de {city}",
+          "origin": "hand",
+          "note": "The code writes « heure d’ » before a vowel (heure d’Edmonton)."
+        },
+        "invite_expiry": {
+          "en": "Your private link works once and expires in 7 days.",
+          "fr": "Votre lien privé fonctionne une seule fois et expire dans 7 jours.",
+          "origin": "machine"
+        },
+        "invite_without_link": {
+          "en": "The private link is not in this email. Use the link the firm gives you.",
+          "fr": "Le lien privé ne se trouve pas dans ce courriel. Utilisez le lien que le cabinet vous fournit.",
+          "origin": "machine"
+        },
+        "contact_to_change": {
+          "en": "To change or cancel, contact {firm_name}.",
+          "fr": "Pour apporter des modifications ou annuler, communiquez avec {firm_name}.",
+          "origin": "machine"
+        },
+        "role_firm_owner": {
+          "en": "a Firm owner",
+          "fr": "propriétaire du cabinet",
+          "origin": "hand",
+          "note": "Article-free so it fits « à titre de {role_phrase} » in EM01."
+        },
+        "role_licensed_consultant": {
+          "en": "a Licensed consultant",
+          "fr": "consultante ou consultant autorisé",
+          "origin": "hand",
+          "note": "Article-free. App role name, not the regulated CICC title; check the wording."
+        },
+        "role_case_manager": {
+          "en": "a Case manager",
+          "fr": "gestionnaire de dossiers",
+          "origin": "hand",
+          "note": "Article-free (EM01)."
+        },
+        "role_assistant": {
+          "en": "an Assistant",
+          "fr": "adjointe ou adjoint",
+          "origin": "hand",
+          "note": "Article-free (EM01)."
+        },
+        "role_finance_user": {
+          "en": "a Finance user",
+          "fr": "responsable des finances",
+          "origin": "hand",
+          "note": "Article-free (EM01)."
+        },
+        "role_other": {
+          "en": "a member of the team",
+          "fr": "membre de l’équipe",
+          "origin": "hand",
+          "note": "Article-free (EM01)."
+        }
+      }
+    },
+    "EM01": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:20a555b693e767f959b9ece49f912ab43018897ec0ebcbd67ab7d0d5ba6712d4",
+      "strings": {
+        "subject_inviter": {
+          "en": "{inviter_name} invited you to {firm_name}",
+          "fr": "{inviter_name} vous invite à {firm_name}",
+          "origin": "machine"
+        },
+        "subject": {
+          "en": "You’re invited to join {firm_name}",
+          "fr": "Vous êtes invité à rejoindre {firm_name}",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Accept your invitation to join {firm_name} on Casevoya.",
+          "fr": "Acceptez l’invitation pour rejoindre {firm_name} sur Casevoya.",
+          "origin": "machine"
+        },
+        "lead": {
+          "en": "You’ve been invited as {role_phrase}. Set a password and two-step sign-in to join.",
+          "fr": "Vous avez été invité en tant que {role_phrase}. Définissez un mot de passe et une authentification à deux étapes pour rejoindre.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Accept invitation",
+          "fr": "Accepter l’invitation",
+          "origin": "machine"
+        }
+      }
+    },
+    "EM02": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:80ec40f27e9bfcf7c1464f45b4da632a4daf779668c2419bb0687a89b2158d0f",
+      "strings": {
+        "subject": {
+          "en": "Your file with {firm_name} is ready",
+          "fr": "Votre dossier avec {firm_name} est prêt",
+          "origin": "hand",
+          "note": "EM14a hand draft."
+        },
+        "preheader": {
+          "en": "Open your private link to set up your portal login.",
+          "fr": "Ouvrez votre lien privé pour créer votre accès au portail.",
+          "origin": "hand",
+          "note": "EM14a hand draft."
+        },
+        "invited_inviter": {
+          "en": "{inviter_name} at {firm_name} invited you to your client portal.",
+          "fr": "{inviter_name} au cabinet {firm_name} vous a invité à accéder à votre portail de compte client.",
+          "origin": "machine"
+        },
+        "invited": {
+          "en": "{firm_name} invited you to your client portal.",
+          "fr": "{firm_name} vous invite à accéder à votre portail client.",
+          "origin": "machine"
+        },
+        "first_step": {
+          "en": "Open your portal to see your first step.",
+          "fr": "Ouvrez votre portail pour voir votre première étape.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Open your portal",
+          "fr": "Ouvrir votre portail",
+          "origin": "hand",
+          "note": "EM14a hand draft."
+        }
+      }
+    },
+    "EM05": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:451190d764249c093d49ce8e2e30328c60798e7c571342f41774d1d0f90a3572",
+      "strings": {
+        "subject": {
+          "en": "Your other sessions were signed out",
+          "fr": "Vos autres sessions ont été déconnectées",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "This follows your password change.",
+          "fr": "Ceci fait suite à votre changement de mot de passe.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "After your password change, every other session was signed out. This is recorded in your firm’s audit trail.",
+          "fr": "Après votre changement de mot de passe, toutes les autres sessions ont été déconnectées. Ceci est consigné dans la traçabilité de votre cabinet {firm_name}.",
+          "origin": "machine",
+          "note": "PLACEHOLDERS DIFFER FROM THE ENGLISH: fix before approval."
+        }
+      }
+    },
+    "EM06": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:acc375e4f8176d82f144004dd12beb70f7f96f42d843e37ab4f5f7c1cafdf930",
+      "strings": {
+        "subject": {
+          "en": "{firm_name} asked for a document",
+          "fr": "{firm_name} vous demande un document",
+          "origin": "hand",
+          "note": "EM14b hand draft (present tense; the English is past tense)."
+        },
+        "preheader": {
+          "en": "Upload it securely in your portal.",
+          "fr": "Téléversez-le en toute sécurité dans votre portail.",
+          "origin": "hand",
+          "note": "EM14b hand draft."
+        },
+        "body_due": {
+          "en": "Please upload a document to your file by {due_date}. Details are in your portal.",
+          "fr": "Téléversez un document à votre dossier avant {due_date}. Les détails se trouvent dans votre portail.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "Please upload a document to your file. Details are in your portal.",
+          "fr": "Veuillez téléverser un document à votre dossier. Les détails se trouvent dans votre portail.",
+          "origin": "hand",
+          "note": "EM14b hand draft."
+        },
+        "cta": {
+          "en": "Open your portal",
+          "fr": "Ouvrir votre portail",
+          "origin": "hand",
+          "note": "EM14b hand draft."
+        }
+      }
+    },
+    "EM07": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:e7d957422caf5091510065f8715e5ec62c98959dce3b9bd25132c645ed588242",
+      "strings": {
+        "subject_due": {
+          "en": "A step on your file is due {short_date}",
+          "fr": "Une étape de votre dossier est prévue {short_date}",
+          "origin": "machine"
+        },
+        "subject": {
+          "en": "A reminder from {firm_name}",
+          "fr": "Un rappel de {firm_name}",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Your portal shows what to do next.",
+          "fr": "Votre portail indique quoi faire.",
+          "origin": "hand",
+          "note": "EM14c hand draft (drops « next »)."
+        },
+        "heading_due": {
+          "en": "A step is due on {short_date}",
+          "fr": "Une étape est prévue pour {short_date}",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "A step on your file is coming up",
+          "fr": "Une étape arrive à échéance",
+          "origin": "hand",
+          "note": "EM14c hand draft."
+        },
+        "body_due": {
+          "en": "A step on your file is due {day_date}. Your portal shows what to do.",
+          "fr": "Une étape de votre dossier est prévue {day_date}. Votre portail indique les démarches à suivre.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "A step on your file is coming up. Your portal shows what to do.",
+          "fr": "Une étape de votre dossier arrive à échéance. Votre portail indique quoi faire.",
+          "origin": "hand",
+          "note": "EM14c hand draft."
+        },
+        "cta": {
+          "en": "Open your portal",
+          "fr": "Ouvrir votre portail",
+          "origin": "hand",
+          "note": "EM14c hand draft."
+        }
+      }
+    },
+    "EM08": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:96e22381f7aede973978ba85ce007ca2c9652b32a7715881426fe7e3af4b99be",
+      "strings": {
+        "subject": {
+          "en": "An agreement from {firm_name} is ready to sign",
+          "fr": "Une convention de {firm_name} est prête à être signée",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Review it and sign in your portal.",
+          "fr": "Examinez-le et signez dans votre portail.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "An agreement is ready to sign",
+          "fr": "Une convention est prête à être signée",
+          "origin": "machine"
+        },
+        "body_service": {
+          "en": "Your service agreement from {firm_name} is ready. Review it and sign in your portal.",
+          "fr": "Votre convention de services de {firm_name} est prête. Examinez-la et signez-la dans votre portail.",
+          "origin": "machine"
+        },
+        "body_consultation": {
+          "en": "Your consultation agreement from {firm_name} is ready. Review it and sign in your portal.",
+          "fr": "Votre convention de consultation de {firm_name} est prête. Examinez-la et signez-la dans votre portail.",
+          "origin": "machine"
+        },
+        "body_amendment": {
+          "en": "Your agreement amendment from {firm_name} is ready. Review it and sign in your portal.",
+          "fr": "Votre modification de convention de {firm_name} est prête. Examinez-la et signez-la dans votre portail.",
+          "origin": "machine"
+        },
+        "body_consent": {
+          "en": "Your consent form from {firm_name} is ready. Review it and sign in your portal.",
+          "fr": "Votre formulaire de consentement de {firm_name} est prêt. Examinez-le et signez dans votre portail.",
+          "origin": "machine"
+        },
+        "body_quote": {
+          "en": "Your quote from {firm_name} is ready. Review it and sign in your portal.",
+          "fr": "Votre devis de {firm_name} est prêt. Examinez-le et signez dans votre portail.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "Your agreement from {firm_name} is ready. Review it and sign in your portal.",
+          "fr": "Votre convention avec {firm_name} est prête. Examinez-la et signez-la dans votre portail.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Review and sign",
+          "fr": "Examiner et signer",
+          "origin": "machine"
+        }
+      }
+    },
+    "EM08-staff": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:30b9f71a7d8e82943bdca2858f725588cfec36745f0530deb01ae2967369a299",
+      "strings": {
+        "subject": {
+          "en": "Your countersignature is needed at {firm_name}",
+          "fr": "Votre contre-signature est requise à {firm_name}",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Open Agreements in Casevoya to sign.",
+          "fr": "Ouvrir les conventions dans Casevoya pour signer.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "It’s your turn to countersign",
+          "fr": "C’est à votre tour de contre-signer",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "Everyone before you has signed an agreement. It is your turn to countersign it for {firm_name}. Open Agreements in Casevoya to sign.",
+          "fr": "Tout le monde avant vous a signé une convention. C’est à votre tour de la contresigner pour {firm_name}. Ouvrir Conventions dans Casevoya pour signer.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Open agreements",
+          "fr": "Ouvrir les conventions",
+          "origin": "machine"
+        }
+      }
+    },
+    "EM09": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:90cef63ed89aafaaf259c3794394fd6c84e0e04a97143a47bb456df57a9d55a9",
+      "strings": {
+        "subject": {
+          "en": "Your agreement with {firm_name} is signed",
+          "fr": "Votre convention avec {firm_name} est signée",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Your copy and the completion certificate are in your portal.",
+          "fr": "Votre copie et le certificat de complétion sont dans votre portail.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "Everyone has signed",
+          "fr": "Tout le monde a signé",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "Your agreement with {firm_name} is signed by everyone. Your copy and the completion certificate are in your portal.",
+          "fr": "Votre convention avec {firm_name} est signée par tous. Votre copie et le certificat d’achèvement se trouvent dans votre portail.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Download your copy",
+          "fr": "Télécharger votre copie",
+          "origin": "machine"
+        }
+      }
+    },
+    "EM09-staff": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:ced88bf041151c1641db5f3cbaf9e45620046ebe59f35bb8562b04a5ef481d2c",
+      "strings": {
+        "subject": {
+          "en": "An agreement at {firm_name} is signed",
+          "fr": "Une convention chez {firm_name} est signée",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "The firm’s copy is on the matter in Casevoya.",
+          "fr": "La copie du cabinet est sur le dossier dans Casevoya.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "Everyone has signed",
+          "fr": "Tout le monde a signé",
+          "origin": "machine",
+          "note": "Same English as another template; same French reused."
+        },
+        "body": {
+          "en": "An agreement you signed is now signed by everyone. The firm’s copy and the completion certificate are on the matter in Casevoya.",
+          "fr": "Une convention que vous avez signée est maintenant signée par tous. La copie du cabinet et le certificat d’achèvement sont disponibles sur le dossier dans Casevoya.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Open agreements",
+          "fr": "Ouvrir les conventions",
+          "origin": "machine",
+          "note": "Same English as another template; same French reused."
+        }
+      }
+    },
+    "EM10": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:3408fccaeca8cf4ab0080b170441a37e262e8f076caab78a82937d3e14b61a9f",
+      "strings": {
+        "subject": {
+          "en": "New invoice from {firm_name}",
+          "fr": "Nouvelle facture de {firm_name}",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "The amount and payment options are in your portal.",
+          "fr": "Le montant et les options de paiement se trouvent dans votre portail.",
+          "origin": "machine"
+        },
+        "body_number_due": {
+          "en": "Invoice {invoice_number} has a balance due on {due_date}. The amount and payment options are in your portal.",
+          "fr": "La facture {invoice_number} a un solde dû le {due_date}. Le montant et les options de paiement se trouvent dans votre portail.",
+          "origin": "machine"
+        },
+        "body_due": {
+          "en": "Your invoice has a balance due on {due_date}. The amount and payment options are in your portal.",
+          "fr": "Votre facture a un solde dû le {due_date}. Le montant et les options de paiement se trouvent dans votre portail.",
+          "origin": "machine"
+        },
+        "body_number": {
+          "en": "Invoice {invoice_number} is ready. The amount and payment options are in your portal.",
+          "fr": "La facture {invoice_number} est prête. Le montant et les options de paiement se trouvent dans votre portail.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "Your invoice is ready. The amount and payment options are in your portal.",
+          "fr": "Votre facture est prête. Le montant et les options de paiement se trouvent dans votre portail.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "View invoice",
+          "fr": "Afficher la facture",
+          "origin": "machine"
+        }
+      }
+    },
+    "EM11": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:d3d1b27e4df6ec9716e78f5f4e99dd3ac7aecec639baae7d4b477ec5d42cdf69",
+      "strings": {
+        "subject": {
+          "en": "{firm_name} received your payment",
+          "fr": "{firm_name} a reçu votre paiement",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Your receipt is in your portal.",
+          "fr": "Votre reçu se trouve dans votre portail.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "Payment received",
+          "fr": "Paiement reçu",
+          "origin": "machine"
+        },
+        "body_number": {
+          "en": "{firm_name} received your payment. Receipt {receipt_number} is in your portal.",
+          "fr": "{firm_name} a reçu votre paiement. Le reçu {receipt_number} se trouve dans votre portail.",
+          "origin": "machine"
+        },
+        "body_advance_number": {
+          "en": "{firm_name} received your advance payment. Receipt {receipt_number} is in your portal.",
+          "fr": "{firm_name} a reçu votre paiement anticipé. Le reçu {receipt_number} se trouve dans votre portail.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "{firm_name} received your payment. Your receipt is in your portal.",
+          "fr": "{firm_name} a reçu votre paiement. Votre reçu se trouve dans votre portail.",
+          "origin": "machine"
+        },
+        "body_advance": {
+          "en": "{firm_name} received your advance payment. Your receipt is in your portal.",
+          "fr": "{firm_name} a reçu votre paiement anticipé. Votre reçu se trouve dans votre portail.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "View receipt",
+          "fr": "Afficher le reçu",
+          "origin": "machine"
+        }
+      }
+    },
+    "EM12": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:af0e3d9bfef984a6c0594f83a4d9313b8a55f5096a1311f274e550c6f166f408",
+      "strings": {
+        "subject": {
+          "en": "A client notice was not delivered",
+          "fr": "Un avis au client n’a pas été livré",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "A follow-up task is open in Casevoya.",
+          "fr": "Une tâche de suivi est ouverte dans Casevoya.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "Critical notice not delivered",
+          "fr": "Avis critique non livré",
+          "origin": "machine"
+        },
+        "body_reference": {
+          "en": "A notice on matter {matter_reference} bounced and was not delivered. A follow-up task was created.",
+          "fr": "Un avis concernant l’affaire {matter_reference} a rebondi et n’a pas été livré. Une tâche de suivi a été créée.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "A client notice bounced and was not delivered. A follow-up task was created.",
+          "fr": "Un avis destiné à un client a rebondi et n’a pas été livré. Une tâche de suivi a été créée.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Open task",
+          "fr": "Ouvrir la tâche",
+          "origin": "machine"
+        }
+      }
+    },
+    "EM15": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:b03c14d2760f4728d648cf3a543928fd07d319e3710ebb8f58cd38f9453df513",
+      "strings": {
+        "subject": {
+          "en": "There’s news on your file",
+          "fr": "Il y a des nouvelles sur votre dossier",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "For your privacy, the details are in your portal.",
+          "fr": "Pour votre confidentialité, les détails se trouvent dans votre portail.",
+          "origin": "machine"
+        },
+        "body_consultant": {
+          "en": "{firm_name} recorded a decision on your file. For your privacy, the details are in your portal. {consultant_name} will contact you about next steps.",
+          "fr": "{firm_name} a enregistré une décision concernant votre dossier. Pour protéger votre vie privée, les détails se trouvent dans votre portail. {consultant_name} communiquera avec vous au sujet des prochaines étapes.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "{firm_name} recorded a decision on your file. For your privacy, the details are in your portal. {firm_name} will contact you about next steps.",
+          "fr": "{firm_name} a enregistré une décision concernant votre dossier. Pour des raisons de confidentialité, les détails se trouvent dans votre portail. {firm_name} communiquera avec vous au sujet des prochaines étapes.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Open your portal",
+          "fr": "Ouvrir votre portail",
+          "origin": "machine",
+          "note": "Same English as another template; same French reused."
+        }
+      }
+    },
+    "EM16a": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:118205fd2d0db6552435c8901530df60c0cfad8bec68c43579aa3b037cbefde2",
+      "strings": {
+        "subject": {
+          "en": "Your consultation with {firm_name} is booked",
+          "fr": "Votre consultation avec {firm_name} est prise",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Here’s when, and how you’ll meet.",
+          "fr": "Voici quand et comment vous vous rencontrerez.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "Your consultation is booked",
+          "fr": "Votre consultation est réservée",
+          "origin": "machine"
+        },
+        "when_consultant": {
+          "en": "{date_time} ({time_zone_label}) with {consultant_name}.",
+          "fr": "{date_time} ({time_zone_label}) avec {consultant_name}.",
+          "origin": "machine"
+        },
+        "when": {
+          "en": "{date_time} ({time_zone_label}).",
+          "fr": "{date_time} ({time_zone_label})",
+          "origin": "machine"
+        },
+        "consultant": {
+          "en": "Your consultation with {consultant_name}.",
+          "fr": "Votre consultation avec {consultant_name}.",
+          "origin": "machine"
+        },
+        "plain": {
+          "en": "Your consultation.",
+          "fr": "Votre consultation.",
+          "origin": "machine"
+        },
+        "meet_phone": {
+          "en": "{firm_name} will call you at the number you gave.",
+          "fr": "{firm_name} vous appellera au numéro que vous avez fourni.",
+          "origin": "machine"
+        },
+        "meet_link": {
+          "en": "{firm_name} will send you the meeting link.",
+          "fr": "{firm_name} vous enverra le lien de la réunion.",
+          "origin": "machine"
+        },
+        "meet_address": {
+          "en": "At {address}.",
+          "fr": "À {address}.",
+          "origin": "machine"
+        },
+        "meet_confirm_address": {
+          "en": "{firm_name} will confirm the address.",
+          "fr": "{firm_name} confirmera l’adresse.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "View booking",
+          "fr": "Voir la réservation",
+          "origin": "machine"
+        }
+      }
+    },
+    "EM16b": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:655f41dc335a338a645c99a1fb14c033d9c98ad8c73b251a9b5259f89f6ead9e",
+      "strings": {
+        "subject": {
+          "en": "Your appointment with {firm_name} moved",
+          "fr": "Votre rendez-vous avec {firm_name} reporté",
+          "origin": "machine"
+        },
+        "preheader_portal": {
+          "en": "The new time is in your portal.",
+          "fr": "Le nouvel horaire est dans votre portail.",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Here’s the new time.",
+          "fr": "Voici l’heure nouvelle.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "Your appointment moved",
+          "fr": "Votre rendez-vous a été déplacé",
+          "origin": "machine"
+        },
+        "moved_when": {
+          "en": "Your consultation is now {date_time} ({time_zone_label}).",
+          "fr": "Votre consultation est maintenant {date_time} ({time_zone_label}).",
+          "origin": "machine"
+        },
+        "moved": {
+          "en": "Your consultation has a new time.",
+          "fr": "Votre consultation a un nouvel horaire.",
+          "origin": "machine"
+        },
+        "reminders_moved": {
+          "en": "Your reminders moved too.",
+          "fr": "Vos rappels ont également été déplacés.",
+          "origin": "machine"
+        },
+        "portal_no_time": {
+          "en": "Your consultation has a new time. It’s in your portal, and your reminders moved too.",
+          "fr": "Votre consultation a une nouvelle heure. Elle se trouve dans votre portail, et vos rappels ont également été déplacés.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "View booking",
+          "fr": "Voir la réservation",
+          "origin": "machine",
+          "note": "Same English as another template; same French reused."
+        }
+      }
+    },
+    "EM16c": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:618d3df7ded1a46250a31733d87272f2c25edca6ad66ff7dbba79bc06bdfcdd3",
+      "strings": {
+        "subject": {
+          "en": "{firm_name} cancelled your consultation",
+          "fr": "{firm_name} a annulé votre consultation",
+          "origin": "machine"
+        },
+        "preheader_portal": {
+          "en": "You can book another time in your portal.",
+          "fr": "Vous pouvez prendre un autre rendez-vous dans votre portail.",
+          "origin": "machine"
+        },
+        "preheader_page": {
+          "en": "You can book another time online.",
+          "fr": "Vous pouvez prendre un autre rendez-vous en ligne.",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "To book another time, contact the firm.",
+          "fr": "Pour prendre un autre rendez-vous, communiquez avec le cabinet.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "Your consultation was cancelled",
+          "fr": "Votre consultation a été annulée",
+          "origin": "machine"
+        },
+        "body_when": {
+          "en": "Your consultation on {date_time} ({time_zone_label}) was cancelled by {firm_name}.",
+          "fr": "Votre consultation du {date_time} ({time_zone_label}) a été annulée par {firm_name}.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "Your consultation was cancelled by {firm_name}.",
+          "fr": "Votre consultation a été annulée par {firm_name}.",
+          "origin": "machine"
+        },
+        "contact_to_book": {
+          "en": "To book another time, contact {firm_name}.",
+          "fr": "Pour prendre un autre rendez-vous, communiquez avec {firm_name}.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Book another time",
+          "fr": "Prendre un autre rendez-vous",
+          "origin": "machine"
+        }
+      }
+    },
+    "EM17": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:d1e82f0bd39ed94120876b98d7f9b9ceaea774d1d8fa8dc43b0505868d406ae5",
+      "strings": {
+        "subject": {
+          "en": "You gave Casevoya support access",
+          "fr": "Vous avez accordé l’accès au support Casevoya",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Every action is in your audit trail. You can end it now.",
+          "fr": "Chaque action est consignée dans votre journal d’audit. Vous pouvez y mettre fin maintenant.",
+          "origin": "machine"
+        },
+        "default_approver": {
+          "en": "A firm owner",
+          "fr": "un propriétaire de cabinet",
+          "origin": "machine"
+        },
+        "approved_minutes": {
+          "en": "{approver_name} approved {minutes} minutes of support access on one matter.",
+          "fr": "{approver_name} a approuvé {minutes} minutes d’accès au soutien pour une affaire.",
+          "origin": "machine"
+        },
+        "approved": {
+          "en": "{approver_name} approved support access on one matter.",
+          "fr": "{approver_name} a approuvé l’accès au soutien pour une affaire.",
+          "origin": "machine"
+        },
+        "ends": {
+          "en": "It ends {date_time}.",
+          "fr": "Cela se termine {date_time}.",
+          "origin": "machine"
+        },
+        "audit": {
+          "en": "Every action is in your audit trail, and you can end it now.",
+          "fr": "Chaque action est consignée dans votre journal d’audit, et vous pouvez la terminer maintenant.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Review or end access",
+          "fr": "Examiner ou mettre fin à l’accès",
+          "origin": "machine"
+        }
+      }
+    },
+    "EM18a": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:9c55851a36415ffe36f71d743b823b92a381f9ea847aa3aeca4059898692e7d3",
+      "strings": {
+        "subject": {
+          "en": "Your Casevoya subscription is past due",
+          "fr": "Votre abonnement Casevoya est en retard",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Nothing is deleted. Update billing to keep working.",
+          "fr": "Rien n’est supprimé. Mettez à jour la facturation pour continuer à travailler.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "We couldn’t collect {firm_name}’s subscription payment. Nothing is deleted; new work pauses after notice if it stays unpaid.",
+          "fr": "Nous n’avons pas pu collecter le paiement de l’abonnement de {firm_name}. Rien n’est supprimé ; les nouveaux travaux sont mis en pause après un avis si celui-ci reste impayé.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Update billing",
+          "fr": "Mettre à jour la facturation",
+          "origin": "machine"
+        }
+      }
+    },
+    "EM18b": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:18a010908d7f755b6db510715f44e291f18b446a9d1dcd30366badcf4c360231",
+      "strings": {
+        "subject": {
+          "en": "{firm_name}’s workspace is restricted",
+          "fr": "L’espace de travail de {firm_name} est restreint",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Clients can still sign in, upload and pay. Nothing is deleted.",
+          "fr": "Les clients peuvent toujours se connecter, téléverser et payer. Rien n’est supprimé.",
+          "origin": "machine"
+        },
+        "body_days": {
+          "en": "Your subscription has been past due for {days} days, so new matters, invitations and submission releases are paused. Clients can still sign in, upload and pay, and nothing is deleted.",
+          "fr": "Votre abonnement est en retard depuis {days} jours, donc les nouvelles affaires, les invitations et les versions de soumission sont suspendues. Les clients peuvent toujours se connecter, téléverser et payer, et rien n’est supprimé.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "Your subscription has been past due, so new matters, invitations and submission releases are paused. Clients can still sign in, upload and pay, and nothing is deleted.",
+          "fr": "Votre abonnement est en retard, vos nouveaux dossiers, invitations et publications sont donc en pause. Les clients peuvent toujours se connecter, téléverser et payer, et rien n’est supprimé.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Update billing",
+          "fr": "Mettre à jour la facturation",
+          "origin": "machine",
+          "note": "Same English as another template; same French reused."
+        }
+      }
+    },
+    "EM19a": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:e5011f630d019cf3542eec00d020dbf76df2f23e17507f5ba6ac318bf6be8ea9",
+      "strings": {
+        "subject": {
+          "en": "Your export is ready",
+          "fr": "Votre exportation est prête",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Sign in to download it.",
+          "fr": "Connectez-vous pour le télécharger.",
+          "origin": "machine"
+        },
+        "body_hours": {
+          "en": "The client-file export you started is ready. The link works for {hours} hours and needs you to sign in.",
+          "fr": "L’exportation de votre dossier client que vous avez lancée est prête. Le lien est valide pendant {hours} heures et nécessite que vous vous connectiez.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "The client-file export you started is ready. The link needs you to sign in.",
+          "fr": "L’exportation de votre dossier client que vous avez lancée est prête. Le lien nécessite que vous vous connectiez.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Download export",
+          "fr": "Télécharger l’exportation",
+          "origin": "machine"
+        }
+      }
+    },
+    "EM19b": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:9ee735bb2815f1045d31f34073b48d280016facc9b43241e7173c346c54a5fde",
+      "strings": {
+        "subject": {
+          "en": "Your client-file export expires soon",
+          "fr": "L’exportation de votre dossier client expire bientôt",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Download it before the link expires.",
+          "fr": "Téléchargez-le avant que le lien n’expire.",
+          "origin": "machine"
+        },
+        "expires_started_hour": {
+          "en": "The export you started on {short_date} expires in 1 hour.",
+          "fr": "L’exportation que vous avez lancée le {short_date} expire dans 1 heure.",
+          "origin": "machine"
+        },
+        "expires_started_hours": {
+          "en": "The export you started on {short_date} expires in {hours} hours.",
+          "fr": "L’exportation que vous avez lancée le {short_date} expire dans {hours} heures.",
+          "origin": "machine"
+        },
+        "expires_started": {
+          "en": "The export you started on {short_date} expires soon.",
+          "fr": "L’exportation que vous avez lancée le {short_date} expire bientôt.",
+          "origin": "machine"
+        },
+        "expires_hour": {
+          "en": "The export you started expires in 1 hour.",
+          "fr": "L’exportation que vous avez lancée expire dans 1 heure.",
+          "origin": "machine"
+        },
+        "expires_hours": {
+          "en": "The export you started expires in {hours} hours.",
+          "fr": "L’exportation que vous avez lancée expire dans {hours} heures.",
+          "origin": "machine"
+        },
+        "expires": {
+          "en": "The export you started expires soon.",
+          "fr": "L’exportation que vous avez lancée expire bientôt.",
+          "origin": "machine"
+        },
+        "after": {
+          "en": "After that you can start a new one; nothing in the file changes.",
+          "fr": "Après cela, vous pouvez en commencer un nouveau ; rien dans le dossier ne change.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Download export",
+          "fr": "Télécharger l’exportation",
+          "origin": "machine",
+          "note": "Same English as another template; same French reused."
+        }
+      }
+    },
+    "EX02": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:14ac3e8d48e204b284a39d9690542a5b29823a74f1f12f8443f9ca9ccedec8be",
+      "strings": {
+        "subject": {
+          "en": "New sign-in to your Casevoya account",
+          "fr": "Nouvelle connexion à votre compte Casevoya",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "If it wasn’t you, sign out everywhere now.",
+          "fr": "Si ce n’était pas vous, déconnectez-vous partout maintenant.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "New sign-in to your account",
+          "fr": "Nouvelle connexion à votre compte",
+          "origin": "machine"
+        },
+        "body_device": {
+          "en": "Someone signed in to {firm_name} on a new device ({device}). If it wasn’t you, sign out everywhere now.",
+          "fr": "Quelqu’un s’est connecté à {firm_name} sur un nouvel appareil ({device}). Si ce n’était pas vous, déconnectez-vous partout maintenant.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "Someone signed in to {firm_name} on a new device. If it wasn’t you, sign out everywhere now.",
+          "fr": "Quelqu’un s’est connecté à {firm_name} sur un nouvel appareil. Si ce n’était pas vous, déconnectez-vous partout immédiatement.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Review sign-ins",
+          "fr": "Examiner les connexions",
+          "origin": "machine"
+        }
+      }
+    },
+    "EX03": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:190715eb775f9ee0c8d833fb26ecb7d4036254f98bb6edd379101588823e768a",
+      "strings": {
+        "subject": {
+          "en": "Your invitation to {firm_name} expired",
+          "fr": "Votre invitation à {firm_name} a expiré",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Ask the firm to send a new one.",
+          "fr": "Demandez au cabinet d’en envoyer un nouveau.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "Your invitation expired",
+          "fr": "Votre invitation a expiré",
+          "origin": "machine"
+        },
+        "body_inviter": {
+          "en": "Your invitation to {firm_name} expired after 7 days. Ask {inviter_name} to send a new one.",
+          "fr": "Votre invitation à {firm_name} a expiré après 7 jours. Demandez à {inviter_name} d’en envoyer une nouvelle.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "Your invitation to {firm_name} expired after 7 days. Ask the firm owner to send a new one.",
+          "fr": "Votre invitation à {firm_name} a expiré après 7 jours. Demandez au propriétaire du cabinet de vous en envoyer une nouvelle.",
+          "origin": "machine"
+        }
+      }
+    },
+    "EX04": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:00c11335811c3735e75328bbc6a540baa72efb9b1298041412acce89bc8e63fe",
+      "strings": {
+        "subject": {
+          "en": "{firm_name} opened your own login",
+          "fr": "{firm_name} a ouvert votre propre connexion",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Set up your login. You choose what you share.",
+          "fr": "Configurez votre connexion. Vous choisissez ce que vous partagez.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "You’re invited to share your file",
+          "fr": "Vous êtes invité à partager votre dossier",
+          "origin": "machine"
+        },
+        "lead": {
+          "en": "{firm_name} has opened your own login for the family file. You choose what you share.",
+          "fr": "{firm_name} a ouvert votre propre connexion pour le dossier familial. Vous choisissez ce que vous partagez.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Set up your login",
+          "fr": "Configurer votre connexion",
+          "origin": "machine"
+        }
+      }
+    },
+    "EX05": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:8f53997f42da0c19eb44b994eec65e8741849f6942cde151896876a9c5587342",
+      "strings": {
+        "subject": {
+          "en": "A document needs another look",
+          "fr": "Un document nécessite un nouvel examen",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "The reason is in your portal.",
+          "fr": "La raison se trouve dans votre portail.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "{firm_name} asked for a clearer copy of one of your documents. The reason is in your portal.",
+          "fr": "{firm_name} a demandé une copie plus claire d’un de vos documents. La raison se trouve dans votre portail.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Open your portal",
+          "fr": "Ouvrir votre portail",
+          "origin": "machine",
+          "note": "Same English as another template; same French reused."
+        }
+      }
+    },
+    "EX06": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:b555b16791907fead584156dfe6f74f1a80cb6efc163389911ac5f5800dd6e8b",
+      "strings": {
+        "subject": {
+          "en": "Your document was accepted",
+          "fr": "Votre document a été accepté",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Accepted by {firm_name}, not by the government.",
+          "fr": "Accepté par {firm_name}, mais pas par le gouvernement.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "{firm_name} accepted one of your documents for your file. Accepted means accepted by {firm_name}, not by the government.",
+          "fr": "{firm_name} a accepté l’un de vos documents pour votre dossier. Accepté signifie accepté par {firm_name}, et non par le gouvernement.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Open your portal",
+          "fr": "Ouvrir votre portail",
+          "origin": "machine",
+          "note": "Same English as another template; same French reused."
+        }
+      }
+    },
+    "EX06-received": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:11f9b183bd92503fe3279ecbdf8fce27839e312bf09f0e1e57fef0c93aab4b1f",
+      "strings": {
+        "subject": {
+          "en": "{firm_name} received your document",
+          "fr": "{firm_name} a reçu votre document",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "It’s in your portal.",
+          "fr": "Ceci se trouve dans votre portail.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "Your document was received",
+          "fr": "Votre document a été reçu",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "{firm_name} received a document on your file. It’s in your portal.",
+          "fr": "{firm_name} a reçu un document relatif à votre dossier. Il se trouve dans votre portail.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Open your portal",
+          "fr": "Ouvrir votre portail",
+          "origin": "machine",
+          "note": "Same English as another template; same French reused."
+        }
+      }
+    },
+    "EX07": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:76558f9887c707b77f218ac164e77e9dd186ed3151350bc1978b2658f18a8ffa",
+      "strings": {
+        "subject": {
+          "en": "New message from {firm_name}",
+          "fr": "Nouveau message de {firm_name}",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "For your privacy, read it in your portal.",
+          "fr": "Pour votre confidentialité, lisez-le dans votre portail.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "You have a new message",
+          "fr": "Vous avez un nouveau message",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "{firm_name} sent you a message. For your privacy, read it in your portal.",
+          "fr": "{firm_name} vous a envoyé un message. Pour votre confidentialité, lisez-le dans votre portail.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Read message",
+          "fr": "Lire le message",
+          "origin": "machine"
+        }
+      }
+    },
+    "EX08": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:a6d535eefc1466ad5d41ecf83043fea7c8e754968e4071ceacb4a0dcd2913899",
+      "strings": {
+        "subject": {
+          "en": "Your payment to {firm_name} didn’t go through",
+          "fr": "Votre paiement à {firm_name} n’a pas été traité",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "You haven’t been charged. You can try again in your portal.",
+          "fr": "Vous n’avez pas été facturé. Vous pouvez essayer à nouveau dans votre portail.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "We couldn’t take your payment",
+          "fr": "Nous n’avons pas pu prendre votre paiement",
+          "origin": "machine"
+        },
+        "body_number": {
+          "en": "Your card payment to {firm_name} for invoice {invoice_number} didn’t go through. You haven’t been charged. You can try again in your portal.",
+          "fr": "Le paiement par carte pour la facture {invoice_number} de {firm_name} n’a pas été effectué. Vous n’avez pas été débité. Vous pouvez essayer à nouveau dans votre portail.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "Your card payment to {firm_name} didn’t go through. You haven’t been charged. You can try again in your portal.",
+          "fr": "Votre paiement par carte à {firm_name} n’a pas été effectué. Vous n’avez pas été débité. Vous pouvez essayer à nouveau dans votre portail.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Open payments",
+          "fr": "Ouvrir les paiements",
+          "origin": "machine"
+        }
+      }
+    },
+    "EX09": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:fbb471777eabb10020917ce8391117074bd11a30fa3798098cb4bce42379aa34",
+      "strings": {
+        "subject": {
+          "en": "{firm_name} started a refund",
+          "fr": "{firm_name} a initié un remboursement",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Refunds usually take 5 to 10 business days to appear.",
+          "fr": "Les remboursements mettent habituellement 5 à 10 jours ouvrables pour apparaître.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "Your refund is on its way",
+          "fr": "Votre remboursement est en route",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "{firm_name} started a refund to your card. Refunds usually take 5 to 10 business days to appear.",
+          "fr": "{firm_name} a initié un remboursement sur votre carte. Les remboursements mettent généralement 5 à 10 jours ouvrables pour apparaître.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "View payments",
+          "fr": "Afficher les paiements",
+          "origin": "machine"
+        }
+      }
+    },
+    "EX10": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:5609f6110cbf66036cacfcf1817294c60d4fbdbc68b1777c2684639a6c47260a",
+      "strings": {
+        "subject": {
+          "en": "Your refund from {firm_name} is complete",
+          "fr": "Votre remboursement de {firm_name} est complet",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "The details are in your portal.",
+          "fr": "Les détails se trouvent dans votre portail.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "Your refund is complete",
+          "fr": "Votre remboursement est complet",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "{firm_name}’s refund has been sent. The details are in your portal.",
+          "fr": "Le remboursement de {firm_name} a été envoyé. Les détails se trouvent dans votre portail.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "View payments",
+          "fr": "Afficher les paiements",
+          "origin": "machine",
+          "note": "Same English as another template; same French reused."
+        }
+      }
+    },
+    "EX11": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:d2d35292fe75b937377c701841dfc7932aa24a226401374aa50ab3751d9b7c0f",
+      "strings": {
+        "subject": {
+          "en": "Casevoya support asked for access",
+          "fr": "Le support Casevoya a demandé l’accès",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Nothing opens unless you approve.",
+          "fr": "Rien ne s’ouvre à moins que vous n’approuviez.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "Support access requested",
+          "fr": "Accès au support demandé",
+          "origin": "machine"
+        },
+        "body_minutes": {
+          "en": "Casevoya support asked for {minutes} minutes of access to one matter at {firm_name}. Nothing opens unless you approve.",
+          "fr": "Le support Casevoya a demandé {minutes} minutes d’accès à une affaire au cabinet {firm_name}. Rien ne s’ouvrira sans votre approbation.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "Casevoya support asked for access to one matter at {firm_name}. Nothing opens unless you approve.",
+          "fr": "Le support Casevoya a demandé l’accès à une affaire chez {firm_name}. Rien ne s’ouvre à moins que vous n’approuviez.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Review request",
+          "fr": "Examiner la demande",
+          "origin": "machine"
+        }
+      }
+    },
+    "EX12": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:9ac41e7b7dde54441cfc301a7c15d3b0c5976f965b49df2eb405c46963fd3417",
+      "strings": {
+        "subject": {
+          "en": "A licence check needs attention",
+          "fr": "Vérification de licence nécessitant une attention",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "Open Licences in Casevoya to review it.",
+          "fr": "Ouvrir les licences dans Casevoya pour l’examiner.",
+          "origin": "machine"
+        },
+        "body_consultant": {
+          "en": "The register check couldn’t confirm {consultant_name}’s licence. New engagements and submission releases are paused.",
+          "fr": "La vérification du registre n’a pas pu confirmer la licence de {consultant_name}. Les nouveaux engagements et les soumissions sont suspendus.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "The register check couldn’t confirm a consultant’s licence. New engagements and submission releases are paused.",
+          "fr": "La vérification du registre n’a pas pu confirmer la licence du consultant. Les nouveaux engagements et les publications sont suspendus.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Open licences",
+          "fr": "Ouvrir les permis",
+          "origin": "machine"
+        }
+      }
+    },
+    "EX13": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:db111c7bf8a76bbc4821428ac7813dfed38959d4597bcb3ae8ad7fdf5e83f641",
+      "strings": {
+        "subject": {
+          "en": "{firm_name} received your privacy request",
+          "fr": "{firm_name} a reçu votre demande de confidentialité",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "You can follow it in your portal.",
+          "fr": "Vous pouvez le suivre dans votre portail.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "We received your privacy request",
+          "fr": "Nous avons reçu votre demande de confidentialité",
+          "origin": "machine"
+        },
+        "body_by": {
+          "en": "{firm_name} received your request to see your records. They’ll reply by {due_date}.",
+          "fr": "{firm_name} a reçu votre demande pour consulter vos dossiers. Ils vous répondront au plus tard {due_date}.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "{firm_name} received your request to see your records.",
+          "fr": "{firm_name} a reçu votre demande pour consulter vos dossiers.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Open your portal",
+          "fr": "Ouvrir votre portail",
+          "origin": "machine",
+          "note": "Same English as another template; same French reused."
+        }
+      }
+    },
+    "EX14": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:9253833dcd54416f0f19d4b92778d3502f0d79051e3a0c10c17527934185d9ca",
+      "strings": {
+        "subject": {
+          "en": "{firm_name} received your complaint",
+          "fr": "{firm_name} a reçu votre plainte",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "We’ll respond in writing.",
+          "fr": "Nous allons répondre par écrit.",
+          "origin": "machine"
+        },
+        "heading": {
+          "en": "We received your complaint",
+          "fr": "Nous avons reçu votre plainte",
+          "origin": "machine"
+        },
+        "body_by_handler": {
+          "en": "{firm_name} received your complaint and will respond by {due_date}. It’s handled by {handler_name}.",
+          "fr": "{firm_name} a reçu votre plainte et y répondra au plus tard {due_date}. Elle est traitée par {handler_name}.",
+          "origin": "machine"
+        },
+        "body_by": {
+          "en": "{firm_name} received your complaint and will respond by {due_date}.",
+          "fr": "{firm_name} a reçu votre plainte et y répondra au plus tard {due_date}.",
+          "origin": "machine"
+        },
+        "body_handler": {
+          "en": "{firm_name} received your complaint and will respond in writing. It’s handled by {handler_name}.",
+          "fr": "{firm_name} a reçu votre plainte et y répondra par écrit. Elle est traitée par {handler_name}.",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "{firm_name} received your complaint and will respond in writing.",
+          "fr": "{firm_name} a reçu votre plainte et y répondra par écrit.",
+          "origin": "machine"
+        }
+      }
+    },
+    "generic": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-18",
+      "sourceHash": "sha256:7123e1ebd8eda11f0b57fee4bd88ce0def0711196263bd1266b0ead04c24d217",
+      "strings": {
+        "subject": {
+          "en": "An update from {firm_name}",
+          "fr": "Mise à jour de {firm_name}",
+          "origin": "machine"
+        },
+        "preheader": {
+          "en": "The details are in your portal.",
+          "fr": "Les détails se trouvent dans votre portail.",
+          "origin": "machine",
+          "note": "Same English as another template; same French reused."
+        },
+        "heading": {
+          "en": "There’s an update on your file",
+          "fr": "Mise à jour de votre dossier",
+          "origin": "machine"
+        },
+        "body": {
+          "en": "{firm_name} has an update for you. For your privacy, the details are in your portal.",
+          "fr": "{firm_name} a une mise à jour pour vous. Pour votre confidentialité, les détails se trouvent dans votre portail.",
+          "origin": "machine"
+        },
+        "cta": {
+          "en": "Open your portal",
+          "fr": "Ouvrir votre portail",
+          "origin": "machine",
+          "note": "Same English as another template; same French reused."
+        }
+      }
+    }
+  }
+}

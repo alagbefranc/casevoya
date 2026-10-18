@@ -3,6 +3,7 @@
 import { documentError } from "@/modules/documents/errors";
 import { mediaTypeForFilename, UPLOAD_CEILING_BYTES } from "@/modules/documents/files";
 import { verifyDocumentStream } from "@/modules/documents/verify";
+import { TRANSLATE_MODEL } from "@/modules/i18n/translate";
 import { verifyTotpCode } from "@/lib/auth/verify-totp";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -229,12 +230,36 @@ export async function reviewDocumentVersion(input: {
   reason: string;
   annotations?: string | null;
   code: string;
+  /** The reason in French, for a client who prefers French. Optional. */
+  reasonFr?: string | null;
+  /** The French started as a "Draft in French" machine draft. */
+  reasonFrMachine?: boolean;
+  /** The person saving confirmed they checked the machine-drafted French. */
+  reasonFrReviewed?: boolean;
 }) {
   if (!isUuid(input.versionId) || !DECISIONS.includes(input.decision as Decision)) {
     return { error: "Choose a file and a decision." };
   }
+  const french = (input.reasonFr ?? "").trim();
+  if (french && input.reasonFrMachine && input.reasonFrReviewed !== true) {
+    return { error: "Check the machine-drafted French and confirm it before saving." };
+  }
   const session = await clientFor(input.organizationId, input.code);
   if ("error" in session) return { error: session.error };
+  if (french) {
+    const { data, error } = await session.supabase.rpc("review_document_version_fr", {
+      p_version_id: input.versionId,
+      p_expected_version: input.expectedVersion,
+      p_decision: input.decision as Decision,
+      p_reason: input.reason,
+      p_annotations: input.annotations ?? null,
+      p_reason_fr: french,
+      p_machine_drafted: input.reasonFrMachine === true,
+      p_model: input.reasonFrMachine === true ? TRANSLATE_MODEL : null,
+    });
+    if (error) return { error: documentError(error.message) };
+    return { version: data };
+  }
   const { data, error } = await session.supabase.rpc("review_document_version", {
     p_version_id: input.versionId,
     p_expected_version: input.expectedVersion,

@@ -10,7 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "check:migrations": "node scripts/check-migrations.mjs",
-    "email:previews": "vitest run tests/email-previews.test.ts -u",
+    "email:previews": "vitest run tests/email-previews.test.ts tests/email-fr-review.test.ts -u",
     "db:types": "supabase gen types typescript --project-id aqjtvqmojfamtspzyeqm --schema public > src/types/database.types.ts",
     "verify": "pnpm check:migrations && pnpm lint && pnpm typecheck && pnpm test",
     "build:workers": "CASEVOYA_TARGET=workers opennextjs-cloudflare build",

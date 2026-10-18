@@ -22,6 +22,7 @@ import {
   staffRolePhrase,
   uuidOrNull,
 } from "@/modules/email/designs/format";
+import { buildLocalized } from "@/modules/email/designs/localized";
 
 export type TemplateStatus = "wired" | "ready-not-wired" | "deferred";
 export type Audience = "staff" | "firm owner" | "client" | "adult dependant";
@@ -491,23 +492,14 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
     name: "French client invite (draft)",
     audience: "client",
     brand: "firm",
-    trigger: "French client invitation (fr-CA). Draft translation: needs a certified translator. Never sent",
+    trigger: "Preview of EM02's French draft (fr-CA, fr-drafts.json). Sent as EM02 only to a French-preferring recipient after a named reviewer approves EM02's French",
     status: "deferred",
     ctaTarget: "Sealed accept link",
     mergeFields: ["firm_name", "accept_url (sealed)"],
     sample: { firmName: SYNTHETIC_FIRM, acceptUrl: "https://app.casevoya.ca/accept/client?token=0000000000000000000000000000000000000000000000000000000000000000" },
-    build(context) {
-      const firmName = firm(context);
-      return copy({
-        subject: `Votre dossier avec ${firmName} est prêt`,
-        preheader: "Ouvrez votre lien privé pour créer votre accès au portail.",
-        heading: `Votre dossier avec ${firmName} est prêt`,
-        body: `${firmName} vous invite à votre portail client. Ouvrez votre portail pour voir votre première étape.`,
-        cta: cta("Ouvrir votre portail", safeUrl(context.acceptUrl)),
-        spot: "client-invite",
-        brand: firmBrand(context),
-        lang: "fr",
-      });
+    // The French draft of EM02 (fr-drafts.json; the EM14a hand draft is folded in there).
+    build(context, origin) {
+      return buildLocalized("EM02", "fr", context, origin);
     },
   },
   EM14b: {
@@ -515,23 +507,14 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
     name: "French document requested (draft)",
     audience: "client",
     brand: "firm",
-    trigger: "French document request (fr-CA). Draft translation: needs a certified translator. Never sent",
+    trigger: "Preview of EM06's French draft (fr-CA, fr-drafts.json). Sent as EM06 only to a French-preferring recipient after a named reviewer approves EM06's French",
     status: "deferred",
     ctaTarget: PATHS.portalDocuments,
     mergeFields: ["firm_name"],
     sample: { firmName: SYNTHETIC_FIRM },
+    // The French draft of EM06 (fr-drafts.json; the EM14b hand draft is folded in there).
     build(context, origin) {
-      const firmName = firm(context);
-      return copy({
-        subject: `${firmName} vous demande un document`,
-        preheader: "Téléversez-le en toute sécurité dans votre portail.",
-        heading: `${firmName} vous demande un document`,
-        body: "Veuillez téléverser un document à votre dossier. Les détails se trouvent dans votre portail.",
-        cta: cta("Ouvrir votre portail", appLink(origin, PATHS.portalDocuments)),
-        spot: "document-requested",
-        brand: firmBrand(context),
-        lang: "fr",
-      });
+      return buildLocalized("EM06", "fr", context, origin);
     },
   },
   EM14c: {
@@ -539,22 +522,14 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
     name: "French deadline reminder (draft)",
     audience: "client",
     brand: "firm",
-    trigger: "French reminder (fr-CA). Draft translation: needs a certified translator. Never sent",
+    trigger: "Preview of EM07's French draft (fr-CA, fr-drafts.json). Sent as EM07 only to a French-preferring recipient after a named reviewer approves EM07's French",
     status: "deferred",
     ctaTarget: PATHS.portal,
     mergeFields: ["firm_name", "due_on"],
     sample: { firmName: SYNTHETIC_FIRM, dueOn: "2026-10-30" },
+    // The French draft of EM07 (fr-drafts.json; the EM14c hand draft is folded in there).
     build(context, origin) {
-      return copy({
-        subject: "Une étape de votre dossier arrive à échéance",
-        preheader: "Votre portail indique quoi faire.",
-        heading: "Une étape arrive à échéance",
-        body: "Une étape de votre dossier arrive à échéance. Votre portail indique quoi faire.",
-        cta: cta("Ouvrir votre portail", appLink(origin, PATHS.portal)),
-        spot: "reminder",
-        brand: firmBrand(context),
-        lang: "fr",
-      });
+      return buildLocalized("EM07", "fr", context, origin);
     },
   },
   EM15: {

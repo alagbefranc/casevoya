@@ -38,7 +38,31 @@ export type EmailCopy = {
   spot: Spot;
   brand: Brand;
   lang?: "en" | "fr";
+  /**
+   * The shell's own words in this email's language (header tagline, footer lines), set by the
+   * French builders (localized.ts). Only the text changes; markup and styles stay the Designer's.
+   * Absent: the English shell (and, for lang "fr", the earlier hand-drafted French footer).
+   */
+  shell?: ShellText;
 };
+
+/** footerFirm carries {firm_name}. */
+export type ShellText = { tagline: string; footerFirm: string; footerPlatform: string };
+
+const SHELL_EN: ShellText = {
+  tagline: "Your immigration file",
+  footerFirm: "Sent by {firm_name} via Casevoya",
+  footerPlatform: "Case management for immigration consultants · casevoya.ca",
+};
+
+function shellFor(copy: EmailCopy): ShellText {
+  if (copy.shell) return copy.shell;
+  return copy.lang === "fr" ? { ...SHELL_EN, footerFirm: "Envoyé par {firm_name} au moyen de Casevoya" } : SHELL_EN;
+}
+
+function firmLine(shell: ShellText, firmName: string): string {
+  return shell.footerFirm.replace("{firm_name}", () => firmName);
+}
 
 export type RenderedEmail = { subject: string; preheader: string; html: string; text: string };
 
@@ -111,7 +135,7 @@ export function firmInitial(firmName: string): string {
  * tagline, and a 1px rule, 120px tall in all, like the image. Firm logos live in a private bucket,
  * so no logo image is used.
  */
-function firmHeader(firmName: string): string {
+function firmHeader(firmName: string, tagline: string = SHELL_EN.tagline): string {
   const name = escapeHtml(firmName);
   const initial = escapeHtml(firmInitial(firmName));
   return (
@@ -121,7 +145,7 @@ function firmHeader(firmName: string): string {
     `<td width="52" height="52" align="center" valign="middle" style="width:52px;height:52px;background:#0A4B93;border-radius:10px;color:#ffffff;font-family:Erode,Georgia,serif;font-size:26px;font-weight:500;line-height:52px;text-align:center">${initial}</td>` +
     `</tr></table></td>` +
     `<td valign="middle" style="padding:0 16px 0 12px;font-family:Erode,Georgia,serif;font-size:22px;font-weight:400;line-height:1.2;color:#111">${name}</td>` +
-    `<td align="right" valign="middle" style="font-family:Erode,Georgia,serif;font-size:13px;line-height:1.3;color:#6b6862;white-space:nowrap;text-align:right">Your immigration file</td>` +
+    `<td align="right" valign="middle" style="font-family:Erode,Georgia,serif;font-size:13px;line-height:1.3;color:#6b6862;white-space:nowrap;text-align:right">${escapeHtml(tagline)}</td>` +
     `</tr></table></td></tr>` +
     `<tr><td style="padding:33px 40px 0"><div style="height:1px;line-height:1px;font-size:1px;background:#e6e2db">&nbsp;</div></td></tr>`
   );
@@ -131,13 +155,13 @@ function platformHeader(origin: string): string {
   return `<tr><td>${img(origin, "header-platform.png", 'width="600" height="120" alt="Casevoya" style="display:block;width:100%;height:auto;border:0"')}</td></tr>`;
 }
 
-function footer(origin: string, brand: Brand, lang: "en" | "fr"): string {
+function footer(origin: string, brand: Brand, shell: ShellText): string {
   const style = "padding:16px 40px 24px;border-top:1px solid #eeebe6;font-size:13px;color:#6b6862";
   if (brand.kind === "firm") {
-    const line = lang === "fr" ? `Envoyé par ${brand.firmName} au moyen de Casevoya` : `Sent by ${brand.firmName} via Casevoya`;
+    const line = firmLine(shell, brand.firmName);
     return `<tr><td style="${style}">${img(origin, "via-casevoya.png", 'width="16" height="16" alt="" style="vertical-align:-3px;border:0"')} ${escapeHtml(line)}</td></tr>`;
   }
-  return `<tr><td style="${style}">${img(origin, "logo.png", 'width="100" height="16" alt="Casevoya" style="display:block;border:0;margin:0 0 8px"')}Case management for immigration consultants · casevoya.ca</td></tr>`;
+  return `<tr><td style="${style}">${img(origin, "logo.png", 'width="100" height="16" alt="Casevoya" style="display:block;border:0;margin:0 0 8px"')}${escapeHtml(shell.footerPlatform)}</td></tr>`;
 }
 
 /** Hidden inbox preview text, padded so clients do not pull body text into the preview. */
@@ -162,8 +186,9 @@ function fontFaces(): string {
 
 export function renderHtml(copy: EmailCopy, origin: string = DEFAULT_EMAIL_ORIGIN): string {
   const lang = copy.lang ?? "en";
+  const shell = shellFor(copy);
   const href = copy.cta ? safeUrl(copy.cta.href) : null;
-  const header = copy.brand.kind === "firm" ? firmHeader(copy.brand.firmName) : platformHeader(origin);
+  const header = copy.brand.kind === "firm" ? firmHeader(copy.brand.firmName, shell.tagline) : platformHeader(origin);
   const button =
     copy.cta && href
       ? `<tr><td style="padding:8px 40px 28px"><a href="${escapeHtml(href)}" style="display:inline-block;background:#0075DE;color:#fff;text-decoration:none;font-weight:500;padding:12px 20px;border-radius:10px">${escapeHtml(copy.cta.label)}</a></td></tr>`
@@ -181,7 +206,7 @@ export function renderHtml(copy: EmailCopy, origin: string = DEFAULT_EMAIL_ORIGI
     `<tr><td style="padding:28px 40px 4px">${img(origin, `spot-${copy.spot}.png`, 'class="spot" width="72" height="72" alt="" style="display:block;border:0"')}</td></tr>\n` +
     `<tr><td style="padding:12px 40px 0"><h1 style="margin:0;font-weight:400;font-size:24px;line-height:1.25;color:#111">${escapeHtml(copy.heading)}</h1></td></tr>\n` +
     `<tr><td style="padding:10px 40px 16px;font-size:16px;line-height:1.5;color:#3b3935">${escapeHtml(copy.body)}</td></tr>${button}\n` +
-    `${footer(origin, copy.brand, lang)}</table>\n` +
+    `${footer(origin, copy.brand, shell)}</table>\n` +
     `</td></tr></table>\n` +
     `</body></html>\n`
   );
@@ -189,15 +214,15 @@ export function renderHtml(copy: EmailCopy, origin: string = DEFAULT_EMAIL_ORIGI
 
 /** The plain-text alternative: heading, paragraph, the button as "label: url", and the footer line. */
 export function renderText(copy: EmailCopy): string {
-  const lang = copy.lang ?? "en";
+  const shell = shellFor(copy);
   const href = copy.cta ? safeUrl(copy.cta.href) : null;
   const lines = [copy.heading, "", copy.body];
   if (copy.cta && href) lines.push("", `${copy.cta.label}: ${href}`);
   lines.push("", "--");
   if (copy.brand.kind === "firm") {
-    lines.push(lang === "fr" ? `Envoyé par ${copy.brand.firmName} au moyen de Casevoya` : `Sent by ${copy.brand.firmName} via Casevoya`);
+    lines.push(firmLine(shell, copy.brand.firmName));
   } else {
-    lines.push("Casevoya · Case management for immigration consultants · casevoya.ca");
+    lines.push(`Casevoya · ${shell.footerPlatform}`);
   }
   return `${lines.join("\n")}\n`;
 }
