@@ -82,6 +82,7 @@ export const CHAT_CSS = `
 .cv-opts input{accent-color:var(--blue)}
 .cv-err{display:flex;gap:8px;align-items:center;justify-content:space-between;margin:0 0 8px;padding:8px 10px;border-radius:10px;background:var(--bad-bg);color:var(--bad);font-size:13.5px}
 .cv-info{background:var(--tint);color:var(--tint-t)}
+.cv-err .cv-retry{flex:none}
 .cv-empty{flex:1;display:grid;place-items:center;text-align:center;padding:32px 20px}
 .cv-empty b{display:block;font-weight:500;font-size:16px;margin-bottom:4px}
 .cv-empty small{display:block;color:var(--t2);font-size:14px;max-width:40ch;margin:0 auto 12px}
