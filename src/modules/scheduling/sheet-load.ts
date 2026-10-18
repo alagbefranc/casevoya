@@ -20,7 +20,7 @@ import type { SheetStaff } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 import { parseAvailability, slotsFromAvailability } from "./availability";
 import { COMMON_ZONES, locationShort, safeZone, shortWhen, slotLabel } from "./format";
-import { buildWeek, consultationRow, daysSummary, deadlineNote, mondayOf, type StaffBooking, type WeekItem } from "./sheet-present";
+import { buildWeek, consultationRow, daysSummary, deadlineNote, defaultWeekAnchor, mondayOf, type StaffBooking, type WeekItem } from "./sheet-present";
 import { addDays, isTimeZone, localToUtc, utcToLocal } from "./slots";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
@@ -340,7 +340,7 @@ export async function loadSheetCalendar(staff: SheetStaff, query: SheetQuery): P
   const tab: CalendarTab = query.tab === "deadlines" ? "deadlines" : "week";
   const now = Date.now();
   const today = utcToLocal(now, zone).date;
-  const anchor = query.week && /^\d{4}-\d{2}-\d{2}$/.test(query.week) ? query.week : today;
+  const anchor = query.week && /^\d{4}-\d{2}-\d{2}$/.test(query.week) ? query.week : defaultWeekAnchor(today);
   const monday = mondayOf(anchor);
   const weekStart = Date.parse(`${addDays(monday, -1)}T00:00:00Z`);
   const weekEnd = Date.parse(`${addDays(monday, 8)}T00:00:00Z`);

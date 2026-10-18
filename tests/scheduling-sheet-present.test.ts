@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWeek, consultationRow, daysSummary, deadlineNote, mondayOf, type StaffBooking } from "@/modules/scheduling/sheet-present";
+import { buildWeek, consultationRow, daysSummary, deadlineNote, defaultWeekAnchor, mondayOf, type StaffBooking } from "@/modules/scheduling/sheet-present";
 import { longWhen, shortWhen, slotLabel } from "@/modules/scheduling/format";
 import { parseAvailability, slotsFromAvailability } from "@/modules/scheduling/availability";
 
@@ -54,6 +54,9 @@ describe("scheduling: staff presentation", () => {
   it("builds the week grid: Monday first, weekend only when used, hours widened, blocks offset in the hour", () => {
     expect(mondayOf("2026-10-22")).toBe("2026-10-19");
     expect(mondayOf("2026-10-25")).toBe("2026-10-19");
+    expect(defaultWeekAnchor("2026-10-22")).toBe("2026-10-22");
+    expect(defaultWeekAnchor("2026-10-24")).toBe("2026-10-26");
+    expect(defaultWeekAnchor("2026-10-25")).toBe("2026-10-26");
     const week = buildWeek(
       "2026-10-19",
       "2026-10-20",

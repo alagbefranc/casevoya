@@ -76,6 +76,11 @@ export function mondayOf(date: string): string {
   return addDays(date, 1 - weekdayOf(date));
 }
 
+/** The week the calendar opens on: this week, or from Saturday on the coming one (the grid starts Monday). */
+export function defaultWeekAnchor(today: string): string {
+  return weekdayOf(today) >= 6 ? addDays(mondayOf(today), 7) : today;
+}
+
 export type WeekItem = {
   start: number;
   end: number;
