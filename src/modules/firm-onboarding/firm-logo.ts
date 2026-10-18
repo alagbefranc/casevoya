@@ -45,3 +45,10 @@ export function brandingLogoLocator(branding: unknown): string | null {
   const value = (branding as Record<string, unknown>).logo_locator;
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
+
+/** The saved accent colour (#RRGGBB) in organizations.branding, if any. */
+export function brandingAccent(branding: unknown): string | null {
+  if (!branding || typeof branding !== "object" || Array.isArray(branding)) return null;
+  const value = (branding as Record<string, unknown>).accent;
+  return typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value.trim()) ? value.trim() : null;
+}

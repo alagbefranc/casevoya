@@ -200,6 +200,7 @@ export type Database = {
           source_url: string | null
           status: Database["public"]["Enums"]["credential_status"]
           updated_at: string
+          valid_until: string | null
           verification_method: string | null
           version: number
         }
@@ -227,6 +228,7 @@ export type Database = {
           source_url?: string | null
           status?: Database["public"]["Enums"]["credential_status"]
           updated_at?: string
+          valid_until?: string | null
           verification_method?: string | null
           version?: number
         }
@@ -254,6 +256,7 @@ export type Database = {
           source_url?: string | null
           status?: Database["public"]["Enums"]["credential_status"]
           updated_at?: string
+          valid_until?: string | null
           verification_method?: string | null
           version?: number
         }
@@ -5210,6 +5213,10 @@ export type Database = {
       set_product_setting: {
         Args: { p_key: string; p_value: Json }
         Returns: undefined
+      }
+      set_credential_valid_until: {
+        Args: { p_credential_id: string; p_valid_until: string | null }
+        Returns: string
       }
       set_sample_mode: {
         Args: { p_enabled: boolean }

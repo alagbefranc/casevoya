@@ -255,7 +255,13 @@ export function usePortActions(page: string, token?: string) {
           if (!input.id) return;
           fields[input.id] = input instanceof HTMLInputElement && input.type === "checkbox" ? input.checked : input.value;
         });
-        const brand = document.getElementById("prev")?.style.getPropertyValue("--brand");
+        // The colour shown in the preview: a picked or saved one sets --brand; otherwise the pressed
+        // swatch (the first by default), so saving without picking keeps what the person sees.
+        const swatches = document.getElementById("sw");
+        const brand =
+          document.getElementById("prev")?.style.getPropertyValue("--brand").trim() ||
+          swatches?.querySelector<HTMLElement>('button[aria-pressed="true"]')?.dataset.c ||
+          swatches?.querySelector<HTMLElement>("button[data-c]")?.dataset.c;
         if (brand) fields.brand = brand.trim();
         const years = document.querySelector("#retS .v")?.textContent;
         if (years) fields.retention_years = years;

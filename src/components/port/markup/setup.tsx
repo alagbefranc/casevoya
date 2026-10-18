@@ -1,23 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { connectOrRun } from "../kit";
 import { FirmLogoUpload, type FirmLogo } from "../firm-logo-upload";
 import { LicenceProofCard } from "../licence-proof-card";
+
+/** The Designer's accent swatches, in order. The first is the default. */
+const SWATCHES = ["#0075DE", "#0a4b93", "#205c38", "#a12c20", "#4a4642"];
+
 /** Converted from site/app-v2/auth/setup.html. Same DOM, classes and copy. */
 export function SetupMarkup({
   jurisdictionCodes = ["CA", "ON"],
   firmName = "",
   logo: savedLogo = null,
+  accent: savedAccent = null,
 }: {
   jurisdictionCodes?: readonly string[];
   firmName?: string;
   /** The firm's saved logo, with a short-lived preview link. */
   logo?: FirmLogo | null;
+  /** The firm's saved accent colour (#RRGGBB), shown in the preview and pressed in the swatches. */
+  accent?: string | null;
 } = {}) {
   const on = (code: string) => jurisdictionCodes.includes(code);
   const firm = firmName.trim();
   const [logo, setLogo] = useState<FirmLogo | null>(savedLogo);
+  const accent = savedAccent && /^#[0-9A-Fa-f]{6}$/.test(savedAccent) ? savedAccent : null;
+  // A saved accent presses its swatch; with none saved, the first swatch is pressed as the Designer shows.
+  const selected = (accent ? SWATCHES.find((color) => color.toLowerCase() === accent.toLowerCase()) : SWATCHES[0]) ?? null;
+  const pressed = (color: string) => color === selected;
   return (
     <>
       <a className="sr" href="#main">Skip to content</a>
@@ -50,8 +61,8 @@ export function SetupMarkup({
 </section>
 <section data-step="4" data-title="Branding" data-vo="wave"><div className="wz-head"><div><h1>Make the portal yours</h1><p className="lead">Clients see your logo and colour. Casevoya appears only as small “Powered by” text.</p></div><span className="wz-art" aria-hidden="true"><img src="/assets/generated/b2/branding-72@1x.webp" srcSet="/assets/generated/b2/branding-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span></div>
 <div className="g2"><div><FirmLogoUpload initials={firm ? firm.slice(0, 2).toUpperCase() : ""} logo={logo} onChange={setLogo} />
-<fieldset className="fld" style={{ "border": "0" }}><legend>Accent colour</legend><span className="hint">We check that white text stays readable on it.</span><div className="sw" id="sw"><button type="button" aria-pressed="true" aria-label="Blue" data-c="#0075DE" style={{ "background": "#0075DE" }}></button><button type="button" aria-pressed="false" aria-label="Navy" data-c="#0a4b93" style={{ "background": "#0a4b93" }}></button><button type="button" aria-pressed="false" aria-label="Forest" data-c="#205c38" style={{ "background": "#205c38" }}></button><button type="button" aria-pressed="false" aria-label="Brick" data-c="#a12c20" style={{ "background": "#a12c20" }}></button><button type="button" aria-pressed="false" aria-label="Graphite" data-c="#4a4642" style={{ "background": "#4a4642" }}></button></div></fieldset></div>
-<div><p style={{ "fontSize": "13.5px", "color": "var(--t2)", "marginBottom": "8px" }}>Portal preview</p><div className="prev" id="prev"><div className="ps"><b><span className="firmlogo" style={{ "width": "22px", "height": "22px", "fontSize": "10px", "borderRadius": "6px" }}>{logo ? <img src={logo.previewUrl} alt="" width="22" height="22" style={{ "width": "100%", "height": "100%", "objectFit": "cover", "borderRadius": "inherit" }} /> : firm ? firm.slice(0, 2).toUpperCase() : ""}</span>{firm || "Your firm"}</b><i className="on"></i><i></i><i></i><i></i></div><div className="pm"><small style={{ "color": "var(--t2)" }}>Hi</small><div style={{ "fontSize": "18px", "fontWeight": "300" }}>Your next step</div><div className="bn">Upload your passport copy</div><p className="pwrd" style={{ "marginTop": "12px" }}>Powered by Casevoya</p></div></div></div></div>
+<fieldset className="fld" style={{ "border": "0" }}><legend>Accent colour</legend><span className="hint">We check that white text stays readable on it.</span><div className="sw" id="sw"><button type="button" aria-pressed={pressed("#0075DE")} aria-label="Blue" data-c="#0075DE" style={{ "background": "#0075DE" }}></button><button type="button" aria-pressed={pressed("#0a4b93")} aria-label="Navy" data-c="#0a4b93" style={{ "background": "#0a4b93" }}></button><button type="button" aria-pressed={pressed("#205c38")} aria-label="Forest" data-c="#205c38" style={{ "background": "#205c38" }}></button><button type="button" aria-pressed={pressed("#a12c20")} aria-label="Brick" data-c="#a12c20" style={{ "background": "#a12c20" }}></button><button type="button" aria-pressed={pressed("#4a4642")} aria-label="Graphite" data-c="#4a4642" style={{ "background": "#4a4642" }}></button></div></fieldset></div>
+<div><p style={{ "fontSize": "13.5px", "color": "var(--t2)", "marginBottom": "8px" }}>Portal preview</p><div className="prev" id="prev" style={accent ? ({ "--brand": accent } as CSSProperties) : undefined}><div className="ps"><b><span className="firmlogo" style={{ "width": "22px", "height": "22px", "fontSize": "10px", "borderRadius": "6px" }}>{logo ? <img src={logo.previewUrl} alt="" width="22" height="22" style={{ "width": "100%", "height": "100%", "objectFit": "cover", "borderRadius": "inherit" }} /> : firm ? firm.slice(0, 2).toUpperCase() : ""}</span>{firm || "Your firm"}</b><i className="on"></i><i></i><i></i><i></i></div><div className="pm"><small style={{ "color": "var(--t2)" }}>Hi</small><div style={{ "fontSize": "18px", "fontWeight": "300" }}>Your next step</div><div className="bn">Upload your passport copy</div><p className="pwrd" style={{ "marginTop": "12px" }}>Powered by Casevoya</p></div></div></div></div>
 </section>
 <section data-step="5" data-title="Calendar and payments" data-vo="point"><div className="wz-head"><div><h1>Calendar and payments</h1><p className="lead">Connect what you already use. You can skip this and do it from Settings.</p></div><span className="wz-art" aria-hidden="true"><img src="/assets/generated/b2/calendar-link-72@1x.webp" srcSet="/assets/generated/b2/calendar-link-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span></div>
 <div className="conn"><img src="/assets/logos/googlecalendar.svg" alt="" /><div>Google Calendar<small>Consultation bookings and deadlines on your calendar</small></div><button className="btn sm" type="button" onClick={(event) => connectOrRun(event.currentTarget)}><span className="lab">Connect</span><span className="spin" aria-hidden="true"></span></button></div>

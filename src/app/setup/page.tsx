@@ -9,6 +9,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import {
   FIRM_LOGO_BUCKET,
   FIRM_LOGO_PREVIEW_SECONDS,
+  brandingAccent,
   brandingLogoLocator,
   ownFirmLogoKey,
 } from "@/modules/firm-onboarding/firm-logo";
@@ -18,10 +19,20 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-function SetupScreen({ codes, firmName, logo }: { codes: string[]; firmName: string; logo: FirmLogo | null }) {
+function SetupScreen({
+  codes,
+  firmName,
+  logo,
+  accent,
+}: {
+  codes: string[];
+  firmName: string;
+  logo: FirmLogo | null;
+  accent: string | null;
+}) {
   return (
     <PortScreen page="setup" variant="wzb">
-      <SetupMarkup jurisdictionCodes={codes} firmName={firmName} logo={logo} />
+      <SetupMarkup jurisdictionCodes={codes} firmName={firmName} logo={logo} accent={accent} />
     </PortScreen>
   );
 }
@@ -43,6 +54,7 @@ async function SavedSetup() {
   let codes = ["CA", "ON"];
   let firmName = "";
   let logo: FirmLogo | null = null;
+  let accent: string | null = null;
   if (hasPublicSupabaseEnv()) {
     const supabase = await createClient();
     const { data: claims } = await supabase.auth.getClaims();
@@ -66,15 +78,17 @@ async function SavedSetup() {
         if (org?.jurisdiction_codes?.length) codes = [...org.jurisdiction_codes];
         if (org?.display_name) firmName = org.display_name;
         if (org) logo = await savedLogo(org.branding, membership.organization_id);
+        // Saving Branding sends the colour shown, so the saved one must be shown, not reset.
+        if (org) accent = brandingAccent(org.branding);
       }
     }
   }
-  return <SetupScreen codes={codes} firmName={firmName} logo={logo} />;
+  return <SetupScreen codes={codes} firmName={firmName} logo={logo} accent={accent} />;
 }
 
 export default function SetupPage() {
   return (
-    <Suspense fallback={<SetupScreen codes={["CA", "ON"]} firmName="" logo={null} />}>
+    <Suspense fallback={<SetupScreen codes={["CA", "ON"]} firmName="" logo={null} accent={null} />}>
       <SavedSetup />
     </Suspense>
   );
