@@ -9,6 +9,8 @@ import { Fragment, type ReactNode } from "react";
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair, Sep } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
+import { personEditProps } from "./person-edit";
+import type { PersonEditData } from "@/modules/sheet/edit-person";
 
 export type ClientsTab = "dir" | "person" | "household";
 
@@ -79,6 +81,11 @@ export type ClientsData = {
   person?: PersonData | null;
   /** Null when no household is recorded. */
   household?: HouseholdData | null;
+  /**
+   * The person tab's person, when the viewer's role may edit people: the top bar offers
+   * "Edit details" (`PersonEditDialog`). Absent, the top bar is the Designer's.
+   */
+  edit?: PersonEditData | null;
 };
 
 const UNDERLINE: Record<ClientsTab, { left: string; width: string }> = {
@@ -119,7 +126,7 @@ function plural(count: number, one: string, many: string) {
 }
 
 /** The Clients page's own top bar and its tab strip. */
-export function ClientsHeader({ data }: { data: Pick<ClientsData, "tab" | "counts" | "add" | "tabs"> }) {
+export function ClientsHeader({ data }: { data: Pick<ClientsData, "tab" | "counts" | "add" | "tabs" | "edit"> }) {
   const tabs: [ClientsTab, string][] = [
     ["dir", "People"],
     ["person", data.tabs.person],
@@ -143,6 +150,12 @@ export function ClientsHeader({ data }: { data: Pick<ClientsData, "tab" | "count
         <span className={"pill"}>{plural(data.counts.people, "person", "people")}</span>
         <span className={"pill"}>{plural(data.counts.households, "household", "households")}</span>
         <span className={"acts"}>
+          {data.tab === "person" && data.edit ? (
+            <button className={"btn s sm"} {...personEditProps(data.edit)}>
+              <Icon name={"edit"} cls={"ic s"} />
+              {"Edit details"}
+            </button>
+          ) : null}
           <a className={"btn p sm"} href={data.add.href}>
             <Icon name={"user-plus"} cls={"ic s"} />
             {data.add.label}

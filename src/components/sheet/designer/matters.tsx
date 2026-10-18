@@ -198,7 +198,8 @@ export function SheetMatters({ data }: { data: MattersData }) {
   );
 }
 
-function Field({ id, label, hint, type = "text", max }: { id: string; label: string; hint?: string; type?: string; max?: string }) {
+/** The Designer's `.fld` with a label, an optional hint and an `.inp`. */
+export function Field({ id, label, hint, type = "text", max }: { id: string; label: string; hint?: string; type?: string; max?: string }) {
   return (
     <div className={"fld"}>
       <label htmlFor={id}>{label}</label>

@@ -7,6 +7,7 @@ import { SheetHome } from "@/components/sheet/designer/home";
 import { MatterDialogs, MatterRbar, MatterTopBar, SheetMatter } from "@/components/sheet/designer/matter";
 import { MATTER_CSS } from "@/components/sheet/designer/matter-css";
 import { MattersTopBar, NewMatterDialog, SheetMatters } from "@/components/sheet/designer/matters";
+import { PersonEditDialog } from "@/components/sheet/designer/person-edit";
 import { SampleCasePanel } from "@/components/sheet/designer/sample-case";
 import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
 import { SheetStaffTab, StaffAfter, StaffHeader } from "@/components/sheet/designer/invitations";
@@ -18,6 +19,7 @@ import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry
 import { homeRoute } from "@/lib/auth/home-route";
 import { signInLocation } from "@/lib/auth/redirect";
 import { loadSheetAgreements } from "@/modules/sheet/agreements-load";
+import { todayIso } from "@/modules/sheet/birth-date";
 import { loadSheetClients } from "@/modules/sheet/clients-load";
 import { loadSheetHome } from "@/modules/sheet/home-load";
 import { loadSheetPortalPolicies } from "@/modules/sheet/portal-policies-load";
@@ -158,6 +160,7 @@ export async function SheetBody({
               {duplicate ? <DuplicateDialog data={duplicate} /> : null}
               {/* "Add a client" opens New matter here: a client is recorded with the matter that lets the team read them. */}
               <NewMatterDialog data={newMatter} />
+              {clients.edit ? <PersonEditDialog data={{ maxBirthDate: todayIso() }} /> : null}
             </>
           }
         >
