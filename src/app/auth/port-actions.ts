@@ -525,9 +525,12 @@ export async function joinStaffInvite(input: {
 export async function previewStaffInvite(token: string) {
   if (!hasPublicSupabaseEnv() || !isInvitationToken(token)) return null;
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("preview_invitation", { p_token: token });
+  const [{ data, error }, inviter] = await Promise.all([
+    supabase.rpc("preview_invitation", { p_token: token }),
+    supabase.rpc("preview_invitation_inviter", { p_token: token }),
+  ]);
   if (error || !data?.[0]) return null;
-  return data[0];
+  return { ...data[0], inviter: inviter.error ? null : inviter.data };
 }
 
 /** No backend in this environment: the screen keeps its current path. */

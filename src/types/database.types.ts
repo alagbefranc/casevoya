@@ -5041,6 +5041,10 @@ export type Database = {
           status: string
         }[]
       }
+      preview_invitation_inviter: {
+        Args: { p_token: string }
+        Returns: string | null
+      }
       request_mfa_reset: {
         Args: { p_reason: string }
         Returns: string

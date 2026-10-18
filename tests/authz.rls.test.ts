@@ -86,6 +86,30 @@ async function visiblePersonIds() {
 }
 
 describe("invitations", () => {
+  it("names the inviter on a still-valid staff invitation and nothing else", async () => {
+    const owner = await createUser(email("owner"));
+    const orgId = await createOrg(owner);
+    await asMaintenance(db);
+    await db.query(`update public.profiles set display_name = 'Inviting Owner' where id = $1`, [owner]);
+    await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    const created = await db.query<{ token: string }>(
+      `select public.create_staff_invitation($1, $2, 'assistant'::public.org_role) as token`,
+      [orgId, email("invitee")],
+    );
+    const token = created.rows[0].token;
+    await db.exec("reset role");
+    await db.exec("set role anon");
+    const named = await db.query<{ name: string | null }>(`select public.preview_invitation_inviter($1) as name`, [token]);
+    expect(named.rows[0].name).toBe("Inviting Owner");
+    const unknown = await db.query<{ name: string | null }>(`select public.preview_invitation_inviter($1) as name`, ["cd".repeat(32)]);
+    expect(unknown.rows[0].name).toBeNull();
+    await asMaintenance(db);
+    await db.query(`update public.invitations set revoked_at = now() where organization_id = $1`, [orgId]);
+    await db.exec("set role anon");
+    const revoked = await db.query<{ name: string | null }>(`select public.preview_invitation_inviter($1) as name`, [token]);
+    expect(revoked.rows[0].name).toBeNull();
+  });
+
   it("stores only a hash, accepts once into an active membership, and rejects reuse, expiry, and the wrong email", async () => {
     const owner = await createUser(email("owner"));
     const orgId = await createOrg(owner);
