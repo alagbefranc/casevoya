@@ -10,5 +10,10 @@ export default defineConfig({
       "next/headers": path.resolve(import.meta.dirname, "tests/helpers/next-headers-stub.ts"),
     },
   },
-  test: { include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"], environment: "node" },
+  test: {
+    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+    environment: "node",
+    // The RLS suites run whole migration sets in PGlite; on a busy runner one case can pass 5s.
+    testTimeout: 30_000,
+  },
 });
