@@ -5002,6 +5002,10 @@ export type Database = {
           number: string
           organization_id: string
           client_funds_paid_cents: number
+          credited_cents: number
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
           paid_cents: number
           refunded_cents: number
           status: Database["public"]["Enums"]["invoice_status"]
@@ -5024,6 +5028,10 @@ export type Database = {
           number: string
           organization_id: string
           client_funds_paid_cents?: number
+          credited_cents?: number
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
           paid_cents?: number
           refunded_cents?: number
           status?: Database["public"]["Enums"]["invoice_status"]
@@ -5046,6 +5054,10 @@ export type Database = {
           number?: string
           organization_id?: string
           client_funds_paid_cents?: number
+          credited_cents?: number
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
           paid_cents?: number
           refunded_cents?: number
           status?: Database["public"]["Enums"]["invoice_status"]
@@ -5801,6 +5813,219 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_credit_notes: {
+        Row: {
+          amount_cents: number
+          applied_cents: number | null
+          client_name: string | null
+          consultant_licence: string | null
+          consultant_name: string | null
+          created_at: string
+          created_by: string | null
+          credit_balance_cents: number | null
+          currency: string
+          decline_reason: string | null
+          declined_at: string | null
+          declined_by: string | null
+          firm_display_name: string | null
+          firm_legal_name: string | null
+          firm_timezone: string | null
+          id: string
+          idempotency_key: string
+          invoice_amount_cents: number | null
+          invoice_description: string | null
+          invoice_id: string
+          invoice_issued_on: string | null
+          invoice_number: string | null
+          is_sample: boolean
+          issued_at: string | null
+          issued_by: string | null
+          matter_id: string
+          matter_label: string | null
+          number: string
+          organization_id: string
+          owner_self_approved: boolean
+          reason: string
+          requested_by: string
+          status: Database["public"]["Enums"]["credit_note_status"]
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          amount_cents?: number
+          applied_cents?: number | null
+          client_name?: string | null
+          consultant_licence?: string | null
+          consultant_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          credit_balance_cents?: number | null
+          currency?: string
+          decline_reason?: string | null
+          declined_at?: string | null
+          declined_by?: string | null
+          firm_display_name?: string | null
+          firm_legal_name?: string | null
+          firm_timezone?: string | null
+          id?: string
+          idempotency_key?: string
+          invoice_amount_cents?: number | null
+          invoice_description?: string | null
+          invoice_id?: string
+          invoice_issued_on?: string | null
+          invoice_number?: string | null
+          is_sample?: boolean
+          issued_at?: string | null
+          issued_by?: string | null
+          matter_id?: string
+          matter_label?: string | null
+          number?: string
+          organization_id?: string
+          owner_self_approved?: boolean
+          reason?: string
+          requested_by?: string
+          status?: Database["public"]["Enums"]["credit_note_status"]
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          amount_cents?: number
+          applied_cents?: number | null
+          client_name?: string | null
+          consultant_licence?: string | null
+          consultant_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          credit_balance_cents?: number | null
+          currency?: string
+          decline_reason?: string | null
+          declined_at?: string | null
+          declined_by?: string | null
+          firm_display_name?: string | null
+          firm_legal_name?: string | null
+          firm_timezone?: string | null
+          id?: string
+          idempotency_key?: string
+          invoice_amount_cents?: number | null
+          invoice_description?: string | null
+          invoice_id?: string
+          invoice_issued_on?: string | null
+          invoice_number?: string | null
+          is_sample?: boolean
+          issued_at?: string | null
+          issued_by?: string | null
+          matter_id?: string
+          matter_label?: string | null
+          number?: string
+          organization_id?: string
+          owner_self_approved?: boolean
+          reason?: string
+          requested_by?: string
+          status?: Database["public"]["Enums"]["credit_note_status"]
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      client_account_reconciliations: {
+        Row: {
+          client_account_id: string
+          client_count: number
+          client_ledgers_total_cents: number
+          created_at: string
+          created_by: string | null
+          currency: string
+          difference_cents: number
+          discard_reason: string | null
+          discarded_at: string | null
+          discarded_by: string | null
+          id: string
+          idempotency_key: string
+          is_sample: boolean
+          item_count: number
+          items: Json
+          ledger_balance_cents: number
+          organization_id: string
+          owner_self_signed: boolean
+          period_start: string
+          prepared_at: string
+          prepared_by: string
+          preparer_note: string | null
+          review_notes: string | null
+          signed_at: string | null
+          signed_by: string | null
+          statement_balance_cents: number
+          statement_date: string
+          status: Database["public"]["Enums"]["client_reconciliation_status"]
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          client_account_id?: string
+          client_count?: number
+          client_ledgers_total_cents?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          difference_cents?: number
+          discard_reason?: string | null
+          discarded_at?: string | null
+          discarded_by?: string | null
+          id?: string
+          idempotency_key?: string
+          is_sample?: boolean
+          item_count?: number
+          items?: Json
+          ledger_balance_cents?: number
+          organization_id?: string
+          owner_self_signed?: boolean
+          period_start?: string
+          prepared_at?: string
+          prepared_by?: string
+          preparer_note?: string | null
+          review_notes?: string | null
+          signed_at?: string | null
+          signed_by?: string | null
+          statement_balance_cents?: number
+          statement_date?: string
+          status?: Database["public"]["Enums"]["client_reconciliation_status"]
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          client_account_id?: string
+          client_count?: number
+          client_ledgers_total_cents?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          difference_cents?: number
+          discard_reason?: string | null
+          discarded_at?: string | null
+          discarded_by?: string | null
+          id?: string
+          idempotency_key?: string
+          is_sample?: boolean
+          item_count?: number
+          items?: Json
+          ledger_balance_cents?: number
+          organization_id?: string
+          owner_self_signed?: boolean
+          period_start?: string
+          prepared_at?: string
+          prepared_by?: string
+          preparer_note?: string | null
+          review_notes?: string | null
+          signed_at?: string | null
+          signed_by?: string | null
+          statement_balance_cents?: number
+          statement_date?: string
+          status?: Database["public"]["Enums"]["client_reconciliation_status"]
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       invoice_reversal_events: {
         Row: {
           amount_cents: number | null
@@ -5875,6 +6100,44 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      request_credit_note: {
+        Args: { p_amount_cents: number; p_idempotency_key: string; p_invoice_id: string; p_reason: string }
+        Returns: string
+      }
+      issue_credit_note: {
+        Args: { p_credit_note_id: string }
+        Returns: Json
+      }
+      decline_credit_note: {
+        Args: { p_credit_note_id: string; p_reason: string }
+        Returns: string
+      }
+      void_invoice: {
+        Args: { p_invoice_id: string; p_reason: string }
+        Returns: Json
+      }
+      invoice_credit_note: {
+        Args: { p_credit_note_id: string }
+        Returns: Json
+      }
+      prepare_client_reconciliation: {
+        Args: {
+          p_client_account_id: string
+          p_idempotency_key: string
+          p_note: string | null
+          p_statement_balance_cents: number
+          p_statement_date: string
+        }
+        Returns: string
+      }
+      sign_client_reconciliation: {
+        Args: { p_notes: string | null; p_outcome: string; p_reconciliation_id: string }
+        Returns: Json
+      }
+      discard_client_reconciliation: {
+        Args: { p_reason: string; p_reconciliation_id: string }
+        Returns: string
+      }
       firm_payment_account_for_owner: {
         Args: { p_org: string }
         Returns: string | null
@@ -6987,6 +7250,8 @@ export type Database = {
         | "declined"
         | "recorded"
       client_fund_method: "bank_transfer" | "interac_e_transfer" | "cheque" | "cash"
+      client_reconciliation_status: "pending_review" | "reconciled" | "exceptions" | "discarded"
+      credit_note_status: "draft" | "issued" | "declined"
       invoice_status:
         | "draft"
         | "issued"
@@ -7403,6 +7668,8 @@ export const Constants = {
       client_fund_entry_kind: ["deposit", "transfer", "refund", "correction"],
       client_fund_entry_status: ["pending_verification", "verified", "rejected", "pending_approval", "approved", "declined", "recorded"],
       client_fund_method: ["bank_transfer", "interac_e_transfer", "cheque", "cash"],
+      client_reconciliation_status: ["pending_review", "reconciled", "exceptions", "discarded"],
+      credit_note_status: ["draft", "issued", "declined"],
       invoice_refund_status: ["pending", "requires_action", "succeeded", "failed", "canceled"],
       invoice_dispute_status: [
         "warning_needs_response",

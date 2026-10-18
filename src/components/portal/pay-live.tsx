@@ -70,7 +70,7 @@ export function PayLive({
   publishableKey: string | null;
   payable: boolean;
 }) {
-  const due = invoice.amountCents - invoice.paidCents;
+  const due = Math.max(0, invoice.amountCents - invoice.paidCents - invoice.creditedCents);
   const money = formatMoney(due, invoice.currency);
   const canPay = payable && Boolean(publishableKey) && invoice.open && !invoice.processing;
   const [started, setStarted] = useState<Started>(null);

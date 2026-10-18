@@ -266,6 +266,8 @@ describe("where the receipt shows", () => {
       amountCents: 113_000,
       paidCents: 113_000,
       refundedCents: 0,
+      creditedCents: 0,
+      creditNotes: [],
       currency: "CAD",
       status: "paid",
       issuedOn: "2026-10-16",

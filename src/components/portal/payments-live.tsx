@@ -1,8 +1,8 @@
-import type { PortalFundsEntry, PortalInvoices } from "@/modules/finance/portal-load";
+import type { PortalFundsEntry, PortalInvoice, PortalInvoices } from "@/modules/finance/portal-load";
 import { methodShort } from "@/modules/finance/client-funds-present";
 import type { PortalViewer } from "@/modules/portal/load";
 import { formatMoney } from "@/modules/finance/money";
-import { paymentReceiptHref } from "@/modules/finance/receipt-links";
+import { creditNoteHref, paymentReceiptHref } from "@/modules/finance/receipt-links";
 import { dayMonth } from "@/modules/sheet/home-present";
 
 const SPRITE = "/assets/icons-coreui/sprite.svg";
@@ -57,14 +57,16 @@ export function fundsRow(entry: PortalFundsEntry, firm: string): { title: string
  * deposits, transfers applied to invoices, refunds, corrections), read-only. A verified deposit
  * has a Receipt download (the advance-payment receipt, CICC Code s. 32(b)). An invoice the client
  * paid (by card, or from their client-account money) has a "Receipt PR-0001" download per payment
- * (CICC Code s. 33(3)), in place of the plain "Paid" note.
+ * (CICC Code s. 33(3)), in place of the plain "Paid" note. An issued credit note takes its amount off
+ * what is due and has a "Credit note CN-0001" download (read-only; drafts are never shown).
  */
 export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: PortalInvoices }) {
   const funds = data.clientFunds;
   const open = data.invoices.filter((invoice) => invoice.open);
   const next = [...open].sort((a, b) => a.dueOn.localeCompare(b.dueOn))[0];
-  const toPay = open.filter((invoice) => !invoice.processing).reduce((sum, invoice) => sum + invoice.amountCents - invoice.paidCents, 0);
-  const processing = open.filter((invoice) => invoice.processing).reduce((sum, invoice) => sum + invoice.amountCents - invoice.paidCents, 0);
+  const due = (invoice: PortalInvoice) => Math.max(0, invoice.amountCents - invoice.paidCents - invoice.creditedCents);
+  const toPay = open.filter((invoice) => !invoice.processing).reduce((sum, invoice) => sum + due(invoice), 0);
+  const processing = open.filter((invoice) => invoice.processing).reduce((sum, invoice) => sum + due(invoice), 0);
   const refunded = data.invoices.reduce((sum, invoice) => sum + invoice.refundedCents, 0);
   const paid = data.invoices.reduce((sum, invoice) => sum + invoice.paidCents, 0) - refunded;
   const paidCount = data.invoices.filter((invoice) => invoice.paidCents > 0).length;
@@ -202,14 +204,14 @@ export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: Por
                         </span>
                       </td>
                       <td className="num" style={{ textAlign: "right" }}>
-                        {formatMoney(invoice.open ? invoice.amountCents - invoice.paidCents : invoice.amountCents, invoice.currency)}
+                        {formatMoney(invoice.open ? due(invoice) : invoice.amountCents, invoice.currency)}
                       </td>
                       <td>
                         {invoice.open && !invoice.processing ? (
                           <a className="btn p sm" href={`/portal/pay?invoice=${invoice.id}`}>
                             {"Pay"}
                           </a>
-                        ) : invoice.receipts.length ? null : invoice.status === "paid" ? (
+                        ) : invoice.receipts.length || invoice.creditNotes.length ? null : invoice.status === "paid" ? (
                           <small>{"Paid"}</small>
                         ) : invoice.status === "refunded" ? (
                           <small>{"Refunded"}</small>
@@ -224,6 +226,19 @@ export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: Por
                               data-payment-receipt="1"
                             >
                               {`Receipt ${receipt.number}`}
+                            </a>
+                          </span>
+                        ))}
+                        {invoice.creditNotes.map((note, index) => (
+                          <span key={note.id}>
+                            {index > 0 || invoice.receipts.length || (invoice.open && !invoice.processing) ? " " : null}
+                            <a
+                              className="btn sm"
+                              href={creditNoteHref(note.id, viewer.organizationId)}
+                              aria-label={`Download credit note ${note.number} (${formatMoney(note.amountCents, invoice.currency)}) for invoice ${invoice.number}`}
+                              data-credit-note="1"
+                            >
+                              {`Credit note ${note.number}`}
                             </a>
                           </span>
                         ))}

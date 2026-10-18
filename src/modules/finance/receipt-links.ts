@@ -5,3 +5,8 @@
 export function paymentReceiptHref(receiptId: string, organizationId: string): string {
   return `/api/invoices/receipts/${receiptId}?organizationId=${organizationId}`;
 }
+
+/** Download link for an issued credit note's PDF. The route checks access in the database again. */
+export function creditNoteHref(creditNoteId: string, organizationId: string): string {
+  return `/api/invoices/credit-notes/${creditNoteId}?organizationId=${organizationId}`;
+}
