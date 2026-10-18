@@ -6,6 +6,7 @@ import { MattersTopBar, SheetMatters } from "@/components/sheet/designer/matters
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
+import { homeRoute } from "@/lib/auth/home-route";
 import { signInLocation } from "@/lib/auth/redirect";
 import { loadSheetHome } from "@/modules/sheet/home-load";
 import { loadSheetMatters } from "@/modules/sheet/matters-load";
@@ -40,6 +41,11 @@ export async function SheetBody({
   const tone = PUBLIC.has(page) ? "public" : "sheet";
   const access = await loadSheetAccess();
   if (!PUBLIC.has(page) && access.kind === "signed-out") redirect(signInLocation(sheetPath(page, matterId)));
+  if (!PUBLIC.has(page) && access.kind === "empty") {
+    // Signed in without a firm: clients go to their portal, an unfinished sign-up to its firm step.
+    const home = await homeRoute();
+    if (home === "/portal" || home === "/start-trial") redirect(home);
+  }
   // The Designer home with the firm's own records, in sample mode too. Sample records are real rows marked sample.
   if (page === "index" && (access.kind === "live" || access.kind === "sample")) {
     const { chrome, rbar, home } = await loadSheetHome(access.staff);
