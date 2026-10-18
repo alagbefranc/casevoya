@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { toast2 } from "../kit";
 /** Converted from site/app-v2/auth/two-step.html. Same DOM, classes and copy. */
 
@@ -31,7 +32,9 @@ export function TwoStepMarkup({
   enrollment?: TotpEnrollment | null;
 } = {}) {
   const secret = (enrollment?.secret ?? "").replace(/\s/g, "").replace(/(.{4})/g, "$1 ").trim();
-  const stepOn = (step: number) => (step === activeStep ? "on" : undefined);
+  // The first render's step only; see PortScreen. A refresh must not move `.on` to another panel.
+  const [shownStep] = useState(activeStep);
+  const stepOn = (step: number) => (step === shownStep ? "on" : undefined);
   return (
     <>
       <a className="sr" href="#main">Skip to content</a><picture className="au-sky" aria-hidden="true"><source type="image/avif" srcSet="/assets/sky/sky-A-800.avif 800w, /assets/sky/sky-A-1440.avif 1440w, /assets/sky/sky-A-2048.avif 2048w" sizes="100vw" /><source type="image/webp" srcSet="/assets/sky/sky-A-800.webp 800w, /assets/sky/sky-A-1440.webp 1440w, /assets/sky/sky-A-2048.webp 2048w" sizes="100vw" /><img src="/assets/sky/sky-A-1440.webp" alt="" width="2048" height="1152" fetchPriority="high" decoding="async" /></picture>

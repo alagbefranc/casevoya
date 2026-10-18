@@ -5,7 +5,7 @@ import { hasPublicSupabaseEnv } from "@/lib/env";
 import { passwordOk } from "@/lib/auth/password";
 import { safeAccessError } from "@/lib/auth/step-up";
 import { safeNext } from "@/lib/auth/redirect";
-import { clearPendingTotp, readPendingTotp, writePendingTotp, type PendingTotp } from "@/lib/auth/mfa-pending";
+import { clearPendingTotp, readPendingTotp, withQr, writePendingTotp, type TotpSetup } from "@/lib/auth/mfa-pending";
 import { firmSlug } from "@/lib/auth/slug";
 import { syncClaimedFirmSlug } from "@/modules/email/sync-routing";
 import { isInvitationToken } from "@/lib/auth/invitations";
@@ -355,7 +355,7 @@ export async function verifyTotpCode(factorId: string, code: string): Promise<Po
  * Starts authenticator setup once. A reload or a second tab gets the same
  * pending factor back, so a QR already scanned keeps working.
  */
-export async function enrollAuthenticator(): Promise<PendingTotp | null> {
+export async function enrollAuthenticator(): Promise<TotpSetup | null> {
   if (!hasPublicSupabaseEnv()) return null;
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
@@ -364,7 +364,7 @@ export async function enrollAuthenticator(): Promise<PendingTotp | null> {
   const totp = (factors?.all ?? []).filter((factor) => factor.factor_type === "totp");
   if (totp.some((factor) => factor.status === "verified")) return null;
   const pending = await readPendingTotp();
-  if (pending && totp.some((factor) => factor.id === pending.factorId)) return pending;
+  if (pending && totp.some((factor) => factor.id === pending.factorId)) return withQr(pending);
   // Unconfirmed setups from an expired or lost page. Supabase refuses a second factor with the same name.
   for (const factor of totp) await supabase.auth.mfa.unenroll({ factorId: factor.id });
   const { data, error } = await supabase.auth.mfa.enroll({
@@ -373,12 +373,9 @@ export async function enrollAuthenticator(): Promise<PendingTotp | null> {
     issuer: "Casevoya",
   });
   if (error || !data || data.type !== "totp") return null;
-  const qr = data.totp.qr_code.startsWith("data:")
-    ? data.totp.qr_code
-    : `data:image/svg+xml;utf-8,${encodeURIComponent(data.totp.qr_code)}`;
-  const started = { factorId: data.id, secret: data.totp.secret, qr };
+  const started = { factorId: data.id, secret: data.totp.secret, uri: data.totp.uri };
   await writePendingTotp(started);
-  return started;
+  return withQr(started);
 }
 
 export async function issueRecoveryCodes(): Promise<PortResult | null> {
