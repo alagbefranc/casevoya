@@ -55,6 +55,9 @@ import { loadSheetTemplates } from "@/modules/sheet/templates-load";
 import { AutomationsHeader, AutomationsSettings, SheetAutomations } from "@/components/sheet/designer/automations";
 import { loadSheetAutomations } from "@/modules/sheet/automations-load";
 import { SheetScreen } from "@/components/sheet/screen";
+import { AskVoDialog, DraftsHeader, DraftsRbar, SheetDrafts } from "@/components/sheet/designer/drafts";
+import { AiHeader, SheetAi, type AiTab } from "@/components/sheet/designer/ai";
+import { loadSheetAi, loadSheetDrafts } from "@/modules/sheet/vo-load";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
 import { homeRoute } from "@/lib/auth/home-route";
 import { isUuid } from "@/lib/tenant/context";
@@ -382,6 +385,38 @@ export async function SheetBody({
           statusbar={loaded.chrome.statusbar}
         >
           <SheetAutomations data={loaded.data} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Vo drafts: AI drafts waiting for a person (AI-03), and Ask Vo. Vo drafts only; people send.
+  if (page === "drafts" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetDrafts(access.staff);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<DraftsHeader data={loaded.header} />}
+          aside={<DraftsRbar data={loaded.data} />}
+          statusbar={loaded.chrome.statusbar}
+          after={loaded.ask ? <AskVoDialog data={loaded.ask} /> : undefined}
+        >
+          <SheetDrafts data={loaded.data} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Practice > Vo and AI: settings, run log, citations library, abstain and offline, human approval, draft audit.
+  if (page === "settings" && query.tab === "ai" && (access.kind === "live" || access.kind === "sample")) {
+    redirect("/sheet/ai");
+  }
+  if (page === "ai" && (access.kind === "live" || access.kind === "sample")) {
+    const tab: AiTab = query.tab === "runs" || query.tab === "sources" || query.tab === "states" || query.tab === "rules" || query.tab === "audit" ? query.tab : "settings";
+    const loaded = await loadSheetAi(access.staff, tab);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={loaded.chrome.sidebar} header={<AiHeader data={loaded.data} />} statusbar={loaded.chrome.statusbar}>
+          <SheetAi data={loaded.data} />
         </SheetFrame>
       </SheetScreen>
     );

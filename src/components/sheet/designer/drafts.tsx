@@ -342,3 +342,54 @@ export function DraftsRbar({ data }: { data: DraftsData }) {
     </aside>
   );
 }
+
+export type AskVoData = { organizationId: string; matters: { id: string; label: string }[] };
+
+/**
+ * Ask Vo (live-only, in the Designer's dialog anatomy): a question about one matter, answered for
+ * the staff member only from the firm's records, with the records it read. Vo abstains when the
+ * question needs a rule, a fee, a deadline or a legal judgement. The answer is shown, not stored.
+ */
+export function AskVoDialog({ data }: { data: AskVoData }) {
+  return (
+    <dialog className={"dlg"} id={"dlgAsk"} aria-labelledby={"dlgAskH"}>
+      <div className={"dh"}>
+        <h2 id={"dlgAskH"}>{"Ask Vo"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={"dlgAsk"}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <div className={"fld"}>
+          <label htmlFor={"askM"}>{"Matter"}</label>
+          <select className={"sel"} id={"askM"}>
+            {data.matters.map((matter) => (
+              <option key={matter.id} value={matter.id}>
+                {matter.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"askQ"}>{"Question"}</label>
+          <small className={"hint"} id={"askQ-h"}>
+            {"Vo answers from this matter’s records only, for you. It won’t give legal advice or state a rule, fee or deadline."}
+          </small>
+          <textarea className={"ta"} id={"askQ"} aria-describedby={"askQ-h"} maxLength={1000} rows={3}></textarea>
+        </div>
+        <div id={"askOut"} aria-live={"polite"} hidden style={{ background: "var(--canvas)", borderRadius: "10px", padding: "12px 14px", fontSize: "14.5px" }}>
+          <p id={"askText"} style={{ margin: 0 }}></p>
+          <small id={"askSrc"} style={{ display: "block", marginTop: "6px", color: "var(--t2)", fontSize: "13px" }}></small>
+        </div>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={"dlgAsk"}>
+          {"Close"}
+        </button>
+        <button className={"btn p"} data-vo-ask={"1"} data-org={data.organizationId} disabled={data.matters.length ? undefined : true}>
+          {"Ask"}
+        </button>
+      </div>
+    </dialog>
+  );
+}

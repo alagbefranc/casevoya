@@ -1,5 +1,6 @@
 import "server-only";
 import { loadMatterMessages } from "@/modules/messages/load";
+import { loadVoComposer } from "@/modules/sheet/vo-load";
 import {
   matterTab,
   type MatterAgreementRow,
@@ -494,6 +495,8 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
   const tab = matterTab(query.tab);
   // Messages tab: the chat view (owner's request, 2026-10-18). A failed read shows its error state.
   const messages = tab === "messages" ? await loadMatterMessages(staff, matterId, query.thread ?? null).catch(() => null) : undefined;
+  // "Draft with Vo" in the composer; a failed read just leaves Vo out.
+  if (messages) messages.vo = await loadVoComposer(staff, matterId).catch(() => undefined);
   // Every change is still checked by the database (role, version, step-up); this only says which matter.
   const wire = { organizationId: org, matterId: matter.id, version: matter.version };
   // public.record_deadline accepts these roles; anyone else is not offered the dialog.

@@ -84,6 +84,7 @@ import { POLICY_KINDS, policyKindForDialog } from "@/modules/portal-policies/def
 import { restoreStaffInvite, runStaffInvite, runStaffResend, runStaffRevoke } from "./staff-invite-act";
 import { reopenGrantDialog, runGrantCreate } from "./grants-acts";
 import { mountIntakeBuilder } from "./intake-builder-acts";
+import { runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
@@ -156,9 +157,14 @@ const FILTER_TOKEN: Record<string, string> = {
   "Awaiting review": "review",
   Quarantined: "quarantined",
   "Expiring soon": "expiring",
+  // Vo and AI > Run log.
+  Accepted: "accepted",
+  Edited: "edited",
+  Rejected: "rejected",
+  Abstained: "abstained",
 };
 /** Pages whose `.fp-bar` chips and search filter real rows by their `data-f` tokens. */
-const FILTER_PAGES = new Set(["tasks", "clients", "agreements", "finance", "documents", "queue"]);
+const FILTER_PAGES = new Set(["tasks", "clients", "agreements", "finance", "documents", "queue", "ai"]);
 
 export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
   const router = useRouter();
@@ -606,6 +612,20 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
                       ? runComplaintStep
                       : runComplianceSettings;
         busyRun(compliance, () => run(compliance, router));
+        return;
+      }
+      // Vo drafts and Vo and AI: Reject, the owner's switches, "useful?" votes and Ask Vo.
+      const vo = target.closest<HTMLElement>("[data-vo-discard], .k2-sw[data-vo-setting], [data-vo-useful], [data-vo-ask]");
+      if (vo && root.contains(vo)) {
+        event.preventDefault();
+        const run = vo.hasAttribute("data-vo-discard")
+          ? () => runVoDiscard(vo, router)
+          : vo.hasAttribute("data-vo-setting")
+            ? () => runVoSetting(vo, router)
+            : vo.hasAttribute("data-vo-useful")
+              ? () => runVoUseful(vo, router)
+              : () => runVoAsk(vo);
+        busyRun(vo, run);
         return;
       }
       const nav = target.closest<HTMLElement>("[data-nav]");
