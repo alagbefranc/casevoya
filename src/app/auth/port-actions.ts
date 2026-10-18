@@ -8,7 +8,9 @@ import { safeNext } from "@/lib/auth/redirect";
 import { clearPendingTotp, readPendingTotp, withQr, writePendingTotp, type TotpSetup } from "@/lib/auth/mfa-pending";
 import { firmSlug } from "@/lib/auth/slug";
 import { syncClaimedFirmSlug } from "@/modules/email/sync-routing";
-import { isInvitationToken } from "@/lib/auth/invitations";
+import { isInvitationToken, normalizeEmail } from "@/lib/auth/invitations";
+import { acceptWithClient } from "@/modules/portal-invitations/accept";
+import type { PortalAcceptPayload } from "@/modules/portal-invitations/types";
 import {
   firmSetupDbPayload,
   firmSetupPayloadSchema,
@@ -520,6 +522,195 @@ export async function joinStaffInvite(input: {
     return fail("This invitation cannot be accepted.");
   }
   return { ok: true, href: "/app" };
+}
+
+export type PortalJoinResult =
+  | { ok: true; confirm: true }
+  | { ok: true; confirm?: false; firstRequest: { purpose: string } | null }
+  | { ok: false; message: string };
+
+type PortalInvitee = { email: string; displayName: string };
+
+const SIGNED_IN_ELSEWHERE = "You’re signed in with a different email. Sign out, then open this invitation again.";
+const WRONG_PASSWORD = "That password didn’t match the Casevoya sign-in for this email.";
+
+function joinFail(message: string): PortalJoinResult {
+  return { ok: false, message };
+}
+
+/** The invited person, from public.preview_portal_invitation; null unless the invitation is open. */
+async function openPortalInvitee(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  token: string,
+): Promise<PortalInvitee | { error: string }> {
+  const { data, error } = await supabase.rpc("preview_portal_invitation", { p_token: token });
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) return { error: "This invitation could not be opened." };
+  const preview = data as { status?: unknown; invitee?: { email?: unknown; display_name?: unknown } | null };
+  if (preview.status === "rate_limited") return { error: "Too many attempts. Wait and try again." };
+  if (preview.status !== "open") return { error: "This invitation can no longer be used." };
+  const email = typeof preview.invitee?.email === "string" ? normalizeEmail(preview.invitee.email) : null;
+  if (!email) return { error: "This invitation can no longer be used." };
+  const displayName = typeof preview.invitee?.display_name === "string" ? preview.invitee.display_name.trim().slice(0, 200) : "";
+  return { email, displayName };
+}
+
+function acceptPayloadOk(payload: unknown): payload is PortalAcceptPayload {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  const value = payload as Record<string, unknown>;
+  return typeof value.portal_terms_id === "string" && typeof value.privacy_notice_id === "string";
+}
+
+/** The person's first open document request on the file, for the Done step. Null when there is none. */
+async function firstOpenRequest(organizationId: string | null, personId: string | null) {
+  if (!organizationId || !personId) return null;
+  try {
+    const supabase = await createClient({ organizationId });
+    const { data } = await supabase
+      .from("document_requests")
+      .select("purpose")
+      .eq("person_id", personId)
+      .eq("status", "open")
+      .order("created_at", { ascending: true })
+      .limit(1);
+    const purpose = data?.[0]?.purpose?.trim();
+    return purpose ? { purpose: purpose.slice(0, 200) } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function acceptJoined(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  token: string,
+  payload: PortalAcceptPayload,
+): Promise<PortalJoinResult> {
+  const accepted = await acceptWithClient(supabase, token, payload);
+  if ("error" in accepted) return joinFail(accepted.error);
+  return { ok: true, firstRequest: await firstOpenRequest(accepted.organizationId, accepted.personId) };
+}
+
+/**
+ * The account step of a portal invitation (client, sponsor, family). Signs up with the invited
+ * email, or signs in to an existing Casevoya account with it, then accepts the invitation.
+ * When Supabase needs the email confirmed first, the result asks for the six-digit code
+ * (confirmPortalInvite). Portal roles do not need two-step sign-in; staff do (joinStaffInvite).
+ */
+export async function joinPortalInvite(input: {
+  token: string;
+  mode: "create" | "existing";
+  password: string;
+  payload: PortalAcceptPayload;
+}): Promise<PortalJoinResult | null> {
+  if (!hasPublicSupabaseEnv()) return nullResult();
+  if (!isInvitationToken(input.token)) return joinFail("That invitation link is not valid.");
+  if (input.mode !== "create" && input.mode !== "existing") return joinFail("Choose how you’ll sign in.");
+  if (!acceptPayloadOk(input.payload)) return joinFail("The current terms and privacy notice have to be accepted.");
+  const password = typeof input.password === "string" ? input.password : "";
+  if (input.mode === "create" && !passwordOk(password)) return joinFail("Choose a password that meets all three rules");
+  if (input.mode === "existing" && (!password || password.length > 200)) return joinFail("Enter your Casevoya password");
+
+  const supabase = await createClient();
+  const invitee = await openPortalInvitee(supabase, input.token);
+  if ("error" in invitee) return joinFail(invitee.error);
+
+  const { data: claims } = await supabase.auth.getClaims();
+  if (claims?.claims?.sub) {
+    const current = typeof claims.claims.email === "string" ? normalizeEmail(claims.claims.email) : null;
+    if (current !== invitee.email) return joinFail(SIGNED_IN_ELSEWHERE);
+    return acceptJoined(supabase, input.token, input.payload);
+  }
+
+  const signIn = async (): Promise<PortalJoinResult | "signed-in"> => {
+    const { error } = await supabase.auth.signInWithPassword({ email: invitee.email, password });
+    if (!error) return "signed-in";
+    if (error.code === "email_not_confirmed" || /not confirmed/i.test(error.message)) {
+      const resent = await supabase.auth.resend({ type: "signup", email: invitee.email });
+      if (resent.error) {
+        return lockedMessage(resent.error.message)
+          ? joinFail("Too many codes were sent. Wait a minute, then try again.")
+          : joinFail("We couldn’t send a code to this email.");
+      }
+      return { ok: true, confirm: true };
+    }
+    if (lockedMessage(error.message)) return joinFail("Too many attempts. Wait and try again.");
+    return joinFail(WRONG_PASSWORD);
+  };
+
+  if (input.mode === "existing") {
+    const signedIn = await signIn();
+    if (signedIn !== "signed-in") return signedIn;
+    return acceptJoined(supabase, input.token, input.payload);
+  }
+
+  const signedUp = await supabase.auth.signUp({
+    email: invitee.email,
+    password,
+    options: { data: invitee.displayName ? { display_name: invitee.displayName } : {} },
+  });
+  if (signedUp.error) {
+    if (/already/i.test(signedUp.error.message) || signedUp.error.code === "user_already_exists") {
+      const signedIn = await signIn();
+      if (signedIn !== "signed-in") {
+        return signedIn.ok
+          ? signedIn
+          : joinFail("This email already has a Casevoya sign-in. Choose “Already have a Casevoya sign-in?” and use that password.");
+      }
+      return acceptJoined(supabase, input.token, input.payload);
+    }
+    if (lockedMessage(signedUp.error.message)) return joinFail("Too many attempts. Wait and try again.");
+    if (signedUp.error.code === "weak_password") return joinFail("Choose a password that meets all three rules");
+    return joinFail("Your sign-in could not be created.");
+  }
+  if (signedUp.data.session) return acceptJoined(supabase, input.token, input.payload);
+  // With email confirmation on, an address that already has an account comes back with no identities.
+  if (signedUp.data.user && signedUp.data.user.identities?.length === 0) {
+    const signedIn = await signIn();
+    if (signedIn !== "signed-in") {
+      return signedIn.ok
+        ? signedIn
+        : joinFail("This email already has a Casevoya sign-in. Choose “Already have a Casevoya sign-in?” and use that password.");
+    }
+    return acceptJoined(supabase, input.token, input.payload);
+  }
+  // Supabase emailed a six-digit confirmation code; the same screen asks for it.
+  return { ok: true, confirm: true };
+}
+
+/** The six-digit code from the confirmation email, then the acceptance (see joinPortalInvite). */
+export async function confirmPortalInvite(input: {
+  token: string;
+  code: string;
+  payload: PortalAcceptPayload;
+}): Promise<PortalJoinResult | null> {
+  if (!hasPublicSupabaseEnv()) return nullResult();
+  if (!isInvitationToken(input.token)) return joinFail("That invitation link is not valid.");
+  if (typeof input.code !== "string" || !/^\d{6}$/.test(input.code)) return joinFail("That code didn’t match.");
+  if (!acceptPayloadOk(input.payload)) return joinFail("The current terms and privacy notice have to be accepted.");
+  const supabase = await createClient();
+  const invitee = await openPortalInvitee(supabase, input.token);
+  if ("error" in invitee) return joinFail(invitee.error);
+  const { error } = await supabase.auth.verifyOtp({ email: invitee.email, token: input.code, type: "signup" });
+  if (error) {
+    if (lockedMessage(error.message)) return joinFail("Too many attempts. Wait and try again.");
+    return joinFail("That code didn’t match. Use the newest code we emailed you.");
+  }
+  return acceptJoined(supabase, input.token, input.payload);
+}
+
+/** Sends the invited email a new six-digit confirmation code. */
+export async function resendPortalInviteCode(token: string): Promise<PortalJoinResult | null> {
+  if (!hasPublicSupabaseEnv()) return nullResult();
+  if (!isInvitationToken(token)) return joinFail("That invitation link is not valid.");
+  const supabase = await createClient();
+  const invitee = await openPortalInvitee(supabase, token);
+  if ("error" in invitee) return joinFail(invitee.error);
+  const { error } = await supabase.auth.resend({ type: "signup", email: invitee.email });
+  if (error) {
+    return lockedMessage(error.message)
+      ? joinFail("A code was sent a moment ago. Wait a minute, then ask for another.")
+      : joinFail("We couldn’t send a code to this email.");
+  }
+  return { ok: true, confirm: true };
 }
 
 export async function previewStaffInvite(token: string) {
