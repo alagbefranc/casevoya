@@ -18,6 +18,8 @@ import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder, t
 import { IntakeBuilderMarkup } from "@/components/sheet/markup/intake-builder";
 import { SheetTemplates, TemplatesHeader, type TemplatesData, type TemplatesTab } from "@/components/sheet/designer/templates";
 import { TemplatesMarkup } from "@/components/sheet/markup/templates";
+import { AutomationsHeader, AutomationsSettings, SheetAutomations, type AutomationsData, type AutomationsTab } from "@/components/sheet/designer/automations";
+import { AutomationsMarkup } from "@/components/sheet/markup/automations";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 
@@ -560,5 +562,62 @@ describe("Designer fidelity: Templates", () => {
     expect(html).toContain("No rule chosen");
     const rule = renderToStaticMarkup(createElement(SheetTemplates, { data: { ...DESIGNER_TEMPLATES, tab: "rule", rule: { ...DESIGNER_TEMPLATES.rule!, actions: null } } }));
     expect(rule).not.toContain("Approve version");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Automations
+// ---------------------------------------------------------------------------
+const DESIGNER_AUTOMATIONS: AutomationsData = {
+  tab: "builder",
+  name: "Deadline reminders",
+  pills: ["Active", "Last run 09:02", "0 retries"],
+  actions: { test: "Test with sample matter", save: "Save version 4" },
+  intro: "Automations create tasks, assign staff, request documents and send approved admin templates. Legal advice, refunds, bank details, outcomes and submissions always need a person.",
+  steps: [
+    { icon: "bell", title: "When", text: "A verified deadline is recorded on a matter", badge: { label: "Event" } },
+    { icon: "filter", title: "If", text: { left: "The deadline is more than 14 days away", right: "Matter is not closed" }, badge: { label: "Conditions" } },
+    { icon: "clock", title: "Then", text: "Propose client reminders at 14, 7, 3 and 1 days", badge: { label: "Action" } },
+    { icon: "users", title: "And", text: "Create a task for the assigned consultant 3 days before", badge: { label: "Action" } },
+    { icon: "shield", title: "Human approval", text: "Before any message reaches the client", badge: { tone: "chg", label: "Required" }, warn: true },
+    { icon: "x-circle", title: "Stop when", text: "The task is completed or the deadline changes", badge: { label: "Stop rule" } },
+  ],
+  addStep: true,
+  runs: [
+    { title: { left: "Priya Sharma", right: "NL-2026-0142" }, note: { left: "Proposed 4 reminders", right: "approved by Amara" }, state: { tone: "ok", label: "Approved" }, when: "09:02" },
+    { title: { left: "Kofi Mensah", right: "NL-2026-0131" }, note: { left: "Proposed 4 reminders", right: "waiting for approval" }, state: { tone: "rev", label: "Waiting" }, when: "Yesterday 16:40" },
+    { title: { left: "Grace Okafor", right: "NL-2026-0128" }, note: "Stopped: deadline changed", state: { tone: "gr", label: "Stopped" }, when: "14 Oct" },
+  ],
+  settings: [
+    { label: "Owner", value: "Amara", person: { name: "Amara Osei", avatarUrl: "/assets/av-amara-consultant.png" } },
+    { label: "Quiet hours", value: "21:00–08:00", icon: "moon" },
+    { label: "Delay", value: "None" },
+    { label: "Critical exceptions", value: "Short-notice requests" },
+  ],
+  others: [
+    { label: "Welcome pack after agreement signed", on: true },
+    { label: "Chase overdue client tasks", on: true },
+    { label: "Lead follow-up after 3 days", on: false },
+  ],
+  vo: { draft: "Suggested: add “Stop when the matter is put on hold”, with a review date.", sources: "Sources: your 3 most recent on-hold matters" },
+};
+
+describe("Designer fidelity: Automations", () => {
+  for (const [tab, variant] of [["builder", "default"], ["runs", "tab-runs"]] as [AutomationsTab, string][]) {
+    it(`renders the Automations page (${tab} tab) exactly as the captured Designer markup`, () => {
+      const captured = clean(renderToStaticMarkup(createElement(AutomationsMarkup, { variant })));
+      const data = { ...DESIGNER_AUTOMATIONS, tab };
+      const live = frame("/sheet/automations", createElement(AutomationsHeader, { data }), createElement(SheetAutomations, { data }), {
+        aside: createElement(AutomationsSettings, { data }),
+      });
+      same(live, captured);
+    });
+  }
+
+  it("shows no editor buttons, other automations or Vo card on a real page, and an honest empty history", () => {
+    const data: AutomationsData = { ...DESIGNER_AUTOMATIONS, tab: "runs", actions: null, addStep: false, others: [], vo: null, runs: [] };
+    const html = renderToStaticMarkup(createElement("div", null, createElement(AutomationsHeader, { data }), createElement(SheetAutomations, { data }), createElement(AutomationsSettings, { data })));
+    expect(html).toContain("No reminders yet");
+    expect(html).not.toMatch(/Save version|Test with sample|Other automations|class="ai"/);
   });
 });

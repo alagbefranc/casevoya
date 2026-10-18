@@ -1661,6 +1661,8 @@ export type Database = {
           legal_name: string
           privacy_contact_email: string | null
           privacy_contact_name: string | null
+          quiet_hours_end: string | null
+          quiet_hours_start: string | null
           retention_policy: Json | null
           sample_mode: boolean
           slug: string
@@ -1691,6 +1693,8 @@ export type Database = {
           legal_name: string
           privacy_contact_email?: string | null
           privacy_contact_name?: string | null
+          quiet_hours_end?: string | null
+          quiet_hours_start?: string | null
           retention_policy?: Json | null
           sample_mode?: boolean
           slug: string
@@ -1721,6 +1725,8 @@ export type Database = {
           legal_name?: string
           privacy_contact_email?: string | null
           privacy_contact_name?: string | null
+          quiet_hours_end?: string | null
+          quiet_hours_start?: string | null
           retention_policy?: Json | null
           sample_mode?: boolean
           slug?: string

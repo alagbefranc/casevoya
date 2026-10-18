@@ -36,6 +36,8 @@ import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder } 
 import { loadSheetIntakeBuilder } from "@/modules/sheet/intake-builder-load";
 import { SheetTemplates, TemplatesHeader } from "@/components/sheet/designer/templates";
 import { loadSheetTemplates } from "@/modules/sheet/templates-load";
+import { AutomationsHeader, AutomationsSettings, SheetAutomations } from "@/components/sheet/designer/automations";
+import { loadSheetAutomations } from "@/modules/sheet/automations-load";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
 import { homeRoute } from "@/lib/auth/home-route";
@@ -237,6 +239,23 @@ export async function SheetBody({
           after={<GrantDialog data={loaded.dialog} />}
         >
           <SheetGrants data={loaded.page} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Automations: the deadline-reminder rule as it runs, and its reminder history (read only).
+  if (page === "automations" && (access.kind === "live" || access.kind === "sample")) {
+    const tab = query.tab === "runs" ? "runs" : "builder";
+    const loaded = await loadSheetAutomations(access.staff, tab);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<AutomationsHeader data={loaded.data} />}
+          aside={<AutomationsSettings data={loaded.data} />}
+          statusbar={loaded.chrome.statusbar}
+        >
+          <SheetAutomations data={loaded.data} />
         </SheetFrame>
       </SheetScreen>
     );
