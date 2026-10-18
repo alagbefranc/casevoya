@@ -96,21 +96,13 @@ export function usePortActions(page: string, token?: string) {
           if (preset) {
             enrolled.current = preset;
           } else if (session.signedIn && !session.factorId) {
-            const started = await enrollAuthenticator();
-            const box = event.root.querySelector<HTMLElement>(".qr");
-            const status = box?.querySelector<HTMLElement>("[role=status]");
+            // A failed request must not leave "Preparing your setup code…" up for good.
+            const started = await enrollAuthenticator().catch(() => null);
+            const status = event.root.querySelector<HTMLElement>(".qr [role=status]");
             if (started) {
+              // The action sets the pending-setup cookie, so Next re-renders /mfa and the server
+              // draws the QR and key. Changing React's DOM here breaks that re-render.
               enrolled.current = started.factorId;
-              if (box) box.dataset.factor = started.factorId;
-              const key = event.root.querySelector(".key b");
-              if (key) key.textContent = started.secret.replace(/(.{4})/g, "$1 ").trim();
-              const img = document.createElement("img");
-              img.src = started.qr;
-              img.alt = "QR code for your authenticator app";
-              img.width = 132;
-              img.height = 132;
-              if (status) status.replaceWith(img);
-              else box?.prepend(img);
             } else if (status) {
               status.textContent = "Setup couldn’t start. Reload this page to try again.";
             }

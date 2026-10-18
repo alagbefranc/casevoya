@@ -23,7 +23,16 @@ vi.mock("@/lib/supabase/server", () => ({
           const id = `00000000-0000-4000-8000-00000000000${state.enrolled}`;
           state.factors.push({ id, factor_type: "totp", status: "unverified" });
           return {
-            data: { id, type: "totp", totp: { secret: `SECRETAAAA${state.enrolled}`.replace(/[0-9]/g, "B"), qr_code: "<svg/>" } },
+            data: {
+              id,
+              type: "totp",
+              totp: {
+                secret: `SECRETAAAA${state.enrolled}`.replace(/[0-9]/g, "B"),
+                // Supabase returns a ~320 KB SVG here.
+                qr_code: `data:image/svg+xml;utf-8,${"<rect/>".repeat(46_000)}`,
+                uri: `otpauth://totp/Casevoya:owner%40example.test?secret=SECRETAAAA&issuer=Casevoya`,
+              },
+            },
             error: null,
           };
         },
@@ -33,6 +42,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 const { enrollAuthenticator } = await import("@/app/auth/port-actions");
+const { cookies } = await import("./helpers/next-headers-stub");
 
 describe("authenticator setup on /mfa", () => {
   beforeEach(() => {
@@ -63,5 +73,16 @@ describe("authenticator setup on /mfa", () => {
     expect(await enrollAuthenticator()).toBeNull();
     expect(state.enrolled).toBe(0);
     expect(state.unenrolled).toEqual([]);
+  });
+
+  it("keeps the pending setup cookie small and draws its own QR", async () => {
+    const started = await enrollAuthenticator();
+    const cookie = (await cookies()).get("cv_mfa_pending")?.value ?? "";
+    // Browsers drop cookies over 4 KB; the Worker hung sending a 368 KB one.
+    expect(cookie.length).toBeGreaterThan(0);
+    expect(cookie.length).toBeLessThan(1024);
+    expect(cookie).not.toContain("svg");
+    expect(started?.qr).toMatch(/^data:image\/svg\+xml;utf-8,/);
+    expect(started?.qr.length).toBeLessThan(20_000);
   });
 });

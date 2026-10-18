@@ -4,3 +4,11 @@
  * search and the status bar. Restore the default for that glyph only.
  */
 .cmdk{display:inline-block}
+
+/*
+ * The Designer drew the authenticator QR as an inline svg and styled it with `.qr svg`.
+ * The app shows the QR as an <img>, so that rule landed on the Copy key icon instead and
+ * squeezed it into a padded white blob. Give the QR image the frame and the icon its size.
+ */
+.qr>img{width:132px;height:132px;flex:none;background:#fff;border-radius:8px;padding:6px}
+.qr .key svg{width:16px;height:16px;padding:0;background:none;border-radius:0;flex:none}

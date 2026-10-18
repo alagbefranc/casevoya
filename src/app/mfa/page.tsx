@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { TwoStepMarkup, type TotpEnrollment } from "@/components/port/markup/two-step";
 import { PortScreen } from "@/components/port/screen";
 import { hasPublicSupabaseEnv } from "@/lib/env";
-import { readPendingTotp } from "@/lib/auth/mfa-pending";
+import { readPendingTotp, withQr } from "@/lib/auth/mfa-pending";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -44,7 +44,7 @@ async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: strin
         const stillOpen = factors?.all?.some(
           (factor) => factor.id === pending?.factorId && factor.factor_type === "totp" && factor.status !== "verified",
         );
-        if (pending && stillOpen) enrollment = pending;
+        if (pending && stillOpen) enrollment = await withQr(pending);
       }
     }
   }
