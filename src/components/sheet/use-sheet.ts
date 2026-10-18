@@ -87,6 +87,16 @@ import { reopenGrantDialog, runGrantCreate } from "./grants-acts";
 import { mountIntakeBuilder } from "./intake-builder-acts";
 import { runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
+import {
+  mountIntegrations,
+  runComposioEnable,
+  runComposioSwitch,
+  runIntConnect,
+  runIntDisconnect,
+  runIntSync,
+  runNotifPref,
+  runQuietHours,
+} from "./settings-integrations-acts";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
 const NEW_MATTER = "/sheet/matters?new=1";
@@ -638,6 +648,32 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(vo, run);
         return;
       }
+      // Settings > Integrations and Notifications: connected accounts, connections, busy times,
+      // the person's own email switches and the firm's quiet hours.
+      const setting = target.closest<HTMLElement>(
+        ".k2-sw[data-composio], [data-composio-enable], [data-int-connect], [data-int-disconnect], [data-int-sync], .k2-sw[data-notif-pref], .k2-sw[data-quiet]",
+      );
+      if (setting && root.contains(setting)) {
+        event.preventDefault();
+        if (setting.hasAttribute("disabled")) return;
+        const data = setting.dataset;
+        const run =
+          data.composio !== undefined
+            ? () => runComposioSwitch(setting, openDialog, router)
+            : data.composioEnable !== undefined
+              ? () => runComposioEnable(setting, router)
+              : data.intConnect !== undefined
+                ? () => runIntConnect(setting)
+                : data.intDisconnect !== undefined
+                  ? () => runIntDisconnect(setting, router)
+                  : data.intSync !== undefined
+                    ? () => runIntSync(setting, router)
+                    : data.notifPref !== undefined
+                      ? () => runNotifPref(setting, router)
+                      : () => runQuietHours(setting, router);
+        busyRun(setting, run);
+        return;
+      }
       const nav = target.closest<HTMLElement>("[data-nav]");
       if (nav?.dataset.nav?.startsWith("/sheet/") && root.contains(nav)) {
         event.preventDefault();
@@ -741,6 +777,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
 
     // The Intake form builder: select, rename, switches, add fields, autosave and publish.
     mountIntakeBuilder(root, router, ac.signal);
+    // Back from a Composio Connect Link on Settings > Integrations.
+    if (page === "settings") mountIntegrations(root, router);
 
     // "Hold to revoke" on a pending staff invitation: held for HOLD_MS, then revoked.
     let hold: number | undefined;

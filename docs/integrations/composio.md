@@ -3,7 +3,7 @@
 Owner's choice (2026-10-18): Casevoya's own mail and calendar are the default; a staff member may
 also connect their own Gmail, Outlook / Microsoft 365 or Google Calendar through Composio.
 Composio is **not in the PRD**; it needs a privacy review before any firm turns it on.
-Status: **server side built and tested with Composio mocked; no Settings UI; not configured.**
+Status: **server side built and tested with Composio mocked; Settings → Integrations wired (2026-10-18); not configured.**
 
 ## Sources consulted (retrieved 2026-10-18)
 
@@ -45,9 +45,12 @@ Casevoya mail and calendar work as before.
 
 ## Not built (open)
 
-- Settings → Integrations rows (Connect / Connected / Disconnect) are not ported to live data; the
-  actions exist but nothing in the Sheet calls them yet. The owner disclosure text belongs in that
-  tab and in Vo and AI → Settings.
+- 2026-10-18: Settings → Integrations is live (`src/components/sheet/designer/settings-integrations.tsx`,
+  `src/modules/sheet/settings-integrations-present.ts`, `settings-integrations-acts.ts`): owner switch with the disclosure
+  dialog, Connect / Reconnect / Disconnect per person, Sync busy times for Google Calendar, and the
+  Connect Link callback `/sheet/settings?tab=integrations&connected=<toolkit>` → `refreshConnection`.
+  Still open: the disclosure in Vo and AI → Settings; the owner sees only their own connections on
+  that tab (the table lets them read the team's; no team list is shown).
 - The Vo agent does not read connected mailboxes (no Composio tool in services/vo-agent).
 - Outlook mail reading and Outlook calendar free/busy (arguments not confirmed in the docs we read).
 - Revoking the Composio connected account on disconnect (we mark it disconnected and drop busy

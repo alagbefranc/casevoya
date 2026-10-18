@@ -131,6 +131,19 @@ import { PipelineMarkup } from "@/components/sheet/markup/pipeline";
 import { LeadMarkup } from "@/components/sheet/markup/lead";
 import { barColor, buildPipeline, ringOffset, type LeadRow, type StageRow } from "@/modules/leads/present";
 import { Review } from "@/components/portal/documents-live";
+import {
+  IntegrationsSettingsHeader,
+  SheetIntegrations,
+  SheetNotificationPrefs,
+  type IntegrationRow,
+  type IntegrationsData,
+  type NotificationPrefsData,
+  type SettingsBell,
+  type SettingsTab,
+} from "@/components/sheet/designer/settings-integrations";
+import { SettingsMarkup } from "@/components/sheet/markup/settings";
+import { ComposioDialog } from "@/components/sheet/designer/settings-integrations";
+import { composioDialog, integrationsData, notificationPrefsData } from "@/modules/sheet/settings-integrations-present";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -3032,6 +3045,160 @@ describe("Designer fidelity: portal document review, French reason (live-only ad
     expect(html).toContain('aria-label="Reason in French, for a client who prefers French"');
     // The machine-draft note and its check box appear only once there is a machine draft.
     expect(html).not.toContain("Machine draft");
+  });
+});
+
+describe("Designer fidelity: Settings, Integrations and Notifications tabs", () => {
+  const SETTINGS_STATUSBAR = {
+    timezone: "America/Toronto",
+    queue: { label: "Reminder queue healthy", detail: "0 retries" },
+    sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+  };
+  // Every Settings capture ends with the Team tab's offboarding dialog; the live tabs here don't render it.
+  const OFFBOARD = /<dialog class="dlg wide" id="dlgOff"[\s\S]*?<\/dialog>/;
+  const PILLS = ["Northline Immigration", "Plan: Practice (fictional)"];
+
+  function settingsPage(tab: SettingsTab, body: ReturnType<typeof createElement>, after?: ReturnType<typeof createElement>) {
+    return withoutPreloads(
+      renderToStaticMarkup(
+        createElement(
+          SheetFrame,
+          {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/settings" },
+            header: createElement(IntegrationsSettingsHeader, { tab, pills: PILLS }),
+            statusbar: SETTINGS_STATUSBAR,
+            after,
+          },
+          body,
+        ),
+      ),
+    );
+  }
+
+  const NOT_CONNECTED = { tone: "gr", label: "Not connected" } as const;
+  const demo = (name: string, logo: string, sub: IntegrationRow["sub"], state: NonNullable<IntegrationRow["state"]>, connected: boolean): IntegrationRow => ({
+    logo: `/assets/logos/${logo}`,
+    name,
+    tag: "planned",
+    sub,
+    state,
+    unlink: connected ? { "aria-label": `Disconnect ${name}`, "data-toast": `${name} disconnected (demo)`, "data-fpb": "1" } : null,
+    action: { label: connected || state.tone === "bad" ? "Manage" : "Connect" },
+  });
+  const LATER_BELL = (name: string): SettingsBell => ({ label: `${name}: notify me`, off: "Notify me", on: "You'll be notified", pressed: false, width: "103px" });
+  const DESIGNER_INTEGRATIONS: IntegrationsData = {
+    title: "Settings",
+    intro: "All integrations are planned for the prototype. The states show how each connection will report problems.",
+    microsoft: { left: "One Microsoft 365 sign-in connects all three", right: "planned" },
+    rows: [
+      demo("Stripe", "stripe.svg", "Payments", { tone: "ok", label: "Connected" }, true),
+      demo("QuickBooks", "quickbooks.svg", "Accounting", { tone: "chg", label: "Degraded", detail: "retrying" }, true),
+      demo("Google Calendar", "googlecalendar.svg", "Calendar", { tone: "ok", label: "Connected" }, true),
+      demo("DocuSign", "docusign.svg", "Agreements", { tone: "bad", label: "Expired", detail: "reconnect" }, false),
+      demo("Gmail", "gmail.svg", "Email", { tone: "ok", label: "Connected" }, true),
+      demo("Zoom", "zoom.svg", "Meetings", NOT_CONNECTED, false),
+      demo("Dropbox", "dropbox.svg", "File import", NOT_CONNECTED, false),
+      demo("Calendly", "calendly.svg", "Booking", NOT_CONNECTED, false),
+      demo("Microsoft Outlook", "integrations/microsoftoutlook-color.svg", "Email", NOT_CONNECTED, false),
+      demo("Microsoft 365 calendar", "integrations/microsoft365-color.svg", "Calendar", NOT_CONNECTED, false),
+      demo("Microsoft Teams", "integrations/microsoftteams-color.svg", "Meetings", NOT_CONNECTED, false),
+      demo("Google Meet", "googlemeet.svg", "Meetings", NOT_CONNECTED, false),
+      demo("Twilio", "twilio.svg", { left: "SMS reminders", right: "optional" }, NOT_CONNECTED, false),
+      { ...demo("Xero", "xero.svg", "Accounting export", { tone: "gr", label: "Later" }, false), action: null, bell: LATER_BELL("Xero") },
+      { ...demo("WhatsApp", "whatsapp.svg", "Messaging", { tone: "gr", label: "Later", detail: "approved channel only" }, false), action: null, bell: LATER_BELL("WhatsApp") },
+    ],
+  };
+
+  const sw = (id: string, on: boolean, sr: string) => ({ kind: "switch" as const, item: { id, on, sr } });
+  const DESIGNER_NOTIFICATION_PREFS: NotificationPrefsData = {
+    intro: "Choose what reaches you by email. Everything still appears in Notifications inside Casevoya.",
+    sections: [
+      {
+        title: "Email me when",
+        rows: [
+          { label: "A client uploads a document", small: "Grouped into one email per hour", control: sw("swo0xc5", true, "A client uploads a document") },
+          { label: "A deadline is 3 days away", small: "Includes the matter and who owns it", control: sw("swgx11a", true, "A deadline is 3 days away") },
+          { label: "Vo has a draft for my review", small: "Never sends anything on its own", control: sw("sw4bsg2", true, "Vo has a draft for my review") },
+          { label: "Someone mentions me", small: "On any matter or lead", control: sw("swmeuhm", true, "Someone mentions me") },
+          { label: "An integration needs attention", small: "Expired or failing connections", control: sw("swz3ig3", false, "An integration needs attention") },
+        ],
+      },
+      {
+        title: "Weekly digest",
+        rows: [
+          {
+            label: "Monday summary",
+            small: "Open matters, due dates and unpaid invoices for your files",
+            control: { kind: "bell", bell: { label: "Monday summary: notify me", off: "Send me the digest", on: "You'll get the digest", pressed: true, width: "155px" } },
+          },
+        ],
+      },
+      {
+        title: "Service messages and marketing are separate",
+        rows: [
+          {
+            label: "Service messages to clients",
+            small: "Deadlines, requests, invoices. Clients can’t turn off critical notices; they choose email or SMS.",
+            control: { kind: "badge", badge: { tone: "ok", label: "Always on" } },
+          },
+          { label: "Marketing to clients", small: "Only with separate, recorded consent (OPS-05)", control: sw("swhnm4a", false, "Marketing to clients") },
+          {
+            label: "Quiet hours for routine reminders",
+            small: { left: "21:00–08:00 in each client’s timezone", right: "critical notices still go out" },
+            art: true,
+            control: sw("swkq9p5", true, "Quiet hours"),
+          },
+        ],
+      },
+    ],
+  };
+
+  it("renders the Integrations tab exactly as the captured Designer markup", () => {
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(SettingsMarkup, { variant: "tab-integrations" }))).replace(OFFBOARD, "");
+    sameMarkup(settingsPage("integrations", createElement(SheetIntegrations, { data: DESIGNER_INTEGRATIONS })), captured);
+  });
+
+  it("renders the Notifications tab exactly as the captured Designer markup", () => {
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(SettingsMarkup, { variant: "tab-notifications" }))).replace(OFFBOARD, "");
+    sameMarkup(settingsPage("notifications", createElement(SheetNotificationPrefs, { data: DESIGNER_NOTIFICATION_PREFS })), captured);
+  });
+
+  it("adds live-only rows and the disclosure dialog with the Designer's own classes only", () => {
+    // Documented live-only additions: Casevoya email, Casevoya calendar and the connected-accounts
+    // switch before the Microsoft 365 row; `data-*`, `disabled` and `title` on buttons; and the
+    // owner's disclosure dialog, built from the Designer's offboarding dialog (.dlg wide, .ofl, .fp-note).
+    const org = "00000000-0000-4000-8000-0000000000bb";
+    const input = {
+      organizationId: org,
+      firmSlug: "synthetic-firm",
+      fromAddress: "notices@casevoya.ca",
+      inboundDomain: "docs.casevoya.ca",
+      isOwner: true,
+      composio: { configured: true, enabled: false, acceptedAt: null },
+      connections: [],
+      busySyncedAt: null,
+      stripe: { canSee: true, isOwner: true, account: { cardPayments: "active", requirementsDue: 0 } },
+      timeZone: "America/Toronto",
+    };
+    const capturedInt = renderToStaticMarkup(createElement(SettingsMarkup, { variant: "tab-integrations" }));
+    const capturedNot = renderToStaticMarkup(createElement(SettingsMarkup, { variant: "tab-notifications" }));
+    // Every class token the live tabs use appears in the Designer's own Settings captures.
+    const classes = (html: string) => new Set([...html.matchAll(/class="([^"]*)"/g)].flatMap((match) => match[1].split(/\s+/).filter(Boolean)));
+    const designer = new Set([...classes(capturedInt), ...classes(capturedNot)]);
+    const live = settingsPage(
+      "integrations",
+      createElement(SheetIntegrations, { data: integrationsData(input) }),
+      createElement(ComposioDialog, { data: composioDialog(input)! }),
+    );
+    const notifications = settingsPage(
+      "notifications",
+      createElement(SheetNotificationPrefs, { data: notificationPrefsData({ organizationId: org, isOwner: true, email: {}, quietHours: null }) }),
+    );
+    for (const cls of [...classes(live), ...classes(notifications)]) expect(designer.has(cls), cls).toBe(true);
+    expect(region(live, '<div id="content">', "</main>")).not.toMatch(/Northline|\(demo\)|Degraded|Expired|fictional/);
+    // Stripping the live attributes from a planned row leaves the Designer's "Not connected" row.
+    const zoom = region(live, '<img src="/assets/logos/zoom.svg"', "</span></div>").replace(/ (disabled=""|title="[^"]*")/g, "");
+    expect(capturedInt).toContain(zoom);
   });
 });
 
