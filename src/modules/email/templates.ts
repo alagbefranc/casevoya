@@ -94,7 +94,8 @@ export function designFor(context: Context): TemplateId | "generic" {
  * case narrative, no document name, no amount. Links are built from the app origin and fixed
  * paths; the only link taken from the context is an invitation's private link that the mail
  * worker opened from its sealed form (context.link). Without it the invitation says the link is
- * not in the email.
+ * not in the email. (A cancelled consultation may link to /book/<firm slug>: the path is fixed and
+ * the slug, context.booking_page, must match the firm slug pattern.)
  */
 export function renderEmail(context: Context, options: { origin?: string } = {}): EmailContent {
   const origin = emailOrigin(options.origin ?? DEFAULT_EMAIL_ORIGIN);
@@ -138,13 +139,38 @@ export function renderEmail(context: Context, options: { origin?: string } = {})
     case "EM16a":
       copy = renderTemplate(
         "EM16a",
-        { firmName: firm, startsAt: textOf(context.starts_at) || null, timeZone: textOf(context.time_zone) || null, consultantName: textOf(context.consultant_name) || null },
+        {
+          firmName: firm,
+          startsAt: textOf(context.starts_at) || null,
+          timeZone: textOf(context.time_zone) || null,
+          consultantName: textOf(context.consultant_name) || null,
+          portal: context.portal === true,
+          locationKind: textOf(context.location_kind) || null,
+          address: textOf(context.address) || null,
+        },
         origin,
       );
       break;
+    // The portal button only when the database says the attendee has a portal login.
     case "EM16b":
+      copy = renderTemplate(
+        "EM16b",
+        { firmName: firm, startsAt: textOf(context.starts_at) || null, timeZone: textOf(context.time_zone) || null, portal: context.portal === true },
+        origin,
+      );
+      break;
     case "EM16c":
-      copy = renderTemplate(design, { firmName: firm, startsAt: textOf(context.starts_at) || null, timeZone: textOf(context.time_zone) || null }, origin);
+      copy = renderTemplate(
+        "EM16c",
+        {
+          firmName: firm,
+          startsAt: textOf(context.starts_at) || null,
+          timeZone: textOf(context.time_zone) || null,
+          portal: context.portal === true,
+          bookingPage: textOf(context.booking_page) || null,
+        },
+        origin,
+      );
       break;
     case "EM08-staff":
     case "EM09":

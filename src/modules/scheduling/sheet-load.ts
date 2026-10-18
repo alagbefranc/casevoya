@@ -19,8 +19,21 @@ import { monthGrid } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 import { parseAvailability, slotsFromAvailability } from "./availability";
-import { COMMON_ZONES, locationShort, safeZone, shortWhen, slotLabel } from "./format";
-import { buildWeek, consultationRow, daysSummary, deadlineNote, defaultWeekAnchor, mondayOf, type StaffBooking, type WeekItem } from "./sheet-present";
+import { COMMON_ZONES, PRACTICE_NOTICE, locationShort, safeZone, shortWhen, slotLabel } from "./format";
+import {
+  BOOKING_PAGE_PILL,
+  bookingPageState,
+  bookingPagesInOrder,
+  bookingTypeState,
+  buildWeek,
+  consultationRow,
+  daysSummary,
+  deadlineNote,
+  defaultWeekAnchor,
+  mondayOf,
+  type StaffBooking,
+  type WeekItem,
+} from "./sheet-present";
 import { addDays, isTimeZone, localToUtc, utcToLocal } from "./slots";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
@@ -36,7 +49,8 @@ export type ConsultationsPage = {
   book: Record<string, string> | null;
   page: ConsultationsData;
   dialogs: { book: BookDialogData; reschedule: RescheduleDialogData; cancel: CancelDialogData };
-  settings: { organizationId: string; zones: string[]; hosts: HostOption[]; owner: boolean };
+  /** practice: sample mode, so the booking type dialog publishes practice pages. */
+  settings: { organizationId: string; zones: string[]; hosts: HostOption[]; owner: boolean; practice: boolean };
 };
 
 type EventTypeRow = {
@@ -145,7 +159,10 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
   const cancelledAhead = upcoming.filter((b) => Date.parse(b.startsAt) > now && b.status === "cancelled");
   const rows = [...ahead, ...past, ...cancelledAhead].map((booking) => consultationRow(booking, zone, now));
   const thisWeek = ahead.filter((b) => b.status === "confirmed" && Date.parse(b.startsAt) < now + 7 * DAY).length;
-  const published = types.filter((type) => type.is_published);
+  // A published sample type is a practice page (only the firm's staff can open it). The share link
+  // and preview use a real page when there is one, otherwise the practice page.
+  const published = bookingPagesInOrder(types.filter((type) => type.is_published));
+  const pageState = bookingPageState(published);
 
   // Availability: everyone who hosts a type or has hours, and the viewer.
   const schedules = await supabase.from("availability_schedules").select("id, membership_id, time_zone").eq("organization_id", org).eq("is_default", true);
@@ -223,7 +240,7 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
   const typeRows: BookingTypeRow[] = types.map((type) => ({
     title: type.title,
     detail: `${type.duration_min} min · ${hostsOf(type.id).length} ${hostsOf(type.id).length === 1 ? "host" : "hosts"} · ${locationShort(type.location_kind)} · /book/${firmSlug}/${type.slug}`,
-    state: type.is_published ? { tone: "ok", label: "Published" } : type.is_sample ? { tone: "gr", label: "Sample" } : { tone: "gr", label: "Not published" },
+    state: bookingTypeState(type),
     edit: owner
       ? {
           "data-type-open": type.id,
@@ -264,7 +281,7 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
   return {
     chrome,
     tab,
-    pills: [`${thisWeek} this week`, published.length ? "Booking page live" : "Booking page not published"],
+    pills: [`${thisWeek} this week`, BOOKING_PAGE_PILL[pageState]],
     book: {},
     page: {
       tab,
@@ -289,11 +306,15 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
               href: `/book/${firmSlug}/${first.slug}`,
             }
           : null,
-        share: link ? { url: link, copy: link, embedNote: false } : null,
+        share: link ? { url: link, copy: link, embedNote: false, note: first?.is_sample ? PRACTICE_NOTICE.note : null } : null,
         types: { rows: typeRows, create: owner ? { "data-type-open": "new" } : null },
         empty: {
           title: "No booking page yet",
-          copy: owner ? "Create a booking type and publish it to share a booking page." : "The firm owner creates and publishes booking types.",
+          copy: owner
+            ? staff.sampleMode
+              ? "Create a booking type and publish it as a practice page. Only your team can open it until your firm is verified."
+              : "Create a booking type and publish it to share a booking page."
+            : "The firm owner creates and publishes booking types.",
         },
       },
     },
@@ -316,7 +337,7 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
         submit: { data: { "data-booking-submit": "can", "data-org": org } },
       },
     },
-    settings: { organizationId: org, zones, hosts: members.map((m) => ({ membershipId: m.membershipId, name: m.name })), owner },
+    settings: { organizationId: org, zones, hosts: members.map((m) => ({ membershipId: m.membershipId, name: m.name })), owner, practice: staff.sampleMode },
   };
 }
 

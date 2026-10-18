@@ -71,7 +71,8 @@ export function AvailabilityDialog({ organizationId, zones }: { organizationId: 
 export type HostOption = { membershipId: string; name: string };
 
 /** A booking type (firm owner, with a recent step-up). Free consultations only in this release. */
-export function BookingTypeDialog({ organizationId, hosts }: { organizationId: string; hosts: HostOption[] }) {
+/** practice: the firm is in sample mode, so a published type is a practice page (staff only). */
+export function BookingTypeDialog({ organizationId, hosts, practice = false }: { organizationId: string; hosts: HostOption[]; practice?: boolean }) {
   const select = (id: string, label: string, options: [string, string][], hint?: string) => (
     <div className={"fld"}>
       <label htmlFor={id}>{label}</label>
@@ -147,7 +148,7 @@ export function BookingTypeDialog({ organizationId, hosts }: { organizationId: s
         </fieldset>
         <label style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <input type={"checkbox"} id={"etPub"} />
-          {"Published (clients can book from the link)"}
+          {practice ? "Published as a practice page (only your team can open it until your firm is verified)" : "Published (clients can book from the link)"}
         </label>
         <p className={"fp-note"}>
           {"Free consultations only. A booking fee paid before a consultation is an advance for the client account, so paid booking types are not available yet."}

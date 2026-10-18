@@ -5,7 +5,10 @@ import type { PublicDeps } from "./public-api";
 /**
  * Supabase wiring for the public booking API. Calls run as the visitor (anonymous, or signed in):
  * the database functions return published types and busy ranges only, and link a booking to a
- * person only when the signed-in portal client is that person.
+ * person only when the signed-in portal client is that person. The client carries the visitor's
+ * session cookie, so a sample-mode firm's practice page (and its slots and hold) comes back only
+ * for the firm's own signed-in staff: the database checks membership with auth.uid(). Everyone
+ * else gets the same "not found" as an unpublished page.
  */
 export async function publicDeps(): Promise<PublicDeps> {
   const supabase = await createClient();

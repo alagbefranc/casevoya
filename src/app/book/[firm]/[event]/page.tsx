@@ -7,6 +7,7 @@ import { hasPublicSupabaseEnv } from "@/lib/env";
 import { parsePublicEvent } from "@/modules/scheduling/public-api";
 import { publicDeps } from "@/modules/scheduling/public-deps";
 
+/** Never indexed (a practice page least of all: it exists only for the firm's own staff). */
 export const metadata: Metadata = {
   title: "Book · Casevoya",
   robots: { index: false, follow: false },

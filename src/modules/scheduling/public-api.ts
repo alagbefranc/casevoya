@@ -32,6 +32,11 @@ export type PublicEvent = {
   currency: string;
   minNoticeMin: number;
   maxAdvanceDays: number;
+  /**
+   * A sample-mode firm's practice page: the database returns it only to the firm's own staff
+   * (signed in, with MFA), and bookings made on it are sample records.
+   */
+  practice: boolean;
 };
 
 export type HoldArgs = {
@@ -76,8 +81,12 @@ export function parsePublicEvent(raw: unknown): PublicEvent | null {
     currency: String(row.currency ?? "CAD"),
     minNoticeMin: typeof row.min_notice_min === "number" ? row.min_notice_min : 0,
     maxAdvanceDays: typeof row.max_advance_days === "number" ? row.max_advance_days : 60,
+    practice: row.practice === true,
   };
 }
+
+/** A practice page is per viewer (staff only): never cached by a browser or a shared cache. */
+const PRIVATE = "private, no-store";
 
 async function loadEvent(deps: PublicDeps, firm: string, event: string): Promise<PublicEvent | null> {
   if (!SLUG.test(firm) || !SLUG.test(event)) return null;
@@ -91,7 +100,7 @@ const NOT_FOUND: ApiResult = { status: 404, body: { error: "not_found", message:
 export async function getPublicEvent(deps: PublicDeps, firm: string, event: string): Promise<ApiResult> {
   const found = await loadEvent(deps, firm, event);
   if (!found) return NOT_FOUND;
-  return { status: 200, body: { event: found }, headers: { "Cache-Control": "public, max-age=30" } };
+  return { status: 200, body: { event: found }, headers: { "Cache-Control": found.practice ? PRIVATE : "public, max-age=30" } };
 }
 
 function dayStart(ms: number) {
@@ -121,7 +130,7 @@ export async function getPublicSlots(
   return {
     status: 200,
     body: { starts: encodeStarts(starts), tz, from: new Date(from).toISOString(), to: new Date(to).toISOString(), durationMin: found.durationMin },
-    headers: { "Cache-Control": `public, max-age=30`, Vary: "Accept-Encoding" },
+    headers: { "Cache-Control": found.practice ? PRIVATE : "public, max-age=30", Vary: "Accept-Encoding" },
   };
 }
 
@@ -169,6 +178,8 @@ export type BookingSummary = {
   locationKind: string;
   locationDetail: string | null;
   icsSequence: number;
+  /** Booked on a practice page: a sample record. */
+  practice: boolean;
 };
 
 export function parseSummary(raw: unknown): BookingSummary | null {
@@ -189,6 +200,7 @@ export function parseSummary(raw: unknown): BookingSummary | null {
     locationKind: String(row.location_kind ?? "video"),
     locationDetail: typeof row.location_detail === "string" ? row.location_detail : null,
     icsSequence: typeof row.ics_sequence === "number" ? row.ics_sequence : 0,
+    practice: row.practice === true,
   };
 }
 

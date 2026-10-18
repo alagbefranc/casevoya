@@ -6,6 +6,16 @@ const WEEKDAY_LONG = ["", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTH_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
+/**
+ * The notice on a sample-mode firm's practice booking page: the Sheet's sample-mode status line
+ * ("Sample mode · practice records are marked sample"), then who can open the page.
+ */
+export const PRACTICE_NOTICE = {
+  label: "Sample mode",
+  detail: "practice records are marked sample",
+  note: "Practice page: only your team can open it until your firm is verified. Bookings made here are sample records.",
+} as const;
+
 export function safeZone(tz: unknown, fallback = "America/Toronto"): string {
   return isTimeZone(tz) ? tz : fallback;
 }

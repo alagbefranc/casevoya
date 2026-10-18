@@ -46,6 +46,8 @@ export async function loadPortalAppointments(viewer: PortalViewer): Promise<Port
     if (Array.isArray(types)) {
       bookable = types
         .filter((type): type is { slug: string; title: string; duration_min: number } => Boolean(type && typeof type === "object" && "slug" in type && "title" in type))
+        // A practice page (sample mode) is for the firm's staff, never offered in a client portal.
+        .filter((type) => (type as { practice?: unknown }).practice !== true)
         .map((type) => ({ title: type.title, href: `/book/${slug}/${type.slug}`, durationMin: type.duration_min }));
     }
   }
