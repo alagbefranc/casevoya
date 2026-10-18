@@ -6,7 +6,7 @@
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair } from "./frame";
 
-export type MatterBadge = { tone: "blue" | "ok" | "unv" | "chg" | "bad" | "rev"; label: string; detail?: string };
+export type MatterBadge = { tone: "blue" | "ok" | "unv" | "chg" | "bad" | "rev" | "gr"; label: string; detail?: string };
 
 export type MatterRow = {
   href?: string;
@@ -33,7 +33,7 @@ export type MattersData = {
   empty: null | { kind: "none" } | { kind: "filtered"; title: string; copy: string; clear: string };
 };
 
-function Badge({ badge }: { badge: MatterBadge }) {
+export function Badge({ badge }: { badge: MatterBadge }) {
   return (
     <span className={`bd ${badge.tone}`}>
       <i></i>
