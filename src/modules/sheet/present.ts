@@ -159,6 +159,9 @@ export type SheetQuery = {
   week?: string;
   /** The open conversation on a matter's Messages tab. */
   thread?: string;
+  /** The Intake form builder's form (stable key) and selected field (field key). */
+  form?: string;
+  field?: string;
 };
 
 export function sheetVariant(page: string, query: SheetQuery): string {

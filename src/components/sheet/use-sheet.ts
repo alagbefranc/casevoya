@@ -68,6 +68,9 @@ import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-
 import { policyDialogId, restorePolicyDraft, runPublishPolicy } from "./portal-policy-act";
 import { POLICY_KINDS, policyKindForDialog } from "@/modules/portal-policies/defaults";
 import { restoreStaffInvite, runStaffInvite, runStaffResend, runStaffRevoke } from "./staff-invite-act";
+import { reopenGrantDialog, runGrantCreate } from "./grants-acts";
+import { mountIntakeBuilder } from "./intake-builder-acts";
+import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
 const NEW_MATTER = "/sheet/matters?new=1";
@@ -225,6 +228,11 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       const create = target.closest<HTMLElement>(`#newB, a[href="${NEW_MATTER}"], a.add`);
       if (create && root.contains(create) && (!create.matches("a.add") || create.textContent.trim() === "New matter")) {
         event.preventDefault();
+        // The licence-suspended home pauses New: the database refuses a new matter anyway.
+        if (create.getAttribute("aria-disabled") === "true") {
+          toast2(create.getAttribute("title") || "Paused", { kind: "warn", sub: "Your licence check needs to confirm good standing first." });
+          return;
+        }
         if (root.querySelector("#dlgNew")) openDialog("dlgNew");
         else window.location.assign(NEW_MATTER);
         return;
@@ -327,6 +335,31 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (approve.getAttribute("aria-busy") === "true") return;
         approve.setAttribute("aria-busy", "true");
         void runApproveTemplate(approve, router).finally(() => approve.removeAttribute("aria-busy"));
+        return;
+      }
+      // Licences: Add a licence and Report a change; the licence-suspended home's Reassign work.
+      const licence = target.closest<HTMLElement>("[data-licence-add], [data-licence-report], [data-licence-send], [data-reassign-from]");
+      if (licence && root.contains(licence)) {
+        event.preventDefault();
+        if (licence.dataset.licenceAdd === "open") return openDialog("dlgAdd");
+        if (licence.hasAttribute("data-licence-report")) return openLicenceReport(licence, root, openDialog);
+        if (licence.getAttribute("aria-busy") === "true") return;
+        licence.setAttribute("aria-busy", "true");
+        const run = licence.hasAttribute("data-licence-add")
+          ? runLicenceAdd(licence, router)
+          : licence.hasAttribute("data-licence-send")
+            ? runLicenceReport(licence, router)
+            : runReassign(licence, router);
+        void run.finally(() => licence.removeAttribute("aria-busy"));
+        return;
+      }
+      // Access grants: Create grant saves through the database (New grant opens #dlgG by data-dlg).
+      const grantCreate = target.closest<HTMLElement>("[data-grant-create]");
+      if (grantCreate && root.contains(grantCreate)) {
+        event.preventDefault();
+        if (grantCreate.getAttribute("aria-busy") === "true") return;
+        grantCreate.setAttribute("aria-busy", "true");
+        void runGrantCreate(grantCreate, router).finally(() => grantCreate.removeAttribute("aria-busy"));
         return;
       }
       // The Staff tab: Invite staff opens the Designer's dialog; Send, Resend and revoke go to the database.
@@ -611,6 +644,9 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       }
     }, listen);
 
+    // The Intake form builder: select, rename, switches, add fields, autosave and publish.
+    mountIntakeBuilder(root, router, ac.signal);
+
     // "Hold to revoke" on a pending staff invitation: held for HOLD_MS, then revoked.
     let hold: number | undefined;
     const release = () => {
@@ -756,6 +792,28 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
           router.replace(`${window.location.pathname}${query ? `?${query}` : ""}`);
         }, listen);
       }
+    }
+
+    // Licences and the licence-suspended home: ?dlg=licence-add|licence-change|reassign (back from
+    // step-up) reopens the dialog with what was typed; ticking matters keeps Reassign's count true.
+    if (root.querySelector("[data-licence-send], [data-reassign-from]")) {
+      window.setTimeout(() => reopenLicenceDialog(root, openDialog), 300);
+      for (const id of ["dlgAdd", "dlgChg", "dlgRe"]) {
+        root.querySelector<HTMLDialogElement>(`dialog#${id}`)?.addEventListener("close", () => {
+          if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
+        }, listen);
+      }
+      const reassign = root.querySelector<HTMLDialogElement>("dialog#dlgRe");
+      if (reassign) reassign.addEventListener("change", () => syncReassign(reassign), listen);
+    }
+
+    // Access grants: ?dlg=grant (back from step-up) reopens New access grant with what was typed.
+    const grantDialog = root.querySelector<HTMLDialogElement>("dialog#dlgG");
+    if (grantDialog?.querySelector("[data-grant-create]")) {
+      window.setTimeout(() => reopenGrantDialog(root, openDialog), 300);
+      grantDialog.addEventListener("close", () => {
+        if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
+      }, listen);
     }
 
     const newTask = root.querySelector<HTMLDialogElement>("dialog#dlgTask");

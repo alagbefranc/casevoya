@@ -29,6 +29,22 @@ import { loadSheetNotifications } from "@/modules/sheet/notifications-load";
 import { DocumentReviewDialog, DocumentsHeader, SheetDocuments } from "@/components/sheet/designer/documents";
 import { ComposeDialog, InboxHeader, SheetInbox } from "@/components/sheet/designer/inbox";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
+import { ROLES_CSS, RolesHeader, SheetRoles } from "@/components/sheet/designer/roles";
+import { LicenceAfter, LicenceHeader, SheetLicences } from "@/components/sheet/designer/licence";
+import { loadSheetChrome } from "@/modules/sheet/chrome-load";
+import { loadSheetLicence } from "@/modules/sheet/licence-load";
+import { ROLE_MATRIX } from "@/modules/staff/role-matrix";
+import { SUSPENDED_CSS, SuspendedAlert, SuspendedPanel, SuspendedTopBar } from "@/components/sheet/designer/licence-suspended";
+import { loadSheetLicenceSuspended } from "@/modules/sheet/licence-suspended-load";
+import { SUSPENDED_REVEAL } from "@/modules/sheet/licence-suspended-present";
+import { GrantDialog, GrantsHeader, SheetGrants } from "@/components/sheet/designer/grants";
+import { loadSheetGrants } from "@/modules/sheet/grants-load";
+import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder } from "@/components/sheet/designer/intake-builder";
+import { loadSheetIntakeBuilder } from "@/modules/sheet/intake-builder-load";
+import { SheetTemplates, TemplatesHeader } from "@/components/sheet/designer/templates";
+import { loadSheetTemplates } from "@/modules/sheet/templates-load";
+import { AutomationsHeader, AutomationsSettings, SheetAutomations } from "@/components/sheet/designer/automations";
+import { loadSheetAutomations } from "@/modules/sheet/automations-load";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
 import { homeRoute } from "@/lib/auth/home-route";
@@ -85,6 +101,26 @@ export async function SheetBody({
     if (home === "/portal" || home === "/start-trial") redirect(home);
   }
   // The Designer home with the firm's own records, in sample mode too. Sample records are real rows marked sample.
+  // The licence-suspended home: the Sheet home for a consultant whose own licence check recorded an
+  // adverse result (ORG-05). The home shows it too, so the consultant can't miss it.
+  if ((page === "index" || page === "licence-suspended") && (access.kind === "live" || access.kind === "sample")) {
+    const suspended = await loadSheetLicenceSuspended(access.staff);
+    if (!suspended && page === "licence-suspended") redirect("/sheet/licence");
+    if (suspended) {
+      return (
+        <SheetScreen page={page}>
+          <SheetFrame sidebar={suspended.chrome.sidebar} header={<SuspendedTopBar data={suspended.top} />} rbar={suspended.rbar} styles={[SUSPENDED_CSS]} statusbar={suspended.chrome.statusbar}>
+            <SheetHome
+              data={suspended.home}
+              before={<SuspendedAlert data={suspended.suspended} />}
+              lead={<SuspendedPanel data={suspended.suspended} />}
+              reveal={SUSPENDED_REVEAL}
+            />
+          </SheetFrame>
+        </SheetScreen>
+      );
+    }
+  }
   if (page === "index" && (access.kind === "live" || access.kind === "sample")) {
     const { chrome, rbar, home, missingPolicies } = await loadSheetHome(access.staff);
     // Until the firm publishes its portal terms and privacy notice, no invited client can join: say so here.
@@ -199,6 +235,98 @@ export async function SheetBody({
           after={<PortalPoliciesAfter dialogs={dialogs} />}
         >
           <SheetPortalPolicies data={policies} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Roles and permissions: what each role may do, as the server enforces it.
+  if (page === "roles" && (access.kind === "live" || access.kind === "sample")) {
+    const chrome = await loadSheetChrome(access.staff, "/sheet/roles");
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={chrome.sidebar} header={<RolesHeader pills={ROLE_MATRIX.pills} />} styles={[ROLES_CSS]} statusbar={chrome.statusbar}>
+          <SheetRoles data={ROLE_MATRIX} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Licences: each consultant's CICC licence and the manual register checks (Licences and Review log tabs).
+  if (page === "licence" && (access.kind === "live" || access.kind === "sample")) {
+    const tab = query.tab === "log" ? "log" : "lic";
+    const loaded = await loadSheetLicence(access.staff, tab);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<LicenceHeader firmName={loaded.page.firmName} tab={tab} />}
+          statusbar={loaded.chrome.statusbar}
+          after={<LicenceAfter dialogs={loaded.dialogs} />}
+        >
+          <SheetLicences data={loaded.page} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Practice > Access grants: person and matter grants, Support access and Office and team limits.
+  if (page === "grants" && (access.kind === "live" || access.kind === "sample")) {
+    const tab = query.tab === "support" || query.tab === "limits" ? query.tab : "grants";
+    const loaded = await loadSheetGrants(access.staff, tab);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<GrantsHeader tab={tab} pills={loaded.page.pills} />}
+          statusbar={loaded.chrome.statusbar}
+          after={<GrantDialog data={loaded.dialog} />}
+        >
+          <SheetGrants data={loaded.page} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Automations: the deadline-reminder rule as it runs, and its reminder history (read only).
+  if (page === "automations" && (access.kind === "live" || access.kind === "sample")) {
+    const tab = query.tab === "runs" ? "runs" : "builder";
+    const loaded = await loadSheetAutomations(access.staff, tab);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<AutomationsHeader data={loaded.data} />}
+          aside={<AutomationsSettings data={loaded.data} />}
+          statusbar={loaded.chrome.statusbar}
+        >
+          <SheetAutomations data={loaded.data} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Practice > Templates: program and agreement templates, the approved email catalog, checklists, and the rule source register (read only).
+  if (page === "templates" && (access.kind === "live" || access.kind === "sample")) {
+    const tab = query.tab === "messages" || query.tab === "checklists" || query.tab === "sources" || query.tab === "rule" ? query.tab : "program";
+    const loaded = await loadSheetTemplates(access.staff, tab, query.view);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={loaded.chrome.sidebar} header={<TemplatesHeader data={loaded.data} />} statusbar={loaded.chrome.statusbar}>
+          <SheetTemplates data={loaded.data} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Practice > Intake forms: the versioned form builder (Build and Preview tabs).
+  if (page === "intake-builder" && (access.kind === "live" || access.kind === "sample")) {
+    const tab = query.tab === "preview" ? "preview" : "build";
+    const loaded = await loadSheetIntakeBuilder(access.staff, tab, { form: query.form, field: query.field });
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<IntakeHeader data={loaded.data} />}
+          aside={<IntakeSettings data={loaded.data} />}
+          styles={[INTAKE_BUILDER_CSS]}
+          statusbar={loaded.chrome.statusbar}
+        >
+          <SheetIntakeBuilder data={loaded.data} />
         </SheetFrame>
       </SheetScreen>
     );
@@ -441,5 +569,7 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     person: one("person"),
     week: one("week"),
     thread: one("thread"),
+    form: one("form"),
+    field: one("field"),
   };
 }
