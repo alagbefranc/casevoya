@@ -366,6 +366,9 @@ export async function saveSetupStep(
       const { error: modeError } = await supabase.rpc("set_sample_mode", { p_enabled: fields.sample_mode });
       if (modeError) return fromRpc(modeError);
     }
+    // The sample case the trial promised, as real sample rows (once per firm).
+    const { error: sampleError } = await supabase.rpc("ensure_sample_case");
+    if (sampleError) return fromRpc(sampleError);
     return { ok: true, href: "/sheet/sample-mode" };
   }
   return { ok: true };
