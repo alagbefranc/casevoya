@@ -6,6 +6,7 @@
  */
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair, Sep } from "./frame";
+import type { NewTaskWire, TaskDialogOption } from "@/modules/sheet/new-task";
 
 export type TasksTab = "internal" | "client" | "deadlines";
 export type TaskTone = "bad" | "chg" | "gr" | "blue" | "ok" | "rev";
@@ -47,9 +48,12 @@ export type DeadlineRow = {
 };
 
 export type TasksDialogData = {
-  owners: string[];
-  dependsOn: string[];
-  create: { toast: string; kind: string; sub?: string };
+  owners: TaskDialogOption[];
+  dependsOn: TaskDialogOption[];
+  /** The captured Designer form toasts on Create. */
+  create?: { toast: string; kind: string; sub?: string };
+  /** The live form: a matter picker, option values, and Create saves through create_task. */
+  wire?: NewTaskWire;
 };
 
 export type TasksData = {
@@ -378,8 +382,24 @@ export function SheetTasks({ data }: { data: TasksData }) {
   return <Internal data={data.internal ?? { alert: null, rows: [] }} />;
 }
 
-/** The Designer's "New task" dialog. It sits after the frame, beside the scrim. */
+function DialogOption({ option }: { option: TaskDialogOption }) {
+  return (
+    <option value={option.value} data-k={option.kind} data-m={option.matter}>
+      {option.label}
+    </option>
+  );
+}
+
+const optionKey = (option: TaskDialogOption, index: number) => `${option.matter ?? ""}:${option.value ?? index}`;
+
+/**
+ * The Designer's "New task" dialog. It sits after the frame, beside the scrim. With `wire`
+ * it gains a Matter field (the database puts every task on a matter) in the Designer's own
+ * `.fld` / `.sel` markup, its options carry values, and Create is saved in use-sheet
+ * (`data-new-task`) instead of toasting.
+ */
 export function TasksDialog({ data }: { data: TasksDialogData }) {
+  const wire = data.wire;
   return (
     <dialog className={"dlg"} id={"dlgTask"} aria-labelledby={"dlgTaskH"}>
       <div className={"dh"}>
@@ -389,6 +409,17 @@ export function TasksDialog({ data }: { data: TasksDialogData }) {
         </button>
       </div>
       <div className={"db"}>
+        {wire ? (
+          <div className={"fld"}>
+            <label htmlFor={"tkM"}>{"Matter"}</label>
+            <select className={"sel"} id={"tkM"} defaultValue={wire.matters[0]?.value ?? ""}>
+              {wire.matters.length === 0 ? <option value={""}>{"No matter you can add tasks to yet"}</option> : null}
+              {wire.matters.map((option, index) => (
+                <DialogOption key={optionKey(option, index)} option={option} />
+              ))}
+            </select>
+          </div>
+        ) : null}
         <div className={"fld"}>
           <label htmlFor={"tkT"}>{"Task"}</label>
           <input className={"inp"} id={"tkT"} type={"text"} placeholder={""} defaultValue={""} />
@@ -396,15 +427,15 @@ export function TasksDialog({ data }: { data: TasksDialogData }) {
         <div className={"fld"}>
           <label htmlFor={"tkK"}>{"Kind"}</label>
           <select className={"sel"} id={"tkK"}>
-            <option>{"Internal (staff only)"}</option>
-            <option>{"Client task (shows in their portal)"}</option>
+            <option value={wire ? "internal" : undefined}>{"Internal (staff only)"}</option>
+            <option value={wire ? "client" : undefined}>{"Client task (shows in their portal)"}</option>
           </select>
         </div>
         <div className={"fld"}>
           <label htmlFor={"tkO"}>{"Owner"}</label>
-          <select className={"sel"} id={"tkO"}>
-            {data.owners.map((name, index) => (
-              <option key={index}>{name}</option>
+          <select className={"sel"} id={"tkO"} defaultValue={wire?.owner}>
+            {data.owners.map((option, index) => (
+              <DialogOption key={optionKey(option, index)} option={option} />
             ))}
           </select>
         </div>
@@ -418,9 +449,9 @@ export function TasksDialog({ data }: { data: TasksDialogData }) {
         <div className={"fld"}>
           <label htmlFor={"tkP"}>{"Depends on"}</label>
           <select className={"sel"} id={"tkP"}>
-            <option>{"Nothing"}</option>
-            {data.dependsOn.map((title, index) => (
-              <option key={index}>{title}</option>
+            <option value={wire ? "" : undefined}>{"Nothing"}</option>
+            {data.dependsOn.map((option, index) => (
+              <DialogOption key={optionKey(option, index)} option={option} />
             ))}
           </select>
         </div>
@@ -429,9 +460,15 @@ export function TasksDialog({ data }: { data: TasksDialogData }) {
         <button className={"btn"} data-close={"dlgTask"}>
           {"Cancel"}
         </button>
-        <button className={"btn p"} data-close={"dlgTask"} data-toast={data.create.toast} data-toast-kind={data.create.kind} data-toast-sub={data.create.sub}>
-          {"Create"}
-        </button>
+        {wire ? (
+          <button className={"btn p"} data-new-task={"1"} data-org={wire.organizationId} data-tz={wire.timezone}>
+            {"Create"}
+          </button>
+        ) : (
+          <button className={"btn p"} data-close={"dlgTask"} data-toast={data.create?.toast} data-toast-kind={data.create?.kind} data-toast-sub={data.create?.sub}>
+            {"Create"}
+          </button>
+        )}
       </div>
     </dialog>
   );
