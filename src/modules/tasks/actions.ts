@@ -4,6 +4,7 @@ import { safeAccessError } from "@/lib/auth/step-up";
 import { verifyTotpCode } from "@/lib/auth/verify-totp";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
+import { deadlineError } from "@/modules/sheet/new-deadline";
 import type { Database, Json } from "@/types/database.types";
 
 type Audience = Database["public"]["Enums"]["task_audience"];
@@ -182,7 +183,7 @@ export async function recordDeadline(input: {
     p_calculation_note: input.calculationNote ?? null,
     p_evidence_locator: input.evidenceLocator ?? null,
   });
-  if (error) return { error: safeAccessError(error.message) };
+  if (error) return { error: deadlineError(error.message) };
   if (typeof data !== "string" || !isUuid(data)) return { error: "The deadline was not recorded." };
   return { id: data };
 }
