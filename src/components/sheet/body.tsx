@@ -7,6 +7,7 @@ import { MATTER_CSS } from "@/components/sheet/designer/matter-css";
 import { MattersTopBar, NewMatterDialog, SheetMatters } from "@/components/sheet/designer/matters";
 import { SampleCasePanel } from "@/components/sheet/designer/sample-case";
 import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
+import { SheetStaffTab, StaffAfter, StaffHeader } from "@/components/sheet/designer/invitations";
 import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
@@ -17,6 +18,7 @@ import { loadSheetHome } from "@/modules/sheet/home-load";
 import { loadSheetMatter } from "@/modules/sheet/matter-load";
 import { loadSheetMatters } from "@/modules/sheet/matters-load";
 import { loadSheetSample } from "@/modules/sheet/sample-load";
+import { loadSheetStaffTab } from "@/modules/sheet/staff-load";
 import { loadSheetTasks } from "@/modules/sheet/tasks-load";
 import { loadSheetAccess, loadSheetBundle } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
@@ -98,6 +100,22 @@ export async function SheetBody({
           after={<TasksDialog data={tasks.dialog} />}
         >
           <SheetTasks data={tasks} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // People and invitations, Staff tab. The Clients and family tab is not ported yet and keeps its old view.
+  if (page === "invitations" && query.tab !== "clients" && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, page: staff, dialog } = await loadSheetStaffTab(access.staff);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={chrome.sidebar}
+          header={<StaffHeader firmName={staff.firmName} />}
+          statusbar={chrome.statusbar}
+          after={<StaffAfter dialog={dialog} />}
+        >
+          <SheetStaffTab data={staff} />
         </SheetFrame>
       </SheetScreen>
     );

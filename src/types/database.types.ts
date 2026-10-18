@@ -4985,6 +4985,19 @@ export type Database = {
         }
         Returns: string
       }
+      firm_staff_directory: {
+        Args: { p_organization_id: string }
+        Returns: {
+          display_name: string | null
+          email: string | null
+          is_licensed: boolean
+          is_self: boolean
+          membership_id: string
+          role: Database["public"]["Enums"]["org_role"]
+          status: Database["public"]["Enums"]["membership_status"]
+          two_step: boolean | null
+        }[]
+      }
       generate_recovery_codes: {
         Args: never
         Returns: string[]

@@ -23,6 +23,8 @@ import { SampleModeMarkup } from "@/components/sheet/markup/sample-mode";
 import { SampleCasePanel, type SampleCaseData } from "@/components/sheet/designer/sample-case";
 import { SheetTasks, TasksDialog, TasksHeader, type TasksData, type TasksTab } from "@/components/sheet/designer/tasks";
 import { TasksMarkup } from "@/components/sheet/markup/tasks";
+import { SheetStaffTab, StaffAfter, StaffHeader, type StaffData, type StaffInviteDialogData } from "@/components/sheet/designer/invitations";
+import { InvitationsMarkup } from "@/components/sheet/markup/invitations";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -239,6 +241,24 @@ const DESIGNER_MATTER_DIALOGS: MatterDialogsData = {
   receivedOn: "2026-10-17",
 };
 
+const DESIGNER_STAFF: StaffData = {
+  firmName: "Northline Immigration",
+  rows: [
+    { person: AMARA_AV, name: "Amara Osei", email: "amara@northline.example", role: { left: "Owner", right: "Licensed consultant" }, state: { tone: "ok", label: "Accepted" }, note: "Two-step on", action: { kind: "more" } },
+    { person: DANIEL_AV, name: "Daniel Ruiz", email: "daniel@northline.example", role: "Case manager", state: { tone: "ok", label: "Accepted" }, note: "Two-step on", action: { kind: "more" } },
+    { person: AV("Lena Park", "av-lena-finance"), name: "Lena Park", email: "lena@northline.example", role: "Finance", state: { tone: "ok", label: "Accepted" }, note: "Two-step on", action: { kind: "more" } },
+    { person: AV("Grace Lin", "av-grace-consultant"), name: "Grace Lin", email: "grace@northline.example", role: "Licensed consultant", state: { tone: "rev", label: "Sent", detail: "expires 23 Oct" }, note: "Single use", action: { kind: "revoke" } },
+    { person: { name: "Joon Park" }, name: "Joon Park", email: "j.park@northline.example", role: "Assistant", state: { tone: "chg", label: "Expired 14 Oct" }, note: "Single use", action: { kind: "resend" } },
+  ],
+};
+
+const DESIGNER_STAFF_DIALOG: StaffInviteDialogData = {
+  placeholder: "name@northline.example",
+  roles: ["Case manager", "Licensed consultant", "Assistant", "Finance", "Practice manager"],
+  offices: ["Toronto", "All offices"],
+  expires: "24 Oct",
+};
+
 function withoutPreloads(html: string): string {
   return html.replace(/<link rel="preload"[^>]*\/>/g, "");
 }
@@ -445,6 +465,57 @@ describe("Designer fidelity", () => {
       expect(live).toBe(captured);
     });
   }
+
+  it("renders the People and invitations Staff tab and its Invite staff dialog exactly as the captured Designer markup", () => {
+    // The capture also carries the Clients and family tab's "Invite to the portal" dialog
+    // (#dlgC). That tab is not ported, so the Staff tab renders without it.
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(InvitationsMarkup))).replace(
+      /<dialog class="dlg" id="dlgC"[\s\S]*?<\/dialog>/,
+      "",
+    );
+    expect(captured).toContain('id="dlgS"');
+    expect(captured).not.toContain('id="dlgC"');
+    const live = withoutPreloads(
+      renderToStaticMarkup(
+        createElement(SheetFrame, {
+          sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/invitations" },
+          header: createElement(StaffHeader, { firmName: DESIGNER_STAFF.firmName }),
+          statusbar: {
+            timezone: "America/Toronto",
+            queue: { label: "Reminder queue healthy", detail: "0 retries" },
+            sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+          },
+          after: createElement(StaffAfter, { dialog: DESIGNER_STAFF_DIALOG }),
+        }, createElement(SheetStaffTab, { data: DESIGNER_STAFF })),
+      ),
+    );
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+    }
+    expect(live).toBe(captured);
+  });
+
+  it("wires the real Staff tab without changing anything but data attributes", () => {
+    const html = renderToStaticMarkup(
+      createElement("div", null,
+        createElement(SheetStaffTab, {
+          data: {
+            firmName: "Maple Immigration",
+            rows: [
+              { ...DESIGNER_STAFF.rows[3], action: { kind: "revoke", invitationId: "11111111-1111-4111-8111-111111111111" } },
+              { ...DESIGNER_STAFF.rows[4], action: { kind: "resend", invitationId: "22222222-2222-4222-8222-222222222222" } },
+            ],
+          },
+        }),
+        createElement(StaffAfter, { dialog: { ...DESIGNER_STAFF_DIALOG, organizationId: "33333333-3333-4333-8333-333333333333" } }),
+      ),
+    );
+    expect(html).toContain('data-hold="Invitation revoked" aria-label="Press and hold to revoke" data-invitation="11111111-1111-4111-8111-111111111111"');
+    expect(html).toContain('data-t="Invitation sent again" data-invitation="22222222-2222-4222-8222-222222222222"');
+    expect(html).toContain('data-toast-kind="ok" data-org="33333333-3333-4333-8333-333333333333"');
+  });
 
   it("shows a firm without tasks the Designer's empty states, with no sample people", () => {
     for (const tab of ["internal", "client", "deadlines"] as TasksTab[]) {
