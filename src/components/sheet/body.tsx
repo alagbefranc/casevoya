@@ -117,7 +117,12 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
-  // People and invitations, Staff tab. The Clients and family tab is not ported yet and keeps its old view.
+  // People and invitations, Clients and family tab: not ported, so a real firm goes to the Clients
+  // page, where client and family records live and portal invitations are sent from the matter.
+  if (page === "invitations" && query.tab === "clients" && (access.kind === "live" || access.kind === "sample")) {
+    redirect("/sheet/clients");
+  }
+  // People and invitations, Staff tab.
   if (page === "invitations" && query.tab !== "clients" && (access.kind === "live" || access.kind === "sample")) {
     const { chrome, page: staff, dialog } = await loadSheetStaffTab(access.staff);
     return (
