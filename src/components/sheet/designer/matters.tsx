@@ -5,6 +5,7 @@
  */
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair } from "./frame";
+import type { NewMatterDialogData } from "@/modules/sheet/new-matter";
 
 export type MatterBadge = { tone: "blue" | "ok" | "unv" | "chg" | "bad" | "rev" | "gr"; label: string; detail?: string };
 
@@ -48,7 +49,8 @@ export function Badge({ badge }: { badge: MatterBadge }) {
   );
 }
 
-export function MattersTopBar({ counts }: { counts: MattersData["counts"] }) {
+/** `newMatter` wires the button to the New matter dialog on this page. */
+export function MattersTopBar({ counts, newMatter = false }: { counts: MattersData["counts"]; newMatter?: boolean }) {
   return (
     <header className={"top"}>
       <button className={"crumb"}>
@@ -60,7 +62,7 @@ export function MattersTopBar({ counts }: { counts: MattersData["counts"] }) {
       <span className={"pill"}>{`${counts.blocked} blocked`}</span>
       <span className={"pill"}>{"On-hold counts as active"}</span>
       <span className={"acts"}>
-        <button className={"btn p sm"}>
+        <button className={"btn p sm"} data-open={newMatter ? "dlgNew" : undefined}>
           <Icon name={"plus"} cls={"ic s"} />
           {"New matter"}
         </button>
@@ -193,5 +195,102 @@ export function SheetMatters({ data }: { data: MattersData }) {
         </>
       )}
     </>
+  );
+}
+
+function Field({ id, label, hint, type = "text" }: { id: string; label: string; hint?: string; type?: string }) {
+  return (
+    <div className={"fld"}>
+      <label htmlFor={id}>{label}</label>
+      {hint ? (
+        <small className={"hint"} id={`${id}-h`}>
+          {hint}
+        </small>
+      ) : null}
+      <input className={"inp"} id={id} type={type} autoComplete={"off"} aria-describedby={hint ? `${id}-h` : undefined} />
+    </div>
+  );
+}
+
+/**
+ * The New matter dialog. The Designer has no create dialog of its own (its "New matter" links
+ * only toast "Starts from a versioned program template"), so this is the Designer's
+ * "Convert to a matter" dialog (`markup/lead.tsx`, `#dlgConv`) with the client's people added
+ * as the Designer's own `.fld` / `.inp` fields. Saving is wired in use-sheet (`data-new-matter`).
+ */
+export function NewMatterDialog({ data }: { data: NewMatterDialogData }) {
+  const noConsultant = data.consultants.length === 0;
+  return (
+    <dialog className={"dlg"} id={"dlgNew"} aria-labelledby={"dlgNewH"}>
+      <div className={"dh"}>
+        <h2 id={"dlgNewH"}>{"New matter"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={"dlgNew"}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <p style={{ marginBottom: "12px" }}>{"A new matter starts from a versioned program template. It doesn’t invite anyone or sign anything."}</p>
+        {data.sampleMode ? (
+          <div className={"alert warn"} style={{ marginBottom: "12px" }}>
+            <Icon name={"info"} />
+            <div>
+              <b>{"This firm is in sample mode"}</b>
+              {"Real client matters open once sample mode is turned off. Until then the firm refuses a real matter."}
+            </div>
+          </div>
+        ) : null}
+        <Field id={"nmA"} label={"Applicant"} />
+        <Field id={"nmAE"} label={"Applicant email"} hint={"Optional. Used later for the portal invitation."} type={"email"} />
+        <Field id={"nmS"} label={"Sponsor"} hint={"Optional. Leave blank if there is no sponsor."} />
+        <Field id={"nmSE"} label={"Sponsor email"} hint={"Optional"} type={"email"} />
+        <div className={"fld"}>
+          <label htmlFor={"nmT"}>{"Program template"}</label>
+          <select className={"sel"} id={"nmT"} defaultValue={data.programs[0]?.value ?? ""}>
+            {data.programs.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+            <option value={""}>{data.programs.length ? "Choose later" : "No published template yet (choose later)"}</option>
+          </select>
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"nmC"}>{"Responsible consultant"}</label>
+          <select className={"sel"} id={"nmC"} defaultValue={data.consultants[0]?.value ?? ""}>
+            {noConsultant ? <option value={""}>{"No licensed consultant yet"}</option> : null}
+            {data.consultants.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {noConsultant ? (
+          <div className={"alert warn"}>
+            <Icon name={"users"} />
+            <div>
+              <b>{"A matter needs a licensed consultant"}</b>
+              {"Invite a licensed consultant from Settings before opening a matter."}
+            </div>
+          </div>
+        ) : (
+          <div className={"alert info"}>
+            <Icon name={"signature"} />
+            <div>
+              <b>{"Needs a signed service agreement"}</b>
+              {"The matter opens in “Engagement pending” until the agreement is signed."}
+            </div>
+          </div>
+        )}
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={"dlgNew"}>
+          {"Cancel"}
+        </button>
+        <button className={"btn p"} data-new-matter={"1"} data-org={data.organizationId}>
+          {"Create matter"}
+        </button>
+      </div>
+    </dialog>
   );
 }

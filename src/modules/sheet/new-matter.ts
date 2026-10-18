@@ -1,0 +1,127 @@
+/**
+ * Pure helpers for the Sheet's "New matter" dialog: its options, what it sends, how the
+ * database's refusals read, and where a step-up goes. The database decides every create.
+ */
+import { safeAccessError } from "@/lib/auth/step-up";
+import { programLabel } from "@/modules/sheet/matters-present";
+
+export type NewMatterOption = { value: string; label: string };
+
+export type NewMatterDialogData = {
+  organizationId: string;
+  consultants: NewMatterOption[];
+  programs: NewMatterOption[];
+  /** The firm is still in sample mode: the database refuses a real matter. */
+  sampleMode: boolean;
+};
+
+export type NewMatterInput = {
+  applicantName: string;
+  applicantEmail: string | null;
+  sponsorName: string | null;
+  sponsorEmail: string | null;
+  consultantMembershipId: string;
+  rulePackVersionId: string | null;
+};
+
+const BLOCKING = new Set(["revoked", "suspended", "inactive", "not_entitled"]);
+
+/** Active licensed consultants, with the Designer's licence note when their check is not done. */
+export function consultantOptions(
+  members: readonly { id: string; name: string }[],
+  credentialStatus: ReadonlyMap<string, string>,
+): NewMatterOption[] {
+  return members.map((member) => {
+    const status = credentialStatus.get(member.id);
+    if (status === "verified") return { value: member.id, label: member.name };
+    if (status && BLOCKING.has(status)) return { value: member.id, label: `${member.name} (licence blocks new matters)` };
+    return { value: member.id, label: `${member.name} (licence check pending: can’t sign yet)` };
+  });
+}
+
+/** Published program packs, newest version first within a program. */
+export function programOptions(
+  packs: readonly { id: string; program_key: string; pack_version: number; status: string }[],
+): NewMatterOption[] {
+  return [...packs]
+    .sort((a, b) => a.program_key.localeCompare(b.program_key) || b.pack_version - a.pack_version)
+    .map((pack) => ({
+      value: pack.id,
+      label: `${programLabel(pack.program_key)} · v${pack.pack_version}${pack.status === "review_due" ? " review due" : ""}`,
+    }));
+}
+
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+function clean(value: FormDataEntryValue | string | null | undefined): string {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+}
+
+/** What the dialog sends, or the first thing to fix. The database checks all of it again. */
+export function readNewMatter(fields: {
+  applicantName?: string | null;
+  applicantEmail?: string | null;
+  sponsorName?: string | null;
+  sponsorEmail?: string | null;
+  consultant?: string | null;
+  program?: string | null;
+}): { input: NewMatterInput } | { error: string } {
+  const applicantName = clean(fields.applicantName);
+  const applicantEmail = clean(fields.applicantEmail).toLowerCase() || null;
+  const sponsorName = clean(fields.sponsorName) || null;
+  const sponsorEmail = clean(fields.sponsorEmail).toLowerCase() || null;
+  const consultant = clean(fields.consultant);
+  const program = clean(fields.program) || null;
+  if (!applicantName) return { error: "Add the applicant’s name." };
+  if (applicantName.length > 200 || (sponsorName && sponsorName.length > 200)) return { error: "Names can be up to 200 characters." };
+  if (applicantEmail && !EMAIL.test(applicantEmail)) return { error: "Enter a valid email address." };
+  if (sponsorEmail && !sponsorName) return { error: "Add the sponsor’s name, or leave the sponsor out." };
+  if (sponsorEmail && !EMAIL.test(sponsorEmail)) return { error: "Enter a valid email address." };
+  if (!consultant) return { error: "Choose a responsible consultant." };
+  return {
+    input: {
+      applicantName,
+      applicantEmail,
+      sponsorName,
+      sponsorEmail,
+      consultantMembershipId: consultant,
+      rulePackVersionId: program,
+    },
+  };
+}
+
+const STEP_UP_ERRORS = new Set([safeAccessError("step-up is required"), safeAccessError("aal2")]);
+
+/** User-facing copy for a refused create. Never passes a database message through. */
+export function newMatterError(message: string): string {
+  if (/sample mode/i.test(message)) {
+    return "This firm is still in sample mode, so new matters can only be fictional samples. Turn sample mode off to open a real client’s matter.";
+  }
+  if (/licence blocks/i.test(message)) return "A licence blocks this new matter. Check the consultant’s licence status.";
+  if (/active licensed consultant/i.test(message)) return "The responsible consultant must be an active licensed consultant.";
+  if (/published pack/i.test(message)) return "Choose a published program template for a jurisdiction this firm practises.";
+  if (/applicant name/i.test(message)) return "Add the applicant’s name.";
+  if (/sponsor name is required/i.test(message)) return "Add the sponsor’s name, or leave the sponsor out.";
+  if (/responsible consultant is required/i.test(message)) return "Choose a responsible consultant.";
+  if (/matter create denied/i.test(message)) return "Your role can’t open matters. Ask a firm owner.";
+  return safeAccessError(message);
+}
+
+export function needsStepUp(error: string | null | undefined): boolean {
+  return Boolean(error && STEP_UP_ERRORS.has(error));
+}
+
+/** The step-up screen, coming back to this page with the dialog open again (`?new=1`). */
+export function newMatterStepUpLocation(pathname: string, search: string): string {
+  const params = new URLSearchParams(search);
+  params.set("new", "1");
+  return `/mfa?step=6&next=${encodeURIComponent(`${pathname}?${params.toString()}`)}`;
+}
+
+/** The same URL without `?new=1`, so closing the dialog and refreshing does not reopen it. */
+export function withoutNew(pathname: string, search: string): string {
+  const params = new URLSearchParams(search);
+  params.delete("new");
+  const query = params.toString();
+  return `${pathname}${query ? `?${query}` : ""}`;
+}

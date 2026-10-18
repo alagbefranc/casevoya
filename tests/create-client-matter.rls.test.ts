@@ -1,0 +1,236 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+
+let db: TestDb;
+
+const REGISTER = "https://register.college-ic.ca/Public-Register-EN";
+const PROOF = "proof/synthetic-register-capture";
+
+beforeAll(async () => {
+  db = await createTestDb();
+}, 120_000);
+
+afterAll(async () => {
+  await db?.close();
+});
+
+beforeEach(async () => {
+  await asMaintenance(db);
+});
+
+type Created = { ok: boolean; id?: string; reference?: string; applicant_id?: string; sponsor_id?: string | null; blocked?: string };
+
+function email(label: string) {
+  return `${label}-${randomUUID().slice(0, 8)}@example.test`;
+}
+
+async function createUser(address: string) {
+  await asMaintenance(db);
+  const id = randomUUID();
+  await db.query(
+    `insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values ($1, $2, now(), '{}'::jsonb)`,
+    [id, address],
+  );
+  return id;
+}
+
+async function createOrg(ownerId: string) {
+  await asUser(db, { userId: ownerId, aal: "aal2", totpAgeSeconds: 0 });
+  const created = await db.query<{ id: string }>(`select (public.create_organization($1, $2, $3)).id as id`, [
+    "Synthetic Legal Name",
+    "Synthetic Firm",
+    `f${randomUUID().replaceAll("-", "").slice(0, 12)}`,
+  ]);
+  return created.rows[0].id;
+}
+
+async function activeMembership(orgId: string, userId: string, role: string, createdBy: string) {
+  await asMaintenance(db);
+  const inserted = await db.query<{ id: string }>(
+    `insert into public.memberships (organization_id, user_id, role, status, accepted_at, created_by)
+     values ($1, $2, $3::public.org_role, 'active', now(), $4) returning id`,
+    [orgId, userId, role, createdBy],
+  );
+  return inserted.rows[0].id;
+}
+
+async function verifiedLicence(owner: string, consultant: string, orgId: string, membershipId: string, block = false) {
+  await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
+  const credential = await db.query<{ id: string }>(
+    `select public.declare_consultant_credential($1, 'RCIC'::public.licence_type, $2, 'Synthetic scope', $3) as id`,
+    [membershipId, `R${randomUUID().slice(0, 6).toUpperCase()}`, PROOF],
+  );
+  await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
+  await db.query(
+    `select public.record_licence_check($1, $2, statement_timestamp(), 'active'::public.register_licence_status,
+       $3, $4, false, false, null, $5, 'Synthetic reviewer note')`,
+    [credential.rows[0].id, REGISTER, !block, block, PROOF],
+  );
+}
+
+async function firm({ sampleMode }: { sampleMode: boolean }) {
+  const owner = await createUser(email("owner"));
+  const consultant = await createUser(email("consultant"));
+  const manager = await createUser(email("manager"));
+  const colleague = await createUser(email("colleague"));
+  const orgId = await createOrg(owner);
+  const consultantMembership = await activeMembership(orgId, consultant, "licensed_consultant", owner);
+  const managerMembership = await activeMembership(orgId, manager, "case_manager", owner);
+  const colleagueMembership = await activeMembership(orgId, colleague, "case_manager", owner);
+  await verifiedLicence(owner, consultant, orgId, consultantMembership);
+  await asMaintenance(db);
+  await db.query(`update public.organizations set sample_mode = $2 where id = $1`, [orgId, sampleMode]);
+  return { owner, consultant, manager, colleague, orgId, consultantMembership, managerMembership, colleagueMembership };
+}
+
+async function create(userId: string, orgId: string, args: unknown[], aal: "aal1" | "aal2" = "aal2") {
+  await asUser(db, { userId, aal, orgId, totpAgeSeconds: aal === "aal2" ? 0 : undefined });
+  const result = await db.query<{ result: Created }>(
+    `select public.create_client_matter($1, $2, $3, $4, $5, $6, $7) as result`,
+    args,
+  );
+  return result.rows[0].result;
+}
+
+describe("create_client_matter", () => {
+  it("opens a real matter with its applicant and sponsor, readable by the case manager who entered it", async () => {
+    const ctx = await firm({ sampleMode: false });
+    const created = await create(ctx.manager, ctx.orgId, [
+      "Ana Pereira",
+      " Ana@Example.Test ",
+      "Luis Pereira",
+      null,
+      ctx.consultantMembership,
+      null,
+      null,
+    ]);
+    expect(created.ok).toBe(true);
+    expect(created.reference).toMatch(/^[A-Z]{2}-\d{4}-\d{4}$/);
+
+    // Still the signed-in case manager: RLS lets them read what they just entered.
+    const matter = await db.query<{ title: string; is_sample: boolean; stage: string; responsible_consultant_membership_id: string }>(
+      `select title, is_sample, stage, responsible_consultant_membership_id from public.matters where id = $1`,
+      [created.id],
+    );
+    expect(matter.rows[0]).toEqual({
+      title: "Ana Pereira",
+      is_sample: false,
+      stage: "engagement_pending",
+      responsible_consultant_membership_id: ctx.consultantMembership,
+    });
+    const people = await db.query<{ display_name: string; email: string | null; role: string }>(
+      `select person.display_name, person.email, participant.role
+       from public.matter_participants participant
+       join public.persons person on person.id = participant.person_id
+       where participant.matter_id = $1
+       order by participant.role`,
+      [created.id],
+    );
+    expect(people.rows).toEqual([
+      { display_name: "Ana Pereira", email: "ana@example.test", role: "applicant" },
+      { display_name: "Luis Pereira", email: null, role: "sponsor" },
+    ]);
+    const staff = await db.query<{ membership_id: string; role: string }>(
+      `select membership_id, role from public.matter_participants
+       where matter_id = $1 and membership_id is not null order by role::text`,
+      [created.id],
+    );
+    expect(staff.rows).toEqual([
+      { membership_id: ctx.managerMembership, role: "case_manager" },
+      { membership_id: ctx.consultantMembership, role: "consultant" },
+    ]);
+
+    // The responsible consultant reads the people through the consultant participant.
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const consultantView = await db.query(`select id from public.persons where id = $1`, [created.applicant_id]);
+    expect(consultantView.rows).toHaveLength(1);
+
+    // A case manager who is not on the matter does not.
+    await asUser(db, { userId: ctx.colleague, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const hidden = await db.query(`select id from public.persons where id = any($1::uuid[])`, [[created.applicant_id, created.sponsor_id]]);
+    expect(hidden.rows).toHaveLength(0);
+  });
+
+  it("does not add the responsible consultant twice and leaves out the sponsor when none is named", async () => {
+    const ctx = await firm({ sampleMode: false });
+    const created = await create(ctx.consultant, ctx.orgId, ["Kofi Mensah", null, "", "", ctx.consultantMembership, null, "Work permit"]);
+    expect(created.ok).toBe(true);
+    expect(created.sponsor_id).toBeNull();
+    const rows = await db.query<{ role: string; person_id: string | null; membership_id: string | null }>(
+      `select role, person_id, membership_id from public.matter_participants where matter_id = $1 order by role`,
+      [created.id],
+    );
+    expect(rows.rows).toEqual([
+      { role: "applicant", person_id: created.applicant_id, membership_id: null },
+      { role: "consultant", person_id: null, membership_id: ctx.consultantMembership },
+    ]);
+    const title = await db.query<{ title: string }>(`select title from public.matters where id = $1`, [created.id]);
+    expect(title.rows[0].title).toBe("Work permit");
+  });
+
+  it("refuses a real matter in sample mode and leaves nothing behind", async () => {
+    const ctx = await firm({ sampleMode: true });
+    await expectDbError(
+      () => create(ctx.consultant, ctx.orgId, ["Real Client", null, null, null, ctx.consultantMembership, null, null]),
+      /sample mode/,
+    );
+    await asMaintenance(db);
+    const left = await db.query<{ n: number }>(
+      `select (select count(*) from public.matters where organization_id = $1)::int
+            + (select count(*) from public.persons where organization_id = $1)::int as n`,
+      [ctx.orgId],
+    );
+    expect(left.rows[0].n).toBe(0);
+  });
+
+  it("returns the licence refusal, and checks the caller, the fields and the session", async () => {
+    const ctx = await firm({ sampleMode: false });
+    const blockedUser = await createUser(email("blocked"));
+    const blockedMembership = await activeMembership(ctx.orgId, blockedUser, "licensed_consultant", ctx.owner);
+    await verifiedLicence(ctx.owner, blockedUser, ctx.orgId, blockedMembership, true);
+
+    const blocked = await create(ctx.owner, ctx.orgId, ["Blocked Client", null, null, null, blockedMembership, null, null]);
+    expect(blocked).toMatchObject({ ok: false, blocked: "licence" });
+    await asMaintenance(db);
+    const persons = await db.query<{ n: number }>(`select count(*)::int as n from public.persons where organization_id = $1`, [ctx.orgId]);
+    expect(persons.rows[0].n).toBe(0);
+
+    await expectDbError(
+      () => create(ctx.manager, ctx.orgId, ["", null, null, null, ctx.consultantMembership, null, null]),
+      /applicant name is required/,
+    );
+    await expectDbError(
+      () => create(ctx.manager, ctx.orgId, ["Someone", "not-an-email", null, null, ctx.consultantMembership, null, null]),
+      /email is invalid/,
+    );
+    await expectDbError(
+      () => create(ctx.manager, ctx.orgId, ["Someone", null, null, "sponsor@example.test", ctx.consultantMembership, null, null]),
+      /sponsor name is required/,
+    );
+    await expectDbError(
+      () => create(ctx.manager, ctx.orgId, ["Someone", null, null, null, ctx.managerMembership, null, null]),
+      /active licensed consultant/,
+    );
+    await expectDbError(
+      () => create(ctx.manager, ctx.orgId, ["Someone", null, null, null, ctx.consultantMembership, null, null], "aal1"),
+      /aal2/,
+    );
+
+    const outsider = await createUser(email("outsider"));
+    const otherOrg = await createOrg(outsider);
+    await expectDbError(
+      () => create(outsider, otherOrg, ["Someone", null, null, null, ctx.consultantMembership, null, null]),
+      /licensed consultant|denied|sample mode/,
+    );
+  });
+
+  it("is not callable by anon", async () => {
+    await asMaintenance(db);
+    const grants = await db.query<{ anon: boolean; authenticated: boolean }>(
+      `select has_function_privilege('anon', 'public.create_client_matter(text, text, text, text, uuid, uuid, text)', 'execute') as anon,
+              has_function_privilege('authenticated', 'public.create_client_matter(text, text, text, text, uuid, uuid, text)', 'execute') as authenticated`,
+    );
+    expect(grants.rows[0]).toEqual({ anon: false, authenticated: true });
+  });
+});
