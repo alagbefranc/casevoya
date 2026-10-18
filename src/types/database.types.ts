@@ -1688,7 +1688,10 @@ export type Database = {
           id: string
           kind: string
           organization_id: string
+          published_at: string
           title: string
+          updated_at: string
+          version: number
           version_label: string
         }
         Insert: {
@@ -1699,7 +1702,10 @@ export type Database = {
           id?: string
           kind: string
           organization_id: string
+          published_at?: string
           title: string
+          updated_at?: string
+          version?: number
           version_label: string
         }
         Update: {
@@ -1710,7 +1716,10 @@ export type Database = {
           id?: string
           kind?: string
           organization_id?: string
+          published_at?: string
           title?: string
+          updated_at?: string
+          version?: number
           version_label?: string
         }
         Relationships: []

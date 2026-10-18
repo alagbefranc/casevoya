@@ -472,6 +472,7 @@ function Settings({ bundle, tab, page }: { bundle: SheetBundle; tab?: string; pa
     <div className="panel">
       <h2>{bundle.staff.organizationName}</h2>
       <p>Legal name {bundle.staff.legalName}. Timezone {bundle.staff.timezone}.</p>
+      <p><Link className="tl" href="/sheet/settings?tab=portal">Client portal terms and privacy notice</Link></p>
     </div>
   );
 }

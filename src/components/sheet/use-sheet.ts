@@ -12,6 +12,8 @@ import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { runNewTask, syncNewTask } from "./new-task-act";
 import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-invite-act";
+import { policyDialogId, restorePolicyDraft, runPublishPolicy } from "./portal-policy-act";
+import { POLICY_KINDS, policyKindForDialog } from "@/modules/portal-policies/defaults";
 import { restoreStaffInvite, runStaffInvite, runStaffResend, runStaffRevoke } from "./staff-invite-act";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
@@ -218,6 +220,15 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         void runPortalInvite(send, router).finally(() => send.removeAttribute("aria-busy"));
         return;
       }
+      // Settings > Client portal: Publish saves a new version of the terms or privacy notice.
+      const policy = target.closest<HTMLElement>("[data-policy][data-org]");
+      if (policy && root.contains(policy)) {
+        event.preventDefault();
+        if (policy.getAttribute("aria-busy") === "true") return;
+        policy.setAttribute("aria-busy", "true");
+        void runPublishPolicy(policy, router).finally(() => policy.removeAttribute("aria-busy"));
+        return;
+      }
       const act = target.closest<HTMLElement>("[data-act]");
       if (act && root.contains(act)) {
         event.preventDefault();
@@ -376,6 +387,21 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         }, 300);
       }
       staffInvite.addEventListener("close", () => {
+        if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
+      }, listen);
+    }
+    // ?dlg=terms|privacy (coming back from step-up) reopens that publish dialog with what was typed.
+    const policyKind = policyKindForDialog(dialogParam);
+    for (const kind of POLICY_KINDS) {
+      const policyDialog = root.querySelector<HTMLDialogElement>(`dialog#${policyDialogId(kind)}`);
+      if (!policyDialog?.querySelector("[data-policy][data-org]")) continue;
+      if (kind === policyKind) {
+        window.setTimeout(() => {
+          restorePolicyDraft(policyDialog, kind);
+          openDialog(policyDialogId(kind));
+        }, 300);
+      }
+      policyDialog.addEventListener("close", () => {
         if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
       }, listen);
     }
