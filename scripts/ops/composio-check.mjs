@@ -29,6 +29,17 @@ if (!connected) {
   console.log(`ALREADY_CONNECTED ${toolkit}`);
 }
 
-// Find a read-only tool at runtime instead of guessing a slug.
+// Find a read-only tool at runtime instead of guessing a slug, then run it once.
 const found = await session.search({ query: "get the connected account's email profile", toolkits: [toolkit] });
-console.log(`SEARCH ${JSON.stringify(found).slice(0, 1500)}`);
+const slug = found?.results?.[0]?.primaryToolSlugs?.[0];
+if (!slug) {
+  console.error("No read-only profile tool found for this toolkit.");
+  process.exit(1);
+}
+console.log(`TOOL ${slug}`);
+const result = await session.execute(slug, {});
+// Print only the shape and identifiers, never mailbox content.
+const keys = (value) => (value && typeof value === "object" ? Object.keys(value) : []);
+console.log(`RESULT_KEYS ${JSON.stringify(keys(result))} DATA_KEYS ${JSON.stringify(keys(result?.data))}`);
+console.log(`SUCCESSFUL ${result?.successful ?? !result?.error} LOG_ID ${result?.logId ?? result?.log_id ?? "(none)"}`);
+if (result?.error) console.log(`ERROR ${String(result.error).slice(0, 300)}`);
