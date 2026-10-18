@@ -94,6 +94,14 @@ import { DocumentReviewDialog, DocumentsHeader, SheetDocuments, type DocumentsDa
 import { DocumentsMarkup } from "@/components/sheet/markup/documents";
 import { ComposeDialog, InboxHeader, SheetInbox, type ComposeData, type InboxData, type InboxTab } from "@/components/sheet/designer/inbox";
 import { InboxMarkup } from "@/components/sheet/markup/inbox";
+import { GOVERNMENT_CSS, GovernmentHeader, SheetGovernment, type GovernmentPageData } from "@/components/sheet/designer/government";
+import { GovernmentMarkup } from "@/components/sheet/markup/government";
+import {
+  MatterDecisionsLive,
+  MatterSubmissions,
+  type MatterDecisionsData,
+  type MatterSubmissionsData,
+} from "@/components/sheet/designer/matter-government";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -2247,5 +2255,242 @@ describe("Designer fidelity: Documents and Inbox", () => {
     expect(html).toContain('<button type="button" class="doct" aria-label="Attachment · scan.pdf"><span>Attachment <span class="sep" aria-hidden="true"></span> scan.pdf</span></button>');
     expect(html).not.toContain("data-toast");
     expect(html).not.toMatch(/Northline|Priya|NL-2026/);
+  });
+});
+
+describe("Designer fidelity: Government status", () => {
+  const DESIGNER_GOVERNMENT: GovernmentPageData = {
+    intro: "What we know from IRCC, who recorded it, from what evidence, and when we last checked. This is a record kept by the firm, not a live feed.",
+    alert: { copy: "The matter is at \u201cSubmitted\u201d in our stages, but no submission confirmation is on file. Upload the IRCC confirmation to verify it." },
+    rows: [
+      { item: "Submission", status: { tone: "unv", label: "Submission unverified" }, recordedBy: "Amara Osei", evidence: "No confirmation uploaded yet", verified: "\u2014", lastChecked: "Today 09:12" },
+      { item: "Application number", status: { tone: "gr", label: "Not yet issued" }, recordedBy: "\u2014", evidence: "\u2014", verified: "\u2014", lastChecked: "\u2014" },
+      { item: "Biometrics", status: { tone: "gr", label: "Not requested" }, recordedBy: "\u2014", evidence: "\u2014", verified: "\u2014", lastChecked: "\u2014" },
+      {
+        item: "Client-uploaded letter",
+        status: { tone: "chg", label: "Received", detail: "unverified" },
+        recordedBy: "Priya Sharma (client)",
+        evidence: "PDF, \u201cIRCC request for info\u201d, 14 Oct",
+        verified: "Not verified by staff",
+        lastChecked: "14 Oct 18:40",
+      },
+    ],
+    record: { options: [{ label: "Submitted" }, { label: "Application number issued" }, { label: "Biometrics requested" }] },
+    history: [
+      { text: "Amara checked the IRCC portal. No change.", when: "Today 09:12" },
+      { text: "Priya uploaded a letter (unverified).", when: "14 Oct 18:40" },
+      { text: "Stage moved to Submitted by Amara.", when: "12 Oct 11:05" },
+    ],
+  };
+
+  it("renders the Government status page exactly as the captured Designer markup", () => {
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(GovernmentMarkup)));
+    const live = withoutPreloads(
+      renderToStaticMarkup(
+        createElement(
+          SheetFrame,
+          {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/government" },
+            styles: GOVERNMENT_CSS,
+            header: createElement(GovernmentHeader, {
+              data: {
+                back: "/sheet/matters/priya",
+                client: { name: "Priya Sharma", avatarUrl: "/assets/av-priya-applicant.png" },
+                pills: ["No live IRCC connection", "Every entry needs a source"],
+              },
+            }),
+            statusbar: {
+              timezone: "America/Toronto",
+              queue: { label: "Reminder queue healthy", detail: "0 retries" },
+              sample: { label: "Demo data", detail: "fictional firm \u201cNorthline Immigration\u201d" },
+            },
+          },
+          createElement(SheetGovernment, { data: DESIGNER_GOVERNMENT }),
+        ),
+      ),
+    );
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 120, i + 160) + "\nGOT " + live.slice(i - 120, i + 160));
+    }
+    expect(live).toBe(captured);
+  });
+
+  it("wires live rows by data attributes only, with the Verify and Record status additions", () => {
+    const html = renderToStaticMarkup(
+      createElement(SheetGovernment, {
+        data: {
+          ...DESIGNER_GOVERNMENT,
+          alert: null,
+          rows: [{ ...DESIGNER_GOVERNMENT.rows[3], verify: { "data-gov": "verify-letter", "data-id": "l1", "data-version": "1", "data-org": "o1" } }],
+          record: { options: [{ value: "acknowledgement", label: "Acknowledgement of receipt" }], save: { "data-gov": "status", "data-matter": "m1", "data-org": "o1" } },
+        },
+      }),
+    );
+    expect(html).not.toContain("Submission unverified");
+    expect(html).toContain('<button class="btn s sm" data-gov="verify-letter" data-id="l1" data-version="1" data-org="o1">Verify</button>');
+    expect(html).toContain('<input placeholder="Attach the IRCC letter or screenshot" readOnly="" data-gov-file="1"/>');
+    expect(html).toContain('<button class="btn p" data-gov="status" data-matter="m1" data-org="o1">Record status</button>');
+  });
+});
+
+describe("Designer fidelity: matter Submissions and Decisions tabs", () => {
+  /** The captured tab's own content, from `#content` to the end of it. */
+  function tabContent(variant: string): string {
+    const html = renderToStaticMarkup(createElement(MatterMarkup, { variant }));
+    const start = html.indexOf('<div id="content">');
+    const end = html.indexOf('</div><aside id="rbar"', start);
+    // `#content` ends where `#main` closes, just before the right column.
+    return html.slice(start, end);
+  }
+  const content = (child: ReturnType<typeof createElement>) => withoutPreloads(renderToStaticMarkup(createElement("div", { id: "content" }, child)));
+  function same(live: string, captured: string) {
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 160) + "\nGOT " + live.slice(i - 160, i + 160));
+    }
+    expect(live).toBe(captured);
+  }
+  const AMARA_AV = { name: "Amara Osei", avatarUrl: "/assets/av-amara-consultant.png" };
+  const DANIEL_AV = { name: "Daniel Ruiz", avatarUrl: "/assets/av-daniel-casemanager.png" };
+  const LENA_AV = { name: "Lena", avatarUrl: "/assets/av-lena-finance.png" };
+
+  function submissions(ready: boolean): MatterSubmissionsData {
+    const check = (title: string, done: boolean, note?: string) => ({ title, done, note: note ?? null });
+    return {
+      package: {
+        title: ["Package v3", "draft"],
+        badge: ready ? { tone: "blue", label: "Ready for consultant review" } : { tone: "chg", label: "Not ready to submit" },
+        hash: "sha256 9be2…11c4",
+        manifest: { title: "Manifest · package v3", label: ["Manifest", "package v3"] },
+        checks: [
+          check("Intake answers reviewed", true),
+          check("All required documents accepted by firm", ready, ready ? undefined : "3 outstanding"),
+          check("Forms filled from approved facts", ready, ready ? undefined : "IMM 5406 missing 2 facts"),
+          check("Consultant review of package v3", false),
+          check("Client confirmation, Priya and Rafael", false),
+          check("Representative authority (IMM 5476) signed", true),
+          check("Government fees recorded with source", true),
+        ],
+        approvals: [
+          { person: AMARA_AV, title: "Consultant review", who: ["Amara Osei", "licensed consultant"], badge: { tone: "gr", label: "Waiting for checklist" } },
+          { person: { name: "Priya Sharma", avatarUrl: "/assets/av-priya-applicant.png" }, title: "Client confirmation", who: ["Priya Sharma", "applicant"], badge: { tone: "gr", label: "Not sent" } },
+          { person: { name: "Rafael Sharma", avatarUrl: "/assets/av-rafael-sponsor.png" }, title: "Client confirmation", who: ["Rafael Sharma", "sponsor"], badge: { tone: "gr", label: "Not sent" } },
+        ],
+        note: "Approvals are tied to this exact package hash. Changing a reviewed fact or document makes a new version and clears these approvals.",
+        hold: ready ? {} : null,
+        why: ready ? null : { text: "Opens when every checklist item is done", link: { href: "?tab=submissions&ready=1", label: "Preview a ready package" } },
+        preview: "Package manifest, v3 draft",
+      },
+      records: [],
+      record: null,
+      earlier: [],
+    };
+  }
+
+  it("renders the Submissions tab (not ready and ready) exactly as the captured Designer markup", () => {
+    same(content(createElement(MatterSubmissions, { data: submissions(false) })), tabContent("tab-submissions"));
+    same(content(createElement(MatterSubmissions, { data: submissions(true) })), tabContent("tab-submissions--ready-1"));
+  });
+
+  const PREVIEW_NOTE = "Sample previews. Priya’s real file has no decision yet.";
+
+  it("renders the Decisions tab with no decision exactly as the captured Designer markup", () => {
+    const data: MatterDecisionsData = {
+      preview: { selected: "none", note: PREVIEW_NOTE },
+      decision: null,
+      letter: true,
+      letters: [
+        {
+          dot: "#0075DE",
+          title: ["IRCC request letter", "additional documents"],
+          parts: ["Received 12 Oct by portal message", "recorded by Daniel", "created the 30 Oct deadline"],
+          badge: { tone: "ok", label: "Deadline verified" },
+          thumb: "IRCC request letter, 8 Oct",
+        },
+        { dot: "#2e9d5b", title: "Acknowledgement of receipt", parts: ["Received 20 Sep", "recorded by Daniel"], badge: { tone: "gr", label: "Filed" } },
+      ],
+    };
+    same(content(createElement(MatterDecisionsLive, { data })), tabContent("tab-decisions"));
+  });
+
+  it("renders the approved, refused and withdrawn decisions exactly as the captured Designer markup", () => {
+    const approved: MatterDecisionsData = {
+      preview: { selected: "approved", note: PREVIEW_NOTE },
+      letter: true,
+      letters: [],
+      decision: {
+        outcome: "approved",
+        heading: "Approved",
+        milestoneLabel: "final approval",
+        tint: { art: "post-decision", title: "Follow-ups after the decision", copy: "Renewal and expiry reminders are proposed here for your review." },
+        badge: { tone: "ok", label: "Confirmed by Amara Osei, 3 Mar 2027" },
+        evidence: { line: ["IRCC decision letter", "received 2 Mar 2027", "recorded by Daniel"], thumb: { title: "IRCC decision letter, 2 Mar 2027" } },
+        milestones: [
+          { label: "Approval in principle", badge: { tone: "ok", label: "18 Jan" } },
+          { label: "Final approval", badge: { tone: "ok", label: "2 Mar" } },
+          { label: "Documents issued", badge: { tone: "rev", label: "Waiting" } },
+          { label: "Landing confirmed", badge: { tone: "gr", label: "Not yet" } },
+          { label: "Status expiry", badge: { tone: "gr", label: "Add when issued" } },
+        ],
+        summary: { title: "Conditions summary", copy: "Draft by Vo from the letter. Amara must approve it before Priya sees it.", review: true },
+        followUps: [
+          { title: "Send consultant-approved conditions summary to Priya", note: "Due 6 Mar", owner: AMARA_AV },
+          { title: "Record document delivery", note: "When issued", owner: DANIEL_AV },
+          { title: "Add status expiry reminder", note: "When issued", owner: DANIEL_AV },
+          { title: "Closure checklist", note: "After landing", owner: AMARA_AV },
+        ],
+      },
+    };
+    same(content(createElement(MatterDecisionsLive, { data: approved })), tabContent("tab-decisions--outcome-approved"));
+
+    const decided = { art: "p3-decision", title: "Decision recorded from the letter", copy: "Any reconsideration or new-application deadline is proposed for your review, never set automatically." };
+    const refused: MatterDecisionsData = {
+      preview: { selected: "refused", note: PREVIEW_NOTE },
+      letter: true,
+      letters: [],
+      decision: {
+        outcome: "refused",
+        heading: "Refused",
+        tint: decided,
+        badge: { tone: "bad", label: "Urgent consultant review" },
+        record: { received: "2 Mar 2027", recordedBy: "Daniel Ruiz", confirmedBy: "Waiting for Amara" },
+        reasons: "The officer is not satisfied that the relationship is genuine…",
+        reasonsSource: "Quoted from the letter, page 1",
+        interpretation: null,
+        consultantFirst: "Amara",
+        followUps: [
+          { title: "Urgent: consultant review of refusal", note: "Due today", owner: AMARA_AV, urgent: true },
+          { title: "Explain the decision to Priya and Rafael", note: "After review", owner: AMARA_AV },
+          { title: "Decide next steps with the client (new linked matter if any)", note: "After meeting", owner: AMARA_AV },
+          { title: "Reconcile the client account", note: "Within 7 days", owner: LENA_AV },
+        ],
+      },
+    };
+    same(content(createElement(MatterDecisionsLive, { data: refused })), tabContent("tab-decisions--outcome-refused"));
+
+    const step = (title: string, note: string, done: boolean) => ({ title, note, done });
+    const withdrawn: MatterDecisionsData = {
+      preview: { selected: "withdrawn", note: PREVIEW_NOTE },
+      letter: true,
+      letters: [],
+      decision: {
+        outcome: "withdrawn",
+        heading: "Withdrawal",
+        tint: decided,
+        badge: { tone: "chg", label: "In progress, 2 of 5" },
+        steps: [
+          step("Written instructions from Priya", "Signed in portal, 1 Feb", true),
+          step("Consultant review", "Amara Osei, 2 Feb", true),
+          step("Withdrawal request sent to IRCC", "Record the confirmation", false),
+          step("IRCC acknowledgement received", "Add the letter when it arrives", false),
+          step("Financial reconciliation", "Advance CAD 1,500 to refund or apply", false),
+        ],
+        followUps: [],
+      },
+    };
+    same(content(createElement(MatterDecisionsLive, { data: withdrawn })), tabContent("tab-decisions--outcome-withdrawn"));
   });
 });

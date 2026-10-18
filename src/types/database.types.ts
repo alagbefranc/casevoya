@@ -456,6 +456,174 @@ export type Database = {
         }
         Relationships: []
       }
+      correspondence_work_links: {
+        Row: {
+          correspondence_id: string
+          created_at: string
+          created_by: string | null
+          deadline_id: string | null
+          id: string
+          organization_id: string
+          task_id: string | null
+        }
+        Insert: {
+          correspondence_id: string
+          created_at?: string
+          created_by?: string | null
+          deadline_id?: string | null
+          id?: string
+          organization_id: string
+          task_id?: string | null
+        }
+        Update: {
+          correspondence_id?: string
+          created_at?: string
+          created_by?: string | null
+          deadline_id?: string | null
+          id?: string
+          organization_id?: string
+          task_id?: string | null
+        }
+        Relationships: []
+      }
+      decision_follow_ups: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          decision_id: string
+          document_version_id: string | null
+          id: string
+          kind: Database["public"]["Enums"]["decision_follow_up_kind"]
+          organization_id: string
+          task_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          decision_id: string
+          document_version_id?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["decision_follow_up_kind"]
+          organization_id: string
+          task_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          decision_id?: string
+          document_version_id?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["decision_follow_up_kind"]
+          organization_id?: string
+          task_id?: string
+        }
+        Relationships: []
+      }
+      decision_records: {
+        Row: {
+          authority_reasons: string | null
+          confirmed_at: string | null
+          confirmed_by_membership_id: string | null
+          consultant_interpretation: string | null
+          correspondence_id: string
+          created_at: string
+          created_by: string | null
+          decided_on: string | null
+          id: string
+          matter_id: string
+          milestone: Database["public"]["Enums"]["decision_milestone"] | null
+          next_steps: string | null
+          organization_id: string
+          outcome: Database["public"]["Enums"]["matter_outcome"]
+          shared_by_membership_id: string | null
+          shared_with_client_at: string | null
+          stage_evidence_id: string | null
+          state: Database["public"]["Enums"]["decision_record_state"]
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          authority_reasons?: string | null
+          confirmed_at?: string | null
+          confirmed_by_membership_id?: string | null
+          consultant_interpretation?: string | null
+          correspondence_id: string
+          created_at?: string
+          created_by?: string | null
+          decided_on?: string | null
+          id?: string
+          matter_id: string
+          milestone?: Database["public"]["Enums"]["decision_milestone"] | null
+          next_steps?: string | null
+          organization_id: string
+          outcome: Database["public"]["Enums"]["matter_outcome"]
+          shared_by_membership_id?: string | null
+          shared_with_client_at?: string | null
+          stage_evidence_id?: string | null
+          state?: Database["public"]["Enums"]["decision_record_state"]
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          authority_reasons?: string | null
+          confirmed_at?: string | null
+          confirmed_by_membership_id?: string | null
+          consultant_interpretation?: string | null
+          correspondence_id?: string
+          created_at?: string
+          created_by?: string | null
+          decided_on?: string | null
+          id?: string
+          matter_id?: string
+          milestone?: Database["public"]["Enums"]["decision_milestone"] | null
+          next_steps?: string | null
+          organization_id?: string
+          outcome?: Database["public"]["Enums"]["matter_outcome"]
+          shared_by_membership_id?: string | null
+          shared_with_client_at?: string | null
+          stage_evidence_id?: string | null
+          state?: Database["public"]["Enums"]["decision_record_state"]
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      decision_steps: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          decision_id: string
+          done_at: string
+          done_by_membership_id: string
+          id: string
+          note: string | null
+          organization_id: string
+          step: Database["public"]["Enums"]["decision_step"]
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          decision_id: string
+          done_at?: string
+          done_by_membership_id: string
+          id?: string
+          note?: string | null
+          organization_id: string
+          step: Database["public"]["Enums"]["decision_step"]
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          decision_id?: string
+          done_at?: string
+          done_by_membership_id?: string
+          id?: string
+          note?: string | null
+          organization_id?: string
+          step?: Database["public"]["Enums"]["decision_step"]
+        }
+        Relationships: []
+      }
       external_busy_blocks: {
         Row: {
           ends_at: string
@@ -819,6 +987,114 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      government_correspondence: {
+        Row: {
+          action_requested: string | null
+          channel: Database["public"]["Enums"]["correspondence_channel"]
+          corrects_id: string | null
+          created_at: string
+          created_by: string | null
+          document_date: string | null
+          evidence_locator: string | null
+          evidence_version_id: string | null
+          id: string
+          issuer: string | null
+          kind: Database["public"]["Enums"]["correspondence_kind"]
+          matter_id: string
+          organization_id: string
+          received_on: string
+          reference_text: string | null
+          shared_by_membership_id: string | null
+          shared_with_client_at: string | null
+          stated_deadline: string | null
+          updated_at: string
+          verified_at: string | null
+          verified_by_membership_id: string | null
+          version: number
+        }
+        Insert: {
+          action_requested?: string | null
+          channel: Database["public"]["Enums"]["correspondence_channel"]
+          corrects_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          document_date?: string | null
+          evidence_locator?: string | null
+          evidence_version_id?: string | null
+          id?: string
+          issuer?: string | null
+          kind: Database["public"]["Enums"]["correspondence_kind"]
+          matter_id: string
+          organization_id: string
+          received_on: string
+          reference_text?: string | null
+          shared_by_membership_id?: string | null
+          shared_with_client_at?: string | null
+          stated_deadline?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          verified_by_membership_id?: string | null
+          version?: number
+        }
+        Update: {
+          action_requested?: string | null
+          channel?: Database["public"]["Enums"]["correspondence_channel"]
+          corrects_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          document_date?: string | null
+          evidence_locator?: string | null
+          evidence_version_id?: string | null
+          id?: string
+          issuer?: string | null
+          kind?: Database["public"]["Enums"]["correspondence_kind"]
+          matter_id?: string
+          organization_id?: string
+          received_on?: string
+          reference_text?: string | null
+          shared_by_membership_id?: string | null
+          shared_with_client_at?: string | null
+          stated_deadline?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          verified_by_membership_id?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
+      government_status_checks: {
+        Row: {
+          checked_at: string
+          checked_by_membership_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          matter_id: string
+          note: string
+          organization_id: string
+        }
+        Insert: {
+          checked_at?: string
+          checked_by_membership_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id: string
+          note: string
+          organization_id: string
+        }
+        Update: {
+          checked_at?: string
+          checked_by_membership_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id?: string
+          note?: string
+          organization_id?: string
+        }
+        Relationships: []
       }
       household_members: {
         Row: {
@@ -3931,6 +4207,87 @@ export type Database = {
         }
         Relationships: []
       }
+      submission_handoffs: {
+        Row: {
+          acknowledged_on: string | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          channel: Database["public"]["Enums"]["submission_channel"]
+          created_at: string
+          created_by: string | null
+          external_reference: string | null
+          id: string
+          matter_id: string
+          organization_id: string
+          package_label: string
+          package_sha256: string | null
+          receipt_locator: string | null
+          receipt_version_id: string | null
+          signed_off_at: string | null
+          signoff_membership_id: string | null
+          stage_evidence_id: string | null
+          status: Database["public"]["Enums"]["submission_handoff_status"]
+          submitted_at: string | null
+          submitted_by_membership_id: string | null
+          updated_at: string
+          verified_at: string | null
+          verified_by_membership_id: string | null
+          version: number
+        }
+        Insert: {
+          acknowledged_on?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          channel: Database["public"]["Enums"]["submission_channel"]
+          created_at?: string
+          created_by?: string | null
+          external_reference?: string | null
+          id?: string
+          matter_id: string
+          organization_id: string
+          package_label: string
+          package_sha256?: string | null
+          receipt_locator?: string | null
+          receipt_version_id?: string | null
+          signed_off_at?: string | null
+          signoff_membership_id?: string | null
+          stage_evidence_id?: string | null
+          status?: Database["public"]["Enums"]["submission_handoff_status"]
+          submitted_at?: string | null
+          submitted_by_membership_id?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          verified_by_membership_id?: string | null
+          version?: number
+        }
+        Update: {
+          acknowledged_on?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          channel?: Database["public"]["Enums"]["submission_channel"]
+          created_at?: string
+          created_by?: string | null
+          external_reference?: string | null
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          package_label?: string
+          package_sha256?: string | null
+          receipt_locator?: string | null
+          receipt_version_id?: string | null
+          signed_off_at?: string | null
+          signoff_membership_id?: string | null
+          stage_evidence_id?: string | null
+          status?: Database["public"]["Enums"]["submission_handoff_status"]
+          submitted_at?: string | null
+          submitted_by_membership_id?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          verified_by_membership_id?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
       webhook_inbox: {
         Row: {
           connected_account_id: string | null
@@ -6577,6 +6934,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_expiry_reminder: {
+        Args: {
+          p_decision_id: string
+          p_document_version_id: string
+          p_due_on: string
+          p_owner_membership_id?: string | null
+        }
+        Returns: string
+      }
       booking_public_busy: {
         Args: { p_event_type_id: string; p_from: string; p_to: string }
         Returns: Json
@@ -6603,8 +6969,97 @@ export type Database = {
         }
         Returns: Json
       }
+      cancel_submission_handoff: {
+        Args: {
+          p_expected_version: number
+          p_handoff_id: string
+          p_reason: string
+        }
+        Returns: number
+      }
+      confirm_decision: {
+        Args: {
+          p_consultant_interpretation?: string | null
+          p_decision_id: string
+          p_expected_version: number
+          p_next_steps: string
+        }
+        Returns: number
+      }
       expire_booking_holds: {
         Args: { p_as_of?: string }
+        Returns: number
+      }
+      link_correspondence_work: {
+        Args: {
+          p_correspondence_id: string
+          p_deadline_id?: string | null
+          p_task_id?: string | null
+        }
+        Returns: string
+      }
+      prepare_submission_handoff: {
+        Args: {
+          p_channel: Database["public"]["Enums"]["submission_channel"]
+          p_matter_id: string
+          p_package_label: string
+          p_package_sha256?: string | null
+        }
+        Returns: string
+      }
+      record_decision: {
+        Args: {
+          p_authority_reasons?: string | null
+          p_correspondence_id: string
+          p_decided_on?: string | null
+          p_milestone?: Database["public"]["Enums"]["decision_milestone"] | null
+          p_outcome: Database["public"]["Enums"]["matter_outcome"]
+        }
+        Returns: string
+      }
+      record_decision_step: {
+        Args: {
+          p_decision_id: string
+          p_note?: string | null
+          p_step: Database["public"]["Enums"]["decision_step"]
+        }
+        Returns: string
+      }
+      record_government_check: {
+        Args: {
+          p_matter_id: string
+          p_note?: string | null
+        }
+        Returns: string
+      }
+      record_government_correspondence: {
+        Args: {
+          p_action_requested?: string | null
+          p_channel: Database["public"]["Enums"]["correspondence_channel"]
+          p_corrects_id?: string | null
+          p_document_date?: string | null
+          p_evidence_locator?: string | null
+          p_evidence_version_id?: string | null
+          p_issuer?: string | null
+          p_kind: Database["public"]["Enums"]["correspondence_kind"]
+          p_matter_id: string
+          p_received_on: string
+          p_reference_text?: string | null
+          p_stated_deadline?: string | null
+        }
+        Returns: string
+      }
+      record_submission: {
+        Args: {
+          p_acknowledged_on?: string | null
+          p_expected_version: number
+          p_external_reference: string
+          p_handoff_id: string
+          p_receipt_locator?: string | null
+          p_receipt_version_id?: string | null
+          p_submitted_at: string
+          p_submitted_by_membership_id: string
+        }
         Returns: number
       }
       save_availability: {
@@ -6638,6 +7093,20 @@ export type Database = {
           p_title: string
         }
         Returns: string
+      }
+      share_government_record: {
+        Args: {
+          p_id: string
+          p_kind: string
+        }
+        Returns: undefined
+      }
+      sign_off_submission_handoff: {
+        Args: {
+          p_expected_version: number
+          p_handoff_id: string
+        }
+        Returns: number
       }
       staff_book_consultation: {
         Args: {
@@ -6683,6 +7152,23 @@ export type Database = {
       decline_credit_note: {
         Args: { p_credit_note_id: string; p_reason: string }
         Returns: string
+      }
+      verify_government_correspondence: {
+        Args: {
+          p_correspondence_id: string
+          p_expected_version: number
+        }
+        Returns: number
+      }
+      verify_submission_receipt: {
+        Args: {
+          p_acknowledged_on?: string | null
+          p_expected_version: number
+          p_handoff_id: string
+          p_receipt_locator?: string | null
+          p_receipt_version_id?: string | null
+        }
+        Returns: number
       }
       void_invoice: {
         Args: { p_invoice_id: string; p_reason: string }
@@ -7841,6 +8327,22 @@ export type Database = {
         | "recorded"
       client_fund_method: "bank_transfer" | "interac_e_transfer" | "cheque" | "cash"
       client_reconciliation_status: "pending_review" | "reconciled" | "exceptions" | "discarded"
+      correspondence_kind:
+        | "acknowledgement"
+        | "application_number"
+        | "request"
+        | "biometrics_instruction"
+        | "procedural_fairness"
+        | "status_update"
+        | "decision"
+        | "other"
+      correspondence_channel:
+        | "portal_message"
+        | "email"
+        | "mail"
+        | "courier"
+        | "in_person"
+        | "other"
       credit_note_status: "draft" | "issued" | "declined"
       invoice_status:
         | "draft"
@@ -7908,6 +8410,31 @@ export type Database = {
         | "accepted"
       agreement_signer_role: "client" | "consultant" | "sponsor" | "dependant" | "guardian" | "firm"
       agreement_signer_status: "waiting" | "current" | "signed" | "declined"
+      decision_record_state:
+        | "awaiting_confirmation"
+        | "confirmed"
+      decision_milestone:
+        | "approval_in_principle"
+        | "final_approval"
+        | "documents_issued"
+        | "arrival_confirmed"
+        | "status_expiry_recorded"
+        | "other"
+      decision_follow_up_kind:
+        | "refusal_review"
+        | "client_explanation"
+        | "next_steps_meeting"
+        | "conditions_summary"
+        | "document_delivery"
+        | "expiry_reminder"
+        | "account_reconciliation"
+        | "closure_checklist"
+      decision_step:
+        | "withdrawal_instructions"
+        | "consultant_review"
+        | "withdrawal_request_sent"
+        | "acknowledgement_received"
+        | "financial_reconciliation"
       signature_event_kind: "sent" | "signed" | "declined" | "voided" | "expired" | "completed" | "superseded" | "replayed"
       consent_purpose:
         | "portal_terms"
@@ -8019,6 +8546,18 @@ export type Database = {
         | "choice"
       answer_presence: "provided" | "unknown" | "not_applicable" | "approximate"
       answer_date_kind: "exact" | "year_month" | "year"
+      submission_channel:
+        | "online_portal"
+        | "paper"
+        | "email"
+        | "in_person"
+        | "other"
+      submission_handoff_status:
+        | "awaiting_signoff"
+        | "authorized"
+        | "submission_unverified"
+        | "submission_verified"
+        | "cancelled"
       task_audience: "internal" | "client"
       task_priority: "low" | "normal" | "high" | "critical"
       task_status: "open" | "blocked" | "done" | "cancelled"
@@ -8563,6 +9102,14 @@ export const Constants = {
         "ignored",
         "failed",
       ],
+      submission_channel: ["online_portal", "paper", "email", "in_person", "other"],
+      submission_handoff_status: ["awaiting_signoff", "authorized", "submission_unverified", "submission_verified", "cancelled"],
+      correspondence_kind: ["acknowledgement", "application_number", "request", "biometrics_instruction", "procedural_fairness", "status_update", "decision", "other"],
+      correspondence_channel: ["portal_message", "email", "mail", "courier", "in_person", "other"],
+      decision_record_state: ["awaiting_confirmation", "confirmed"],
+      decision_milestone: ["approval_in_principle", "final_approval", "documents_issued", "arrival_confirmed", "status_expiry_recorded", "other"],
+      decision_follow_up_kind: ["refusal_review", "client_explanation", "next_steps_meeting", "conditions_summary", "document_delivery", "expiry_reminder", "account_reconciliation", "closure_checklist"],
+      decision_step: ["withdrawal_instructions", "consultant_review", "withdrawal_request_sent", "acknowledgement_received", "financial_reconciliation"],
     },
   },
 } as const

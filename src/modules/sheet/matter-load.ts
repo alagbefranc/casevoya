@@ -60,6 +60,7 @@ import type { CountersignDialogData } from "@/components/sheet/designer/agreemen
 import { inviteEmailLines } from "@/modules/email/templates";
 import { acceptPath, portalRoleForParty, portalRoleLabel } from "@/modules/sheet/portal-invite";
 import { mayOfferPersonEdit, personEditData } from "@/modules/sheet/edit-person";
+import { loadMatterGovernment } from "@/modules/sheet/government-load";
 import { DEADLINE_KINDS, DEADLINE_ROLES, deadlineSource } from "@/modules/sheet/new-deadline";
 import { missingPolicies } from "@/modules/portal-policies/defaults";
 import { loadCurrentPolicies } from "@/modules/portal-policies/load";
@@ -515,6 +516,16 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     edit: cards.some((card) => card.edit) ? { maxBirthDate: todayIso(), invite: canInvite } : null,
     deadline: recordsDeadlines ? { timezone: staff.timezone, sampleMode: staff.sampleMode && !matter.is_sample, kinds: DEADLINE_KINDS } : null,
   };
+  // Submissions and Decisions (T036 to T039), read as this member like everything above.
+  const government = await loadMatterGovernment(supabase, {
+    staff,
+    matter,
+    members,
+    licensed: isLicensedMembership(staff.role, ownLicence?.data),
+    today,
+    now,
+  });
+  if (dialogs.deadline) dialogs.deadline.letters = government.letters;
   const confirmOutcome =
     !matter.outcome && matter.government_status === "decision_evidence_on_file" && isLicensedMembership(staff.role, ownLicence?.data)
       ? { options: MATTER_OUTCOMES.map((value) => ({ value, label: outcomeLabel(value) })), wire }
@@ -547,7 +558,9 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     outcome: matter.outcome ? outcomeLabel(matter.outcome) : null,
     confirmOutcome,
     closure: { closed: matter.stage === "closed", retention: matter.retention_on ? longDate(matter.retention_on) : null },
+    submissions: government.submissions,
+    decisions: government.decisions,
   };
 
-  return { chrome, header, rbar, dialogs, page, countersign };
+  return { chrome, header, rbar, dialogs, page, countersign, governmentDialogs: government.dialogs };
 }

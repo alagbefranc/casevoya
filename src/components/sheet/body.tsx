@@ -12,6 +12,9 @@ import { SheetFrame } from "@/components/sheet/designer/frame";
 import { ApproveTransferDialog, FundsLiveDialogs, RecordPaymentDialog, SheetFinanceFunds, VerifyPaymentDialog } from "@/components/sheet/designer/funds";
 import { StripeAccountStatus } from "@/components/sheet/stripe-connect";
 import { SheetHome } from "@/components/sheet/designer/home";
+import { GOVERNMENT_CSS, GovernmentHeader, SheetGovernment } from "@/components/sheet/designer/government";
+import { GovDialogs } from "@/components/sheet/designer/matter-government";
+import { loadSheetGovernment } from "@/modules/sheet/government-load";
 import { MatterDialogs, MatterRbar, MatterTopBar, SheetMatter } from "@/components/sheet/designer/matter";
 import { MATTER_CSS } from "@/components/sheet/designer/matter-css";
 import { MattersTopBar, NewMatterDialog, SheetMatters } from "@/components/sheet/designer/matters";
@@ -344,6 +347,18 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
+  // Government status: one matter's record (`?view=<matter id>`) or the firm's matters on record (T036, T037).
+  if (page === "government" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetGovernment(access.staff, query);
+    if (!loaded) notFound();
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={loaded.chrome.sidebar} header={<GovernmentHeader data={loaded.header} />} styles={GOVERNMENT_CSS} statusbar={loaded.chrome.statusbar}>
+          <SheetGovernment data={loaded.page} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
   if (page === "matter" && (access.kind === "live" || access.kind === "sample")) {
     const loaded = matterId ? await loadSheetMatter(access.staff, matterId, query) : null;
     if (!loaded) notFound();
@@ -357,6 +372,7 @@ export async function SheetBody({
           after={
             <>
               <MatterDialogs data={loaded.dialogs} />
+              <GovDialogs data={loaded.governmentDialogs} />
               {loaded.countersign.map((sign) => (
                 <CountersignDialog key={sign.envelopeId} data={sign} />
               ))}
