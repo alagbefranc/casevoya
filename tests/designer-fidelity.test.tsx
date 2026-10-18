@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { Fragment, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { SheetFrame, type RbarData } from "@/components/sheet/designer/frame";
@@ -63,6 +63,32 @@ import {
   type TransferDialogData,
   type VerifyDialogData,
 } from "@/components/sheet/designer/funds";
+
+import { BookPage, type BookPageData } from "@/components/sheet/designer/book";
+import { BookMarkup } from "@/components/sheet/markup/book";
+import {
+  BookDialog,
+  CancelDialog,
+  ConsultationsHeader,
+  RescheduleDialog,
+  SheetConsultations,
+  type BookDialogData,
+  type CancelDialogData,
+  type ConsultationsData,
+  type ConsultationsTab,
+  type RescheduleDialogData,
+} from "@/components/sheet/designer/consultations";
+import { ConsultationsMarkup } from "@/components/sheet/markup/consultations";
+import {
+  CalendarHeader,
+  CalendarRbarView,
+  SheetCalendar,
+  type CalendarData,
+  type CalendarRbar,
+  type CalendarTab,
+  type WeekBlock,
+} from "@/components/sheet/designer/calendar";
+import { CalendarMarkup } from "@/components/sheet/markup/calendar";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -1370,6 +1396,322 @@ describe("Designer fidelity: Finance, Client funds", () => {
     expect(html).toMatch(/<dialog class="dlg" id="dlgBank" aria-labelledby="dlgBankH"><div class="dh"><h2 id="dlgBankH">Record the bank transfer<\/h2>/);
     expect(html).toContain(`data-funds-bank="1" data-org="${org}" data-today="2026-10-18" disabled=""`);
     expect(html).toContain("CICC Code s. 32(g)");
+  });
+});
+
+describe("Designer fidelity: public booking page", () => {
+  const DESIGNER_BOOK: BookPageData = {
+    header: { logo: { src: "/assets/firms/northline-lockup.svg", alt: "Northline Immigration" } },
+    title: "Book an initial consultation",
+    lead: "45 minutes with a licensed consultant. Times are shown in your timezone (America/Toronto). You’ll sign a short consultation agreement before the meeting.",
+    fee: {
+      title: "About the fee",
+      copy: "CAD 300.00 (Northline’s fee, demo). Paid before the meeting, it’s held in Northline’s client account until the consultation happens. Cancel 24 hours ahead for a full refund.",
+    },
+    slots: ["Tue 20 Oct · 11:00", "Thu 22 Oct · 13:30", "Thu 22 Oct · 15:00", "Tue 27 Oct · 10:30"].map((label) => ({ label, value: label, pressed: false })),
+    meet: ["Video call", "Phone", "At the Toronto office"],
+    note: "Next: check your answers, sign the consultation agreement, then pay.",
+    submit: { label: "Check and continue" },
+    footer: { firm: "Northline Immigration (fictional demo firm)", privacyHref: "/sheet/privacy" },
+  };
+
+  it("renders the booking page exactly as the captured Designer markup", () => {
+    const captured = renderToStaticMarkup(createElement(BookMarkup));
+    const live = renderToStaticMarkup(createElement(BookPage, { data: DESIGNER_BOOK }));
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+    }
+    expect(live).toBe(captured);
+  });
+
+  it("wires a firm's free booking page: live form, zone picker, honeypot, no fee card, no sample firm", () => {
+    // Documented additions on the live page (inside the same form): data-live="1" for the Sheet's
+    // form guard, the visitor's time-zone picker (#bz), a phone field for phone consultations, a
+    // hidden honeypot (#bw) and an error line. The fee card is left out for a free consultation
+    // and the header is the firm's name (firm logos are private). No privacy link until the firm
+    // has a public notice.
+    const html = renderToStaticMarkup(
+      createElement(BookPage, {
+        data: {
+          header: { name: "Maple Immigration" },
+          title: "Initial consultation",
+          lead: "30 minutes with Maple Immigration. Times are shown in your timezone (America/Vancouver).",
+          fee: null,
+          slots: [{ label: "Tue 20 Oct · 08:00", value: "1792508400000", pressed: true }],
+          meet: ["Phone"],
+          note: "This consultation is free.",
+          submit: { label: "Book this time" },
+          footer: { firm: "Maple Immigration", privacyHref: null },
+          live: { zone: { value: "America/Vancouver", options: ["America/Vancouver", "America/Toronto"] }, phone: true, more: false, error: "Choose a time." },
+        },
+      }),
+    );
+    expect(html).toContain('<form id="f" data-live="1" noValidate="">');
+    expect(html).toContain('aria-pressed="true" data-start="1792508400000"');
+    expect(html).toContain('id="bz"');
+    expect(html).toContain('id="bp"');
+    expect(html).toContain('id="bw" tabindex="-1"');
+    expect(html).toContain('role="alert"');
+    expect(html).not.toContain("About the fee");
+    expect(html).not.toMatch(/Northline|CAD 300|Privacy notice|client account/);
+  });
+});
+
+describe("Designer fidelity: Consultations", () => {
+  const DESIGNER_CONSULTATIONS: ConsultationsData = {
+    tab: "upcoming",
+    upcoming: {
+      rows: [
+        {
+          when: "Thu 22 Oct 10:30 ET",
+          client: "Ana Ferreira",
+          with: { left: "Amara Osei", right: "Zoom (planned)" },
+          agreement: "C-02 v3 signed",
+          fee: { tone: "ok", label: "Held as advance" },
+          state: { tone: "blue", label: "Confirmed" },
+          actions: [{ label: "Reschedule", dlg: "dlgRes" }],
+        },
+        {
+          when: "Fri 23 Oct 14:00 ET",
+          client: "Wei & Lin Zhang",
+          with: { left: "Daniel Ruiz", right: "office" },
+          agreement: "Sent",
+          fee: { tone: "rev", label: "Pending" },
+          state: { tone: "rev", label: "Awaiting agreement" },
+          actions: [{ label: "Remind", toast: "Reminder sent" }],
+        },
+        {
+          when: "Tue 20 Oct 09:00 ET",
+          client: "Hamid Rahimi",
+          with: { left: "Amara Osei", right: "phone" },
+          agreement: "C-02 v3 signed",
+          fee: "No fee",
+          state: { tone: "blue", label: "Confirmed" },
+          actions: [{ label: "Cancel", dlg: "dlgCan" }],
+        },
+        {
+          when: "Thu 15 Oct 16:00 ET",
+          client: "Yusuf Demir",
+          with: { left: "Amara Osei", right: "Zoom" },
+          agreement: "C-02 v3 signed",
+          fee: { tone: "ok", label: "Earned after meeting" },
+          state: { tone: "bad", label: "No-show" },
+          actions: [{ label: "Follow up", toast: "Follow-up task created", icon: "no-show" }],
+        },
+      ],
+    },
+    availability: {
+      hosts: [
+        {
+          name: "Amara Osei",
+          items: [
+            { term: "Days", value: "Tue, Thu 09:00–17:00 ET" },
+            { term: "Length", value: "45 minutes" },
+            { term: "Buffer", value: "15 minutes before and after" },
+            { term: "Capacity", value: "4 a day" },
+            { term: "Timezone", value: { left: "America/Toronto", right: "clients see their own" } },
+            { term: "Calendars read", value: { left: "Northline", right: "consultations (Google Calendar, planned)" } },
+            { term: "Video meetings", value: "video-planned" },
+          ],
+        },
+      ],
+      calendar: { month: DESIGNER_RBAR.month, leading: DESIGNER_RBAR.leading, days: DESIGNER_RBAR.days },
+    },
+    booking: {
+      preview: {
+        logo: "/assets/firms/northline-glyph-128.png",
+        firm: "Northline Immigration",
+        title: "Book an initial consultation",
+        note: "45 minutes with a licensed consultant. Times are in your timezone.",
+        chips: ["Tue 20 Oct 11:00", "Thu 22 Oct 13:30", "Thu 22 Oct 15:00"],
+        href: "/book",
+      },
+      share: { url: "northline.casevoya.example/book", embedNote: true },
+    },
+  };
+  const DESIGNER_BOOK_DIALOG: BookDialogData = {
+    clients: [{ label: "Tomás Duarte" }, { label: "Grace Okafor" }, { label: "New person…" }],
+    times: [{ label: "Tue 20 Oct 11:00 ET" }, { label: "Thu 22 Oct 13:30 ET" }],
+    agreements: ["Send consultation agreement C-02 v3", "Already signed"],
+    submit: { toast: "Consultation booked", sub: "The slot is held. Agreement sent.", kind: "ok" },
+  };
+  const DESIGNER_RES: RescheduleDialogData = {
+    title: "Reschedule Ana’s consultation",
+    times: [{ label: "Tue 27 Oct 10:30 ET" }, { label: "Thu 29 Oct 14:00 ET" }],
+    note: "Ana gets an email and a portal update. Her reminders move with it.",
+    submit: { toast: "Rescheduled", kind: "ok" },
+  };
+  const DESIGNER_CAN: CancelDialogData = {
+    body: "Hamid Rahimi is told by email and in his portal. No fee was paid, so there’s nothing to refund.",
+    submit: { toast: "Consultation cancelled" },
+  };
+
+  for (const tab of ["upcoming", "availability", "booking"] as ConsultationsTab[]) {
+    it(`renders the Consultations page (${tab} tab) and its dialogs exactly as the captured Designer markup`, () => {
+      const captured = withoutPreloads(renderToStaticMarkup(createElement(ConsultationsMarkup, { variant: `tab-${tab}` })));
+      const live = withoutPreloads(
+        renderToStaticMarkup(
+          createElement(SheetFrame, {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/consultations" },
+            header: createElement(ConsultationsHeader, { tab, pills: ["3 this week", "Hosted booking page live (demo)"] }),
+            statusbar: {
+              timezone: "America/Toronto",
+              queue: { label: "Reminder queue healthy", detail: "0 retries" },
+              sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+            },
+            after: createElement(
+              Fragment,
+              null,
+              createElement(BookDialog, { data: DESIGNER_BOOK_DIALOG }),
+              createElement(RescheduleDialog, { data: DESIGNER_RES }),
+              createElement(CancelDialog, { data: DESIGNER_CAN }),
+            ),
+          }, createElement(SheetConsultations, { data: { ...DESIGNER_CONSULTATIONS, tab } })),
+        ),
+      );
+      if (live !== captured) {
+        let i = 0;
+        while (i < live.length && live[i] === captured[i]) i++;
+        console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+      }
+      expect(live).toBe(captured);
+    });
+  }
+
+  it("shows a firm without bookings the Designer's empty states, with no sample people", () => {
+    for (const tab of ["upcoming", "availability", "booking"] as ConsultationsTab[]) {
+      const html = renderToStaticMarkup(
+        createElement(SheetConsultations, {
+          data: {
+            tab,
+            upcoming: { rows: [], empty: { title: "No consultations yet", copy: "Bookings appear here." } },
+            availability: { hosts: [], calendar: { month: "October 2026", leading: 3, days: [{ day: 1 }] }, empty: { title: "No working hours yet", copy: "Set your hours.", action: { "data-avail-open": "m1" } } },
+            booking: { preview: null, share: null, types: { rows: [], create: null } },
+          },
+        }),
+      );
+      expect(html).toContain('class="emp"');
+      expect(html).not.toMatch(/Northline|Amara|Ana Ferreira|Hamid|Yusuf|Daniel|C-02|demo/);
+    }
+  });
+
+  it("wires live rows and dialogs by data attributes, with no Designer toast or sample values", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        "div",
+        null,
+        createElement(SheetConsultations, {
+          data: {
+            tab: "upcoming",
+            upcoming: {
+              rows: [
+                {
+                  when: "Tue 20 Oct 10:00 EDT",
+                  client: "Sam Example",
+                  with: { left: "Kim Host", right: "video (link to follow)" },
+                  agreement: "—",
+                  fee: "No fee",
+                  state: { tone: "blue", label: "Confirmed" },
+                  actions: [
+                    { label: "Reschedule", data: { "data-booking-open": "res", "data-booking": "b1", "data-version": "3", "data-name": "Sam Example" } },
+                    { label: "Cancel", data: { "data-booking-open": "can", "data-booking": "b1", "data-version": "3", "data-name": "Sam Example" } },
+                  ],
+                },
+              ],
+            },
+          },
+        }),
+        createElement(BookDialog, {
+          data: { clients: [{ label: "Sam Example", value: "p1" }], times: [{ label: "Tue 20 Oct 10:00 EDT", value: "2026-10-20T14:00:00.000Z" }], submit: { data: { "data-booking-submit": "book", "data-org": "o1" } } },
+        }),
+        createElement(RescheduleDialog, { data: { title: "Reschedule this consultation", times: [], note: "They get an email with the new time.", submit: { data: { "data-booking-submit": "res", "data-org": "o1" } } } }),
+        createElement(CancelDialog, { data: { body: "They get an email.", submit: { data: { "data-booking-submit": "can", "data-org": "o1" } } } }),
+      ),
+    );
+    expect(html).toContain('data-booking-open="res" data-booking="b1" data-version="3"');
+    expect(html).toContain('<button class="btn p" data-booking-submit="book" data-org="o1">Book</button>');
+    expect(html).toContain('data-booking-submit="res"');
+    expect(html).toContain('data-booking-submit="can"');
+    expect(html).not.toContain("bkA");
+    expect(html).not.toContain("data-toast");
+    expect(html).not.toMatch(/Northline|Amara|C-02|Held as advance/);
+  });
+});
+
+describe("Designer fidelity: Calendar", () => {
+  const empty = () => [[], [], [], [], []] as WeekBlock[][];
+  const hours = [9, 10, 11, 12, 13, 14, 15, 16].map((h) => ({ label: `${h}:00`, cells: empty() }));
+  const at = (hour: number, day: number, block: WeekBlock) => hours[hour - 9].cells[day].push(block);
+  at(9, 1, { kind: "internal", title: { left: "Review OCR", right: "Priya Sharma" }, note: "Amara Osei", height: 56 });
+  at(10, 0, { kind: "consultation", title: { left: "Consultation", right: "Ana Ferreira" }, note: "Zoom (planned)", height: 120 });
+  at(10, 4, { kind: "internal", title: "Team queue review", note: "Daniel Ruiz", height: 56 });
+  at(11, 3, { kind: "consultation", title: { left: "Proposal call", right: "Tomás Duarte" }, note: "Google Meet (planned)", height: 120 });
+  at(13, 2, { kind: "tentative", title: { left: "Confirm deadline", right: "Kofi Mensah" }, note: "Source: IRCC letter, 13 Oct", height: 56 });
+  at(14, 4, { kind: "deadline", title: { left: "Deadline: biometrics", right: "Mei Tanaka" }, note: { left: "Verified", right: "17:00 ET" }, height: 56 });
+  const DESIGNER_CALENDAR: CalendarData = {
+    tab: "week",
+    heading: { title: "This week", copy: "Appointments and deadlines together. Each deadline shows its source and who verified it." },
+    week: { days: ["Mon 12", "Tue 13", "Wed 14", "Thu 15", "Fri 16"].map((label) => ({ label, today: label === "Fri 16" })), hours },
+    note: "Deadline reminders go out at 14, 7, 3 and 1 days. The applicant sees times in their own zone (Asia/Kolkata for Priya).",
+  };
+  const DESIGNER_CAL_RBAR: CalendarRbar = {
+    calendar: { month: DESIGNER_RBAR.month, leading: DESIGNER_RBAR.leading, days: DESIGNER_RBAR.days },
+    deadlines: [
+      { date: "Fri 16 Oct", title: "Biometrics", who: "Mei Tanaka", chip: { tone: "bad", label: "Today" } },
+      { date: "Tue 20 Oct", title: "Photo dates", who: "Priya Sharma", chip: { tone: "chg", label: "Verified" } },
+      { date: "Fri 30 Oct", title: "Submission", who: "Priya Sharma", chip: { tone: "rev", label: "Verified" } },
+    ],
+    calendars: [
+      { name: "Amara", tool: "Google Calendar", logo: "/assets/logos/integrations/googlecalendar-color.png", chip: { tone: "ok", label: "Synced 09:10" } },
+      { name: "Grace", tool: "Outlook", logo: "/assets/logos/integrations/microsoftoutlook-color.svg", chip: { tone: "gr", label: "Not connected" } },
+      { name: "Toronto office", tool: "Microsoft 365", logo: "/assets/logos/integrations/microsoft365-color.svg", chip: { tone: "gr", label: "Not connected" } },
+    ],
+  };
+
+  for (const tab of ["week", "deadlines"] as CalendarTab[]) {
+    it(`renders the Calendar page (${tab} tab) exactly as the captured Designer markup`, () => {
+      const captured = withoutPreloads(renderToStaticMarkup(createElement(CalendarMarkup, { variant: `tab-${tab}` })));
+      const live = withoutPreloads(
+        renderToStaticMarkup(
+          createElement(SheetFrame, {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/calendar" },
+            header: createElement(CalendarHeader, { tab, pills: ["Week of 12 Oct 2026", "Times in America/Toronto"] }),
+            aside: createElement(CalendarRbarView, { data: DESIGNER_CAL_RBAR }),
+            statusbar: {
+              timezone: "America/Toronto",
+              queue: { label: "Reminder queue healthy", detail: "0 retries" },
+              sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+            },
+          }, createElement(SheetCalendar, { data: { ...DESIGNER_CALENDAR, tab } })),
+        ),
+      );
+      if (live !== captured) {
+        let i = 0;
+        while (i < live.length && live[i] === captured[i]) i++;
+        console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+      }
+      expect(live).toBe(captured);
+    });
+  }
+
+  it("shows an empty week and no sample people for a firm with nothing booked", () => {
+    const html = renderToStaticMarkup(
+      createElement(Fragment, null,
+        createElement(SheetCalendar, {
+          data: {
+            tab: "week",
+            heading: { title: "This week", copy: "Appointments and deadlines together." },
+            week: { days: ["Mon 19", "Tue 20", "Wed 21", "Thu 22", "Fri 23"].map((label) => ({ label, today: false })), hours: [9, 10].map((h) => ({ label: `${h}:00`, cells: empty() })) },
+            note: "Clients see consultation times in their own zone.",
+          },
+        }),
+        createElement(CalendarRbarView, { data: { calendar: { month: "October 2026", leading: 3, days: [{ day: 1 }] }, deadlines: [], calendars: [{ name: "Kim Host", tool: "no calendar connected", logo: null, chip: { tone: "gr", label: "Not connected" } }] } }),
+      ),
+    );
+    expect(html).toContain("No deadlines this month");
+    expect(html).not.toMatch(/Northline|Amara|Priya|Kofi|Mei Tanaka|Ana Ferreira|Synced/);
   });
 });
 

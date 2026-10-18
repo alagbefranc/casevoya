@@ -33,6 +33,9 @@ const WIRED: Record<string, Record<string, unknown>> = {
   EX08: { template: "payment_failed", firm: FIRM, invoice_id: INVOICE, invoice_number: "INV-0001", due_on: "2026-11-06" },
   EX09: { template: "refund_started", firm: FIRM, invoice_id: INVOICE, invoice_number: "INV-0001" },
   EX10: { template: "refund_complete", firm: FIRM, invoice_id: INVOICE, invoice_number: "INV-0001" },
+  EM16a: { template: "consultation_booked", firm: FIRM, starts_at: "2026-10-22T14:30:00Z", time_zone: "America/Vancouver", consultant_name: "Sam Example" },
+  EM16b: { template: "consultation_rescheduled", firm: FIRM, starts_at: "2026-10-27T14:30:00Z", time_zone: "America/Toronto" },
+  EM16c: { template: "consultation_cancelled", firm: FIRM, starts_at: "2026-10-27T14:30:00Z", time_zone: "America/Toronto" },
 };
 
 function slug(name: string): string {

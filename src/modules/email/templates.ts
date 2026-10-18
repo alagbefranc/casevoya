@@ -77,6 +77,13 @@ export function designFor(context: Context): TemplateId | "generic" {
     // outbox event that queues it with receipt_number (and advance: true for client funds).
     case "payment_receipt":
       return "EM11";
+    // Scheduling (20261019180200_scheduling_mail.sql): booked, moved, cancelled by the firm.
+    case "consultation_booked":
+      return "EM16a";
+    case "consultation_rescheduled":
+      return "EM16b";
+    case "consultation_cancelled":
+      return "EM16c";
     default:
       return "generic";
   }
@@ -127,6 +134,17 @@ export function renderEmail(context: Context, options: { origin?: string } = {})
       break;
     case "EM11":
       copy = renderTemplate("EM11", { firmName: firm, receiptNumber: textOf(context.receipt_number), advance: context.advance === true }, origin);
+      break;
+    case "EM16a":
+      copy = renderTemplate(
+        "EM16a",
+        { firmName: firm, startsAt: textOf(context.starts_at) || null, timeZone: textOf(context.time_zone) || null, consultantName: textOf(context.consultant_name) || null },
+        origin,
+      );
+      break;
+    case "EM16b":
+    case "EM16c":
+      copy = renderTemplate(design, { firmName: firm, startsAt: textOf(context.starts_at) || null, timeZone: textOf(context.time_zone) || null }, origin);
       break;
     case "EM08-staff":
     case "EM09":

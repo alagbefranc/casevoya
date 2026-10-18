@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { AccountForm } from "./account-form";
 import { AgreementsLive } from "./agreements-live";
+import { AppointmentsLive } from "./appointments-live";
 import { DocumentsLive } from "./documents-live";
 import { PayLive } from "./pay-live";
 import { PaymentsLive } from "./payments-live";
@@ -9,6 +10,7 @@ import type { PortalAgreements } from "@/modules/agreements/load";
 import type { PortalDocuments } from "@/modules/documents/load";
 import type { PortalInvoices } from "@/modules/finance/portal-load";
 import type { PortalViewer } from "@/modules/portal/load";
+import type { PortalAppointments } from "@/modules/scheduling/portal-load";
 
 export type PortalPayments = { data: PortalInvoices; invoiceId: string | null };
 
@@ -37,12 +39,14 @@ export function LivePortal({
   documents,
   agreements,
   payments,
+  appointments,
 }: {
   page: string;
   viewer: PortalViewer;
   documents?: PortalDocuments | null;
   agreements?: PortalAgreements | null;
   payments?: PortalPayments | null;
+  appointments?: PortalAppointments | null;
 }) {
   const name = viewer.person?.displayName ?? "Your account";
   const matter = viewer.matters[0];
@@ -82,7 +86,7 @@ export function LivePortal({
               <span className="pill">{matter ? matter.title : viewer.organizationName}</span>
               <span className="acts"><a className="btn s sm" href="/help/client-home-screen" id="help">Help</a></span>
             </header>
-            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} />
+            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} />
           </div>
         </main>
         <footer className="statusbar">
@@ -101,13 +105,18 @@ function LiveMain({
   documents,
   agreements,
   payments,
+  appointments,
 }: {
   page: string;
   viewer: PortalViewer;
   documents: PortalDocuments | null;
   agreements: PortalAgreements | null;
   payments: PortalPayments | null;
+  appointments: PortalAppointments | null;
 }) {
+  if (page === "appointments") {
+    return appointments ? <AppointmentsLive viewer={viewer} data={appointments} /> : <Stub page={page} />;
+  }
   if (page === "payments") {
     return payments ? <PaymentsLive viewer={viewer} data={payments.data} /> : <Stub page={page} />;
   }

@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
+import { btree_gist } from "@electric-sql/pglite/contrib/btree_gist";
 import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
 
 const root = path.resolve(import.meta.dirname, "../..");
@@ -149,7 +150,7 @@ export async function applyMigrationsFrom(db: TestDb, version: string) {
 }
 
 export async function createTestDb(options: TestDbOptions = {}): Promise<TestDb> {
-  const db = new PGlite({ extensions: { pgcrypto } });
+  const db = new PGlite({ extensions: { pgcrypto, btree_gist } });
   await db.exec(harness);
   if (options.supabaseDefaultPrivileges) await db.exec(supabaseDefaultPrivileges);
   const stop = options.stopBefore;
