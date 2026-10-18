@@ -12,3 +12,17 @@
  */
 .qr>img{width:132px;height:132px;flex:none;background:#fff;border-radius:8px;padding:6px}
 .qr .key svg{width:16px;height:16px;padding:0;background:none;border-radius:0;flex:none}
+
+/*
+ * `.fld` is display:grid. The portal invitation's "Date of birth" field is [hidden] until the
+ * dialog opens for someone without one; keep it hidden even without preflight's rule.
+ */
+.fld[hidden]{display:none}
+
+/*
+ * People and invitations, Staff tab: the name cell is a grid item whose min-width is its
+ * content, so a long email pushed into the Role column. Let the cell shrink and the name and
+ * email wrap anywhere instead. The Designer markup is unchanged.
+ */
+.iv .ivr>div{min-width:0}
+.iv .ivr>div>b,.iv .ivr>div>small{overflow-wrap:anywhere}

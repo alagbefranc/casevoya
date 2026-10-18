@@ -15,6 +15,7 @@ import {
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import { createClient } from "@/lib/supabase/server";
 import { staffPerson } from "@/modules/sheet/avatar";
+import { todayIso } from "@/modules/sheet/birth-date";
 import { isUuid } from "@/lib/tenant/context";
 import { isLicensedMembership, LICENCE_FACT_COLUMNS } from "@/lib/tenant/roles";
 import { loadSheetChrome, memberNames } from "@/modules/sheet/chrome-load";
@@ -179,7 +180,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     ),
   ];
   const [persons, signers, relationships] = await Promise.all([
-    personIds.length ? supabase.from("persons").select("id, display_name, email, user_id").eq("organization_id", org).in("id", personIds) : null,
+    personIds.length ? supabase.from("persons").select("id, display_name, email, user_id, date_of_birth").eq("organization_id", org).in("id", personIds) : null,
     envelopeIds.length
       ? supabase.from("envelope_signers").select("envelope_id, display_name, signing_order, status, signed_at").eq("organization_id", org).in("envelope_id", envelopeIds).order("signing_order", { ascending: true })
       : null,
@@ -283,7 +284,10 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
         role: partyRole(row.role),
         parts: [record?.email || "No email on file"],
         pill: { label: record?.user_id ? "Portal active" : invited ? `Invited ${invited}` : "No portal access" },
-        invite: canInvite && record && !record.user_id && portalRole ? { personId: record.id, role: portalRoleLabel(portalRole), email: record.email ?? "" } : null,
+        invite:
+          canInvite && record && !record.user_id && portalRole
+            ? { personId: record.id, role: portalRoleLabel(portalRole), email: record.email ?? "", birthDateMissing: !record.date_of_birth }
+            : null,
       });
     } else if (row.membership_id && !staffIds.has(row.membership_id)) {
       staffIds.add(row.membership_id);
@@ -430,6 +434,8 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     // A real matter while the firm is still in sample mode: the database refuses real client invitations.
     locked: staff.sampleMode && !matter.is_sample,
     wire: { organizationId: org, matterId: matter.id },
+    // public.create_portal_invitation needs a date of birth; the dialog asks for it when one is missing.
+    birthDate: cards.some((card) => card.invite?.birthDateMissing) ? { max: todayIso() } : null,
   };
 
   // A hold's owner is someone on the firm's staff, never a client. The responsible consultant comes first.

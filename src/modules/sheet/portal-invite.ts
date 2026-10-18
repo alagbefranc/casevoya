@@ -5,6 +5,7 @@
  * and where a step-up goes. public.create_portal_invitation decides every invitation.
  */
 import type { PortalInviteRole } from "@/modules/portal-invitations/types";
+import { readBirthDate, todayIso } from "@/modules/sheet/birth-date";
 import { dayMonth } from "@/modules/sheet/home-present";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
 
@@ -55,13 +56,26 @@ export function acceptLink(origin: string, role: PortalInviteRole, token: string
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export type PortalInviteInput = { personId: string; role: PortalInviteRole; email: string };
+export type PortalInviteInput = {
+  personId: string;
+  role: PortalInviteRole;
+  email: string;
+  /** `YYYY-MM-DD` to save on the person first, when they had none; otherwise null. */
+  dateOfBirth: string | null;
+};
 
-/** What the dialog sends, or the first thing to fix. The database checks all of it again. */
+/**
+ * What the dialog sends, or the first thing to fix. The database checks all of it again.
+ * `dateOfBirth` is a string only when the dialog asked for it (the person has none on file);
+ * then it is required, because public.create_portal_invitation refuses anyone without one.
+ */
 export function readPortalInvite(fields: {
   personId?: string | null;
   roleLabel?: string | null;
   email?: string | null;
+  dateOfBirth?: string | null;
+  /** `YYYY-MM-DD`; defaults to today in UTC. */
+  today?: string;
 }): { input: PortalInviteInput } | { error: string } {
   const personId = (fields.personId ?? "").trim();
   const role = portalRoleFromLabel(fields.roleLabel);
@@ -70,7 +84,14 @@ export function readPortalInvite(fields: {
   if (!role) return { error: "Choose their role." };
   if (!email) return { error: "Add their email address." };
   if (!EMAIL.test(email) || email.length > 320) return { error: "Enter a valid email address." };
-  return { input: { personId, role, email } };
+  let dateOfBirth: string | null = null;
+  if (typeof fields.dateOfBirth === "string") {
+    const birth = readBirthDate(fields.dateOfBirth, fields.today ?? todayIso());
+    if ("error" in birth) return { error: birth.error };
+    if (!birth.date) return { error: "Add their date of birth. Only adults get a portal login." };
+    dateOfBirth = birth.date;
+  }
+  return { input: { personId, role, email, dateOfBirth } };
 }
 
 /**

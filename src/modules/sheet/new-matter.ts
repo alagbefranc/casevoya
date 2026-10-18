@@ -3,6 +3,7 @@
  * database's refusals read, and where a step-up goes. The database decides every create.
  */
 import { safeAccessError } from "@/lib/auth/step-up";
+import { readBirthDate, todayIso } from "@/modules/sheet/birth-date";
 import { programLabel } from "@/modules/sheet/matters-present";
 
 export type NewMatterOption = { value: string; label: string };
@@ -13,6 +14,8 @@ export type NewMatterDialogData = {
   programs: NewMatterOption[];
   /** The firm is still in sample mode: the database refuses a real matter. */
   sampleMode: boolean;
+  /** The latest date of birth the date fields accept (`YYYY-MM-DD`). Absent, no limit is set. */
+  maxBirthDate?: string;
 };
 
 export type NewMatterInput = {
@@ -20,6 +23,9 @@ export type NewMatterInput = {
   applicantEmail: string | null;
   sponsorName: string | null;
   sponsorEmail: string | null;
+  /** `YYYY-MM-DD`, or null when not given. */
+  applicantDateOfBirth: string | null;
+  sponsorDateOfBirth: string | null;
   consultantMembershipId: string;
   rulePackVersionId: string | null;
 };
@@ -63,8 +69,12 @@ export function readNewMatter(fields: {
   applicantEmail?: string | null;
   sponsorName?: string | null;
   sponsorEmail?: string | null;
+  applicantDateOfBirth?: string | null;
+  sponsorDateOfBirth?: string | null;
   consultant?: string | null;
   program?: string | null;
+  /** `YYYY-MM-DD`; defaults to today in UTC. */
+  today?: string;
 }): { input: NewMatterInput } | { error: string } {
   const applicantName = clean(fields.applicantName);
   const applicantEmail = clean(fields.applicantEmail).toLowerCase() || null;
@@ -77,6 +87,12 @@ export function readNewMatter(fields: {
   if (applicantEmail && !EMAIL.test(applicantEmail)) return { error: "Enter a valid email address." };
   if (sponsorEmail && !sponsorName) return { error: "Add the sponsor’s name, or leave the sponsor out." };
   if (sponsorEmail && !EMAIL.test(sponsorEmail)) return { error: "Enter a valid email address." };
+  const today = fields.today ?? todayIso();
+  const applicantBirth = readBirthDate(fields.applicantDateOfBirth, today);
+  if ("error" in applicantBirth) return { error: `Applicant: ${applicantBirth.error}` };
+  const sponsorBirth = readBirthDate(fields.sponsorDateOfBirth, today);
+  if ("error" in sponsorBirth) return { error: `Sponsor: ${sponsorBirth.error}` };
+  if (sponsorBirth.date && !sponsorName) return { error: "Add the sponsor’s name, or leave the sponsor out." };
   if (!consultant) return { error: "Choose a responsible consultant." };
   return {
     input: {
@@ -84,6 +100,8 @@ export function readNewMatter(fields: {
       applicantEmail,
       sponsorName,
       sponsorEmail,
+      applicantDateOfBirth: applicantBirth.date,
+      sponsorDateOfBirth: sponsorBirth.date,
       consultantMembershipId: consultant,
       rulePackVersionId: program,
     },
@@ -102,6 +120,7 @@ export function newMatterError(message: string): string {
   if (/published pack/i.test(message)) return "Choose a published program template for a jurisdiction this firm practises.";
   if (/applicant name/i.test(message)) return "Add the applicant’s name.";
   if (/sponsor name is required/i.test(message)) return "Add the sponsor’s name, or leave the sponsor out.";
+  if (/date of birth/i.test(message)) return "Check the dates of birth. They can’t be in the future or before 1900.";
   if (/responsible consultant is required/i.test(message)) return "Choose a responsible consultant.";
   if (/matter create denied/i.test(message)) return "Your role can’t open matters. Ask a firm owner.";
   return safeAccessError(message);
