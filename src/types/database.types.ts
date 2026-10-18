@@ -820,6 +820,48 @@ export type Database = {
           },
         ]
       }
+      credential_change_reports: {
+        Row: {
+          created_at: string
+          credential_id: string
+          detail: string
+          id: string
+          organization_id: string
+          reported_by: string
+        }
+        Insert: {
+          created_at?: string
+          credential_id: string
+          detail: string
+          id?: string
+          organization_id: string
+          reported_by: string
+        }
+        Update: {
+          created_at?: string
+          credential_id?: string
+          detail?: string
+          id?: string
+          organization_id?: string
+          reported_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credential_change_reports_credential_id_organization_id_fkey"
+            columns: ["credential_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "consultant_credentials"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "credential_change_reports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       household_members: {
         Row: {
           created_at: string
@@ -7251,6 +7293,40 @@ export type Database = {
       set_credential_valid_until: {
         Args: { p_credential_id: string; p_valid_until: string | null }
         Returns: string
+      }
+      add_consultant_licence: {
+        Args: {
+          p_college_id: string
+          p_licence_type: Database["public"]["Enums"]["licence_type"]
+          p_membership_id: string
+        }
+        Returns: string
+      }
+      report_licence_change: {
+        Args: { p_credential_id: string; p_detail: string }
+        Returns: string
+      }
+      licence_review_log: {
+        Args: { p_organization_id: string }
+        Returns: {
+          actor_is_platform: boolean
+          actor_name: string | null
+          at: string
+          college_id: string
+          credential_id: string
+          holder_name: string | null
+          kind: string
+          result: string | null
+        }[]
+      }
+      reassign_consultant_matters_selected: {
+        Args: {
+          p_from_membership: string
+          p_matter_ids: string[]
+          p_reason: string
+          p_to_membership: string
+        }
+        Returns: number
       }
       set_sample_mode: {
         Args: { p_enabled: boolean }

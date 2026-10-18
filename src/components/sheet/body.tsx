@@ -22,6 +22,11 @@ import { SheetStaffTab, StaffAfter, StaffHeader } from "@/components/sheet/desig
 import { PolicyMissingAlert, PortalPoliciesAfter, SettingsPortalHeader, SheetPortalPolicies } from "@/components/sheet/designer/portal-policies";
 import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
+import { ROLES_CSS, RolesHeader, SheetRoles } from "@/components/sheet/designer/roles";
+import { LicenceAfter, LicenceHeader, SheetLicences } from "@/components/sheet/designer/licence";
+import { loadSheetChrome } from "@/modules/sheet/chrome-load";
+import { loadSheetLicence } from "@/modules/sheet/licence-load";
+import { ROLE_MATRIX } from "@/modules/staff/role-matrix";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
 import { homeRoute } from "@/lib/auth/home-route";
@@ -158,6 +163,34 @@ export async function SheetBody({
           after={<PortalPoliciesAfter dialogs={dialogs} />}
         >
           <SheetPortalPolicies data={policies} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Roles and permissions: what each role may do, as the server enforces it.
+  if (page === "roles" && (access.kind === "live" || access.kind === "sample")) {
+    const chrome = await loadSheetChrome(access.staff, "/sheet/roles");
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={chrome.sidebar} header={<RolesHeader pills={ROLE_MATRIX.pills} />} styles={[ROLES_CSS]} statusbar={chrome.statusbar}>
+          <SheetRoles data={ROLE_MATRIX} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Licences: each consultant's CICC licence and the manual register checks (Licences and Review log tabs).
+  if (page === "licence" && (access.kind === "live" || access.kind === "sample")) {
+    const tab = query.tab === "log" ? "log" : "lic";
+    const loaded = await loadSheetLicence(access.staff, tab);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<LicenceHeader firmName={loaded.page.firmName} tab={tab} />}
+          statusbar={loaded.chrome.statusbar}
+          after={<LicenceAfter dialogs={loaded.dialogs} />}
+        >
+          <SheetLicences data={loaded.page} />
         </SheetFrame>
       </SheetScreen>
     );
