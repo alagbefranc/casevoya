@@ -8,6 +8,7 @@ import { withoutNew } from "@/modules/sheet/new-matter";
 import { sheetStateCopy } from "@/modules/sheet/present";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
+import { runNewTask, syncNewTask } from "./new-task-act";
 import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-invite-act";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
@@ -115,6 +116,14 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (save.getAttribute("aria-busy") === "true") return;
         save.setAttribute("aria-busy", "true");
         void runNewMatter(save, router).finally(() => save.removeAttribute("aria-busy"));
+        return;
+      }
+      const task = target.closest<HTMLElement>("[data-new-task]");
+      if (task && root.contains(task)) {
+        event.preventDefault();
+        if (task.getAttribute("aria-busy") === "true") return;
+        task.setAttribute("aria-busy", "true");
+        void runNewTask(task, router).finally(() => task.removeAttribute("aria-busy"));
         return;
       }
       const palette = target.closest<HTMLElement>("[data-palette]");
@@ -270,6 +279,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       newMatter.addEventListener("close", () => {
         if (new URLSearchParams(window.location.search).has("new")) router.replace(withoutNew(window.location.pathname, window.location.search));
       }, listen);
+    }
+
+    const newTask = root.querySelector<HTMLDialogElement>("dialog#dlgTask");
+    if (newTask?.querySelector("[data-new-task]")) {
+      // The live New task form: owners and dependencies follow the chosen matter and kind.
+      syncNewTask(newTask);
+      newTask.addEventListener("change", () => syncNewTask(newTask), listen);
     }
 
     window.addEventListener("resize", place, listen);
