@@ -10,6 +10,7 @@ import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair, Sep } from "./frame";
 import { PersonEditDialog, personEditProps, type PersonEditDialogData } from "./person-edit";
 import { PolicyMissingAlert } from "./portal-policies";
+import { MatterDecisionsLive, MatterSubmissions, type MatterDecisionsData, type MatterSubmissionsData } from "./matter-government";
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
 import type { PersonEditData } from "@/modules/sheet/edit-person";
 import { ChatError, ChatView } from "@/components/messages/chat";
@@ -674,6 +675,8 @@ export type MatterDeadlineDialog = {
   /** The firm is in sample mode and this matter is real: the database refuses the deadline. */
   sampleMode: boolean;
   kinds: readonly { value: string; label: string }[];
+  /** Government letters on the matter; the deadline is linked to the one chosen (T037). */
+  letters?: { id: string; label: string }[];
 };
 
 /** The record a dialog's confirm button saves to; the kit reads these from the button. */
@@ -932,6 +935,19 @@ function DeadlineDialog({ data, wire }: { data: MatterDeadlineDialog; wire: Matt
             {"Where it’s written"}
             <input id={"ddE"} placeholder={"For example: IRCC request letter, page 2"} autoComplete={"off"} />
           </label>
+          {data.letters?.length ? (
+            <label className={"fl"}>
+              {"From a government letter (optional)"}
+              <select id={"ddC"} defaultValue={""}>
+                <option value={""}>{"None"}</option>
+                {data.letters.map((letter) => (
+                  <option key={letter.id} value={letter.id}>
+                    {letter.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label className={"fl"}>
             {"Official source URL"}
             <input id={"ddU"} type={"url"} placeholder={"https://www.canada.ca/…"} autoComplete={"off"} />
@@ -1490,6 +1506,10 @@ export type MatterPageData = {
   closure: { closed: boolean; retention: string | null };
   /** Messages tab: the chat view's data (null: it failed to load; absent: another tab). */
   messages?: ChatData | null;
+  /** T036 submission handoff; absent, the tab keeps its empty state. */
+  submissions?: MatterSubmissionsData | null;
+  /** T037 and T038 letters and decisions; absent, the tab keeps the outcome-only view. */
+  decisions?: MatterDecisionsData | null;
 };
 
 /** The open tab's content. */
@@ -1505,8 +1525,10 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
       return <MatterAgreements rows={data.agreements.rows} signing={data.agreements.signing} create={data.agreements.create} />;
     case "tasks":
       return <MatterTasks deadline={data.tasks.deadline} tasks={data.tasks.tasks} record={data.tasks.record} />;
+    case "submissions":
+      return data.submissions ? <MatterSubmissions data={data.submissions} /> : <MatterTabEmpty tab={data.tab} />;
     case "decisions":
-      return <MatterDecisions outcome={data.outcome} confirm={data.confirmOutcome} />;
+      return data.decisions ? <MatterDecisionsLive data={data.decisions} /> : <MatterDecisions outcome={data.outcome} confirm={data.confirmOutcome} />;
     case "closure":
       return <MatterClosure closed={data.closure.closed} retention={data.closure.retention} />;
     // Redesigned as a chat view at the owner's request (2026-10-18); the other tabs keep the Designer's markup.

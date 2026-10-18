@@ -1,8 +1,10 @@
 "use client";
 
 import { toast2 } from "@/components/port/kit";
-import { changeMatterStage, confirmMatterOutcome, holdMatter, recordMatterDeadline, recordMatterLetter, resumeMatter } from "@/modules/sheet/actions";
-import { letterNote, letterStatus, needsStepUp, stageAt, stepUpLocation, withoutDialog, type MatterDialog } from "@/modules/sheet/matter-wire";
+import { changeMatterStage, confirmMatterOutcome, holdMatter, recordMatterDeadline, resumeMatter } from "@/modules/sheet/actions";
+import { linkLetterDeadline } from "@/modules/government/actions";
+import { needsStepUp, stageAt, stepUpLocation, withoutDialog, type MatterDialog } from "@/modules/sheet/matter-wire";
+import { recordLetter } from "./gov-acts";
 import { readDeadline } from "@/modules/sheet/new-deadline";
 
 type Router = { replace: (href: string) => void; refresh: () => void };
@@ -56,13 +58,10 @@ export async function runMatterAct(button: HTMLElement, root: HTMLElement, route
     if (!reviewOn) return void toast2("Pick a review date", { kind: "warn", sub: "On hold needs a date to look at it again." });
     result = await holdMatter({ ...ref, reason, ownerMembershipId, reviewOn });
   } else if (act === "letter") {
-    const selects = scope.querySelectorAll<HTMLSelectElement>("select");
-    const type = (selects[0]?.selectedOptions[0]?.textContent ?? "").trim();
-    const via = (selects[1]?.selectedOptions[0]?.textContent ?? "").trim();
-    const status = letterStatus(type);
-    if (!status) return void toast2("Choose the letter type", { kind: "warn" });
-    const note = letterNote({ type, receivedOn: text(scope, 'input[type="date"]'), via, deadline: text(scope, "input[placeholder]") });
-    result = await recordMatterLetter({ ...ref, status, note });
+    // T037: the letter is kept as received (its own row, unverified); the government status
+    // follows only once a staff member verifies it against the evidence.
+    result = await recordLetter(scope, dialog, { organizationId: ref.organizationId, matterId: ref.matterId });
+    sub = "Kept as received. It counts once a staff member verifies it against the evidence.";
   } else if (act === "resume") {
     result = await resumeMatter(ref);
   } else if (act === "outcome") {
@@ -85,6 +84,11 @@ export async function runMatterAct(button: HTMLElement, root: HTMLElement, route
     const read = readDeadline(fields);
     if ("error" in read) return void toast2(read.error, { kind: "warn", sub: "Nothing was saved." });
     result = await recordMatterDeadline({ ...ref, fields });
+    // T037: a deadline from a government letter is linked to that letter (its origin).
+    const letter = text(scope, "#ddC");
+    if (letter && result && "id" in result && typeof result.id === "string") {
+      await linkLetterDeadline({ organizationId: ref.organizationId, correspondenceId: letter, deadlineId: result.id });
+    }
     if (result && "remindersScheduled" in result && result.remindersScheduled === false) {
       sub = "Tentative until a licensed consultant confirms it. Reminders weren’t scheduled yet.";
     }

@@ -58,6 +58,7 @@ import {
 } from "./corrections-acts";
 import { openDocReview, reopenDocReview, runDocFile, runDocReview } from "./documents-acts";
 import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
+import { bindGovControls } from "./gov-acts";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { markAllNotificationsRead, openNotification } from "./notification-acts";
@@ -159,6 +160,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     }, listen);
     root.querySelector("#mClose")?.addEventListener("click", shut, listen);
     scrim?.addEventListener("click", shut, listen);
+    // Government status, Submissions and Decisions (T036 to T039): `data-gov` controls and file picks.
+    bindGovControls(root, router, listen);
 
     root.querySelectorAll<HTMLButtonElement>(".grp>button").forEach((button) => {
       button.addEventListener("click", () => {
