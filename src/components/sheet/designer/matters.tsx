@@ -198,7 +198,7 @@ export function SheetMatters({ data }: { data: MattersData }) {
   );
 }
 
-function Field({ id, label, hint, type = "text" }: { id: string; label: string; hint?: string; type?: string }) {
+function Field({ id, label, hint, type = "text", max }: { id: string; label: string; hint?: string; type?: string; max?: string }) {
   return (
     <div className={"fld"}>
       <label htmlFor={id}>{label}</label>
@@ -207,7 +207,7 @@ function Field({ id, label, hint, type = "text" }: { id: string; label: string; 
           {hint}
         </small>
       ) : null}
-      <input className={"inp"} id={id} type={type} autoComplete={"off"} aria-describedby={hint ? `${id}-h` : undefined} />
+      <input className={"inp"} id={id} type={type} autoComplete={"off"} aria-describedby={hint ? `${id}-h` : undefined} min={type === "date" ? "1900-01-01" : undefined} max={max} />
     </div>
   );
 }
@@ -241,8 +241,10 @@ export function NewMatterDialog({ data }: { data: NewMatterDialogData }) {
         ) : null}
         <Field id={"nmA"} label={"Applicant"} />
         <Field id={"nmAE"} label={"Applicant email"} hint={"Optional. Used later for the portal invitation."} type={"email"} />
+        <Field id={"nmAD"} label={"Applicant date of birth"} hint={"Optional. Needed before a portal invitation: only adults get a login."} type={"date"} max={data.maxBirthDate} />
         <Field id={"nmS"} label={"Sponsor"} hint={"Optional. Leave blank if there is no sponsor."} />
         <Field id={"nmSE"} label={"Sponsor email"} hint={"Optional"} type={"email"} />
+        <Field id={"nmSD"} label={"Sponsor date of birth"} hint={"Optional"} type={"date"} max={data.maxBirthDate} />
         <div className={"fld"}>
           <label htmlFor={"nmT"}>{"Program template"}</label>
           <select className={"sel"} id={"nmT"} defaultValue={data.programs[0]?.value ?? ""}>

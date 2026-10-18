@@ -228,9 +228,86 @@ describe("create_client_matter", () => {
   it("is not callable by anon", async () => {
     await asMaintenance(db);
     const grants = await db.query<{ anon: boolean; authenticated: boolean }>(
-      `select has_function_privilege('anon', 'public.create_client_matter(text, text, text, text, uuid, uuid, text)', 'execute') as anon,
-              has_function_privilege('authenticated', 'public.create_client_matter(text, text, text, text, uuid, uuid, text)', 'execute') as authenticated`,
+      `select has_function_privilege('anon', 'public.create_client_matter(text, text, text, text, uuid, uuid, text, date, date)', 'execute') as anon,
+              has_function_privilege('authenticated', 'public.create_client_matter(text, text, text, text, uuid, uuid, text, date, date)', 'execute') as authenticated`,
     );
     expect(grants.rows[0]).toEqual({ anon: false, authenticated: true });
+  });
+
+  it("has one signature in the API, and the retired 7-argument one is not executable", async () => {
+    await asMaintenance(db);
+    const overloads = await db.query<{ args: string; definer: boolean; config: string[] | null }>(
+      `select pg_get_function_identity_arguments(p.oid) as args, p.prosecdef as definer, p.proconfig as config
+       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.proname = 'create_client_matter'`,
+    );
+    expect(overloads.rows).toHaveLength(1);
+    expect(overloads.rows[0].args).toMatch(/p_applicant_date_of_birth date, p_sponsor_date_of_birth date$/);
+    expect(overloads.rows[0].definer).toBe(false);
+    expect(overloads.rows[0].config).toEqual(["search_path=\"\""]);
+    const retired = await db.query<{ anon: boolean; authenticated: boolean; service: boolean }>(
+      `select has_function_privilege('anon', 'app.create_client_matter_retired_20261018(text, text, text, text, uuid, uuid, text)', 'execute') as anon,
+              has_function_privilege('authenticated', 'app.create_client_matter_retired_20261018(text, text, text, text, uuid, uuid, text)', 'execute') as authenticated,
+              has_function_privilege('service_role', 'app.create_client_matter_retired_20261018(text, text, text, text, uuid, uuid, text)', 'execute') as service`,
+    );
+    expect(retired.rows[0]).toEqual({ anon: false, authenticated: false, service: false });
+  });
+
+  it("saves the applicant's and sponsor's dates of birth with day precision", async () => {
+    const ctx = await firm({ sampleMode: false });
+    await asUser(db, { userId: ctx.manager, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const result = await db.query<{ result: Created }>(
+      `select public.create_client_matter(
+         p_applicant_name => 'Ana Pereira', p_applicant_email => null, p_sponsor_name => 'Luis Pereira', p_sponsor_email => null,
+         p_consultant_membership_id => $1, p_applicant_date_of_birth => '1990-05-02', p_sponsor_date_of_birth => '1988-11-30') as result`,
+      [ctx.consultantMembership],
+    );
+    const created = result.rows[0].result;
+    expect(created.ok).toBe(true);
+    const people = await db.query<{ display_name: string; date_of_birth: string; birth_date: string; birth_date_precision: string; is_minor: boolean }>(
+      `select display_name, date_of_birth::text as date_of_birth, birth_date::text as birth_date,
+              birth_date_precision::text as birth_date_precision, is_minor
+       from public.persons where id = any($1::uuid[]) order by display_name`,
+      [[created.applicant_id, created.sponsor_id]],
+    );
+    expect(people.rows).toEqual([
+      { display_name: "Ana Pereira", date_of_birth: "1990-05-02", birth_date: "1990-05-02", birth_date_precision: "day", is_minor: false },
+      { display_name: "Luis Pereira", date_of_birth: "1988-11-30", birth_date: "1988-11-30", birth_date_precision: "day", is_minor: false },
+    ]);
+
+    // Left out, the dates stay unknown.
+    const plain = await create(ctx.manager, ctx.orgId, ["Kofi Mensah", null, null, null, ctx.consultantMembership, null, null]);
+    await asMaintenance(db);
+    const unknown = await db.query<{ date_of_birth: string | null; birth_date_precision: string | null }>(
+      `select date_of_birth, birth_date_precision from public.persons where id = $1`,
+      [plain.applicant_id],
+    );
+    expect(unknown.rows[0]).toEqual({ date_of_birth: null, birth_date_precision: null });
+  });
+
+  it("refuses a future or implausible date of birth, and a sponsor date without a sponsor", async () => {
+    const ctx = await firm({ sampleMode: false });
+    const args = (applicant: string | null, sponsorName: string | null, sponsor: string | null) => [
+      "Someone",
+      null,
+      sponsorName,
+      null,
+      ctx.consultantMembership,
+      null,
+      null,
+      applicant,
+      sponsor,
+    ];
+    const call = async (values: unknown[]) => {
+      await asUser(db, { userId: ctx.manager, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+      return db.query(`select public.create_client_matter($1, $2, $3, $4, $5, $6, $7, $8::date, $9::date)`, values);
+    };
+    await expectDbError(() => call(args("2999-01-01", null, null)), /date of birth is not plausible/);
+    await expectDbError(() => call(args("1850-01-01", null, null)), /date of birth is not plausible/);
+    await expectDbError(() => call(args(null, "Sponsor Person", "2999-01-01")), /date of birth is not plausible/);
+    await expectDbError(() => call(args(null, null, "1980-01-01")), /sponsor name is required with a sponsor date of birth/);
+    await asMaintenance(db);
+    const persons = await db.query<{ n: number }>(`select count(*)::int as n from public.persons where organization_id = $1`, [ctx.orgId]);
+    expect(persons.rows[0].n).toBe(0);
   });
 });

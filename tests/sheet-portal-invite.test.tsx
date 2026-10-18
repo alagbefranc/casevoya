@@ -89,6 +89,18 @@ describe("Invite to the portal dialog", () => {
     expect(html).not.toMatch(/Northline|Priya|Olena|olena\.k/);
   });
 
+  it("adds a hidden Date of birth field in the Designer's field markup only when someone lacks one", () => {
+    const html = renderToStaticMarkup(createElement(MatterInviteDialog, { data: { ...DESIGNER_INVITE, birthDate: { max: "2026-10-18" } } }));
+    expect(html).toContain(
+      '<div class="fld" id="cDF" hidden=""><label for="cD">Date of birth</label><input class="inp" id="cD" type="date" min="1900-01-01" max="2026-10-18" aria-describedby="cD-h"/>',
+    );
+    // Right after the Email field, and nothing else changes.
+    expect(html.replace(/<div class="fld" id="cDF"[\s\S]*?<\/span><\/div>/, "")).toBe(
+      renderToStaticMarkup(createElement(MatterInviteDialog, { data: DESIGNER_INVITE })),
+    );
+    expect(renderToStaticMarkup(createElement(MatterInviteDialog, { data: { ...DESIGNER_INVITE, birthDate: null } }))).not.toContain("cDF");
+  });
+
   it("shows the lock only for a real matter in sample mode", () => {
     const html = renderToStaticMarkup(createElement(MatterInviteDialog, { data: { ...DESIGNER_INVITE, locked: false } }));
     expect(html).not.toContain("locked");
@@ -109,8 +121,18 @@ describe("People tab cards", () => {
       createElement(MatterPeople, { cards: [{ ...card, invite: { personId: PERSON, role: "Applicant", email: "ana@example.test" } }], relationships: [] }),
     );
     expect(html).toContain(
-      `aria-label="Manage Ana Pereira" data-invite-open="1" data-person="${PERSON}" data-role="Applicant" data-email="ana@example.test" data-name="Ana Pereira"`,
+      `aria-label="Manage Ana Pereira" data-invite-open="1" data-person="${PERSON}" data-role="Applicant" data-email="ana@example.test" data-name="Ana Pereira"><svg`,
     );
+  });
+
+  it("marks a person without a date of birth so the dialog asks for it", () => {
+    const html = renderToStaticMarkup(
+      createElement(MatterPeople, {
+        cards: [{ ...card, invite: { personId: PERSON, role: "Applicant", email: "ana@example.test", birthDateMissing: true } }],
+        relationships: [],
+      }),
+    );
+    expect(html).toContain(`data-name="Ana Pereira" data-dob="missing"`);
   });
 });
 
@@ -141,12 +163,25 @@ describe("portal invite helpers", () => {
 
   it("reads what the dialog sends, or the first thing to fix", () => {
     expect(readPortalInvite({ personId: PERSON, roleLabel: "Sponsor", email: " Rafael@Example.Test " })).toEqual({
-      input: { personId: PERSON, role: "sponsor", email: "rafael@example.test" },
+      input: { personId: PERSON, role: "sponsor", email: "rafael@example.test", dateOfBirth: null },
     });
     expect(readPortalInvite({ personId: "", roleLabel: "Sponsor", email: "a@b.co" })).toEqual({ error: "Open the invitation from a person on this matter." });
     expect(readPortalInvite({ personId: PERSON, roleLabel: "Payer", email: "a@b.co" })).toEqual({ error: "Choose their role." });
     expect(readPortalInvite({ personId: PERSON, roleLabel: "Applicant", email: "" })).toEqual({ error: "Add their email address." });
     expect(readPortalInvite({ personId: PERSON, roleLabel: "Applicant", email: "not an email" })).toEqual({ error: "Enter a valid email address." });
+  });
+
+  it("requires a valid date of birth only when the dialog asked for one", () => {
+    const fields = { personId: PERSON, roleLabel: "Applicant", email: "ana@example.test", today: "2026-10-18" };
+    expect(readPortalInvite({ ...fields, dateOfBirth: "1990-04-04" })).toEqual({
+      input: { personId: PERSON, role: "client", email: "ana@example.test", dateOfBirth: "1990-04-04" },
+    });
+    expect(readPortalInvite({ ...fields, dateOfBirth: "" })).toEqual({ error: "Add their date of birth. Only adults get a portal login." });
+    expect(readPortalInvite({ ...fields, dateOfBirth: "2026-10-19" })).toEqual({ error: "The date of birth can’t be in the future." });
+    expect(readPortalInvite({ ...fields, dateOfBirth: "1899-12-31" })).toEqual({ error: "Check the date of birth. It is before 1900." });
+    expect(readPortalInvite({ ...fields, dateOfBirth: "04/04/1990" })).toEqual({ error: "Enter the date of birth as a full date." });
+    expect(readPortalInvite({ ...fields, dateOfBirth: "2001-02-29" })).toEqual({ error: "Enter the date of birth as a full date." });
+    expect(readPortalInvite({ ...fields, dateOfBirth: "2026-10-18" })).toMatchObject({ input: { dateOfBirth: "2026-10-18" } });
   });
 
   it("invites a guardian for the matter's minors, never for themselves", () => {

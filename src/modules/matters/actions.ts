@@ -99,6 +99,8 @@ export async function createClientMatter(input: {
   applicantEmail: string | null;
   sponsorName: string | null;
   sponsorEmail: string | null;
+  applicantDateOfBirth?: string | null;
+  sponsorDateOfBirth?: string | null;
   consultantMembershipId: string;
   rulePackVersionId: string | null;
 }): Promise<{ id: string; reference: string | null } | { error: string }> {
@@ -107,6 +109,8 @@ export async function createClientMatter(input: {
     applicantEmail: input.applicantEmail,
     sponsorName: input.sponsorName,
     sponsorEmail: input.sponsorEmail,
+    applicantDateOfBirth: input.applicantDateOfBirth,
+    sponsorDateOfBirth: input.sponsorDateOfBirth,
     consultant: input.consultantMembershipId,
     program: input.rulePackVersionId,
   });
@@ -122,6 +126,8 @@ export async function createClientMatter(input: {
     p_sponsor_email: read.input.sponsorEmail,
     p_consultant_membership_id: read.input.consultantMembershipId,
     p_rule_pack_version_id: read.input.rulePackVersionId,
+    p_applicant_date_of_birth: read.input.applicantDateOfBirth,
+    p_sponsor_date_of_birth: read.input.sponsorDateOfBirth,
   });
   if (error) return { error: newMatterError(error.message) };
   const result = asRecord(data);

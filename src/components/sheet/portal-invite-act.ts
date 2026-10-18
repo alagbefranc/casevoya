@@ -30,6 +30,13 @@ export function openPortalInvite(button: HTMLElement, root: HTMLElement) {
   if (role && button.dataset.role) role.value = button.dataset.role;
   const email = dialog.querySelector<HTMLInputElement>("#cE");
   if (email) email.value = button.dataset.email ?? "";
+  // The date of birth field is only there when someone on the matter has none, and only shown for them.
+  const birthField = dialog.querySelector<HTMLElement>("#cDF");
+  if (birthField) {
+    birthField.hidden = button.dataset.dob !== "missing";
+    const birth = birthField.querySelector<HTMLInputElement>("#cD");
+    if (birth) birth.value = "";
+  }
   syncPreview(dialog);
   if (role && !role.dataset.wired) {
     role.dataset.wired = "1";
@@ -43,6 +50,13 @@ export function reopenPortalInvite(root: HTMLElement, personId: string | null) {
   if (!personId) return;
   const button = [...root.querySelectorAll<HTMLElement>("[data-invite-open]")].find((item) => item.dataset.person === personId);
   if (button) openPortalInvite(button, root);
+}
+
+/** The typed date of birth when the dialog asks for one, otherwise undefined (not asked). */
+function birthDateValue(dialog: HTMLElement): string | undefined {
+  const field = dialog.querySelector<HTMLElement>("#cDF");
+  if (!field || field.hidden) return undefined;
+  return field.querySelector<HTMLInputElement>("#cD")?.value ?? "";
 }
 
 async function copy(text: string): Promise<boolean> {
@@ -69,6 +83,7 @@ export async function runPortalInvite(button: HTMLElement, router: Router) {
     personId,
     roleLabel: dialog.querySelector<HTMLSelectElement>("#cR")?.value ?? "",
     email: dialog.querySelector<HTMLInputElement>("#cE")?.value ?? "",
+    dateOfBirth: birthDateValue(dialog),
   });
   if ("error" in result) {
     if (needsStepUp(result.error)) {

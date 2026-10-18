@@ -61,10 +61,23 @@ describe("readNewMatter", () => {
         applicantEmail: "ana@example.test",
         sponsorName: null,
         sponsorEmail: null,
+        applicantDateOfBirth: null,
+        sponsorDateOfBirth: null,
         consultantMembershipId: AMARA,
         rulePackVersionId: null,
       },
     });
+  });
+
+  it("passes optional dates of birth and checks them before calling the database", () => {
+    const today = "2026-10-18";
+    const read = readNewMatter({ ...base, sponsorName: "Luis Pereira", applicantDateOfBirth: "1990-05-02", sponsorDateOfBirth: " 1988-11-30 ", today });
+    expect(read).toMatchObject({ input: { applicantDateOfBirth: "1990-05-02", sponsorDateOfBirth: "1988-11-30" } });
+    expect(readNewMatter({ ...base, applicantDateOfBirth: "2026-10-19", today })).toEqual({ error: "Applicant: The date of birth can’t be in the future." });
+    expect(readNewMatter({ ...base, applicantDateOfBirth: "1899-12-31", today })).toEqual({ error: "Applicant: Check the date of birth. It is before 1900." });
+    expect(readNewMatter({ ...base, sponsorName: "Luis", sponsorDateOfBirth: "1990-02-30", today })).toEqual({ error: "Sponsor: Enter the date of birth as a full date." });
+    expect(readNewMatter({ ...base, sponsorDateOfBirth: "1980-01-01", today })).toEqual({ error: "Add the sponsor’s name, or leave the sponsor out." });
+    expect(newMatterError("date of birth is not plausible")).toMatch(/dates of birth/);
   });
 
   it("asks for what is missing before calling the database", () => {
