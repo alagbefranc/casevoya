@@ -21,7 +21,7 @@ const viewer = {
 
 describe("consultation emails (EM16a–c) through the mail worker's renderer", () => {
   it("renders the booking time in the attendee's own zone, with the zone named, and no time in the subject", () => {
-    const booked = renderEmail({ template: "consultation_booked", firm: "Maple Example Immigration", starts_at: "2026-10-22T14:30:00Z", time_zone: "America/Vancouver", consultant_name: "Kim Host" });
+    const booked = renderEmail({ template: "consultation_booked", firm: "Maple Example Immigration", starts_at: "2026-10-22T14:30:00Z", time_zone: "America/Vancouver", consultant_name: "Kim Host", portal: true });
     expect(booked.design).toBe("EM16a");
     expect(booked.subject).toBe("Your consultation with Maple Example Immigration is booked");
     expect(booked.text).toContain("Thursday 22 October 2026, 07:30 (Vancouver time) with Kim Host");
@@ -37,6 +37,59 @@ describe("consultation emails (EM16a–c) through the mail worker's renderer", (
   it("never puts a link from the database into the email", () => {
     const email = renderEmail({ template: "consultation_booked", firm: "Maple", starts_at: "2026-10-22T14:30:00Z", time_zone: "UTC", link: "https://evil.example/x" });
     expect(email.html).not.toContain("evil.example");
+    // Not the meeting link either: the firm sends it.
+    const linked = renderEmail({ template: "consultation_booked", firm: "Maple", starts_at: "2026-10-22T14:30:00Z", time_zone: "UTC", location_kind: "meeting_link", address: "https://meet.example.test/x" });
+    expect(linked.text).toContain("Maple will send you the meeting link.");
+    expect(linked.html).not.toContain("meet.example.test");
+    // A booking page slug that is not a slug is never linked.
+    const odd = renderEmail({ template: "consultation_cancelled", firm: "Maple", starts_at: "2026-10-27T14:30:00Z", time_zone: "UTC", portal: false, booking_page: "../evil.example" });
+    expect(odd.html).not.toContain("evil.example");
+    expect(odd.text).toContain("To book another time, contact Maple.");
+  });
+
+  const at = { starts_at: "2026-10-22T14:30:00Z", time_zone: "America/Toronto", firm: "Maple" };
+  const links = (html: string) => [...html.matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
+
+  it("EM16a: the portal button only for a portal login, and how they meet instead of a joining link", () => {
+    const portal = renderEmail({ template: "consultation_booked", ...at, portal: true, location_kind: "video" });
+    expect(links(portal.html)).toEqual(["https://app.casevoya.ca/portal/appointments"]);
+    expect(portal.text).toContain("Maple will send you the meeting link.");
+    expect(portal.text).not.toContain("To change or cancel");
+
+    const lines: [string, string | null, string][] = [
+      ["phone", null, "Maple will call you at the number you gave."],
+      ["video", null, "Maple will send you the meeting link."],
+      ["meeting_link", null, "Maple will send you the meeting link."],
+      ["in_person", "1 Example Street, Toronto", "At 1 Example Street, Toronto."],
+      ["in_person", null, "Maple will confirm the address."],
+    ];
+    for (const [kind, address, line] of lines) {
+      const email = renderEmail({ template: "consultation_booked", ...at, portal: false, location_kind: kind, address });
+      expect(links(email.html), kind).toEqual([]);
+      expect(email.text, kind).toContain(`${line} To change or cancel, contact Maple.`);
+      expect(`${email.text} ${email.preheader}`, kind).not.toMatch(/joining link|portal/i);
+    }
+  });
+
+  it("EM16b: the portal button only for a portal login; otherwise who to contact", () => {
+    const portal = renderEmail({ template: "consultation_rescheduled", ...at, portal: true });
+    expect(links(portal.html)).toEqual(["https://app.casevoya.ca/portal/appointments"]);
+    const visitor = renderEmail({ template: "consultation_rescheduled", ...at, portal: false });
+    expect(links(visitor.html)).toEqual([]);
+    expect(visitor.text).toContain("Your consultation is now Thursday 22 October 2026, 10:30 (Toronto time). To change or cancel, contact Maple.");
+    expect(`${visitor.text} ${visitor.preheader}`).not.toMatch(/portal/i);
+  });
+
+  it("EM16c: no fee sentence; the portal, else the firm's booking page, else who to contact", () => {
+    const portal = renderEmail({ template: "consultation_cancelled", ...at, portal: true });
+    expect(links(portal.html)).toEqual(["https://app.casevoya.ca/portal/appointments"]);
+    const page = renderEmail({ template: "consultation_cancelled", ...at, portal: false, booking_page: "maple-example" });
+    expect(links(page.html)).toEqual(["https://app.casevoya.ca/book/maple-example"]);
+    expect(page.text).toContain("Book another time");
+    const none = renderEmail({ template: "consultation_cancelled", ...at, portal: false });
+    expect(links(none.html)).toEqual([]);
+    expect(none.text).toContain("was cancelled by Maple. To book another time, contact Maple.");
+    for (const email of [portal, page, none]) expect(email.text).not.toMatch(/fee|refund|credit/i);
   });
 });
 

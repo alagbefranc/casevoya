@@ -58,7 +58,8 @@ export type ConsultationsData = {
   availability?: { hosts: HostPanel[]; calendar: MonthCal; empty?: { title: string; copy: string; action?: Record<string, string> | null } | null };
   booking?: {
     preview: BookingPreview | null;
-    share: { url: string; copy?: string | null; embedNote: boolean } | null;
+    /** note: live only, the practice-page line in sample mode (absent on the Designer render). */
+    share: { url: string; copy?: string | null; embedNote: boolean; note?: string | null } | null;
     /** Live: the firm's booking types (owner edits them). */
     types?: { rows: BookingTypeRow[]; create?: Record<string, string> | null } | null;
     empty?: { title: string; copy: string } | null;
@@ -421,6 +422,11 @@ function Booking({ data }: { data: NonNullable<ConsultationsData["booking"]> }) 
                     {"Copy link"}
                   </button>
                 </div>
+                {data.share.note ? (
+                  <p className={"fp-note"} role={"note"}>
+                    {data.share.note}
+                  </p>
+                ) : null}
                 {data.share.embedNote ? (
                   <p className={"fp-note"}>
                     {"Embed code and the enquiry form are on "}

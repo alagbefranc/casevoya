@@ -66,6 +66,7 @@ import {
 
 import { BookPage, type BookPageData } from "@/components/sheet/designer/book";
 import { BookMarkup } from "@/components/sheet/markup/book";
+import { PRACTICE_NOTICE } from "@/modules/scheduling/format";
 import {
   BookDialog,
   CancelDialog,
@@ -1456,6 +1457,31 @@ describe("Designer fidelity: public booking page", () => {
     expect(html).toContain('role="alert"');
     expect(html).not.toContain("About the fee");
     expect(html).not.toMatch(/Northline|CAD 300|Privacy notice|client account/);
+    expect(html).not.toContain("Practice page");
+  });
+
+  it("marks a practice page (sample mode) with the Sheet's sample-mode line and who can open it", () => {
+    // Documented live-only addition: on a sample-mode firm's practice page, a notice card between
+    // the header and <main> (role="note"). The Designer render and real pages never have it.
+    const html = renderToStaticMarkup(
+      createElement(BookPage, {
+        data: {
+          header: { name: "Maple Immigration" },
+          title: "Initial consultation",
+          lead: "30 minutes with Maple Immigration.",
+          fee: null,
+          slots: [],
+          meet: ["Phone"],
+          note: "This consultation is free.",
+          submit: { label: "Book this time" },
+          footer: { firm: "Maple Immigration", privacyHref: null },
+          practice: { ...PRACTICE_NOTICE },
+          live: { zone: { value: "America/Toronto", options: ["America/Toronto"] }, phone: true, more: false, empty: "Loading times…" },
+        },
+      }),
+    );
+    expect(html).toMatch(/<\/header><div class="card" role="note"[^>]*><b class="demo"[^>]*>Sample mode · practice records are marked sample<\/b>/);
+    expect(html).toContain("Practice page: only your team can open it until your firm is verified. Bookings made here are sample records.");
   });
 });
 
@@ -1595,6 +1621,26 @@ describe("Designer fidelity: Consultations", () => {
       expect(html).toContain('class="emp"');
       expect(html).not.toMatch(/Northline|Amara|Ana Ferreira|Hamid|Yusuf|Daniel|C-02|demo/);
     }
+  });
+
+  it("says on the Booking page tab that a sample-mode firm's link is a practice page", () => {
+    // Documented live-only addition: share.note, a line under the copy-link row (role="note").
+    const link = "https://app.casevoya.ca/book/maple/initial";
+    const html = renderToStaticMarkup(
+      createElement(SheetConsultations, {
+        data: {
+          tab: "booking",
+          booking: {
+            preview: { logo: null, firm: "Maple Immigration", title: "Initial consultation", note: "30 minutes.", chips: [], href: "/book/maple/initial" },
+            share: { url: link, copy: link, embedNote: false, note: PRACTICE_NOTICE.note },
+            types: { rows: [{ title: "Initial consultation", detail: "30 min", state: { tone: "chg", label: "Practice page" } }], create: null },
+          },
+        },
+      }),
+    );
+    expect(html).toContain(`<code style="font-size:13px">${link}</code>`);
+    expect(html).toContain(`<p class="fp-note" role="note">${PRACTICE_NOTICE.note}</p>`);
+    expect(html).toContain("Practice page");
   });
 
   it("wires live rows and dialogs by data attributes, with no Designer toast or sample values", () => {

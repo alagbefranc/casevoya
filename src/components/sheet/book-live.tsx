@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { BookPage, type BookPageData } from "@/components/sheet/designer/book";
-import { COMMON_ZONES, locationLabel, longWhen, safeZone, slotLabel } from "@/modules/scheduling/format";
+import { COMMON_ZONES, PRACTICE_NOTICE, locationLabel, longWhen, safeZone, slotLabel } from "@/modules/scheduling/format";
 import type { BookingSummary, PublicEvent } from "@/modules/scheduling/public-api";
 import { decodeStarts, isTimeZone } from "@/modules/scheduling/slots";
 
@@ -34,6 +34,7 @@ export function bookPageBase(event: PublicEvent, zone: string): Omit<BookPageDat
     meet: [locationLabel(event.locationKind, event.locationDetail)],
     note: "This consultation is free. You’ll get a confirmation email with the time in your timezone.",
     footer: { firm: event.firmName, privacyHref: null },
+    practice: event.practice ? { ...PRACTICE_NOTICE } : null,
   };
 }
 
@@ -66,6 +67,7 @@ function Confirmation({ booking, ics, email, onAgain }: { booking: BookingSummar
         </a>
       ) : null}
       <small style={{ color: "#615d59" }}>{`A confirmation is on its way to ${email}.`}</small>
+      {booking.practice ? <small style={{ color: "#615d59" }}>{"This is a sample booking made on a practice page."}</small> : null}
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
         {ics ? (
           <button className={"btn s sm"} type={"button"} onClick={download}>

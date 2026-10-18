@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { buildWeek, consultationRow, daysSummary, deadlineNote, defaultWeekAnchor, mondayOf, type StaffBooking } from "@/modules/scheduling/sheet-present";
+import {
+  BOOKING_PAGE_PILL,
+  bookingPageState,
+  bookingPagesInOrder,
+  bookingTypeState,
+  buildWeek,
+  consultationRow,
+  daysSummary,
+  deadlineNote,
+  defaultWeekAnchor,
+  mondayOf,
+  type StaffBooking,
+} from "@/modules/scheduling/sheet-present";
 import { longWhen, shortWhen, slotLabel } from "@/modules/scheduling/format";
 import { parseAvailability, slotsFromAvailability } from "@/modules/scheduling/availability";
 
@@ -98,5 +110,24 @@ describe("scheduling: staff presentation", () => {
     expect(staff).toEqual(["2026-10-19T17:00:00.000Z", "2026-10-19T18:00:00.000Z", "2026-10-19T20:00:00.000Z"]);
     expect(slotsFromAvailability(payload!, { ...range, ignoreNotice: true, membershipId: "m2" }).map((ms) => new Date(ms).toISOString())).toEqual(["2026-10-19T20:00:00.000Z"]);
     expect(parseAvailability({ hosts: "x" })).toBeNull();
+  });
+});
+
+describe("scheduling: booking page tab in sample mode", () => {
+  const real = { is_published: true, is_sample: false, slug: "real" };
+  const practice = { is_published: true, is_sample: true, slug: "practice" };
+
+  it("says whether the booking page is live, a practice page or not published", () => {
+    expect(BOOKING_PAGE_PILL[bookingPageState([])]).toBe("Booking page not published");
+    expect(BOOKING_PAGE_PILL[bookingPageState([practice])]).toBe("Practice booking page (team only)");
+    expect(BOOKING_PAGE_PILL[bookingPageState([practice, real])]).toBe("Booking page live");
+  });
+
+  it("shares the real page first, and marks practice types", () => {
+    expect(bookingPagesInOrder([practice, real]).map((t) => t.slug)).toEqual(["real", "practice"]);
+    expect(bookingTypeState(practice)).toEqual({ tone: "chg", label: "Practice page" });
+    expect(bookingTypeState(real)).toEqual({ tone: "ok", label: "Published" });
+    expect(bookingTypeState({ is_published: false, is_sample: true })).toEqual({ tone: "gr", label: "Sample" });
+    expect(bookingTypeState({ is_published: false, is_sample: false })).toEqual({ tone: "gr", label: "Not published" });
   });
 });

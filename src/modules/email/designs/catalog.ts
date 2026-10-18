@@ -7,7 +7,8 @@
  *
  * Links are built here from the app origin and fixed app paths. The one exception is an
  * invitation's private accept link, which the mail worker opens from its sealed form and passes in
- * (acceptUrl); it is used only when it is an absolute http(s) URL.
+ * (acceptUrl); it is used only when it is an absolute http(s) URL. EM16c may link to the firm's
+ * public booking page, /book/<firm slug>, where the slug must match the firm slug pattern.
  */
 import { appLink, cleanText, safeUrl, type Brand, type EmailCopy, type Spot } from "@/modules/email/designs/layout";
 import {
@@ -36,6 +37,8 @@ export const PATHS = {
   portalPayments: "/portal/payments",
   portalMessages: "/portal/messages",
   portalAppointments: "/portal/appointments",
+  /** The firm's public booking pages: /book/<firm slug>. */
+  book: "/book",
   sheetAgreements: "/sheet/agreements",
   sheetTasks: "/sheet/tasks",
   sheetGrants: "/sheet/grants",
@@ -64,9 +67,18 @@ export type EmailContexts = {
   EM14b: FirmContext;
   EM14c: FirmContext & { dueOn?: string | null };
   EM15: FirmContext & { consultantName?: string | null };
-  EM16a: FirmContext & { startsAt?: string | null; timeZone?: string | null; consultantName?: string | null };
-  EM16b: FirmContext & { startsAt?: string | null; timeZone?: string | null };
-  EM16c: FirmContext & { startsAt?: string | null; timeZone?: string | null };
+  /** portal: the attendee's person has a portal login (only then a portal button). */
+  EM16a: FirmContext & {
+    startsAt?: string | null;
+    timeZone?: string | null;
+    consultantName?: string | null;
+    portal?: boolean;
+    locationKind?: string | null;
+    address?: string | null;
+  };
+  EM16b: FirmContext & { startsAt?: string | null; timeZone?: string | null; portal?: boolean };
+  /** bookingPage: the firm's slug when it has a booking page this attendee can use (no portal). */
+  EM16c: FirmContext & { startsAt?: string | null; timeZone?: string | null; portal?: boolean; bookingPage?: string | null };
   EM17: FirmContext & { approverName?: string | null; minutes?: number | null; endsAt?: string | null; timeZone?: string | null };
   EM18a: FirmContext;
   EM18b: FirmContext & { daysPastDue?: number | null };
@@ -139,6 +151,39 @@ function copy(
 function invoiceHref(origin: string, invoiceId: string | null | undefined): string | null {
   const id = uuidOrNull(invoiceId);
   return appLink(origin, id ? `${PATHS.portalPayments}?invoice=${id}` : PATHS.portalPayments);
+}
+
+/**
+ * EM16a: how they meet, from the booking's location kind. A meeting link itself is never put in
+ * the email (the firm sends it); an in-person address is plain text.
+ */
+function meetingLine(firmName: string, kind: string | null | undefined, address: string | null | undefined): string {
+  switch (kind) {
+    case "phone":
+      return `${firmName} will call you at the number you gave.`;
+    case "video":
+    case "meeting_link":
+      return `${firmName} will send you the meeting link.`;
+    case "in_person": {
+      const where = cleanText(address ?? "", 300).replace(/\.$/, "");
+      return where ? `At ${where}.` : `${firmName} will confirm the address.`;
+    }
+    default:
+      return "";
+  }
+}
+
+/** The last line for an attendee with no portal. */
+function contactToChange(firmName: string): string {
+  return `To change or cancel, contact ${firmName}.`;
+}
+
+const FIRM_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+
+/** The firm's public booking page, built from the fixed app path /book/<firm slug>. */
+function bookingPageHref(origin: string, firmSlug: string | null | undefined): string | null {
+  const slug = typeof firmSlug === "string" ? firmSlug.trim() : "";
+  return FIRM_SLUG.test(slug) ? appLink(origin, `${PATHS.book}/${slug}`) : null;
 }
 
 const SYNTHETIC_FIRM = "Maple Example Immigration";
@@ -542,21 +587,32 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
     name: "Consultation booked",
     audience: "client",
     brand: "firm",
-    trigger: "A consultation is booked on the public booking page or by staff (outbox booking.confirmed, template consultation_booked), to the attendee. Honours email_notices when linked to a person",
+    trigger:
+      "A consultation is booked on the public booking page (or a practice page in sample mode) or by staff (outbox booking.confirmed, template consultation_booked), to the attendee. Honours email_notices when linked to a person. The portal button only for an attendee whose person has a portal login",
     status: "wired",
     ctaTarget: PATHS.portalAppointments,
-    mergeFields: ["firm_name", "starts_at", "time_zone", "consultant_name"],
-    sample: { firmName: SYNTHETIC_FIRM, startsAt: "2026-10-22T14:30:00Z", timeZone: "America/Toronto", consultantName: "Sam Example" },
+    mergeFields: ["firm_name", "starts_at", "time_zone", "consultant_name", "portal", "location_kind", "address"],
+    sample: {
+      firmName: SYNTHETIC_FIRM,
+      startsAt: "2026-10-22T14:30:00Z",
+      timeZone: "America/Toronto",
+      consultantName: "Sam Example",
+      portal: true,
+      locationKind: "phone",
+    },
     build(context, origin) {
+      const firmName = firm(context);
       const when = dateTimeIn(context.startsAt, context.timeZone);
       const consultant = name(context.consultantName);
       const lead = when ? `${when} (${zoneLabel(context.timeZone)})` : "Your consultation";
+      const meet = meetingLine(firmName, context.locationKind, context.address);
+      const end = context.portal ? "" : ` ${contactToChange(firmName)}`;
       return copy({
-        subject: `Your consultation with ${firm(context)} is booked`,
-        preheader: "Details and the joining link are in your portal.",
+        subject: `Your consultation with ${firmName} is booked`,
+        preheader: "Here’s when, and how you’ll meet.",
         heading: "Your consultation is booked",
-        body: `${lead}${consultant ? ` with ${consultant}` : ""}. Details and the joining link are in your portal.`,
-        cta: cta("View booking", appLink(origin, PATHS.portalAppointments)),
+        body: `${lead}${consultant ? ` with ${consultant}` : ""}.${meet ? ` ${meet}` : ""}${end}`,
+        cta: context.portal ? cta("View booking", appLink(origin, PATHS.portalAppointments)) : null,
         spot: "reminder",
         brand: firmBrand(context),
       });
@@ -567,21 +623,26 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
     name: "Consultation rescheduled",
     audience: "client",
     brand: "firm",
-    trigger: "Staff move a confirmed consultation (outbox booking.rescheduled, template consultation_rescheduled), to the attendee",
+    trigger:
+      "Staff move a confirmed consultation (outbox booking.rescheduled, template consultation_rescheduled), to the attendee. The portal button only for an attendee whose person has a portal login",
     status: "wired",
     ctaTarget: PATHS.portalAppointments,
-    mergeFields: ["firm_name", "starts_at", "time_zone"],
-    sample: { firmName: SYNTHETIC_FIRM, startsAt: "2026-10-27T14:30:00Z", timeZone: "America/Toronto" },
+    mergeFields: ["firm_name", "starts_at", "time_zone", "portal"],
+    sample: { firmName: SYNTHETIC_FIRM, startsAt: "2026-10-27T14:30:00Z", timeZone: "America/Toronto", portal: true },
     build(context, origin) {
+      const firmName = firm(context);
       const when = dateTimeIn(context.startsAt, context.timeZone);
+      const moved = when ? `Your consultation is now ${when} (${zoneLabel(context.timeZone)}).` : "Your consultation has a new time.";
       return copy({
-        subject: `Your appointment with ${firm(context)} moved`,
-        preheader: "The new time is in your portal.",
+        subject: `Your appointment with ${firmName} moved`,
+        preheader: context.portal ? "The new time is in your portal." : "Here’s the new time.",
         heading: "Your appointment moved",
-        body: when
-          ? `Your consultation is now ${when} (${zoneLabel(context.timeZone)}). Your reminders moved too.`
-          : "Your consultation has a new time. It’s in your portal, and your reminders moved too.",
-        cta: cta("View booking", appLink(origin, PATHS.portalAppointments)),
+        body: context.portal
+          ? when
+            ? `${moved} Your reminders moved too.`
+            : "Your consultation has a new time. It’s in your portal, and your reminders moved too."
+          : `${moved} ${contactToChange(firmName)}`,
+        cta: context.portal ? cta("View booking", appLink(origin, PATHS.portalAppointments)) : null,
         spot: "reminder",
         brand: firmBrand(context),
       });
@@ -592,21 +653,28 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
     name: "Consultation cancelled",
     audience: "client",
     brand: "firm",
-    trigger: "Staff cancel an upcoming confirmed consultation (outbox booking.cancelled, template consultation_cancelled), to the attendee",
+    trigger:
+      "Staff cancel an upcoming confirmed consultation (outbox booking.cancelled, template consultation_cancelled), to the attendee. Portal attendees get the portal button; others get the firm's booking page when it has a published one they can use, otherwise no button",
     status: "wired",
     ctaTarget: PATHS.portalAppointments,
-    mergeFields: ["firm_name", "starts_at", "time_zone"],
-    sample: { firmName: SYNTHETIC_FIRM, startsAt: "2026-10-27T14:30:00Z", timeZone: "America/Toronto" },
+    mergeFields: ["firm_name", "starts_at", "time_zone", "portal", "booking_page"],
+    sample: { firmName: SYNTHETIC_FIRM, startsAt: "2026-10-27T14:30:00Z", timeZone: "America/Toronto", portal: true },
     build(context, origin) {
       const firmName = firm(context);
       const when = dateTimeIn(context.startsAt, context.timeZone);
       const which = when ? `Your consultation on ${when} (${zoneLabel(context.timeZone)})` : "Your consultation";
+      const page = context.portal ? null : bookingPageHref(origin, context.bookingPage);
+      const href = context.portal ? appLink(origin, PATHS.portalAppointments) : page;
       return copy({
         subject: `${firmName} cancelled your consultation`,
-        preheader: "You can book another time in your portal.",
+        preheader: context.portal
+          ? "You can book another time in your portal."
+          : page
+            ? "You can book another time online."
+            : "To book another time, contact the firm.",
         heading: "Your consultation was cancelled",
-        body: `${which} was cancelled by ${firmName}. Any booking fee is refunded or kept as credit, as shown in your portal.`,
-        cta: cta("Book another time", appLink(origin, PATHS.portalAppointments)),
+        body: `${which} was cancelled by ${firmName}.${href ? "" : ` To book another time, contact ${firmName}.`}`,
+        cta: href ? cta("Book another time", href) : null,
         spot: "reminder",
         brand: firmBrand(context),
       });

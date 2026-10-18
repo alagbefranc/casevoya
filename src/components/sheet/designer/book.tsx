@@ -7,7 +7,9 @@
  * Live pages add, inside the same form: `data-live="1"` (the Sheet's form guard), a "Later times"
  * button under the slots, the booker's time-zone picker (PRD: confirm timezone), a phone field
  * for phone consultations, a hidden honeypot field and an error line. A free consultation has no
- * fee card. After booking, the form is replaced by the confirmation card.
+ * fee card. After booking, the form is replaced by the confirmation card. A sample-mode firm's
+ * practice page (open only to the firm's staff) adds a notice card under the header: the Sheet's
+ * sample-mode line ("Sample mode · practice records are marked sample") and who can open it.
  */
 import type { FormEvent, ReactNode } from "react";
 
@@ -29,6 +31,8 @@ export type BookPageData = {
   note: string;
   submit: { label: string; busy?: boolean };
   footer: { firm: string; privacyHref?: string | null };
+  /** Live only: a practice page in sample mode. Absent on the Designer render and on real pages. */
+  practice?: { label: string; detail: string; note: string } | null;
   /** Live wiring; absent on the Designer render. */
   live?: {
     zone: { value: string; options: string[] };
@@ -62,6 +66,14 @@ export function BookPage({ data }: { data: BookPageData }) {
             <span>{data.header.name}</span>
           )}
         </header>
+        {data.practice ? (
+          <div className={"card"} role={"note"} style={{ marginBottom: "24px", maxWidth: "640px" }}>
+            <b className={"demo"} style={{ fontWeight: "600", color: "#a15c00" }}>
+              {`${data.practice.label} · ${data.practice.detail}`}
+            </b>
+            <small style={{ color: "#615d59" }}>{data.practice.note}</small>
+          </div>
+        ) : null}
         <main id={"m"}>
           <div>
             <h1>{data.title}</h1>

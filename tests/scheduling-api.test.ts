@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { decodeStarts } from "@/modules/scheduling/slots";
 import { buildIcs, icsText } from "@/modules/scheduling/ics";
-import { clientHash, getPublicSlots, postPublicHold, type HoldArgs, type PublicDeps } from "@/modules/scheduling/public-api";
+import { clientHash, getPublicEvent, getPublicSlots, postPublicHold, type HoldArgs, type PublicDeps } from "@/modules/scheduling/public-api";
 
 const NOW = Date.parse("2026-10-19T12:00:00Z"); // Monday 08:00 in Toronto
 const EVENT = {
@@ -141,6 +141,37 @@ describe("public booking API", () => {
     expect(result.body.ics).toBeNull();
     const reused = deps({ hold: async () => Promise.reject(new Error("idempotency key reused for a different booking")) });
     expect((await postPublicHold(reused, "synthetic", "initial", goodBody(), null)).status).toBe(409);
+  });
+
+  it("serves a practice page (sample mode) like any page, but never to a shared cache", async () => {
+    const practice = deps({ event: async () => ({ ...EVENT, practice: true }) });
+    const event = await getPublicEvent(practice, "synthetic", "initial");
+    expect(event.status).toBe(200);
+    expect((event.body.event as { practice: boolean }).practice).toBe(true);
+    expect(event.headers?.["Cache-Control"]).toBe("private, no-store");
+    const slots = await getPublicSlots(practice, "synthetic", "initial", { from: "2026-10-19T00:00:00Z", to: "2026-10-20T00:00:00Z" });
+    expect(slots.status).toBe(200);
+    expect(slots.headers?.["Cache-Control"]).toBe("private, no-store");
+    // A real page keeps its short public cache and says it is not a practice page.
+    const real = await getPublicEvent(deps(), "synthetic", "initial");
+    expect((real.body.event as { practice: boolean }).practice).toBe(false);
+    expect(real.headers?.["Cache-Control"]).toBe("public, max-age=30");
+    // Someone the database does not show the practice page to gets the unpublished page's answer.
+    const hidden = deps({ event: async () => null });
+    const unpublished = await getPublicEvent(hidden, "synthetic", "initial");
+    expect(unpublished).toEqual(await getPublicEvent(deps({ event: async () => null }), "synthetic", "other"));
+    expect(unpublished.status).toBe(404);
+    expect((await postPublicHold(hidden, "synthetic", "initial", goodBody(), null)).status).toBe(404);
+    // A booking made on a practice page says it is a sample.
+    const booked = await postPublicHold(
+      deps({ event: async () => ({ ...EVENT, practice: true }), hold: async (args) => ({ ...(await deps().hold(args) as object), practice: true }) }),
+      "synthetic",
+      "initial",
+      goodBody(),
+      null,
+    );
+    expect(booked.status).toBe(201);
+    expect((booked.body.booking as { practice: boolean }).practice).toBe(true);
   });
 
   it("hashes the client address; nothing raw is sent", async () => {

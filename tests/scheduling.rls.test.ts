@@ -73,12 +73,24 @@ async function firm(options: { sample?: boolean; hosts?: number } = {}) {
 
 type Ctx = Awaited<ReturnType<typeof firm>>;
 
-async function eventType(ctx: Ctx, options: { publish?: boolean; capacity?: number | null; slug?: string; notice?: number } = {}) {
+async function eventType(
+  ctx: Ctx,
+  options: { publish?: boolean; capacity?: number | null; slug?: string; notice?: number; kind?: string; detail?: string | null } = {},
+) {
   await asUser(db, owner(ctx));
   const row = await db.query<{ id: string }>(
     `select public.save_booking_event_type($1, null, null, 'Initial consultation', $2, null, 30, null, 15, 15, $3, 60, $4,
-       'video', null, $5::uuid[], $6) as id`,
-    [ctx.orgId, options.slug ?? "initial", options.notice ?? 60, options.capacity ?? null, ctx.hosts.map((h) => h.membershipId), options.publish ?? true],
+       $7::public.booking_location_kind, $8, $5::uuid[], $6) as id`,
+    [
+      ctx.orgId,
+      options.slug ?? "initial",
+      options.notice ?? 60,
+      options.capacity ?? null,
+      ctx.hosts.map((h) => h.membershipId),
+      options.publish ?? true,
+      options.kind ?? "video",
+      options.detail ?? null,
+    ],
   );
   return row.rows[0].id;
 }
@@ -93,10 +105,15 @@ async function localStart(days: number, time = "10:00"): Promise<string> {
   return row.rows[0].at;
 }
 
-type Summary = { public_ref: string; status: string; starts_at: string; time_zone: string; title: string; firm_name: string; location_detail: string | null };
+type Summary = { public_ref: string; status: string; starts_at: string; time_zone: string; title: string; firm_name: string; location_detail: string | null; practice: boolean };
 
-async function hold(ctx: Ctx, start: string, options: { email?: string; key?: string; hash?: string | null; event?: string; as?: string } = {}) {
-  if (options.as) await asUser(db, { userId: options.as, aal: "aal1" });
+async function hold(
+  ctx: Ctx,
+  start: string,
+  options: { email?: string; key?: string; hash?: string | null; event?: string; as?: string; session?: Parameters<typeof asUser>[1] } = {},
+) {
+  if (options.session) await asUser(db, options.session);
+  else if (options.as) await asUser(db, { userId: options.as, aal: "aal1" });
   else await asAnon(db);
   const row = await db.query<{ result: Summary & { error?: string } }>(
     `select public.booking_public_hold($1, $2, $3::timestamptz, 'Sam Example', $4, null, 'America/Vancouver', $5, $6) as result`,
@@ -311,12 +328,16 @@ describe("scheduling: public booking page", () => {
     await expectDbError(() => hold(ctx, start, { hash }), /booking_rate_limited/);
   });
 
-  it("does not publish while the firm is in sample mode, and a paid type can never be published", async () => {
+  it("publishes a sample-mode firm's type as a sample row (a practice page); a paid type can never be published", async () => {
     const sampleFirm = await firm({ sample: true });
-    await expectDbError(() => eventType(sampleFirm), /sample mode/);
-    const id = await eventType(sampleFirm, { publish: false });
+    const id = await eventType(sampleFirm);
     await asMaintenance(db);
-    expect((await db.query<{ is_sample: boolean }>(`select is_sample from public.booking_event_types where id = $1`, [id])).rows[0].is_sample).toBe(true);
+    expect((await db.query<{ is_sample: boolean; is_published: boolean }>(`select is_sample, is_published from public.booking_event_types where id = $1`, [id])).rows[0]).toEqual({
+      is_sample: true,
+      is_published: true,
+    });
+    // A practice page is still free only.
+    await expectDbError(() => db.query(`update public.booking_event_types set price_cents = 30000 where id = $1`, [id]), /booking_event_types_paid_not_published/);
 
     const ctx = await firm();
     const typeId = await eventType(ctx);
@@ -341,6 +362,156 @@ describe("scheduling: public booking page", () => {
     await db.query(`select public.save_availability($1, $2, $3, $4::jsonb, '[{"date":"2030-01-01","start":null,"end":null}]'::jsonb)`, [ctx.orgId, host.membershipId, TZ, JSON.stringify(EVERY_DAY)]);
     await expectDbError(() => db.query(`select public.save_availability($1, $2, 'Mars/Base', '[]'::jsonb, '[]'::jsonb)`, [ctx.orgId, host.membershipId]), /time zone/);
     await expectDbError(() => db.query(`select public.save_availability($1, $2, $3, '[{"weekday":1,"start":"17:00","end":"09:00"}]'::jsonb, '[]'::jsonb)`, [ctx.orgId, host.membershipId, TZ]), /end after its start/);
+  });
+});
+
+describe("scheduling: practice booking pages (sample mode)", () => {
+  const staffSession = (ctx: Ctx) => ({ userId: ctx.owner.id, aal: "aal2" as const, totpAgeSeconds: 0 });
+
+  async function publicView(firmSlug: string, typeId: string) {
+    const event = (await db.query<{ e: Record<string, unknown> | null }>(`select public.booking_public_event($1, 'initial') as e`, [firmSlug])).rows[0].e;
+    const list = (await db.query<{ l: { types: Record<string, unknown>[] } | null }>(`select public.booking_public_event_types($1) as l`, [firmSlug])).rows[0].l;
+    let busy: string;
+    try {
+      await db.query(`select public.booking_public_busy($1, now(), now() + interval '7 days')`, [typeId]);
+      busy = "ok";
+    } catch (error) {
+      busy = error instanceof Error ? error.message : String(error);
+    }
+    return { event, types: list?.types ?? [], busy };
+  }
+
+  async function prepareMail(eventType: string, orgId: string) {
+    await asServiceRole(db);
+    const worker = `worker-${randomUUID().slice(0, 8)}`;
+    const claimed = (await db.query<{ c: { id: string; event_type: string; organization_id: string }[] }>(`select public.claim_mail_events($1, 50) as c`, [worker])).rows[0].c;
+    const event = claimed.find((row) => row.event_type === eventType && row.organization_id === orgId);
+    expect(event, eventType).toBeTruthy();
+    return (await db.query<{ p: { action: string; messages: { to: string; context: Record<string, unknown> }[] } }>(`select public.prepare_email_delivery($1, $2) as p`, [event!.id, worker])).rows[0].p;
+  }
+
+  it("hides a practice page from anonymous visitors, other firms, the firm's portal clients and staff without MFA, exactly like an unpublished page", async () => {
+    const ctx = await firm({ sample: true });
+    const typeId = await eventType(ctx);
+    // An unpublished type is the baseline: what a visitor sees must be the same, so nothing leaks.
+    const real = await firm();
+    const hiddenId = await eventType(real, { publish: false });
+    await asAnon(db);
+    const unpublished = await publicView(real.firmSlug, hiddenId);
+    expect(unpublished).toMatchObject({ event: null, types: [] });
+    expect(unpublished.busy).toMatch(/booking type not found/);
+
+    const other = await firm();
+    const client = await createUser("client", "Synthetic Client");
+    await membership(ctx.orgId, client.id, "client");
+    await asMaintenance(db);
+    await db.query(`insert into public.persons (organization_id, user_id, display_name, email, is_sample) values ($1, $2, 'Synthetic Client', $3, true)`, [
+      ctx.orgId,
+      client.id,
+      client.email,
+    ]);
+    const viewers: [string, () => Promise<void>][] = [
+      ["anonymous", () => asAnon(db)],
+      ["another firm's owner", () => asUser(db, { userId: other.owner.id, aal: "aal2", totpAgeSeconds: 0 })],
+      ["another firm's owner pointing at this firm", () => asUser(db, { userId: other.owner.id, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 })],
+      ["the firm's portal client", () => asUser(db, { userId: client.id, aal: "aal1", orgId: ctx.orgId })],
+      ["the firm's owner without MFA", () => asUser(db, { userId: ctx.owner.id, aal: "aal1" })],
+    ];
+    for (const [who, as] of viewers) {
+      await as();
+      const view = await publicView(ctx.firmSlug, typeId);
+      expect(view.event, who).toBeNull();
+      expect(view.types, who).toEqual([]);
+      expect(view.busy, who).toMatch(/booking type not found/);
+      await expectDbError(
+        () =>
+          db.query(`select public.booking_public_hold($1, 'initial', now() + interval '3 days', 'Sam Example', 'sam@example.test', null, 'UTC', $2, null)`, [
+            ctx.firmSlug,
+            randomUUID(),
+          ]),
+        /booking type not found/,
+      );
+    }
+    await asMaintenance(db);
+    expect((await db.query(`select 1 from public.bookings where organization_id = $1`, [ctx.orgId])).rows).toHaveLength(0);
+  });
+
+  it("opens a practice page to the firm's staff and books it as a sample booking, with the same checks", async () => {
+    const ctx = await firm({ sample: true });
+    const typeId = await eventType(ctx, { capacity: 1 });
+    // Any active staff member with MFA may open it, without choosing a workspace.
+    for (const session of [staffSession(ctx), { userId: ctx.hosts[0].user.id, aal: "aal2" as const, totpAgeSeconds: 0 }]) {
+      await asUser(db, session);
+      const view = await publicView(ctx.firmSlug, typeId);
+      expect(view.event).toMatchObject({ title: "Initial consultation", practice: true, price_cents: 0 });
+      expect(view.types).toEqual([expect.objectContaining({ slug: "initial", practice: true })]);
+      expect(view.busy).toBe("ok");
+    }
+
+    const start = await localStart(3);
+    const key = randomUUID();
+    const summary = await hold(ctx, start, { session: staffSession(ctx), key, email: "practice@example.test" });
+    expect(summary).toMatchObject({ status: "confirmed", practice: true });
+    // Idempotency: the same key returns the same booking.
+    expect((await hold(ctx, start, { session: staffSession(ctx), key, email: "practice@example.test" })).public_ref).toBe(summary.public_ref);
+    // The slot, the daily limit and the working hours hold as on a real page.
+    await expectDbError(() => hold(ctx, start, { session: staffSession(ctx), email: "again@example.test" }), /slot_unavailable/);
+    await expectDbError(async () => hold(ctx, await localStart(3, "14:00"), { session: staffSession(ctx), email: "again@example.test" }), /slot_unavailable/);
+    await expectDbError(async () => hold(ctx, await localStart(4, "20:00"), { session: staffSession(ctx), email: "again@example.test" }), /slot_unavailable/);
+
+    await asMaintenance(db);
+    const booking = (await db.query<{ id: string; is_sample: boolean; source: string; person_id: string | null }>(
+      `select id, is_sample, source, person_id from public.bookings where public_ref = $1`,
+      [summary.public_ref],
+    )).rows[0];
+    expect(booking).toMatchObject({ is_sample: true, source: "public", person_id: null });
+    expect((await db.query(`select 1 from public.bookings where organization_id = $1`, [ctx.orgId])).rows).toHaveLength(1);
+    // The attendee and history rows belong to the sample booking.
+    expect((await db.query(`select 1 from public.booking_attendees where booking_id = $1`, [booking.id])).rows).toHaveLength(1);
+    const kinds = (await db.query<{ kind: string }>(`select kind from public.booking_events where booking_id = $1 order by created_at`, [booking.id])).rows.map((r) => r.kind);
+    expect(kinds).toEqual(["held", "confirmed"]);
+    // Sample mail goes out like every other sample record's mail.
+    const prepared = await prepareMail("booking.confirmed", ctx.orgId);
+    expect(prepared.action).toBe("send");
+    expect(prepared.messages[0]).toMatchObject({ to: "practice@example.test" });
+    expect(prepared.messages[0].context).toMatchObject({ portal: false, location_kind: "video" });
+  });
+
+  it("leaves a real firm's page as it was: open to everyone, real bookings, practice false", async () => {
+    const ctx = await firm();
+    await eventType(ctx);
+    await asAnon(db);
+    expect((await db.query<{ e: Record<string, unknown> }>(`select public.booking_public_event($1, 'initial') as e`, [ctx.firmSlug])).rows[0].e).toMatchObject({ practice: false });
+    const summary = await hold(ctx, await localStart(4));
+    expect(summary.practice).toBe(false);
+    await asMaintenance(db);
+    expect((await db.query<{ is_sample: boolean }>(`select is_sample from public.bookings where public_ref = $1`, [summary.public_ref])).rows[0].is_sample).toBe(false);
+  });
+
+  it("gives the mail how they meet, the in-person address, portal only for a portal login, and the booking page on a cancellation", async () => {
+    const ctx = await firm();
+    await eventType(ctx, { kind: "in_person", detail: "1 Example Street, Toronto" });
+    const client = await createUser("client", "Synthetic Client");
+    await membership(ctx.orgId, client.id, "client");
+    await asMaintenance(db);
+    await db.query(`insert into public.persons (organization_id, user_id, display_name, email) values ($1, $2, 'Synthetic Client', $3)`, [ctx.orgId, client.id, client.email]);
+
+    await hold(ctx, await localStart(19), { as: client.id, email: client.email });
+    const portalMail = await prepareMail("booking.confirmed", ctx.orgId);
+    expect(portalMail.messages[0].context).toMatchObject({ portal: true, location_kind: "in_person", address: "1 Example Street, Toronto" });
+
+    const visitor = await hold(ctx, await localStart(19, "14:00"), { email: "visitor@example.test" });
+    const visitorMail = await prepareMail("booking.confirmed", ctx.orgId);
+    expect(visitorMail.messages[0]).toMatchObject({ to: "visitor@example.test" });
+    expect(visitorMail.messages[0].context).toMatchObject({ portal: false, location_kind: "in_person" });
+
+    await asMaintenance(db);
+    const id = (await db.query<{ id: string }>(`select id from public.bookings where public_ref = $1`, [visitor.public_ref])).rows[0].id;
+    await asUser(db, owner(ctx));
+    await db.query(`select public.staff_cancel_booking($1, $2, null, null)`, [ctx.orgId, id]);
+    const cancelled = await prepareMail("booking.cancelled", ctx.orgId);
+    expect(cancelled.messages[0].context).toMatchObject({ portal: false, booking_page: ctx.firmSlug });
+    expect(cancelled.messages[0].context).not.toHaveProperty("address");
   });
 });
 

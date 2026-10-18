@@ -455,6 +455,10 @@ normalises to `booking_fee.succeeded` / `booking_fee.failed`. `record_stripe_eve
 - Sample mode renders a fixed fictional firm calendar, slots and a fake call screen. It makes no Stripe or LiveKit
   calls; the token endpoint returns 404 and the Payment Element is replaced by a static mock.
 - Live mode never shows sample rows. Empty states read "No booking types yet" and similar.
+- **Practice pages** (docs/DECISIONS.md, 2026-10-18; `20261019190000_booking_practice_pages.sql`): a firm in
+  sample mode may publish a booking type as a sample row. Its public page and APIs answer only the firm's own
+  signed-in staff (with MFA); everyone else gets the unpublished page's 404. Bookings made there are sample
+  bookings, with every usual check, and their mail is sent like other sample records' mail.
 
 ## 10. Delivery plan (suggested PR slices)
 1. Migrations, enums, RPCs, RLS, PGlite tests.

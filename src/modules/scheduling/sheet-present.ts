@@ -127,3 +127,28 @@ export function deadlineNote(dueAt: string | null, zone: string, verified: boole
   const at = Date.parse(dueAt);
   return { left: state, right: `${clock(at, zone)} ${zoneAbbr(at, zone)}` };
 }
+
+/** Booking page tab: a published sample type is a practice page (staff only, sample bookings). */
+export type BookingPageState = "live" | "practice" | "none";
+
+export const BOOKING_PAGE_PILL: Record<BookingPageState, string> = {
+  live: "Booking page live",
+  practice: "Practice booking page (team only)",
+  none: "Booking page not published",
+};
+
+/** Published types with real pages first, so the share link is the real page when one exists. */
+export function bookingPagesInOrder<T extends { is_sample: boolean }>(published: T[]): T[] {
+  return [...published.filter((type) => !type.is_sample), ...published.filter((type) => type.is_sample)];
+}
+
+export function bookingPageState(published: { is_sample: boolean }[]): BookingPageState {
+  if (published.some((type) => !type.is_sample)) return "live";
+  return published.length ? "practice" : "none";
+}
+
+/** The chip on a booking type row. */
+export function bookingTypeState(type: { is_published: boolean; is_sample: boolean }): Chip {
+  if (type.is_published) return type.is_sample ? { tone: "chg", label: "Practice page" } : { tone: "ok", label: "Published" };
+  return type.is_sample ? { tone: "gr", label: "Sample" } : { tone: "gr", label: "Not published" };
+}
