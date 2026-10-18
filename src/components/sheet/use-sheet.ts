@@ -34,6 +34,17 @@ import {
   runVerify,
   syncFundsLedger,
 } from "./funds-acts";
+import {
+  copyLink,
+  openAvailability,
+  openBooking,
+  openBookingType,
+  runAvailability,
+  runBookingSubmit,
+  runBookingType,
+  runOutcome,
+  syncBookTimes,
+} from "./booking-acts";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { runNewTask, syncNewTask } from "./new-task-act";
@@ -350,6 +361,62 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         void runPublishPolicy(policy, router).finally(() => policy.removeAttribute("aria-busy"));
         return;
       }
+      // Consultations: row actions, the booking dialogs, working hours and booking types.
+      const bookingOpen = target.closest<HTMLElement>("[data-booking-open]");
+      if (bookingOpen && root.contains(bookingOpen)) {
+        event.preventDefault();
+        void openBooking(bookingOpen, root, openDialog);
+        return;
+      }
+      const busyRun = (button: HTMLElement, run: () => Promise<void>) => {
+        if (button.getAttribute("aria-busy") === "true") return;
+        button.setAttribute("aria-busy", "true");
+        void run().finally(() => button.removeAttribute("aria-busy"));
+      };
+      const bookingSubmit = target.closest<HTMLElement>("[data-booking-submit]");
+      if (bookingSubmit && root.contains(bookingSubmit)) {
+        event.preventDefault();
+        busyRun(bookingSubmit, () => runBookingSubmit(bookingSubmit, router));
+        return;
+      }
+      const outcome = target.closest<HTMLElement>("[data-booking-outcome]");
+      if (outcome && root.contains(outcome)) {
+        event.preventDefault();
+        busyRun(outcome, () => runOutcome(outcome, router));
+        return;
+      }
+      const availOpen = target.closest<HTMLElement>("[data-avail-open]");
+      if (availOpen && root.contains(availOpen)) {
+        event.preventDefault();
+        openAvailability(availOpen, root, openDialog);
+        return;
+      }
+      const availSubmit = target.closest<HTMLElement>("[data-avail-submit]");
+      if (availSubmit && root.contains(availSubmit)) {
+        event.preventDefault();
+        busyRun(availSubmit, () => runAvailability(availSubmit, router));
+        return;
+      }
+      const typeOpen = target.closest<HTMLElement>("[data-type-open]");
+      if (typeOpen && root.contains(typeOpen)) {
+        event.preventDefault();
+        openBookingType(typeOpen, root, openDialog);
+        return;
+      }
+      const typeSubmit = target.closest<HTMLElement>("[data-type-submit]");
+      if (typeSubmit && root.contains(typeSubmit)) {
+        event.preventDefault();
+        busyRun(typeSubmit, () => runBookingType(typeSubmit, router));
+        return;
+      }
+      const nav = target.closest<HTMLElement>("[data-nav]");
+      if (nav?.dataset.nav?.startsWith("/sheet/") && root.contains(nav)) {
+        event.preventDefault();
+        router.push(nav.dataset.nav);
+        return;
+      }
+      const copy = target.closest<HTMLElement>("[data-copy]");
+      if (copy && root.contains(copy)) void copyLink(copy);
       const act = target.closest<HTMLElement>("[data-act]");
       if (act && root.contains(act)) {
         event.preventDefault();
@@ -593,6 +660,14 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       // The live New task form: owners and dependencies follow the chosen matter and kind.
       syncNewTask(newTask);
       newTask.addEventListener("change", () => syncNewTask(newTask), listen);
+    }
+
+    const bookDialog = root.querySelector<HTMLDialogElement>("dialog#dlgBook");
+    if (bookDialog?.querySelector("[data-booking-submit]")) {
+      // Book for a client: times follow the chosen booking type; ?dlg=book (from the Calendar) opens it.
+      syncBookTimes(bookDialog);
+      bookDialog.addEventListener("change", () => syncBookTimes(bookDialog), listen);
+      if (dialogParam === "book") window.setTimeout(() => openDialog("dlgBook"), 300);
     }
 
     window.addEventListener("resize", place, listen);

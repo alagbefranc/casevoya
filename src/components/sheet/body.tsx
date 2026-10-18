@@ -1,5 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { DemoSheet } from "@/components/sheet/demo";
+import { CalendarHeader, CalendarRbarView, SheetCalendar } from "@/components/sheet/designer/calendar";
+import { BookDialog, CancelDialog, ConsultationsHeader, RescheduleDialog, SheetConsultations } from "@/components/sheet/designer/consultations";
+import { AvailabilityDialog, BookingTypeDialog } from "@/components/sheet/designer/scheduling-dialogs";
 import { AgreementsHeader, CountersignDialog, NewAgreementDialog, SheetAgreements, TemplateDialog } from "@/components/sheet/designer/agreements";
 import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet/designer/clients";
 import { FinanceHeader, NewInvoiceDialog, RefundDialog, SheetFinance, SheetFinancePayments, SheetFinanceRefunds } from "@/components/sheet/designer/finance";
@@ -34,6 +37,7 @@ import { loadSheetStaffTab } from "@/modules/sheet/staff-load";
 import { loadSheetTasks } from "@/modules/sheet/tasks-load";
 import { loadSheetAccess, loadSheetBundle } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
+import { loadSheetCalendar, loadSheetConsultations } from "@/modules/scheduling/sheet-load";
 
 const PUBLIC = new Set(["enquiry", "book"]);
 
@@ -246,6 +250,47 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
+  // Consultations: Upcoming, Availability and Booking page tabs (BUILD-SPEC §4). The Consultation
+  // record tab (notes and outcome summaries) is not built and keeps its old view.
+  if (page === "consultations" && query.tab !== "record" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetConsultations(access.staff, query);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<ConsultationsHeader tab={loaded.tab} pills={loaded.pills} book={loaded.book} />}
+          statusbar={loaded.chrome.statusbar}
+          after={
+            <>
+              <BookDialog data={loaded.dialogs.book} />
+              <RescheduleDialog data={loaded.dialogs.reschedule} />
+              <CancelDialog data={loaded.dialogs.cancel} />
+              <AvailabilityDialog organizationId={loaded.settings.organizationId} zones={loaded.settings.zones} />
+              {loaded.settings.owner ? <BookingTypeDialog organizationId={loaded.settings.organizationId} hosts={loaded.settings.hosts} /> : null}
+            </>
+          }
+        >
+          <SheetConsultations data={loaded.page} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Calendar: the week of appointments and deadlines, and the Deadlines tab.
+  if (page === "calendar" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetCalendar(access.staff, query);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<CalendarHeader tab={loaded.tab} pills={loaded.pills} create={{ "data-nav": "/sheet/consultations?dlg=book" }} />}
+          aside={<CalendarRbarView data={loaded.rbar} />}
+          statusbar={loaded.chrome.statusbar}
+        >
+          <SheetCalendar data={loaded.page} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
   if (page === "matter" && (access.kind === "live" || access.kind === "sample")) {
     const loaded = matterId ? await loadSheetMatter(access.staff, matterId, query) : null;
     if (!loaded) notFound();
@@ -312,5 +357,6 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     state: one("state"),
     limit: one("limit"),
     person: one("person"),
+    week: one("week"),
   };
 }

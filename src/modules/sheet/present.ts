@@ -155,6 +155,8 @@ export type SheetQuery = {
   limit?: string;
   /** The person shown on the Clients page's person and household tabs. */
   person?: string;
+  /** The Calendar page's week: any date in it, YYYY-MM-DD. */
+  week?: string;
 };
 
 export function sheetVariant(page: string, query: SheetQuery): string {
