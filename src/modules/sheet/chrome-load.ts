@@ -56,7 +56,8 @@ export async function loadSheetChrome(staff: SheetStaff, active: string): Promis
     supabase.from("matters").select("id", count).eq("organization_id", org).neq("stage", "closed"),
     supabase.from("matters").select("id").eq("organization_id", org).order("updated_at", { ascending: false }).limit(2),
     supabase.from("tasks").select("id", count).eq("organization_id", org).in("status", [...OPEN_TASK]),
-    supabase.from("inbound_inbox_items").select("id", count).eq("organization_id", org).eq("upload_state", "clean"),
+    // Email waiting in the Inbox's Email to triage tab.
+    supabase.from("inbound_emails").select("id", count).eq("organization_id", org).eq("triage_state", "open"),
   ]);
   const pinned = (recentMatters.data ?? []).map((row) => row.id);
   const name = await matterNames(supabase, org, pinned);
