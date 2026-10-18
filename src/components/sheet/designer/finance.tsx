@@ -6,9 +6,13 @@
  * The header's New invoice opens the Designer's `#dlgInv`. Given `live`, that dialog keeps the
  * Designer's anatomy (`.fld`, `.sel`, `.inp`, `.ta`, `.g2`, `.alert`) with the fields an invoice
  * needs (matter, delivered work or incurred cost, amount and currency, due date), and its submit
- * button carries `data-new-invoice` in place of the Designer's toast. The Payments tab is the
- * firm's Stripe account through Connect embedded components; it has no Designer capture and
- * uses the Designer's page anatomy (`.ph`, `.panel`, `.alert`).
+ * button carries `data-new-invoice` in place of the Designer's toast.
+ *
+ * The Payments tab (`FinanceMarkup({ variant: "tab-payments" })`) lists the firm's card payments
+ * from `invoice_payments`. The Designer's bank-transfer flows (record, verify, transfer approval,
+ * the "bank payment to verify" banner) are not ported. Two things it adds use the Designer's own
+ * anatomy: the Stripe account banner (`.alert` with `.acts`, the slot of the Designer's banner)
+ * and the Stripe balance (`.fp-kpi` tiles, as on the Invoices tab).
  */
 import type { ReactNode } from "react";
 import { Avatar, type SidebarPerson } from "./sidebar";
@@ -108,6 +112,12 @@ const TABS: [string, string][] = [
   ["refunds", "Refunds and disputes"],
 ];
 
+/** Where the Designer's capture leaves the tab underline (the kit moves it to the open tab). */
+const UNDERLINE: Record<FinanceHeaderData["tab"], { left: string; width: string }> = {
+  invoices: { left: "0px", width: "49px" },
+  payments: { left: "75px", width: "56px" },
+};
+
 /** The Finance page's own top bar and its tab strip. */
 export function FinanceHeader({ data }: { data: FinanceHeaderData }) {
   return (
@@ -160,7 +170,7 @@ export function FinanceHeader({ data }: { data: FinanceHeaderData }) {
             {data.invoiceTab}
           </button>
         ) : null}
-        <i className={"ul"} style={{ left: "0px", width: "49px" }}></i>
+        <i className={"ul"} style={UNDERLINE[data.tab]}></i>
       </div>
     </>
   );
@@ -432,19 +442,104 @@ export function NewInvoiceDialog({ data }: { data: NewInvoiceDialogData }) {
   );
 }
 
-/** The Payments tab: the firm's Stripe account, managed in Casevoya. */
-export function SheetFinancePayments({ intro, children }: { intro: string; children: ReactNode }) {
+export type PaymentRow = {
+  key?: string;
+  /** Day received ("16 Oct"), in the firm's timezone. */
+  received: string;
+  from: string;
+  method: string;
+  /** The processor reference, then any detail, with the Designer's separator between them. */
+  reference: string[];
+  goesTo: string;
+  amount: string;
+  state: MatterBadge;
+};
+
+export type PaymentsData = {
+  intro: string;
+  /** The amount column's heading, the currency ("CAD"). */
+  currency: string;
+  /** The Stripe balance and payouts tiles; null when the viewer may not see them. */
+  balance: FinanceKpi[] | null;
+  rows: PaymentRow[];
+  empty: null | { title: string; copy: string };
+  /** The closing note, split where the Designer puts a separator. */
+  note: string[];
+};
+
+function PaymentLine({ row }: { row: PaymentRow }) {
+  return (
+    <tr>
+      <td>{row.received}</td>
+      <td>{row.from}</td>
+      <td>{row.method}</td>
+      <td>
+        <Parts parts={row.reference} />
+      </td>
+      <td>{row.goesTo}</td>
+      <td className={"num"} style={RIGHT}>
+        {row.amount}
+      </td>
+      <td>
+        <Badge badge={row.state} />
+      </td>
+    </tr>
+  );
+}
+
+/**
+ * The Payments tab. `status` is the Stripe account banner (it renders the Designer's `.alert`
+ * itself, or nothing); it sits where the Designer has its bank-payment banner.
+ */
+export function SheetFinancePayments({ data, status }: { data: PaymentsData; status?: ReactNode }) {
   return (
     <>
       <div className={"ph rv"} style={i(0)}>
         <div>
-          <h1 className={"display"}>{"Card payments"}</h1>
-          <p>{intro}</p>
+          <h1 className={"display"}>{"Payments"}</h1>
+          <p>{data.intro}</p>
         </div>
       </div>
-      <div className={"panel rv"} style={{ ...i(1), padding: "20px 22px" }}>
-        {children}
-      </div>
+      {status}
+      {data.balance ? (
+        <div className={"fp-kpi rv"} style={i(1)}>
+          {data.balance.map((kpi) => (
+            <Kpi key={kpi.label} kpi={kpi} />
+          ))}
+        </div>
+      ) : null}
+      {data.empty ? (
+        <div className={"panel rv"} style={i(2)}>
+          <Empty art={"received-tray"} title={data.empty.title} copy={data.empty.copy} />
+        </div>
+      ) : (
+        <div className={"tw rv"} role={"region"} aria-label={"Payments"} tabIndex={0} style={i(2)}>
+          <table className={"t"}>
+            <caption className={"sr"}>{"Payments"}</caption>
+            <thead>
+              <tr>
+                <th scope={"col"}>{"Received"}</th>
+                <th scope={"col"}>{"From"}</th>
+                <th scope={"col"}>{"Method"}</th>
+                <th scope={"col"}>{"Reference"}</th>
+                <th scope={"col"}>{"Goes to"}</th>
+                <th scope={"col"} style={RIGHT}>
+                  {data.currency}
+                </th>
+                <th scope={"col"}>{"State"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.rows.map((row, index) => (
+                <PaymentLine key={row.key ?? index} row={row} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className={"fp-note rv"} style={i(3)}>
+        <Parts parts={data.note} />
+      </p>
     </>
   );
 }

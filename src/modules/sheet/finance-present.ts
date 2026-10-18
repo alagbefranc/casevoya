@@ -30,6 +30,41 @@ export function invoiceState(status: string, dueOn: string, today: string, proce
   }
 }
 
+/**
+ * The Payments tab's state badge for a card payment (`invoice_payment_status`). Only verified
+ * Stripe events move a payment, so the badge says what Stripe confirmed. `requires_payment`
+ * (the client opened the card form, nothing was charged) is not listed on the tab.
+ */
+export function paymentState(status: string): { tone: InvoiceTone; label: string } {
+  switch (status) {
+    case "succeeded":
+      return { tone: "ok", label: "Received" };
+    case "processing":
+      return { tone: "rev", label: "Processing" };
+    case "failed":
+      return { tone: "bad", label: "Payment failed" };
+    case "canceled":
+      return { tone: "gr", label: "Canceled" };
+    case "requires_payment":
+      return { tone: "gr", label: "Not paid yet" };
+    default:
+      return { tone: "gr", label: status };
+  }
+}
+
+/** Payment statuses the Payments tab lists: a charge was attempted or settled. */
+export const LISTED_PAYMENT_STATUSES = ["processing", "succeeded", "failed", "canceled"] as const;
+
+/** "evt_…3xY9Qa" for a Stripe id: the prefix and the last six characters, enough to find it in Stripe. */
+export function shortStripeId(id: string | null | undefined): string {
+  const value = (id ?? "").trim();
+  if (!value) return "—";
+  const cut = value.indexOf("_");
+  const prefix = cut > 0 ? value.slice(0, cut + 1) : "";
+  const rest = value.slice(prefix.length);
+  return rest.length > 8 ? `${prefix}…${rest.slice(-6)}` : value;
+}
+
 export const FEE_CATEGORY_LABEL: Record<string, string> = {
   professional_fee: "Professional fee",
   disbursement: "Disbursement",

@@ -4,7 +4,7 @@ import { AgreementsHeader, CountersignDialog, NewAgreementDialog, SheetAgreement
 import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet/designer/clients";
 import { FinanceHeader, NewInvoiceDialog, SheetFinance, SheetFinancePayments } from "@/components/sheet/designer/finance";
 import { SheetFrame } from "@/components/sheet/designer/frame";
-import { StripeConnectPanel } from "@/components/sheet/stripe-connect";
+import { StripeAccountStatus } from "@/components/sheet/stripe-connect";
 import { SheetHome } from "@/components/sheet/designer/home";
 import { MatterDialogs, MatterRbar, MatterTopBar, SheetMatter } from "@/components/sheet/designer/matter";
 import { MATTER_CSS } from "@/components/sheet/designer/matter-css";
@@ -215,12 +215,8 @@ export async function SheetBody({
           statusbar={finance.chrome.statusbar}
           after={<NewInvoiceDialog data={finance.dialog} />}
         >
-          {tab === "payments" ? (
-            <SheetFinancePayments
-              intro={`Clients pay ${finance.account.firmName}’s invoices by card into the firm’s own Stripe account. Stripe runs in test mode: no real card is charged. Casevoya never holds the money.`}
-            >
-              <StripeConnectPanel data={finance.account} />
-            </SheetFinancePayments>
+          {finance.payments ? (
+            <SheetFinancePayments data={finance.payments} status={<StripeAccountStatus data={finance.account} />} />
           ) : (
             <SheetFinance data={finance.page} />
           )}

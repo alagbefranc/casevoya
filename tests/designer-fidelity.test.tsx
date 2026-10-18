@@ -36,7 +36,15 @@ import {
   type NewAgreementDialogData,
 } from "@/components/sheet/designer/agreements";
 import { AgreementsMarkup } from "@/components/sheet/markup/agreements";
-import { FinanceHeader, NewInvoiceDialog, SheetFinance, type FinanceData, type NewInvoiceDialogData } from "@/components/sheet/designer/finance";
+import {
+  FinanceHeader,
+  NewInvoiceDialog,
+  SheetFinance,
+  SheetFinancePayments,
+  type FinanceData,
+  type NewInvoiceDialogData,
+  type PaymentsData,
+} from "@/components/sheet/designer/finance";
 import { FinanceMarkup } from "@/components/sheet/markup/finance";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
@@ -838,6 +846,32 @@ const DESIGNER_NEW_INVOICE: NewInvoiceDialogData = {
   ],
 };
 
+const OK_RECONCILED = { tone: "ok", label: "Reconciled" } as const;
+const RAFAEL_FOR_PRIYA = "Rafael Sharma for Priya";
+
+const DESIGNER_PAYMENTS: PaymentsData = {
+  intro:
+    "Money received by Northline. Card payments are confirmed by the processor’s signed event; bank transfers stay “Pending verification” until they’re matched to the bank statement.",
+  currency: "CAD",
+  balance: null,
+  rows: [
+    { received: "16 Oct", from: "Kofi Mensah", method: "Bank transfer", reference: ["RBC-55102", "evidence uploaded"], goesTo: "Client account (advance)", amount: "1,808.00", state: { tone: "rev", label: "Pending verification" } },
+    { received: "14 Oct", from: RAFAEL_FOR_PRIYA, method: "Bank transfer", reference: ["TD-88213"], goesTo: "Client account (advance)", amount: "500.00", state: OK_RECONCILED },
+    { received: "12 Oct", from: "Ana Ferreira", method: "Card", reference: ["evt_5602", "declined by bank"], goesTo: "INV-0214", amount: "791.00", state: { tone: "bad", label: "Payment failed" } },
+    { received: "8 Oct", from: RAFAEL_FOR_PRIYA, method: "Card", reference: ["evt_5530", "RC-0093"], goesTo: "INV-0218", amount: "1,130.00", state: OK_RECONCILED },
+    { received: "3 Oct", from: RAFAEL_FOR_PRIYA, method: "Card", reference: ["evt_5488", "RC-0091"], goesTo: "Client account (advance)", amount: "1,000.00", state: OK_RECONCILED },
+    { received: "18 Sep", from: "Tomás Duarte", method: "Card", reference: ["evt_5170", "RC-0088"], goesTo: "INV-0211", amount: "300.00", state: OK_RECONCILED },
+    { received: "4 Sep", from: RAFAEL_FOR_PRIYA, method: "Card", reference: ["evt_5021", "duplicate of evt_5020"], goesTo: "Refund RF-0012", amount: "300.00", state: { tone: "chg", label: "Refund processing" } },
+    { received: "4 Sep", from: RAFAEL_FOR_PRIYA, method: "Card", reference: ["evt_5020", "RC-0084"], goesTo: "INV-0197", amount: "300.00", state: OK_RECONCILED },
+  ],
+  empty: null,
+  note: [
+    "The same processor event arriving twice is counted once (provider",
+    "connected account",
+    "event ID). A CAD payment can’t pay a USD invoice. A failed or reversed transfer reopens the balance and creates a task; it never changes the matter stage.",
+  ],
+};
+
 describe("Designer fidelity: Finance", () => {
   it("renders the Finance page (Invoices) and its New invoice dialog exactly as the captured Designer markup", () => {
     // The capture also carries Record a bank payment (#dlgPay), Verify (#dlgVer), Transfer (#dlgTr)
@@ -893,6 +927,72 @@ describe("Designer fidelity: Finance", () => {
     expect(html).toContain('<input class="inp" id="niDue" type="date" min="2026-10-18" value="2026-11-17"/>');
     expect(html).toContain("Card payments aren’t set up yet");
     expect(html).toContain('<option value="11111111-1111-4111-8111-111111111111">Dana Lee · CV-2026-0001</option>');
+  });
+
+  it("renders the Finance page (Payments) exactly as the captured Designer markup", () => {
+    // The Payments capture carries the same dialogs as the Invoices one; the bank-transfer flows
+    // (#dlgPay record, #dlgVer verify, #dlgTr transfer approval) and #dlgCN are not ported. Its
+    // "1 bank payment to verify" banner opens #dlgVer, so it is left out too: the live tab puts
+    // the Stripe account banner in that slot only when Stripe needs something.
+    let captured = withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup, { variant: "tab-payments" })));
+    for (const id of ["dlgPay", "dlgVer", "dlgTr", "dlgCN"]) {
+      captured = captured.replace(new RegExp(`<dialog class="dlg" id="${id}"[\\s\\S]*?</dialog>`), "");
+      expect(captured).not.toContain(`id="${id}"`);
+    }
+    const banner = /<div class="alert warn rv" style="--i:1"><svg class="ic" aria-hidden="true"><use href="[^"]*#i-bank"><\/use><\/svg><div><b>1 bank payment to verify<\/b>[\s\S]*?data-dlg="dlgVer"[\s\S]*?<\/div><\/div>/;
+    expect(captured).toMatch(banner);
+    captured = captured.replace(banner, "");
+    expect(captured).not.toContain("bank payment to verify");
+    const live = withoutPreloads(
+      renderToStaticMarkup(
+        createElement(
+          SheetFrame,
+          {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/finance" },
+            header: createElement(FinanceHeader, {
+              data: { pills: ["CAD", { left: "Northline Immigration", right: "fictional" }], recordPayment: true, invoiceTab: "INV-0218", tab: "payments" },
+            }),
+            statusbar: {
+              timezone: "America/Toronto",
+              queue: { label: "Reminder queue healthy", detail: "0 retries" },
+              sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+            },
+            after: createElement(NewInvoiceDialog, { data: DESIGNER_NEW_INVOICE }),
+          },
+          createElement(SheetFinancePayments, { data: DESIGNER_PAYMENTS }),
+        ),
+      ),
+    );
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+    }
+    expect(live).toBe(captured);
+  });
+
+  it("shows the Stripe balance as the Designer's KPI tiles, and a firm without payments an honest empty state", () => {
+    const html = renderToStaticMarkup(
+      createElement(SheetFinancePayments, {
+        data: {
+          intro: "Synthetic firm",
+          currency: "CAD",
+          balance: [
+            { href: "?tab=payments", label: "Available in Stripe", value: { money: "—" }, note: "Balance unavailable" },
+            { href: "?tab=payments", label: "Payouts", value: { money: "On" }, note: "Stripe" },
+          ],
+          rows: [],
+          empty: { title: "No card payments yet", copy: "Payments appear here when Stripe confirms them." },
+          note: ["Synthetic note"],
+        },
+        status: createElement("div", { className: "alert warn rv", "data-stripe": "1" }),
+      }),
+    );
+    expect(html).toMatch(/<div class="ph rv"[\s\S]*?<div class="alert warn rv" data-stripe="1"><\/div><div class="fp-kpi rv" style="--i:1"><a class="fp-k k2-spot"/);
+    expect(html).toContain("Balance unavailable");
+    expect(html).toContain('class="emp"');
+    expect(html).not.toContain("<table");
+    expect(html).not.toMatch(/Northline|Priya|Kofi|Ana Ferreira|Rafael|evt_5|INV-02|RBC-|TD-882/);
   });
 
   it("shows a firm without invoices an honest empty state, with no sample people", () => {

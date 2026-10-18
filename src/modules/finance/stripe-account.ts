@@ -9,9 +9,9 @@ import type Stripe from "stripe";
  * - Stripe collects its fees from the firm and is responsible for losses (fees_collector and
  *   losses_collector "stripe", Managed Risk). That needs direct charges, which is what a SaaS
  *   platform uses: the charge is the firm's, on the firm's account (FIN-02).
- * - Dashboard "none" by default: the firm manages the account through Connect embedded
- *   components in Casevoya (onboarding, account management, notification banner, payments,
- *   payouts), never a Stripe-hosted page. STRIPE_CONNECT_DASHBOARD=full gives the firm Stripe
+ * - Dashboard "none" by default: the firm finishes the account through Connect embedded
+ *   components in Casevoya (onboarding, notification banner) and sees its payments, balance and
+ *   payouts on Casevoya's own Payments tab, never a Stripe-hosted page. STRIPE_CONNECT_DASHBOARD=full gives the firm Stripe
  *   Dashboard access too, if the platform's Connect settings refuse "none".
  */
 
@@ -62,11 +62,12 @@ export async function retrieveAccountStatus(stripe: Stripe, accountId: string) {
   return accountStatus(account);
 }
 
-/** Connect embedded components the firm owner may use (https://docs.stripe.com/api/account_sessions/create). */
+/**
+ * Connect embedded components the firm owner may use (https://docs.stripe.com/api/account_sessions/create).
+ * Only Stripe's onboarding and notification banner (identity and bank details stay with Stripe);
+ * payments, payouts and the balance are Casevoya's own Payments tab.
+ */
 export const ACCOUNT_SESSION_COMPONENTS: Stripe.AccountSessionCreateParams.Components = {
   account_onboarding: { enabled: true, features: { external_account_collection: true } },
-  account_management: { enabled: true, features: { external_account_collection: true } },
   notification_banner: { enabled: true, features: { external_account_collection: true } },
-  payments: { enabled: true, features: { refund_management: true, dispute_management: true, capture_payments: true } },
-  payouts: { enabled: true, features: { instant_payouts: false, standard_payouts: true, edit_payout_schedule: true, external_account_collection: true } },
 };
