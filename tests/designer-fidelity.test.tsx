@@ -58,6 +58,9 @@ import {
   type FundsData,
 } from "@/components/sheet/designer/funds";
 
+import { BookPage, type BookPageData } from "@/components/sheet/designer/book";
+import { BookMarkup } from "@/components/sheet/markup/book";
+
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
 
@@ -1353,5 +1356,65 @@ describe("Designer fidelity: Finance, Client funds", () => {
     expect(html).toMatch(/<dialog class="dlg" id="dlgBank" aria-labelledby="dlgBankH"><div class="dh"><h2 id="dlgBankH">Record the bank transfer<\/h2>/);
     expect(html).toContain(`data-funds-bank="1" data-org="${org}" data-today="2026-10-18" disabled=""`);
     expect(html).toContain("CICC Code s. 32(g)");
+  });
+});
+
+describe("Designer fidelity: public booking page", () => {
+  const DESIGNER_BOOK: BookPageData = {
+    header: { logo: { src: "/assets/firms/northline-lockup.svg", alt: "Northline Immigration" } },
+    title: "Book an initial consultation",
+    lead: "45 minutes with a licensed consultant. Times are shown in your timezone (America/Toronto). You’ll sign a short consultation agreement before the meeting.",
+    fee: {
+      title: "About the fee",
+      copy: "CAD 300.00 (Northline’s fee, demo). Paid before the meeting, it’s held in Northline’s client account until the consultation happens. Cancel 24 hours ahead for a full refund.",
+    },
+    slots: ["Tue 20 Oct · 11:00", "Thu 22 Oct · 13:30", "Thu 22 Oct · 15:00", "Tue 27 Oct · 10:30"].map((label) => ({ label, value: label, pressed: false })),
+    meet: ["Video call", "Phone", "At the Toronto office"],
+    note: "Next: check your answers, sign the consultation agreement, then pay.",
+    submit: { label: "Check and continue" },
+    footer: { firm: "Northline Immigration (fictional demo firm)", privacyHref: "/sheet/privacy" },
+  };
+
+  it("renders the booking page exactly as the captured Designer markup", () => {
+    const captured = renderToStaticMarkup(createElement(BookMarkup));
+    const live = renderToStaticMarkup(createElement(BookPage, { data: DESIGNER_BOOK }));
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+    }
+    expect(live).toBe(captured);
+  });
+
+  it("wires a firm's free booking page: live form, zone picker, honeypot, no fee card, no sample firm", () => {
+    // Documented additions on the live page (inside the same form): data-live="1" for the Sheet's
+    // form guard, the visitor's time-zone picker (#bz), a phone field for phone consultations, a
+    // hidden honeypot (#bw) and an error line. The fee card is left out for a free consultation
+    // and the header is the firm's name (firm logos are private). No privacy link until the firm
+    // has a public notice.
+    const html = renderToStaticMarkup(
+      createElement(BookPage, {
+        data: {
+          header: { name: "Maple Immigration" },
+          title: "Initial consultation",
+          lead: "30 minutes with Maple Immigration. Times are shown in your timezone (America/Vancouver).",
+          fee: null,
+          slots: [{ label: "Tue 20 Oct · 08:00", value: "1792508400000", pressed: true }],
+          meet: ["Phone"],
+          note: "This consultation is free.",
+          submit: { label: "Book this time" },
+          footer: { firm: "Maple Immigration", privacyHref: null },
+          live: { zone: { value: "America/Vancouver", options: ["America/Vancouver", "America/Toronto"] }, phone: true, more: false, error: "Choose a time." },
+        },
+      }),
+    );
+    expect(html).toContain('<form id="f" data-live="1" noValidate="">');
+    expect(html).toContain('aria-pressed="true" data-start="1792508400000"');
+    expect(html).toContain('id="bz"');
+    expect(html).toContain('id="bp"');
+    expect(html).toContain('id="bw" tabindex="-1"');
+    expect(html).toContain('role="alert"');
+    expect(html).not.toContain("About the fee");
+    expect(html).not.toMatch(/Northline|CAD 300|Privacy notice|client account/);
   });
 });

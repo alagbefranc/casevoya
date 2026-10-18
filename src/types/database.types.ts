@@ -24,6 +24,471 @@ export type Database = {
   }
   public: {
     Tables: {
+      availability_overrides: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          end_local: string | null
+          id: string
+          on_date: string
+          organization_id: string
+          schedule_id: string
+          start_local: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          end_local?: string | null
+          id?: string
+          on_date: string
+          organization_id: string
+          schedule_id: string
+          start_local?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          end_local?: string | null
+          id?: string
+          on_date?: string
+          organization_id?: string
+          schedule_id?: string
+          start_local?: string | null
+        }
+        Relationships: []
+      }
+      availability_rules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          end_local: string
+          id: string
+          organization_id: string
+          schedule_id: string
+          start_local: string
+          weekday: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          end_local: string
+          id?: string
+          organization_id: string
+          schedule_id: string
+          start_local: string
+          weekday: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          end_local?: string
+          id?: string
+          organization_id?: string
+          schedule_id?: string
+          start_local?: string
+          weekday?: number
+        }
+        Relationships: []
+      }
+      availability_schedules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_default: boolean
+          membership_id: string
+          name: string
+          organization_id: string
+          time_zone: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_default?: boolean
+          membership_id: string
+          name?: string
+          organization_id: string
+          time_zone: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_default?: boolean
+          membership_id?: string
+          name?: string
+          organization_id?: string
+          time_zone?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      booking_attendees: {
+        Row: {
+          booking_id: string
+          created_at: string
+          created_by: string | null
+          display_name: string
+          email: string
+          id: string
+          locale: string
+          organization_id: string
+          person_id: string | null
+          phone: string | null
+          role: string
+          time_zone: string
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          created_by?: string | null
+          display_name: string
+          email: string
+          id?: string
+          locale?: string
+          organization_id: string
+          person_id?: string | null
+          phone?: string | null
+          role?: string
+          time_zone: string
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          created_by?: string | null
+          display_name?: string
+          email?: string
+          id?: string
+          locale?: string
+          organization_id?: string
+          person_id?: string | null
+          phone?: string | null
+          role?: string
+          time_zone?: string
+        }
+        Relationships: []
+      }
+      booking_event_type_hosts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          event_type_id: string
+          id: string
+          membership_id: string
+          organization_id: string
+          position: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          event_type_id: string
+          id?: string
+          membership_id: string
+          organization_id: string
+          position?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          event_type_id?: string
+          id?: string
+          membership_id?: string
+          organization_id?: string
+          position?: number
+        }
+        Relationships: []
+      }
+      booking_event_types: {
+        Row: {
+          archived_at: string | null
+          buffer_after_min: number
+          buffer_before_min: number
+          created_at: string
+          created_by: string | null
+          currency: string
+          daily_capacity: number | null
+          description: string | null
+          duration_min: number
+          id: string
+          is_published: boolean
+          is_sample: boolean
+          location_detail: string | null
+          location_kind: Database["public"]["Enums"]["booking_location_kind"]
+          max_advance_days: number
+          min_notice_min: number
+          organization_id: string
+          price_cents: number
+          refund_cutoff_hours: number
+          refund_policy: string
+          slot_step_min: number | null
+          slug: string
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          archived_at?: string | null
+          buffer_after_min?: number
+          buffer_before_min?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          daily_capacity?: number | null
+          description?: string | null
+          duration_min: number
+          id?: string
+          is_published?: boolean
+          is_sample?: boolean
+          location_detail?: string | null
+          location_kind?: Database["public"]["Enums"]["booking_location_kind"]
+          max_advance_days?: number
+          min_notice_min?: number
+          organization_id: string
+          price_cents?: number
+          refund_cutoff_hours?: number
+          refund_policy?: string
+          slot_step_min?: number | null
+          slug: string
+          title: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          archived_at?: string | null
+          buffer_after_min?: number
+          buffer_before_min?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          daily_capacity?: number | null
+          description?: string | null
+          duration_min?: number
+          id?: string
+          is_published?: boolean
+          is_sample?: boolean
+          location_detail?: string | null
+          location_kind?: Database["public"]["Enums"]["booking_location_kind"]
+          max_advance_days?: number
+          min_notice_min?: number
+          organization_id?: string
+          price_cents?: number
+          refund_cutoff_hours?: number
+          refund_policy?: string
+          slot_step_min?: number | null
+          slug?: string
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      booking_events: {
+        Row: {
+          actor: Database["public"]["Enums"]["booking_actor"]
+          actor_user_id: string | null
+          booking_id: string
+          created_at: string
+          id: string
+          kind: string
+          organization_id: string
+          payload: Json
+        }
+        Insert: {
+          actor: Database["public"]["Enums"]["booking_actor"]
+          actor_user_id?: string | null
+          booking_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          organization_id: string
+          payload?: Json
+        }
+        Update: {
+          actor?: Database["public"]["Enums"]["booking_actor"]
+          actor_user_id?: string | null
+          booking_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          organization_id?: string
+          payload?: Json
+        }
+        Relationships: []
+      }
+      booking_hold_attempts: {
+        Row: {
+          client_hash: string | null
+          created_at: string
+          id: string
+          organization_id: string
+        }
+        Insert: {
+          client_hash?: string | null
+          created_at?: string
+          id?: string
+          organization_id: string
+        }
+        Update: {
+          client_hash?: string | null
+          created_at?: string
+          id?: string
+          organization_id?: string
+        }
+        Relationships: []
+      }
+      bookings: {
+        Row: {
+          attendee_time_zone: string
+          blocked_from: string
+          blocked_until: string
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: Database["public"]["Enums"]["booking_actor"] | null
+          confirmed_at: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          ends_at: string
+          event_type_id: string
+          hold_expires_at: string | null
+          host_membership_id: string
+          host_name: string | null
+          host_time_zone: string
+          host_user_id: string
+          ics_sequence: number
+          id: string
+          idempotency_key: string
+          is_sample: boolean
+          location_detail: string | null
+          location_kind: Database["public"]["Enums"]["booking_location_kind"]
+          matter_id: string | null
+          organization_id: string
+          outcome_at: string | null
+          person_id: string | null
+          price_cents: number
+          public_ref: string
+          source: string
+          starts_at: string
+          status: Database["public"]["Enums"]["booking_status"]
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          attendee_time_zone: string
+          blocked_from: string
+          blocked_until: string
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: Database["public"]["Enums"]["booking_actor"] | null
+          confirmed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          ends_at: string
+          event_type_id: string
+          hold_expires_at?: string | null
+          host_membership_id: string
+          host_name?: string | null
+          host_time_zone: string
+          host_user_id: string
+          ics_sequence?: number
+          id?: string
+          idempotency_key: string
+          is_sample?: boolean
+          location_detail?: string | null
+          location_kind: Database["public"]["Enums"]["booking_location_kind"]
+          matter_id?: string | null
+          organization_id: string
+          outcome_at?: string | null
+          person_id?: string | null
+          price_cents?: number
+          public_ref: string
+          source: string
+          starts_at: string
+          status?: Database["public"]["Enums"]["booking_status"]
+          title: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          attendee_time_zone?: string
+          blocked_from?: string
+          blocked_until?: string
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: Database["public"]["Enums"]["booking_actor"] | null
+          confirmed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          ends_at?: string
+          event_type_id?: string
+          hold_expires_at?: string | null
+          host_membership_id?: string
+          host_name?: string | null
+          host_time_zone?: string
+          host_user_id?: string
+          ics_sequence?: number
+          id?: string
+          idempotency_key?: string
+          is_sample?: boolean
+          location_detail?: string | null
+          location_kind?: Database["public"]["Enums"]["booking_location_kind"]
+          matter_id?: string | null
+          organization_id?: string
+          outcome_at?: string | null
+          person_id?: string | null
+          price_cents?: number
+          public_ref?: string
+          source?: string
+          starts_at?: string
+          status?: Database["public"]["Enums"]["booking_status"]
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      external_busy_blocks: {
+        Row: {
+          ends_at: string
+          external_ref: string | null
+          id: string
+          membership_id: string
+          organization_id: string
+          source: string
+          starts_at: string
+          synced_at: string
+        }
+        Insert: {
+          ends_at: string
+          external_ref?: string | null
+          id?: string
+          membership_id: string
+          organization_id: string
+          source: string
+          starts_at: string
+          synced_at?: string
+        }
+        Update: {
+          ends_at?: string
+          external_ref?: string | null
+          id?: string
+          membership_id?: string
+          organization_id?: string
+          source?: string
+          starts_at?: string
+          synced_at?: string
+        }
+        Relationships: []
+      }
       access_grants: {
         Row: {
           created_at: string
@@ -5875,6 +6340,101 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      booking_public_busy: {
+        Args: { p_event_type_id: string; p_from: string; p_to: string }
+        Returns: Json
+      }
+      booking_public_event: {
+        Args: { p_event_slug: string; p_firm_slug: string }
+        Returns: Json
+      }
+      booking_public_event_types: {
+        Args: { p_firm_slug: string }
+        Returns: Json
+      }
+      booking_public_hold: {
+        Args: {
+          p_client_hash: string | null
+          p_email: string
+          p_event_slug: string
+          p_firm_slug: string
+          p_idempotency_key: string
+          p_name: string
+          p_phone: string | null
+          p_start: string
+          p_time_zone: string
+        }
+        Returns: Json
+      }
+      expire_booking_holds: {
+        Args: { p_as_of?: string }
+        Returns: number
+      }
+      save_availability: {
+        Args: {
+          p_membership_id: string
+          p_org: string
+          p_overrides: Json
+          p_rules: Json
+          p_time_zone: string
+        }
+        Returns: string
+      }
+      save_booking_event_type: {
+        Args: {
+          p_buffer_after_min: number
+          p_buffer_before_min: number
+          p_daily_capacity: number | null
+          p_description: string | null
+          p_duration_min: number
+          p_event_type_id: string | null
+          p_expected_version: number | null
+          p_host_membership_ids: string[]
+          p_location_detail: string | null
+          p_location_kind: Database["public"]["Enums"]["booking_location_kind"]
+          p_max_advance_days: number
+          p_min_notice_min: number
+          p_org: string
+          p_publish: boolean
+          p_slot_step_min: number | null
+          p_slug: string
+          p_title: string
+        }
+        Returns: string
+      }
+      staff_book_consultation: {
+        Args: {
+          p_event_type_id: string
+          p_idempotency_key: string
+          p_org: string
+          p_person_id: string
+          p_start: string
+          p_time_zone: string
+        }
+        Returns: string
+      }
+      staff_booking_availability: {
+        Args: {
+          p_event_type_id: string
+          p_exclude_booking?: string | null
+          p_from: string
+          p_org: string
+          p_to: string
+        }
+        Returns: Json
+      }
+      staff_cancel_booking: {
+        Args: { p_booking_id: string; p_expected_version: number | null; p_org: string; p_reason: string | null }
+        Returns: undefined
+      }
+      staff_record_booking_outcome: {
+        Args: { p_booking_id: string; p_org: string; p_outcome: string }
+        Returns: undefined
+      }
+      staff_reschedule_booking: {
+        Args: { p_booking_id: string; p_expected_version: number | null; p_org: string; p_start: string }
+        Returns: undefined
+      }
       firm_payment_account_for_owner: {
         Args: { p_org: string }
         Returns: string | null
@@ -6977,6 +7537,16 @@ export type Database = {
       }
     }
     Enums: {
+      booking_actor: "client" | "staff" | "system"
+      booking_location_kind: "video" | "phone" | "in_person" | "meeting_link"
+      booking_status:
+        | "held"
+        | "pending_payment"
+        | "confirmed"
+        | "cancelled"
+        | "expired"
+        | "no_show"
+        | "completed"
       client_fund_entry_kind: "deposit" | "transfer" | "refund" | "correction"
       client_fund_entry_status:
         | "pending_verification"
@@ -7032,6 +7602,13 @@ export type Database = {
         | "signature"
         | "document_request"
         | "document_receipt"
+        | "invoice"
+        | "payment_failed"
+        | "refund_started"
+        | "refund_complete"
+        | "consultation_booked"
+        | "consultation_rescheduled"
+        | "consultation_cancelled"
       access_grant_kind: "explicit" | "guardian"
       agreement_kind: "quote" | "consultation" | "service" | "amendment" | "consent"
       agreement_status:
@@ -7398,6 +7975,9 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      booking_actor: ["client", "staff", "system"],
+      booking_location_kind: ["video", "phone", "in_person", "meeting_link"],
+      booking_status: ["held", "pending_payment", "confirmed", "cancelled", "expired", "no_show", "completed"],
       invoice_status: ["draft", "issued", "partially_paid", "paid", "voided", "credited", "refunded"],
       invoice_payment_status: ["requires_payment", "processing", "succeeded", "failed", "canceled"],
       client_fund_entry_kind: ["deposit", "transfer", "refund", "correction"],
@@ -7431,6 +8011,13 @@ export const Constants = {
         "signature",
         "document_request",
         "document_receipt",
+        "invoice",
+        "payment_failed",
+        "refund_started",
+        "refund_complete",
+        "consultation_booked",
+        "consultation_rescheduled",
+        "consultation_cancelled",
       ],
       access_grant_kind: ["explicit", "guardian"],
       agreement_kind: ["quote", "consultation", "service", "amendment", "consent"],
