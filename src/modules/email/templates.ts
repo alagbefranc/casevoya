@@ -111,7 +111,7 @@ export function renderEmail(context: Context): EmailContent {
   if (template === "signature") {
     return document(
       `Agreement signed — ${firm}`,
-      `An agreement with ${firm} is fully signed. Your copy is in the portal.`,
+      `An agreement with ${firm} is fully signed. Clients find their copy in the portal; the firm's copy is on the matter in Casevoya.`,
       firm,
     );
   }
