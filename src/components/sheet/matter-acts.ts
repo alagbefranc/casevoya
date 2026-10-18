@@ -1,8 +1,9 @@
 "use client";
 
 import { toast2 } from "@/components/port/kit";
-import { changeMatterStage, confirmMatterOutcome, holdMatter, recordMatterLetter, resumeMatter } from "@/modules/sheet/actions";
+import { changeMatterStage, confirmMatterOutcome, holdMatter, recordMatterDeadline, recordMatterLetter, resumeMatter } from "@/modules/sheet/actions";
 import { letterNote, letterStatus, needsStepUp, stageAt, stepUpLocation, withoutDialog, type MatterDialog } from "@/modules/sheet/matter-wire";
+import { readDeadline } from "@/modules/sheet/new-deadline";
 
 type Router = { replace: (href: string) => void; refresh: () => void };
 type Result = { error?: string } | Record<string, unknown> | null | undefined;
@@ -12,13 +13,17 @@ function text(root: ParentNode, selector: string): string {
   return (el?.value ?? "").trim();
 }
 
-const DIALOG: Record<string, MatterDialog | null> = { stage: "stage", hold: "hold", letter: "letter", resume: null, outcome: null };
+const DIALOG: Record<string, MatterDialog | null> = { stage: "stage", hold: "hold", letter: "letter", deadline: "deadline", resume: null, outcome: null };
 const DONE: Record<string, string> = {
   stage: "Stage changed",
   hold: "Matter put on hold",
   letter: "Letter recorded",
   resume: "Matter resumed",
   outcome: "Outcome recorded",
+  deadline: "Deadline recorded",
+};
+const DONE_SUB: Record<string, string> = {
+  deadline: "Tentative until a licensed consultant confirms it. Reminders are proposed.",
 };
 
 /**
@@ -35,6 +40,7 @@ export async function runMatterAct(button: HTMLElement, root: HTMLElement, route
   const dialog = button.closest("dialog");
   const scope: ParentNode = dialog ?? root;
   let result: Result;
+  let sub = DONE_SUB[act] ?? "Recorded in the matter’s history.";
 
   if (act === "stage") {
     const toStage = stageAt(scope.querySelector<HTMLInputElement>('input[name="stg"]:checked')?.value);
@@ -64,6 +70,24 @@ export async function runMatterAct(button: HTMLElement, root: HTMLElement, route
     const note = text(scope, "#outNote");
     if (note.length < 3) return void toast2("Add a note", { kind: "warn", sub: "Say what the decision letter shows. It is kept in the history." });
     result = await confirmMatterOutcome({ ...ref, outcome, note });
+  } else if (act === "deadline") {
+    const fields = {
+      label: text(scope, "#ddL"),
+      kind: text(scope, "#ddK"),
+      dueOn: text(scope, "#ddD"),
+      dueTime: text(scope, "#ddT"),
+      timezone: text(scope, "#ddZ"),
+      evidence: text(scope, "#ddE"),
+      sourceUrl: text(scope, "#ddU"),
+      retrievedOn: text(scope, "#ddR"),
+    };
+    // Checked here for a quick answer, and again by the server action and the database.
+    const read = readDeadline(fields);
+    if ("error" in read) return void toast2(read.error, { kind: "warn", sub: "Nothing was saved." });
+    result = await recordMatterDeadline({ ...ref, fields });
+    if (result && "remindersScheduled" in result && result.remindersScheduled === false) {
+      sub = "Tentative until a licensed consultant confirms it. Reminders weren’t scheduled yet.";
+    }
   } else {
     return;
   }
@@ -78,7 +102,7 @@ export async function runMatterAct(button: HTMLElement, root: HTMLElement, route
     return;
   }
   dialog?.close();
-  toast2(DONE[act] ?? "Saved", { kind: "ok", sub: "Recorded in the matter’s history." });
+  toast2(DONE[act] ?? "Saved", { kind: "ok", sub });
   router.replace(withoutDialog(window.location.pathname, window.location.search));
   router.refresh();
 }

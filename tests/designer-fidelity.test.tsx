@@ -169,8 +169,8 @@ const DESIGNER_TASKS: TasksData = {
     ],
   },
   dialog: {
-    owners: ["Daniel Ruiz", "Amara Osei", "Lena Park"],
-    dependsOn: ["Police certificate accepted", "Agreement signed"],
+    owners: [{ label: "Daniel Ruiz" }, { label: "Amara Osei" }, { label: "Lena Park" }],
+    dependsOn: [{ label: "Police certificate accepted" }, { label: "Agreement signed" }],
     create: { toast: "Task created", kind: "ok" },
   },
 };
@@ -524,7 +524,7 @@ describe("Designer fidelity", () => {
   it("shows a firm without tasks the Designer's empty states, with no sample people", () => {
     for (const tab of ["internal", "client", "deadlines"] as TasksTab[]) {
       const html = renderToStaticMarkup(
-        createElement(SheetTasks, { data: { tab, counts: { open: 0, escalated: 0 }, internal: { alert: null, rows: [] }, client: { rows: [] }, deadlines: { rows: [] }, dialog: { owners: ["Dana Lee"], dependsOn: [], create: { toast: "x", kind: "warn" } } } }),
+        createElement(SheetTasks, { data: { tab, counts: { open: 0, escalated: 0 }, internal: { alert: null, rows: [] }, client: { rows: [] }, deadlines: { rows: [] }, dialog: { owners: [{ label: "Dana Lee" }], dependsOn: [], create: { toast: "x", kind: "warn" } } } }),
       );
       expect(html).toContain('class="emp"');
       expect(html).not.toMatch(/Northline|Amara|Priya|Kofi|Olena|Rafael|Daniel|Lena|NL-2026/);

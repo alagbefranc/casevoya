@@ -2,7 +2,14 @@
 import { safeAccessError } from "@/lib/auth/step-up";
 import { MATTER_STAGES } from "@/modules/sheet/present";
 
-export type MatterDialog = "stage" | "hold" | "letter";
+export type MatterDialog = "stage" | "hold" | "letter" | "deadline";
+
+/** The `<dialog>` each `?dlg=` value reopens. */
+export const DIALOG_ID: Record<MatterDialog, string> = { stage: "dStage", hold: "dHold", letter: "dLetter", deadline: "dDeadline" };
+
+export function dialogId(value: string | null | undefined): string | null {
+  return value && Object.hasOwn(DIALOG_ID, value) ? DIALOG_ID[value as MatterDialog] : null;
+}
 
 /** The matter actions turn a database step-up refusal into one of these messages. */
 const STEP_UP_ERRORS = new Set([safeAccessError("step-up is required"), safeAccessError("aal2")]);
