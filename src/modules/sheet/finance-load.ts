@@ -39,7 +39,7 @@ export async function loadSheetFinance(staff: SheetStaff, tab: "invoices" | "pay
   const today = isoDateInTimeZone(new Date(), staff.timezone);
   const canBill = BILLING_ROLES.has(staff.role);
 
-  const [chrome, invoices, billable, accountRow] = await Promise.all([
+  const [chrome, invoices, billable, samples, accountRow] = await Promise.all([
     loadSheetChrome(staff, "/sheet/finance"),
     supabase
       .from("invoices")
@@ -48,10 +48,33 @@ export async function loadSheetFinance(staff: SheetStaff, tab: "invoices" | "pay
       .order("created_at", { ascending: false })
       .limit(INVOICES_READ),
     canBill ? supabase.rpc("list_matter_billing") : null,
+    // list_matter_billing leaves sample matters out, and in sample mode only sample matters take
+    // invoices (create_invoice), so the open sample matters this person can read are offered here.
+    canBill && staff.sampleMode
+      ? supabase
+          .from("matters")
+          .select("id, title, stage, matter_participants(role, persons(display_name))")
+          .eq("organization_id", org)
+          .eq("is_sample", true)
+          .neq("stage", "closed")
+          .limit(50)
+      : null,
     supabase.from("firm_payment_accounts").select("account_id, card_payments_status, payouts_status, requirements_due").eq("organization_id", org).maybeSingle(),
   ]);
   const rows = invoices.data ?? [];
-  const billing = (billable?.data ?? []).filter((row) => row.organization_id === org && row.stage !== "closed");
+  const sampleBilling = (samples?.data ?? []).map((row) => ({
+    matter_id: row.id,
+    organization_id: org,
+    title: row.title,
+    stage: row.stage,
+    client_display_name:
+      (row.matter_participants ?? [])
+        .filter((party) => party.role === "applicant")
+        .map((party) => party.persons?.display_name)
+        .filter((name): name is string => Boolean(name))
+        .join(", ") || null,
+  }));
+  const billing = [...(billable?.data ?? []).filter((row) => row.organization_id === org && row.stage !== "closed"), ...sampleBilling];
   const matterIds = [...new Set([...rows.map((row) => row.matter_id), ...billing.map((row) => row.matter_id)])];
   const invoiceIds = rows.map((row) => row.id);
   const [matters, processing] = await Promise.all([
