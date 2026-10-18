@@ -4,6 +4,7 @@ import { AgreementsHeader, CountersignDialog, NewAgreementDialog, SheetAgreement
 import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet/designer/clients";
 import { FinanceHeader, NewInvoiceDialog, RefundDialog, SheetFinance, SheetFinancePayments, SheetFinanceRefunds } from "@/components/sheet/designer/finance";
 import { SheetFrame } from "@/components/sheet/designer/frame";
+import { ApproveTransferDialog, FundsLiveDialogs, RecordPaymentDialog, SheetFinanceFunds, VerifyPaymentDialog } from "@/components/sheet/designer/funds";
 import { StripeAccountStatus } from "@/components/sheet/stripe-connect";
 import { SheetHome } from "@/components/sheet/designer/home";
 import { MatterDialogs, MatterRbar, MatterTopBar, SheetMatter } from "@/components/sheet/designer/matter";
@@ -202,14 +203,14 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
-  // Finance, Invoices, Payments and Refunds and disputes tabs. Client funds, reconciliation and
+  // Finance, Invoices, Payments, Client funds and Refunds and disputes tabs. Reconciliation and
   // the single invoice view are not ported yet and keep their old view.
   if (
     page === "finance" &&
-    (!query.tab || query.tab === "invoices" || query.tab === "payments" || query.tab === "refunds") &&
+    (!query.tab || query.tab === "invoices" || query.tab === "payments" || query.tab === "funds" || query.tab === "refunds") &&
     (access.kind === "live" || access.kind === "sample")
   ) {
-    const tab = query.tab === "payments" || query.tab === "refunds" ? query.tab : "invoices";
+    const tab = query.tab === "payments" || query.tab === "funds" || query.tab === "refunds" ? query.tab : "invoices";
     const finance = await loadSheetFinance(access.staff, tab);
     return (
       <SheetScreen page={page}>
@@ -219,12 +220,22 @@ export async function SheetBody({
           statusbar={finance.chrome.statusbar}
           after={
             <>
+              {finance.funds ? (
+                <>
+                  <RecordPaymentDialog data={finance.funds.pay} />
+                  <VerifyPaymentDialog data={finance.funds.verify} />
+                  <ApproveTransferDialog data={finance.funds.transfer} />
+                </>
+              ) : null}
               <NewInvoiceDialog data={finance.dialog} />
               {finance.refundDialog ? <RefundDialog data={finance.refundDialog} /> : null}
+              {finance.funds ? <FundsLiveDialogs data={finance.funds.more} /> : null}
             </>
           }
         >
-          {finance.payments ? (
+          {finance.funds ? (
+            <SheetFinanceFunds data={finance.funds.data} />
+          ) : finance.payments ? (
             <SheetFinancePayments data={finance.payments} status={<StripeAccountStatus data={finance.account} />} />
           ) : finance.refunds ? (
             <SheetFinanceRefunds data={finance.refunds} />

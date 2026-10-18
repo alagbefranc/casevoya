@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { stripeServer } from "@/lib/stripe/server";
 import { publishableKey } from "@/modules/finance/keys";
+import { ledgerTotals } from "@/modules/finance/client-funds-present";
 import { formatMoney } from "@/modules/finance/money";
 import type { PortalViewer } from "@/modules/portal/load";
 import { invoiceState } from "@/modules/sheet/finance-present";
@@ -25,8 +26,29 @@ export type PortalInvoice = {
   state: { tone: string; label: string; detail?: string };
 };
 
+/** One entry of the client's own client-account ledger that counts (verified, approved or recorded). */
+export type PortalFundsEntry = {
+  id: string;
+  kind: "deposit" | "transfer" | "refund" | "correction";
+  direction: "in" | "out";
+  amountCents: number;
+  occurredOn: string;
+  method: string | null;
+  reference: string | null;
+  invoiceNumber: string | null;
+  matterTitle: string;
+};
+
+export type PortalClientFunds = {
+  /** Held for the client now: verified deposits less transfers, refunds and corrections. */
+  heldCents: number;
+  entries: PortalFundsEntry[];
+};
+
 export type PortalInvoices = {
   invoices: PortalInvoice[];
+  /** The client's own client-account ledger (FIN-03), or null when there is none. Read-only. */
+  clientFunds: PortalClientFunds | null;
   today: string;
   /** Test keys on both sides: the Payment Element can load. */
   payable: boolean;
@@ -52,7 +74,36 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
   const busy = new Set((processing?.data ?? []).map((row) => row.invoice_id));
   const titles = new Map(viewer.matters.map((matter) => [matter.id, matter.title]));
   const pk = publishableKey();
+  // RLS: only the client's own sub-ledgers, and only entries that count.
+  const funds = await supabase
+    .from("client_fund_entries")
+    .select("id, matter_id, kind, status, direction, amount_cents, occurred_on, method, external_reference, invoice_id, created_at")
+    .eq("organization_id", viewer.organizationId)
+    .in("status", ["verified", "approved", "recorded"])
+    .order("created_at", { ascending: true })
+    .limit(500);
+  const fundRows = funds.data ?? [];
+  const numbers = new Map(rows.map((row) => [row.id, row.number]));
+  const clientFunds: PortalClientFunds | null = fundRows.length
+    ? {
+        heldCents: ledgerTotals(
+          fundRows.map((row) => ({ kind: row.kind, status: row.status, direction: row.direction === "in" ? "in" : "out", amountCents: row.amount_cents })),
+        ).balanceCents,
+        entries: fundRows.map((row) => ({
+          id: row.id,
+          kind: row.kind,
+          direction: row.direction === "in" ? "in" : "out",
+          amountCents: row.amount_cents,
+          occurredOn: row.occurred_on,
+          method: row.method,
+          reference: row.external_reference,
+          invoiceNumber: row.invoice_id ? (numbers.get(row.invoice_id) ?? null) : null,
+          matterTitle: titles.get(row.matter_id) ?? "Your matter",
+        })),
+      }
+    : null;
   return {
+    clientFunds,
     today,
     payable: Boolean(pk && stripeServer()),
     publishableKey: pk,

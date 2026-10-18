@@ -49,6 +49,14 @@ import {
   type RefundsData,
 } from "@/components/sheet/designer/finance";
 import { FinanceMarkup } from "@/components/sheet/markup/finance";
+import {
+  ApproveTransferDialog,
+  FundsLiveDialogs,
+  RecordPaymentDialog,
+  SheetFinanceFunds,
+  VerifyPaymentDialog,
+  type FundsData,
+} from "@/components/sheet/designer/funds";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -1155,5 +1163,188 @@ describe("Designer fidelity: Finance", () => {
     expect(html).toContain('class="emp"');
     expect(html).toContain('data-dlg="dlgInv"');
     expect(html).not.toMatch(/Northline|Priya|Kofi|Ana Ferreira|NL-2026|INV-02/);
+  });
+});
+
+const DESIGNER_FUNDS: FundsData = {
+  intro: "Advances held in Northline’s client account, per client and per matter. They’re a liability, not revenue, until an approved earned-fee transfer (FIN-10, FIN-11).",
+  kpis: [
+    { href: "#", label: "Client account balance", value: { money: "CAD 1,500.00" }, note: { left: "Bank ••• 4410", right: "1 client" } },
+    { href: "#", label: "Pending verification", value: { money: "CAD 1,808.00" }, note: { left: "Kofi Mensah", right: "not available yet" }, tone: "warn" },
+    { href: "#", label: "Transfers waiting", value: { count: 1 }, note: { left: "CAD 300.00", right: "needs Lena’s approval" }, tone: "warn" },
+    { href: "?tab=recon", label: "Last reconciliation", value: { money: "30 Sep" }, note: "Signed by Lena Park and Amara Osei" },
+  ],
+  panels: [
+    {
+      client: "Priya Sharma",
+      matter: "NL-2026-0142",
+      badge: { tone: "ok", label: "Reconciled 15 Oct" },
+      rows: [
+        { key: "a", date: "3 Oct", entry: ["Advance payment", "RC-0091"], evidence: ["Card", "evt_5488"], in: "1,000.00", out: "", balance: "1,000.00" },
+        { key: "b", date: "14 Oct", entry: ["Advance deposit", "bank transfer"], evidence: ["TD-88213", "Lena"], in: "500.00", out: "", balance: "1,500.00" },
+        { key: "c", date: "15 Oct", entry: ["Reconciled against the October statement"], evidence: ["Statement p.3"], in: "", out: "", balance: "1,500.00" },
+        { key: "d", date: "—", entry: ["Proposed earned-fee transfer → INV-0218 milestone 1"], evidence: ["Needs 2 approvers"], in: "", out: "(300.00)", balance: "1,500.00" },
+      ],
+      footer: {
+        actions: [{ label: "Review transfer", primary: true, attrs: { "data-dlg": "dlgTr", "data-fpd": "1" } }],
+        note: "After approval: CAD 1,200.00 available. A ledger entry alone doesn’t move money; the bank transfer is recorded next.",
+      },
+    },
+    {
+      client: "Kofi Mensah",
+      matter: "NL-2026-0131",
+      badge: { tone: "rev", label: "Pending verification" },
+      rows: [{ key: "e", date: "16 Oct", entry: ["Advance deposit", "bank transfer, recorded by hand"], evidence: ["RBC-55102", "screenshot"], in: "1,808.00", out: "", balance: "0.00 available" }],
+      footer: null,
+    },
+  ],
+  empty: null,
+  alert: {
+    title: "One client’s money never pays another client’s bill",
+    copy: "Every journal balances by currency and can’t be edited once posted; mistakes are fixed with a reversing entry. Casevoya’s subscription and processor fees never come out of a client’s balance.",
+  },
+};
+
+describe("Designer fidelity: Finance, Client funds", () => {
+  it("renders the Client funds tab and its payment, verify and transfer dialogs exactly as the captured Designer markup", () => {
+    // Only #dlgCN (credit note) is cut from the capture: credit notes don't exist yet.
+    let captured = withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup, { variant: "tab-funds" })));
+    captured = captured.replace(/<dialog class="dlg" id="dlgCN"[\s\S]*?<\/dialog>/, "");
+    expect(captured).not.toContain('id="dlgCN"');
+    for (const id of ["dlgPay", "dlgVer", "dlgTr", "dlgInv"]) expect(captured).toContain(`id="${id}"`);
+    const live = withoutPreloads(
+      renderToStaticMarkup(
+        createElement(
+          SheetFrame,
+          {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/finance" },
+            header: createElement(FinanceHeader, {
+              data: { pills: ["CAD", { left: "Northline Immigration", right: "fictional" }], recordPayment: true, invoiceTab: "INV-0218", tab: "funds" },
+            }),
+            statusbar: {
+              timezone: "America/Toronto",
+              queue: { label: "Reminder queue healthy", detail: "0 retries" },
+              sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+            },
+            after: [
+              createElement(RecordPaymentDialog, {
+                key: "pay",
+                data: {
+                  designer: {
+                    amount: "1,808.00",
+                    methods: ["Bank transfer", "Interac e-Transfer", "Cheque", "Cash (receipt required)"],
+                    reference: "RBC-55102",
+                    received: "16/10/2026",
+                    destinations: ["Client account ••• 4410 (advances)", "Operating account ••• 2208 (earned fees)"],
+                    reviewers: ["Amara Osei", "Lena Park"],
+                  },
+                },
+              }),
+              createElement(VerifyPaymentDialog, {
+                key: "ver",
+                data: {
+                  designer: {
+                    title: "Verify Kofi Mensah’s payment",
+                    rows: [
+                      { term: "Amount", parts: ["CAD 1,808.00"] },
+                      { term: "Reference", parts: ["RBC-55102"] },
+                      { term: "Bank line", parts: ["16 Oct", "“MENSAH K", "RBC-55102”", "CAD 1,808.00"] },
+                      { term: "Recorded by", parts: ["Lena Park"] },
+                      { term: "Destination", parts: ["Client account ••• 4410"] },
+                    ],
+                  },
+                },
+              }),
+              createElement(ApproveTransferDialog, {
+                key: "tr",
+                data: {
+                  designer: {
+                    rows: [
+                      { term: "From", parts: ["Priya Sharma’s client ledger", "CAD 1,500.00 available"] },
+                      { term: "To", parts: ["Operating account ••• 2208"] },
+                      { term: "For", parts: ["INV-0218", "milestone 1 (preparation delivered 1–15 Oct)"] },
+                      { term: "Amount", parts: ["CAD 300.00", "within available funds and eligible earned charges"] },
+                      { term: "Approvals", parts: ["1. Amara Osei", "approved 16 Oct, 14:05", "2. Lena Park", "waiting"] },
+                      { term: "Bank transfer", parts: ["Recorded after both approvals"] },
+                    ],
+                    note: "Two people approve by default. A solo practice records a self-approval with a reason.",
+                    approveLabel: "Approve as Lena Park",
+                  },
+                },
+              }),
+              createElement(NewInvoiceDialog, { key: "inv", data: DESIGNER_NEW_INVOICE }),
+            ],
+          },
+          createElement(SheetFinanceFunds, { data: DESIGNER_FUNDS }),
+        ),
+      ),
+    );
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+    }
+    expect(live).toBe(captured);
+  });
+
+  it("shows a firm without client funds an honest empty state, with no sample people", () => {
+    const html = renderToStaticMarkup(
+      createElement(SheetFinanceFunds, {
+        data: {
+          intro: "Synthetic firm",
+          kpis: [{ href: "?tab=funds", label: "Client account balance", value: { money: "CAD 0.00" }, note: "No client account yet" }],
+          panels: [],
+          empty: { title: "No client account yet", copy: "The firm owner adds it first.", actions: [{ label: "Add the client account", primary: true, attrs: { "data-funds-open": "dlgAcct" } }] },
+          alert: { title: "Synthetic", copy: "Synthetic" },
+        },
+      }),
+    );
+    expect(html).toContain('class="emp"');
+    expect(html).toContain('data-funds-open="dlgAcct"');
+    expect(html).not.toContain("<table");
+    expect(html).toMatch(/<div class="alert lockd rv" style="--i:3">/);
+    expect(html).not.toMatch(/Northline|Priya|Kofi|NL-2026|INV-02|RBC-|TD-882|Lena/);
+  });
+
+  it("wires the live dialogs by data attributes, with no Designer toast or sample values", () => {
+    const org = "33333333-3333-4333-8333-333333333333";
+    const ledger = "44444444-4444-4444-8444-444444444444";
+    const html = renderToStaticMarkup(
+      createElement("div", null, [
+        createElement(RecordPaymentDialog, {
+          key: "pay",
+          data: {
+            live: {
+              organizationId: org,
+              today: "2026-10-18",
+              sampleMode: false,
+              parties: [{ value: `${ledger}:${ledger}`, label: "Dana Lee · CV-2026-0001" }],
+              accounts: [{ value: ledger, label: "Client account ••• 1234" }],
+              blocked: null,
+            },
+          },
+        }),
+        createElement(VerifyPaymentDialog, { key: "ver", data: { live: { organizationId: org } } }),
+        createElement(ApproveTransferDialog, { key: "tr", data: { live: { organizationId: org } } }),
+        createElement(FundsLiveDialogs, {
+          key: "more",
+          data: { organizationId: org, today: "2026-10-18", ledgers: [{ value: ledger, label: "Dana Lee", data: { "data-matter": ledger, "data-available": "10000" } }], invoices: [], corrections: [], isOwner: false },
+        }),
+      ]),
+    );
+    expect(html).not.toContain("data-toast");
+    expect(html).not.toMatch(/Northline|Priya|Kofi|Lena|Amara|RBC-|4410|2208/);
+    expect(html).toContain(`data-funds-deposit="1" data-org="${org}" data-today="2026-10-18"`);
+    expect(html).toContain('<input class="inp" id="mpD" type="date" max="2026-10-18" value="2026-10-18"/>');
+    expect(html).toContain(`data-funds-verify="1" data-org="${org}"`);
+    expect(html).toContain(`data-funds-reject="1" data-org="${org}"`);
+    expect(html).toContain(`data-funds-approve="1" data-org="${org}"`);
+    expect(html).toContain(`data-funds-decline="1" data-org="${org}"`);
+    expect(html).toContain('<div class="alert warn" id="tSelf" hidden="">');
+    expect(html).toContain(`<option value="${ledger}" data-matter="${ledger}" data-available="10000">Dana Lee</option>`);
+    // Nothing to correct, and only the owner adds the client account.
+    expect(html).toContain(`data-funds-correct="1" data-org="${org}" disabled=""`);
+    expect(html).toContain(`data-funds-account="1" data-org="${org}" disabled=""`);
+    expect(html).not.toContain('id="mpV"');
   });
 });
