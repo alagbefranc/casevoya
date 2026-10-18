@@ -28,7 +28,8 @@ method or other content. How Casevoya meets it:
   advance receipts). Append-only; a later refund or dispute does not change it.
 * Required by the Code: the invoice (number, description, issue date and total are on the receipt).
 * Product choices, not required by the Code: amount, date paid, client name, matter, method
-  ("Card", or the firm's client account by institution and last four digits), reference, firm
+  (the card brand and last four digits from Stripe, e.g. "Visa ••••4242", or "Card" when Stripe
+  gave none; or the firm's client account by institution and last four digits), reference, firm
   names, the responsible consultant and their CICC licence when on file, issued time, the s. 33(3)
   citation.
 * "Provide the client with a receipt": the client downloads it from `/portal/payments`; billing
@@ -36,7 +37,8 @@ method or other content. How Casevoya meets it:
   (owner is preparing HTML templates). Whether a download link counts as "providing" is an open
   question for the owner.
 * Treating a client-account transfer as "a payment received from a client" is a reading, not a
-  quoted rule: the money was the client's and it paid their invoice. Open question for the owner.
+  quoted rule: the money was the client's and it paid their invoice. Decided by Francis
+  (2026-10-18): it counts, so an approved transfer gets a receipt.
 
 ## What the Code says (s. 32, 33, 36, 37, 39), and how the ledger maps to it
 

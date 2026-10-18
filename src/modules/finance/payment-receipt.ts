@@ -39,6 +39,9 @@ export type InvoicePaymentReceipt = {
   accountLabel: string | null;
   accountInstitution: string | null;
   accountLast4: string | null;
+  /** Stripe card brand (e.g. "visa") and last four digits, when known. Brand and last 4 only. */
+  cardBrand: string | null;
+  cardLast4: string | null;
   isSample: boolean;
 };
 
@@ -72,6 +75,9 @@ export function paymentReceiptFromRpc(data: unknown): InvoicePaymentReceipt | nu
   const accountInstitution = str(row.account_institution);
   const accountLast4 = str(row.account_last4);
   if (method === "client_account" && (!accountLabel || !accountInstitution || !accountLast4)) return null;
+  const cardBrand = str(row.card_brand);
+  const cardLast4 = str(row.card_last4);
+  const card = method === "card" && cardBrand && cardLast4 && /^[0-9]{4}$/.test(cardLast4) ? { cardBrand, cardLast4 } : { cardBrand: null, cardLast4: null };
   return {
     ...(required as { [K in keyof typeof required]: string }),
     source,
@@ -86,6 +92,7 @@ export function paymentReceiptFromRpc(data: unknown): InvoicePaymentReceipt | nu
     accountLabel,
     accountInstitution,
     accountLast4,
+    ...card,
     isSample: row.is_sample === true,
   };
 }
@@ -98,12 +105,38 @@ export function invoiceLine(
   return `${receipt.invoiceNumber} — ${receipt.invoiceDescription} (${facts.join(", ")})`;
 }
 
+/** Stripe's card brand codes, as people write them. An unknown brand reads "Card". */
+const CARD_BRANDS: Record<string, string> = {
+  amex: "American Express",
+  american_express: "American Express",
+  cartes_bancaires: "Cartes Bancaires",
+  diners: "Diners Club",
+  diners_club: "Diners Club",
+  discover: "Discover",
+  eftpos_au: "eftpos",
+  interac: "Interac",
+  jcb: "JCB",
+  link: "Link",
+  mastercard: "Mastercard",
+  unionpay: "UnionPay",
+  visa: "Visa",
+};
+
+/** "Visa" from "visa"; "Card" for "unknown" or a brand Casevoya doesn't name. */
+export function cardBrandName(brand: string | null | undefined): string {
+  return (brand && CARD_BRANDS[brand.trim().toLowerCase()]) || "Card";
+}
+
 /**
- * How it was paid. Casevoya stores no card details, so a card payment reads "Card". A transfer
- * names the firm's client account it came from (institution and last four digits only).
+ * How it was paid. A card payment reads "Visa ••••4242" when Stripe gave the brand and last 4
+ * (stored from the verified webhook; nothing else about the card is kept), otherwise "Card". A
+ * transfer names the firm's client account it came from (institution and last four digits only).
  */
-export function paymentMethodLine(receipt: Pick<InvoicePaymentReceipt, "method" | "accountLabel" | "accountInstitution" | "accountLast4">): string {
-  if (receipt.method === "card") return "Card";
+export function paymentMethodLine(
+  receipt: Pick<InvoicePaymentReceipt, "method" | "accountLabel" | "accountInstitution" | "accountLast4"> &
+    Partial<Pick<InvoicePaymentReceipt, "cardBrand" | "cardLast4">>,
+): string {
+  if (receipt.method === "card") return receipt.cardLast4 ? `${cardBrandName(receipt.cardBrand)} ••••${receipt.cardLast4}` : "Card";
   return `Transfer from the firm’s client account at ${receipt.accountInstitution} ••• ${receipt.accountLast4} (${receipt.accountLabel}), from money held for the client`;
 }
 

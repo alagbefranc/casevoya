@@ -7,6 +7,10 @@ import type { Json } from "@/types/database.types";
  * events from a connected account are applied; the database (app.apply_stripe_payment_event,
  * app.apply_stripe_reversal_event) dedupes by provider, connected account and event id, and checks
  * account, amount and currency again.
+ *
+ * For payment_intent.succeeded, the card brand and last 4 (nothing else) are recorded first
+ * (public.record_invoice_payment_card) so the receipt issued when the event is applied shows them.
+ * That step is best effort: it never blocks or fails applying the payment.
  */
 
 export const PAYMENT_EVENTS = new Set([
@@ -221,12 +225,66 @@ export function reversalEventArgs(event: Stripe.Event): ReversalEventArgs | null
 
 export type ApplyResult = { outcome: string } & Record<string, unknown>;
 
+/**
+ * Card brand and last four digits of a card payment (decided by Francis: a card receipt reads
+ * "Visa ••••4242"). Nothing else about the card is ever read or kept.
+ */
+export type CardDetails = { brand: string; last4: string };
+
+export type RecordCardArgs = {
+  p_account_id: string;
+  p_payment_intent_id: string;
+  p_card_brand: string;
+  p_card_last4: string;
+  p_livemode: boolean;
+};
+
+/** Events whose PaymentIntent has a charge whose card is worth recording. */
+export const CARD_EVENTS = new Set(["payment_intent.succeeded"]);
+
+const BRAND = /^[a-z0-9_]{1,40}$/;
+const LAST4 = /^[0-9]{4}$/;
+
+/** Brand and last 4 from a card object shaped like `payment_method_details.card` or `PaymentMethod.card`. */
+export function cardDetailsOf(card: unknown): CardDetails | null {
+  if (!card || typeof card !== "object") return null;
+  const { brand, last4 } = card as { brand?: unknown; last4?: unknown };
+  const cleanBrand = typeof brand === "string" ? brand.trim().toLowerCase() : "";
+  const cleanLast4 = typeof last4 === "string" ? last4.trim() : "";
+  return BRAND.test(cleanBrand) && LAST4.test(cleanLast4) ? { brand: cleanBrand, last4: cleanLast4 } : null;
+}
+
+/**
+ * The card of a PaymentIntent, when the object already carries it: `latest_charge` expanded (its
+ * `payment_method_details.card`) or `payment_method` expanded (its `card`). Events deliver both as
+ * ids, so for a webhook this is usually null and the caller looks the PaymentIntent up.
+ */
+export function cardFromPaymentIntent(intent: Pick<Stripe.PaymentIntent, "latest_charge" | "payment_method"> | null | undefined): CardDetails | null {
+  if (!intent) return null;
+  const charge = intent.latest_charge;
+  if (charge && typeof charge === "object") {
+    const fromCharge = cardDetailsOf(charge.payment_method_details?.card);
+    if (fromCharge) return fromCharge;
+  }
+  const method = intent.payment_method;
+  if (method && typeof method === "object") return cardDetailsOf(method.card);
+  return null;
+}
+
 export type WebhookDeps = {
   secret: string | null;
   apply: ((args: PaymentEventArgs) => Promise<ApplyResult>) | null;
   /** Refund and dispute events. Without it they are left for Stripe to retry (503). */
   applyReversal?: ((args: ReversalEventArgs) => Promise<ApplyResult>) | null;
   cryptoProvider?: Stripe.CryptoProvider;
+  /**
+   * Looks up the card of a PaymentIntent on the connected account (PaymentIntent with
+   * latest_charge expanded). Optional; when missing, failing or returning nothing, the payment is
+   * still applied and its card stays unknown.
+   */
+  lookupCard?: ((args: { accountId: string; paymentIntentId: string }) => Promise<CardDetails | null>) | null;
+  /** Stores the card on the payment (public.record_invoice_payment_card). Failures never block. */
+  recordCard?: ((args: RecordCardArgs) => Promise<ApplyResult>) | null;
 };
 
 export type WebhookResponse = { status: number; body: Record<string, unknown> };
@@ -250,10 +308,54 @@ export async function handleStripeWebhook(body: string, signature: string | null
   if (!args && !reversal) return { status: 200, body: { received: true, outcome: "ignored" } };
   const applyReversal = deps.applyReversal;
   if (reversal && !applyReversal) return { status: 503, body: { error: "Stripe webhooks are not configured." } };
+  const card = args ? await recordCardBeforeApply(event, args, deps) : null;
   try {
     const result = args ? await deps.apply(args) : reversal && applyReversal ? await applyReversal(reversal) : { outcome: "ignored" };
+    // The payment's row did not exist yet (recovered from the PaymentIntent metadata by the event
+    // just applied): record the card now. Its receipt was issued without it and is filled once.
+    if (args && card?.pending && result.outcome === "applied") await recordCard(deps, card.args);
     return { status: 200, body: { received: true, outcome: result.outcome } };
   } catch {
     return { status: 500, body: { error: "The event was not recorded." } };
   }
+}
+
+async function recordCard(deps: WebhookDeps, args: RecordCardArgs): Promise<string | null> {
+  if (!deps.recordCard) return null;
+  try {
+    return (await deps.recordCard(args)).outcome;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * For a succeeded card payment, stores the card brand and last 4 before the event is applied, so
+ * the receipt issued when it is applied copies them. Never throws: any failure leaves the card
+ * unknown and the payment is applied as usual.
+ */
+async function recordCardBeforeApply(
+  event: Stripe.Event,
+  args: PaymentEventArgs,
+  deps: WebhookDeps,
+): Promise<{ args: RecordCardArgs; pending: boolean } | null> {
+  if (!CARD_EVENTS.has(args.p_event_type) || args.p_livemode || !deps.recordCard) return null;
+  let card = cardFromPaymentIntent(event.data.object as Stripe.PaymentIntent);
+  if (!card && deps.lookupCard) {
+    try {
+      card = cardDetailsOf(await deps.lookupCard({ accountId: args.p_account_id, paymentIntentId: args.p_payment_intent_id }));
+    } catch {
+      card = null;
+    }
+  }
+  if (!card) return null;
+  const recordArgs: RecordCardArgs = {
+    p_account_id: args.p_account_id,
+    p_payment_intent_id: args.p_payment_intent_id,
+    p_card_brand: card.brand,
+    p_card_last4: card.last4,
+    p_livemode: false,
+  };
+  const outcome = await recordCard(deps, recordArgs);
+  return { args: recordArgs, pending: outcome === "unknown_payment" };
 }
