@@ -1,6 +1,11 @@
 "use server";
 
+import { headers } from "next/headers";
+import { createClient } from "@/lib/supabase/server";
+import { isUuid } from "@/lib/tenant/context";
 import { clearMatterOnHold, overrideMatterStage, recordGovernmentStatus, recordMatterOutcome, setMatterOnHold } from "@/modules/matters/actions";
+import { createPortalInvitation } from "@/modules/portal-invitations/actions";
+import { acceptLink, guardianSubjects, readPortalInvite } from "@/modules/sheet/portal-invite";
 
 /**
  * The Designer matter page's dialogs. They send no authenticator code: the database
@@ -107,4 +112,52 @@ export async function completeTaskFromSheet(form: FormData) {
     expectedVersion: Number(field(form, "version")),
     status: "done",
   });
+}
+
+/**
+ * The matter page's "Invite to the portal" dialog. public.create_portal_invitation decides
+ * (role on the matter, adults only, guardian subjects, sample versus real, the real-client
+ * lock, rate limits, step-up) and queues the invitation email in the outbox. The email
+ * carries no link: the private link comes back here once, for the inviter to give them.
+ */
+export async function invitePortalPerson(input: {
+  organizationId: string;
+  matterId: string;
+  personId: string;
+  roleLabel: string;
+  email: string;
+}): Promise<{ error: string } | { link: string; expiresAt: string | null }> {
+  const read = readPortalInvite({ personId: input.personId, roleLabel: input.roleLabel, email: input.email });
+  if ("error" in read) return { error: read.error };
+  if (!isUuid(input.organizationId) || !isUuid(input.matterId)) return { error: "Choose a person and a matter." };
+
+  let subjects: string[] = [];
+  if (read.input.role === "guardian") {
+    // Read as the signed-in staff member, so row-level security decides what is visible.
+    const supabase = await createClient({ organizationId: input.organizationId });
+    const { data: parties } = await supabase
+      .from("matter_participants")
+      .select("person_id, role")
+      .eq("organization_id", input.organizationId)
+      .eq("matter_id", input.matterId)
+      .in("role", ["applicant", "dependant"]);
+    const childIds = (parties ?? []).map((row) => row.person_id).filter((id): id is string => Boolean(id));
+    const { data: minors } = childIds.length
+      ? await supabase.from("persons").select("id").eq("organization_id", input.organizationId).eq("is_minor", true).in("id", childIds)
+      : { data: [] };
+    subjects = guardianSubjects(read.input.personId, (minors ?? []).map((row) => row.id));
+  }
+
+  const created = await createPortalInvitation({
+    organizationId: input.organizationId,
+    personId: read.input.personId,
+    matterId: input.matterId,
+    role: read.input.role,
+    email: read.input.email,
+    guardianSubjectIds: subjects,
+    code: null,
+  });
+  if ("error" in created) return { error: created.error ?? "That invitation could not be sent." };
+  const origin = (await headers()).get("origin") ?? "";
+  return { link: acceptLink(origin, read.input.role, created.token), expiresAt: created.expiresAt };
 }
