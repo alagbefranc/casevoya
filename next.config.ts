@@ -13,6 +13,12 @@ const nextConfig: NextConfig = {
       { source: "/sheet/portal-rafael", destination: "/portal/rafael", permanent: false },
       { source: "/sheet/matter", destination: "/portal/documents", permanent: false, has: [{ type: "query", key: "tab", value: "documents" }] },
       { source: "/sheet/matter", destination: "/portal/matters", permanent: false },
+      // The legal pages live on the public site; the app's links (setup, sign-in footers) used to 404.
+      { source: "/terms", destination: "https://casevoya.ca/terms", permanent: false },
+      { source: "/privacy", destination: "https://casevoya.ca/privacy", permanent: false },
+      { source: "/subprocessors", destination: "https://casevoya.ca/subprocessors", permanent: false },
+      { source: "/help", destination: "https://casevoya.ca/help", permanent: false },
+      { source: "/status", destination: "https://casevoya.ca/status", permanent: false },
     ];
   },
   // Off for the Cloudflare build until opennextjs-cloudflare#1318 is fixed; on everywhere else.
