@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { SheetFrame, type RbarData } from "@/components/sheet/designer/frame";
 import { SheetHome, type HomeData } from "@/components/sheet/designer/home";
 import { MattersTopBar, SheetMatters, type MattersData } from "@/components/sheet/designer/matters";
@@ -19,6 +19,11 @@ import { SheetSidebar, type SidebarData } from "@/components/sheet/designer/side
 import { IndexMarkup } from "@/components/sheet/markup/index";
 import { MatterMarkup } from "@/components/sheet/markup/matter";
 import { MattersMarkup } from "@/components/sheet/markup/matters";
+import { SampleModeMarkup } from "@/components/sheet/markup/sample-mode";
+import { SampleCasePanel, type SampleCaseData } from "@/components/sheet/designer/sample-case";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
+vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
 
 /**
  * The data-driven Designer components must produce the same HTML as the captured
@@ -323,6 +328,48 @@ describe("Designer fidelity", () => {
       '<header class="top"',
       '<div id="content">',
     );
+    expect(live).toBe(captured);
+  });
+
+  it("renders the sample-mode content exactly as the captured Designer markup", () => {
+    const sample: SampleCaseData = {
+      applicant: "Priya",
+      steps: [
+        { key: "intake", image: "intake", title: "Send an intake form", note: "Priya fills in her history", href: "/sheet/matters/priya?tab=intake", done: true },
+        { key: "agreement", image: "agreement", title: "Send a service agreement", note: "Signing order: Priya, then Rafael", href: "/sheet/portal-agreements", done: true },
+        { key: "upload", image: "upload", title: "Request and review an upload", note: "Marriage certificate", href: "/sheet/matters/priya?tab=documents", done: false },
+        { key: "reminder", image: "reminder", title: "Schedule a reminder", note: "Police certificate due in 14 days", href: "/sheet/automations", done: false },
+        { key: "invoice", image: "invoice", title: "Issue an invoice", note: "From Northline to Priya", href: "/sheet/matters/priya?tab=billing", done: false },
+        { key: "export", image: "export", title: "Export the file", note: "ZIP with the audit trail", href: "/sheet/two-step?step=6", done: false },
+      ],
+      licence: { holder: "Amara Osei", status: "waiting for review" },
+    };
+    const content = (html: string) => region(html, '<div id="content">', '<aside id="rbar"');
+    const captured = withoutPreloads(content(renderToStaticMarkup(createElement(SampleModeMarkup))));
+    const live = withoutPreloads(
+      content(
+        renderToStaticMarkup(
+          createElement(SheetFrame, {
+            sidebar: DESIGNER_SIDEBAR,
+            top: { firmName: "Northline Immigration", pills: [] },
+            rbar: DESIGNER_RBAR,
+            statusbar: { timezone: "America/Toronto" },
+          }, createElement(SheetHome, {
+            data: {
+              ...DESIGNER_HOME,
+              greeting: "Welcome to Northline, Amara.",
+              summary: "You\u2019re exploring with sample data. Everyone here is fictional, so nothing you send reaches a real person.",
+            },
+            lead: createElement(SampleCasePanel, { data: sample }),
+          })),
+        ),
+      ),
+    );
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+    }
     expect(live).toBe(captured);
   });
 });

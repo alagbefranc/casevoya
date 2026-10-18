@@ -5,6 +5,8 @@ import { SheetHome } from "@/components/sheet/designer/home";
 import { MatterDialogs, MatterRbar, MatterTopBar, SheetMatter } from "@/components/sheet/designer/matter";
 import { MATTER_CSS } from "@/components/sheet/designer/matter-css";
 import { MattersTopBar, SheetMatters } from "@/components/sheet/designer/matters";
+import { SampleCasePanel } from "@/components/sheet/designer/sample-case";
+import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
@@ -13,6 +15,7 @@ import { signInLocation } from "@/lib/auth/redirect";
 import { loadSheetHome } from "@/modules/sheet/home-load";
 import { loadSheetMatter } from "@/modules/sheet/matter-load";
 import { loadSheetMatters } from "@/modules/sheet/matters-load";
+import { loadSheetSample } from "@/modules/sheet/sample-load";
 import { loadSheetAccess, loadSheetBundle } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 
@@ -56,6 +59,17 @@ export async function SheetBody({
       <SheetScreen page={page}>
         <SheetFrame sidebar={chrome.sidebar} top={chrome.top} rbar={rbar} statusbar={chrome.statusbar}>
           <SheetHome data={home} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  if (page === "sample-mode" && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, rbar, home, sample } = await loadSheetSample(access.staff);
+    return (
+      <SheetScreen page={page}>
+        <style dangerouslySetInnerHTML={{ __html: SAMPLE_CASE_CSS }} />
+        <SheetFrame sidebar={chrome.sidebar} top={chrome.top} rbar={rbar} statusbar={chrome.statusbar}>
+          <SheetHome data={home} lead={<SampleCasePanel data={sample} />} />
         </SheetFrame>
       </SheetScreen>
     );

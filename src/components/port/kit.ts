@@ -384,10 +384,6 @@ export function closeDlg(id: string) {
   }, 150);
 }
 
-export function uploadDemoLogo() {
-  toast2("Logo uploaded", { kind: "ok", sub: "Shown on this screen only." });
-}
-
 /** Calendar and payment providers have no OAuth backend yet. */
 export function connectOrRun(button: HTMLElement) {
   if (button.closest(".conn")) {

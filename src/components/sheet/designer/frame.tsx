@@ -56,7 +56,9 @@ export function Empty({ art, title, copy, px = 88, children }: { art: string; ti
   );
 }
 
-export type TopBarData = { firmName: string; pills: string[] };
+/** A plain pill, or the Designer's tinted two-part pill ("Trial · 14 days left"). */
+export type TopPill = string | { left: string; right: string; tint: true };
+export type TopBarData = { firmName: string; pills: TopPill[] };
 
 export function SheetTopBar({ data }: { data: TopBarData }) {
   return (
@@ -66,11 +68,19 @@ export function SheetTopBar({ data }: { data: TopBarData }) {
         {data.firmName}
         <Icon name={"sort"} cls={"ic dd"} />
       </button>
-      {data.pills.map((pill) => (
-        <span key={pill} className={"pill"}>
-          {pill}
-        </span>
-      ))}
+      {data.pills.map((pill) =>
+        typeof pill === "string" ? (
+          <span key={pill} className={"pill"}>
+            {pill}
+          </span>
+        ) : (
+          <span key={`${pill.left}-${pill.right}`} className={"pill"} style={{ background: "var(--tint)", color: "var(--tint-t)" }}>
+            <span>
+              <Pair left={pill.left} right={pill.right} />
+            </span>
+          </span>
+        ),
+      )}
       <span className={"acts"}>
         <button className={"btn s sm"} data-palette={"1"}>
           <Icon name={"search"} cls={"ic s"} />

@@ -5071,6 +5071,7 @@ export type Database = {
         }
         Returns: Json
       }
+      ensure_sample_case: { Args: never; Returns: string }
       complete_sample_proof: {
         Args: {
           p_matter_id: string

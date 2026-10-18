@@ -2,6 +2,7 @@
  * The Designer's Sheet home (`#content` of `markup/index.tsx`), rendered from the firm's records.
  * Same DOM, classes and order; empty data uses the Designer's empty-state panel.
  */
+import type { ReactNode } from "react";
 import type { TaskBadge } from "@/modules/sheet/home-present";
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair } from "./frame";
@@ -51,9 +52,15 @@ export function percent(count: number, total: number): string {
 
 const NUM_STYLE = { fontSize: "30px", fontWeight: "300", minWidth: "44px" };
 
-export function SheetHome({ data }: { data: HomeData }) {
+/**
+ * `lead` sits between the greeting and the quick actions (the sample-mode page puts its
+ * sample-case panel there).
+ */
+export function SheetHome({ data, lead }: { data: HomeData; lead?: ReactNode }) {
   const total = data.gauge.reduce((sum, segment) => sum + segment.count, 0);
   const arcs = gaugeArcs(data.gauge);
+  // Reveal order (`--i`) as the Designer numbers it, with and without the lead panel.
+  const order = lead ? { quick: "2", panel: "2", bar: "4", tasks: "5" } : { quick: "1", panel: "2", bar: "3", tasks: "4" };
   return (
     <>
       <div className={"ph rv"} style={{ "--i": "0" } as React.CSSProperties}>
@@ -62,8 +69,9 @@ export function SheetHome({ data }: { data: HomeData }) {
         </h1>
         <p>{data.summary}</p>
       </div>
+      {lead}
       <div
-        style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "24px", "--i": "1" } as React.CSSProperties}
+        style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "24px", "--i": order.quick } as React.CSSProperties}
         id={"quick"}
         className={"rv"}
       >
@@ -88,7 +96,7 @@ export function SheetHome({ data }: { data: HomeData }) {
           {"Ask Vo for a draft"}
         </a>
       </div>
-      <div className={"panel rv"} style={{ "--i": "2" } as React.CSSProperties}>
+      <div className={"panel rv"} style={{ "--i": order.panel } as React.CSSProperties}>
         <h2>
           <Icon name={"dashboard"} />
           {"Your practice today"}
@@ -177,7 +185,7 @@ export function SheetHome({ data }: { data: HomeData }) {
           </div>
         </div>
       </div>
-      <div className={"bar rv"} style={{ marginTop: "4px", "--i": "3" } as React.CSSProperties}>
+      <div className={"bar rv"} style={{ marginTop: "4px", "--i": order.bar } as React.CSSProperties}>
         <Icon name={"search"} cls={"ic s"} />
         <input placeholder={"Search today’s tasks"} aria-label={"Search today’s tasks"} />
         <span className={"fchip on"}>{"Mine"}</span>
@@ -187,7 +195,7 @@ export function SheetHome({ data }: { data: HomeData }) {
           {"Filter"}
         </span>
       </div>
-      <div id={"tasks"} className={"rv"} style={{ "--i": "4" } as React.CSSProperties}>
+      <div id={"tasks"} className={"rv"} style={{ "--i": order.tasks } as React.CSSProperties}>
         {data.tasks.length === 0 ? (
           <div className={"panel"}>
             <Empty

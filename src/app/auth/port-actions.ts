@@ -18,6 +18,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { LICENCE_PROOF_BUCKET, ownLicenceProofKey } from "@/modules/firm-onboarding/licence-proof";
+import { FIRM_LOGO_BUCKET, ownFirmLogoKey } from "@/modules/firm-onboarding/firm-logo";
 
 export type PortResult =
   | { ok: true; href?: string; codes?: string[] }
@@ -79,12 +80,15 @@ function officeParts(raw: string) {
   return { addressLine, locality, region, postal };
 }
 
-/** The proof file exists in the private bucket (written only by /api/firm/licence-proof). */
-async function licenceProofStored(key: string): Promise<boolean> {
+/**
+ * The file exists in its private bucket. Licence proofs are written only by /api/firm/licence-proof
+ * and firm logos only by /api/firm/logo.
+ */
+async function privateFileStored(bucket: string, key: string): Promise<boolean> {
   try {
     const folder = key.slice(0, key.lastIndexOf("/"));
     const name = key.slice(key.lastIndexOf("/") + 1);
-    const { data } = await createServiceClient().storage.from(LICENCE_PROOF_BUCKET).list(folder, { search: name, limit: 1 });
+    const { data } = await createServiceClient().storage.from(bucket).list(folder, { search: name, limit: 1 });
     return Boolean(data?.some((object) => object.name === name));
   } catch {
     return false;
@@ -293,7 +297,7 @@ export async function saveSetupStep(
     const locator = text(fields, "lproof");
     const proofKey = ownLicenceProofKey(locator, organizationId, workspace.membershipId);
     if (!proofKey) return fail("Upload your licence proof to continue.");
-    if (!(await licenceProofStored(proofKey))) return fail("Your licence proof wasn’t found. Upload it again.");
+    if (!(await privateFileStored(LICENCE_PROOF_BUCKET, proofKey))) return fail("Your licence proof wasn’t found. Upload it again.");
     const { data: existing } = await supabase
       .from("consultant_credentials")
       .select("id")
@@ -311,6 +315,15 @@ export async function saveSetupStep(
       });
       if (declared) return fromRpc(declared);
     }
+  }
+
+  // The firm's logo, uploaded on this step (see /api/firm/logo). Saving branding replaces it, so the
+  // saved logo rides in #logo too; an empty value means no logo.
+  const logoLocator = step === "branding" ? text(fields, "logo") : "";
+  if (logoLocator) {
+    const logoKey = ownFirmLogoKey(logoLocator, organizationId);
+    if (!logoKey) return fail("Upload your logo again.");
+    if (!(await privateFileStored(FIRM_LOGO_BUCKET, logoKey))) return fail("Your logo wasn’t found. Upload it again.");
   }
 
   const locale = text(fields, "lc").startsWith("Fran") ? "fr-CA" : "en-CA";
@@ -340,6 +353,7 @@ export async function saveSetupStep(
     branding: {
       step,
       acknowledged: true,
+      ...(logoLocator ? { logoLocator } : {}),
       ...(accent && /^#[0-9A-Fa-f]{6}$/.test(accent) ? { accent } : {}),
     },
     calendar_and_payments: { step, acknowledged: true },
@@ -366,6 +380,9 @@ export async function saveSetupStep(
       const { error: modeError } = await supabase.rpc("set_sample_mode", { p_enabled: fields.sample_mode });
       if (modeError) return fromRpc(modeError);
     }
+    // The sample case the trial promised, as real sample rows (once per firm).
+    const { error: sampleError } = await supabase.rpc("ensure_sample_case");
+    if (sampleError) return fromRpc(sampleError);
     return { ok: true, href: "/sheet/sample-mode" };
   }
   return { ok: true };
