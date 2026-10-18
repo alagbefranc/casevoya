@@ -14,6 +14,8 @@ export type SealSigner = {
   userAgent: string | null;
   consentVersion: string | null;
   consentText: string | null;
+  /** The consultant's CICC licence ("RCIC R123456"), when they countersign for the firm. */
+  licence?: string | null;
 };
 
 export type SealEvent = {
@@ -130,6 +132,7 @@ export function parseSealSource(value: unknown): SealSource {
         userAgent: str(row.user_agent),
         consentVersion: str(row.consent_version),
         consentText: str(row.consent_text),
+        licence: str(row.licence),
       };
     }),
     events: (Array.isArray(root.events) ? root.events : []).map((item) => {

@@ -64,10 +64,26 @@ function inviteEmail(firm: string, kind: "staff" | "portal", link: string | null
   return { subject, html, text: `${lead} ${link} ${INVITE_EXPIRY}\n\n${firm}\n` };
 }
 
+/** The Sheet page a staff signer opens to countersign. The mail worker joins it to the app origin. */
+export const COUNTERSIGN_PATH = "/sheet/agreements";
+
+/** Staff copy of the agreement email: it is the consultant's turn to countersign, in the Sheet. */
+function countersignEmail(firm: string, link: string | null): EmailContent {
+  const subject = `Your countersignature is needed — ${firm}`;
+  const lead = "Everyone before you has signed an agreement. It is your turn to countersign it for the firm.";
+  if (!link) return document(subject, `${lead} Open Agreements in Casevoya to sign.`, firm);
+  const html =
+    `<!DOCTYPE html><html><body><p>${escapeHtml(lead)} Open Agreements in Casevoya to sign: ` +
+    `<a href="${escapeHtml(link)}">${escapeHtml(link)}</a></p><p>${escapeHtml(firm)}</p></body></html>`;
+  return { subject, html, text: `${lead} Open Agreements in Casevoya to sign: ${link}\n\n${firm}\n` };
+}
+
 /**
  * HTML and text for one template. Copy stays generic: no file body, no case narrative. Only the
- * invitation carries a link, and only the one the mail worker opened from its sealed form
- * (context.link); without it the invitation says the link is not in the email.
+ * invitation carries a private link, and only the one the mail worker opened from its sealed form
+ * (context.link); without it the invitation says the link is not in the email. The staff copy of
+ * the agreement email (context.audience "staff") links to the Sheet's Agreements page, which the
+ * mail worker builds from the app origin; it carries no token.
  */
 export function renderEmail(context: Context): EmailContent {
   const firm = firmName(context);
@@ -81,6 +97,9 @@ export function renderEmail(context: Context): EmailContent {
       ? `${firm} has a date on your file (${due}). Open the portal for what to do next.`
       : `${firm} has a date on your file. Open the portal for what to do next.`;
     return document(`Reminder from ${firm}`, paragraph, firm);
+  }
+  if (template === "agreement" && textOf(context.audience) === "staff") {
+    return countersignEmail(firm, inviteHref(context.link));
   }
   if (template === "agreement") {
     return document(
