@@ -114,3 +114,33 @@ export function summary(now: LocalNow, city: string, documentsToReview: number, 
   const joined = parts.map((part, index) => (index === 0 ? part : part.charAt(0).toLowerCase() + part.slice(1)));
   return `${date} ${joined.join(", and ")}.`;
 }
+
+/**
+ * What a firm activity looks like in the Designer's notification list, keyed by the audit action
+ * the database writes. Other actions are not shown. tests/audit-actions.test.ts checks every key.
+ */
+export const NOTICE: Record<string, string> = {
+  "document.uploaded": "Document uploaded",
+  "document.upload_completed": "Document uploaded",
+  "document.reviewed": "Document reviewed",
+  "document.request_created": "Document requested",
+  "agreement.sent": "Agreement sent for signature",
+  "agreement.signed": "Agreement signed",
+  "agreement.executed": "Agreement fully signed",
+  "agreement.completed": "Agreement fully signed",
+  "agreement.quote_accepted": "Quote accepted",
+  "email.received": "Email received",
+  "email.failed": "Email could not be delivered",
+  "invitation.accepted": "Invitation accepted",
+  "intake.submitted": "Questionnaire submitted",
+  "matter.create": "Matter opened",
+  "matter.stage_transition": "Matter stage changed",
+  "matter.stage_override": "Matter stage changed",
+  "matter.on_hold_set": "Matter put on hold",
+  "matter.on_hold_cleared": "Matter resumed",
+  "matter.government_status_recorded": "Government status recorded",
+  "matter.outcome_recorded": "Outcome recorded",
+  "firm.sample_case_created": "Sample case created",
+  "task.overdue": "Task overdue",
+  "deadline.confirmed": "Deadline confirmed",
+};
