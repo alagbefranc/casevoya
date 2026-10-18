@@ -16,6 +16,8 @@ import {
   normalizeCollegeId,
 } from "@/modules/firm-onboarding";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { LICENCE_PROOF_BUCKET, ownLicenceProofKey } from "@/modules/firm-onboarding/licence-proof";
 
 export type PortResult =
   | { ok: true; href?: string; codes?: string[] }
@@ -77,6 +79,18 @@ function officeParts(raw: string) {
   return { addressLine, locality, region, postal };
 }
 
+/** The proof file exists in the private bucket (written only by /api/firm/licence-proof). */
+async function licenceProofStored(key: string): Promise<boolean> {
+  try {
+    const folder = key.slice(0, key.lastIndexOf("/"));
+    const name = key.slice(key.lastIndexOf("/") + 1);
+    const { data } = await createServiceClient().storage.from(LICENCE_PROOF_BUCKET).list(folder, { search: name, limit: 1 });
+    return Boolean(data?.some((object) => object.name === name));
+  } catch {
+    return false;
+  }
+}
+
 async function ownerWorkspace() {
   const lookup = await createClient();
   const { data: claims } = await lookup.auth.getClaims();
@@ -84,7 +98,7 @@ async function ownerWorkspace() {
   if (!userId) return null;
   const { data: membership } = await lookup
     .from("memberships")
-    .select("organization_id")
+    .select("id, organization_id")
     .eq("user_id", userId)
     .eq("role", "firm_owner")
     .eq("status", "active")
@@ -93,6 +107,7 @@ async function ownerWorkspace() {
   if (!membership) return null;
   return {
     organizationId: membership.organization_id,
+    membershipId: membership.id,
     supabase: await createClient({ organizationId: membership.organization_id }),
   };
 }
@@ -271,23 +286,28 @@ export async function saveSetupStep(
     if (officeError) return fromRpc(officeError);
   }
 
-  if (step === "licence" && text(fields, "rg").includes("CICC")) {
+  if (step === "licence" && text(fields, "lno")) {
+    // The owner's own licence, with the proof file they uploaded on this step (see /api/firm/licence-proof).
+    if (!text(fields, "rg").includes("CICC")) return fail("Casevoya records CICC licences.");
     const collegeId = normalizeCollegeId(text(fields, "lno")) ?? text(fields, "lno");
-    const { data: consultants } = await supabase
-      .from("memberships")
+    const locator = text(fields, "lproof");
+    const proofKey = ownLicenceProofKey(locator, organizationId, workspace.membershipId);
+    if (!proofKey) return fail("Upload your licence proof to continue.");
+    if (!(await licenceProofStored(proofKey))) return fail("Your licence proof wasn’t found. Upload it again.");
+    const { data: existing } = await supabase
+      .from("consultant_credentials")
       .select("id")
       .eq("organization_id", organizationId)
-      .eq("role", "licensed_consultant")
-      .eq("status", "active")
+      .eq("membership_id", workspace.membershipId)
+      .eq("college_id", collegeId.toUpperCase())
       .limit(1);
-    const membershipId = consultants?.[0]?.id;
-    if (membershipId) {
+    if (!existing?.length) {
       const { error: declared } = await supabase.rpc("declare_consultant_credential", {
-        p_membership_id: membershipId,
+        p_membership_id: workspace.membershipId,
         p_licence_type: "RCIC",
         p_college_id: collegeId,
         p_scope_note: text(fields, "cl").includes("IRB") ? "RCIC-IRB" : "",
-        p_proof_locator: "CICC register entry.pdf",
+        p_proof_locator: locator,
       });
       if (declared) return fromRpc(declared);
     }

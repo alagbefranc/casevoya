@@ -635,4 +635,26 @@ describe("real client invites and trial", () => {
     );
     expect(mode.rows[0].sample_mode).toBe(false);
   });
+
+  it("lets a firm owner declare their own licence but not one on another owner's membership", async () => {
+    const owner = await createUser(`owner-${randomUUID().slice(0, 8)}@example.test`);
+    const orgId = await createOrg(owner);
+    await asMaintenance(db);
+    const own = await db.query<{ id: string }>(
+      `select id from public.memberships where organization_id = $1 and user_id = $2 and role = 'firm_owner'`,
+      [orgId, owner],
+    );
+    const ownerMembership = own.rows[0].id;
+    const credentialId = await declareLicence(owner, orgId, ownerMembership, "R700001");
+    expect(credentialId).toBeTruthy();
+
+    // Declared, not yet checked against the register: not the firm's verified licence yet.
+    await asMaintenance(db);
+    const verified = await db.query<{ ok: boolean }>(`select app.firm_has_verified_licence($1) as ok`, [orgId]);
+    expect(verified.rows[0].ok).toBe(false);
+
+    const coOwner = await createUser(`coowner-${randomUUID().slice(0, 8)}@example.test`);
+    const coOwnerMembership = await activeMembership(orgId, coOwner, "firm_owner", owner);
+    await expectDbError(() => declareLicence(owner, orgId, coOwnerMembership, "R700002"), /licence declaration denied/);
+  });
 });
