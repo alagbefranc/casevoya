@@ -221,7 +221,7 @@ function Field({ id, label, hint, type = "text", max }: { id: string; label: str
 export function NewMatterDialog({ data }: { data: NewMatterDialogData }) {
   const noConsultant = data.consultants.length === 0;
   return (
-    <dialog className={"dlg"} id={"dlgNew"} aria-labelledby={"dlgNewH"}>
+    <dialog className={"dlg wide"} id={"dlgNew"} aria-labelledby={"dlgNewH"}>
       <div className={"dh"}>
         <h2 id={"dlgNewH"}>{"New matter"}</h2>
         <button className={"x"} aria-label={"Close"} data-close={"dlgNew"}>
@@ -239,33 +239,35 @@ export function NewMatterDialog({ data }: { data: NewMatterDialogData }) {
             </div>
           </div>
         ) : null}
-        <Field id={"nmA"} label={"Applicant"} />
-        <Field id={"nmAE"} label={"Applicant email"} hint={"Optional. Used later for the portal invitation."} type={"email"} />
-        <Field id={"nmAD"} label={"Applicant date of birth"} hint={"Optional. Needed before a portal invitation: only adults get a login."} type={"date"} max={data.maxBirthDate} />
-        <Field id={"nmS"} label={"Sponsor"} hint={"Optional. Leave blank if there is no sponsor."} />
-        <Field id={"nmSE"} label={"Sponsor email"} hint={"Optional"} type={"email"} />
-        <Field id={"nmSD"} label={"Sponsor date of birth"} hint={"Optional"} type={"date"} max={data.maxBirthDate} />
-        <div className={"fld"}>
-          <label htmlFor={"nmT"}>{"Program template"}</label>
-          <select className={"sel"} id={"nmT"} defaultValue={data.programs[0]?.value ?? ""}>
-            {data.programs.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-            <option value={""}>{data.programs.length ? "Choose later" : "No published template yet (choose later)"}</option>
-          </select>
-        </div>
-        <div className={"fld"}>
-          <label htmlFor={"nmC"}>{"Responsible consultant"}</label>
-          <select className={"sel"} id={"nmC"} defaultValue={data.consultants[0]?.value ?? ""}>
-            {noConsultant ? <option value={""}>{"No licensed consultant yet"}</option> : null}
-            {data.consultants.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+        <div className={"g2"}>
+          <Field id={"nmA"} label={"Applicant"} />
+          <Field id={"nmS"} label={"Sponsor"} hint={"Optional. Leave blank if there is none."} />
+          <Field id={"nmAE"} label={"Applicant email"} hint={"Optional. Used for the portal invitation."} type={"email"} />
+          <Field id={"nmSE"} label={"Sponsor email"} hint={"Optional"} type={"email"} />
+          <Field id={"nmAD"} label={"Applicant date of birth"} hint={"Optional. Only adults get a portal login."} type={"date"} max={data.maxBirthDate} />
+          <Field id={"nmSD"} label={"Sponsor date of birth"} hint={"Optional"} type={"date"} max={data.maxBirthDate} />
+          <div className={"fld"}>
+            <label htmlFor={"nmT"}>{"Program template"}</label>
+            <select className={"sel"} id={"nmT"} defaultValue={data.programs[0]?.value ?? ""}>
+              {data.programs.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+              <option value={""}>{data.programs.length ? "Choose later" : "No published template yet (choose later)"}</option>
+            </select>
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"nmC"}>{"Responsible consultant"}</label>
+            <select className={"sel"} id={"nmC"} defaultValue={data.consultants[0]?.value ?? ""}>
+              {noConsultant ? <option value={""}>{"No licensed consultant yet"}</option> : null}
+              {data.consultants.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         {noConsultant ? (
           <div className={"alert warn"}>
