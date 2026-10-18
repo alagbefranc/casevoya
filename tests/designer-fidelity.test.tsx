@@ -91,6 +91,10 @@ import {
 } from "@/components/sheet/designer/calendar";
 import { CalendarMarkup } from "@/components/sheet/markup/calendar";
 import { Review } from "@/components/portal/documents-live";
+import { DocumentReviewDialog, DocumentsHeader, SheetDocuments, type DocumentsData, type DocumentsTab } from "@/components/sheet/designer/documents";
+import { DocumentsMarkup } from "@/components/sheet/markup/documents";
+import { ComposeDialog, InboxHeader, SheetInbox, type ComposeData, type InboxData, type InboxTab } from "@/components/sheet/designer/inbox";
+import { InboxMarkup } from "@/components/sheet/markup/inbox";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -2016,5 +2020,256 @@ describe("Designer fidelity: portal document review, French reason (live-only ad
     expect(html).toContain('aria-label="Reason in French, for a client who prefers French"');
     // The machine-draft note and its check box appear only once there is a machine draft.
     expect(html).not.toContain("Machine draft");
+  });
+});
+
+const RECORDS_STATUSBAR = {
+  timezone: "America/Toronto",
+  queue: { label: "Reminder queue healthy", detail: "0 retries" },
+  sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+};
+
+type DocChipT = { tone: "ok" | "rev" | "chg" | "bad" | "unv"; label: string };
+const OK = (label: string): DocChipT => ({ tone: "ok", label });
+const UPLOADED: DocChipT = { tone: "unv", label: "Uploaded" };
+const BEING: DocChipT = { tone: "rev", label: "Being reviewed" };
+const card = (doc: string, title: string, parts: string[], version: string, when: string, states: DocChipT[]) => ({
+  title,
+  thumb: { doc },
+  meta: { parts, version, when },
+  states,
+});
+
+const DESIGNER_DOCUMENTS: DocumentsData = {
+  tab: "review",
+  pills: ["6 to review", "1 quarantined"],
+  firmName: "Northline",
+  review: {
+    rows: [
+      { title: "Marriage certificate v2", link: { href: "/sheet/matters/priya?tab=documents" }, person: "Priya Sharma", matter: "NL-2026-0142", uploaded: "16 Oct", scan: OK("Clean"), review: { tone: "rev", label: "Awaiting review" } },
+      { title: "Relationship photos (3)", person: "Rafael Sharma", matter: "NL-2026-0142", uploaded: "Today 08:41", scan: OK("Clean"), review: { tone: "rev", label: "Awaiting review" } },
+      { title: "Bank statement.pdf.exe", person: "Kofi Mensah", matter: "NL-2026-0131", uploaded: "16 Oct", scan: { tone: "bad", pair: ["Quarantined", "not a PDF"] }, review: "Can’t open" },
+      { title: "Employment letter", person: "Kofi Mensah", matter: "NL-2026-0131", uploaded: "15 Oct", scan: OK("Clean"), review: { tone: "rev", label: "Awaiting review" } },
+      { title: "Language test report", person: "Ana Ferreira", matter: "NL-2026-0129", uploaded: "14 Oct", scan: OK("Clean"), review: { tone: "chg", label: "Expires in 20 days" } },
+      { title: "Olena birth certificate v2", person: "Olena Sharma", matter: "NL-2026-0142", uploaded: "10 Oct", scan: OK("Clean"), review: { tone: "bad", label: "Expired" } },
+    ],
+  },
+  all: {
+    cards: [
+      card("passport-bio-page", "Passport, bio page", ["Identity", "Priya"], "v1", "3 Oct", [UPLOADED, OK("Accepted")]),
+      card("marriage-certificate", "Marriage certificate", ["Relationship", "Priya and Rafael"], "v2", "16 Oct", [UPLOADED, BEING]),
+      { title: "Medical history", thumb: { locked: ["Private to Olena", "permission required to view"] }, states: [{ tone: "unv", label: "Locked" }] },
+      card("bank-statement", "Bank statement, Aug–Sep", ["Funds and support", "Rafael"], "v1", "14 Oct", [UPLOADED, OK("Accepted")]),
+      card("employment-letter", "Employment letter", ["Sponsor income", "Rafael"], "v1", "9 Oct", [UPLOADED, { tone: "chg", label: "Changes needed" }]),
+      card("relationship-photos", "Relationship photos, 3 files", ["Relationship", "Rafael"], "v1", "17 Oct", [UPLOADED, BEING]),
+      card("language-test", "Language test report", ["Language", "Priya"], "v1", "6 Oct", [UPLOADED, OK("Accepted")]),
+      card("preview-checking", "Police certificate, India", ["Background", "Priya"], "v1", "Today 09:02", [{ tone: "unv", label: "Checking file" }]),
+      card("police-certificate", "Police certificate, UAE", ["Background", "Priya"], "v1", "15 Oct", [UPLOADED, BEING]),
+      card("fallback-heic", "Payslip September.heic", ["Sponsor income", "Rafael"], "v1", "16 Oct", [UPLOADED, BEING]),
+      card("fallback-docx", "Letter of support.docx", ["Relationship", "Rafael"], "v1", "16 Oct", [UPLOADED, BEING]),
+      card("preview-quarantined", "Scan 0412.pdf", ["Unsorted", "Priya"], "v1", "16 Oct", [{ tone: "bad", label: "Upload failed" }]),
+      card("government-letter", "IRCC letter, request for documents", ["Government letter", "Priya"], "v1", "12 Oct", [UPLOADED, OK("Accepted")]),
+      card("service-agreement", "Service agreement S-05 v2, signed", ["Agreement", "Priya and Rafael"], "v2", "4 Oct", [UPLOADED, OK("Accepted")]),
+      card("receipt", "Receipt RC-0093", ["Payment", "Priya"], "v1", "8 Oct", [UPLOADED]),
+      { title: "IRCC account screenshot.png", thumb: { icon: "file-png" }, meta: { parts: ["Government status", "Priya"], version: "v1", when: "15 Oct" }, states: [UPLOADED, BEING] },
+      card("package-manifest", "Package manifest, v3 draft", ["Submission", "Daniel"], "v3", "16 Oct", [UPLOADED, BEING]),
+    ],
+  },
+  custody: {
+    rows: [
+      { original: "Passport (Priya Sharma)", owner: "Priya Sharma", received: "3 Oct", location: ["Toronto office", "safe B, shelf 2"], purpose: "Certified copy", returnBy: ["10 Oct", "returned"], acknowledged: "Signed by Rafael, 10 Oct" },
+      { original: "Marriage certificate (original)", owner: "Priya Sharma", received: "14 Oct", location: ["Toronto office", "safe B"], purpose: "Translation", returnBy: "28 Oct", acknowledged: { tone: "chg", label: "Waiting" } },
+    ],
+  },
+};
+
+const DESIGNER_COMPOSE: ComposeData = {
+  to: [
+    ["Priya Sharma", "NL-2026-0142"],
+    ["Rafael Sharma", "NL-2026-0142"],
+    ["Kofi Mensah", "NL-2026-0131"],
+  ],
+  templates: ["None", "Document request", "Appointment reminder", "Payment received"],
+  send: { toast: "Message sent", kind: "ok" },
+};
+
+const THREAD = (file: string, name: string, line: [string, string], when: string, unread: boolean, selected = false) => ({
+  href: "#",
+  selected,
+  person: { name, avatarUrl: `/assets/${file}.png` },
+  unread,
+  line,
+  when,
+});
+
+const DESIGNER_INBOX: InboxData = {
+  tab: "conv",
+  conv: {
+    filters: ["All", "Unread", "Needs a reply", "Critical, needs acknowledgement"],
+    threads: [
+      THREAD("av-rafael-sponsor", "Rafael Sharma", ["NL-2026-0142", "Uploaded 3 relationship photos. Do these need dates?"], "08:41", true, true),
+      THREAD("av-priya-applicant", "Priya Sharma", ["NL-2026-0142", "Can I sign the amendment on my phone?"], "Yesterday", true),
+      THREAD("av-kofi-client", "Kofi Mensah", ["NL-2026-0131", "I sent the transfer on Friday. Reference RBC-55102."], "16 Oct", true),
+      THREAD("av-ana-client", "Ana Ferreira", ["NL-2026-0129", "The card didn’t go through, can I pay by e-Transfer?"], "12 Oct", true),
+      THREAD("av-olena-dependant", "Olena Sharma", ["NL-2026-0142", "Thanks, consent saved."], "10 Oct", false),
+    ],
+    view: {
+      title: ["Rafael Sharma", "NL-2026-0142"],
+      role: { tone: "gr", label: "Sponsor" },
+      mails: [{ meta: ["Rafael", "today 08:41", "via portal"], body: "I uploaded 3 relationship photos. Do these need dates?", files: ["3 photos", "opened by permissioned link only"] }],
+      vo: { draft: "Draft reply: “Thanks Rafael. Please add a short note with the date and place for each photo, in the upload screen.”", sources: ["Sources: request DR-12", "checklist v3"] },
+      audience: { title: "Audience: Rafael Sharma (sponsor) and Northline staff on this file", copy: "Priya’s private records can’t be attached to this message." },
+      reply: {
+        send: { label: "Send to Rafael", attrs: { "data-run": "ok", "data-done": "Sent to Rafael", "data-sub": "He gets an email with a portal link only.", "data-fpr": "1" } },
+        note: { "data-toast": "Saved as a staff-only note", "data-sub": "Clients never see staff notes.", "data-fpb": "1" },
+        acknowledge: "Ask Rafael to acknowledge",
+      },
+    },
+  },
+  triage: {
+    copy: "Email imported from the inboxes you connected, limited to the labels you chose. Unknown threads wait here; forwarding an email doesn’t give its sender access to a case (OPS-06).",
+    sources: [
+      { logo: "/assets/logos/integrations/gmail-color.png", parts: ["amara@northline.example", "label “Clients”"] },
+      { logo: "/assets/logos/integrations/microsoftoutlook-color.svg", parts: ["grace@northline.example", "not connected"] },
+    ],
+    rows: [
+      {
+        from: "h.rahimi@example.com",
+        subject: "Re: work permit documents",
+        attachments: [],
+        suggestion: ["Lead L4", "Hamid Rahimi"],
+        why: ["Email and name match", "2 attributes"],
+        actions: [
+          { label: "Confirm match", primary: true, attrs: { "data-toast": "Matched to Hamid Rahimi", "data-sub": "Attachments go to review. Sender access unchanged.", "data-fpb": "1" } },
+          { label: "Not this person", attrs: { "data-toast": "Left in triage", "data-sub": "", "data-fpb": "1" } },
+        ],
+      },
+      {
+        from: "noreply@cic.gc.ca",
+        subject: "Your account message (forwarded by Priya)",
+        attachments: [{ label: "Attachment", name: "IRCC letter.pdf", doc: "government-letter", image: "government-letter" }],
+        suggestion: "NL-2026-0142",
+        why: "Forwarded by the client",
+        actions: [{ label: "Record as government letter", href: "/sheet/matters/priya?dlg=letter" }],
+      },
+      {
+        from: "family.sharma@example.com",
+        subject: "Photos for the file",
+        attachments: [],
+        suggestion: "2 possible people",
+        why: ["Shared family email", "can’t match on email alone"],
+        actions: [{ label: "Choose person", attrs: { "data-toast": "Pick Priya, Rafael or Olena", "data-sub": "Never merged on a shared family email.", "data-fpb": "1" } }],
+      },
+      {
+        from: "info@unknown-agency.example",
+        subject: "Partnership proposal",
+        attachments: [],
+        suggestion: "No match",
+        why: "—",
+        actions: [{ label: "Not case mail", attrs: { "data-toast": "Removed from triage", "data-sub": "", "data-fpb": "1" } }],
+      },
+    ],
+  },
+  bounced: {
+    alert: {
+      title: "Deadline notice to Kofi Mensah bounced",
+      parts: ["“A step is due on 30 Oct”", "mailbox full", "17 Oct 07:02. Task created for Daniel Ruiz: call Kofi and confirm by portal."],
+      href: "/sheet/tasks",
+    },
+    rows: [
+      { sent: "17 Oct 07:02", to: "Kofi Mensah", notice: "Deadline reminder (critical)", problem: ["Mailbox full", "soft bounce ×3"], followUp: ["Daniel Ruiz", "call today"], state: { tone: "bad", label: "Not delivered" } },
+      { sent: "14 Oct 18:10", to: "Ana Ferreira", notice: "Invoice issued", problem: "SMS number unreachable", followUp: "Email delivered instead", state: { tone: "ok", label: "Delivered by email" } },
+      { sent: "9 Oct 11:30", to: "Sofia Reyes", notice: "Agreement to sign", problem: "Address doesn’t exist", followUp: ["Lena Park", "confirmed new address"], state: { tone: "ok", label: "Resolved" } },
+    ],
+  },
+  notes: {
+    cards: [
+      { title: "Office closed 11 Nov", audience: ["All clients", "Remembrance Day"], when: "Scheduled 4 Nov" },
+      { title: "New portal sign-in", audience: "All clients with portal access", when: ["Sent 1 Oct", "41 read"] },
+    ],
+  },
+};
+
+describe("Designer fidelity: Documents and Inbox", () => {
+  for (const tab of ["review", "all", "custody"] as DocumentsTab[]) {
+    it(`renders the Documents page (${tab} tab) exactly as the captured Designer markup`, () => {
+      const captured = withoutPreloads(renderToStaticMarkup(createElement(DocumentsMarkup, { variant: `tab-${tab}` })));
+      const data = { ...DESIGNER_DOCUMENTS, tab };
+      const live = withoutPreloads(
+        renderToStaticMarkup(
+          createElement(SheetFrame, {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/documents" },
+            header: createElement(DocumentsHeader, { tab, pills: data.pills }),
+            statusbar: RECORDS_STATUSBAR,
+          }, createElement(SheetDocuments, { data })),
+        ),
+      );
+      sameMarkup(live, captured);
+    });
+  }
+
+  for (const tab of ["conv", "triage", "bounced", "notes"] as InboxTab[]) {
+    it(`renders the Inbox page (${tab} tab) and its New message dialog exactly as the captured Designer markup`, () => {
+      const captured = withoutPreloads(renderToStaticMarkup(createElement(InboxMarkup, { variant: `tab-${tab}` })));
+      const live = withoutPreloads(
+        renderToStaticMarkup(
+          createElement(SheetFrame, {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/inbox" },
+            header: createElement(InboxHeader, { tab, pills: ["4 unread", "1 bounced notice"] }),
+            statusbar: RECORDS_STATUSBAR,
+            after: createElement(ComposeDialog, { data: DESIGNER_COMPOSE }),
+          }, createElement(SheetInbox, { data: { ...DESIGNER_INBOX, tab } })),
+        ),
+      );
+      sameMarkup(live, captured);
+    });
+  }
+
+  it("shows a firm without documents or mail honest empty states, with no sample people", () => {
+    for (const tab of ["review", "all", "custody"] as DocumentsTab[]) {
+      const html = renderToStaticMarkup(createElement(SheetDocuments, { data: { tab, pills: [], firmName: "Maple Immigration", review: { rows: [] }, all: { cards: [] }, custody: { rows: [] } } }));
+      expect(html).toContain('class="emp"');
+      expect(html).not.toMatch(/Northline|Priya|Kofi|Olena|Rafael|Ana Ferreira|NL-2026/);
+    }
+    for (const tab of ["conv", "triage", "bounced", "notes"] as InboxTab[]) {
+      const html = renderToStaticMarkup(
+        createElement(SheetInbox, { data: { tab, conv: { filters: ["All"], threads: [], view: null }, triage: { copy: "x", sources: [], rows: [] }, bounced: { alert: null, rows: [] }, notes: { cards: [] } } }),
+      );
+      expect(html).toContain('class="emp"');
+      expect(html).not.toMatch(/Northline|Priya|Kofi|Olena|Rafael|Ana Ferreira|NL-2026|amara@/);
+    }
+  });
+
+  it("wires live review links, triage buttons and the review dialog by data attributes, with no Designer toast", () => {
+    const org = "33333333-3333-4333-8333-333333333333";
+    const html = renderToStaticMarkup(
+      createElement("div", null,
+        createElement(SheetDocuments, {
+          data: {
+            tab: "review",
+            pills: [],
+            firmName: "Maple Immigration",
+            review: { rows: [{ title: "Passport", link: { href: "/sheet/matters/m1?tab=documents", attrs: { "data-doc-review": "v1", "data-version": "2" } }, flags: ["review"], person: "Dana Lee", matter: "MI-1", uploaded: "2 Oct", scan: { tone: "ok", label: "Clean" }, review: { tone: "rev", label: "Awaiting review" } }] },
+          },
+        }),
+        createElement(DocumentReviewDialog, { data: { organizationId: org, firmName: "Maple Immigration" } }),
+        createElement(SheetInbox, {
+          data: {
+            tab: "triage",
+            triage: {
+              copy: "x",
+              sources: [{ logo: null, parts: ["maple@docs.casevoya.ca", "firm address"] }],
+              rows: [{ from: "dana@example.test", subject: "Files", attachments: [{ label: "Attachment", name: "scan.pdf", image: null }], suggestion: "Dana Lee", why: "x", actions: [{ label: "Confirm match", primary: true, attrs: { "data-inbox-file": "e1" } }, { label: "Not case mail", attrs: { "data-inbox-dismiss": "e1" } }] }],
+            },
+          },
+        }),
+      ),
+    );
+    expect(html).toContain('<tr data-f="review"><td><a href="/sheet/matters/m1?tab=documents" style="color:var(--blue)" data-doc-review="v1" data-version="2">Passport</a></td>');
+    expect(html).toContain(`data-doc-review-submit="1" data-org="${org}"`);
+    expect(html).toContain('<button class="btn p sm" data-inbox-file="e1">Confirm match</button> <button class="btn sm" data-inbox-dismiss="e1">Not case mail</button>');
+    expect(html).toContain('<button type="button" class="doct" aria-label="Attachment · scan.pdf"><span>Attachment <span class="sep" aria-hidden="true"></span> scan.pdf</span></button>');
+    expect(html).not.toContain("data-toast");
+    expect(html).not.toMatch(/Northline|Priya|NL-2026/);
   });
 });

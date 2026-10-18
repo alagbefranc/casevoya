@@ -23,7 +23,7 @@ Model: `@cf/meta/llama-3.3-70b-instruct-fp8-fast` on Workers AI (comparison:
 `person_contact_preferences.locale` (`en-CA` default, or `fr-CA`), chosen when the client accepts
 the portal invitation and changed on the portal **Your account → Language** (English / Français).
 Staff recipients fall back to `profiles.preferred_locale`. The mail worker reads it per delivery
-with `public.email_delivery_locales` (migration `20261019200000_french_drafts.sql`).
+with `public.email_delivery_locales` (migration `20261019210000_french_drafts.sql`).
 
 ## French emails
 

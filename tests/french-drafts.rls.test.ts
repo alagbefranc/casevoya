@@ -1,5 +1,5 @@
 /**
- * 20261019200000_french_drafts.sql: recipient locale for the mail worker, French review reasons
+ * 20261019210000_french_drafts.sql: recipient locale for the mail worker, French review reasons
  * (machine-drafted and human-reviewed), and the "Draft in French" quota.
  */
 import { randomUUID } from "node:crypto";

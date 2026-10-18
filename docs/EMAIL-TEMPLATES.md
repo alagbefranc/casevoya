@@ -119,7 +119,7 @@ recipient whose language is `fr-CA` and only after its status is `approved` with
 and date (and the shared shell strings likewise), with English unchanged since. The current status
 per template is the "Status" table of `docs/i18n/email-fr-review.md`; how to approve is in
 `docs/i18n/README.md`. The mail worker gets each recipient's language from
-`public.email_delivery_locales` (`20261019200000_french_drafts.sql`).
+`public.email_delivery_locales` (`20261019210000_french_drafts.sql`).
 
 ### How each database template maps to a design
 
