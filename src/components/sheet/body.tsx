@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { DemoSheet } from "@/components/sheet/demo";
 import { AgreementsHeader, CountersignDialog, NewAgreementDialog, SheetAgreements, TemplateDialog } from "@/components/sheet/designer/agreements";
 import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet/designer/clients";
-import { FinanceHeader, NewInvoiceDialog, SheetFinance, SheetFinancePayments } from "@/components/sheet/designer/finance";
+import { FinanceHeader, NewInvoiceDialog, RefundDialog, SheetFinance, SheetFinancePayments, SheetFinanceRefunds } from "@/components/sheet/designer/finance";
 import { SheetFrame } from "@/components/sheet/designer/frame";
 import { StripeAccountStatus } from "@/components/sheet/stripe-connect";
 import { SheetHome } from "@/components/sheet/designer/home";
@@ -202,10 +202,14 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
-  // Finance, Invoices and Payments tabs. Client funds, reconciliation, refunds and the single
-  // invoice view are not ported yet and keep their old view.
-  if (page === "finance" && (!query.tab || query.tab === "invoices" || query.tab === "payments") && (access.kind === "live" || access.kind === "sample")) {
-    const tab = query.tab === "payments" ? "payments" : "invoices";
+  // Finance, Invoices, Payments and Refunds and disputes tabs. Client funds, reconciliation and
+  // the single invoice view are not ported yet and keep their old view.
+  if (
+    page === "finance" &&
+    (!query.tab || query.tab === "invoices" || query.tab === "payments" || query.tab === "refunds") &&
+    (access.kind === "live" || access.kind === "sample")
+  ) {
+    const tab = query.tab === "payments" || query.tab === "refunds" ? query.tab : "invoices";
     const finance = await loadSheetFinance(access.staff, tab);
     return (
       <SheetScreen page={page}>
@@ -213,10 +217,17 @@ export async function SheetBody({
           sidebar={finance.chrome.sidebar}
           header={<FinanceHeader data={finance.header} />}
           statusbar={finance.chrome.statusbar}
-          after={<NewInvoiceDialog data={finance.dialog} />}
+          after={
+            <>
+              <NewInvoiceDialog data={finance.dialog} />
+              {finance.refundDialog ? <RefundDialog data={finance.refundDialog} /> : null}
+            </>
+          }
         >
           {finance.payments ? (
             <SheetFinancePayments data={finance.payments} status={<StripeAccountStatus data={finance.account} />} />
+          ) : finance.refunds ? (
+            <SheetFinanceRefunds data={finance.refunds} />
           ) : (
             <SheetFinance data={finance.page} />
           )}

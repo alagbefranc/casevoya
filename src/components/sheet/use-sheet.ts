@@ -16,7 +16,7 @@ import {
   runNewAgreement,
   runNewTemplate,
 } from "./agreement-acts";
-import { reopenInvoiceDialog, runNewInvoice } from "./finance-acts";
+import { openRefund, reopenInvoiceDialog, reopenRefundDialog, runNewInvoice, runRefund } from "./finance-acts";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { runNewTask, syncNewTask } from "./new-task-act";
@@ -174,6 +174,21 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (invoice.getAttribute("aria-busy") === "true" || invoice.hasAttribute("disabled")) return;
         invoice.setAttribute("aria-busy", "true");
         void runNewInvoice(invoice, router).finally(() => invoice.removeAttribute("aria-busy"));
+        return;
+      }
+      // The Payments tab: a row's Refund fills and opens #dlgRefund; its Refund button asks Stripe.
+      const refundOpen = target.closest<HTMLElement>("[data-refund-open]");
+      if (refundOpen && root.contains(refundOpen)) {
+        event.preventDefault();
+        openRefund(refundOpen, root, openDialog);
+        return;
+      }
+      const refund = target.closest<HTMLElement>("[data-refund-submit]");
+      if (refund && root.contains(refund)) {
+        event.preventDefault();
+        if (refund.getAttribute("aria-busy") === "true" || refund.hasAttribute("disabled")) return;
+        refund.setAttribute("aria-busy", "true");
+        void runRefund(refund, router).finally(() => refund.removeAttribute("aria-busy"));
         return;
       }
       // Countersign: the signed-in consultant signs an envelope where it is their turn.
@@ -491,6 +506,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
 
     // ?dlg=invoice (back from step-up) reopens the live New invoice dialog with what was typed.
     if (root.querySelector("dialog#dlgInv [data-new-invoice]")) window.setTimeout(() => reopenInvoiceDialog(root, openDialog), 300);
+    // ?dlg=refund (back from step-up) reopens Refund for the same payment with what was typed.
+    if (root.querySelector("dialog#dlgRefund [data-refund-submit]")) window.setTimeout(() => reopenRefundDialog(root, openDialog), 300);
     // ?dlg=countersign&envelope=… (back from step-up, or from the "your turn" email) reopens that
     // envelope's sign dialog on the Agreements or matter page; closing it drops the flag.
     const signDialogs = [...root.querySelectorAll<HTMLDialogElement>("dialog[data-sign-envelope]")];

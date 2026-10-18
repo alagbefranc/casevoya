@@ -26,7 +26,8 @@ Do not commit secrets. Copy the names below into the host environment. Account i
 ### Stripe (test mode only)
 
 - Firm = Stripe connected account (Accounts v2: merchant configuration with `card_payments`; Stripe collects fees and owns losses). Client payments are **direct charges** on that account, created as PaymentIntents and confirmed in the page with the Payment Element. No Checkout, no hosted pages.
-- In the Stripe test Dashboard: enable Connect for the platform, then add an event destination for **connected accounts** with URL `https://<app>/api/stripe/webhook` and events `payment_intent.processing`, `payment_intent.succeeded`, `payment_intent.payment_failed`, `payment_intent.canceled`. Put its signing secret in `STRIPE_WEBHOOK_SECRET`.
+- In the Stripe test Dashboard: enable Connect for the platform, then add an event destination for **connected accounts** with URL `https://<app>/api/stripe/webhook` and events `payment_intent.processing`, `payment_intent.succeeded`, `payment_intent.payment_failed`, `payment_intent.canceled`, `refund.created`, `refund.updated`, `refund.failed`, `charge.refunded`, `charge.dispute.created`, `charge.dispute.updated`, `charge.dispute.closed`. Put its signing secret in `STRIPE_WEBHOOK_SECRET`. A restricted `rk_test_…` key also needs Refunds write.
+- A refund is recorded as pending when the firm asks Stripe for it; it turns succeeded or failed (and the invoice refunded) only when a verified refund event is applied (`app.apply_stripe_reversal_event`, service role, same dedupe).
 - Locally: `stripe listen --forward-connect-to localhost:3000/api/stripe/webhook` prints a `whsec_…` to use as `STRIPE_WEBHOOK_SECRET`.
 - An invoice turns paid only when a verified webhook event is applied (`app.apply_stripe_payment_event`, service role, deduped on provider + connected account + event id). The browser redirect is never proof of payment.
 

@@ -16,15 +16,19 @@ function i(n: number) {
 /**
  * The Designer's Payments page (`markup/portal-payments.tsx`) for the client's real invoices.
  * Same anatomy: heading with art, the `.money` strip, and the `.t.pay` table with a Pay button on
- * each open invoice. Advances and refunds are not on file yet, so they are not shown.
+ * each open invoice. A card refund shows on its invoice: a partly refunded invoice stays paid and
+ * says how much went back, a fully refunded one reads "Refunded", and "Paid so far" is net of
+ * refunds. Advances are not on file yet, so they are not shown.
  */
 export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: PortalInvoices }) {
   const open = data.invoices.filter((invoice) => invoice.open);
   const next = [...open].sort((a, b) => a.dueOn.localeCompare(b.dueOn))[0];
   const toPay = open.filter((invoice) => !invoice.processing).reduce((sum, invoice) => sum + invoice.amountCents - invoice.paidCents, 0);
   const processing = open.filter((invoice) => invoice.processing).reduce((sum, invoice) => sum + invoice.amountCents - invoice.paidCents, 0);
-  const paid = data.invoices.reduce((sum, invoice) => sum + invoice.paidCents, 0);
+  const refunded = data.invoices.reduce((sum, invoice) => sum + invoice.refundedCents, 0);
+  const paid = data.invoices.reduce((sum, invoice) => sum + invoice.paidCents, 0) - refunded;
   const paidCount = data.invoices.filter((invoice) => invoice.paidCents > 0).length;
+  const paidNote = paidCount ? `${paidCount} ${paidCount === 1 ? "invoice" : "invoices"}` : "No payments yet";
   return (
     <div id="pc">
       <div className="ph pp-h rv" style={i(0)}>
@@ -60,7 +64,17 @@ export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: Por
         <div>
           <span className="lbl">{"Paid so far"}</span>
           <b className="num">{formatMoney(paid, "CAD")}</b>
-          <small className="lbl">{paidCount ? `${paidCount} ${paidCount === 1 ? "invoice" : "invoices"}` : "No payments yet"}</small>
+          <small className="lbl">
+            {refunded > 0 ? (
+              <>
+                {`${paidNote} `}
+                <Sep />
+                {` ${formatMoney(refunded, "CAD")} refunded to your card`}
+              </>
+            ) : (
+              paidNote
+            )}
+          </small>
         </div>
       </div>
       {!data.payable && open.length ? (
@@ -117,7 +131,15 @@ export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: Por
                       <td>
                         <span className={`bd ${badge.tone}`}>
                           <i></i>
-                          {badge.label}
+                          {"detail" in badge && badge.detail ? (
+                            <span>
+                              {`${badge.label} `}
+                              <Sep />
+                              {` ${badge.detail}`}
+                            </span>
+                          ) : (
+                            badge.label
+                          )}
                         </span>
                       </td>
                       <td className="num" style={{ textAlign: "right" }}>
@@ -130,6 +152,8 @@ export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: Por
                           </a>
                         ) : invoice.status === "paid" ? (
                           <small>{"Paid"}</small>
+                        ) : invoice.status === "refunded" ? (
+                          <small>{"Refunded"}</small>
                         ) : null}
                       </td>
                     </tr>

@@ -108,7 +108,7 @@ describe("Stripe webhook", () => {
 
   it("acknowledges and ignores live-mode, platform and unrelated events", async () => {
     const db = fakeDatabase();
-    for (const payload of [fixture({ livemode: true }), fixture({ account: null }), fixture({ type: "charge.refunded" })]) {
+    for (const payload of [fixture({ livemode: true }), fixture({ account: null }), fixture({ type: "customer.created" })]) {
       const { body, header } = await signed(payload);
       const result = await handleStripeWebhook(body, header, { secret: SECRET, apply: db.apply, cryptoProvider: crypto });
       expect(result.status).toBe(200);
