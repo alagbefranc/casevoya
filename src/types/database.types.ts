@@ -9523,6 +9523,16 @@ export type Database = {
           two_step: boolean | null
         }[]
       }
+      firm_staff_security: {
+        Args: { p_organization_id: string }
+        Returns: {
+          active_sessions: number | null
+          last_active_at: string | null
+          membership_id: string
+          passkeys: number | null
+          second_factor: boolean
+        }[]
+      }
       freeze_intake_response: {
         Args: { p_response_id: string }
         Returns: undefined
