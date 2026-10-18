@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
+import { DPA_AVAILABLE } from "@/modules/firm-onboarding/legal";
 import { connectOrRun } from "../kit";
 import { FirmLogoUpload, type FirmLogo } from "../firm-logo-upload";
 import { LicenceProofCard } from "../licence-proof-card";
@@ -42,10 +43,10 @@ export function SetupMarkup({
 </section>
 <section data-step="1" data-title="Terms and privacy" data-vo="holding"><div className="wz-head"><div><h1>Terms and privacy</h1><p className="lead">Your subscription is with Casevoya. Your service agreements stay between your firm and each client.</p></div><span className="wz-art" aria-hidden="true"><img src="/assets/generated/b2/privacy-shield-72@1x.webp" srcSet="/assets/generated/b2/privacy-shield-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span></div>
 <div className="terms"><div><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-file-check" /></svg><div>Subscription terms<small>Version 2026-10 · 9 pages</small></div><a className="btn sm" href="/terms" target="_blank" rel="noopener">Read</a></div>
-<div><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-shield" /></svg><div>Data processing agreement<small>How Casevoya processes your clients’ information for you · Version 2026-10</small></div><a className="btn sm" href="/privacy" target="_blank" rel="noopener">Read</a></div>
+{DPA_AVAILABLE ? (<div><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-shield" /></svg><div>Data processing agreement<small>How Casevoya processes your clients’ information for you · Version 2026-10</small></div><a className="btn sm" href="/privacy" target="_blank" rel="noopener">Read</a></div>) : null}
 <div><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-building" /></svg><div>Subprocessors<small>Companies that help run the service</small></div><a className="btn sm" href="/subprocessors" target="_blank" rel="noopener">Read</a></div></div>
 <label className="check" data-req="Accept the subscription terms"><input type="checkbox" id="t1" /><span>I accept the subscription terms on behalf of {firm || "your firm"}</span></label>
-<label className="check" data-req="Accept the data processing agreement"><input type="checkbox" id="t2" /><span>I accept the data processing agreement</span></label>
+{DPA_AVAILABLE ? (<label className="check" data-req="Accept the data processing agreement"><input type="checkbox" id="t2" /><span>I accept the data processing agreement</span></label>) : null}
 <div className="sec"><h3>Privacy contact</h3><p>The person clients and Casevoya contact about personal information. It can be you.</p><div className="g2"><div className="fld" data-req="Name a privacy contact"><label htmlFor="pc">Name</label><input className="inp" id="pc" type="text" autoComplete="" defaultValue="" placeholder="" aria-describedby="pc-h pc-e" /><span className="emsg" id="pc-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Name a privacy contact</span></span></div><div className="fld" data-req="Enter the privacy contact’s email"><label htmlFor="pe">Email</label><input className="inp" id="pe" type="email" autoComplete="" defaultValue="" placeholder="name@firm.ca" aria-describedby="pe-h pe-e" /><span className="emsg" id="pe-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter the privacy contact’s email</span></span></div></div></div>
 </section>
 <section data-step="2" data-title="Where you practise" data-vo="point"><div className="wz-head"><div><h1>Where do you practise?</h1><p className="lead">This decides which intake packs and program templates you see. It doesn’t change what your licence allows.</p></div><span className="wz-art" aria-hidden="true"><img src="/assets/generated/b2/jurisdictions-map-72@1x.webp" srcSet="/assets/generated/b2/jurisdictions-map-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span></div>
