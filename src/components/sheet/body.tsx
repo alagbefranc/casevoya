@@ -23,6 +23,9 @@ import { SampleCasePanel } from "@/components/sheet/designer/sample-case";
 import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
 import { SheetStaffTab, StaffAfter, StaffHeader } from "@/components/sheet/designer/invitations";
 import { PolicyMissingAlert, PortalPoliciesAfter, SettingsPortalHeader, SheetPortalPolicies } from "@/components/sheet/designer/portal-policies";
+import { SettingsFirmAfter, SettingsFirmHeader, SheetSettingsBranding, SheetSettingsFirm, SheetSettingsLanguage, SheetSettingsOffices } from "@/components/sheet/designer/settings-firm";
+import { loadSheetSettingsFirm } from "@/modules/sheet/settings-firm-load";
+import { settingsTab } from "@/modules/sheet/settings-firm-present";
 import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam } from "@/components/sheet/designer/settings";
 import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
 import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
@@ -357,6 +360,22 @@ export async function SheetBody({
         >
           {loaded.integrations ? <SheetIntegrations data={loaded.integrations} /> : null}
           {loaded.notifications ? <SheetNotificationPrefs data={loaded.notifications} /> : null}
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Firm (the default tab), Offices, Branding, Language and time: the firm's own values.
+  const firmTab = page === "settings" ? settingsTab(query.tab) : null;
+  if (firmTab && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetSettingsFirm(access.staff, firmTab);
+    const view = loaded.page;
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={loaded.chrome.sidebar} header={<SettingsFirmHeader data={loaded.header} />} statusbar={loaded.chrome.statusbar} after={<SettingsFirmAfter data={loaded.dialogs} />}>
+          {view.tab === "general" ? <SheetSettingsFirm data={view.data} /> : null}
+          {view.tab === "offices" ? <SheetSettingsOffices data={view.data} /> : null}
+          {view.tab === "branding" ? <SheetSettingsBranding data={view.data} /> : null}
+          {view.tab === "language" ? <SheetSettingsLanguage data={view.data} /> : null}
         </SheetFrame>
       </SheetScreen>
     );
