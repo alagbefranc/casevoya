@@ -1,0 +1,160 @@
+/**
+ * What Vo's tools may read, as the requesting staff member: a Supabase client built from THEIR
+ * short-lived access token and the publishable key, so Postgres RLS decides every row (PRD AI-05:
+ * retrieval restricted by tenant, matter, person and audience before content reaches the model).
+ * The service never holds a service-role key. Every query is narrowed to the run's matter and,
+ * for drafts, its conversation.
+ */
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "../../../src/types/database.types";
+import { parseAvailability, slotsFromAvailability } from "../../../src/modules/scheduling/availability";
+
+export type VoSettingsRow = {
+  enabled: boolean;
+  reply_drafts: boolean;
+  staff_answers: boolean;
+  read_client_messages: boolean;
+  read_identity: boolean;
+  read_relationship: boolean;
+  read_financial: boolean;
+  read_medical: boolean;
+  read_criminal: boolean;
+  read_narratives: boolean;
+};
+
+export type VoMessage = { id: string; body: string; createdAt: string; authorKind: "client" | "staff"; authorName: string };
+export type VoMatter = { id: string; title: string; reference: string | null; stage: string; isSample: boolean };
+export type VoRequestRow = { id: string; purpose: string; explanation: string; dueOn: string | null; formats: string[] };
+export type VoTaskRow = { id: string; title: string; dueOn: string | null; status: string };
+export type VoDeadlineRow = { id: string; label: string; dueOn: string | null; verification: string };
+export type VoDocumentRow = { id: string; purpose: string; sensitivity: string; category: string | null; status: string | null };
+export type VoSourceRow = { title: string; publisher: string; url: string; lastChecked: string | null };
+
+/** The narrow read surface the tools use. Tests pass a fake; production uses supabaseVoData. */
+export interface VoData {
+  settings(): Promise<VoSettingsRow | null>;
+  firm(): Promise<{ name: string; slug: string | null; sampleMode: boolean } | null>;
+  matter(matterId: string): Promise<VoMatter | null>;
+  people(matterId: string): Promise<{ name: string; role: string }[]>;
+  threadPeople(threadId: string): Promise<string[]>;
+  messages(threadId: string, limit: number): Promise<VoMessage[]>;
+  requests(matterId: string): Promise<VoRequestRow[]>;
+  tasks(matterId: string): Promise<VoTaskRow[]>;
+  deadlines(matterId: string): Promise<VoDeadlineRow[]>;
+  documents(matterId: string): Promise<VoDocumentRow[]>;
+  approvedSources(): Promise<VoSourceRow[]>;
+  freeSlots(days: number): Promise<{ starts: string[]; bookingLink: string | null; timeZone: string }>;
+  rpc(name: "finish_vo_run", args: Record<string, unknown>): Promise<{ data: unknown; error: { message: string } | null }>;
+}
+
+export function supabaseVoData(input: { url: string; publishableKey: string; accessToken: string; organizationId: string }): VoData {
+  const db: SupabaseClient<Database> = createClient<Database>(input.url, input.publishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { headers: { Authorization: `Bearer ${input.accessToken}`, "x-casevoya-org": input.organizationId } },
+  });
+  const org = input.organizationId;
+  return {
+    async settings() {
+      const { data } = await db.from("vo_settings").select("*").eq("organization_id", org).maybeSingle();
+      return (data as VoSettingsRow | null) ?? null;
+    },
+    async firm() {
+      const { data } = await db.from("organizations").select("display_name, slug, sample_mode").eq("id", org).maybeSingle();
+      return data ? { name: data.display_name, slug: data.slug ?? null, sampleMode: data.sample_mode } : null;
+    },
+    async matter(matterId) {
+      const { data } = await db.from("matters").select("id, title, reference, stage, is_sample").eq("organization_id", org).eq("id", matterId).maybeSingle();
+      return data ? { id: data.id, title: data.title, reference: data.reference, stage: String(data.stage), isSample: data.is_sample } : null;
+    },
+    async people(matterId) {
+      const { data: parties } = await db.from("matter_participants").select("person_id, role").eq("organization_id", org).eq("matter_id", matterId).not("person_id", "is", null);
+      const ids = [...new Set((parties ?? []).map((row) => row.person_id).filter((id): id is string => Boolean(id)))];
+      if (!ids.length) return [];
+      const { data: persons } = await db.from("persons").select("id, display_name").eq("organization_id", org).in("id", ids);
+      const name = new Map((persons ?? []).map((row) => [row.id, row.display_name]));
+      return (parties ?? []).filter((row) => row.person_id && name.has(row.person_id)).map((row) => ({ name: name.get(row.person_id!)!, role: String(row.role) }));
+    },
+    async threadPeople(threadId) {
+      const { data } = await db.from("message_thread_people").select("person_id").eq("organization_id", org).eq("thread_id", threadId);
+      const ids = (data ?? []).map((row) => row.person_id);
+      if (!ids.length) return [];
+      const { data: persons } = await db.from("persons").select("display_name").eq("organization_id", org).in("id", ids);
+      return (persons ?? []).map((row) => row.display_name).sort();
+    },
+    async messages(threadId, limit) {
+      const { data } = await db
+        .from("matter_messages")
+        .select("id, body, created_at, author_kind, author_name")
+        .eq("organization_id", org)
+        .eq("thread_id", threadId)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      return (data ?? [])
+        .reverse()
+        .map((row) => ({ id: row.id, body: row.body, createdAt: row.created_at, authorKind: row.author_kind === "client" ? "client" : "staff", authorName: row.author_name }));
+    },
+    async requests(matterId) {
+      const { data } = await db
+        .from("document_requests")
+        .select("id, purpose, explanation, due_on, acceptable_formats")
+        .eq("organization_id", org)
+        .eq("matter_id", matterId)
+        .eq("status", "open")
+        .limit(10);
+      return (data ?? []).map((row) => ({ id: row.id, purpose: row.purpose, explanation: row.explanation, dueOn: row.due_on, formats: row.acceptable_formats ?? [] }));
+    },
+    async tasks(matterId) {
+      const { data } = await db.from("tasks").select("id, title, due_on, status").eq("organization_id", org).eq("matter_id", matterId).in("status", ["open", "blocked"]).limit(15);
+      return (data ?? []).map((row) => ({ id: row.id, title: row.title, dueOn: row.due_on, status: String(row.status) }));
+    },
+    async deadlines(matterId) {
+      const { data } = await db.from("deadlines").select("id, label, due_on, verification").eq("organization_id", org).eq("matter_id", matterId).limit(15);
+      return (data ?? []).map((row) => ({ id: row.id, label: row.label, dueOn: row.due_on, verification: String(row.verification) }));
+    },
+    async documents(matterId) {
+      const { data: refs } = await db.from("document_matter_refs").select("document_id").eq("organization_id", org).eq("matter_id", matterId).is("removed_at", null).limit(100);
+      const ids = (refs ?? []).map((row) => row.document_id);
+      if (!ids.length) return [];
+      const { data } = await db.from("documents").select("id, purpose, sensitivity").eq("organization_id", org).in("id", ids);
+      return (data ?? []).map((row) => ({ id: row.id, purpose: row.purpose, sensitivity: String(row.sensitivity), category: null, status: null }));
+    },
+    async approvedSources() {
+      const { data } = await db
+        .from("official_sources")
+        .select("title, publisher, canonical_url, last_checked_at, next_review_at, review_status, change_state")
+        .eq("review_status", "verified")
+        .limit(40);
+      const now = Date.now();
+      return (data ?? [])
+        .filter((row) => String(row.change_state) !== "change_detected" && (!row.next_review_at || Date.parse(row.next_review_at) > now))
+        .map((row) => ({ title: row.title ?? row.canonical_url, publisher: row.publisher, url: row.canonical_url, lastChecked: row.last_checked_at }));
+    },
+    async freeSlots(days) {
+      const { data: types } = await db
+        .from("booking_event_types")
+        .select("id, slug, is_published")
+        .eq("organization_id", org)
+        .is("archived_at", null)
+        .order("created_at", { ascending: true })
+        .limit(1);
+      const type = types?.[0];
+      if (!type) return { starts: [], bookingLink: null, timeZone: "America/Toronto" };
+      const now = Date.now();
+      const to = now + Math.min(Math.max(days, 1), 14) * 86_400_000;
+      const { data } = await db.rpc("staff_booking_availability", { p_org: org, p_event_type_id: type.id, p_from: new Date(now).toISOString(), p_to: new Date(to).toISOString() });
+      const payload = parseAvailability(data);
+      const starts = payload ? slotsFromAvailability(payload, { fromUtc: now, toUtc: to, nowUtc: now }).slice(0, 6) : [];
+      const firm = await this.firm();
+      const zone = payload?.hosts[0]?.timeZone ?? "America/Toronto";
+      return {
+        starts: starts.map((start) => new Date(start).toISOString()),
+        bookingLink: type.is_published && firm?.slug ? `https://app.casevoya.ca/book/${firm.slug}/${type.slug}` : null,
+        timeZone: zone,
+      };
+    },
+    async rpc(name, args) {
+      const { data, error } = await db.rpc(name, args as never);
+      return { data, error: error ? { message: error.message } : null };
+    },
+  };
+}

@@ -3,97 +3,120 @@
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { messageError } from "@/modules/messages/present";
-import { hasWork, loadVoContext } from "./context";
-import { runVoModel, workersAi } from "./engine";
-import { guardVoOutput, MAX_DRAFT_CHARS } from "./guard";
-import { buildVoMessages, newNonce, VO_PROMPT_VERSION, type VoKind } from "./prompt";
-import { nextSettings, voError, type VoSettingKey } from "./present";
+import { callVoAgent, voAgentConfigured } from "./agent-client";
+import { MAX_DRAFT_CHARS } from "./guard";
+import { VO_SETTING_KEYS, voError, type VoSettingKey } from "./errors";
+import type { VoSourceRef, VoTask, VoTaskRequest } from "./sign";
 
 type Result<T extends object = object> = ({ ok: true } & T) | { error: string };
 
 const KEY = /^[A-Za-z0-9_-]{8,80}$/;
-const KINDS: readonly VoKind[] = ["message_reply", "document_request"];
+const TOKEN_LIFETIME_MS = 2 * 60_000;
+
+type Started = { runId: string; matterId: string; membershipId: string; userId: string; accessToken: string };
 
 /**
- * "Draft with Vo" from a matter conversation. The database checks the caller (active staff with
- * staff MFA who can read the conversation), that Vo is on, sample mode and the rate limits, and
- * records the run; the context is read with the caller's own access (RLS); the Workers AI answer
- * is guarded and saved as a DRAFT with the records it cited. Nothing is sent: the staff member
- * reviews and edits it in the composer and sends it themselves (send_vo_draft).
+ * Checks and counts a Vo request in the database (staff with MFA who can read the matter, Vo on,
+ * capability, sample mode, rate limits), then hands the run to the Vo agent service with the
+ * caller's own access token. Unavailable before anything is counted when the service isn't set up.
+ */
+async function start(
+  organizationId: string,
+  kind: VoTask,
+  target: { threadId?: string; matterId?: string },
+): Promise<{ supabase: Awaited<ReturnType<typeof createClient>>; started: Started } | { error: string }> {
+  if (!voAgentConfigured()) return { error: voError("unavailable") };
+  const supabase = await createClient({ organizationId });
+  const [{ data: claims }, { data: session }] = await Promise.all([supabase.auth.getClaims(), supabase.auth.getSession()]);
+  const userId = String(claims?.claims?.sub ?? "");
+  const accessToken = session.session?.access_token ?? "";
+  if (!userId || !accessToken) return { error: "Sign in first." };
+  const { data: membership } = await supabase
+    .from("memberships")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!membership) return { error: voError("denied") };
+  const begun = await supabase.rpc("begin_vo_run", {
+    p_organization_id: organizationId,
+    p_kind: kind,
+    p_thread_id: target.threadId ?? null,
+    p_matter_id: target.matterId ?? null,
+  });
+  if (begun.error) return { error: voError("denied") };
+  const run = (begun.data ?? {}) as { ok?: boolean; error?: string; run_id?: string; matter_id?: string };
+  if (run.ok !== true || !run.run_id || !run.matter_id) return { error: voError(run.error ?? "failed") };
+  return { supabase, started: { runId: run.run_id, matterId: run.matter_id, membershipId: membership.id, userId, accessToken } };
+}
+
+function request(organizationId: string, kind: VoTask, started: Started, threadId: string | null, question: string | null): VoTaskRequest {
+  return {
+    v: 1,
+    runId: started.runId,
+    organizationId,
+    membershipId: started.membershipId,
+    userId: started.userId,
+    task: kind,
+    matterId: started.matterId,
+    threadId,
+    question,
+    accessToken: started.accessToken,
+    expiresAt: Date.now() + TOKEN_LIFETIME_MS,
+  };
+}
+
+/** If the service never answered, the run is closed here so it doesn't look in progress. */
+async function closeIfOpen(supabase: Awaited<ReturnType<typeof createClient>>, runId: string, failure: string) {
+  await supabase.rpc("finish_vo_run", { p_run_id: runId, p_result: "failed", p_failure: failure === "unavailable" ? "unavailable" : "failed" });
+}
+
+/**
+ * "Draft with Vo" from a matter conversation: a reply to the client's latest message, or an
+ * explanation of the open document requests. The result is a DRAFT the staff member reviews,
+ * edits and sends themselves from the composer (send_vo_draft). Nothing is sent here.
  */
 export async function draftWithVo(input: {
   organizationId: string;
   threadId: string;
-  kind: VoKind;
-}): Promise<Result<{ draftId: string; text: string; needsRule: boolean }> | { ok: true; abstained: true }> {
+  kind: "message_reply" | "document_request";
+}): Promise<Result<{ draftId: string; text: string; needsRule: boolean; sources: VoSourceRef[] }> | { ok: true; abstained: true }> {
   if (!isUuid(input.organizationId) || !isUuid(input.threadId)) return { error: "Choose a conversation." };
-  if (!KINDS.includes(input.kind)) return { error: "Choose what Vo should draft." };
-  // Unavailable outside the Worker: say so before anything is counted.
-  const ai = workersAi();
-  if (!ai) return { error: voError("unavailable") };
+  if (input.kind !== "message_reply" && input.kind !== "document_request") return { error: "Choose what Vo should draft." };
+  const begun = await start(input.organizationId, input.kind, { threadId: input.threadId });
+  if ("error" in begun) return begun;
+  const out = await callVoAgent(request(input.organizationId, input.kind, begun.started, input.threadId, null));
+  if (out.result === "drafted") return { ok: true, draftId: out.draftId, text: out.text, needsRule: out.needsRule, sources: out.sources };
+  if (out.result === "abstained") return { ok: true, abstained: true };
+  if (out.result === "answered") return { error: voError("failed") };
+  if (out.failure === "unavailable") await closeIfOpen(begun.supabase, begun.started.runId, out.failure);
+  return { error: voError(out.failure === "nothing_to_draft" ? (input.kind === "document_request" ? "no_requests" : "no_message") : out.failure) };
+}
 
-  const supabase = await createClient({ organizationId: input.organizationId });
-  const { data: claims } = await supabase.auth.getClaims();
-  const userId = String(claims?.claims?.sub ?? "");
-  if (!userId) return { error: "Sign in first." };
-
-  const begun = await supabase.rpc("begin_vo_run", { p_organization_id: input.organizationId, p_kind: input.kind, p_thread_id: input.threadId });
-  if (begun.error) return { error: voError("denied") };
-  const run = (begun.data ?? {}) as { ok?: boolean; error?: string; run_id?: string };
-  if (run.ok !== true || !run.run_id) return { error: voError(run.error ?? "failed") };
-  const runId = run.run_id;
-  const version = VO_PROMPT_VERSION[input.kind];
-
-  const fail = async (failure: "failed" | "empty" | "nothing_to_draft", message: string) => {
-    await supabase.rpc("finish_vo_run", { p_run_id: runId, p_result: "failed", p_failure: failure, p_prompt_version: version });
-    return { error: message };
-  };
-
-  try {
-    const [firm, profile] = await Promise.all([
-      supabase.from("organizations").select("display_name").eq("id", input.organizationId).maybeSingle(),
-      supabase.from("profiles").select("display_name").eq("id", userId).maybeSingle(),
-    ]);
-    const loaded = await loadVoContext(supabase, {
-      organizationId: input.organizationId,
-      threadId: input.threadId,
-      kind: input.kind,
-      firmName: firm.data?.display_name ?? "the firm",
-      staffName: profile.data?.display_name ?? "a staff member",
-    });
-    if (!loaded) return await fail("failed", voError("denied"));
-    if (!hasWork(loaded.context)) return await fail("nothing_to_draft", voError(input.kind === "document_request" ? "no_requests" : "no_message"));
-
-    const answer = await runVoModel(buildVoMessages(loaded.context, newNonce()), ai);
-    if ("error" in answer) return await fail("failed", voError("failed"));
-    const guarded = guardVoOutput(answer.text);
-    if (guarded.kind === "empty") return await fail("empty", voError("failed"));
-    if (guarded.kind === "abstain") {
-      await supabase.rpc("finish_vo_run", {
-        p_run_id: runId,
-        p_result: "abstained",
-        p_model: answer.model,
-        p_prompt_version: version,
-        p_latency_ms: answer.ms,
-      });
-      return { ok: true, abstained: true };
-    }
-    const saved = await supabase.rpc("finish_vo_run", {
-      p_run_id: runId,
-      p_result: "drafted",
-      p_title: loaded.title,
-      p_body: guarded.text,
-      p_sources: loaded.sources,
-      p_model: answer.model,
-      p_prompt_version: version,
-      p_needs_rule: guarded.needsRule,
-      p_latency_ms: answer.ms,
-    });
-    if (saved.error || typeof saved.data !== "string") return { error: voError("failed") };
-    return { ok: true, draftId: saved.data, text: guarded.text, needsRule: guarded.needsRule };
-  } catch {
-    return await fail("failed", voError("failed")).catch(() => ({ error: voError("failed") }));
-  }
+/**
+ * Ask Vo about one matter: an answer for the staff member only, from the firm's own records, with
+ * the records it used. Questions that need a rule, a fee, a deadline or a legal judgement are
+ * declined and left for a consultant. The answer is shown, not stored.
+ */
+export async function askVo(input: {
+  organizationId: string;
+  matterId: string;
+  question: string;
+}): Promise<Result<{ text: string; needsRule: boolean; sources: VoSourceRef[] }> | { ok: true; abstained: true }> {
+  if (!isUuid(input.organizationId) || !isUuid(input.matterId)) return { error: "Choose a matter." };
+  const question = (input.question ?? "").trim();
+  if (!question || question.length > 1000) return { error: "Ask a question of up to 1,000 characters." };
+  const begun = await start(input.organizationId, "ask", { matterId: input.matterId });
+  if ("error" in begun) return begun;
+  const out = await callVoAgent(request(input.organizationId, "ask", begun.started, null, question));
+  if (out.result === "answered") return { ok: true, text: out.text, needsRule: out.needsRule, sources: out.sources };
+  if (out.result === "abstained") return { ok: true, abstained: true };
+  if (out.result === "drafted") return { error: voError("failed") };
+  if (out.failure === "unavailable") await closeIfOpen(begun.supabase, begun.started.runId, out.failure);
+  return { error: voError(out.failure) };
 }
 
 /** Sends the reviewed text of a draft as a matter message (the person pressed Send). */
@@ -123,7 +146,7 @@ export async function sendVoDraft(input: {
   return { ok: true, messageId: row.message_id, threadId: row.thread_id };
 }
 
-/** Rejects a draft: it stays in the audit as discarded and is never sent. */
+/** Rejects a draft: it stays in the audit as rejected and is never sent. */
 export async function discardVoDraft(input: { organizationId: string; draftId: string }): Promise<Result> {
   if (!isUuid(input.organizationId) || !isUuid(input.draftId)) return { error: "Choose a draft." };
   const supabase = await createClient({ organizationId: input.organizationId });
@@ -144,19 +167,9 @@ export async function rateVoRun(input: { organizationId: string; runId: string; 
 /** One Vo switch, changed by the firm owner (the others keep their saved value). */
 export async function saveVoSetting(input: { organizationId: string; setting: VoSettingKey; on: boolean }): Promise<Result> {
   if (!isUuid(input.organizationId) || typeof input.on !== "boolean") return { error: "Choose a setting." };
-  if (!["enabled", "reply_drafts", "read_client_messages"].includes(input.setting)) return { error: "Choose a setting." };
+  if (!(VO_SETTING_KEYS as readonly string[]).includes(input.setting)) return { error: "Choose a setting." };
   const supabase = await createClient({ organizationId: input.organizationId });
-  const [row, org] = await Promise.all([
-    supabase.from("vo_settings").select("enabled, reply_drafts, read_client_messages").eq("organization_id", input.organizationId).maybeSingle(),
-    supabase.from("organizations").select("sample_mode").eq("id", input.organizationId).maybeSingle(),
-  ]);
-  const next = nextSettings(row.data ?? null, org.data?.sample_mode === true, input.setting, input.on);
-  const { error } = await supabase.rpc("set_vo_settings", {
-    p_organization_id: input.organizationId,
-    p_enabled: next.enabled,
-    p_reply_drafts: next.replyDrafts,
-    p_read_client_messages: next.readClientMessages,
-  });
+  const { error } = await supabase.rpc("set_vo_settings", { p_organization_id: input.organizationId, p_changes: { [input.setting]: input.on } });
   if (error) return { error: voError("owner_only") };
   return { ok: true };
 }

@@ -11,7 +11,7 @@ import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from 
  */
 let db: TestDb;
 
-const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+const MODEL = "claude-opus-5-5";
 
 beforeAll(async () => {
   db = await createTestDb();
@@ -250,11 +250,11 @@ describe("grounded drafts", () => {
     const draftId = await finish(run.run_id!, sourcesFor(f));
     expect(draftId).toBeTruthy();
     await expectDbError(() => finish(run.run_id!, sourcesFor(f)), /already finished/);
-    // A model id that is not a Workers AI model is refused.
+    // A malformed model id is refused.
     const second = await begin(f);
     await expectDbError(
       () =>
-        db.query(`select public.finish_vo_run($1, 'drafted', 'T', 'Body', $2::jsonb, 'gpt-4', 'reply-1', false, 10, null)`, [
+        db.query(`select public.finish_vo_run($1, 'drafted', 'T', 'Body', $2::jsonb, 'Not a model!', 'reply-1', false, 10, null)`, [
           second.run_id,
           JSON.stringify(sourcesFor(f)),
         ]),

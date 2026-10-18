@@ -64,7 +64,7 @@ export function guardVoOutput(raw: unknown): GuardResult {
     .replace(/[ \t]{2,}/g, " ")
     .trim();
   // A leading quote pair the model sometimes adds.
-  if (/^["“].*["”]$/s.test(text)) text = text.slice(1, -1).trim();
+  if (/^["“][\s\S]*["”]$/.test(text)) text = text.slice(1, -1).trim();
   if (!text) return { kind: "empty" };
   if (text.length > MAX_DRAFT_CHARS) text = text.slice(0, MAX_DRAFT_CHARS).trimEnd();
   return { kind: "draft", text, needsRule: text.includes(NEEDS_RULE) };

@@ -1,0 +1,34 @@
+// casevoya-vo-agent: the Vo agent (Claude Agent SDK) in a Cloudflare Container. NOT DEPLOYED.
+// A separate Worker from casevoya-app; the app reaches it only through its service binding
+// "VO_AGENT" (see docs/integrations/vo-agent.md). Secrets, set with `wrangler secret put` before
+// the first deploy and never in this file: VO_AGENT_SECRET (shared with casevoya-app),
+// ANTHROPIC_API_KEY. No Supabase service-role key exists here: tools run as the staff member.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "casevoya-vo-agent",
+  "main": "runtime/worker.ts",
+  "account_id": "c8010438fc56280e3ea5747a123e818a",
+  "compatibility_date": "2026-10-17",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "containers": [
+    {
+      "class_name": "VoAgentContainer",
+      "image": "./Dockerfile",
+      "max_instances": 3,
+      "instance_type": "basic"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "VO_AGENT", "class_name": "VoAgentContainer" }]
+  },
+  "exports": {
+    "VoAgentContainer": { "type": "durable-object", "storage": "sqlite" }
+  },
+  "vars": {
+    "SUPABASE_URL": "https://aqjtvqmojfamtspzyeqm.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_WJL1a16TYhbj2HETogqpLQ_RcbYs1vH"
+  },
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } }
+}

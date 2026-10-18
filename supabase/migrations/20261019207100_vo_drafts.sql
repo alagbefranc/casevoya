@@ -70,10 +70,15 @@ create table public.vo_runs (
   matter_id uuid not null,
   thread_id uuid,
   result public.vo_run_result not null default 'running',
-  model text check (model is null or model ~ '^@cf/[a-z0-9._/-]{3,120}$'),
+  model text check (model is null or model ~ '^[a-z0-9@][a-z0-9@._/-]{2,119}$'),
   prompt_version text check (prompt_version is null or prompt_version ~ '^[a-z0-9._-]{1,40}$'),
   source_count integer check (source_count is null or source_count between 0 and 60),
   latency_ms integer check (latency_ms is null or latency_ms between 0 and 600000),
+  -- The agent's tool calls (names only), token use and the client-side cost estimate (AI-02).
+  tools_called text[] not null default '{}'::text[] check (cardinality(tools_called) <= 60),
+  input_tokens integer check (input_tokens is null or input_tokens >= 0),
+  output_tokens integer check (output_tokens is null or output_tokens >= 0),
+  cost_usd numeric(10, 4) check (cost_usd is null or cost_usd >= 0),
   failure text check (failure is null or failure in ('unavailable', 'failed', 'empty', 'nothing_to_draft', 'expired')),
   useful boolean,
   is_sample boolean not null default false,
@@ -107,7 +112,7 @@ create table public.vo_drafts (
     and jsonb_array_length(sources) between 1 and 40
     and pg_column_size(sources) <= 16000
   ),
-  model text not null check (model ~ '^@cf/[a-z0-9._/-]{3,120}$'),
+  model text not null check (model ~ '^[a-z0-9@][a-z0-9@._/-]{2,119}$'),
   prompt_version text not null check (prompt_version ~ '^[a-z0-9._-]{1,40}$'),
   needs_rule boolean not null default false,
   status public.vo_draft_status not null default 'draft',
@@ -358,7 +363,11 @@ create function public.finish_vo_run(
   p_prompt_version text default null,
   p_needs_rule boolean default false,
   p_latency_ms integer default null,
-  p_failure text default null
+  p_failure text default null,
+  p_tools text[] default null,
+  p_input_tokens integer default null,
+  p_output_tokens integer default null,
+  p_cost_usd numeric default null
 )
 returns uuid
 language plpgsql
@@ -389,7 +398,7 @@ begin
      or (p_result = 'answered' and run.kind <> 'ask') then
     raise exception 'say how the run ended' using errcode = '22023';
   end if;
-  if p_model is not null and p_model !~ '^@cf/[a-z0-9._/-]{3,120}$' then
+  if p_model is not null and p_model !~ '^[a-z0-9@][a-z0-9@._/-]{2,119}$' then
     raise exception 'unknown model' using errcode = '22023';
   end if;
   if p_prompt_version is not null and p_prompt_version !~ '^[a-z0-9._-]{1,40}$' then
@@ -397,6 +406,15 @@ begin
   end if;
   if p_latency_ms is not null and p_latency_ms not between 0 and 600000 then
     raise exception 'latency out of range' using errcode = '22023';
+  end if;
+  if p_tools is not null and (
+    cardinality(p_tools) > 60
+    or exists (select 1 from unnest(p_tools) t where t !~ '^[A-Za-z0-9_]{1,80}$')
+  ) then
+    raise exception 'tool names out of range' using errcode = '22023';
+  end if;
+  if coalesce(p_input_tokens, 0) < 0 or coalesce(p_output_tokens, 0) < 0 or coalesce(p_cost_usd, 0) < 0 or coalesce(p_cost_usd, 0) > 1000 then
+    raise exception 'usage out of range' using errcode = '22023';
   end if;
   if p_failure is not null and (p_result <> 'failed' or p_failure not in ('unavailable', 'failed', 'empty', 'nothing_to_draft')) then
     raise exception 'unknown failure' using errcode = '22023';
@@ -503,6 +521,10 @@ begin
         prompt_version = p_prompt_version,
         source_count = case when p_result in ('drafted', 'answered') then count_sources else null end,
         latency_ms = p_latency_ms,
+        tools_called = coalesce(p_tools, '{}'::text[]),
+        input_tokens = p_input_tokens,
+        output_tokens = p_output_tokens,
+        cost_usd = p_cost_usd,
         failure = case when p_result = 'failed' then coalesce(p_failure, 'failed') else null end,
         finished_at = clock_timestamp()
     where id = run.id;
@@ -516,14 +538,15 @@ begin
       'prompt_version', p_prompt_version,
       'source_count', case when p_result in ('drafted', 'answered') then count_sources else null end,
       'needs_rule', case when p_result = 'drafted' then coalesce(p_needs_rule, false) else null end,
-      'draft_id', did
+      'draft_id', did,
+      'tools', coalesce(p_tools, '{}'::text[])
     )
   );
   return did;
 end;
 $$;
-revoke all on function public.finish_vo_run(uuid, public.vo_run_result, text, text, jsonb, text, text, boolean, integer, text) from public, anon;
-grant execute on function public.finish_vo_run(uuid, public.vo_run_result, text, text, jsonb, text, text, boolean, integer, text)
+revoke all on function public.finish_vo_run(uuid, public.vo_run_result, text, text, jsonb, text, text, boolean, integer, text, text[], integer, integer, numeric) from public, anon;
+grant execute on function public.finish_vo_run(uuid, public.vo_run_result, text, text, jsonb, text, text, boolean, integer, text, text[], integer, integer, numeric)
   to authenticated, service_role;
 
 create function public.send_vo_draft(p_draft_id uuid, p_body text, p_client_key text default null)
