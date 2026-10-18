@@ -184,9 +184,10 @@ export function SheetRbar({ data }: { data: RbarData }) {
   );
 }
 
-function VoCard({ draft, sources }: { draft: string; sources: string }) {
+/** The Vo draft card. The home column puts it 18px below; the intake builder 12px. */
+export function VoCard({ draft, sources, marginTop = "18px" }: { draft: string; sources: string; marginTop?: string }) {
   return (
-    <div style={{ marginTop: "18px" }}>
+    <div style={{ marginTop }}>
       <div className={"ai"}>
         <div className={"vohd"}>
           <svg className={"mascot m-done"} width={30} height={30} viewBox={"0 0 100 100"} role={"img"} aria-label={"Vo, the Casevoya assistant, draft ready"}>

@@ -157,6 +157,9 @@ export type SheetQuery = {
   person?: string;
   /** The Calendar page's week: any date in it, YYYY-MM-DD. */
   week?: string;
+  /** The Intake form builder's form (stable key) and selected field (field key). */
+  form?: string;
+  field?: string;
 };
 
 export function sheetVariant(page: string, query: SheetQuery): string {

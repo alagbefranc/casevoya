@@ -32,6 +32,8 @@ import { loadSheetLicenceSuspended } from "@/modules/sheet/licence-suspended-loa
 import { SUSPENDED_REVEAL } from "@/modules/sheet/licence-suspended-present";
 import { GrantDialog, GrantsHeader, SheetGrants } from "@/components/sheet/designer/grants";
 import { loadSheetGrants } from "@/modules/sheet/grants-load";
+import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder } from "@/components/sheet/designer/intake-builder";
+import { loadSheetIntakeBuilder } from "@/modules/sheet/intake-builder-load";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
 import { homeRoute } from "@/lib/auth/home-route";
@@ -233,6 +235,24 @@ export async function SheetBody({
           after={<GrantDialog data={loaded.dialog} />}
         >
           <SheetGrants data={loaded.page} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Practice > Intake forms: the versioned form builder (Build and Preview tabs).
+  if (page === "intake-builder" && (access.kind === "live" || access.kind === "sample")) {
+    const tab = query.tab === "preview" ? "preview" : "build";
+    const loaded = await loadSheetIntakeBuilder(access.staff, tab, { form: query.form, field: query.field });
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<IntakeHeader data={loaded.data} />}
+          aside={<IntakeSettings data={loaded.data} />}
+          styles={[INTAKE_BUILDER_CSS]}
+          statusbar={loaded.chrome.statusbar}
+        >
+          <SheetIntakeBuilder data={loaded.data} />
         </SheetFrame>
       </SheetScreen>
     );
@@ -450,5 +470,7 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     limit: one("limit"),
     person: one("person"),
     week: one("week"),
+    form: one("form"),
+    field: one("field"),
   };
 }

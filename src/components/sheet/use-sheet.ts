@@ -65,6 +65,7 @@ import { policyDialogId, restorePolicyDraft, runPublishPolicy } from "./portal-p
 import { POLICY_KINDS, policyKindForDialog } from "@/modules/portal-policies/defaults";
 import { restoreStaffInvite, runStaffInvite, runStaffResend, runStaffRevoke } from "./staff-invite-act";
 import { reopenGrantDialog, runGrantCreate } from "./grants-acts";
+import { mountIntakeBuilder } from "./intake-builder-acts";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
@@ -582,6 +583,9 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         router.push(row.dataset.href);
       }
     }, listen);
+
+    // The Intake form builder: select, rename, switches, add fields, autosave and publish.
+    mountIntakeBuilder(root, router, ac.signal);
 
     // "Hold to revoke" on a pending staff invitation: held for HOLD_MS, then revoked.
     let hold: number | undefined;

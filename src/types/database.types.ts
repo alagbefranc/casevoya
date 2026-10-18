@@ -7319,6 +7319,24 @@ export type Database = {
           result: string | null
         }[]
       }
+      save_intake_draft: {
+        Args: {
+          p_expected_version: number | null
+          p_schema: Json
+          p_stable_key: string
+          p_template_id: string | null
+          p_title: string
+        }
+        Returns: Json
+      }
+      publish_intake_draft: {
+        Args: { p_expected_version: number; p_template_id: string }
+        Returns: string
+      }
+      intake_template_usage: {
+        Args: { p_organization_id: string }
+        Returns: { matters: number; stable_key: string }[]
+      }
       firm_access_grants: {
         Args: { p_organization_id: string }
         Returns: {

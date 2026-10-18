@@ -14,6 +14,8 @@ import { LicenceSuspendedMarkup } from "@/components/sheet/markup/licence-suspen
 import { SUSPENDED_REVEAL } from "@/modules/sheet/licence-suspended-present";
 import { GrantDialog, GrantsHeader, SheetGrants, type GrantDialogData, type GrantsData, type GrantsTab } from "@/components/sheet/designer/grants";
 import { GrantsMarkup } from "@/components/sheet/markup/grants";
+import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder, type IntakeBuilderData, type IntakeTab } from "@/components/sheet/designer/intake-builder";
+import { IntakeBuilderMarkup } from "@/components/sheet/markup/intake-builder";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 
@@ -398,5 +400,65 @@ describe("Designer fidelity: Access grants", () => {
     expect(html).toContain('<option data-person="11111111-1111-4111-8111-111111111111">Ana Diaz</option>');
     expect(html).toContain('data-matter="22222222-2222-4222-8222-222222222222" data-subject="44444444-4444-4444-8444-444444444444"');
     expect(html).toContain('data-grant-create="1" data-org="33333333-3333-4333-8333-333333333333"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Intake form builder
+// ---------------------------------------------------------------------------
+const DESIGNER_INTAKE: IntakeBuilderData = {
+  tab: "build",
+  title: "Spousal sponsorship v3",
+  pills: [{ left: "Draft", right: "autosaved 10 s ago" }, "Used by 4 matters"],
+  publishLabel: "Publish v4",
+  section: { left: "Section 1", right: "About you" },
+  palette: ["Short text", "Long text", "Date", "Yes / No", "Choice", "Address", "File upload", "Repeating rows", "Section", "Signature"].map((label) => ({ label })),
+  rows: [
+    { label: "Full legal name", typeLabel: "Short text", note: "Required", conditional: false, badge: null, selected: false },
+    { label: "Date of birth", typeLabel: "Date", note: "Required", conditional: false, badge: { tone: "gr", label: "Unknown allowed" }, selected: true },
+    { label: "Have you been married before?", typeLabel: "Yes / No", note: "Required", conditional: false, badge: null, selected: false },
+    { label: "Previous marriage details", typeLabel: "Section", note: "Shows if “Yes” above", conditional: true, badge: { tone: "blue", label: "Conditional" }, selected: false },
+    { label: "Passport bio page", typeLabel: "File upload", note: "Required", conditional: false, badge: { tone: "gr", label: "OCR on" }, selected: false },
+    { label: "Travel history, last 10 years", typeLabel: "Repeating rows", note: "Optional", conditional: false, badge: { tone: "gr", label: "N/A allowed" }, selected: false },
+  ],
+  settings: {
+    label: "Date of birth",
+    toggles: [
+      { label: "Required", on: true },
+      { label: "Allow “Unknown”", on: true },
+      { label: "Allow “Not applicable”", on: false },
+      { label: "Show to sponsor", on: false },
+    ],
+  },
+  vo: { draft: "Suggest adding “Children from previous relationships” under previous marriage.", sources: "Sources: Based on IRCC guide 5525, staff-reviewed checklist v3" },
+};
+
+describe("Designer fidelity: Intake form builder", () => {
+  for (const tab of ["build", "preview"] as IntakeTab[]) {
+    it(`renders the Intake form builder (${tab} tab) exactly as the captured Designer markup`, () => {
+      const captured = clean(renderToStaticMarkup(createElement(IntakeBuilderMarkup, { variant: tab === "build" ? "default" : "tab-preview" })));
+      const data = { ...DESIGNER_INTAKE, tab };
+      const live = frame("/sheet/intake-builder", createElement(IntakeHeader, { data }), createElement(SheetIntakeBuilder, { data }), {
+        styles: [INTAKE_BUILDER_CSS],
+        aside: createElement(IntakeSettings, { data }),
+      });
+      same(live, captured);
+    });
+  }
+
+  it("wires the builder by data attributes only, and shows no Vo card without Vo", () => {
+    const data: IntakeBuilderData = {
+      ...DESIGNER_INTAKE,
+      vo: null,
+      rows: [{ ...DESIGNER_INTAKE.rows[0], key: "full_name" }],
+      palette: [{ label: "Short text", type: "Short text" }],
+      live: { organizationId: "33333333-3333-4333-8333-333333333333", stableKey: "about_you", title: "About you", templateId: null, version: null, status: "new", schema: "{\"fields\":[]}" },
+    };
+    const html = renderToStaticMarkup(createElement("div", null, createElement(IntakeHeader, { data }), createElement(SheetIntakeBuilder, { data }), createElement(IntakeSettings, { data })));
+    expect(html).toContain('data-intake-org="33333333-3333-4333-8333-333333333333" data-intake-key="about_you"');
+    expect(html).toContain('<div class="qq" data-key="full_name">');
+    expect(html).toContain('data-intake-publish="1"');
+    expect(html).toContain('data-goto-tab="preview"');
+    expect(html).not.toContain('class="ai"');
   });
 });
