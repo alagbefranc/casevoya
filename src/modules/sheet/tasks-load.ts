@@ -5,6 +5,7 @@ import { staffPerson } from "@/modules/sheet/avatar";
 import { loadSheetChrome, matterNames, memberNames } from "@/modules/sheet/chrome-load";
 import { dayMonth, isoDate, localNow } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
+import { clientOptions, dependsOnOptions, matterOptions, staffOptions } from "@/modules/sheet/new-task";
 import { isoDateInTimeZone, plusDays, type SheetQuery } from "@/modules/sheet/present";
 import {
   clientState,
@@ -25,6 +26,8 @@ import {
 type Client = Awaited<ReturnType<typeof createClient>>;
 
 const OPEN_TASK = ["open", "blocked"] as const;
+/** app.staff_roles(): who can own an internal task. */
+const STAFF_ROLES = ["firm_owner", "licensed_consultant", "case_manager", "assistant", "finance_user"] as const;
 /** Finished client tasks and past deadlines stay on the page this long. */
 const RECENT_DAYS = 30;
 
@@ -193,30 +196,87 @@ export async function loadSheetTasks(staff: SheetStaff, query: SheetQuery, now: 
   const tab = tasksTab(query.tab);
   const count = { count: "exact" as const, head: true };
 
-  const [chrome, open, escalated, members, openTitles, internal, client, deadlines] = await Promise.all([
+  const [chrome, open, escalated, dialog, internal, client, deadlines] = await Promise.all([
     loadSheetChrome(staff, "/sheet/tasks"),
     supabase.from("tasks").select("id", count).eq("organization_id", org).in("status", [...OPEN_TASK]),
     supabase.from("tasks").select("id", count).eq("organization_id", org).eq("status", "open").not("escalated_at", "is", null),
-    memberNames(supabase, org),
-    supabase.from("tasks").select("title").eq("organization_id", org).in("status", [...OPEN_TASK]).order("due_on", { ascending: true, nullsFirst: false }).limit(50),
+    loadNewTask(supabase, staff),
     tab === "internal" ? loadInternal(supabase, staff, today, now) : undefined,
     tab === "client" ? loadClient(supabase, staff, today) : undefined,
     tab === "deadlines" ? loadDeadlines(supabase, staff, today) : undefined,
   ]);
 
-  const owners = [...new Set(members.values())].sort((a, b) => a.localeCompare(b));
   const tasks: TasksData = {
     tab,
     counts: { open: open.count ?? 0, escalated: escalated.count ?? 0 },
     internal,
     client,
     deadlines,
-    dialog: {
-      owners: owners.length ? owners : [staff.displayName],
-      dependsOn: [...new Set((openTitles.data ?? []).map((row) => row.title))],
-      // Tasks are created on a matter (the database requires one), and this dialog has no matter field.
-      create: { toast: "This form isn\u2019t connected yet", kind: "warn", sub: "Nothing was saved." },
-    },
+    dialog,
   };
   return { chrome, tasks };
+}
+
+/** Matters offered in New task. RLS decides which a staff member can read; closed matters are left out. */
+const NEW_TASK_MATTERS = 200;
+
+/**
+ * The New task dialog, read as the signed-in staff member: the matters they can read, the
+ * firm's active staff (internal owners), each matter's people (client owners, sample matching
+ * the matter, as create_task requires) and each matter's tasks (what a task can depend on).
+ */
+async function loadNewTask(supabase: Client, staff: SheetStaff): Promise<TasksData["dialog"]> {
+  const org = staff.organizationId;
+  const [matters, staffRows, members] = await Promise.all([
+    supabase
+      .from("matters")
+      .select("id, reference, is_sample")
+      .eq("organization_id", org)
+      .neq("stage", "closed")
+      .order("updated_at", { ascending: false })
+      .limit(NEW_TASK_MATTERS),
+    supabase.from("memberships").select("id").eq("organization_id", org).eq("status", "active").in("role", [...STAFF_ROLES]),
+    memberNames(supabase, org),
+  ]);
+  const matterRows = matters.data ?? [];
+  const ids = matterRows.map((row) => row.id);
+  const [name, participants, earlier] = await Promise.all([
+    matterNames(supabase, org, ids),
+    ids.length
+      ? supabase.from("matter_participants").select("matter_id, person_id").eq("organization_id", org).in("matter_id", ids).not("person_id", "is", null)
+      : null,
+    ids.length
+      ? supabase
+          .from("tasks")
+          .select("id, title, matter_id")
+          .eq("organization_id", org)
+          .in("matter_id", ids)
+          .neq("status", "cancelled")
+          .order("created_at", { ascending: false })
+          .limit(TASKS_READ)
+      : null,
+  ]);
+  const personIds = [...new Set((participants?.data ?? []).map((row) => row.person_id).filter((id): id is string => Boolean(id)))];
+  const people = personIds.length ? await supabase.from("persons").select("id, display_name, is_sample").eq("organization_id", org).in("id", personIds) : null;
+  const person = new Map((people?.data ?? []).map((row) => [row.id, row]));
+  const sample = new Map(matterRows.map((row) => [row.id, row.is_sample]));
+
+  const staffOwners = staffOptions((staffRows.data ?? []).map((row) => ({ id: row.id, name: members.get(row.id) || "Unassigned" })));
+  const clientOwners = clientOptions(
+    (participants?.data ?? []).flatMap((row) => {
+      const found = row.person_id ? person.get(row.person_id) : undefined;
+      if (!found || found.is_sample !== sample.get(row.matter_id)) return [];
+      return [{ matterId: row.matter_id, personId: found.id, name: found.display_name }];
+    }),
+  );
+  return {
+    owners: [...staffOwners, ...clientOwners],
+    dependsOn: dependsOnOptions(earlier?.data ?? []),
+    wire: {
+      organizationId: org,
+      timezone: staff.timezone,
+      matters: matterOptions(matterRows, name),
+      owner: staff.membershipId,
+    },
+  };
 }

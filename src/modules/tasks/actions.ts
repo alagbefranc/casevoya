@@ -5,6 +5,7 @@ import { verifyTotpCode } from "@/lib/auth/verify-totp";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { deadlineError } from "@/modules/sheet/new-deadline";
+import { dependencyError, newTaskError, readNewTask } from "@/modules/sheet/new-task";
 import type { Database, Json } from "@/types/database.types";
 
 type Audience = Database["public"]["Enums"]["task_audience"];
@@ -70,6 +71,60 @@ export async function createTask(input: {
   if (error) return { error: safeAccessError(error.message) };
   if (typeof data !== "string" || !isUuid(data)) return { error: "The task was not created." };
   return { id: data };
+}
+
+/**
+ * The Sheet's "New task": a task on a matter the signed-in staff member can read, saved through
+ * create_task (security invoker, so RLS, the staff role check and sample mode decide). When the
+ * dialog names a task it depends on, add_task_dependency links them; the task stays saved if
+ * that link is refused, and the result says so.
+ */
+export async function createSheetTask(input: {
+  organizationId: string;
+  timezone: string;
+  matterId: string;
+  audience: string;
+  title: string;
+  ownerMembershipId: string | null;
+  ownerPersonId: string | null;
+  dueOn: string | null;
+  dependsOnTaskId: string | null;
+}): Promise<{ id: string; dependency: string | null } | { error: string }> {
+  const read = readNewTask({
+    matter: input.matterId,
+    title: input.title,
+    kind: input.audience,
+    owner: input.audience === "client" ? input.ownerPersonId : input.ownerMembershipId,
+    due: input.dueOn,
+    dependsOn: input.dependsOnTaskId,
+  });
+  if ("error" in read) return { error: read.error };
+  const timezone = typeof input.timezone === "string" && /^[A-Za-z0-9_+/-]{1,64}$/.test(input.timezone) ? input.timezone : "America/Toronto";
+  const session = await clientFor(input.organizationId, null);
+  if ("error" in session) return { error: session.error ?? "Sign in first." };
+  const task = read.input;
+  const { data, error } = await session.supabase.rpc("create_task", {
+    p_matter_id: task.matterId,
+    p_audience: task.audience,
+    p_title: task.title,
+    p_owner_membership_id: task.ownerMembershipId,
+    p_owner_person_id: task.ownerPersonId,
+    p_priority: "normal",
+    p_due_on: task.dueOn,
+    p_due_at: null,
+    p_due_timezone: timezone,
+    p_estimated_minutes: null,
+    p_intake_field_key: null,
+    p_checklist: [],
+  });
+  if (error) return { error: newTaskError(error.message) };
+  if (typeof data !== "string" || !isUuid(data)) return { error: "The task was not created." };
+  if (!task.dependsOnTaskId) return { id: data, dependency: null };
+  const linked = await session.supabase.rpc("add_task_dependency", {
+    p_task_id: data,
+    p_depends_on_task_id: task.dependsOnTaskId,
+  });
+  return { id: data, dependency: linked.error ? dependencyError(linked.error.message) : null };
 }
 
 export async function setTaskStatus(input: {
