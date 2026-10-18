@@ -6,7 +6,7 @@
  *
  * Every value that reaches the HTML goes through escapeHtml; every link goes through safeUrl and
  * is dropped (with its button) when it is not an absolute http(s) URL without credentials.
- * Images and fonts load from the app's own origin (public/assets/email and public/fonts/erode),
+ * Images load from the app's own origin (public/assets/email); fonts from casevoya.ca (see FONT_BASE),
  * passed in as `origin`.
  */
 
@@ -146,8 +146,14 @@ function preheader(text: string): string {
   return `<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;color:#F6F5F4">${escapeHtml(text)}${pad}</div>`;
 }
 
-function fontFaces(origin: string): string {
-  const base = `${emailOrigin(origin)}/fonts/erode`;
+/**
+ * The approved export loads Erode from the marketing site, which serves fonts with
+ * Access-Control-Allow-Origin: * (the app origin does not), so mail clients that honour CORS can use it.
+ */
+const FONT_BASE = "https://casevoya.ca/fonts";
+
+function fontFaces(): string {
+  const base = FONT_BASE;
   return (
     `@font-face{font-family:Erode;src:url(${base}/Erode-Regular.woff2) format('woff2');font-weight:400;font-style:normal}` +
     `@font-face{font-family:Erode;src:url(${base}/Erode-Medium.woff2) format('woff2');font-weight:500;font-style:normal}`
@@ -165,7 +171,7 @@ export function renderHtml(copy: EmailCopy, origin: string = DEFAULT_EMAIL_ORIGI
   return (
     `<!doctype html>\n` +
     `<html lang="${lang}" xmlns="http://www.w3.org/1999/xhtml"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="x-apple-disable-message-reformatting"><meta name="color-scheme" content="light"><title>${escapeHtml(copy.subject)}</title>\n` +
-    `<style>${fontFaces(origin)}\n` +
+    `<style>${fontFaces()}\n` +
     `body{margin:0;padding:0;background:#F6F5F4}table{border-collapse:collapse}img{border:0;outline:none;text-decoration:none}\n` +
     `@media (max-width:620px){.mail{width:100%!important}}</style></head>\n` +
     `<body style="margin:0;padding:0;background:#F6F5F4">\n` +

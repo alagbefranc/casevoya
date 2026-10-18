@@ -104,8 +104,9 @@ describe("approved email designs", () => {
       expect(url.startsWith(`${ORIGIN}/assets/email/`), url).toBe(true);
       expect(existsSync(path.join(PUBLIC, new URL(url).pathname)), url).toBe(true);
     }
+    // Fonts come from the marketing site, as in the approved export (it serves them with CORS).
     for (const font of email.html.matchAll(/url\((https:[^)]+)\)/g)) {
-      expect(existsSync(path.join(PUBLIC, new URL(font[1]).pathname)), font[1]).toBe(true);
+      expect(font[1], font[1]).toMatch(/^https:\/\/casevoya\.ca\/fonts\/Erode-(Regular|Medium)\.woff2$/);
     }
   });
 
