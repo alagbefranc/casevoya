@@ -87,6 +87,7 @@ import { reopenGrantDialog, runGrantCreate } from "./grants-acts";
 import { mountIntakeBuilder } from "./intake-builder-acts";
 import { runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
+import { reopenFirmDialog, runFirmSave } from "./settings-firm-acts";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
 const NEW_MATTER = "/sheet/matters?new=1";
@@ -360,6 +361,15 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (approve.getAttribute("aria-busy") === "true") return;
         approve.setAttribute("aria-busy", "true");
         void runApproveTemplate(approve, router).finally(() => approve.removeAttribute("aria-busy"));
+        return;
+      }
+      // Settings > Firm, Offices, Branding, Language and time: the dialogs' Save and Remove office.
+      const firmSave = target.closest<HTMLElement>("[data-firm-save]");
+      if (firmSave && root.contains(firmSave)) {
+        event.preventDefault();
+        if (firmSave.getAttribute("aria-busy") === "true") return;
+        firmSave.setAttribute("aria-busy", "true");
+        void runFirmSave(firmSave, router).finally(() => firmSave.removeAttribute("aria-busy"));
         return;
       }
       // Licences: Add a licence and Report a change; the licence-suspended home's Reassign work.
@@ -900,6 +910,18 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       }
       const reassign = root.querySelector<HTMLDialogElement>("dialog#dlgRe");
       if (reassign) reassign.addEventListener("change", () => syncReassign(reassign), listen);
+    }
+
+    // Settings > Firm, Offices, Branding, Language and time: ?dlg=<dialog id> (back from step-up)
+    // reopens that dialog with what was typed; closing a dialog drops ?dlg.
+    if (root.querySelector("[data-firm-save]")) {
+      window.setTimeout(() => reopenFirmDialog(root, openDialog), 300);
+      root.querySelectorAll<HTMLDialogElement>("dialog").forEach((dialog) => {
+        if (!dialog.querySelector("[data-firm-save]")) return;
+        dialog.addEventListener("close", () => {
+          if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
+        }, listen);
+      });
     }
 
     // Access grants: ?dlg=grant (back from step-up) reopens New access grant with what was typed.
