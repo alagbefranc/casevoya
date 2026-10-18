@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@composio/core':
+        specifier: ^0.25.0
+        version: 0.25.0(@aws-sdk/credential-provider-node@3.972.86)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.4)(ws@8.21.0)(zod@4.6.7)
       '@stripe/connect-js':
         specifier: 3.4.6
         version: 3.4.6
@@ -414,6 +417,9 @@ packages:
     resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
     engines: {node: '>=6.9.0'}
 
+  '@cfworker/json-schema@4.1.1':
+    resolution: {integrity: sha512-gAmrUZSGtKc3AiBL71iNWxDsyUC5uMaKKGdvzYsBoTW/xi42JQHl7eKV2OYzCUqvc+D2RCcf7EXY2iCyFIk6og==}
+
   '@cloudflare/kv-asset-handler@0.5.0':
     resolution: {integrity: sha512-jxQYkj8dSIzc0cD6cMMNdOc1UVjqSqu8BZdor5s8cGjW2I8BjODt/kWPVdY+u9zj3ms75Q5qaZgnxUad83+eAg==}
     engines: {node: '>=22.0.0'}
@@ -456,6 +462,27 @@ packages:
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
+
+  '@composio/client@2.0.0-rc.17':
+    resolution: {integrity: sha512-j1fqyiAwAO6kOmbLwkLn4fb4//GNveV2yo0iMo4wTwOk9euRwQNK6lodVcRhJT6ZeRCSS2Xv8uUsJtmGsPTyiA==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      effect: '*'
+    peerDependenciesMeta:
+      effect:
+        optional: true
+
+  '@composio/core@0.25.0':
+    resolution: {integrity: sha512-oxzr0etEDb2EzoyCQfyunoui0sRZq+v97w1l4Wj445cbks/VGauQsgVjVSxMqMc74MnSnzvvZ4saQbpkycBN+g==}
+    engines: {node: '>=22.22.3'}
+    peerDependencies:
+      zod: '>=3.25.76 <5'
+
+  '@composio/json-schema-to-zod@0.3.4':
+    resolution: {integrity: sha512-8MQUTBZ+r5ToY5lLaJCdOHLXjpqfyFKQuyruZbHnl4Mtp7LYjJP2k5KPyo521AmVSpugbyXiyNdCZWZQR2qGIw==}
+    engines: {node: '>=22.22.3'}
+    peerDependencies:
+      zod: '>=3.25.76 <5'
 
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -2061,6 +2088,10 @@ packages:
     resolution: {integrity: sha512-g7nH6P6dyDioJogAAGprGpCtVImJhpPk/roCzdb3fIh61/s/nPsfR6onyMwkCAR/OlC3yBC0lESvUoQEAssIrw==}
     engines: {node: '>= 0.8'}
 
+  dequal@2.0.3:
+    resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
+    engines: {node: '>=6'}
+
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
@@ -2608,6 +2639,9 @@ packages:
     resolution: {integrity: sha512-1pC6N8qWJbWoPtEjgcL2xyhQOP491EQjeUo3qTKcmV8YSDDJrOepfG8pcC7h/QgnQHYSv0mJ3Z/ZWxmatVrysg==}
     engines: {node: '>= 0.4'}
 
+  is-fs-case-sensitive@2.0.0:
+    resolution: {integrity: sha512-JoCsyGITdYPM+pUbeMQ4IiEuQ4wjPdeWORlG7n644isewbcxiQIr+9gmF5k7UabTP/jLBRkbgydEamR7JZBKHA==}
+
   is-fullwidth-code-point@3.0.0:
     resolution: {integrity: sha512-zymm5+u+sCsSWyD9qNaejV3DFvhCKclKdizYaJUuHA83RLjb7nSuGnddCHGv0hk+KY7BMAlsWeK4Ueg6EV6XQg==}
     engines: {node: '>=8'}
@@ -3102,6 +3136,30 @@ packages:
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
+  openai@7.38.0:
+    resolution: {integrity: sha512-Ef+YyIeoiisZLP/tV4F4/RieJAl4OEJTyJg6gV0AXOb0T9CDkvYJoU224OY5CTmQ4zDJeku4jEHjz2b3/6Ndhw==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
+      '@smithy/hash-node': '>=4.3.0 <5'
+      '@smithy/signature-v4': '>=5.4.0 <6'
+      undici: '>=5 <9'
+      ws: ^8.21.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      '@aws-sdk/credential-provider-node':
+        optional: true
+      '@smithy/hash-node':
+        optional: true
+      '@smithy/signature-v4':
+        optional: true
+      undici:
+        optional: true
+      ws:
+        optional: true
+      zod:
+        optional: true
+
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
@@ -3221,6 +3279,9 @@ packages:
   pure-rand@8.4.2:
     resolution: {integrity: sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng==}
 
+  pusher-js@8.6.0:
+    resolution: {integrity: sha512-wShJPfCS/kYkCBVzVW67wa9cnQIgHTszEK2XHNrFkOgGruuGw081aERAxfRjfdFU+WcIt8x6dvbwkTW4iZuQ8Q==}
+
   qrcode@1.5.4:
     resolution: {integrity: sha512-1ca71Zgiu6ORjHqFBDpnSMTR2ReToX4l1Au1VFLyVeBTFavzQnv5JxMFr3ukHVKpSrSA2MCk0lNJSykjUfz7Zg==}
     engines: {node: '>=10.13.0'}
@@ -3240,6 +3301,10 @@ packages:
   raw-body@3.0.2:
     resolution: {integrity: sha512-K5zQjDllxWkf7Z5xJdV0/B0WTNqx6vxG70zJE4N0kBs4LovmEYWJzQGxC9bS9RAKu3bgM40lrd5zoLJ12MQ5BA==}
     engines: {node: '>= 0.10'}
+
+  re2js@2.8.8:
+    resolution: {integrity: sha512-E2FVgqD2mzJ+ZmMSHLnkOvZ7PiZ4FgMdfVCA3YsJWs9gtyoaKmUMxyVPCXS1yK209/mz3XkdT7kr3OlMWW2Fww==}
+    engines: {node: '>=20.0.0'}
 
   react-dom@19.3.0:
     resolution: {integrity: sha512-JDk8dgif51OjFoDE70+OT9ICyYr+69HlmihNwp1+Nsfbna3t5sIiCa9ZJktDmQ4/1b/rn26hIAR2uYXDMr5r0Q==}
@@ -3560,6 +3625,9 @@ packages:
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
+  tweetnacl@1.0.3:
+    resolution: {integrity: sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw==}
+
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
     engines: {node: '>= 0.8.0'}
@@ -3612,6 +3680,10 @@ packages:
 
   undici@7.29.1:
     resolution: {integrity: sha512-RYONW2MeafgYlkVOKYKkA/Ag7BmXqgIWCa8t1m0JcxrQg9pI9lEqRhAOruOBCbAohOa/gkCF+iPi9hrgvTzu6Q==}
+    engines: {node: '>=20.18.1'}
+
+  undici@7.30.1:
+    resolution: {integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==}
     engines: {node: '>=20.18.1'}
 
   unenv@2.0.0-rc.24:
@@ -3865,6 +3937,11 @@ packages:
 
   youch@4.1.0-beta.10:
     resolution: {integrity: sha512-rLfVLB4FgQneDr0dv1oddCVZmKjcJ6yX6mS4pU82Mq/Dt9a3cLZQ62pDBL4AUO+uVrCvtWz3ZFUL2HFAFJ/BXQ==}
+
+  zod-to-json-schema@3.25.2:
+    resolution: {integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==}
+    peerDependencies:
+      zod: ^3.25.28 || ^4
 
   zod-validation-error@4.0.2:
     resolution: {integrity: sha512-Q6/nZLe6jxuU80qb/4uJ4t5v2VEZ44lzQjPDhYJNztRQ4wyWc6VF3D3Kb/fAuPetZQnhS3hnajCf9CsWesghLQ==}
@@ -4550,6 +4627,8 @@ snapshots:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
 
+  '@cfworker/json-schema@4.1.1': {}
+
   '@cloudflare/kv-asset-handler@0.5.0': {}
 
   '@cloudflare/unenv-preset@2.16.2(unenv@2.0.0-rc.24)(workerd@1.20261012.1)':
@@ -4572,6 +4651,35 @@ snapshots:
 
   '@cloudflare/workerd-windows-64@1.20261012.1':
     optional: true
+
+  '@composio/client@2.0.0-rc.17': {}
+
+  '@composio/core@0.25.0(@aws-sdk/credential-provider-node@3.972.86)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.4)(ws@8.21.0)(zod@4.6.7)':
+    dependencies:
+      '@composio/client': 2.0.0-rc.17
+      '@composio/json-schema-to-zod': 0.3.4(zod@4.6.7)
+      '@types/json-schema': 7.0.15
+      is-fs-case-sensitive: 2.0.0
+      openai: 7.38.0(@aws-sdk/credential-provider-node@3.972.86)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.21.0)(zod@4.6.7)
+      picocolors: 1.1.1
+      pusher-js: 8.6.0
+      semver: 7.8.5
+      undici: 7.30.1
+      zod: 4.6.7
+      zod-to-json-schema: 3.25.2(zod@4.6.7)
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - effect
+      - ws
+
+  '@composio/json-schema-to-zod@0.3.4(zod@4.6.7)':
+    dependencies:
+      '@cfworker/json-schema': 4.1.1
+      dequal: 2.0.3
+      re2js: 2.8.8
+      zod: 4.6.7
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
@@ -5996,6 +6104,8 @@ snapshots:
 
   depd@2.0.0: {}
 
+  dequal@2.0.3: {}
+
   detect-libc@2.1.2: {}
 
   dijkstrajs@1.0.3: {}
@@ -6748,6 +6858,8 @@ snapshots:
     dependencies:
       call-bound: 1.0.4
 
+  is-fs-case-sensitive@2.0.0: {}
+
   is-fullwidth-code-point@3.0.0: {}
 
   is-generator-function@1.1.2:
@@ -7175,6 +7287,15 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
+  openai@7.38.0(@aws-sdk/credential-provider-node@3.972.86)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.21.0)(zod@4.6.7):
+    optionalDependencies:
+      '@aws-sdk/credential-provider-node': 3.972.86
+      '@smithy/hash-node': 4.5.2
+      '@smithy/signature-v4': 5.7.4
+      undici: 7.30.1
+      ws: 8.21.0
+      zod: 4.6.7
+
   optionator@0.9.4:
     dependencies:
       deep-is: 0.1.4
@@ -7287,6 +7408,10 @@ snapshots:
 
   pure-rand@8.4.2: {}
 
+  pusher-js@8.6.0:
+    dependencies:
+      tweetnacl: 1.0.3
+
   qrcode@1.5.4:
     dependencies:
       dijkstrajs: 1.0.3
@@ -7308,6 +7433,8 @@ snapshots:
       http-errors: 2.0.1
       iconv-lite: 0.7.3
       unpipe: 1.0.0
+
+  re2js@2.8.8: {}
 
   react-dom@19.3.0(react@19.3.0):
     dependencies:
@@ -7725,6 +7852,8 @@ snapshots:
 
   tslib@2.8.1: {}
 
+  tweetnacl@1.0.3: {}
+
   type-check@0.4.0:
     dependencies:
       prelude-ls: 1.2.1
@@ -7794,6 +7923,8 @@ snapshots:
   undici@6.29.1: {}
 
   undici@7.29.1: {}
+
+  undici@7.30.1: {}
 
   unenv@2.0.0-rc.24:
     dependencies:
@@ -8054,6 +8185,10 @@ snapshots:
       '@speed-highlight/core': 1.2.24
       cookie: 1.1.1
       youch-core: 0.3.3
+
+  zod-to-json-schema@3.25.2(zod@4.6.7):
+    dependencies:
+      zod: 4.6.7
 
   zod-validation-error@4.0.2(zod@4.6.7):
     dependencies:
