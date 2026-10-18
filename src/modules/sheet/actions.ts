@@ -7,6 +7,8 @@ import { clearMatterOnHold, overrideMatterStage, recordGovernmentStatus, recordM
 import { createPortalInvitation } from "@/modules/portal-invitations/actions";
 import { acceptLink, guardianSubjects, readPortalInvite } from "@/modules/sheet/portal-invite";
 import { readDeadline } from "@/modules/sheet/new-deadline";
+import { missingPolicies, POLICIES_MISSING } from "@/modules/portal-policies/defaults";
+import { loadCurrentPolicies } from "@/modules/portal-policies/load";
 import { createTask, recordDeadline, scheduleDeadlineReminders, setTaskStatus } from "@/modules/tasks/actions";
 
 /**
@@ -173,6 +175,10 @@ export async function invitePortalPerson(input: {
   const read = readPortalInvite({ personId: input.personId, roleLabel: input.roleLabel, email: input.email, dateOfBirth: input.dateOfBirth });
   if ("error" in read) return { error: read.error };
   if (!isUuid(input.organizationId) || !isUuid(input.matterId)) return { error: "Choose a person and a matter." };
+
+  // No client can accept until the firm publishes its portal terms and privacy notice, so nothing is sent before then.
+  const missing = missingPolicies(await loadCurrentPolicies(await createClient({ organizationId: input.organizationId }), input.organizationId));
+  if (missing.length) return { error: POLICIES_MISSING };
 
   if (read.input.dateOfBirth) {
     const saved = await recordMissingBirthDate(input.organizationId, read.input.personId, read.input.dateOfBirth);

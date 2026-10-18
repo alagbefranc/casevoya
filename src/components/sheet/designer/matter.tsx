@@ -8,6 +8,8 @@ import { gaugeArcs, percent } from "./home";
 import { Badge, type MatterBadge } from "./matters";
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair, Sep } from "./frame";
+import { PolicyMissingAlert } from "./portal-policies";
+import type { PolicyKind } from "@/modules/portal-policies/defaults";
 
 export const MATTER_TABS = [
   ["overview", "Overview"],
@@ -542,12 +544,21 @@ export type MatterInviteData = {
    * opened for such a person. Absent, the dialog is exactly the captured one.
    */
   birthDate?: { max: string } | null;
+  /**
+   * The firm's portal documents that are not published yet. A client cannot accept any invitation
+   * until both are, so the dialog says so, links to Settings > Client portal, and does not send.
+   * Absent or empty, the dialog is exactly the captured one.
+   */
+  policiesMissing?: readonly PolicyKind[] | null;
 };
 
 const ROLE_OPTIONS = ["Adult dependant", "Applicant", "Sponsor", "Guardian", "Employer contact"] as const;
 
 export function MatterInviteDialog({ data }: { data: MatterInviteData }) {
-  const send = data.wire
+  const missing = data.policiesMissing?.length ? data.policiesMissing : null;
+  const send = missing
+    ? { disabled: true }
+    : data.wire
     ? { "data-invite": "1", "data-org": data.wire.organizationId, "data-matter": data.wire.matterId }
     : {
         "data-close": "dlgC",
@@ -574,6 +585,7 @@ export function MatterInviteDialog({ data }: { data: MatterInviteData }) {
             </div>
           </div>
         ) : null}
+        {missing ? <PolicyMissingAlert kinds={missing} style={{ marginBottom: "12px" }} /> : null}
         <div className={"fld"}>
           <label htmlFor={"cM"}>{"Matter"}</label>
           <select className={"sel"} id={"cM"}>

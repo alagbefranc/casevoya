@@ -692,6 +692,42 @@ describe("real client invites and trial", () => {
     await expectDbError(() => db.query(`select public.ensure_sample_case()`), /sample case denied/);
   });
 
+  it("makes a licensed owner the sample matter's responsible consultant, and not an unlicensed one", async () => {
+    const owner = await createUser(`owner-${randomUUID().slice(0, 8)}@example.test`);
+    const orgId = await createOrg(owner);
+    await asMaintenance(db);
+    const ownerMembership = (
+      await db.query<{ id: string }>(
+        `select id from public.memberships where organization_id = $1 and user_id = $2 and role = 'firm_owner'`,
+        [orgId, owner],
+      )
+    ).rows[0].id;
+
+    // Without a licence on file the owner is not licensed: the sample matter keeps no consultant.
+    await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    const matterId = (await db.query<{ id: string }>(`select public.ensure_sample_case() as id`)).rows[0].id;
+    await asMaintenance(db);
+    const before = await db.query<{ consultant: string | null }>(
+      `select responsible_consultant_membership_id as consultant from public.matters where id = $1`,
+      [matterId],
+    );
+    expect(before.rows[0].consultant).toBeNull();
+
+    // Once the owner declares a licence, opening the sample case again assigns them.
+    await declareLicence(owner, orgId, ownerMembership, "R700101");
+    await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    await db.query(`select public.ensure_sample_case()`);
+    await asMaintenance(db);
+    const after = await db.query<{ consultant: string | null; parties: number }>(
+      `select responsible_consultant_membership_id as consultant,
+              (select count(*)::int from public.matter_participants
+                where matter_id = $1 and membership_id = $2 and role = 'consultant') as parties
+         from public.matters where id = $1`,
+      [matterId, ownerMembership],
+    );
+    expect(after.rows[0]).toEqual({ consultant: ownerMembership, parties: 1 });
+  });
+
   it("completes the terms step without a data processing agreement and records one only when accepted", async () => {
     const owner = await createUser(`owner-${randomUUID().slice(0, 8)}@example.test`);
     const orgId = await createOrg(owner);
