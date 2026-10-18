@@ -339,11 +339,8 @@ export function ChatView({ data }: { data: ChatData }) {
     if ("abstained" in result) return setNotice("Vo didn’t draft this one: it needs a consultant (advice, eligibility or a rule without an approved source). Please answer it yourself.");
     setVoDraft(result.draftId);
     setText(result.text);
-    showInfo(
-      result.needsRule
-        ? "Vo’s draft is in the box. Replace “[needs a sourced rule]” with a checked, sourced fact, or remove it, then review and send."
-        : `Vo’s draft is in the box. Review and edit it before you send. Sources: ${result.sources.map((source) => source.label).join(", ")}.`,
-    );
+    if (result.needsRule) setNotice("Vo’s draft is in the box. Replace “[needs a sourced rule]” with a checked, sourced fact, or remove it, then review and send.");
+    else showInfo(`Vo’s draft is in the box. Review and edit it before you send. Sources: ${result.sources.map((source) => source.label).join(", ")}.`);
     requestAnimationFrame(() => {
       grow();
       input.current?.focus();
