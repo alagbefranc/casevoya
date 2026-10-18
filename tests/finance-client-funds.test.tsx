@@ -126,6 +126,7 @@ describe("client funds inputs", () => {
     expect(clientFundsError("client balance cannot go negative")).toMatch(/more than the client has available/);
     expect(clientFundsError("the invoice must be on the same matter")).toMatch(/same matter/);
     expect(clientFundsError("step-up is required")).toBe(clientFundsError("step-up is required: approving your own request needs a step-up after the request"));
+    expect(clientFundsError("step-up is required")).toBe(clientFundsError("step-up is required: verifying your own deposit needs a step-up after it was recorded"));
     expect(clientFundsError("some internal detail")).not.toMatch(/internal/);
   });
 });

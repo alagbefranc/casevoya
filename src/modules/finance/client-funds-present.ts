@@ -338,6 +338,7 @@ export function clientFundsError(message: string): string {
   if (/receipt access denied/i.test(message)) return "That receipt isn’t available to you.";
   if (/cannot approve their own transfer/i.test(message)) return "You asked for this transfer, so someone else approves it. The firm owner can approve any transfer.";
   if (/approving your own request needs a step-up/i.test(message)) return safeAccessError("step-up is required");
+  if (/verifying your own deposit needs a step-up/i.test(message)) return safeAccessError("step-up is required");
   if (/sample mode/i.test(message)) return "This firm is in sample mode, so only sample matters take client funds. Turn sample mode off to record a real client’s money.";
   if (/billing access denied/i.test(message)) return "Only the firm owner or the matter’s finance user can do this.";
   if (/firm owner step-up/i.test(message)) return "Only the firm owner adds a client account, after confirming with their authenticator.";
