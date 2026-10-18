@@ -5592,6 +5592,296 @@ export type Database = {
         }
         Relationships: []
       }
+      migration_batches: {
+        Row: {
+          byte_size: number
+          checked_at: string | null
+          commit_started_at: string | null
+          committed_at: string | null
+          committed_by: string | null
+          created_at: string
+          created_by: string | null
+          discarded_at: string | null
+          exceptions: Json
+          file_name: string
+          headers: string[]
+          id: string
+          is_sample: boolean
+          mapping: Json
+          organization_id: string
+          parsed_digest: string
+          plan_counts: Json | null
+          plan_hash: string | null
+          purge_after: string
+          references_at_import: Json
+          result_counts: Json | null
+          rolled_back_at: string | null
+          rolled_back_by: string | null
+          source_row_count: number
+          source_sha256: string
+          source_system: string
+          staged_digest: string | null
+          staged_row_count: number
+          staging_purged_at: string | null
+          status: Database["public"]["Enums"]["migration_batch_status"]
+          updated_at: string
+          verified_at: string | null
+          version: number
+        }
+        Insert: {
+          byte_size: number
+          checked_at?: string | null
+          commit_started_at?: string | null
+          committed_at?: string | null
+          committed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          discarded_at?: string | null
+          exceptions?: Json
+          file_name: string
+          headers: string[]
+          id?: string
+          is_sample?: boolean
+          mapping?: Json
+          organization_id: string
+          parsed_digest: string
+          plan_counts?: Json | null
+          plan_hash?: string | null
+          purge_after: string
+          references_at_import?: Json
+          result_counts?: Json | null
+          rolled_back_at?: string | null
+          rolled_back_by?: string | null
+          source_row_count: number
+          source_sha256: string
+          source_system?: string
+          staged_digest?: string | null
+          staged_row_count?: number
+          staging_purged_at?: string | null
+          status?: Database["public"]["Enums"]["migration_batch_status"]
+          updated_at?: string
+          verified_at?: string | null
+          version?: number
+        }
+        Update: {
+          byte_size?: number
+          checked_at?: string | null
+          commit_started_at?: string | null
+          committed_at?: string | null
+          committed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          discarded_at?: string | null
+          exceptions?: Json
+          file_name?: string
+          headers?: string[]
+          id?: string
+          is_sample?: boolean
+          mapping?: Json
+          organization_id?: string
+          parsed_digest?: string
+          plan_counts?: Json | null
+          plan_hash?: string | null
+          purge_after?: string
+          references_at_import?: Json
+          result_counts?: Json | null
+          rolled_back_at?: string | null
+          rolled_back_by?: string | null
+          source_row_count?: number
+          source_sha256?: string
+          source_system?: string
+          staged_digest?: string | null
+          staged_row_count?: number
+          staging_purged_at?: string | null
+          status?: Database["public"]["Enums"]["migration_batch_status"]
+          updated_at?: string
+          verified_at?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "migration_batches_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      migration_records: {
+        Row: {
+          batch_id: string
+          created: boolean
+          created_at: string
+          id: string
+          imported_stage: Database["public"]["Enums"]["matter_stage"] | null
+          organization_id: string
+          record_id: string
+          record_table: string
+          removed_at: string | null
+          row_number: number
+          source_reference: string | null
+          version_at_import: number
+        }
+        Insert: {
+          batch_id: string
+          created: boolean
+          created_at?: string
+          id?: string
+          imported_stage?: Database["public"]["Enums"]["matter_stage"] | null
+          organization_id: string
+          record_id: string
+          record_table: string
+          removed_at?: string | null
+          row_number: number
+          source_reference?: string | null
+          version_at_import: number
+        }
+        Update: {
+          batch_id?: string
+          created?: boolean
+          created_at?: string
+          id?: string
+          imported_stage?: Database["public"]["Enums"]["matter_stage"] | null
+          organization_id?: string
+          record_id?: string
+          record_table?: string
+          removed_at?: string | null
+          row_number?: number
+          source_reference?: string | null
+          version_at_import?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "migration_records_batch_id_organization_id_fkey"
+            columns: ["batch_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "migration_batches"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      migration_rows: {
+        Row: {
+          batch_id: string
+          cells: string[]
+          committed_at: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision: string | null
+          decision_target: string | null
+          group_first: number | null
+          group_key: string | null
+          id: string
+          is_applicant: boolean
+          match_detail: string[] | null
+          match_person_id: string | null
+          match_row_number: number | null
+          matter_id: string | null
+          normalized: Json | null
+          organization_id: string
+          person_id: string | null
+          plan: Database["public"]["Enums"]["migration_row_plan"] | null
+          problems: Json
+          row_number: number
+          row_sha256: string
+        }
+        Insert: {
+          batch_id: string
+          cells: string[]
+          committed_at?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string | null
+          decision_target?: string | null
+          group_first?: number | null
+          group_key?: string | null
+          id?: string
+          is_applicant?: boolean
+          match_detail?: string[] | null
+          match_person_id?: string | null
+          match_row_number?: number | null
+          matter_id?: string | null
+          normalized?: Json | null
+          organization_id: string
+          person_id?: string | null
+          plan?: Database["public"]["Enums"]["migration_row_plan"] | null
+          problems?: Json
+          row_number: number
+          row_sha256: string
+        }
+        Update: {
+          batch_id?: string
+          cells?: string[]
+          committed_at?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string | null
+          decision_target?: string | null
+          group_first?: number | null
+          group_key?: string | null
+          id?: string
+          is_applicant?: boolean
+          match_detail?: string[] | null
+          match_person_id?: string | null
+          match_row_number?: number | null
+          matter_id?: string | null
+          normalized?: Json | null
+          organization_id?: string
+          person_id?: string | null
+          plan?: Database["public"]["Enums"]["migration_row_plan"] | null
+          problems?: Json
+          row_number?: number
+          row_sha256?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "migration_rows_batch_id_organization_id_fkey"
+            columns: ["batch_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "migration_batches"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      migration_settings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          organization_id: string
+          staging_days: number
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          organization_id: string
+          staging_days?: number
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          organization_id?: string
+          staging_days?: number
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "migration_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       official_source_domains: {
         Row: {
           active: boolean
@@ -8291,6 +8581,10 @@ export type Database = {
         Args: { p_envelope_id: string }
         Returns: Json
       }
+      append_migration_rows: {
+        Args: { p_batch: string; p_first_row: number; p_org: string; p_rows: Json }
+        Returns: number
+      }
       apply_document_scan: {
         Args: { p_result: string; p_version_id: string }
         Returns: Database["public"]["Enums"]["document_upload_state"]
@@ -8406,6 +8700,10 @@ export type Database = {
         }
         Returns: Json
       }
+      begin_migration_commit: {
+        Args: { p_batch: string; p_org: string; p_plan_hash: string }
+        Returns: Json
+      }
       begin_verified_inbound_message: {
         Args: {
           p_domain: string
@@ -8512,6 +8810,10 @@ export type Database = {
           p_request_id: string
         }
         Returns: undefined
+      }
+      commit_migration_chunk: {
+        Args: { p_batch: string; p_limit?: number; p_org: string }
+        Returns: Json
       }
       complete_document_upload: {
         Args: { p_header_hex: string; p_sha256: string; p_version_id: string }
@@ -8805,6 +9107,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      decide_migration_duplicate: {
+        Args: { p_batch: string; p_org: string; p_row: number; p_same: boolean }
+        Returns: Json
+      }
       declare_consultant_credential: {
         Args: {
           p_college_id: string
@@ -8842,6 +9148,10 @@ export type Database = {
       discard_client_reconciliation: {
         Args: { p_reason: string; p_reconciliation_id: string }
         Returns: string
+      }
+      discard_migration_batch: {
+        Args: { p_batch: string; p_org: string }
+        Returns: undefined
       }
       dismiss_inbound_email: {
         Args: { p_email_id: string; p_note?: string | null }
@@ -9083,6 +9393,14 @@ export type Database = {
         Args: { p_matter_id: string }
         Returns: Json
       }
+      migration_column_values: {
+        Args: { p_batch: string; p_column: number; p_org: string }
+        Returns: Json
+      }
+      migration_rollback_check: {
+        Args: { p_batch: string; p_org: string }
+        Returns: Json
+      }
       move_lead_stage: {
         Args: {
           p_expected_version: number
@@ -9092,6 +9410,10 @@ export type Database = {
           p_to_stage: string
         }
         Returns: number
+      }
+      note_migration_commit_failure: {
+        Args: { p_batch: string; p_org: string; p_reason: string }
+        Returns: undefined
       }
       open_intake_response: {
         Args: { p_matter_id: string; p_person_id: string; p_template_id: string }
@@ -9629,6 +9951,14 @@ export type Database = {
         Args: { invitation_id: string }
         Returns: undefined
       }
+      rollback_migration_batch: {
+        Args: { p_batch: string; p_org: string }
+        Returns: Json
+      }
+      run_migration_dry_run: {
+        Args: { p_batch: string; p_org: string }
+        Returns: Json
+      }
       save_availability: {
         Args: {
           p_membership_id: string
@@ -9710,6 +10040,10 @@ export type Database = {
         }
         Returns: string
       }
+      save_migration_mapping: {
+        Args: { p_batch: string; p_mapping: Json; p_org: string }
+        Returns: undefined
+      }
       save_my_contact_preferences: {
         Args: {
           p_deadline_reminders: boolean
@@ -9749,6 +10083,10 @@ export type Database = {
       schedule_deadline_reminders: {
         Args: { p_as_of: string; p_deadline_id: string }
         Returns: number
+      }
+      seal_migration_batch: {
+        Args: { p_batch: string; p_org: string }
+        Returns: Json
       }
       select_matter_program: {
         Args: {
@@ -9847,6 +10185,10 @@ export type Database = {
         }
         Returns: number
       }
+      set_migration_staging_days: {
+        Args: { p_days: number; p_org: string }
+        Returns: undefined
+      }
       set_product_setting: {
         Args: { p_key: string; p_value: Json }
         Returns: undefined
@@ -9932,6 +10274,18 @@ export type Database = {
       staff_reschedule_booking: {
         Args: { p_booking_id: string; p_expected_version: number | null; p_org: string; p_start: string }
         Returns: undefined
+      }
+      stage_migration_batch: {
+        Args: {
+          p_byte_size: number
+          p_file_name: string
+          p_headers: string[]
+          p_org: string
+          p_parsed_digest: string
+          p_row_count: number
+          p_source_sha256: string
+        }
+        Returns: string
       }
       start_matter_export: {
         Args: { p_idempotency_key: string; p_matter_id: string }
@@ -10310,6 +10664,14 @@ export type Database = {
         | "outcome_and_follow_up"
         | "closure"
       membership_status: "invited" | "active" | "suspended" | "revoked"
+      migration_batch_status:
+        | "staged"
+        | "checked"
+        | "committing"
+        | "committed"
+        | "rolled_back"
+        | "discarded"
+      migration_row_plan: "create" | "link" | "confirm" | "review" | "error" | "skip"
       org_role:
         | "firm_owner"
         | "licensed_consultant"
@@ -10672,6 +11034,8 @@ export const Constants = {
         "case_manager",
         "assistant",
       ],
+      migration_batch_status: ["staged", "checked", "committing", "committed", "rolled_back", "discarded"],
+      migration_row_plan: ["create", "link", "confirm", "review", "error", "skip"],
       matter_stage: [
         "engagement_pending",
         "intake",
