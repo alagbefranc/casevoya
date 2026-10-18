@@ -386,8 +386,19 @@ export function closeDlg(id: string) {
 
 /** Calendar and payment providers have no OAuth backend yet. */
 export function connectOrRun(button: HTMLElement) {
-  if (button.closest(".conn")) {
-    const name = button.closest(".conn")?.querySelector("b, strong")?.textContent?.trim() || "This connection";
+  const conn = button.closest(".conn");
+  if (conn) {
+    // The Designer markup names the provider as the label's own text, before its <small> description:
+    // <div class="conn"><img/><div>Google Calendar<small>…</small></div><button/></div>
+    const label = conn.querySelector(":scope > div");
+    const own = label
+      ? Array.from(label.childNodes)
+          .filter((node) => node.nodeType === Node.TEXT_NODE)
+          .map((node) => node.textContent ?? "")
+          .join("")
+          .trim()
+      : "";
+    const name = own || conn.querySelector("b, strong")?.textContent?.trim() || "This connection";
     toast2(`${name} is not connected yet`, {
       kind: "warn",
       sub: "Calendar and payment sign-in is not available in this version.",

@@ -54,12 +54,22 @@ function fromRpc(error: { message: string }): PortResult {
   if (/licence declaration denied/i.test(error.message)) {
     return fail("A licence is recorded on a licensed consultant membership, separate from this login.");
   }
+  if (/licence expiry date is in the past/i.test(error.message)) {
+    return fail("Enter a “Valid until” date that hasn’t passed.");
+  }
   if (/college id is not usable/i.test(error.message)) {
     return fail("Enter the College ID using letters, digits, or hyphens.");
   }
   if (/add the main office/i.test(error.message)) return fail("Add the main office before completing firm details.");
   if (/choose at least one jurisdiction/i.test(error.message)) return fail("Choose at least one place you practise.");
   return fail(safeAccessError(error.message));
+}
+
+/** A calendar date as a date input sends it (YYYY-MM-DD), and a real one. */
+function isIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function text(fields: Record<string, string | boolean>, id: string) {
@@ -298,6 +308,12 @@ export async function saveSetupStep(
     const proofKey = ownLicenceProofKey(locator, organizationId, workspace.membershipId);
     if (!proofKey) return fail("Upload your licence proof to continue.");
     if (!(await privateFileStored(LICENCE_PROOF_BUCKET, proofKey))) return fail("Your licence proof wasn’t found. Upload it again.");
+    // "Valid until" (#ex) is optional; when given it must be a real date that hasn't passed.
+    const validUntil = text(fields, "ex");
+    if (validUntil && !isIsoDate(validUntil)) return fail("Enter the “Valid until” date as a full date.");
+    if (validUntil && validUntil < new Date().toISOString().slice(0, 10)) {
+      return fail("Enter a “Valid until” date that hasn’t passed.");
+    }
     const { data: existing } = await supabase
       .from("consultant_credentials")
       .select("id")
@@ -305,8 +321,9 @@ export async function saveSetupStep(
       .eq("membership_id", workspace.membershipId)
       .eq("college_id", collegeId.toUpperCase())
       .limit(1);
-    if (!existing?.length) {
-      const { error: declared } = await supabase.rpc("declare_consultant_credential", {
+    let credentialId = existing?.[0]?.id ?? null;
+    if (!credentialId) {
+      const { data: declaredId, error: declared } = await supabase.rpc("declare_consultant_credential", {
         p_membership_id: workspace.membershipId,
         p_licence_type: "RCIC",
         p_college_id: collegeId,
@@ -314,6 +331,15 @@ export async function saveSetupStep(
         p_proof_locator: locator,
       });
       if (declared) return fromRpc(declared);
+      credentialId = declaredId ?? null;
+    }
+    // Stored separately so declare_consultant_credential keeps its signature.
+    if (validUntil && credentialId) {
+      const { error: expiryError } = await supabase.rpc("set_credential_valid_until", {
+        p_credential_id: credentialId,
+        p_valid_until: validUntil,
+      });
+      if (expiryError) return fromRpc(expiryError);
     }
   }
 

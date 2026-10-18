@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  brandingAccent,
   brandingLogoLocator,
   firmLogoKey,
   firmLogoLocator,
@@ -37,5 +38,15 @@ describe("firm logo files", () => {
     expect(brandingLogoLocator({ logo_locator: 5 })).toBeNull();
     expect(brandingLogoLocator(null)).toBeNull();
     expect(brandingLogoLocator(["x"])).toBeNull();
+  });
+
+  it("reads the saved accent colour from organizations.branding", () => {
+    expect(brandingAccent({ logo_locator: "firm-logos/a.png", accent: "#0a4b93" })).toBe("#0a4b93");
+    expect(brandingAccent({ accent: " #A12C20 " })).toBe("#A12C20");
+    expect(brandingAccent({ accent: "" })).toBeNull();
+    expect(brandingAccent({ accent: "red" })).toBeNull();
+    expect(brandingAccent({ accent: "#fff" })).toBeNull();
+    expect(brandingAccent(null)).toBeNull();
+    expect(brandingAccent(["#0075DE"])).toBeNull();
   });
 });
