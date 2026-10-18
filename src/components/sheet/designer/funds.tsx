@@ -18,7 +18,7 @@
  *     to withdraw shows "Withdraw by <date>" (CICC Code s. 32(g): 30 days after the invoice).
  *   * `#dlgTr` adds a decline reason; its Approve says who approves. The requester can't approve
  *     their own transfer unless they are the firm owner (decided by Francis), and the dialog says so.
- *   * The "Last reconciliation" tile is "Available": reconciliation is not built.
+ *   * The "Last reconciliation" tile is the latest signed reconciliation (Reconciliation tab, FIN-12).
  *   * Four dialogs the capture doesn't have, in `#dlgInv`'s anatomy: propose a transfer
  *     (`#dlgTrNew`), refund to the client (`#dlgOut`), correct an entry (`#dlgFix`) and add the
  *     client account (`#dlgAcct`).
@@ -190,7 +190,7 @@ export function SheetFinanceFunds({ data }: { data: FundsData }) {
   );
 }
 
-function DialogHead({ id, title }: { id: string; title: string }) {
+export function DialogHead({ id, title }: { id: string; title: string }) {
   return (
     <div className={"dh"}>
       <h2 id={`${id}H`}>{title}</h2>
@@ -201,7 +201,7 @@ function DialogHead({ id, title }: { id: string; title: string }) {
   );
 }
 
-function Field({ id, label, hint, children }: { id: string; label: string; hint?: string; children: ReactNode }) {
+export function Field({ id, label, hint, children }: { id: string; label: string; hint?: string; children: ReactNode }) {
   return (
     <div className={"fld"}>
       <label htmlFor={id}>{label}</label>
@@ -217,7 +217,7 @@ function Field({ id, label, hint, children }: { id: string; label: string; hint?
 
 export type FundsOption = { value: string; label: string; data?: Record<string, string> };
 
-function Options({ options }: { options: FundsOption[] }) {
+export function Options({ options }: { options: FundsOption[] }) {
   return (
     <>
       {options.map((option) => (
@@ -380,7 +380,7 @@ export function RecordPaymentDialog({ data }: { data: RecordPaymentDialogData })
 
 export type DlRow = { term: string; parts: string[]; id?: string };
 
-function Dl({ rows }: { rows: DlRow[] }) {
+export function Dl({ rows }: { rows: DlRow[] }) {
   return (
     <dl className={"fp-dl"}>
       {rows.map((row) => (
@@ -546,7 +546,7 @@ export function ApproveTransferDialog({ data }: { data: TransferDialogData }) {
 // Live-only dialogs, in #dlgInv's anatomy
 // ---------------------------------------------------------------------------
 
-function LiveDialog({ id, title, children, submit }: { id: string; title: string; children: ReactNode; submit: ReactNode }) {
+export function LiveDialog({ id, title, children, submit }: { id: string; title: string; children: ReactNode; submit: ReactNode }) {
   return (
     <dialog className={"dlg"} id={id} aria-labelledby={`${id}H`}>
       <DialogHead id={id} title={title} />

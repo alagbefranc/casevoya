@@ -164,12 +164,14 @@ export type ReceiptLayout = {
   rows: [string, string][];
   notes: string[];
   isSample: boolean;
+  /** The PDF's title; "Receipt <number>" when not given. */
+  title?: string;
 };
 
 /** One page in the shared receipt layout. Same input, same bytes: dates come from the receipt. */
 export async function renderReceiptLayout(layout: ReceiptLayout): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  doc.setTitle(pdfSafeText(`Receipt ${layout.number}`));
+  doc.setTitle(pdfSafeText(layout.title ?? `Receipt ${layout.number}`));
   doc.setAuthor(pdfSafeText(layout.firmLegalName));
   doc.setCreator("Casevoya");
   doc.setProducer("Casevoya (pdf-lib)");
