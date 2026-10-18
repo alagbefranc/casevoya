@@ -1,7 +1,10 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MatterRbar, MatterTopBar, matterTab, SheetMatter, type MatterPageData } from "@/components/sheet/designer/matter";
+import { MatterDialogs, MatterRbar, MatterTopBar, matterTab, SheetMatter, type MatterPageData } from "@/components/sheet/designer/matter";
+import { safeNext } from "@/lib/auth/redirect";
+import { safeAccessError } from "@/lib/auth/step-up";
+import { letterNote, letterStatus, needsStepUp, stageAt, stepUpLocation, withoutDialog } from "@/modules/sheet/matter-wire";
 import {
   agreementState,
   deadlineBadge,
@@ -72,6 +75,74 @@ describe("Matter page words", () => {
     expect(matterTab("billing")).toBe("billing");
     expect(matterTab("nope")).toBe("overview");
     expect(matterTab(undefined)).toBe("overview");
+  });
+});
+
+describe("Matter dialog wiring", () => {
+  it("recognises a step-up refusal and nothing else", () => {
+    expect(needsStepUp(safeAccessError("step-up is required"))).toBe(true);
+    expect(needsStepUp(safeAccessError("aal2 required"))).toBe(true);
+    expect(needsStepUp(safeAccessError("matter version conflict"))).toBe(false);
+    expect(needsStepUp(safeAccessError("staff access denied"))).toBe(false);
+    expect(needsStepUp(null)).toBe(false);
+  });
+
+  it("sends a step-up to /mfa step 6 and back to the same matter with the dialog open", () => {
+    const id = "6f1c2f9e-3b1a-4c2d-9e8f-0a1b2c3d4e5f";
+    const location = stepUpLocation(`/sheet/matters/${id}`, "?tab=overview", "stage");
+    expect(location).toBe(`/mfa?step=6&next=${encodeURIComponent(`/sheet/matters/${id}?tab=overview&dlg=stage`)}`);
+    const next = new URLSearchParams(location.split("?")[1]).get("next");
+    expect(safeNext(next)).toBe(`/sheet/matters/${id}?tab=overview&dlg=stage`);
+    expect(stepUpLocation("/sheet/matters/x", "?dlg=hold", null)).toBe(`/mfa?step=6&next=${encodeURIComponent("/sheet/matters/x")}`);
+    expect(stepUpLocation("/sheet/matters/x", "", "letter")).toBe(`/mfa?step=6&next=${encodeURIComponent("/sheet/matters/x?dlg=letter")}`);
+    expect(withoutDialog("/sheet/matters/x", "?tab=people&dlg=hold")).toBe("/sheet/matters/x?tab=people");
+    expect(withoutDialog("/sheet/matters/x", "?dlg=hold")).toBe("/sheet/matters/x");
+  });
+
+  it("maps the Designer's dialog fields to what the database records", () => {
+    expect(stageAt("3")).toBe("preparation");
+    expect(stageAt("11")).toBe("closed");
+    expect(stageAt("12")).toBeNull();
+    expect(stageAt("x")).toBeNull();
+    expect(stageAt(undefined)).toBeNull();
+    expect(letterStatus("Acknowledgement of receipt")).toBe("receipt_on_file");
+    expect(letterStatus("Request for documents")).toBe("additional_request_open");
+    expect(letterStatus("Decision")).toBe("decision_evidence_on_file");
+    expect(letterStatus("Anything else")).toBeNull();
+    expect(letterNote({ type: "Decision", receivedOn: "2026-10-17", via: "Email", deadline: "" })).toBe("Decision letter, received 2026-10-17, by Email");
+    expect(letterNote({ type: "Request for documents", receivedOn: "2026-10-17", via: "Mail", deadline: " 30 days " })).toBe(
+      "Request for documents letter, received 2026-10-17, by Mail. Deadline in the letter: 30 days",
+    );
+  });
+
+  it("puts the matter on the confirm buttons only when the page is wired", () => {
+    const wire = { organizationId: "org-1", matterId: "m-1", version: 7 };
+    const dialogs = { current: 2, target: 3, version: 7, evidence: [], reason: "", owners: [{ id: "mem-1", name: "Dana Lee" }], reviewOn: "2026-10-31", receivedOn: "2026-10-17" };
+    const live = renderToStaticMarkup(createElement(MatterDialogs, { data: { ...dialogs, wire } }));
+    expect(live).toContain('id="stGo" data-act="stage" data-org="org-1" data-matter="m-1" data-version="7"');
+    expect(live).toContain('id="holdGo" data-act="hold"');
+    expect(live).toContain('id="letGo" data-act="letter"');
+    expect(live).toContain('<option value="mem-1">Dana Lee</option>');
+    expect(live).not.toContain("data-toast");
+    const inert = renderToStaticMarkup(createElement(MatterDialogs, { data: dialogs }));
+    expect(inert).not.toContain("data-act");
+    const header = renderToStaticMarkup(
+      createElement(MatterTopBar, { data: { client: { name: "Dana Lee" }, pills: [], hold: { reason: "Waiting on client", parts: ["Owner Dana Lee"] }, tab: "overview", wire } }),
+    );
+    expect(header).toContain('id="holdOff" data-act="resume"');
+    expect(header).toContain('data-goto-tab="documents"');
+  });
+
+  it("asks a consultant to confirm an outcome only when decision evidence is on file", () => {
+    const wire = { organizationId: "org-1", matterId: "m-1", version: 7 };
+    const html = renderToStaticMarkup(
+      createElement(SheetMatter, {
+        data: { ...EMPTY_FIRM, tab: "decisions", confirmOutcome: { options: [{ value: "approved", label: "Approved" }], wire } },
+      }),
+    );
+    expect(html).toContain("Confirm the outcome");
+    expect(html).toContain('data-act="outcome"');
+    expect(renderToStaticMarkup(createElement(SheetMatter, { data: { ...EMPTY_FIRM, tab: "decisions" } }))).toContain("No decision recorded");
   });
 });
 

@@ -41,10 +41,16 @@ import {
   clockTime,
 } from "@/modules/sheet/matter-present";
 import { governmentBadge, programLabel } from "@/modules/sheet/matters-present";
-import { governmentLabel, isoDateInTimeZone, MATTER_STAGES, outcomeLabel, STAFF_ROLES, stageLabel, type SheetQuery } from "@/modules/sheet/present";
-
-/** Confirm buttons in the matter dialogs do not save from this page yet; the kit says so. */
-const PENDING = { title: "This form isn’t connected yet", sub: "Nothing was saved." };
+import {
+  governmentLabel,
+  isoDateInTimeZone,
+  MATTER_OUTCOMES,
+  MATTER_STAGES,
+  outcomeLabel,
+  STAFF_ROLES,
+  stageLabel,
+  type SheetQuery,
+} from "@/modules/sheet/present";
 
 /**
  * The Designer's matter page for one matter, read as the signed-in staff member so
@@ -379,21 +385,29 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     : null;
 
   const tab = matterTab(query.tab);
-  const header: MatterHeaderData = { client, pills: headerPills(matter.updated_at, matter.created_at, staff.timezone, now), hold, tab };
+  // Every change is still checked by the database (role, version, step-up); this only says which matter.
+  const wire = { organizationId: org, matterId: matter.id, version: matter.version };
+  const header: MatterHeaderData = { client, pills: headerPills(matter.updated_at, matter.created_at, staff.timezone, now), hold, tab, wire };
 
-  // A hold's owner is someone on the firm's staff, never a client.
-  const owners = [...new Set([...(consultant ? [consultant] : []), ...(staffRows.data ?? []).map((row) => memberName(row.id))])];
+  // A hold's owner is someone on the firm's staff, never a client. The responsible consultant comes first.
+  const holdStaff = (staffRows.data ?? []).map((row) => row.id);
+  const responsible = matter.responsible_consultant_membership_id;
+  const ownerIds = responsible && holdStaff.includes(responsible) ? [responsible, ...holdStaff.filter((id) => id !== responsible)] : holdStaff;
   const dialogs: MatterDialogsData = {
     current: stage,
     target: stage < MATTER_STAGES.length - 1 ? stage + 1 : null,
     version: matter.version,
     evidence: [],
     reason: "",
-    owners: owners.length ? owners : [staff.displayName],
+    owners: ownerIds.length ? ownerIds.map((id) => ({ id, name: memberName(id) })) : [{ id: staff.membershipId, name: staff.displayName }],
     reviewOn: matter.on_hold_review_on ?? defaultReview(today),
     receivedOn: today,
-    pending: PENDING,
+    wire,
   };
+  const confirmOutcome =
+    !matter.outcome && matter.government_status === "decision_evidence_on_file" && staff.role === "licensed_consultant"
+      ? { options: MATTER_OUTCOMES.map((value) => ({ value, label: outcomeLabel(value) })), wire }
+      : null;
 
   const page: MatterPageData = {
     tab,
@@ -420,6 +434,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     agreements: { rows: agreementTable, signing },
     tasks: { deadline, tasks: taskTable },
     outcome: matter.outcome ? outcomeLabel(matter.outcome) : null,
+    confirmOutcome,
     closure: { closed: matter.stage === "closed", retention: matter.retention_on ? longDate(matter.retention_on) : null },
   };
 

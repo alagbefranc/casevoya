@@ -183,7 +183,7 @@ const DESIGNER_MATTER_DIALOGS: MatterDialogsData = {
   version: 12,
   evidence: [null, null, null, { tone: "ok", label: "Evidence ready" }, ...Array.from({ length: 8 }, () => ({ tone: "chg" as const, label: "Evidence missing" }))],
   reason: "Required facts reviewed; photo blocker tracked as a task.",
-  owners: ["Amara Osei", "Daniel Ruiz"],
+  owners: [{ name: "Amara Osei" }, { name: "Daniel Ruiz" }],
   reviewOn: "2026-10-30",
   receivedOn: "2026-10-17",
 };

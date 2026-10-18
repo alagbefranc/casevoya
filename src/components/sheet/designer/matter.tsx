@@ -79,6 +79,8 @@ export type MatterHeaderData = {
   pills: string[];
   hold: null | { reason: string | null; parts: string[] };
   tab: MatterTab;
+  /** Wires Resume and sends Request document to the Documents tab. */
+  wire?: MatterWire | null;
 };
 
 export function MatterTopBar({ data }: { data: MatterHeaderData }) {
@@ -120,7 +122,7 @@ export function MatterTopBar({ data }: { data: MatterHeaderData }) {
             <Icon name={"workflow"} cls={"ic s"} />
             {"Change stage"}
           </button>
-          <button className={"btn p sm"}>
+          <button className={"btn p sm"} data-goto-tab={data.wire ? "documents" : undefined}>
             <Icon name={"upload"} cls={"ic s"} />
             {"Request document"}
           </button>
@@ -135,7 +137,7 @@ export function MatterTopBar({ data }: { data: MatterHeaderData }) {
               <Joined parts={data.hold.parts} />
             </small>
           </div>
-          <button className={"btn s sm"} id={"holdOff"}>
+          <button className={"btn s sm"} id={"holdOff"} {...wireProps("resume", data.wire)}>
             {"Resume"}
           </button>
         </div>
@@ -515,12 +517,24 @@ export type MatterDialogsData = {
   /** Per stage after the current one; null when the evidence is not tracked. */
   evidence: (MatterBadge | null)[];
   reason: string;
-  owners: string[];
+  /** Staff who can own a hold. `id` is the membership the hold is saved with. */
+  owners: { name: string; id?: string }[];
   reviewOn: string;
   receivedOn: string;
-  /** For confirm buttons that do not save yet: the kit shows this toast instead. */
-  pending?: { title: string; sub: string } | null;
+  /** Which matter the confirm buttons save to. Absent, the buttons are the Designer's inert ones. */
+  wire?: MatterWire | null;
 };
+
+/** The record a dialog's confirm button saves to; the kit reads these from the button. */
+export type MatterWire = { organizationId: string; matterId: string; version: number };
+
+export type MatterAct = "stage" | "hold" | "letter" | "resume" | "outcome";
+
+/** `data-act` and the matter it saves to, or nothing for the Designer's inert buttons. */
+export function wireProps(act: MatterAct, wire: MatterWire | null | undefined) {
+  if (!wire) return {};
+  return { "data-act": act, "data-org": wire.organizationId, "data-matter": wire.matterId, "data-version": String(wire.version) };
+}
 
 function Close() {
   return (
@@ -530,9 +544,9 @@ function Close() {
   );
 }
 
-function Go({ id, label, pending }: { id: string; label: string; pending?: MatterDialogsData["pending"] }) {
+function Go({ id, label, act, wire }: { id: string; label: string; act: MatterAct; wire?: MatterWire | null }) {
   return (
-    <button className={"btn p"} id={id} data-toast={pending?.title} data-toast-kind={pending ? "warn" : undefined} data-toast-sub={pending?.sub}>
+    <button className={"btn p"} id={id} {...wireProps(act, wire)}>
       {label}
     </button>
   );
@@ -596,7 +610,7 @@ export function MatterDialogs({ data }: { data: MatterDialogsData }) {
           <button className={"btn"} data-x={""}>
             {"Cancel"}
           </button>
-          <Go id={"stGo"} label={targetLabel ? `Move to ${targetLabel}` : "Change stage"} pending={data.pending} />
+          <Go id={"stGo"} label={targetLabel ? `Move to ${targetLabel}` : "Change stage"} act={"stage"} wire={data.wire} />
         </div>
       </dialog>
       <dialog className={"dlg"} id={"dHold"} aria-labelledby={"dHoldT"}>
@@ -618,7 +632,9 @@ export function MatterDialogs({ data }: { data: MatterDialogsData }) {
             {"Owner"}
             <select>
               {data.owners.map((owner, index) => (
-                <option key={index}>{owner}</option>
+                <option key={index} value={owner.id}>
+                  {owner.name}
+                </option>
               ))}
             </select>
           </label>
@@ -635,7 +651,7 @@ export function MatterDialogs({ data }: { data: MatterDialogsData }) {
           <button className={"btn"} data-x={""}>
             {"Cancel"}
           </button>
-          <Go id={"holdGo"} label={"Put on hold"} pending={data.pending} />
+          <Go id={"holdGo"} label={"Put on hold"} act={"hold"} wire={data.wire} />
         </div>
       </dialog>
       <dialog className={"dlg wide"} id={"dLetter"} aria-labelledby={"dLetterT"}>
@@ -701,7 +717,7 @@ export function MatterDialogs({ data }: { data: MatterDialogsData }) {
           <button className={"btn"} data-x={""}>
             {"Cancel"}
           </button>
-          <Go id={"letGo"} label={"Record letter"} pending={data.pending} />
+          <Go id={"letGo"} label={"Record letter"} act={"letter"} wire={data.wire} />
         </div>
       </dialog>
     </>
@@ -1051,7 +1067,43 @@ export function MatterTasks({ deadline, tasks }: { deadline: MatterDeadline | nu
 }
 
 /** The Designer's decision tab: nothing recorded until an official letter and a consultant confirm it. */
-export function MatterDecisions({ outcome }: { outcome: string | null }) {
+export type MatterOutcomeConfirm = { options: { value: string; label: string }[]; wire: MatterWire };
+
+export function MatterDecisions({ outcome, confirm }: { outcome: string | null; confirm?: MatterOutcomeConfirm | null }) {
+  if (!outcome && confirm) {
+    // Decision evidence is on file: a licensed consultant confirms the outcome (Designer classes, no captured screen).
+    return (
+      <div className={"empty rv"} style={css({ "--i": "0" })}>
+        <span className={"spot"}>
+          <img src={"/assets/generated/spots/decision@1x.webp"} srcSet={"/assets/generated/spots/decision@2x.webp 2x"} width={88} height={88} alt={""} />
+        </span>
+        <div>
+          <h3>{"Confirm the outcome"}</h3>
+          <p>{"The decision letter is on file. A licensed consultant confirms the outcome before it counts; pending is not an outcome."}</p>
+          <label className={"fl"}>
+            {"Outcome"}
+            <select id={"outSel"} defaultValue={confirm.options[0]?.value}>
+              {confirm.options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={"fl"}>
+            {"Note (kept in the history)"}
+            <textarea id={"outNote"} rows={2} />
+          </label>
+          <div className={"ea"}>
+            <button className={"btn p sm"} {...wireProps("outcome", confirm.wire)}>
+              <Icon name={"check-circle"} cls={"ic s"} />
+              {"Confirm outcome"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!outcome) {
     return (
       <div className={"empty rv"} style={css({ "--i": "0" })}>
@@ -1140,6 +1192,8 @@ export type MatterPageData = {
   agreements: { rows: MatterAgreementRow[]; signing: MatterSigning | null };
   tasks: { deadline: MatterDeadline | null; tasks: MatterTaskRow[] };
   outcome: string | null;
+  /** Set when decision evidence is on file and no outcome is recorded yet. */
+  confirmOutcome?: MatterOutcomeConfirm | null;
   closure: { closed: boolean; retention: string | null };
 };
 
@@ -1157,7 +1211,7 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
     case "tasks":
       return <MatterTasks deadline={data.tasks.deadline} tasks={data.tasks.tasks} />;
     case "decisions":
-      return <MatterDecisions outcome={data.outcome} />;
+      return <MatterDecisions outcome={data.outcome} confirm={data.confirmOutcome} />;
     case "closure":
       return <MatterClosure closed={data.closure.closed} retention={data.closure.retention} />;
     default:
