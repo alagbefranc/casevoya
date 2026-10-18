@@ -67,10 +67,11 @@ export const firmSetupPayloadSchema = z.discriminatedUnion("step", [
   z.strictObject({
     step: z.literal("terms_and_privacy"),
     subscriptionTermsAccepted: z.literal(true),
-    dpaAccepted: z.literal(true),
+    // Optional until a DPA is published (see legal.ts); recorded only when actually accepted.
+    dpaAccepted: z.boolean(),
     privacyContactName: z.string().trim().min(1).max(200),
     privacyContactEmail: email,
-    dpaVersion: z.string().trim().min(1).max(40),
+    dpaVersion: z.string().trim().min(1).max(40).optional(),
     subscriptionTermsVersion: z.string().trim().min(1).max(40),
   }),
   z.strictObject({
@@ -116,11 +117,10 @@ export function firmSetupDbPayload(payload: FirmSetupPayload): Record<string, un
     case "terms_and_privacy":
       return {
         subscription_terms_accepted: "true",
-        dpa_accepted: "true",
         privacy_contact_name: payload.privacyContactName,
         privacy_contact_email: payload.privacyContactEmail,
-        dpa_version: payload.dpaVersion,
         subscription_terms_version: payload.subscriptionTermsVersion,
+        ...(payload.dpaAccepted && payload.dpaVersion ? { dpa_accepted: "true", dpa_version: payload.dpaVersion } : {}),
       };
     case "jurisdictions":
       return { codes: payload.codes };

@@ -17,6 +17,7 @@ import {
 } from "@/modules/firm-onboarding";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { DPA_AVAILABLE, DPA_VERSION } from "@/modules/firm-onboarding/legal";
 import { LICENCE_PROOF_BUCKET, ownLicenceProofKey } from "@/modules/firm-onboarding/licence-proof";
 import { FIRM_LOGO_BUCKET, ownFirmLogoKey } from "@/modules/firm-onboarding/firm-logo";
 
@@ -368,10 +369,10 @@ export async function saveSetupStep(
     terms_and_privacy: {
       step,
       subscriptionTermsAccepted: fields.t1 === true,
-      dpaAccepted: fields.t2 === true,
+      dpaAccepted: DPA_AVAILABLE && fields.t2 === true,
       privacyContactName: text(fields, "pc"),
       privacyContactEmail: text(fields, "pe"),
-      dpaVersion: "2026-10-17",
+      ...(DPA_AVAILABLE ? { dpaVersion: DPA_VERSION } : {}),
       subscriptionTermsVersion: "2026-10-17",
     },
     jurisdictions: { step, codes: jurisdictionCodesFromFields(fields) },

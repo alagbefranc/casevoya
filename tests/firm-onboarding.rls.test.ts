@@ -691,4 +691,39 @@ describe("real client invites and trial", () => {
     await asUser(db, { userId: assistant, aal: "aal2", orgId, totpAgeSeconds: 0 });
     await expectDbError(() => db.query(`select public.ensure_sample_case()`), /sample case denied/);
   });
+
+  it("completes the terms step without a data processing agreement and records one only when accepted", async () => {
+    const owner = await createUser(`owner-${randomUUID().slice(0, 8)}@example.test`);
+    const orgId = await createOrg(owner);
+    const terms = (extra: Record<string, unknown>) =>
+      JSON.stringify({
+        subscription_terms_accepted: true,
+        privacy_contact_name: "Synthetic Privacy Lead",
+        privacy_contact_email: "privacy@example.test",
+        subscription_terms_version: "2026-10",
+        ...extra,
+      });
+    await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    await db.query(`select public.save_firm_setup('terms_and_privacy'::public.firm_setup_step, $1::jsonb)`, [terms({})]);
+    await asMaintenance(db);
+    const without = await db.query<{ dpa: boolean; terms: boolean; done: boolean }>(
+      `select o.dpa_accepted_at is not null as dpa, o.subscription_terms_accepted_at is not null as terms,
+              exists (select 1 from public.organization_setup_steps s where s.organization_id = o.id and s.step = 'terms_and_privacy') as done
+       from public.organizations o where o.id = $1`,
+      [orgId],
+    );
+    expect(without.rows[0]).toEqual({ dpa: false, terms: true, done: true });
+
+    await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    await expectDbError(
+      () => db.query(`select public.save_firm_setup('terms_and_privacy'::public.firm_setup_step, $1::jsonb)`, [terms({ dpa_accepted: false })]),
+      /only be recorded as accepted/,
+    );
+    await db.query(`select public.save_firm_setup('terms_and_privacy'::public.firm_setup_step, $1::jsonb)`, [
+      terms({ dpa_accepted: true, dpa_version: "2026-11" }),
+    ]);
+    await asMaintenance(db);
+    const withDpa = await db.query<{ version: string }>(`select dpa_version as version from public.organizations where id = $1`, [orgId]);
+    expect(withDpa.rows[0].version).toBe("2026-11");
+  });
 });
