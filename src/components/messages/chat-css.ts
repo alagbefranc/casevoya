@@ -7,7 +7,9 @@
 export const CHAT_CSS = `
 .main:has(.cv){padding-bottom:0}
 .cv{--cv-h:600px;display:grid;grid-template-columns:320px minmax(0,1fr);height:var(--cv-h);min-height:360px;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:12px}
+.cv{grid-template-rows:minmax(0,1fr)}
 .cv *{min-width:0}
+.cv-list,.cv-pane,.cv-log,.cv-threads{min-height:0}
 .cv-list{display:flex;flex-direction:column;border-right:1px solid var(--line);background:#fff}
 .cv-lh{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:14px 14px 10px}
 .cv-lh h2{font-size:15px;font-weight:600}
