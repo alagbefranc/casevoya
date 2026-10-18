@@ -1,4 +1,15 @@
-export type EmailContent = { subject: string; html: string; text: string };
+import {
+  INVITE_EXPIRY,
+  PATHS,
+  clientInviteLines,
+  renderTemplate,
+  type TemplateId,
+} from "@/modules/email/designs/catalog";
+import { DEFAULT_EMAIL_ORIGIN, appLink, cleanText, emailOrigin, renderCopy, safeUrl } from "@/modules/email/designs/layout";
+
+export { INVITE_WITHOUT_LINK } from "@/modules/email/designs/catalog";
+
+export type EmailContent = { subject: string; preheader: string; html: string; text: string; design: string };
 
 type Context = Record<string, unknown>;
 
@@ -6,125 +17,137 @@ function textOf(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
 function firmName(context: Context): string {
-  const firm = textOf(context.firm).trim();
-  return firm || "Your firm";
+  return cleanText(context.firm) || "Your firm";
 }
-
-function document(subject: string, paragraph: string, firm: string): EmailContent {
-  const html = `<!DOCTYPE html><html><body><p>${escapeHtml(paragraph)}</p><p>${escapeHtml(firm)}</p></body></html>`;
-  return { subject, html, text: `${paragraph}\n\n${firm}\n` };
-}
-
-const INVITE_EXPIRY = "It works once and expires in 7 days.";
 
 /**
- * The invitation email's paragraph in two parts: who invited them, then the private link.
- * The staff screens preview exactly this copy before an invitation is sent.
+ * The invitation email's copy in two parts, a bold lead and the rest. The staff screens preview
+ * exactly this before an invitation is sent (the sent email adds the inviter's name when known).
  */
 export function inviteEmailLines(firm: string, kind: "staff" | "portal"): { lead: string; rest: string } {
-  const name = firm.trim() || "Your firm";
-  return {
-    lead: `${name} invited you to ${kind === "staff" ? "a staff seat" : "the client portal"}.`,
-    rest: `Open your private link in this email to continue. ${INVITE_EXPIRY}`,
-  };
+  const name = cleanText(firm) || "Your firm";
+  if (kind === "staff") {
+    return {
+      lead: `You’re invited to join ${name}.`,
+      rest: `Set a password and two-step sign-in to join. ${INVITE_EXPIRY}`,
+    };
+  }
+  const lines = clientInviteLines(name);
+  return { lead: `${lines.heading}.`, rest: lines.body };
 }
 
-/** Only when the sealed link could not be attached or opened: the email goes out without it. */
-export const INVITE_WITHOUT_LINK = "The private link is not in this email. Use the link the firm gives you.";
+/** The Sheet page a staff signer opens to countersign. The renderer joins it to the app origin. */
+export const COUNTERSIGN_PATH = PATHS.sheetAgreements;
 
-/** An absolute http(s) link, or null. Nothing else is ever put in an email. */
+/** An absolute http(s) invitation link opened by the mail worker, or null. Nothing else is ever put in an email. */
 function inviteHref(value: unknown): string | null {
   const text = textOf(value).trim();
   if (!text || text.length > 600) return null;
-  try {
-    const url = new URL(text);
-    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
-  } catch {
-    return null;
+  return safeUrl(text);
+}
+
+/** Which approved design a queued delivery uses, from its database template and context. */
+export function designFor(context: Context): TemplateId | "generic" {
+  const template = textOf(context.template);
+  const staff = textOf(context.audience) === "staff";
+  switch (template) {
+    case "invite":
+      if (textOf(context.kind) === "staff") return "EM01";
+      return textOf(context.role) === "adult_dependant" ? "EX04" : "EM02";
+    case "reminder":
+      return "EM07";
+    case "agreement":
+      return staff ? "EM08-staff" : "EM08";
+    case "signature":
+      return staff ? "EM09-staff" : "EM09";
+    case "document_request":
+      return "EM06";
+    case "document_receipt":
+      return textOf(context.status) === "accepted" ? "EX06" : "EX06-received";
+    case "invoice":
+      return "EM10";
+    case "payment_failed":
+      return "EX08";
+    case "refund_started":
+      return "EX09";
+    case "refund_complete":
+      return "EX10";
+    // Hook for the receipts work (EM11): needs the email_template value 'payment_receipt' and an
+    // outbox event that queues it with receipt_number (and advance: true for client funds).
+    case "payment_receipt":
+      return "EM11";
+    default:
+      return "generic";
   }
-}
-
-function inviteEmail(firm: string, kind: "staff" | "portal", link: string | null): EmailContent {
-  const lines = inviteEmailLines(firm, kind);
-  const subject = `Invitation from ${firm}`;
-  if (!link) return document(subject, `${lines.lead} ${INVITE_WITHOUT_LINK}`, firm);
-  const lead = `${lines.lead} Open your private link to continue:`;
-  const html =
-    `<!DOCTYPE html><html><body><p>${escapeHtml(lead)} <a href="${escapeHtml(link)}">${escapeHtml(link)}</a> ` +
-    `${escapeHtml(INVITE_EXPIRY)}</p><p>${escapeHtml(firm)}</p></body></html>`;
-  return { subject, html, text: `${lead} ${link} ${INVITE_EXPIRY}\n\n${firm}\n` };
-}
-
-/** The Sheet page a staff signer opens to countersign. The mail worker joins it to the app origin. */
-export const COUNTERSIGN_PATH = "/sheet/agreements";
-
-/** Staff copy of the agreement email: it is the consultant's turn to countersign, in the Sheet. */
-function countersignEmail(firm: string, link: string | null): EmailContent {
-  const subject = `Your countersignature is needed — ${firm}`;
-  const lead = "Everyone before you has signed an agreement. It is your turn to countersign it for the firm.";
-  if (!link) return document(subject, `${lead} Open Agreements in Casevoya to sign.`, firm);
-  const html =
-    `<!DOCTYPE html><html><body><p>${escapeHtml(lead)} Open Agreements in Casevoya to sign: ` +
-    `<a href="${escapeHtml(link)}">${escapeHtml(link)}</a></p><p>${escapeHtml(firm)}</p></body></html>`;
-  return { subject, html, text: `${lead} Open Agreements in Casevoya to sign: ${link}\n\n${firm}\n` };
 }
 
 /**
- * HTML and text for one template. Copy stays generic: no file body, no case narrative. Only the
- * invitation carries a private link, and only the one the mail worker opened from its sealed form
- * (context.link); without it the invitation says the link is not in the email. The staff copy of
- * the agreement email (context.audience "staff") links to the Sheet's Agreements page, which the
- * mail worker builds from the app origin; it carries no token.
+ * HTML, text, subject and preheader for one queued delivery. Copy stays generic: no file body, no
+ * case narrative, no document name, no amount. Links are built from the app origin and fixed
+ * paths; the only link taken from the context is an invitation's private link that the mail
+ * worker opened from its sealed form (context.link). Without it the invitation says the link is
+ * not in the email.
  */
-export function renderEmail(context: Context): EmailContent {
+export function renderEmail(context: Context, options: { origin?: string } = {}): EmailContent {
+  const origin = emailOrigin(options.origin ?? DEFAULT_EMAIL_ORIGIN);
   const firm = firmName(context);
-  const template = textOf(context.template);
-  if (template === "invite") {
-    return inviteEmail(firm, textOf(context.kind) === "staff" ? "staff" : "portal", inviteHref(context.link));
+  const design = designFor(context);
+  const link = inviteHref(context.link);
+  const due = textOf(context.due_on) || null;
+  let copy;
+  switch (design) {
+    case "EM01":
+      copy = renderTemplate("EM01", { firmName: firm, inviterName: textOf(context.inviter), role: textOf(context.role), acceptUrl: link }, origin);
+      break;
+    case "EM02":
+      copy = renderTemplate("EM02", { firmName: firm, inviterName: textOf(context.inviter), acceptUrl: link }, origin);
+      break;
+    case "EX04":
+      copy = renderTemplate("EX04", { firmName: firm, acceptUrl: link }, origin);
+      break;
+    case "EM07":
+      copy = renderTemplate("EM07", { firmName: firm, dueOn: due }, origin);
+      break;
+    case "EM08":
+      copy = renderTemplate("EM08", { firmName: firm, agreementKind: textOf(context.agreement_kind) }, origin);
+      break;
+    case "EM06":
+      copy = renderTemplate("EM06", { firmName: firm, dueOn: due }, origin);
+      break;
+    case "EM10":
+      copy = renderTemplate(
+        "EM10",
+        { firmName: firm, invoiceId: textOf(context.invoice_id), invoiceNumber: textOf(context.invoice_number), dueOn: due },
+        origin,
+      );
+      break;
+    case "EX08":
+      copy = renderTemplate("EX08", { firmName: firm, invoiceId: textOf(context.invoice_id), invoiceNumber: textOf(context.invoice_number) }, origin);
+      break;
+    case "EM11":
+      copy = renderTemplate("EM11", { firmName: firm, receiptNumber: textOf(context.receipt_number), advance: context.advance === true }, origin);
+      break;
+    case "EM08-staff":
+    case "EM09":
+    case "EM09-staff":
+    case "EX06":
+    case "EX06-received":
+    case "EX09":
+    case "EX10":
+      copy = renderTemplate(design, { firmName: firm }, origin);
+      break;
+    default:
+      copy = renderTemplate("EX07", { firmName: firm }, origin);
+      copy = {
+        ...copy,
+        subject: `An update from ${firm}`,
+        preheader: "The details are in your portal.",
+        heading: "There’s an update on your file",
+        body: `${firm} has an update for you. For your privacy, the details are in your portal.`,
+        cta: { label: "Open your portal", href: appLink(origin, PATHS.portal) ?? "" },
+      };
   }
-  if (template === "reminder") {
-    const due = textOf(context.due_on).trim();
-    const paragraph = due
-      ? `${firm} has a date on your file (${due}). Open the portal for what to do next.`
-      : `${firm} has a date on your file. Open the portal for what to do next.`;
-    return document(`Reminder from ${firm}`, paragraph, firm);
-  }
-  if (template === "agreement" && textOf(context.audience) === "staff") {
-    return countersignEmail(firm, inviteHref(context.link));
-  }
-  if (template === "agreement") {
-    return document(
-      `Agreement ready to sign — ${firm}`,
-      `${firm} has an agreement ready for you to review and sign in the portal.`,
-      firm,
-    );
-  }
-  if (template === "signature") {
-    return document(
-      `Agreement signed — ${firm}`,
-      `An agreement with ${firm} is fully signed. Clients find their copy in the portal; the firm's copy is on the matter in Casevoya.`,
-      firm,
-    );
-  }
-  if (template === "document_request") {
-    const purpose = textOf(context.purpose).trim();
-    const due = textOf(context.due_on).trim();
-    const detail = purpose ? ` They asked for: ${purpose}.` : "";
-    const when = due ? ` Due ${due}.` : "";
-    return document(
-      `Document requested — ${firm}`,
-      `${firm} asked you to upload a document.${detail}${when} Use the portal upload.`,
-      firm,
-    );
-  }
-  return document(`Document received — ${firm}`, `${firm} received a document on your file. It is in the portal.`, firm);
+  const rendered = renderCopy(copy, origin);
+  return { ...rendered, design };
 }

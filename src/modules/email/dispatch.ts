@@ -1,4 +1,4 @@
-import { COUNTERSIGN_PATH, renderEmail } from "@/modules/email/templates";
+import { renderEmail } from "@/modules/email/templates";
 import type { OutboundEmail, SendOutcome } from "@/modules/email/cloudflare";
 
 export type MailDelivery = {
@@ -50,19 +50,6 @@ async function openSealedLink(deps: DispatchDeps, sealed: unknown, invitationId:
   }
 }
 
-/**
- * The staff copy of the agreement email (a consultant's turn to countersign) links to the Sheet's
- * Agreements page on the app origin. The path is fixed here; nothing from the database is a link.
- */
-function staffLink(appOrigin: string | undefined, template: string, context: Record<string, unknown>): string | null {
-  if (!appOrigin || template !== "agreement" || context.audience !== "staff") return null;
-  try {
-    return new URL(COUNTERSIGN_PATH, appOrigin).href;
-  } catch {
-    return null;
-  }
-}
-
 function includesAddress(list: string[], email: string): boolean {
   const target = email.toLowerCase();
   return list.some((item) => item.toLowerCase() === target);
@@ -78,13 +65,18 @@ export async function dispatchOutbound(
     const prepared = await deps.prepare(event.id, options.worker, options.inboundDomain, options.fromAddress);
     if (prepared.action !== "send" || !prepared.messages) continue;
     for (const message of prepared.messages) {
-      // Only a link this worker opened reaches the template; never the sealed form.
+      // Only a link this worker opened reaches the template; never the sealed form. Every other
+      // button (portal, Sheet) is a fixed path the renderer joins to the app origin; nothing from
+      // the database is a link.
       const context: Record<string, unknown> = { ...message.context };
       const sealed = context.sealed_link;
       delete context.sealed_link;
       delete context.link;
-      const link = (await openSealedLink(deps, sealed, context.invitation_id)) ?? staffLink(options.appOrigin, message.template, context);
-      const rendered = renderEmail({ ...context, template: message.template, ...(link ? { link } : {}) });
+      const link = await openSealedLink(deps, sealed, context.invitation_id);
+      const rendered = renderEmail(
+        { ...context, template: message.template, ...(link ? { link } : {}) },
+        { origin: options.appOrigin },
+      );
       const outcome = await deps.send({
         to: message.to,
         fromAddress: message.from_address,

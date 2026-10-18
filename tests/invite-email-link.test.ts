@@ -59,12 +59,12 @@ describe("invitation email copy", () => {
   it("includes the private link, escaped, when the worker opened one", () => {
     const link = `${LINK}&x="<b>"`;
     const email = renderEmail({ template: "invite", kind: "staff", firm: "North <Firm>", link });
-    expect(email.text).toContain("North <Firm> invited you to a staff seat.");
+    expect(email.text).toContain("You’re invited to join North <Firm>");
     expect(email.text).toContain(`${LINK}&x=%22%3Cb%3E%22`);
     expect(email.text).not.toContain(link);
-    expect(email.text).toContain("It works once and expires in 7 days.");
+    expect(email.text).toContain("Your private link works once and expires in 7 days.");
     expect(email.text).not.toContain(INVITE_WITHOUT_LINK);
-    expect(email.html).toContain(`<a href="${LINK}&amp;x=%22%3Cb%3E%22">`);
+    expect(email.html).toContain(`<a href="${LINK}&amp;x=%22%3Cb%3E%22" style=`);
     expect(email.html).not.toContain("<b>");
     expect(email.html).toContain("North &lt;Firm&gt;");
   });

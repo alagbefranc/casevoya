@@ -36,13 +36,15 @@ describe("email templates", () => {
     expect(invite.html).not.toContain("<script>");
     expect(invite.text).toContain("The private link is not in this email");
     expect(invite.text.length).toBeGreaterThan(20);
+    // A request's purpose names the document: it never reaches the email, even if a context has it.
     const request = renderEmail({ template: "document_request", firm: "Northline", purpose: "Passport scan", due_on: "2026-11-01" });
-    expect(request.html).toContain("Passport scan");
-    expect(request.text).toContain("Passport scan");
+    expect(request.html).not.toContain("Passport scan");
+    expect(request.text).not.toContain("Passport scan");
+    expect(request.text).toContain("by 1 November 2026");
     expect(request.subject).toContain("Northline");
     for (const template of ["invite", "reminder", "agreement", "signature", "document_request", "document_receipt"]) {
       const rendered = renderEmail({ template, firm: "Northline" });
-      expect(rendered.html).toContain("<p>");
+      expect(rendered.html).toContain("<h1 ");
       expect(rendered.text.trim().length).toBeGreaterThan(10);
     }
   });

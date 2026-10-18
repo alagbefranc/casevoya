@@ -14,7 +14,7 @@ Do not commit secrets. Copy the names below into the host environment. Account i
 | `CLOUDFLARE_EMAIL_FROM` | Outbound From address. Default `notices@casevoya.ca`. |
 | `INBOUND_EMAIL_DOMAIN` | Firm addresses are `<slug>@` this domain. Default `docs.casevoya.ca`. |
 | `EMAIL_DISPATCH_SECRET` | Bearer for `POST /api/email/dispatch`. Also the HKDF input for the AES-256-GCM key that seals invitation links into the outbox (`src/modules/email/invite-link-seal.ts`); rotating it makes unsent sealed links fall back to the linkless email. |
-| `APP_URL` | Optional. Origin put in invitation email links. Default `https://app.casevoya.ca`. Not a secret. |
+| `APP_URL` | Optional. Origin put in email links (invitations, portal and Sheet buttons) and the origin emails load their images (`/assets/email/*`) and Erode fonts from. Default `https://app.casevoya.ca`. Not a secret. |
 | `EMAIL_INBOUND_WEBHOOK_SECRET` | HMAC shared with the inbound Worker (`INBOUND_WEBHOOK_SECRET`). |
 | `CLOUDFLARE_ROUTING_API_TOKEN` | Email Routing Rules Write on zone `303990065795d627a9fd337b01258024`. Creates and deletes per-firm rules. |
 | `EMAIL_ROUTING_RECONCILE_SECRET` | Bearer for `POST /api/email/routing/reconcile`. |
