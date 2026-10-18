@@ -8295,8 +8295,14 @@ export type Database = {
           staff_answers: boolean
           updated_at: string
           updated_by: string
+          composio_accepted_at: string | null
+          composio_accepted_by: string | null
+          composio_enabled: boolean
         }
         Insert: {
+          composio_accepted_at?: string | null
+          composio_accepted_by?: string | null
+          composio_enabled?: boolean
           enabled: boolean
           organization_id: string
           read_client_messages?: boolean
@@ -8325,6 +8331,48 @@ export type Database = {
           staff_answers?: boolean
           updated_at?: string
           updated_by?: string
+          composio_accepted_at?: string | null
+          composio_accepted_by?: string | null
+          composio_enabled?: boolean
+        }
+        Relationships: []
+      }
+      staff_connections: {
+        Row: {
+          connected_account_id: string | null
+          created_at: string
+          id: string
+          mail_label: string
+          membership_id: string
+          organization_id: string
+          status: string
+          toolkit: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          connected_account_id?: string | null
+          created_at?: string
+          id?: string
+          mail_label?: string
+          membership_id: string
+          organization_id: string
+          status: string
+          toolkit: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          connected_account_id?: string | null
+          created_at?: string
+          id?: string
+          mail_label?: string
+          membership_id?: string
+          organization_id?: string
+          status?: string
+          toolkit?: string
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -10230,6 +10278,25 @@ export type Database = {
       send_vo_draft: {
         Args: { p_body: string; p_client_key?: string | null; p_draft_id: string }
         Returns: Json
+      }
+      set_composio_enabled: {
+        Args: { p_accept_disclosure: boolean; p_enabled: boolean; p_organization_id: string }
+        Returns: undefined
+      }
+      save_staff_connection: {
+        Args: {
+          p_connected_account_id?: string | null
+          p_mail_label?: string | null
+          p_organization_id: string
+          p_status: string
+          p_toolkit: string
+        }
+        Returns: string
+      }
+      disconnect_staff_connection: { Args: { p_connection_id: string }; Returns: undefined }
+      replace_external_busy_blocks: {
+        Args: { p_blocks: Json; p_from: string; p_organization_id: string; p_source: string; p_to: string }
+        Returns: number
       }
       set_vo_settings: {
         Args: { p_changes: Json; p_organization_id: string }

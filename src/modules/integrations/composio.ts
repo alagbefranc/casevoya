@@ -1,5 +1,5 @@
 import "server-only";
-import { Composio } from "@composio/core";
+import { Composio, SessionPreset } from "@composio/core";
 
 /**
  * Composio Platform (https://docs.composio.dev/docs/how-composio-works.md, read 2026-10-18).
@@ -23,6 +23,21 @@ function composio(): Composio {
 /** A Composio session for one staff member (membership id). */
 export async function staffSession(membershipId: string) {
   return composio().create(membershipId);
+}
+
+/**
+ * A session limited to one toolkit's tools, with no meta tools, no sandbox and no in-chat
+ * connection prompts (https://docs.composio.dev/docs/configuring-sessions.md, read 2026-10-18:
+ * `sessionPreset: SessionPreset.DIRECT_TOOLS`, `toolkits`, `manageConnections`, `sandbox`).
+ * Which of its tools may run is decided by src/modules/integrations/composio-policy.ts.
+ */
+export async function toolkitSession(membershipId: string, toolkit: string) {
+  return composio().create(membershipId, {
+    toolkits: [toolkit],
+    sessionPreset: SessionPreset.DIRECT_TOOLS,
+    manageConnections: { enable: false },
+    sandbox: { enable: false },
+  });
 }
 
 /** Whether this staff member has an active connection for a toolkit, e.g. "gmail". */
