@@ -77,6 +77,7 @@ import { wireLead, wirePipeline } from "./pipeline-acts";
 import { runNewTask, syncNewTask } from "./new-task-act";
 import { runReportExport } from "./report-acts";
 import { runExportAct } from "./export-acts";
+import { runMigrationAct } from "./migration-acts";
 import { inviteFromEdit, openPersonEdit, runPersonEdit } from "./person-edit-act";
 import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-invite-act";
 import { policyDialogId, restorePolicyDraft, runPublishPolicy } from "./portal-policy-act";
@@ -433,6 +434,15 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (exportAct.getAttribute("aria-busy") === "true" || exportAct.hasAttribute("disabled")) return;
         exportAct.setAttribute("aria-busy", "true");
         void runExportAct(exportAct, root, router).finally(() => exportAct.removeAttribute("aria-busy"));
+        return;
+      }
+      // Migration import (T044): upload, mapping and preview, duplicate decisions, sign-off, rollback.
+      const migrationAct = target.closest<HTMLElement>("[data-mig-act]");
+      if (migrationAct && root.contains(migrationAct)) {
+        event.preventDefault();
+        if (migrationAct.getAttribute("aria-busy") === "true" || migrationAct.hasAttribute("disabled")) return;
+        migrationAct.setAttribute("aria-busy", "true");
+        void runMigrationAct(migrationAct, root, router).finally(() => migrationAct.removeAttribute("aria-busy"));
         return;
       }
       const palette = target.closest<HTMLElement>("[data-palette]");

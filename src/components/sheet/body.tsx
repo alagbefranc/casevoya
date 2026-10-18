@@ -33,6 +33,8 @@ import { QueueHeader, SheetQueue } from "@/components/sheet/designer/queue";
 import { loadSheetQueue } from "@/modules/sheet/queue-load";
 import { ExportsDialog, ExportsHeader, SheetExports } from "@/components/sheet/designer/exports";
 import { loadSheetExports } from "@/modules/sheet/exports-load";
+import { MigrationHeader, SheetMigration } from "@/components/sheet/designer/migration";
+import { loadSheetMigration } from "@/modules/sheet/migration-load";
 import { DocumentReviewDialog, DocumentsHeader, SheetDocuments } from "@/components/sheet/designer/documents";
 import { ComposeDialog, InboxHeader, SheetInbox } from "@/components/sheet/designer/inbox";
 import { PrivacyDialogs, PrivacyHeader, SheetPrivacy } from "@/components/sheet/designer/privacy";
@@ -271,6 +273,17 @@ export async function SheetBody({
           after={<ExportsDialog data={exports.dialog} />}
         >
           <SheetExports data={exports} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Compliance > Migration import (T044, PRD §25): the firm owner's CSV import with dry run and rollback.
+  if (page === "migration" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetMigration(access.staff, query);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={loaded.chrome.sidebar} header={<MigrationHeader data={loaded.header} />} statusbar={loaded.chrome.statusbar}>
+          <SheetMigration data={loaded.page} />
         </SheetFrame>
       </SheetScreen>
     );
