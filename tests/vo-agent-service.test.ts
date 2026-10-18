@@ -220,6 +220,16 @@ describe("a Vo run", () => {
     expect(rpcs[0].args).toMatchObject({ p_result: "failed", p_failure: "nothing_to_draft" });
   });
 
+  it("says there is nothing to reply to when the conversation has no client message, without calling the model", async () => {
+    const rpcs: Rpc[] = [];
+    const sdk = { query: () => { throw new Error("the model must not run"); }, tool: () => ({}), createSdkMcpServer: () => ({}) } as unknown as AgentSdk;
+    const data = fakeData(rpcs, { messages: async () => [{ id: MSG, body: "Hi, this is the firm.", createdAt: "2026-10-17T14:00:00Z", authorKind: "staff", authorName: "Staff" }] });
+    const out = await runVoTask(request("message_reply"), { sdk, data, apiKey: "key", cwd: "/tmp/vo" });
+    expect(out).toMatchObject({ result: "failed", failure: "nothing_to_draft" });
+    expect(rpcs).toHaveLength(1);
+    expect(rpcs[0].args).toMatchObject({ p_result: "failed", p_failure: "nothing_to_draft" });
+  });
+
   it("answers Ask Vo from the records, with sources, honouring the per-document-kind switches", async () => {
     const rpcs: Rpc[] = [];
     const seen = { toolResults: [] as string[] };
