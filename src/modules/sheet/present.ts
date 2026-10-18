@@ -87,7 +87,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 /** Pages and matter/settings tabs whose backend is not on main. They render a marked slot. */
 const SLOTS: Record<string, string> = {
-  finance: "Finance and invoices are not connected. The Stripe batch will own payments, client funds and reconciliation. This screen reads and writes nothing.",
+  finance: "Client funds, reconciliation, refunds and disputes are not connected yet. Invoices and Stripe card payments are on the Invoices and Payments tabs. This screen reads and writes nothing.",
   inbox: "Messages and the email inbox are not connected. The mailer is in flight on another branch, so this screen does not touch email.",
   drafts: "Vo drafts are not connected. Nothing on this screen is generated, stored or sent.",
   ai: "Vo and AI settings are not connected. These switches are not saved.",
@@ -105,7 +105,7 @@ const SLOTS: Record<string, string> = {
   enquiry: "The hosted enquiry form is not saved. There is no lead record behind it.",
   book: "The public booking page does not create an appointment.",
   "matter:messages": "Matter messages are not connected. The mailer is in flight on another branch.",
-  "matter:billing": "Matter billing is not connected. Invoices wait for the Stripe batch.",
+  "matter:billing": "Matter billing is not on this tab yet. Invoices and Stripe card payments are on the Finance page.",
   "matter:forms": "Prepared government forms are not stored yet. Intake answers are on the Intake tab.",
   "matter:submissions": "Submission packages are not stored yet. Casevoya does not submit to IRCC.",
   "settings:billing": "Subscription billing is not connected. It waits for the Stripe batch.",

@@ -17,6 +17,9 @@
     "deploy:inbound": "wrangler deploy --config workers/inbound-email/wrangler.toml"
   },
   "dependencies": {
+    "@stripe/connect-js": "3.4.6",
+    "@stripe/react-connect-js": "3.4.4",
+    "@stripe/react-stripe-js": "7.0.0",
     "@stripe/stripe-js": "^10.1.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
@@ -27,6 +30,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
+    "stripe": "23.0.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {

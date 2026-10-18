@@ -1,4 +1,4 @@
-/** Prototype pay states from portal-pay.html. A real charge waits on the finance PaymentIntent. */
+/** Prototype pay states from portal-pay.html (the demo page only; a real invoice uses the Payment Element). */
 export const PAY_STATES = ["ready", "processing", "declined", "3ds", "success", "paid"] as const;
 
 export type PayState = (typeof PAY_STATES)[number];

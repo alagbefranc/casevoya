@@ -118,7 +118,8 @@ export function usePortal(ref: RefObject<HTMLElement | null>, page: string) {
       }
     }
 
-    if (page === "pay") armPay(root, listen);
+    // The demo pay page walks the Designer's states; the live pay page uses Stripe's Payment Element.
+    if (demo && page === "pay") armPay(root, listen);
     if (demo && page === "upload") armUpload(root, listen);
     if (demo && narrow()) armSwipe(root);
     if (demo) armDocs(root, listen);

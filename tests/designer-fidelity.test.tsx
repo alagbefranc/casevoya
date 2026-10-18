@@ -36,6 +36,8 @@ import {
   type NewAgreementDialogData,
 } from "@/components/sheet/designer/agreements";
 import { AgreementsMarkup } from "@/components/sheet/markup/agreements";
+import { FinanceHeader, NewInvoiceDialog, SheetFinance, type FinanceData, type NewInvoiceDialogData } from "@/components/sheet/designer/finance";
+import { FinanceMarkup } from "@/components/sheet/markup/finance";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -792,3 +794,113 @@ const DESIGNER_NEW_QUOTE: NewAgreementDialogData = {
   ],
   submit: "Create quote",
 };
+
+const AVF = (name: string, file: string) => ({ name, avatarUrl: `/assets/${file}.png` });
+const PRIYA_F = AVF("Priya Sharma", "av-priya-applicant");
+
+const DESIGNER_FINANCE: FinanceData = {
+  intro:
+    "Three kinds of money stay apart: Northline’s earned fees, advances held in the client account, and government fees the client pays to IRCC. A payment never changes a government status.",
+  kpis: [
+    { href: "?tab=invoices", label: "Owed to Northline", value: { money: "CAD 3,729.00" }, note: "3 open invoices" },
+    { href: "?tab=invoices", label: "Overdue", value: { money: "CAD 791.00" }, note: { left: "Ana Ferreira", right: "8 days" }, tone: "bad" },
+    { href: "?tab=funds", label: "Held in client account", value: { money: "CAD 1,500.00" }, note: { left: "Not earned", right: "1 client" } },
+    { href: "?tab=payments", label: "Needs you", value: { count: 2 }, note: { left: "1 transfer approval", right: "1 bank payment to verify" }, tone: "warn" },
+  ],
+  rows: [
+    { number: { href: "?tab=invoice", label: "INV-0222" }, client: PRIYA_F, matter: "NL-2026-0142", categories: ["Disbursement", "translation"], issued: "—", due: "—", total: "113.00", paid: "0.00", state: { tone: "gr", label: "Draft" } },
+    { number: { href: "?tab=invoice", label: "INV-0221" }, client: AVF("Kofi Mensah", "av-kofi-client"), matter: "NL-2026-0131", categories: ["Professional fee", "HST"], issued: "9 Oct", due: "9 Nov", total: "1,808.00", paid: "0.00", state: { tone: "blue", label: "Issued" } },
+    { number: { href: "?tab=invoice", label: "INV-0218" }, client: PRIYA_F, matter: "NL-2026-0142", categories: ["Professional fee", "HST 13%", "disbursement"], issued: "2 Oct", due: "6 Nov", total: "2,260.00", paid: "1,130.00", state: { tone: "chg", label: "Partially paid" } },
+    { number: { href: "?tab=invoice", label: "INV-0214" }, client: AVF("Ana Ferreira", "av-ana-client"), matter: "NL-2026-0129", categories: ["Professional fee", "HST"], issued: "25 Sep", due: "9 Oct", total: "791.00", paid: "0.00", state: { tone: "bad", label: "Overdue" } },
+    { number: { href: "?tab=invoice", label: "INV-0211" }, client: AVF("Tomás Duarte", "av-tomas-client"), matter: "Lead L6", categories: ["Consultation fee"], issued: "18 Sep", due: "18 Sep", total: "300.00", paid: "300.00", state: { tone: "ok", label: "Paid" } },
+    { number: { href: "?tab=invoice", label: "INV-0205" }, client: AVF("Sofia Reyes", "av-sofia-client"), matter: "Lead L3", categories: ["Consultation fee"], issued: "10 Sep", due: "—", total: "300.00", paid: "0.00", state: { tone: "gr", label: "Voided" } },
+    { number: { href: "?tab=invoice", label: "INV-0199" }, client: { name: "Hamid Rahimi" }, matter: "Lead L4", categories: ["Professional fee", "HST"], issued: "5 Sep", due: "—", total: "452.00", paid: "0.00", state: { tone: "gr", label: "Credited" } },
+    { number: { href: "?tab=invoice", label: "INV-0197" }, client: PRIYA_F, matter: "NL-2026-0142", categories: ["Consultation fee"], issued: "2 Sep", due: "2 Sep", total: "300.00", paid: "300.00", state: { tone: "ok", label: "Paid" } },
+  ],
+  empty: null,
+};
+
+const DESIGNER_NEW_INVOICE: NewInvoiceDialogData = {
+  matters: [
+    { left: "NL-2026-0142", right: "Priya Sharma" },
+    { left: "NL-2026-0131", right: "Kofi Mensah" },
+  ],
+  work: [
+    { left: "Milestone 2", right: "package released (not delivered yet)" },
+    { left: "Disbursement", right: "courier, 15 Oct" },
+  ],
+};
+
+describe("Designer fidelity: Finance", () => {
+  it("renders the Finance page (Invoices) and its New invoice dialog exactly as the captured Designer markup", () => {
+    // The capture also carries Record a bank payment (#dlgPay), Verify (#dlgVer), Transfer (#dlgTr)
+    // and Credit note (#dlgCN). Those flows are not ported, so the Invoices tab renders without them.
+    let captured = withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup)));
+    for (const id of ["dlgPay", "dlgVer", "dlgTr", "dlgCN"]) {
+      captured = captured.replace(new RegExp(`<dialog class="dlg" id="${id}"[\\s\\S]*?</dialog>`), "");
+      expect(captured).not.toContain(`id="${id}"`);
+    }
+    expect(captured).toContain('id="dlgInv"');
+    const live = withoutPreloads(
+      renderToStaticMarkup(
+        createElement(
+          SheetFrame,
+          {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/finance" },
+            header: createElement(FinanceHeader, {
+              data: { pills: ["CAD", { left: "Northline Immigration", right: "fictional" }], recordPayment: true, invoiceTab: "INV-0218", tab: "invoices" },
+            }),
+            statusbar: {
+              timezone: "America/Toronto",
+              queue: { label: "Reminder queue healthy", detail: "0 retries" },
+              sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+            },
+            after: createElement(NewInvoiceDialog, { data: DESIGNER_NEW_INVOICE }),
+          },
+          createElement(SheetFinance, { data: DESIGNER_FINANCE }),
+        ),
+      ),
+    );
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+    }
+    expect(live).toBe(captured);
+  });
+
+  it("wires the live New invoice dialog by data attributes, with no Designer toast", () => {
+    const org = "33333333-3333-4333-8333-333333333333";
+    const html = renderToStaticMarkup(
+      createElement(NewInvoiceDialog, {
+        data: {
+          matters: [{ value: "11111111-1111-4111-8111-111111111111", left: "Dana Lee · CV-2026-0001" }],
+          work: [],
+          live: { organizationId: org, sampleMode: false, currencies: ["CAD"], defaultDue: "2026-11-17", today: "2026-10-18", cardPaymentsReady: false, blocked: null },
+        },
+      }),
+    );
+    expect(html).toContain(`data-new-invoice="1" data-org="${org}" data-today="2026-10-18"`);
+    expect(html).not.toContain("data-toast");
+    expect(html).toMatch(/<div class="g2"><div class="fld"><label for="niA">Amount<\/label>[\s\S]*?<label for="niCur">Currency<\/label>/);
+    expect(html).toContain('<input class="inp" id="niDue" type="date" min="2026-10-18" value="2026-11-17"/>');
+    expect(html).toContain("Card payments aren’t set up yet");
+    expect(html).toContain('<option value="11111111-1111-4111-8111-111111111111">Dana Lee · CV-2026-0001</option>');
+  });
+
+  it("shows a firm without invoices an honest empty state, with no sample people", () => {
+    const html = renderToStaticMarkup(
+      createElement(SheetFinance, {
+        data: {
+          intro: "Synthetic firm",
+          kpis: [{ href: "?tab=invoices", label: "Owed to Synthetic", value: { money: "CAD 0.00" }, note: "No open invoices" }],
+          rows: [],
+          empty: { title: "No invoices yet", copy: "Issue one from a matter.", action: { label: "New invoice", dialog: "dlgInv" } },
+        },
+      }),
+    );
+    expect(html).toContain('class="emp"');
+    expect(html).toContain('data-dlg="dlgInv"');
+    expect(html).not.toMatch(/Northline|Priya|Kofi|Ana Ferreira|NL-2026|INV-02/);
+  });
+});
