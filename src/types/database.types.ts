@@ -6572,11 +6572,453 @@ export type Database = {
         }
         Relationships: []
       }
+      compliance_settings: {
+        Row: {
+          complaint_ack_days: number | null
+          complaint_escalation_text: string | null
+          complaint_response_days: number | null
+          created_at: string
+          created_by: string | null
+          organization_id: string
+          privacy_response_days: number | null
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          complaint_ack_days?: number | null
+          complaint_escalation_text?: string | null
+          complaint_response_days?: number | null
+          created_at?: string
+          created_by?: string | null
+          organization_id: string
+          privacy_response_days?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          complaint_ack_days?: number | null
+          complaint_escalation_text?: string | null
+          complaint_response_days?: number | null
+          created_at?: string
+          created_by?: string | null
+          organization_id?: string
+          privacy_response_days?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
+      complaint_handlers: {
+        Row: {
+          added_by: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          membership_id: string
+          organization_id: string
+          removed_at: string | null
+          removed_by: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          added_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          membership_id: string
+          organization_id: string
+          removed_at?: string | null
+          removed_by?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          added_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          membership_id?: string
+          organization_id?: string
+          removed_at?: string | null
+          removed_by?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      privacy_requests: {
+        Row: {
+          assignee_membership_id: string
+          channel: Database["public"]["Enums"]["compliance_channel"]
+          closed_at: string | null
+          closed_by: string | null
+          consent_record_id: string | null
+          created_at: string
+          created_by: string | null
+          delivery_method: string | null
+          details: string
+          due_on: string | null
+          evidence_note: string | null
+          id: string
+          identity_method: string | null
+          identity_verified_at: string | null
+          identity_verified_by: string | null
+          idempotency_key: string
+          is_sample: boolean
+          kept_records: Json | null
+          kind: Database["public"]["Enums"]["privacy_request_kind"]
+          matter_id: string | null
+          number: number
+          organization_id: string
+          outcome: Database["public"]["Enums"]["privacy_request_outcome"] | null
+          outcome_note: string | null
+          person_id: string | null
+          received_on: string
+          redaction_at: string | null
+          redaction_by: string | null
+          redaction_note: string | null
+          reference: string
+          refusal_reason: string | null
+          requester_name: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          scope_at: string | null
+          scope_by: string | null
+          scope_note: string | null
+          target_days: number | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          assignee_membership_id: string
+          channel: Database["public"]["Enums"]["compliance_channel"]
+          closed_at?: string | null
+          closed_by?: string | null
+          consent_record_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          delivery_method?: string | null
+          details: string
+          due_on?: string | null
+          evidence_note?: string | null
+          id?: string
+          identity_method?: string | null
+          identity_verified_at?: string | null
+          identity_verified_by?: string | null
+          idempotency_key: string
+          is_sample?: boolean
+          kept_records?: Json | null
+          kind: Database["public"]["Enums"]["privacy_request_kind"]
+          matter_id?: string | null
+          number: number
+          organization_id: string
+          outcome?: Database["public"]["Enums"]["privacy_request_outcome"] | null
+          outcome_note?: string | null
+          person_id?: string | null
+          received_on: string
+          redaction_at?: string | null
+          redaction_by?: string | null
+          redaction_note?: string | null
+          reference: string
+          refusal_reason?: string | null
+          requester_name: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          scope_at?: string | null
+          scope_by?: string | null
+          scope_note?: string | null
+          target_days?: number | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          assignee_membership_id?: string
+          channel?: Database["public"]["Enums"]["compliance_channel"]
+          closed_at?: string | null
+          closed_by?: string | null
+          consent_record_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          delivery_method?: string | null
+          details?: string
+          due_on?: string | null
+          evidence_note?: string | null
+          id?: string
+          identity_method?: string | null
+          identity_verified_at?: string | null
+          identity_verified_by?: string | null
+          idempotency_key?: string
+          is_sample?: boolean
+          kept_records?: Json | null
+          kind?: Database["public"]["Enums"]["privacy_request_kind"]
+          matter_id?: string | null
+          number?: number
+          organization_id?: string
+          outcome?: Database["public"]["Enums"]["privacy_request_outcome"] | null
+          outcome_note?: string | null
+          person_id?: string | null
+          received_on?: string
+          redaction_at?: string | null
+          redaction_by?: string | null
+          redaction_note?: string | null
+          reference?: string
+          refusal_reason?: string | null
+          requester_name?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          scope_at?: string | null
+          scope_by?: string | null
+          scope_note?: string | null
+          target_days?: number | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      privacy_request_redactions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          done_at: string | null
+          done_by: string | null
+          id: string
+          organization_id: string
+          record_label: string
+          removed: string
+          request_id: string
+          state: Database["public"]["Enums"]["privacy_redaction_state"]
+          third_party: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          done_at?: string | null
+          done_by?: string | null
+          id?: string
+          organization_id: string
+          record_label: string
+          removed: string
+          request_id: string
+          state?: Database["public"]["Enums"]["privacy_redaction_state"]
+          third_party: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          done_at?: string | null
+          done_by?: string | null
+          id?: string
+          organization_id?: string
+          record_label?: string
+          removed?: string
+          request_id?: string
+          state?: Database["public"]["Enums"]["privacy_redaction_state"]
+          third_party?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      complaints: {
+        Row: {
+          ack_due_on: string | null
+          ack_note: string | null
+          acknowledged_by: string | null
+          acknowledged_on: string | null
+          assignee_membership_id: string
+          category: Database["public"]["Enums"]["complaint_category"]
+          channel: Database["public"]["Enums"]["compliance_channel"]
+          complainant_name: string
+          created_at: string
+          created_by: string | null
+          evidence_note: string | null
+          id: string
+          idempotency_key: string
+          is_sample: boolean
+          issue: string
+          matter_id: string | null
+          number: number
+          organization_id: string
+          person_id: string | null
+          received_on: string
+          reference: string
+          resolution: string | null
+          resolved_by: string | null
+          resolved_on: string | null
+          response_by: string | null
+          response_due_on: string | null
+          response_note: string | null
+          response_sent_on: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          ack_due_on?: string | null
+          ack_note?: string | null
+          acknowledged_by?: string | null
+          acknowledged_on?: string | null
+          assignee_membership_id: string
+          category: Database["public"]["Enums"]["complaint_category"]
+          channel: Database["public"]["Enums"]["compliance_channel"]
+          complainant_name: string
+          created_at?: string
+          created_by?: string | null
+          evidence_note?: string | null
+          id?: string
+          idempotency_key: string
+          is_sample?: boolean
+          issue: string
+          matter_id?: string | null
+          number: number
+          organization_id: string
+          person_id?: string | null
+          received_on: string
+          reference: string
+          resolution?: string | null
+          resolved_by?: string | null
+          resolved_on?: string | null
+          response_by?: string | null
+          response_due_on?: string | null
+          response_note?: string | null
+          response_sent_on?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          ack_due_on?: string | null
+          ack_note?: string | null
+          acknowledged_by?: string | null
+          acknowledged_on?: string | null
+          assignee_membership_id?: string
+          category?: Database["public"]["Enums"]["complaint_category"]
+          channel?: Database["public"]["Enums"]["compliance_channel"]
+          complainant_name?: string
+          created_at?: string
+          created_by?: string | null
+          evidence_note?: string | null
+          id?: string
+          idempotency_key?: string
+          is_sample?: boolean
+          issue?: string
+          matter_id?: string | null
+          number?: number
+          organization_id?: string
+          person_id?: string | null
+          received_on?: string
+          reference?: string
+          resolution?: string | null
+          resolved_by?: string | null
+          resolved_on?: string | null
+          response_by?: string | null
+          response_due_on?: string | null
+          response_note?: string | null
+          response_sent_on?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      close_privacy_request: {
+        Args: {
+          p_consent_record_id: string | null
+          p_delivery_method: string | null
+          p_evidence_note: string | null
+          p_outcome: string
+          p_outcome_note: string | null
+          p_refusal_reason: string | null
+          p_request_id: string
+        }
+        Returns: undefined
+      }
+      privacy_request_kept_records: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      record_complaint: {
+        Args: {
+          p_assignee_membership_id: string
+          p_category: string
+          p_channel: string
+          p_complainant_name: string
+          p_idempotency_key: string
+          p_issue: string
+          p_matter_id: string | null
+          p_org: string
+          p_person_id: string | null
+          p_received_on: string
+        }
+        Returns: string
+      }
+      record_complaint_step: {
+        Args: { p_complaint_id: string; p_note: string | null; p_on: string | null; p_step: string }
+        Returns: undefined
+      }
+      record_privacy_request: {
+        Args: {
+          p_assignee_membership_id: string
+          p_channel: string
+          p_details: string
+          p_idempotency_key: string
+          p_kind: string
+          p_matter_id: string | null
+          p_org: string
+          p_person_id: string | null
+          p_received_on: string
+          p_requester_name: string
+        }
+        Returns: string
+      }
+      record_privacy_step: {
+        Args: { p_note: string; p_request_id: string; p_step: string }
+        Returns: undefined
+      }
+      save_privacy_redaction: {
+        Args: {
+          p_record_label: string | null
+          p_redaction_id: string | null
+          p_removed: string | null
+          p_request_id: string
+          p_state: string
+          p_third_party: string | null
+        }
+        Returns: string
+      }
+      set_complaint_handlers: {
+        Args: { p_membership_ids: string[]; p_org: string }
+        Returns: number
+      }
+      set_compliance_settings: {
+        Args: {
+          p_complaint_ack_days: number | null
+          p_complaint_escalation_text: string | null
+          p_complaint_response_days: number | null
+          p_org: string
+          p_privacy_response_days: number | null
+        }
+        Returns: undefined
+      }
       booking_public_busy: {
         Args: { p_event_type_id: string; p_from: string; p_to: string }
         Returns: Json
@@ -7820,6 +8262,11 @@ export type Database = {
       }
     }
     Enums: {
+      compliance_channel: "email" | "phone" | "letter" | "in_person" | "portal" | "other"
+      complaint_category: "fees_billing" | "communication" | "service_quality" | "conduct" | "privacy" | "other"
+      privacy_redaction_state: "to_do" | "redacted" | "excluded" | "kept"
+      privacy_request_kind: "access" | "correction" | "consent_withdrawal" | "deletion"
+      privacy_request_outcome: "fulfilled" | "partly_fulfilled" | "refused" | "withdrawn"
       booking_actor: "client" | "staff" | "system"
       booking_location_kind: "video" | "phone" | "in_person" | "meeting_link"
       booking_status:
@@ -8260,6 +8707,11 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      compliance_channel: ["email", "phone", "letter", "in_person", "portal", "other"],
+      complaint_category: ["fees_billing", "communication", "service_quality", "conduct", "privacy", "other"],
+      privacy_redaction_state: ["to_do", "redacted", "excluded", "kept"],
+      privacy_request_kind: ["access", "correction", "consent_withdrawal", "deletion"],
+      privacy_request_outcome: ["fulfilled", "partly_fulfilled", "refused", "withdrawn"],
       booking_actor: ["client", "staff", "system"],
       booking_location_kind: ["video", "phone", "in_person", "meeting_link"],
       booking_status: ["held", "pending_payment", "confirmed", "cancelled", "expired", "no_show", "completed"],
