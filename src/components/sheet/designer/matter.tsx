@@ -536,6 +536,12 @@ export type MatterInviteData = {
   wire?: { organizationId: string; matterId: string } | null;
   /** The Designer's toast on its inert Send button. */
   toast?: { title: string; sub: string };
+  /**
+   * Someone this dialog can invite has no date of birth on file. The dialog then carries a
+   * "Date of birth" field in the Designer's own `.fld` / `.inp` markup, hidden until it is
+   * opened for such a person. Absent, the dialog is exactly the captured one.
+   */
+  birthDate?: { max: string } | null;
 };
 
 const ROLE_OPTIONS = ["Adult dependant", "Applicant", "Sponsor", "Guardian", "Employer contact"] as const;
@@ -587,6 +593,15 @@ export function MatterInviteDialog({ data }: { data: MatterInviteData }) {
           <label htmlFor={"cE"}>{"Email"}</label>
           <input className={"inp"} id={"cE"} type={"email"} defaultValue={data.email} />
         </div>
+        {data.birthDate ? (
+          <div className={"fld"} id={"cDF"} hidden>
+            <label htmlFor={"cD"}>{"Date of birth"}</label>
+            <input className={"inp"} id={"cD"} type={"date"} min={"1900-01-01"} max={data.birthDate.max} aria-describedby={"cD-h"} />
+            <span className={"hint"} id={"cD-h"}>
+              {"Only adults get a portal login. It is saved on their record."}
+            </span>
+          </div>
+        ) : null}
         <div className={"fld"}>
           <label htmlFor={"cL"}>{"Language"}</label>
           <select className={"sel"} id={"cL"}>
@@ -940,8 +955,11 @@ export type MatterPersonCard = {
   role: string;
   parts: string[];
   pill: { label: string; detail?: string };
-  /** A client on this matter without portal access: the card's Manage button opens the invitation. */
-  invite?: { personId: string; role: string; email: string } | null;
+  /**
+   * A client on this matter without portal access: the card's Manage button opens the invitation.
+   * `birthDateMissing`: no date of birth on file, so the dialog asks for one.
+   */
+  invite?: { personId: string; role: string; email: string; birthDateMissing?: boolean } | null;
 };
 
 /** The Manage button's `data-*` for the invitation dialog, or nothing for the Designer's inert button. */
@@ -953,6 +971,7 @@ function inviteProps(card: MatterPersonCard) {
     "data-role": card.invite.role,
     "data-email": card.invite.email,
     "data-name": card.person.name,
+    ...(card.invite.birthDateMissing ? { "data-dob": "missing" } : {}),
   };
 }
 export type MatterRelationship = { from: string; relation: string; to: string; evidence: string; sharing: MatterBadge | null };

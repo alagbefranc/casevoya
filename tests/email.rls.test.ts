@@ -472,4 +472,16 @@ describe("outbound and inbound email", () => {
       await db.query(`drop table public.messages`);
     }
   });
+
+  it("keeps matter reply addresses within the 64-character local-part limit", async () => {
+    const f = await firm();
+    await asMaintenance(db);
+    const short = await db.query<{ address: string }>(`select app.firm_reply_address($1, $2, 'docs.casevoya.ca') as address`, [f.orgId, f.matterId]);
+    expect(short.rows[0].address).toMatch(new RegExp(`^${f.orgSlug}\\+[a-f0-9]{32}@docs\\.casevoya\\.ca$`));
+    const long = `walk-two-immigration-test-${randomUUID().slice(0, 6)}`;
+    await db.query(`update public.organizations set slug = $2 where id = $1`, [f.orgId, long]);
+    const fallback = await db.query<{ address: string }>(`select app.firm_reply_address($1, $2, 'docs.casevoya.ca') as address`, [f.orgId, f.matterId]);
+    expect(fallback.rows[0].address).toBe(`${long}@docs.casevoya.ca`);
+    expect(fallback.rows[0].address.split("@")[0].length).toBeLessThanOrEqual(64);
+  });
 });

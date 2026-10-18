@@ -12,6 +12,7 @@ import {
   memberNames,
 } from "@/modules/sheet/chrome-load";
 import { dayMonth, isoDate, localNow } from "@/modules/sheet/home-present";
+import { todayIso } from "@/modules/sheet/birth-date";
 import type { SheetStaff } from "@/modules/sheet/load";
 import {
   governmentBadge,
@@ -248,5 +249,6 @@ export async function loadNewMatterDialog(supabase: Client, staff: SheetStaff): 
     ),
     programs: programOptions(published.data ?? []),
     sampleMode: staff.sampleMode,
+    maxBirthDate: todayIso(),
   };
 }

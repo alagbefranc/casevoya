@@ -22,6 +22,8 @@ export async function runNewMatter(button: HTMLElement, router: Router) {
     applicantEmail: value(dialog, "nmAE"),
     sponsorName: value(dialog, "nmS"),
     sponsorEmail: value(dialog, "nmSE"),
+    applicantDateOfBirth: value(dialog, "nmAD"),
+    sponsorDateOfBirth: value(dialog, "nmSD"),
     consultant: value(dialog, "nmC"),
     program: value(dialog, "nmT"),
   });

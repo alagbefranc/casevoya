@@ -5261,10 +5261,12 @@ export type Database = {
       }
       create_client_matter: {
         Args: {
+          p_applicant_date_of_birth?: string | null
           p_applicant_email: string | null
           p_applicant_name: string
           p_consultant_membership_id: string
           p_rule_pack_version_id?: string | null
+          p_sponsor_date_of_birth?: string | null
           p_sponsor_email: string | null
           p_sponsor_name: string | null
           p_title?: string | null
