@@ -2,6 +2,7 @@ import type { PortalFundsEntry, PortalInvoices } from "@/modules/finance/portal-
 import { methodShort } from "@/modules/finance/client-funds-present";
 import type { PortalViewer } from "@/modules/portal/load";
 import { formatMoney } from "@/modules/finance/money";
+import { paymentReceiptHref } from "@/modules/finance/receipt-links";
 import { dayMonth } from "@/modules/sheet/home-present";
 
 const SPRITE = "/assets/icons-coreui/sprite.svg";
@@ -54,7 +55,9 @@ export function fundsRow(entry: PortalFundsEntry, firm: string): { title: string
  * Designer's "Held for you in …’s client account", the Designer's explanation panel follows, and
  * the table ("Invoices and requests") lists the client-account entries that count (verified
  * deposits, transfers applied to invoices, refunds, corrections), read-only. A verified deposit
- * has a Receipt download (the advance-payment receipt, CICC Code s. 32(b)).
+ * has a Receipt download (the advance-payment receipt, CICC Code s. 32(b)). An invoice the client
+ * paid (by card, or from their client-account money) has a "Receipt PR-0001" download per payment
+ * (CICC Code s. 33(3)), in place of the plain "Paid" note.
  */
 export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: PortalInvoices }) {
   const funds = data.clientFunds;
@@ -206,11 +209,24 @@ export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: Por
                           <a className="btn p sm" href={`/portal/pay?invoice=${invoice.id}`}>
                             {"Pay"}
                           </a>
-                        ) : invoice.status === "paid" ? (
+                        ) : invoice.receipts.length ? null : invoice.status === "paid" ? (
                           <small>{"Paid"}</small>
                         ) : invoice.status === "refunded" ? (
                           <small>{"Refunded"}</small>
                         ) : null}
+                        {invoice.receipts.map((receipt, index) => (
+                          <span key={receipt.id}>
+                            {index > 0 || (invoice.open && !invoice.processing) ? " " : null}
+                            <a
+                              className="btn sm"
+                              href={paymentReceiptHref(receipt.id, viewer.organizationId)}
+                              aria-label={`Download receipt ${receipt.number} for invoice ${invoice.number}`}
+                              data-payment-receipt="1"
+                            >
+                              {`Receipt ${receipt.number}`}
+                            </a>
+                          </span>
+                        ))}
                       </td>
                     </tr>
                   );

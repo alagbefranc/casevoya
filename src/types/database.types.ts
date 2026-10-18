@@ -5471,6 +5471,117 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_payment_receipts: {
+        Row: {
+          account_institution: string | null
+          account_label: string | null
+          account_last4: string | null
+          amount_cents: number
+          client_name: string
+          consultant_licence: string | null
+          consultant_name: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          entry_id: string | null
+          firm_display_name: string
+          firm_legal_name: string
+          firm_timezone: string
+          id: string
+          invoice_amount_cents: number
+          invoice_description: string
+          invoice_id: string
+          invoice_issued_on: string | null
+          invoice_number: string
+          is_sample: boolean
+          issued_at: string
+          issued_by: string | null
+          matter_id: string
+          matter_label: string
+          method: string
+          number: string
+          organization_id: string
+          paid_at: string
+          paid_on: string
+          payment_id: string | null
+          person_id: string | null
+          reference: string | null
+          source: string
+        }
+        Insert: {
+          account_institution?: string | null
+          account_label?: string | null
+          account_last4?: string | null
+          amount_cents: number
+          client_name: string
+          consultant_licence?: string | null
+          consultant_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency: string
+          entry_id?: string | null
+          firm_display_name: string
+          firm_legal_name: string
+          firm_timezone: string
+          id?: string
+          invoice_amount_cents: number
+          invoice_description: string
+          invoice_id: string
+          invoice_issued_on?: string | null
+          invoice_number: string
+          is_sample?: boolean
+          issued_at?: string
+          issued_by?: string | null
+          matter_id: string
+          matter_label: string
+          method: string
+          number: string
+          organization_id: string
+          paid_at: string
+          paid_on: string
+          payment_id?: string | null
+          person_id?: string | null
+          reference?: string | null
+          source: string
+        }
+        Update: {
+          account_institution?: string | null
+          account_label?: string | null
+          account_last4?: string | null
+          amount_cents?: number
+          client_name?: string
+          consultant_licence?: string | null
+          consultant_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          entry_id?: string | null
+          firm_display_name?: string
+          firm_legal_name?: string
+          firm_timezone?: string
+          id?: string
+          invoice_amount_cents?: number
+          invoice_description?: string
+          invoice_id?: string
+          invoice_issued_on?: string | null
+          invoice_number?: string
+          is_sample?: boolean
+          issued_at?: string
+          issued_by?: string | null
+          matter_id?: string
+          matter_label?: string
+          method?: string
+          number?: string
+          organization_id?: string
+          paid_at?: string
+          paid_on?: string
+          payment_id?: string | null
+          person_id?: string | null
+          reference?: string | null
+          source?: string
+        }
+        Relationships: []
+      }
       client_fund_bank_transfers: {
         Row: {
           amount_cents: number
@@ -6009,6 +6120,12 @@ export type Database = {
           p_transferred_on: string
         }
         Returns: string
+      }
+      invoice_payment_receipt: {
+        Args: {
+          p_receipt_id: string
+        }
+        Returns: Json
       }
       client_fund_receipt: {
         Args: {

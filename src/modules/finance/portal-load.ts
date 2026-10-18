@@ -24,6 +24,8 @@ export type PortalInvoice = {
   open: boolean;
   processing: boolean;
   state: { tone: string; label: string; detail?: string };
+  /** Receipts for the client's own payments of this invoice ("PR-0001", CICC Code s. 33(3)), oldest first. */
+  receipts: { id: string; number: string }[];
 };
 
 /** One entry of the client's own client-account ledger that counts (verified, approved or recorded). */
@@ -74,6 +76,19 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
     ? await supabase.from("invoice_payments").select("invoice_id").eq("organization_id", viewer.organizationId).eq("status", "processing").in("invoice_id", ids)
     : null;
   const busy = new Set((processing?.data ?? []).map((row) => row.invoice_id));
+  // RLS: only receipts for payments this client made (card) or that came from their client-account money.
+  const paymentReceipts = ids.length
+    ? await supabase
+        .from("invoice_payment_receipts")
+        .select("id, invoice_id, number")
+        .eq("organization_id", viewer.organizationId)
+        .in("invoice_id", ids)
+        .order("number", { ascending: true })
+    : null;
+  const receiptsOf = new Map<string, { id: string; number: string }[]>();
+  for (const row of paymentReceipts?.data ?? []) {
+    receiptsOf.set(row.invoice_id, [...(receiptsOf.get(row.invoice_id) ?? []), { id: row.id, number: row.number }]);
+  }
   const titles = new Map(viewer.matters.map((matter) => [matter.id, matter.title]));
   const pk = publishableKey();
   // RLS: only the client's own sub-ledgers, and only entries that count.
@@ -133,6 +148,7 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
         open: row.status === "issued" || row.status === "partially_paid",
         processing: busy.has(row.id),
         state: { tone: state.tone, label: state.label, ...(state.detail ? { detail: state.detail } : {}) },
+        receipts: receiptsOf.get(row.id) ?? [],
       };
     }),
   };

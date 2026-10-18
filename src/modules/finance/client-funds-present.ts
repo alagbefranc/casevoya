@@ -41,8 +41,13 @@ export type FundEntry = {
   ownerSelfApproved: boolean;
   /** The firm owner verified a deposit they recorded themselves. */
   verifiedByOwnerSelf?: boolean;
-  /** "RC-0001": the receipt issued when a deposit was verified (CICC Code s. 32(b)). */
+  /**
+   * The entry's receipt: "RC-0001" for a verified deposit (the advance, CICC Code s. 32(b)), or
+   * "PR-0001" for an approved transfer applied to an invoice (payment of the invoice, s. 33(3)).
+   */
   receiptNumber?: string | null;
+  /** An approved transfer's invoice payment receipt id (`invoice_payment_receipts.id`), for its download. */
+  paymentReceiptId?: string | null;
   /** The recorded bank transfer of an approved earned-fee transfer. */
   bank?: { on: string; reference: string } | null;
 };
@@ -77,7 +82,7 @@ export type LedgerLine = {
   in: string;
   out: string;
   balance: string;
-  /** A verified deposit's receipt download, after the entry text. */
+  /** A verified deposit's or an approved transfer's receipt download, after the entry text. */
   receipt?: { label: string; href: string };
 };
 
@@ -168,7 +173,8 @@ export function ledgerLines(
         else outText = amount(entry.amountCents);
     }
     const line: LedgerLine = { key: entry.id, date, entry: label, evidence, in: inText, out: outText, balance: balanceText };
-    if (entry.kind === "deposit" && entry.status === "verified" && entry.receiptNumber && receiptHref) {
+    const receipted = (entry.kind === "deposit" && entry.status === "verified") || (entry.kind === "transfer" && entry.status === "approved");
+    if (receipted && entry.receiptNumber && receiptHref) {
       line.receipt = { label: `Receipt ${entry.receiptNumber}`, href: receiptHref(entry) };
     }
     return line;

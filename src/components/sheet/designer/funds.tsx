@@ -11,7 +11,8 @@
  *   * `#dlgVer` adds a Reject with a reason for a payment that isn't on the statement, and says
  *     why the person who recorded a payment can't verify it (the firm owner may verify their own,
  *     shown as "Verified by owner (own entry)"). Verifying issues the receipt (CICC Code s. 32(b)),
- *     downloaded from the ledger row.
+ *     downloaded from the ledger row. An approved transfer's row links the receipt for the invoice
+ *     payment it made ("Receipt PR-0001", s. 33(3)) the same way.
  *   * An approved transfer reads "Approved — awaiting bank transfer" until the bank transfer is
  *     recorded (`#dlgBank`, the Designer's "Record the bank transfer next"). A sub-ledger with money
  *     to withdraw shows "Withdraw by <date>" (CICC Code s. 32(g): 30 days after the invoice).

@@ -114,16 +114,21 @@ alter default privileges in schema public grant all on sequences to anon, authen
 export type TestDbOptions = {
   /** Emulate Supabase's default privileges on the public schema. */
   supabaseDefaultPrivileges?: boolean;
+  /**
+   * Stop before the first migration whose file name starts with this version (for testing a
+   * migration's backfill: seed rows, then `applyMigrationsFrom`).
+   */
+  stopBefore?: string;
 };
 
-export async function createTestDb(options: TestDbOptions = {}): Promise<TestDb> {
-  const db = new PGlite({ extensions: { pgcrypto } });
-  await db.exec(harness);
-  if (options.supabaseDefaultPrivileges) await db.exec(supabaseDefaultPrivileges);
-  const dir = path.join(root, "supabase/migrations");
-  const files = readdirSync(dir)
+function migrationFiles(): string[] {
+  return readdirSync(path.join(root, "supabase/migrations"))
     .filter((file) => file.endsWith(".sql"))
     .sort();
+}
+
+async function applyMigrations(db: PGlite, files: string[]) {
+  const dir = path.join(root, "supabase/migrations");
   for (const file of files) {
     try {
       await db.exec(readFileSync(path.join(dir, file), "utf8"));
@@ -132,6 +137,26 @@ export async function createTestDb(options: TestDbOptions = {}): Promise<TestDb>
       throw new Error(`${file}: ${message}`);
     }
   }
+}
+
+/** Applies the remaining migrations, from the one whose file name starts with `version`. */
+export async function applyMigrationsFrom(db: TestDb, version: string) {
+  await asMaintenance(db);
+  await applyMigrations(
+    db,
+    migrationFiles().filter((file) => file >= version),
+  );
+}
+
+export async function createTestDb(options: TestDbOptions = {}): Promise<TestDb> {
+  const db = new PGlite({ extensions: { pgcrypto } });
+  await db.exec(harness);
+  if (options.supabaseDefaultPrivileges) await db.exec(supabaseDefaultPrivileges);
+  const stop = options.stopBefore;
+  await applyMigrations(
+    db,
+    migrationFiles().filter((file) => !stop || file < stop),
+  );
   const original = db.query.bind(db);
   db.query = (async (query: string, params?: unknown[]) => {
     try {
