@@ -189,6 +189,8 @@ async function funded(f: Firm, amount = 150_000) {
     `select public.record_client_deposit($1, $2, $3, $4, 'cad', 'bank_transfer', 'RBC-0001', $5::date, 'Statement line', $6) as id`,
     [f.clientAccountId, f.matterId, f.personId, amount, today(), key("cf")],
   );
+  // The owner verifying their own deposit needs a step-up taken after it was recorded.
+  await as(f, f.owner, true);
   await f.target.query(`select public.verify_client_deposit($1)`, [deposit.rows[0].id]);
   await asMaintenance(f.target);
   return (await f.target.query<{ ledger_id: string }>(`select ledger_id from public.client_fund_entries where id = $1`, [deposit.rows[0].id])).rows[0].ledger_id;
