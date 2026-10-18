@@ -101,13 +101,16 @@ const staff = (f: Firm, userId: string) => asUser(db, { userId, aal: "aal2", org
 
 async function turnOn(f: Firm, enabled = true, reply = true, messages = true) {
   await staff(f, f.owner);
-  await db.query(`select public.set_vo_settings($1, $2, $3, $4)`, [f.orgId, enabled, reply, messages]);
+  await db.query(`select public.set_vo_settings($1, $2::jsonb)`, [
+    f.orgId,
+    JSON.stringify({ enabled, reply_drafts: reply, read_client_messages: messages }),
+  ]);
 }
 
 async function begin(f: Firm, kind = "message_reply") {
   const row = await db.query<{ r: { ok: boolean; error?: string; run_id?: string; matter_id?: string } }>(
-    `select public.begin_vo_run($1, $2::public.vo_draft_kind, $3) as r`,
-    [f.orgId, kind, f.threadId],
+    `select public.begin_vo_run($1, $2::public.vo_run_kind, $3, $4) as r`,
+    [f.orgId, kind, kind === "ask" ? null : f.threadId, kind === "ask" ? f.matterId : null],
   );
   return row.rows[0].r;
 }
@@ -142,7 +145,11 @@ describe("Vo switch and sample mode", () => {
     const f = await firm();
     await staff(f, f.consultant);
     expect(await begin(f)).toEqual({ ok: false, error: "off" });
-    await expectDbError(() => db.query(`select public.set_vo_settings($1, true, true, true)`, [f.orgId]), /staff access denied/);
+    await expectDbError(() => db.query(`select public.set_vo_settings($1, '{"enabled": true}'::jsonb)`, [f.orgId]), /staff access denied/);
+    await staff(f, f.owner);
+    await expectDbError(() => db.query(`select public.set_vo_settings($1, '{"send_email": true}'::jsonb)`, [f.orgId]), /unknown Vo switch/);
+    await expectDbError(() => db.query(`select public.set_vo_settings($1, '{"enabled": "yes"}'::jsonb)`, [f.orgId]), /unknown Vo switch/);
+    await staff(f, f.consultant);
     await turnOn(f);
     await staff(f, f.consultant);
     expect((await begin(f)).ok).toBe(true);
@@ -364,5 +371,43 @@ describe("review", () => {
       [run.run_id],
     );
     expect(result.rows[0]).toEqual({ result: "abstained", drafts: 0 });
+  });
+});
+
+describe("Ask Vo", () => {
+  it("answers about one matter the asker can read, keeps no answer text, and cites only that matter's records", async () => {
+    const f = await firm();
+    const other = await firm();
+    await turnOn(f);
+    await staff(f, f.consultant);
+    const run = await begin(f, "ask");
+    expect(run.ok).toBe(true);
+    const answer = (sources: unknown[]) =>
+      db.query<{ id: string | null }>(`select public.finish_vo_run($1, 'answered', null, null, $2::jsonb, $3, 'ask-1', false, 300, null) as id`, [
+        run.run_id,
+        JSON.stringify(sources),
+        MODEL,
+      ]);
+    // A conversation message is not an Ask Vo source, nor is another firm's matter.
+    await expectDbError(() => answer([{ kind: "message", id: f.clientMessageId, label: "Message" }]), /outside this conversation/);
+    await expectDbError(() => answer([{ kind: "matter", id: other.matterId, label: "Theirs" }]), /outside this matter/);
+    // An Ask Vo run can't produce a draft for a client.
+    await expectDbError(() => finish(run.run_id!, sourcesFor(f)), /say how the run ended/);
+    const done = await answer([{ kind: "matter", id: f.matterId, label: "Synthetic matter" }]);
+    expect(done.rows[0].id).toBeNull();
+    const row = await db.query<{ result: string; source_count: number; drafts: number }>(
+      `select result, source_count, (select count(*)::int from public.vo_drafts where run_id = $1) as drafts from public.vo_runs where id = $1`,
+      [run.run_id],
+    );
+    expect(row.rows[0]).toEqual({ result: "answered", source_count: 1, drafts: 0 });
+    // Staff not on the matter can't ask about it; the capability switch stops it.
+    await staff(f, f.outsider);
+    await expectDbError(() => begin(f, "ask"), /vo denied/);
+    await staff(f, f.owner);
+    await db.query(`select public.set_vo_settings($1, '{"staff_answers": false}'::jsonb)`, [f.orgId]);
+    await staff(f, f.consultant);
+    expect(await begin(f, "ask")).toEqual({ ok: false, error: "capability_off" });
+    // Reply drafts are unaffected by the Ask Vo switch.
+    expect((await begin(f)).ok).toBe(true);
   });
 });

@@ -45,7 +45,16 @@ create table public.vo_settings (
   organization_id uuid primary key references public.organizations (id),
   enabled boolean not null,
   reply_drafts boolean not null default true,
+  staff_answers boolean not null default true,
   read_client_messages boolean not null default true,
+  -- Sensitive document kinds Vo may read (AI-06). No Vo feature reads document contents yet;
+  -- the owner's choice is kept for when one does. Off until the owner turns one on.
+  read_identity boolean not null default false,
+  read_relationship boolean not null default false,
+  read_financial boolean not null default false,
+  read_medical boolean not null default false,
+  read_criminal boolean not null default false,
+  read_narratives boolean not null default false,
   updated_at timestamptz not null default now(),
   updated_by uuid not null references auth.users (id)
 );
@@ -57,9 +66,9 @@ create table public.vo_runs (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations (id),
   user_id uuid not null references auth.users (id),
-  kind public.vo_draft_kind not null,
+  kind public.vo_run_kind not null,
   matter_id uuid not null,
-  thread_id uuid not null,
+  thread_id uuid,
   result public.vo_run_result not null default 'running',
   model text check (model is null or model ~ '^@cf/[a-z0-9._/-]{3,120}$'),
   prompt_version text check (prompt_version is null or prompt_version ~ '^[a-z0-9._-]{1,40}$'),
@@ -73,6 +82,7 @@ create table public.vo_runs (
   unique (id, organization_id),
   check ((result = 'running') = (finished_at is null)),
   check (failure is null or result = 'failed'),
+  check ((kind = 'ask') = (thread_id is null)),
   foreign key (matter_id, organization_id) references public.matters (id, organization_id),
   foreign key (thread_id, organization_id) references public.message_threads (id, organization_id)
 );
@@ -192,12 +202,8 @@ grant execute on function app.vo_enabled(uuid) to authenticated, service_role;
 -- Writes
 -- ---------------------------------------------------------------------------
 
-create function public.set_vo_settings(
-  p_organization_id uuid,
-  p_enabled boolean,
-  p_reply_drafts boolean,
-  p_read_client_messages boolean
-)
+-- The owner changes one or more switches; the others keep their saved value (or default).
+create function public.set_vo_settings(p_organization_id uuid, p_changes jsonb)
 returns jsonb
 language plpgsql
 security definer
@@ -206,36 +212,62 @@ as $$
 declare
   actor uuid := (select auth.uid());
   before_enabled boolean;
+  current_row public.vo_settings%rowtype;
+  key text;
+  allowed text[] := array[
+    'enabled', 'reply_drafts', 'staff_answers', 'read_client_messages', 'read_identity', 'read_relationship',
+    'read_financial', 'read_medical', 'read_criminal', 'read_narratives'
+  ];
 begin
   perform app.require_active_staff(p_organization_id, array['firm_owner']::public.org_role[], false);
-  if p_enabled is null or p_reply_drafts is null or p_read_client_messages is null then
-    raise exception 'every Vo switch needs a value' using errcode = '22023';
+  if p_changes is null or jsonb_typeof(p_changes) <> 'object' or p_changes = '{}'::jsonb then
+    raise exception 'choose a Vo switch' using errcode = '22023';
   end if;
+  for key in select jsonb_object_keys(p_changes)
+  loop
+    if not (key = any (allowed)) or jsonb_typeof(p_changes -> key) <> 'boolean' then
+      raise exception 'unknown Vo switch' using errcode = '22023';
+    end if;
+  end loop;
   before_enabled := app.vo_enabled(p_organization_id);
-  insert into public.vo_settings (organization_id, enabled, reply_drafts, read_client_messages, updated_at, updated_by)
-  values (p_organization_id, p_enabled, p_reply_drafts, p_read_client_messages, now(), actor)
-  on conflict (organization_id) do update
-    set enabled = excluded.enabled,
-        reply_drafts = excluded.reply_drafts,
-        read_client_messages = excluded.read_client_messages,
-        updated_at = excluded.updated_at,
-        updated_by = excluded.updated_by;
+  select * into current_row from public.vo_settings where organization_id = p_organization_id for update;
+  if current_row.organization_id is null then
+    insert into public.vo_settings (organization_id, enabled, updated_by)
+    values (p_organization_id, before_enabled, actor)
+    returning * into current_row;
+  end if;
+  update public.vo_settings
+    set enabled = coalesce((p_changes ->> 'enabled')::boolean, current_row.enabled),
+        reply_drafts = coalesce((p_changes ->> 'reply_drafts')::boolean, current_row.reply_drafts),
+        staff_answers = coalesce((p_changes ->> 'staff_answers')::boolean, current_row.staff_answers),
+        read_client_messages = coalesce((p_changes ->> 'read_client_messages')::boolean, current_row.read_client_messages),
+        read_identity = coalesce((p_changes ->> 'read_identity')::boolean, current_row.read_identity),
+        read_relationship = coalesce((p_changes ->> 'read_relationship')::boolean, current_row.read_relationship),
+        read_financial = coalesce((p_changes ->> 'read_financial')::boolean, current_row.read_financial),
+        read_medical = coalesce((p_changes ->> 'read_medical')::boolean, current_row.read_medical),
+        read_criminal = coalesce((p_changes ->> 'read_criminal')::boolean, current_row.read_criminal),
+        read_narratives = coalesce((p_changes ->> 'read_narratives')::boolean, current_row.read_narratives),
+        updated_at = now(),
+        updated_by = actor
+    where organization_id = p_organization_id
+    returning * into current_row;
   perform app.record_audit_event(
     p_organization_id, 'vo.settings_changed', 'vo_settings', null, 'success',
-    jsonb_build_object(
-      'enabled', p_enabled,
-      'was_enabled', before_enabled,
-      'reply_drafts', p_reply_drafts,
-      'read_client_messages', p_read_client_messages
-    )
+    jsonb_build_object('changes', p_changes, 'was_enabled', before_enabled, 'enabled', current_row.enabled)
   );
-  return jsonb_build_object('enabled', p_enabled, 'reply_drafts', p_reply_drafts, 'read_client_messages', p_read_client_messages);
+  return to_jsonb(current_row) - 'updated_by';
 end;
 $$;
-revoke all on function public.set_vo_settings(uuid, boolean, boolean, boolean) from public, anon;
-grant execute on function public.set_vo_settings(uuid, boolean, boolean, boolean) to authenticated, service_role;
+revoke all on function public.set_vo_settings(uuid, jsonb) from public, anon;
+grant execute on function public.set_vo_settings(uuid, jsonb) to authenticated, service_role;
 
-create function public.begin_vo_run(p_organization_id uuid, p_kind public.vo_draft_kind, p_thread_id uuid)
+-- p_thread_id for a draft (message_reply, document_request); p_matter_id for Ask Vo.
+create function public.begin_vo_run(
+  p_organization_id uuid,
+  p_kind public.vo_run_kind,
+  p_thread_id uuid,
+  p_matter_id uuid default null
+)
 returns jsonb
 language plpgsql
 security definer
@@ -244,7 +276,9 @@ as $$
 declare
   actor uuid := (select auth.uid());
   thread public.message_threads%rowtype;
+  matter public.matters%rowtype;
   settings public.vo_settings%rowtype;
+  sample boolean;
   last_hour integer;
   last_day integer;
   firm_day integer;
@@ -258,20 +292,30 @@ begin
   if p_kind is null then
     raise exception 'choose what Vo drafts' using errcode = '22023';
   end if;
-  select * into thread from public.message_threads where id = p_thread_id and organization_id = p_organization_id;
+  if p_kind = 'ask' then
+    select * into matter from public.matters where id = p_matter_id and organization_id = p_organization_id;
+  else
+    select * into thread from public.message_threads where id = p_thread_id and organization_id = p_organization_id;
+    select * into matter from public.matters where id = thread.matter_id and organization_id = p_organization_id;
+  end if;
   -- Vo reads only what the requesting person can read.
-  if thread.id is null or app.message_staff_reads_matter(thread.matter_id, thread.organization_id) is distinct from true then
+  if matter.id is null or (p_kind <> 'ask' and thread.id is null)
+     or app.message_staff_reads_matter(matter.id, matter.organization_id) is distinct from true then
     raise exception 'vo denied' using errcode = '42501';
   end if;
   if app.vo_enabled(p_organization_id) is distinct from true then
     return jsonb_build_object('ok', false, 'error', 'off');
   end if;
   select * into settings from public.vo_settings where organization_id = p_organization_id;
-  if settings.organization_id is not null and (settings.reply_drafts is not true or settings.read_client_messages is not true) then
+  if settings.organization_id is not null and (
+    (p_kind = 'ask' and settings.staff_answers is not true)
+    or (p_kind <> 'ask' and (settings.reply_drafts is not true or settings.read_client_messages is not true))
+  ) then
     return jsonb_build_object('ok', false, 'error', 'capability_off');
   end if;
+  sample := case when p_kind = 'ask' then matter.is_sample else thread.is_sample end;
   -- In sample mode Vo works on sample records only.
-  if app.sample_mode_blocks_real(p_organization_id, thread.is_sample) then
+  if app.sample_mode_blocks_real(p_organization_id, sample) then
     return jsonb_build_object('ok', false, 'error', 'sample_only');
   end if;
 
@@ -292,17 +336,17 @@ begin
   end if;
 
   insert into public.vo_runs (organization_id, user_id, kind, matter_id, thread_id, is_sample)
-  values (p_organization_id, actor, p_kind, thread.matter_id, thread.id, thread.is_sample)
+  values (p_organization_id, actor, p_kind, matter.id, case when p_kind = 'ask' then null else thread.id end, sample)
   returning id into rid;
   perform app.record_audit_event(
     p_organization_id, 'vo.run_started', 'vo_runs', rid, 'success',
     jsonb_build_object('kind', p_kind)
   );
-  return jsonb_build_object('ok', true, 'run_id', rid, 'matter_id', thread.matter_id);
+  return jsonb_build_object('ok', true, 'run_id', rid, 'matter_id', matter.id);
 end;
 $$;
-revoke all on function public.begin_vo_run(uuid, public.vo_draft_kind, uuid) from public, anon;
-grant execute on function public.begin_vo_run(uuid, public.vo_draft_kind, uuid) to authenticated, service_role;
+revoke all on function public.begin_vo_run(uuid, public.vo_run_kind, uuid, uuid) from public, anon;
+grant execute on function public.begin_vo_run(uuid, public.vo_run_kind, uuid, uuid) to authenticated, service_role;
 
 create function public.finish_vo_run(
   p_run_id uuid,
@@ -340,7 +384,9 @@ begin
   if run.result <> 'running' then
     raise exception 'this Vo run is already finished' using errcode = '22023';
   end if;
-  if p_result is null or p_result = 'running' then
+  if p_result is null or p_result = 'running'
+     or (p_result = 'drafted' and run.kind = 'ask')
+     or (p_result = 'answered' and run.kind <> 'ask') then
     raise exception 'say how the run ended' using errcode = '22023';
   end if;
   if p_model is not null and p_model !~ '^@cf/[a-z0-9._/-]{3,120}$' then
@@ -364,15 +410,18 @@ begin
     return null;
   end if;
 
-  if p_result = 'drafted' then
+  if p_result in ('drafted', 'answered') then
     if app.message_staff_reads_matter(run.matter_id, run.organization_id) is distinct from true then
       raise exception 'vo denied' using errcode = '42501';
     end if;
     if p_model is null or p_prompt_version is null then
       raise exception 'a draft records its model and prompt version' using errcode = '22023';
     end if;
-    if p_title is null or length(btrim(p_title)) not between 1 and 200
-       or p_body is null or length(btrim(p_body)) not between 1 and 4000 then
+    -- Ask Vo answers are shown to the asker and not kept (only the run and its sources' count).
+    if p_result = 'drafted' and (
+      p_title is null or length(btrim(p_title)) not between 1 and 200
+      or p_body is null or length(btrim(p_body)) not between 1 and 4000
+    ) then
       raise exception 'a draft needs a title and 1 to 4000 characters' using errcode = '22023';
     end if;
     if p_sources is null or jsonb_typeof(p_sources) <> 'array' or jsonb_array_length(p_sources) not between 1 and 40 then
@@ -395,7 +444,7 @@ begin
           raise exception 'a source is outside this matter' using errcode = '42501';
         end if;
       elsif src_kind = 'message' then
-        if not exists (
+        if run.thread_id is null or not exists (
           select 1 from public.matter_messages message
           where message.id = src_id::uuid
             and message.organization_id = run.organization_id
@@ -412,17 +461,37 @@ begin
         ) then
           raise exception 'a source is outside this matter' using errcode = '42501';
         end if;
+      elsif src_kind = 'task' then
+        if not exists (
+          select 1 from public.tasks task
+          where task.id = src_id::uuid
+            and task.organization_id = run.organization_id
+            and task.matter_id = run.matter_id
+        ) then
+          raise exception 'a source is outside this matter' using errcode = '42501';
+        end if;
+      elsif src_kind = 'deadline' then
+        if not exists (
+          select 1 from public.deadlines deadline
+          where deadline.id = src_id::uuid
+            and deadline.organization_id = run.organization_id
+            and deadline.matter_id = run.matter_id
+        ) then
+          raise exception 'a source is outside this matter' using errcode = '42501';
+        end if;
       else
         raise exception 'unknown source kind' using errcode = '22023';
       end if;
       count_sources := count_sources + 1;
     end loop;
+  end if;
 
+  if p_result = 'drafted' then
     insert into public.vo_drafts (
       organization_id, run_id, kind, matter_id, thread_id, title, body, sources, model, prompt_version,
       needs_rule, is_sample, created_by
     ) values (
-      run.organization_id, run.id, run.kind, run.matter_id, run.thread_id, btrim(p_title), btrim(p_body), p_sources,
+      run.organization_id, run.id, run.kind::text::public.vo_draft_kind, run.matter_id, run.thread_id, btrim(p_title), btrim(p_body), p_sources,
       p_model, p_prompt_version, coalesce(p_needs_rule, false), run.is_sample, actor
     )
     returning id into did;
@@ -432,7 +501,7 @@ begin
     set result = p_result,
         model = p_model,
         prompt_version = p_prompt_version,
-        source_count = case when p_result = 'drafted' then count_sources else null end,
+        source_count = case when p_result in ('drafted', 'answered') then count_sources else null end,
         latency_ms = p_latency_ms,
         failure = case when p_result = 'failed' then coalesce(p_failure, 'failed') else null end,
         finished_at = clock_timestamp()
@@ -445,7 +514,7 @@ begin
       'result', p_result,
       'model', p_model,
       'prompt_version', p_prompt_version,
-      'source_count', case when p_result = 'drafted' then count_sources else null end,
+      'source_count', case when p_result in ('drafted', 'answered') then count_sources else null end,
       'needs_rule', case when p_result = 'drafted' then coalesce(p_needs_rule, false) else null end,
       'draft_id', did
     )

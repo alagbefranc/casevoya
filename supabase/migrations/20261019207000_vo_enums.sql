@@ -14,10 +14,19 @@ create type public.vo_draft_status as enum (
   'discarded'
 );
 
--- One Vo run: started, then drafted, abstained (the request needs a consultant) or failed.
+-- What a Vo run was for: a draft (above), or "Ask Vo", a staff-only answer about one matter.
+create type public.vo_run_kind as enum (
+  'message_reply',
+  'document_request',
+  'ask'
+);
+
+-- One Vo run: started, then drafted (a draft for review), answered (Ask Vo, staff only),
+-- abstained (the request needs a consultant) or failed.
 create type public.vo_run_result as enum (
   'running',
   'drafted',
+  'answered',
   'abstained',
   'failed'
 );
