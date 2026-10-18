@@ -2,6 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import { DemoSheet } from "@/components/sheet/demo";
 import { SheetFrame } from "@/components/sheet/designer/frame";
 import { SheetHome } from "@/components/sheet/designer/home";
+import { MatterDialogs, MatterRbar, MatterTopBar, SheetMatter } from "@/components/sheet/designer/matter";
+import { MATTER_CSS } from "@/components/sheet/designer/matter-css";
 import { MattersTopBar, SheetMatters } from "@/components/sheet/designer/matters";
 import { SampleCasePanel } from "@/components/sheet/designer/sample-case";
 import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
@@ -11,6 +13,7 @@ import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry
 import { homeRoute } from "@/lib/auth/home-route";
 import { signInLocation } from "@/lib/auth/redirect";
 import { loadSheetHome } from "@/modules/sheet/home-load";
+import { loadSheetMatter } from "@/modules/sheet/matter-load";
 import { loadSheetMatters } from "@/modules/sheet/matters-load";
 import { loadSheetSample } from "@/modules/sheet/sample-load";
 import { loadSheetAccess, loadSheetBundle } from "@/modules/sheet/load";
@@ -77,6 +80,24 @@ export async function SheetBody({
       <SheetScreen page={page}>
         <SheetFrame sidebar={chrome.sidebar} header={<MattersTopBar counts={matters.counts} />} statusbar={chrome.statusbar}>
           <SheetMatters data={matters} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  if (page === "matter" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = matterId ? await loadSheetMatter(access.staff, matterId, query) : null;
+    if (!loaded) notFound();
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<MatterTopBar data={loaded.header} />}
+          aside={<MatterRbar data={loaded.rbar} />}
+          styles={MATTER_CSS}
+          after={<MatterDialogs data={loaded.dialogs} />}
+          statusbar={loaded.chrome.statusbar}
+        >
+          <SheetMatter data={loaded.page} />
         </SheetFrame>
       </SheetScreen>
     );

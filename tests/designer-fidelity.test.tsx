@@ -4,8 +4,20 @@ import { describe, expect, it, vi } from "vitest";
 import { SheetFrame, type RbarData } from "@/components/sheet/designer/frame";
 import { SheetHome, type HomeData } from "@/components/sheet/designer/home";
 import { MattersTopBar, SheetMatters, type MattersData } from "@/components/sheet/designer/matters";
+import {
+  MatterDialogs,
+  MatterOverview,
+  MatterRbar,
+  MatterTopBar,
+  type MatterDialogsData,
+  type MatterHeaderData,
+  type MatterOverviewData,
+  type MatterRbarData,
+} from "@/components/sheet/designer/matter";
+import { MATTER_CSS } from "@/components/sheet/designer/matter-css";
 import { SheetSidebar, type SidebarData } from "@/components/sheet/designer/sidebar";
 import { IndexMarkup } from "@/components/sheet/markup/index";
+import { MatterMarkup } from "@/components/sheet/markup/matter";
 import { MattersMarkup } from "@/components/sheet/markup/matters";
 import { SampleModeMarkup } from "@/components/sheet/markup/sample-mode";
 import { SampleCasePanel, type SampleCaseData } from "@/components/sheet/designer/sample-case";
@@ -115,6 +127,72 @@ const DESIGNER_MATTERS: MattersData = {
   empty: null,
 };
 
+const PRIYA = AV("Priya Sharma", "av-priya-applicant");
+const RAFAEL = AV("Rafael Sharma", "av-rafael-sponsor");
+const OLENA = AV("Olena Sharma", "av-olena-dependant");
+
+const DESIGNER_MATTER_HEADER: MatterHeaderData = {
+  client: PRIYA,
+  pills: ["Updated 16 min ago", "Source checked 12 Oct", "Opened 2 Sep 2026"],
+  hold: null,
+  tab: "overview",
+};
+
+const DESIGNER_MATTER: MatterOverviewData = {
+  client: PRIYA,
+  facts: ["NL-2026-0142", "Spousal sponsorship, outland", "Consultant Amara Osei"],
+  badges: [
+    { tone: "blue", label: "Stage", detail: "Evidence collection" },
+    { tone: "unv", label: "Government", detail: "Not submitted" },
+    { tone: "ok", label: "Money", detail: "Advance held CAD 1,500" },
+    { tone: "chg", label: "Next deadline", detail: "Fri 30 Oct, 17:00 ET (verified)" },
+  ],
+  stage: { index: 2, total: 12, label: "Evidence collection" },
+  documents: { accepted: 7, review: 3, outstanding: 4 },
+  requests: [
+    { person: PRIYA, title: "Marriage certificate", badge: { tone: "rev", label: "Awaiting review" } },
+    { person: RAFAEL, title: "Proof of relationship — photos", badge: { tone: "chg", label: "Changes requested" } },
+    { person: RAFAEL, title: "Sponsor proof of income (T4)", badge: { tone: "gr", label: "Requested" } },
+    { person: PRIYA, title: "Police certificate (India)", badge: { tone: "gr", label: "Requested" } },
+    { person: OLENA, title: "Olena — birth certificate", badge: { tone: "bad", label: "Expired" } },
+  ],
+  blockers: [
+    { blocking: true, text: "Photos lack dates and places" },
+    { blocking: false, text: "Sponsor T4 due in 6 days" },
+  ],
+  people: [
+    { person: PRIYA, role: "Applicant" },
+    { person: RAFAEL, role: "Sponsor" },
+    { person: OLENA, role: "Dependent", locked: true },
+  ],
+  events: [
+    { dot: "#c9c5c0", title: "Rafael uploaded 3 relationship photos", parts: ["Client portal", "Rafael Sharma (sponsor)"], badge: { tone: "unv", label: "Unreviewed" }, when: "Today 08:41" },
+    { dot: "#0075DE", title: "Amara opened passport (download audited)", parts: ["Request req_8if2", "role consultant"], badge: { tone: "gr", label: "Read" }, when: "Today 08:12" },
+    { dot: "#2e9d5b", title: "Advance reconciled", parts: ["Bank statement", "Lena (finance)"], badge: { tone: "ok", label: "Reconciled" }, when: "15 Oct" },
+  ],
+};
+
+const DESIGNER_MATTER_RBAR: MatterRbarData = {
+  vo: {
+    draft: "Rafael’s photos don’t show dates. Draft request: “Please add a short note with the date and place for each photo.”",
+    sources: "Sources: request DR-12, checklist v3",
+  },
+  agreement: { title: "Service agreement v2", state: "executed", parts: ["2 of 2 signed", "28 Sep", "DocuSign (planned)"] },
+  representation: { title: "Use of representative form on file", note: "Recorded separately from the agreement" },
+  note: { text: "Rafael prefers WhatsApp but we only use the portal for documents.", parts: ["Staff only", "Daniel"] },
+};
+
+const DESIGNER_MATTER_DIALOGS: MatterDialogsData = {
+  current: 2,
+  target: 3,
+  version: 12,
+  evidence: [null, null, null, { tone: "ok", label: "Evidence ready" }, ...Array.from({ length: 8 }, () => ({ tone: "chg" as const, label: "Evidence missing" }))],
+  reason: "Required facts reviewed; photo blocker tracked as a task.",
+  owners: [{ name: "Amara Osei" }, { name: "Daniel Ruiz" }],
+  reviewOn: "2026-10-30",
+  receivedOn: "2026-10-17",
+};
+
 function withoutPreloads(html: string): string {
   return html.replace(/<link rel="preload"[^>]*\/>/g, "");
 }
@@ -206,6 +284,50 @@ describe("Designer fidelity", () => {
       while (i < live.length && live[i] === captured[i]) i++;
       console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 120, i + 160) + "\nGOT " + live.slice(i - 120, i + 160));
     }
+    expect(live).toBe(captured);
+  });
+
+  it("renders the matter overview exactly as the captured Designer markup", () => {
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(MatterMarkup)));
+    const live = withoutPreloads(
+      renderToStaticMarkup(
+        createElement(SheetFrame, {
+          sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/matters/priya" },
+          header: createElement(MatterTopBar, { data: DESIGNER_MATTER_HEADER }),
+          aside: createElement(MatterRbar, { data: DESIGNER_MATTER_RBAR }),
+          styles: MATTER_CSS,
+          after: createElement(MatterDialogs, { data: DESIGNER_MATTER_DIALOGS }),
+          statusbar: {
+            timezone: "America/Toronto",
+            queue: { label: "Reminder queue healthy", detail: "0 retries" },
+            sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+          },
+        }, createElement(MatterOverview, { data: DESIGNER_MATTER })),
+      ),
+    );
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 120, i + 160) + "\nGOT " + live.slice(i - 120, i + 160));
+    }
+    expect(live).toBe(captured);
+  });
+
+  it("puts the matter hold bar between the top bar and the tabs, as the captured Designer markup does", () => {
+    const captured = region(renderToStaticMarkup(createElement(MatterMarkup, { variant: "tab-overview--hold-1" })), '<header class="top"', '<div id="content">');
+    const live = region(
+      renderToStaticMarkup(
+        createElement(SheetFrame, {
+          sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/matters/priya" },
+          header: createElement(MatterTopBar, {
+            data: { ...DESIGNER_MATTER_HEADER, hold: { reason: "Waiting on client", parts: ["Owner Amara Osei", "review 30 Oct", "deadline alerts still on"] } },
+          }),
+          statusbar: { timezone: "America/Toronto" },
+        }),
+      ),
+      '<header class="top"',
+      '<div id="content">',
+    );
     expect(live).toBe(captured);
   });
 
