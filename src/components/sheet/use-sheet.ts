@@ -3,13 +3,15 @@
 import { useEffect, useLayoutEffect, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { toast2 } from "@/components/port/kit";
-import { dialogId } from "@/modules/sheet/matter-wire";
+import { dialogId, withoutDialog } from "@/modules/sheet/matter-wire";
 import { withoutNew } from "@/modules/sheet/new-matter";
 import { sheetStateCopy } from "@/modules/sheet/present";
+import { INVITE_DIALOG } from "@/modules/sheet/staff-present";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { runNewTask, syncNewTask } from "./new-task-act";
 import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-invite-act";
+import { restoreStaffInvite, runStaffInvite, runStaffResend, runStaffRevoke } from "./staff-invite-act";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
 const NEW_MATTER = "/sheet/matters?new=1";
@@ -21,6 +23,9 @@ function icon(name: string, cls = ""): string {
 function art(name: string, px: number) {
   return `<span class="art" style="--a:${px}px" aria-hidden="true"><img src="/assets/generated/b2/${name}-160@1x.webp" srcset="/assets/generated/b2/${name}-160@2x.webp 2x" width="${px}" height="${px}" alt="" loading="lazy" decoding="async"></span>`;
 }
+
+/** How long "Hold to revoke" must be held. */
+const HOLD_MS = 900;
 
 const FILTER_TOKEN: Record<string, string> = {
   Mine: "mine",
@@ -130,6 +135,30 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         void runNewMatter(save, router).finally(() => save.removeAttribute("aria-busy"));
         return;
       }
+      // The Staff tab: Invite staff opens the Designer's dialog; Send, Resend and revoke go to the database.
+      if (target.closest("#invB") && root.querySelector("#dlgS [data-org]")) {
+        event.preventDefault();
+        openDialog("dlgS");
+        return;
+      }
+      const invite = target.closest<HTMLElement>("#dlgS [data-org]");
+      if (invite && root.contains(invite)) {
+        event.preventDefault();
+        if (invite.getAttribute("aria-busy") === "true") return;
+        invite.setAttribute("aria-busy", "true");
+        void runStaffInvite(invite, router).finally(() => invite.removeAttribute("aria-busy"));
+        return;
+      }
+      const invitation = target.closest<HTMLElement>("[data-invitation]");
+      if (invitation && root.contains(invitation)) {
+        event.preventDefault();
+        if (invitation.getAttribute("aria-busy") === "true") return;
+        // Revoking needs a press and hold (pointer or keyboard, below); a click alone does not revoke.
+        if (invitation.hasAttribute("data-hold")) return;
+        invitation.setAttribute("aria-busy", "true");
+        void runStaffResend(invitation, root, router).finally(() => invitation.removeAttribute("aria-busy"));
+        return;
+      }
       const task = target.closest<HTMLElement>("[data-new-task]");
       if (task && root.contains(task)) {
         event.preventDefault();
@@ -144,10 +173,10 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         openPalette(root);
         return;
       }
-      const invite = target.closest<HTMLElement>("[data-invite-open]");
-      if (invite && root.contains(invite)) {
+      const portalInvite = target.closest<HTMLElement>("[data-invite-open]");
+      if (portalInvite && root.contains(portalInvite)) {
         event.preventDefault();
-        openPortalInvite(invite, root);
+        openPortalInvite(portalInvite, root);
         return;
       }
       const send = target.closest<HTMLElement>("[data-invite]");
@@ -251,6 +280,28 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       }
     }, listen);
 
+    // "Hold to revoke" on a pending staff invitation: held for HOLD_MS, then revoked.
+    let hold: number | undefined;
+    const release = () => {
+      window.clearTimeout(hold);
+      hold = undefined;
+    };
+    const press = (event: Event) => {
+      const button = (event.target as HTMLElement).closest<HTMLElement>("[data-invitation][data-hold]");
+      if (!button || !root.contains(button) || button.getAttribute("aria-busy") === "true") return;
+      if (event instanceof KeyboardEvent && (event.repeat || (event.key !== "Enter" && event.key !== " "))) return;
+      event.preventDefault();
+      release();
+      hold = window.setTimeout(() => {
+        hold = undefined;
+        button.setAttribute("aria-busy", "true");
+        void runStaffRevoke(button, root, router).finally(() => button.removeAttribute("aria-busy"));
+      }, HOLD_MS);
+    };
+    root.addEventListener("pointerdown", press, listen);
+    root.addEventListener("keydown", press, listen);
+    for (const type of ["pointerup", "pointerout", "pointercancel", "keyup"]) root.addEventListener(type, release, listen);
+
     root.querySelectorAll<HTMLInputElement>('.bar input').forEach((input) => {
       if (filters?.contains(input)) {
         const preset = new URLSearchParams(window.location.search).get("q");
@@ -284,6 +335,19 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     const dialog = dialogId(dialogParam);
     if (dialog) window.setTimeout(() => openDialog(dialog), 300);
     if (dialogParam === "invite") window.setTimeout(() => reopenPortalInvite(root, params.get("pid")), 300);
+    const staffInvite = root.querySelector<HTMLDialogElement>("#dlgS");
+    if (staffInvite && staffInvite.querySelector("[data-org]")) {
+      // ?dlg=invite (coming back from step-up) reopens Invite staff with what was typed; closing drops the flag.
+      if (dialogParam === INVITE_DIALOG) {
+        window.setTimeout(() => {
+          restoreStaffInvite(staffInvite);
+          openDialog("dlgS");
+        }, 300);
+      }
+      staffInvite.addEventListener("close", () => {
+        if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
+      }, listen);
+    }
     const newMatter = root.querySelector<HTMLDialogElement>("#dlgNew");
     if (newMatter) {
       // ?new=1 (the sidebar link, or coming back from step-up) opens the dialog; closing it drops the flag.
