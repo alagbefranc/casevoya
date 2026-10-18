@@ -7,6 +7,7 @@ import { dialogId, withoutDialog } from "@/modules/sheet/matter-wire";
 import { withoutNew } from "@/modules/sheet/new-matter";
 import { sheetStateCopy } from "@/modules/sheet/present";
 import { INVITE_DIALOG } from "@/modules/sheet/staff-present";
+import { reopenAgreementDialogs, runApproveTemplate, runNewAgreement, runNewTemplate } from "./agreement-acts";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { runNewTask, syncNewTask } from "./new-task-act";
@@ -36,9 +37,13 @@ const FILTER_TOKEN: Record<string, string> = {
   Sponsors: "sponsor",
   Dependants: "dependant",
   Leads: "lead",
+  Waiting: "waiting",
+  Executed: "executed",
+  Quotes: "quote",
+  "Declined, voided, expired": "closed",
 };
 /** Pages whose `.fp-bar` chips and search filter real rows by their `data-f` tokens. */
-const FILTER_PAGES = new Set(["tasks", "clients"]);
+const FILTER_PAGES = new Set(["tasks", "clients", "agreements"]);
 
 export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
   const router = useRouter();
@@ -133,6 +138,32 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (save.getAttribute("aria-busy") === "true") return;
         save.setAttribute("aria-busy", "true");
         void runNewMatter(save, router).finally(() => save.removeAttribute("aria-busy"));
+        return;
+      }
+      // The Agreements page. Each control is keyed by its own data attribute, so the Matters and
+      // Clients pages' New matter dialog (#dlgNew) never answers here, nor these there.
+      const agreement = target.closest<HTMLElement>("[data-new-agreement]");
+      if (agreement && root.contains(agreement)) {
+        event.preventDefault();
+        if (agreement.getAttribute("aria-busy") === "true" || agreement.hasAttribute("disabled")) return;
+        agreement.setAttribute("aria-busy", "true");
+        void runNewAgreement(agreement, router).finally(() => agreement.removeAttribute("aria-busy"));
+        return;
+      }
+      const template = target.closest<HTMLElement>("[data-new-template]");
+      if (template && root.contains(template)) {
+        event.preventDefault();
+        if (template.getAttribute("aria-busy") === "true") return;
+        template.setAttribute("aria-busy", "true");
+        void runNewTemplate(template, router).finally(() => template.removeAttribute("aria-busy"));
+        return;
+      }
+      const approve = target.closest<HTMLElement>("[data-approve-template]");
+      if (approve && root.contains(approve)) {
+        event.preventDefault();
+        if (approve.getAttribute("aria-busy") === "true") return;
+        approve.setAttribute("aria-busy", "true");
+        void runApproveTemplate(approve, router).finally(() => approve.removeAttribute("aria-busy"));
         return;
       }
       // The Staff tab: Invite staff opens the Designer's dialog; Send, Resend and revoke go to the database.
@@ -355,6 +386,22 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       newMatter.addEventListener("close", () => {
         if (new URLSearchParams(window.location.search).has("new")) router.replace(withoutNew(window.location.pathname, window.location.search));
       }, listen);
+    }
+
+    const newAgreement = root.querySelector<HTMLDialogElement>("dialog#dlgNewQ");
+    if (newAgreement?.querySelector("[data-new-agreement]")) {
+      // ?dlg=agreement (from a matter page, or back from step-up) and ?dlg=template reopen the live dialogs.
+      window.setTimeout(() => reopenAgreementDialogs(root, openDialog), 300);
+      for (const live of [newAgreement, root.querySelector<HTMLDialogElement>("dialog#dlgTpl")]) {
+        live?.addEventListener("close", () => {
+          const search = new URLSearchParams(window.location.search);
+          if (!search.has("dlg") || root.querySelector("dialog[open]")) return;
+          search.delete("dlg");
+          search.delete("matter");
+          const query = search.toString();
+          router.replace(`${window.location.pathname}${query ? `?${query}` : ""}`);
+        }, listen);
+      }
     }
 
     const newTask = root.querySelector<HTMLDialogElement>("dialog#dlgTask");
