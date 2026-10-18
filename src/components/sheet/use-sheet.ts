@@ -217,6 +217,11 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       const create = target.closest<HTMLElement>(`#newB, a[href="${NEW_MATTER}"], a.add`);
       if (create && root.contains(create) && (!create.matches("a.add") || create.textContent.trim() === "New matter")) {
         event.preventDefault();
+        // The licence-suspended home pauses New: the database refuses a new matter anyway.
+        if (create.getAttribute("aria-disabled") === "true") {
+          toast2(create.getAttribute("title") || "Paused", { kind: "warn", sub: "Your licence check needs to confirm good standing first." });
+          return;
+        }
         if (root.querySelector("#dlgNew")) openDialog("dlgNew");
         else window.location.assign(NEW_MATTER);
         return;

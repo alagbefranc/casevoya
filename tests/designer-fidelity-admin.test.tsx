@@ -8,6 +8,10 @@ import { LicenceAfter, LicenceHeader, SheetLicences, type LicenceDialogsData, ty
 import { RolesMarkup } from "@/components/sheet/markup/roles";
 import { LicenceMarkup } from "@/components/sheet/markup/licence";
 import { ROLE_MATRIX } from "@/modules/staff/role-matrix";
+import { SheetHome, type HomeData } from "@/components/sheet/designer/home";
+import { SUSPENDED_CSS, SuspendedAlert, SuspendedPanel, SuspendedTopBar, type SuspendedData } from "@/components/sheet/designer/licence-suspended";
+import { LicenceSuspendedMarkup } from "@/components/sheet/markup/licence-suspended";
+import { SUSPENDED_REVEAL } from "@/modules/sheet/licence-suspended-present";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 
@@ -227,5 +231,91 @@ describe("Designer fidelity: Licences", () => {
     const html = renderToStaticMarkup(createElement(SheetLicences, { data: { ...DESIGNER_LICENCES, tab: "log", log: [] } }));
     expect(html).toContain("Nothing logged yet");
     expect(html).not.toMatch(/Northline|Amara|Tremblay/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Licence-suspended home
+// ---------------------------------------------------------------------------
+const DESIGNER_SUSPENDED: SuspendedData = {
+  alert: {
+    title: "Licence check expired on 15 Oct",
+    body: "We couldn’t confirm your CICC licence R712345 in the monthly review. New engagements and submission releases are paused until a reviewer confirms it. We emailed you and your continuity contact, Grace Lin.",
+    href: "/sheet/licence?state=expired",
+    action: "Update licence",
+  },
+  stillWorks: ["Opening every client file and its history", "Deadline monitoring and reminders", "Messages and uploads from clients", "Exporting a client’s file"],
+  paused: ["Signing new service agreements", "Releasing submissions", "Taking on new matters"],
+  footer: { title: "4 matters have deadlines in the next 30 days", note: "Reassign them to another licensed consultant so nothing is missed." },
+  reassign: {
+    note: "Only consultants with a verified licence appear here. Clients are told who now handles their file.",
+    targets: [{ name: "Grace Lin", parts: ["RCIC", "verified 2 Oct"] }],
+    matters: [
+      { name: "Priya Sharma", reference: "NL-2026-0142", note: "Submission due 24 Oct", checked: true },
+      { name: "Kofi Mensah", reference: "NL-2026-0131", note: "Biometrics follow-up 28 Oct", checked: true },
+      { name: "Tomás Duarte", reference: "NL-2026-0150", note: "Agreement to sign", checked: true },
+      { name: "Sofia Reyes", reference: "lead", note: "Consultation 21 Oct", checked: false },
+    ],
+    reason: "Temporary while my licence check is reviewed.",
+  },
+};
+
+const HOME_STUB: HomeData = {
+  greeting: "Good morning, Amara.",
+  summary: "Your licence check has expired, so some actions are paused. Your clients’ files, deadlines and history are safe.",
+  quick: { lead: "/sheet/pipeline", document: "/sheet/matters/priya?tab=documents", consultation: "/sheet/calendar", invoice: "/sheet/matters/priya?tab=billing", draft: "/sheet/drafts" },
+  gauge: [],
+  needs: [],
+  byDeadline: [],
+  tasks: [],
+};
+
+function region(html: string, open: string, close: string): string {
+  const start = html.indexOf(open);
+  expect(start, `missing ${open}`).toBeGreaterThanOrEqual(0);
+  return html.slice(start, html.indexOf(close, start));
+}
+
+describe("Designer fidelity: licence-suspended home", () => {
+  it("renders the top bar, alert, greeting, panel and Reassign work dialog exactly as the captured Designer markup", () => {
+    const part = (html: string) => region(html, '<header class="top"', '<div style="display:flex;gap:10px');
+    const captured = part(clean(renderToStaticMarkup(createElement(LicenceSuspendedMarkup))));
+    const live = part(
+      frame(
+        "/sheet",
+        createElement(SuspendedTopBar, { data: { firmName: "Northline Immigration", pills: ["Updated 2 min ago", "Your matters: 18"], newTitle: "Paused while your licence check is reviewed" } }),
+        createElement(SheetHome, {
+          data: HOME_STUB,
+          before: createElement(SuspendedAlert, { data: DESIGNER_SUSPENDED }),
+          lead: createElement(SuspendedPanel, { data: DESIGNER_SUSPENDED }),
+          reveal: SUSPENDED_REVEAL,
+        }),
+        { styles: [SUSPENDED_CSS] },
+      ),
+    );
+    same(live, captured);
+    expect(renderToStaticMarkup(createElement(LicenceSuspendedMarkup))).toContain(SUSPENDED_CSS.slice(0, 80));
+  });
+
+  it("wires the dialog by data attributes only", () => {
+    const html = renderToStaticMarkup(
+      createElement(SuspendedPanel, {
+        data: {
+          ...DESIGNER_SUSPENDED,
+          reassign: {
+            ...DESIGNER_SUSPENDED.reassign,
+            organizationId: "33333333-3333-4333-8333-333333333333",
+            fromMembershipId: "44444444-4444-4444-8444-444444444444",
+            targets: [{ name: "Sam Lee", parts: ["RCIC", "verified 2 Oct"], membershipId: "55555555-5555-4555-8555-555555555555" }],
+            matters: [{ name: "Ana Diaz", reference: "CA-2026-0001", note: "Due 1 Nov", checked: true, matterId: "66666666-6666-4666-8666-666666666666" }],
+          },
+        },
+      }),
+    );
+    expect(html).toContain('data-open="dlgRe"');
+    expect(html).toContain('data-reassign-from="44444444-4444-4444-8444-444444444444" data-org="33333333-3333-4333-8333-333333333333"');
+    expect(html).toContain('data-matter="66666666-6666-4666-8666-666666666666"');
+    expect(html).toContain("Reassign 1 matter<");
+    expect(html).not.toContain("Clients notified");
   });
 });

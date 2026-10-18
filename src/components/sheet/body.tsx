@@ -27,6 +27,9 @@ import { LicenceAfter, LicenceHeader, SheetLicences } from "@/components/sheet/d
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import { loadSheetLicence } from "@/modules/sheet/licence-load";
 import { ROLE_MATRIX } from "@/modules/staff/role-matrix";
+import { SUSPENDED_CSS, SuspendedAlert, SuspendedPanel, SuspendedTopBar } from "@/components/sheet/designer/licence-suspended";
+import { loadSheetLicenceSuspended } from "@/modules/sheet/licence-suspended-load";
+import { SUSPENDED_REVEAL } from "@/modules/sheet/licence-suspended-present";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
 import { homeRoute } from "@/lib/auth/home-route";
@@ -81,6 +84,26 @@ export async function SheetBody({
     if (home === "/portal" || home === "/start-trial") redirect(home);
   }
   // The Designer home with the firm's own records, in sample mode too. Sample records are real rows marked sample.
+  // The licence-suspended home: the Sheet home for a consultant whose own licence check recorded an
+  // adverse result (ORG-05). The home shows it too, so the consultant can't miss it.
+  if ((page === "index" || page === "licence-suspended") && (access.kind === "live" || access.kind === "sample")) {
+    const suspended = await loadSheetLicenceSuspended(access.staff);
+    if (!suspended && page === "licence-suspended") redirect("/sheet/licence");
+    if (suspended) {
+      return (
+        <SheetScreen page={page}>
+          <SheetFrame sidebar={suspended.chrome.sidebar} header={<SuspendedTopBar data={suspended.top} />} rbar={suspended.rbar} styles={[SUSPENDED_CSS]} statusbar={suspended.chrome.statusbar}>
+            <SheetHome
+              data={suspended.home}
+              before={<SuspendedAlert data={suspended.suspended} />}
+              lead={<SuspendedPanel data={suspended.suspended} />}
+              reveal={SUSPENDED_REVEAL}
+            />
+          </SheetFrame>
+        </SheetScreen>
+      );
+    }
+  }
   if (page === "index" && (access.kind === "live" || access.kind === "sample")) {
     const { chrome, rbar, home, missingPolicies } = await loadSheetHome(access.staff);
     // Until the firm publishes its portal terms and privacy notice, no invited client can join: say so here.
