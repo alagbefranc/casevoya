@@ -86,6 +86,7 @@ import { restoreStaffInvite, runStaffInvite, runStaffResend, runStaffRevoke } fr
 import { reopenGrantDialog, runGrantCreate } from "./grants-acts";
 import { mountIntakeBuilder } from "./intake-builder-acts";
 import { runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
+import { mountRetentionSlider, runRetentionSave } from "./retention-act";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
 import {
   mountIntegrations,
@@ -527,6 +528,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         button.setAttribute("aria-busy", "true");
         void run().finally(() => button.removeAttribute("aria-busy"));
       };
+      // Settings > Retention (firm owner): Save stores the slider's period as a new policy version.
+      const retentionSave = target.closest<HTMLElement>("[data-retention-save]");
+      if (retentionSave && root.contains(retentionSave)) {
+        event.preventDefault();
+        busyRun(retentionSave, () => runRetentionSave(retentionSave, router));
+        return;
+      }
       const bookingSubmit = target.closest<HTMLElement>("[data-booking-submit]");
       if (bookingSubmit && root.contains(bookingSubmit)) {
         event.preventDefault();
@@ -858,6 +866,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
       }, listen);
     }
+    // Settings > Retention: the firm owner's slider moves (firm setup's own k2Slider).
+    if (page === "settings") mountRetentionSlider(root);
     // ?dlg=terms|privacy (coming back from step-up) reopens that publish dialog with what was typed.
     const policyKind = policyKindForDialog(dialogParam);
     for (const kind of POLICY_KINDS) {

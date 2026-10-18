@@ -7165,6 +7165,45 @@ export type Database = {
         }
         Relationships: []
       }
+      retention_policy_versions: {
+        Row: {
+          approved_at: string
+          approved_by: string
+          created_at: string
+          created_by: string | null
+          id: string
+          organization_id: string
+          period_count: number
+          source: string
+          unit: string
+          version: number
+        }
+        Insert: {
+          approved_at: string
+          approved_by: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id: string
+          period_count: number
+          source: string
+          unit?: string
+          version: number
+        }
+        Update: {
+          approved_at?: string
+          approved_by?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id?: string
+          period_count?: number
+          source?: string
+          unit?: string
+          version?: number
+        }
+        Relationships: []
+      }
       rule_definitions: {
         Row: {
           applicant_context: string | null
@@ -9497,6 +9536,10 @@ export type Database = {
         Args: { p_org: string }
         Returns: string | null
       }
+      firm_subscription_usage: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
       firm_staff_directory: {
         Args: { p_organization_id: string }
         Returns: {
@@ -10470,6 +10513,14 @@ export type Database = {
       set_firm_reminder_offsets: {
         Args: { p_days: number[] }
         Returns: undefined
+      }
+      set_firm_retention_policy: {
+        Args: {
+          p_expected_version: number
+          p_organization_id: string
+          p_years: number
+        }
+        Returns: number
       }
       set_matter_on_hold: {
         Args: {

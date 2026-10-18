@@ -156,6 +156,8 @@ import {
 import { ComposioDialog } from "@/components/sheet/designer/settings-integrations";
 import { composioDialog, integrationsData, notificationPrefsData } from "@/modules/sheet/settings-integrations-present";
 import { SettingsMarkup } from "@/components/sheet/markup/settings";
+import { SettingsBillingHeader, SheetRetention, SheetSubscription, type RetentionData, type SettingsBillingTab, type SubscriptionData } from "@/components/sheet/designer/settings-billing";
+import { retentionPage, subscriptionPage, subscriptionPill } from "@/modules/sheet/settings-billing-present";
 import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam, type SecurityData, type TeamData } from "@/components/sheet/designer/settings";
 import { securityData, teamData } from "@/modules/sheet/settings-present";
 
@@ -3515,5 +3517,129 @@ describe("Designer fidelity: Settings, Integrations and Notifications tabs", () 
     // Stripping the live attributes from a planned row leaves the Designer's "Not connected" row.
     const zoom = region(live, '<img src="/assets/logos/zoom.svg"', "</span></div>").replace(/ (disabled=""|title="[^"]*")/g, "");
     expect(capturedInt).toContain(zoom);
+  });
+});
+
+describe("Designer fidelity: Settings, Subscription and Retention", () => {
+  const DESIGNER_SUBSCRIPTION: SubscriptionData = {
+    payer: "Northline",
+    rows: [
+      ["Plan", "Practice (prices aren’t set yet)"],
+      ["State", "Active since 2 Sep 2026"],
+      ["Seats", "6 of 10"],
+      ["Storage", "6.2 of 50 GB"],
+      ["Invoices from Casevoya", "Sent to Lena Park"],
+      ["If you cancel", "New work stops after the paid period. Exports stay open for at least 90 days; records are kept as your contract says."],
+    ],
+    alert: null,
+    note: null,
+  };
+  const DESIGNER_RETENTION: RetentionData = {
+    intro: "How long closed files are kept. The Canada RCIC baseline is at least six years after closing; holds can make it longer (SEC-07).",
+    slider: { value: 12, min: 6, max: 15 },
+    rows: [
+      ["Policy version", ["R-2", "approved by Amara Osei, 2 Sep 2026"]],
+      ["Applies to", ["Matters closed after 2 Sep 2026"]],
+      ["Legal holds", ["1 active", "NL-2025-0301"]],
+    ],
+    note: "Retention periods are demo settings to check against real policy before launch.",
+    alert: null,
+    save: null,
+  };
+  const STATUSBAR = {
+    timezone: "America/Toronto",
+    queue: { label: "Reminder queue healthy", detail: "0 retries" },
+    sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+  };
+
+  function page(tab: SettingsBillingTab, body: ReturnType<typeof createElement>) {
+    return withoutPreloads(
+      renderToStaticMarkup(
+        createElement(SheetFrame, {
+          sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/settings" },
+          header: createElement(SettingsBillingHeader, { firmName: "Northline Immigration", pill: "Plan: Practice (fictional)", tab }),
+          statusbar: STATUSBAR,
+        }, body),
+      ),
+    );
+  }
+
+  /** The capture keeps the Team tab's Offboard dialog in the page; it belongs to that tab, not these. */
+  function captured(variant: string) {
+    return withoutPreloads(renderToStaticMarkup(createElement(SettingsMarkup, { variant }))).replace(
+      /<dialog class="dlg wide" id="dlgOff"[\s\S]*?<\/dialog>/,
+      "",
+    );
+  }
+
+  function same(live: string, expected: string) {
+    if (live !== expected) {
+      let i = 0;
+      while (i < live.length && live[i] === expected[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + expected.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+    }
+    expect(live).toBe(expected);
+  }
+
+  it("renders the Subscription tab exactly as the captured Designer markup", () => {
+    same(page("billing", createElement(SheetSubscription, { data: DESIGNER_SUBSCRIPTION })), captured("tab-billing"));
+  });
+
+  it("renders the Retention tab exactly as the captured Designer markup", () => {
+    same(page("retention", createElement(SheetRetention, { data: DESIGNER_RETENTION })), captured("tab-retention"));
+  });
+
+  it("shows a trial firm its stored state and real counts, with no prices, plan amounts or sample firm", () => {
+    const now = new Date("2026-10-18T15:00:00Z");
+    const subscription = { status: "trial", trial_started_at: "2026-10-10T15:00:00Z", trial_ends_at: "2026-10-24T15:00:00Z" };
+    const data = subscriptionPage({
+      firmName: "Walk Test Immigration",
+      subscription,
+      usage: { seats_active: 2, seats_invited: 1, active_matters: 3, sample_matters: 3, storage_bytes: 0, vo_runs_month: 4, emails_month: 0, month_start: "2026-10-01" },
+      timeZone: "America/Toronto",
+      now,
+    });
+    expect(subscriptionPill(subscription, now)).toBe("Subscription: Trial");
+    const html = renderToStaticMarkup(createElement(SheetSubscription, { data }));
+    expect(html).toContain("What Walk Test Immigration pays Casevoya.");
+    expect(html).toContain("<dt>State</dt><dd>Trial since 10 Oct 2026, ends 24 Oct 2026</dd>");
+    expect(html).toContain("<dt>Seats</dt><dd>2 in use, 1 invited. No seat limit is set.</dd>");
+    expect(html).toContain("<dt>Active matters</dt><dd>3 (3 sample). No limit is set.</dd>");
+    expect(html).toContain("<dt>Vo runs this month</dt><dd>4 since 1 Oct</dd>");
+    expect(html).not.toMatch(/Northline|Lena|Practice|\$|CAD|\b(129|299|599)\b|90 days/);
+    // The live-only note is the Designer's .fp-note with its info icon.
+    expect(html).toMatch(/<p class="fp-note rv" style="--i:2"><svg class="ic s" aria-hidden="true"><use href="[^"]*#i-info"><\/use><\/svg> Casevoya sets plans and prices/);
+  });
+
+  it("wires the owner's Save by data attributes, and states no statutory period", () => {
+    const data = retentionPage({
+      policy: { unit: "years", count: 7 },
+      latest: null,
+      setup: { at: "2026-10-10T15:00:00Z", by: "Synthetic Owner" },
+      holds: { count: 0, references: [] },
+      organizationId: "00000000-0000-4000-8000-000000000001",
+      canSave: true,
+      timeZone: "America/Toronto",
+    });
+    const html = renderToStaticMarkup(createElement(SheetRetention, { data }));
+    expect(html).toContain(
+      '<div class="fp-row" style="margin-top:12px"><button class="btn p sm" data-retention-save="" data-org="00000000-0000-4000-8000-000000000001" data-version="1">Save retention period</button></div>',
+    );
+    expect(html).toContain('aria-valuemin="1" aria-valuemax="15" aria-valuenow="7" aria-valuetext="7 years"');
+    expect(html).toContain('<dd>R-1 <span class="sep" aria-hidden="true"></span> set in firm setup by Synthetic Owner, 10 Oct 2026</dd>');
+    expect(html).toContain("<dt>Legal holds</dt><dd>None active</dd>");
+    expect(html).not.toMatch(/six years|RCIC|SEC-07|demo settings|Amara|NL-2025/);
+    // Without the live Save row, the panel is the Designer's.
+    expect(html.replace(/<div class="fp-row"[\s\S]*?<\/div>/, "")).toMatch(/<\/dl><\/div><\/section><p class="fp-note rv" style="--i:2">/);
+
+    const viewer = renderToStaticMarkup(
+      createElement(SheetRetention, {
+        data: retentionPage({ policy: null, latest: null, setup: null, holds: { count: 0, references: [] }, organizationId: "x", canSave: false, timeZone: "America/Toronto" }),
+      }),
+    );
+    expect(viewer).not.toContain("data-retention-save");
+    expect(viewer).toContain("No retention period is set");
+    expect(viewer).toContain("<dt>Policy version</dt><dd>Not set</dd>");
+
   });
 });

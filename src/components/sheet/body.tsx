@@ -27,6 +27,8 @@ import { SettingsFirmAfter, SettingsFirmHeader, SheetSettingsBranding, SheetSett
 import { loadSheetSettingsFirm } from "@/modules/sheet/settings-firm-load";
 import { settingsTab } from "@/modules/sheet/settings-firm-present";
 import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam } from "@/components/sheet/designer/settings";
+import { SettingsBillingHeader, SheetRetention, SheetSubscription } from "@/components/sheet/designer/settings-billing";
+import { loadSheetRetention, loadSheetSubscription } from "@/modules/sheet/settings-billing-load";
 import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
 import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
 import { ComposioDialog, IntegrationsSettingsHeader, SheetIntegrations, SheetNotificationPrefs } from "@/components/sheet/designer/settings-integrations";
@@ -390,6 +392,37 @@ export async function SheetBody({
       <SheetScreen page={page}>
         <SheetFrame sidebar={chrome.sidebar} header={<SettingsHeader data={header} />} statusbar={chrome.statusbar}>
           {content}
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Subscription (ADM-02): the firm's stored subscription state and real usage counts.
+  // Keyed per tab so the Sheet's scripts mount again when the tab changes.
+  if (page === "settings" && query.tab === "billing" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetSubscription(access.staff);
+    return (
+      <SheetScreen key={"settings-billing"} page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<SettingsBillingHeader firmName={access.staff.organizationName} pill={loaded.pill} tab={"billing"} />}
+          statusbar={loaded.chrome.statusbar}
+        >
+          <SheetSubscription data={loaded.page} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Retention (SEC-07): the firm's own retention period, its version and legal holds.
+  if (page === "settings" && query.tab === "retention" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetRetention(access.staff);
+    return (
+      <SheetScreen key={"settings-retention"} page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<SettingsBillingHeader firmName={access.staff.organizationName} pill={loaded.pill} tab={"retention"} />}
+          statusbar={loaded.chrome.statusbar}
+        >
+          <SheetRetention data={loaded.page} />
         </SheetFrame>
       </SheetScreen>
     );
