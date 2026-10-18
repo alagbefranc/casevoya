@@ -16,6 +16,8 @@ import { GrantDialog, GrantsHeader, SheetGrants, type GrantDialogData, type Gran
 import { GrantsMarkup } from "@/components/sheet/markup/grants";
 import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder, type IntakeBuilderData, type IntakeTab } from "@/components/sheet/designer/intake-builder";
 import { IntakeBuilderMarkup } from "@/components/sheet/markup/intake-builder";
+import { SheetTemplates, TemplatesHeader, type TemplatesData, type TemplatesTab } from "@/components/sheet/designer/templates";
+import { TemplatesMarkup } from "@/components/sheet/markup/templates";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 
@@ -460,5 +462,103 @@ describe("Designer fidelity: Intake form builder", () => {
     expect(html).toContain('data-intake-publish="1"');
     expect(html).toContain('data-goto-tab="preview"');
     expect(html).not.toContain('class="ai"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Templates
+// ---------------------------------------------------------------------------
+const CA = (right: string) => ({ left: "Canada", right });
+const EN_FR = { left: "English", right: "French deferred" };
+const DESIGNER_TEMPLATES: TemplatesData = {
+  tab: "program",
+  pills: ["2 sources need review"],
+  reviewCount: 2,
+  program: {
+    rows: [
+      { template: "Spousal sponsorship, outland", jurisdiction: CA("IRCC"), version: "v4", state: { tone: "ok", label: "Published" }, source: { left: "Casevoya central", right: "firm override on checklist" }, reviewer: "Amara Osei", effective: "2 Sep 2026", pinned: { left: "3 on v4", right: "1 on v3" } },
+      { template: "Express Entry PR", jurisdiction: CA("IRCC"), version: "v3", state: { tone: "chg", label: "Source review required" }, source: "Casevoya central", reviewer: "—", effective: "1 Jul 2026", pinned: "2" },
+      { template: "Study permit", jurisdiction: CA("IRCC"), version: "v5", state: { tone: "ok", label: "Published" }, source: "Casevoya central", reviewer: "Amara Osei", effective: "15 Aug 2026", pinned: "4" },
+      { template: "Work permit (LMIA-based)", jurisdiction: CA("IRCC"), version: "v2", state: { tone: "gr", label: "Draft" }, source: "Firm template", reviewer: "Waiting", effective: "—", pinned: "0" },
+    ],
+    note: "Firm overrides are labelled so you can tell them apart from centrally reviewed content.",
+  },
+  messages: {
+    rows: [
+      { template: "Document requested", channel: "Email + portal", usedBy: "Automations, staff", languages: EN_FR, state: { tone: "ok", label: "Approved" } },
+      { template: "Deadline reminder 14/7/3/1 days", channel: "Email, SMS", usedBy: "Automation “Deadline reminders”", languages: EN_FR, state: { tone: "ok", label: "Approved" } },
+      { template: "Payment received", channel: "Email", usedBy: "Finance", languages: EN_FR, state: { tone: "ok", label: "Approved" } },
+      { template: "Refusal next steps", channel: { left: "Portal only", right: "consultant sends" }, usedBy: "Consultant only, never automated", languages: "English", state: { tone: "rev", label: "Needs consultant wording" } },
+    ],
+  },
+  checklists: {
+    cards: [
+      { title: { left: "Spousal sponsorship", right: "applicant" }, note: { left: "14 items", right: "conditional on marital history" }, tag: "v4" },
+      { title: { left: "Spousal sponsorship", right: "sponsor" }, note: { left: "9 items", right: "income rules from source S-114" }, tag: "v4" },
+      { title: "Dependant child 18+", note: { left: "6 items", right: "own consent required" }, tag: "v2" },
+      { title: "Closure", note: { left: "8 items", right: "retention date set at closing" }, tag: "v1" },
+    ],
+  },
+  sources: {
+    kpis: [
+      { label: "Review required", value: "2", count: 2, note: "1 overdue", warn: true, href: "?tab=sources" },
+      { label: "Published rules", value: "46", count: 46, note: "in 4 templates", href: "#" },
+      { label: "Next scheduled check", value: "21 Oct", note: "Study permit income rule", href: "#" },
+      { label: "Affected matters", value: "3", count: 3, note: "by the 2 open reviews", href: "#" },
+    ],
+    rows: [
+      { rule: "Proof of funds amount (S-071)", href: "?tab=rule", jurisdiction: CA("Express Entry"), state: { tone: "chg", label: "Review required" }, effective: "7 Jul 2026", reviewer: "Amara Osei (owner)", lastChecked: "1 Jul 2026", nextReview: { num: { left: "Overdue", right: "1 Oct" } }, affected: "2 matters" },
+      { rule: "Police certificate validity (S-102)", jurisdiction: CA("all PR"), state: { tone: "rev", label: "Requested review" }, effective: "1 Jan 2026", reviewer: "Grace Lin", lastChecked: "12 Sep 2026", nextReview: "12 Oct 2026", affected: "1 matter" },
+      { rule: "Sponsor income evidence (S-114)", jurisdiction: CA("spousal"), state: { tone: "ok", label: "Published" }, effective: "2 Sep 2026", reviewer: "Amara Osei", lastChecked: "12 Oct 2026", nextReview: "12 Nov 2026", affected: "3 matters" },
+      { rule: "Biometrics requirement (S-033)", jurisdiction: CA("all temporary"), state: { tone: "gr", label: "Suspended" }, effective: "—", reviewer: "Amara Osei", lastChecked: "30 Sep 2026", nextReview: "—", affected: "0" },
+    ],
+  },
+  rule: {
+    title: { left: "Proof of funds amount", right: "S-071" },
+    summary: "Express Entry template v3. The published table changed on 7 Jul 2026 and this rule still points to the older version.",
+    claim: "“Applicants without a valid job offer must show settlement funds at the level in IRCC’s current table for their family size.”",
+    note: "Interpretation note (Amara Osei): the amount comes from the table on the day of submission; we don’t copy numbers into client messages.",
+    diff: [
+      { label: "Source version", old: "table updated 2025", new: "table updated 7 Jul 2026" },
+      { label: "Tests", old: "3 of 3 passing", new: { left: "1 of 3 failing", right: "family size 4 amount changed" } },
+    ],
+    tests: [
+      { case: "Single applicant, no job offer", expected: "Shows the current table link", result: "Pass" },
+      { case: "Family of 4", expected: "Uses amount from current table", result: { tone: "bad", label: "Fail" } },
+      { case: "Valid job offer", expected: "Rule doesn’t apply", result: "Pass" },
+    ],
+    source: {
+      publisher: "Immigration, Refugees and Citizenship Canada",
+      url: "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/documents/proof-funds.html",
+      linkText: "Express Entry: proof of funds",
+      appliesTo: "Settlement funds table, by family size",
+      version: "Page as captured 1 Jul 2026 (stale)",
+      checked: "1 Jul 2026",
+      reviewer: { left: "Amara Osei", right: "review overdue" },
+      state: { tone: "unv", label: "Not yet checked" },
+    },
+    actions: { role: "licensed consultant" },
+  },
+};
+
+describe("Designer fidelity: Templates", () => {
+  for (const [tab, variant] of [["program", "default"], ["messages", "tab-messages"], ["checklists", "tab-checklists"], ["sources", "tab-sources"], ["rule", "tab-rule"]] as [TemplatesTab, string][]) {
+    it(`renders the Templates page (${tab} tab) exactly as the captured Designer markup`, () => {
+      const captured = clean(renderToStaticMarkup(createElement(TemplatesMarkup, { variant })));
+      const data = { ...DESIGNER_TEMPLATES, tab };
+      const live = frame("/sheet/templates", createElement(TemplatesHeader, { data }), createElement(SheetTemplates, { data }));
+      same(live, captured);
+    });
+  }
+
+  it("shows honest empty states and no rule-review buttons without a workflow behind them", () => {
+    const empty: TemplatesData = { ...DESIGNER_TEMPLATES, program: { ...DESIGNER_TEMPLATES.program, rows: [] }, checklists: { cards: [] }, sources: { ...DESIGNER_TEMPLATES.sources, rows: [] }, rule: null };
+    const html = ["program", "checklists", "sources", "rule"].map((tab) => renderToStaticMarkup(createElement(SheetTemplates, { data: { ...empty, tab: tab as TemplatesTab } }))).join("");
+    expect(html).toContain("No program templates yet");
+    expect(html).toContain("No checklist templates yet");
+    expect(html).toContain("No rules to review");
+    expect(html).toContain("No rule chosen");
+    const rule = renderToStaticMarkup(createElement(SheetTemplates, { data: { ...DESIGNER_TEMPLATES, tab: "rule", rule: { ...DESIGNER_TEMPLATES.rule!, actions: null } } }));
+    expect(rule).not.toContain("Approve version");
   });
 });

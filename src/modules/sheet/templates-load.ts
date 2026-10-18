@@ -1,0 +1,122 @@
+import "server-only";
+import type { TemplatesTab } from "@/components/sheet/designer/templates";
+import { createClient } from "@/lib/supabase/server";
+import { isUuid } from "@/lib/tenant/context";
+import { EMAIL_TEMPLATES } from "@/modules/email/designs/catalog";
+import { loadSheetChrome, memberNames } from "@/modules/sheet/chrome-load";
+import type { SheetStaff } from "@/modules/sheet/load";
+import { isoDateInTimeZone } from "@/modules/sheet/present";
+import { messageRows, programRows, templatesData, type CatalogRow, type RuleRow } from "@/modules/sheet/templates-present";
+
+const READ = 200;
+
+function tally(values: readonly (string | null)[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const value of values) if (value) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return counts;
+}
+
+/**
+ * The Designer's Templates page, read as the signed-in staff member: program packs and rule
+ * versions the firm may see (RLS), the firm's agreement templates, and the approved email
+ * catalog. Read only.
+ */
+export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, view: string | undefined, now: Date = new Date()) {
+  const supabase = await createClient({ organizationId: staff.organizationId });
+  const org = staff.organizationId;
+  const [chrome, packs, pinnedMatters, agreementTemplates, agreements, versions, definitions, reviews, evidence, items, names] = await Promise.all([
+    loadSheetChrome(staff, "/sheet/templates"),
+    supabase.from("rule_pack_versions").select("id, program_key, jurisdiction, pack_version, status, organization_id, next_review_at").order("updated_at", { ascending: false }).limit(READ),
+    supabase.from("matters").select("program_pack_id").eq("organization_id", org).not("program_pack_id", "is", null).limit(1000),
+    supabase.from("agreement_templates").select("id, name, kind, status, approved_at, approved_by, version").eq("organization_id", org).order("updated_at", { ascending: false }).limit(READ),
+    supabase.from("agreements").select("template_id").eq("organization_id", org).not("template_id", "is", null).limit(1000),
+    supabase.from("rule_versions").select("id, definition_id, version_number, status, effective_from, next_review_at, claim, applicability_note").order("updated_at", { ascending: false }).limit(READ),
+    supabase.from("rule_definitions").select("id, stable_key, jurisdiction, program_key").limit(READ),
+    supabase.from("professional_reviews").select("rule_version_id, reviewer_membership_id, decided_at").eq("organization_id", org).order("decided_at", { ascending: false }).limit(READ),
+    supabase.from("rule_evidence").select("rule_version_id, snapshot_id, source_section").limit(READ),
+    supabase.from("rule_pack_items").select("pack_id, rule_version_id").limit(1000),
+    memberNames(supabase, org),
+  ]);
+
+  const snapshotIds = [...new Set((evidence.data ?? []).map((row) => row.snapshot_id))];
+  const snapshots = snapshotIds.length ? await supabase.from("source_snapshots").select("id, source_id, publisher, final_url, retrieved_at").in("id", snapshotIds) : null;
+  const sourceIds = [...new Set((snapshots?.data ?? []).map((row) => row.source_id))];
+  const sources = sourceIds.length ? await supabase.from("official_sources").select("id, title").in("id", sourceIds) : null;
+
+  const pinned = tally((pinnedMatters.data ?? []).map((row) => row.program_pack_id));
+  const used = tally((agreements.data ?? []).map((row) => row.template_id));
+  const definitionOf = new Map((definitions.data ?? []).map((row) => [row.id, row]));
+  const reviewerOf = new Map<string, string>();
+  for (const review of reviews.data ?? []) {
+    if (!reviewerOf.has(review.rule_version_id)) reviewerOf.set(review.rule_version_id, names.get(review.reviewer_membership_id) ?? "Licensed reviewer");
+  }
+  const snapshotOf = new Map((snapshots?.data ?? []).map((row) => [row.id, row]));
+  const titleOf = new Map((sources?.data ?? []).map((row) => [row.id, row.title]));
+  const packMatters = new Map<string, number>();
+  for (const item of items.data ?? []) packMatters.set(item.rule_version_id, (packMatters.get(item.rule_version_id) ?? 0) + (pinned.get(item.pack_id) ?? 0));
+
+  const rules: RuleRow[] = (versions.data ?? []).flatMap((row) => {
+    const definition = definitionOf.get(row.definition_id);
+    if (!definition) return [];
+    const cited = (evidence.data ?? []).filter((item) => item.rule_version_id === row.id);
+    const captured = cited.map((item) => ({ item, snapshot: snapshotOf.get(item.snapshot_id) })).filter((pair) => pair.snapshot);
+    const latest = [...captured].sort((a, b) => (b.snapshot?.retrieved_at ?? "").localeCompare(a.snapshot?.retrieved_at ?? ""))[0];
+    return [
+      {
+        id: row.id,
+        stableKey: definition.stable_key,
+        versionNumber: row.version_number,
+        jurisdiction: definition.jurisdiction,
+        programKey: definition.program_key,
+        status: row.status,
+        effectiveFrom: row.effective_from,
+        nextReviewAt: row.next_review_at,
+        claim: row.claim,
+        applicabilityNote: row.applicability_note,
+        reviewer: reviewerOf.get(row.id) ?? null,
+        lastChecked: latest?.snapshot?.retrieved_at ?? null,
+        affected: packMatters.get(row.id) ?? 0,
+        source: latest?.snapshot
+          ? {
+              publisher: latest.snapshot.publisher,
+              url: latest.snapshot.final_url,
+              title: titleOf.get(latest.snapshot.source_id) ?? null,
+              retrievedAt: latest.snapshot.retrieved_at,
+              section: latest.item.source_section,
+            }
+          : null,
+      },
+    ];
+  });
+
+  const catalog: CatalogRow[] = Object.values(EMAIL_TEMPLATES).map((template) => ({ name: template.name, audience: template.audience, status: template.status }));
+  const agreementRows = (agreementTemplates.data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    kind: row.kind,
+    status: row.status,
+    approvedAt: row.approved_at,
+    approvedBy: row.approved_by ? (names.get(row.approved_by) ?? null) : null,
+    version: row.version,
+  }));
+  const packRows = (packs.data ?? []).map((row) => ({
+    id: row.id,
+    programKey: row.program_key,
+    jurisdiction: row.jurisdiction,
+    packVersion: row.pack_version,
+    status: row.status,
+    firm: row.organization_id !== null,
+    nextReviewAt: row.next_review_at,
+  }));
+  const selected = view && isUuid(view) ? (rules.find((rule) => rule.id === view) ?? null) : null;
+  const data = templatesData({
+    tab,
+    program: programRows(packRows, pinned, agreementRows, used),
+    messages: messageRows(catalog),
+    rules,
+    packs: packRows.length,
+    selected,
+    today: isoDateInTimeZone(now, staff.timezone),
+  });
+  return { chrome, data };
+}

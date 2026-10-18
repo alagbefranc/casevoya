@@ -34,6 +34,8 @@ import { GrantDialog, GrantsHeader, SheetGrants } from "@/components/sheet/desig
 import { loadSheetGrants } from "@/modules/sheet/grants-load";
 import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder } from "@/components/sheet/designer/intake-builder";
 import { loadSheetIntakeBuilder } from "@/modules/sheet/intake-builder-load";
+import { SheetTemplates, TemplatesHeader } from "@/components/sheet/designer/templates";
+import { loadSheetTemplates } from "@/modules/sheet/templates-load";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
 import { homeRoute } from "@/lib/auth/home-route";
@@ -235,6 +237,18 @@ export async function SheetBody({
           after={<GrantDialog data={loaded.dialog} />}
         >
           <SheetGrants data={loaded.page} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Practice > Templates: program and agreement templates, the approved email catalog, checklists, and the rule source register (read only).
+  if (page === "templates" && (access.kind === "live" || access.kind === "sample")) {
+    const tab = query.tab === "messages" || query.tab === "checklists" || query.tab === "sources" || query.tab === "rule" ? query.tab : "program";
+    const loaded = await loadSheetTemplates(access.staff, tab, query.view);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={loaded.chrome.sidebar} header={<TemplatesHeader data={loaded.data} />} statusbar={loaded.chrome.statusbar}>
+          <SheetTemplates data={loaded.data} />
         </SheetFrame>
       </SheetScreen>
     );
