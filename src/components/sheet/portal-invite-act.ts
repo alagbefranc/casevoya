@@ -1,0 +1,92 @@
+"use client";
+
+import { toast2 } from "@/components/port/kit";
+import { invitePortalPerson } from "@/modules/sheet/actions";
+import { needsStepUp } from "@/modules/sheet/matter-wire";
+import { acceptPath, expiryLabel, inviteStepUpLocation, portalRoleFromLabel, withoutInvite } from "@/modules/sheet/portal-invite";
+
+type Router = { replace: (href: string) => void; refresh: () => void };
+
+const DIALOG = "dlgC";
+
+function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] || "them";
+}
+
+/** Points "Preview their screens" at the accept screen for the chosen role. */
+function syncPreview(dialog: HTMLElement) {
+  const role = portalRoleFromLabel(dialog.querySelector<HTMLSelectElement>("#cR")?.value);
+  const preview = dialog.querySelector<HTMLAnchorElement>(".df a.btn");
+  if (role && preview) preview.setAttribute("href", acceptPath(role));
+}
+
+/** Opens the dialog for the person whose card was clicked: their role on the matter and their email. */
+export function openPortalInvite(button: HTMLElement, root: HTMLElement) {
+  const dialog = root.querySelector<HTMLDialogElement>(`#${DIALOG}`);
+  if (!dialog) return;
+  dialog.dataset.person = button.dataset.person ?? "";
+  dialog.dataset.name = button.dataset.name ?? "";
+  const role = dialog.querySelector<HTMLSelectElement>("#cR");
+  if (role && button.dataset.role) role.value = button.dataset.role;
+  const email = dialog.querySelector<HTMLInputElement>("#cE");
+  if (email) email.value = button.dataset.email ?? "";
+  syncPreview(dialog);
+  if (role && !role.dataset.wired) {
+    role.dataset.wired = "1";
+    role.addEventListener("change", () => syncPreview(dialog));
+  }
+  if (!dialog.open) dialog.showModal();
+}
+
+/** Coming back from step-up (`?dlg=invite&pid=`): reopen the dialog for the same person. */
+export function reopenPortalInvite(root: HTMLElement, personId: string | null) {
+  if (!personId) return;
+  const button = [...root.querySelectorAll<HTMLElement>("[data-invite-open]")].find((item) => item.dataset.person === personId);
+  if (button) openPortalInvite(button, root);
+}
+
+async function copy(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sends the invitation through the server action. The database decides; a step-up refusal
+ * sends the person to /mfa?step=6 and back here with the dialog open for the same person.
+ * The email is queued without the link, so the private link is copied for the inviter to give.
+ */
+export async function runPortalInvite(button: HTMLElement, router: Router) {
+  const dialog = button.closest("dialog");
+  if (!dialog) return;
+  const personId = dialog.dataset.person ?? "";
+  const result = await invitePortalPerson({
+    organizationId: button.dataset.org ?? "",
+    matterId: button.dataset.matter ?? "",
+    personId,
+    roleLabel: dialog.querySelector<HTMLSelectElement>("#cR")?.value ?? "",
+    email: dialog.querySelector<HTMLInputElement>("#cE")?.value ?? "",
+  });
+  if ("error" in result) {
+    if (needsStepUp(result.error)) {
+      window.location.assign(inviteStepUpLocation(window.location.pathname, window.location.search, personId));
+      return;
+    }
+    toast2(result.error, { kind: "bad", sub: "No invitation was sent." });
+    return;
+  }
+  const name = firstName(dialog.dataset.name ?? "");
+  const expires = expiryLabel(result.expiresAt, Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const when = expires ? `It works once and expires ${expires}.` : "It works once and expires in 7 days.";
+  dialog.close();
+  if (await copy(result.link)) {
+    toast2(`Invitation sent to ${name}`, { kind: "ok", sub: `Their private link is copied. The email has no link, so give it to them yourself. ${when}`, duration: 12000 });
+  } else {
+    toast2(`Invitation sent to ${name}`, { kind: "ok", sub: `The email has no link. Give them this one yourself: ${result.link} ${when}`, duration: 60000 });
+  }
+  router.replace(withoutInvite(window.location.pathname, window.location.search));
+  router.refresh();
+}

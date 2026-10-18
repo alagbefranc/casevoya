@@ -5,6 +5,7 @@ import {
   type MatterDocumentRow,
   type MatterEvent,
   type MatterHeaderData,
+  type MatterInviteData,
   type MatterPageData,
   type MatterPersonCard,
   type MatterRbarData,
@@ -43,6 +44,9 @@ import {
   clockTime,
 } from "@/modules/sheet/matter-present";
 import { governmentBadge, programLabel } from "@/modules/sheet/matters-present";
+import { inviteEmailLines } from "@/modules/email/templates";
+import { acceptPath, portalRoleForParty, portalRoleLabel } from "@/modules/sheet/portal-invite";
+import { DEADLINE_KINDS, DEADLINE_ROLES, deadlineSource } from "@/modules/sheet/new-deadline";
 import {
   governmentLabel,
   isoDateInTimeZone,
@@ -70,14 +74,14 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
   const { data: matter } = await supabase
     .from("matters")
     .select(
-      "id, title, reference, stage, government_status, on_hold, on_hold_reason, on_hold_owner_membership_id, on_hold_review_on, outcome, retention_on, program_pack_id, responsible_consultant_membership_id, version, created_at, updated_at",
+      "id, title, reference, stage, government_status, on_hold, on_hold_reason, on_hold_owner_membership_id, on_hold_review_on, outcome, retention_on, program_pack_id, responsible_consultant_membership_id, is_sample, version, created_at, updated_at",
     )
     .eq("organization_id", org)
     .eq("id", matterId)
     .maybeSingle();
   if (!matter) return null;
 
-  const [chrome, members, staffRows, participants, tasks, deadlines, requests, refs, agreements, pack, ownLicence] = await Promise.all([
+  const [chrome, members, staffRows, participants, tasks, deadlines, requests, refs, agreements, pack, ownLicence, invitations] = await Promise.all([
     loadSheetChrome(staff, `/sheet/matters/${matter.id}`),
     memberNames(supabase, org),
     supabase.from("memberships").select("id").eq("organization_id", org).eq("status", "active").in("role", [...STAFF_ROLES]),
@@ -91,7 +95,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       .limit(100),
     supabase
       .from("deadlines")
-      .select("id, label, kind, due_on, due_at, timezone, verification, verifying_membership_id, evidence_locator, calculation_note, rule_version_id, source_retrieved_on, updated_at")
+      .select("id, label, kind, due_on, due_at, timezone, verification, verifying_membership_id, evidence_locator, calculation_note, rule_version_id, source_url, source_retrieved_on, updated_at")
       .eq("organization_id", org)
       .eq("matter_id", matter.id)
       .order("due_on", { ascending: true, nullsFirst: false })
@@ -117,6 +121,18 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     staff.role === "firm_owner"
       ? supabase.from("consultant_credentials").select(LICENCE_FACT_COLUMNS).eq("organization_id", org).eq("membership_id", staff.membershipId).maybeSingle()
       : null,
+    // Open portal invitations on this matter (row-level security shows them to staff who may invite).
+    supabase
+      .from("portal_invitations")
+      .select("person_id, created_at")
+      .eq("organization_id", org)
+      .eq("matter_id", matter.id)
+      .is("consumed_at", null)
+      .is("revoked_at", null)
+      .is("declined_at", null)
+      .gt("expires_at", now.toISOString())
+      .order("created_at", { ascending: false })
+      .limit(50),
   ]);
 
   const parties = participants.data ?? [];
@@ -249,16 +265,25 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
   const facts = [matter.reference ?? "No reference yet", ...(program ? [program] : []), ...(consultant ? [`Consultant ${consultant}`] : [])];
 
   // People: clients from the matter's participants, then the staff on it.
+  // public.create_portal_invitation lets an owner, or a consultant or case manager on the matter, invite.
+  const canInvite = staff.role === "firm_owner" || staff.role === "licensed_consultant" || staff.role === "case_manager";
+  const invitedOn = new Map<string, string>();
+  for (const row of invitations?.data ?? []) {
+    if (!invitedOn.has(row.person_id)) invitedOn.set(row.person_id, dayMonth(isoDateInTimeZone(new Date(row.created_at), staff.timezone)));
+  }
   const staffIds = new Set<string>();
   const cards: MatterPersonCard[] = [];
   for (const row of ordered) {
     if (row.person_id) {
       const record = person.get(row.person_id);
+      const invited = invitedOn.get(row.person_id);
+      const portalRole = portalRoleForParty(row.role);
       cards.push({
         person: { name: personName(row.person_id) },
         role: partyRole(row.role),
         parts: [record?.email || "No email on file"],
-        pill: { label: record?.user_id ? "Portal active" : "No portal access" },
+        pill: { label: record?.user_id ? "Portal active" : invited ? `Invited ${invited}` : "No portal access" },
+        invite: canInvite && record && !record.user_id && portalRole ? { personId: record.id, role: portalRoleLabel(portalRole), email: record.email ?? "" } : null,
       });
     } else if (row.membership_id && !staffIds.has(row.membership_id)) {
       staffIds.add(row.membership_id);
@@ -350,7 +375,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
           next.verification === "confirmed"
             ? ({ tone: "ok", label: next.verifying_membership_id ? `Verified by ${memberName(next.verifying_membership_id)}` : "Verified" } as MatterBadge)
             : ({ tone: "chg", label: "Not verified yet" } as MatterBadge),
-        source: [next.evidence_locator || "No source recorded", ...(next.source_retrieved_on ? [`retrieved ${dayMonth(next.source_retrieved_on)}`] : [])],
+        source: deadlineSource(next.evidence_locator, next.source_url, next.source_retrieved_on ? dayMonth(next.source_retrieved_on) : null),
         origin: `${next.rule_version_id ? "Derived from a program rule." : "Not derived from a rule."}${next.calculation_note ? ` ${next.calculation_note}` : ""}`,
         reminders: (reminders?.data ?? []).map((row) => ({
           label: row.offset_days != null ? `${row.offset_days} ${row.offset_days === 1 ? "day" : "days"}` : "Reminder",
@@ -393,7 +418,19 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
   const tab = matterTab(query.tab);
   // Every change is still checked by the database (role, version, step-up); this only says which matter.
   const wire = { organizationId: org, matterId: matter.id, version: matter.version };
-  const header: MatterHeaderData = { client, pills: headerPills(matter.updated_at, matter.created_at, staff.timezone, now), hold, tab, wire };
+  // public.record_deadline accepts these roles; anyone else is not offered the dialog.
+  const recordsDeadlines = (DEADLINE_ROLES as readonly string[]).includes(staff.role);
+  const header: MatterHeaderData = { client, pills: headerPills(matter.updated_at, matter.created_at, staff.timezone, now), hold, tab, wire, deadline: recordsDeadlines };
+
+  const inviteDialog: MatterInviteData = {
+    matter: { client: clientName, reference: matter.reference },
+    email: "",
+    mail: inviteEmailLines(staff.organizationName, "portal"),
+    preview: acceptPath("client"),
+    // A real matter while the firm is still in sample mode: the database refuses real client invitations.
+    locked: staff.sampleMode && !matter.is_sample,
+    wire: { organizationId: org, matterId: matter.id },
+  };
 
   // A hold's owner is someone on the firm's staff, never a client. The responsible consultant comes first.
   const holdStaff = (staffRows.data ?? []).map((row) => row.id);
@@ -409,6 +446,8 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     reviewOn: matter.on_hold_review_on ?? defaultReview(today),
     receivedOn: today,
     wire,
+    invite: canInvite ? inviteDialog : null,
+    deadline: recordsDeadlines ? { timezone: staff.timezone, sampleMode: staff.sampleMode && !matter.is_sample, kinds: DEADLINE_KINDS } : null,
   };
   const confirmOutcome =
     !matter.outcome && matter.government_status === "decision_evidence_on_file" && isLicensedMembership(staff.role, ownLicence?.data)
@@ -438,7 +477,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       rows: documentTable,
     },
     agreements: { rows: agreementTable, signing },
-    tasks: { deadline, tasks: taskTable },
+    tasks: { deadline, tasks: taskTable, record: recordsDeadlines },
     outcome: matter.outcome ? outcomeLabel(matter.outcome) : null,
     confirmOutcome,
     closure: { closed: matter.stage === "closed", retention: matter.retention_on ? longDate(matter.retention_on) : null },

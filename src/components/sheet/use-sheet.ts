@@ -3,12 +3,14 @@
 import { useEffect, useLayoutEffect, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { toast2 } from "@/components/port/kit";
-import { withoutDialog } from "@/modules/sheet/matter-wire";
+import { dialogId, withoutDialog } from "@/modules/sheet/matter-wire";
 import { withoutNew } from "@/modules/sheet/new-matter";
 import { sheetStateCopy } from "@/modules/sheet/present";
 import { INVITE_DIALOG } from "@/modules/sheet/staff-present";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
+import { runNewTask, syncNewTask } from "./new-task-act";
+import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-invite-act";
 import { restoreStaffInvite, runStaffInvite, runStaffResend, runStaffRevoke } from "./staff-invite-act";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
@@ -145,10 +147,32 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         void runStaffResend(invitation, root, router).finally(() => invitation.removeAttribute("aria-busy"));
         return;
       }
+      const task = target.closest<HTMLElement>("[data-new-task]");
+      if (task && root.contains(task)) {
+        event.preventDefault();
+        if (task.getAttribute("aria-busy") === "true") return;
+        task.setAttribute("aria-busy", "true");
+        void runNewTask(task, router).finally(() => task.removeAttribute("aria-busy"));
+        return;
+      }
       const palette = target.closest<HTMLElement>("[data-palette]");
       if (palette && root.contains(palette)) {
         event.preventDefault();
         openPalette(root);
+        return;
+      }
+      const portalInvite = target.closest<HTMLElement>("[data-invite-open]");
+      if (portalInvite && root.contains(portalInvite)) {
+        event.preventDefault();
+        openPortalInvite(portalInvite, root);
+        return;
+      }
+      const send = target.closest<HTMLElement>("[data-invite]");
+      if (send && root.contains(send)) {
+        event.preventDefault();
+        if (send.getAttribute("aria-busy") === "true") return;
+        send.setAttribute("aria-busy", "true");
+        void runPortalInvite(send, router).finally(() => send.removeAttribute("aria-busy"));
         return;
       }
       const act = target.closest<HTMLElement>("[data-act]");
@@ -295,14 +319,14 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     });
 
     const params = new URLSearchParams(window.location.search);
-    const dialog = params.get("dlg");
-    if (dialog === "stage" || dialog === "hold" || dialog === "letter") {
-      window.setTimeout(() => openDialog(dialog === "stage" ? "dStage" : dialog === "hold" ? "dHold" : "dLetter"), 300);
-    }
+    const dialogParam = params.get("dlg");
+    const dialog = dialogId(dialogParam);
+    if (dialog) window.setTimeout(() => openDialog(dialog), 300);
+    if (dialogParam === "invite") window.setTimeout(() => reopenPortalInvite(root, params.get("pid")), 300);
     const staffInvite = root.querySelector<HTMLDialogElement>("#dlgS");
     if (staffInvite && staffInvite.querySelector("[data-org]")) {
       // ?dlg=invite (coming back from step-up) reopens Invite staff with what was typed; closing drops the flag.
-      if (dialog === INVITE_DIALOG) {
+      if (dialogParam === INVITE_DIALOG) {
         window.setTimeout(() => {
           restoreStaffInvite(staffInvite);
           openDialog("dlgS");
@@ -319,6 +343,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       newMatter.addEventListener("close", () => {
         if (new URLSearchParams(window.location.search).has("new")) router.replace(withoutNew(window.location.pathname, window.location.search));
       }, listen);
+    }
+
+    const newTask = root.querySelector<HTMLDialogElement>("dialog#dlgTask");
+    if (newTask?.querySelector("[data-new-task]")) {
+      // The live New task form: owners and dependencies follow the chosen matter and kind.
+      syncNewTask(newTask);
+      newTask.addEventListener("change", () => syncNewTask(newTask), listen);
     }
 
     window.addEventListener("resize", place, listen);

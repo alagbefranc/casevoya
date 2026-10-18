@@ -81,6 +81,8 @@ export type MatterHeaderData = {
   tab: MatterTab;
   /** Wires Resume and sends Request document to the Documents tab. */
   wire?: MatterWire | null;
+  /** Shows "Record deadline" on the Tasks and deadlines tab. Only when wired and the role may record one. */
+  deadline?: boolean;
 };
 
 export function MatterTopBar({ data }: { data: MatterHeaderData }) {
@@ -122,6 +124,12 @@ export function MatterTopBar({ data }: { data: MatterHeaderData }) {
             <Icon name={"workflow"} cls={"ic s"} />
             {"Change stage"}
           </button>
+          {data.wire && data.deadline && data.tab === "tasks" ? (
+            <button className={"btn s sm"} data-open={"dDeadline"}>
+              <Icon name={"alarm"} cls={"ic s"} />
+              {"Record deadline"}
+            </button>
+          ) : null}
           <button className={"btn p sm"} data-goto-tab={data.wire ? "documents" : undefined}>
             <Icon name={"upload"} cls={"ic s"} />
             {"Request document"}
@@ -509,6 +517,104 @@ export const STAGE_ENTRY = [
   ["Closed", "Closure checklist and a calculated retention date"],
 ] as const;
 
+/**
+ * The Designer's "Invite to the portal" dialog (captured on Settings > People and invitations,
+ * Clients and family tab), opened here from a person card on the People tab.
+ */
+export type MatterInviteData = {
+  /** The one matter it invites to: this one. */
+  matter: { client: string; reference: string | null };
+  /** The email field's starting value. The page fills it from the person card that opens the dialog. */
+  email: string;
+  /** "What the email says": the outbox email's own copy (lead in bold). */
+  mail: { lead: string; rest: string };
+  /** "Preview their screens". */
+  preview: string;
+  /** A real (not sample) matter while the firm is in sample mode: real client invitations are locked. */
+  locked: boolean;
+  /** Which matter the Send button saves to. Absent, the button is the Designer's inert one. */
+  wire?: { organizationId: string; matterId: string } | null;
+  /** The Designer's toast on its inert Send button. */
+  toast?: { title: string; sub: string };
+};
+
+const ROLE_OPTIONS = ["Adult dependant", "Applicant", "Sponsor", "Guardian", "Employer contact"] as const;
+
+export function MatterInviteDialog({ data }: { data: MatterInviteData }) {
+  const send = data.wire
+    ? { "data-invite": "1", "data-org": data.wire.organizationId, "data-matter": data.wire.matterId }
+    : {
+        "data-close": "dlgC",
+        ...(data.toast ? { "data-toast": data.toast.title, "data-toast-sub": data.toast.sub, "data-toast-kind": "ok" } : {}),
+      };
+  return (
+    <dialog className={"dlg"} id={"dlgC"} aria-labelledby={"dcH"}>
+      <div className={"dh"}>
+        <h2 id={"dcH"}>{"Invite to the portal"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={"dlgC"}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        {data.locked ? (
+          <div className={"alert warn"} style={{ marginBottom: "12px" }}>
+            <Icon name={"info"} />
+            <div>
+              <b>{"Real client invitations are locked"}</b>
+              {"They open once the sample steps and your licence check are done. Until then the firm refuses a real client’s invitation. "}
+              <a className={"tl"} href={"/sheet/sample-mode"}>
+                {"See what’s left"}
+              </a>
+            </div>
+          </div>
+        ) : null}
+        <div className={"fld"}>
+          <label htmlFor={"cM"}>{"Matter"}</label>
+          <select className={"sel"} id={"cM"}>
+            <option>{data.matter.reference ? <Pair left={data.matter.client} right={data.matter.reference} /> : data.matter.client}</option>
+          </select>
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"cR"}>{"Their role"}</label>
+          <select className={"sel"} id={"cR"}>
+            {ROLE_OPTIONS.map((label) => (
+              <option key={label}>{label}</option>
+            ))}
+          </select>
+          <span className={"hint"}>{"Adult dependants get their own consent step. Guardians need authority on file."}</span>
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"cE"}>{"Email"}</label>
+          <input className={"inp"} id={"cE"} type={"email"} defaultValue={data.email} />
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"cL"}>{"Language"}</label>
+          <select className={"sel"} id={"cL"}>
+            <option>{"English"}</option>
+            <option>{"Français"}</option>
+          </select>
+        </div>
+        <div className={"mailp"}>
+          <small>{"What the email says"}</small>
+          <p>
+            <b style={{ fontWeight: "500" }}>{data.mail.lead}</b>
+            {` ${data.mail.rest}`}
+          </p>
+          <small>{"No case details are put in the email."}</small>
+        </div>
+      </div>
+      <div className={"df"}>
+        <a className={"btn"} href={data.preview}>
+          {"Preview their screens"}
+        </a>
+        <button className={"btn p"} {...send}>
+          {"Send invitation"}
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
 export type MatterDialogsData = {
   current: number;
   /** The stage picked by default (the next one), or null at the last stage. */
@@ -523,12 +629,24 @@ export type MatterDialogsData = {
   receivedOn: string;
   /** Which matter the confirm buttons save to. Absent, the buttons are the Designer's inert ones. */
   wire?: MatterWire | null;
+  /** The portal invitation dialog, for staff who may invite. Absent, it is not rendered. */
+  invite?: MatterInviteData | null;
+  /** The Record a deadline dialog. Only rendered when wired; the Designer has no deadline dialog. */
+  deadline?: MatterDeadlineDialog | null;
+};
+
+export type MatterDeadlineDialog = {
+  /** The firm's timezone, offered as the official one. */
+  timezone: string;
+  /** The firm is in sample mode and this matter is real: the database refuses the deadline. */
+  sampleMode: boolean;
+  kinds: readonly { value: string; label: string }[];
 };
 
 /** The record a dialog's confirm button saves to; the kit reads these from the button. */
 export type MatterWire = { organizationId: string; matterId: string; version: number };
 
-export type MatterAct = "stage" | "hold" | "letter" | "resume" | "outcome";
+export type MatterAct = "stage" | "hold" | "letter" | "resume" | "outcome" | "deadline";
 
 /** `data-act` and the matter it saves to, or nothing for the Designer's inert buttons. */
 export function wireProps(act: MatterAct, wire: MatterWire | null | undefined) {
@@ -720,7 +838,90 @@ export function MatterDialogs({ data }: { data: MatterDialogsData }) {
           <Go id={"letGo"} label={"Record letter"} act={"letter"} wire={data.wire} />
         </div>
       </dialog>
+      {data.invite ? <MatterInviteDialog data={data.invite} /> : null}
+      {data.wire && data.deadline ? <DeadlineDialog data={data.deadline} wire={data.wire} /> : null}
     </>
+  );
+}
+
+/**
+ * Record a deadline. The Designer has no deadline dialog, so this is its "Record a government
+ * letter" dialog (`#dLetter`: `.g2` of `.fl` fields, a `.mu` note, Cancel and a primary button)
+ * holding public.record_deadline's fields, with the hold dialog's `.lock` note and the
+ * New matter dialog's sample-mode `.alert`. Saving is wired in matter-acts (`data-act="deadline"`).
+ */
+function DeadlineDialog({ data, wire }: { data: MatterDeadlineDialog; wire: MatterWire }) {
+  return (
+    <dialog className={"dlg wide"} id={"dDeadline"} aria-labelledby={"dDeadlineT"}>
+      <div className={"dh"}>
+        <h2 id={"dDeadlineT"}>{"Record a deadline"}</h2>
+        <Close />
+      </div>
+      <div className={"db"}>
+        {data.sampleMode ? (
+          <div className={"alert warn"} style={{ marginBottom: "12px" }}>
+            <Icon name={"info"} />
+            <div>
+              <b>{"This firm is in sample mode"}</b>
+              {"Only sample matters accept new deadlines until sample mode is turned off. The firm will refuse this one."}
+            </div>
+          </div>
+        ) : null}
+        <div className={"g2"}>
+          <label className={"fl"}>
+            {"What is due"}
+            <input id={"ddL"} placeholder={"For example: Respond to IRCC request"} autoComplete={"off"} />
+          </label>
+          <label className={"fl"}>
+            {"Kind"}
+            <select id={"ddK"} defaultValue={data.kinds[0]?.value}>
+              {data.kinds.map((kind) => (
+                <option key={kind.value} value={kind.value}>
+                  {kind.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={"fl"}>
+            {"Due on"}
+            <input id={"ddD"} type={"date"} />
+          </label>
+          <label className={"fl"}>
+            {"Due time (optional)"}
+            <input id={"ddT"} type={"time"} />
+          </label>
+          <label className={"fl"}>
+            {"Official timezone"}
+            <input id={"ddZ"} defaultValue={data.timezone} autoComplete={"off"} />
+          </label>
+          <label className={"fl"}>
+            {"Where it’s written"}
+            <input id={"ddE"} placeholder={"For example: IRCC request letter, page 2"} autoComplete={"off"} />
+          </label>
+          <label className={"fl"}>
+            {"Official source URL"}
+            <input id={"ddU"} type={"url"} placeholder={"https://www.canada.ca/…"} autoComplete={"off"} />
+          </label>
+          <label className={"fl"}>
+            {"Source retrieved on"}
+            <input id={"ddR"} type={"date"} />
+          </label>
+        </div>
+        <p className={"mu"} style={{ fontSize: "13px", marginTop: "8px" }}>
+          {"A legal or letter deadline cites the official government page it comes from and the date you retrieved it. Casevoya doesn’t calculate deadlines or skip weekends."}
+        </p>
+        <p className={"lock"} style={{ fontSize: "13.5px", marginTop: "10px" }}>
+          <Icon name={"alarm"} cls={"ic s"} />
+          {"It stays tentative until a licensed consultant confirms it. Reminders are proposed from the due date."}
+        </p>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-x={""}>
+          {"Cancel"}
+        </button>
+        <Go id={"ddGo"} label={"Record deadline"} act={"deadline"} wire={wire} />
+      </div>
+    </dialog>
   );
 }
 
@@ -734,7 +935,26 @@ function Panel({ index = 0, children }: { index?: number; children: ReactNode })
   );
 }
 
-export type MatterPersonCard = { person: SidebarPerson; role: string; parts: string[]; pill: { label: string; detail?: string } };
+export type MatterPersonCard = {
+  person: SidebarPerson;
+  role: string;
+  parts: string[];
+  pill: { label: string; detail?: string };
+  /** A client on this matter without portal access: the card's Manage button opens the invitation. */
+  invite?: { personId: string; role: string; email: string } | null;
+};
+
+/** The Manage button's `data-*` for the invitation dialog, or nothing for the Designer's inert button. */
+function inviteProps(card: MatterPersonCard) {
+  if (!card.invite) return {};
+  return {
+    "data-invite-open": "1",
+    "data-person": card.invite.personId,
+    "data-role": card.invite.role,
+    "data-email": card.invite.email,
+    "data-name": card.person.name,
+  };
+}
 export type MatterRelationship = { from: string; relation: string; to: string; evidence: string; sharing: MatterBadge | null };
 
 export function MatterPeople({ cards, relationships }: { cards: MatterPersonCard[]; relationships: MatterRelationship[] }) {
@@ -767,7 +987,7 @@ export function MatterPeople({ cards, relationships }: { cards: MatterPersonCard
                 )}
               </span>
             </div>
-            <button className={"btn s sm"} aria-label={`Manage ${card.person.name}`}>
+            <button className={"btn s sm"} aria-label={`Manage ${card.person.name}`} {...inviteProps(card)}>
               <Icon name={"more"} cls={"ic s"} />
             </button>
           </div>
@@ -979,11 +1199,17 @@ export type MatterDeadline = {
 };
 export type MatterTaskRow = { title: string; parts: string[]; badge: MatterBadge; owner: SidebarPerson };
 
-export function MatterTasks({ deadline, tasks }: { deadline: MatterDeadline | null; tasks: MatterTaskRow[] }) {
+export function MatterTasks({ deadline, tasks, record = false }: { deadline: MatterDeadline | null; tasks: MatterTaskRow[]; record?: boolean }) {
   if (!deadline && tasks.length === 0) {
     return (
       <Panel>
-        <Empty art={"portal-nothing-due"} title={"No open tasks"} copy={"Client tasks and internal tasks appear here with owners and due dates."} />
+        <Empty art={"portal-nothing-due"} title={"No open tasks"} copy={"Client tasks and internal tasks appear here with owners and due dates."}>
+          {record ? (
+            <button className={"btn p sm"} data-open={"dDeadline"}>
+              {"Record a deadline"}
+            </button>
+          ) : null}
+        </Empty>
       </Panel>
     );
   }
@@ -1190,7 +1416,8 @@ export type MatterPageData = {
   people: { cards: MatterPersonCard[]; relationships: MatterRelationship[] };
   documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[] };
   agreements: { rows: MatterAgreementRow[]; signing: MatterSigning | null };
-  tasks: { deadline: MatterDeadline | null; tasks: MatterTaskRow[] };
+  /** `record` offers the Record a deadline dialog from the empty state. */
+  tasks: { deadline: MatterDeadline | null; tasks: MatterTaskRow[]; record?: boolean };
   outcome: string | null;
   /** Set when decision evidence is on file and no outcome is recorded yet. */
   confirmOutcome?: MatterOutcomeConfirm | null;
@@ -1209,7 +1436,7 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
     case "agreements":
       return <MatterAgreements rows={data.agreements.rows} signing={data.agreements.signing} />;
     case "tasks":
-      return <MatterTasks deadline={data.tasks.deadline} tasks={data.tasks.tasks} />;
+      return <MatterTasks deadline={data.tasks.deadline} tasks={data.tasks.tasks} record={data.tasks.record} />;
     case "decisions":
       return <MatterDecisions outcome={data.outcome} confirm={data.confirmOutcome} />;
     case "closure":

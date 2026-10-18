@@ -478,4 +478,62 @@ describe("portal invitations", () => {
       expect(countOf(recorded.rows[0].n)).toBe(1);
     }
   });
+
+  it("gives the matter page what it reads: open invitations, a guardian's minors, and a step-up refusal", async () => {
+    const { owner, consultant, orgId, membershipId } = await firmWithConsultant();
+    const outsider = await createUser(email("manager"));
+    await activeMembership(orgId, outsider, "case_manager", owner);
+    const matterId = await addMatter(consultant, orgId, "Fictional family file", true);
+    await addStaffParty(owner, orgId, matterId, membershipId, "consultant");
+    const minor = await addPerson(consultant, orgId, "Sample Child", null, "2016-06-15", true);
+    const guardian = await addPerson(consultant, orgId, "Sample Guardian", null, "1982-03-03", true);
+    await addParty(consultant, orgId, matterId, minor, "dependant");
+    await addParty(consultant, orgId, matterId, guardian, "guardian");
+
+    // What invitePortalPerson reads for a guardian, as the consultant (row-level security applies):
+    // the matter's applicant and dependants, then which of them are minors.
+    await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    const children = await db.query<{ person_id: string }>(
+      `select person_id from public.matter_participants
+       where organization_id = $1 and matter_id = $2 and role in ('applicant', 'dependant')`,
+      [orgId, matterId],
+    );
+    const minors = await db.query<{ id: string }>(
+      `select id from public.persons where organization_id = $1 and is_minor and id = any($2::uuid[])`,
+      [orgId, children.rows.map((row) => row.person_id)],
+    );
+    expect(minors.rows.map((row) => row.id)).toEqual([minor]);
+
+    // Without a recent step-up the database refuses with the message the page turns into /mfa?step=6.
+    const guardianInvite = `select public.create_portal_invitation($1, $2, 'guardian'::public.org_role, $3, $4::uuid[])`;
+    await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 60 * 60 });
+    await expectDbError(() => db.query(guardianInvite, [guardian, matterId, email("guardian"), [minor]]), /recent step-up/);
+
+    const issued = await invite(consultant, orgId, guardian, matterId, "guardian", email("guardian"), [minor]);
+    expect(issued.ok).toBe(true);
+
+    // The People tab's "Invited" pill: open invitations on this matter.
+    const open = `select person_id from public.portal_invitations
+       where organization_id = $1 and matter_id = $2 and consumed_at is null and revoked_at is null
+         and declined_at is null and expires_at > now()`;
+    await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    const seen = await db.query<{ person_id: string }>(open, [orgId, matterId]);
+    expect(seen.rows.map((row) => row.person_id)).toEqual([guardian]);
+
+    // A case manager who is not on the matter sees none, and cannot invite.
+    await asUser(db, { userId: outsider, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    const hidden = await db.query<{ person_id: string }>(open, [orgId, matterId]);
+    expect(hidden.rows).toHaveLength(0);
+    await expectDbError(() => db.query(guardianInvite, [guardian, matterId, email("guardian"), [minor]]), /recent step-up/);
+
+    // The invitation email is queued in the outbox for the existing mail dispatcher, without the token.
+    await asMaintenance(db);
+    const queued = await db.query<{ payload: string }>(
+      `select payload::text as payload from public.outbox_events
+       where event_type = 'portal_invitation.email_requested' and aggregate_id = $1`,
+      [issued.invitation_id],
+    );
+    expect(queued.rows).toHaveLength(1);
+    expect(queued.rows[0].payload).not.toContain(issued.token);
+  });
 });

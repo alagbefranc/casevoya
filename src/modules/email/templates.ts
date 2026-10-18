@@ -24,17 +24,25 @@ function document(subject: string, paragraph: string, firm: string): EmailConten
   return { subject, html, text: `${paragraph}\n\n${firm}\n` };
 }
 
+/**
+ * The invitation email's paragraph in two parts: who invited them, then where the link is.
+ * The staff screens preview exactly this copy before an invitation is sent.
+ */
+export function inviteEmailLines(firm: string, kind: "staff" | "portal"): { lead: string; rest: string } {
+  const name = firm.trim() || "Your firm";
+  return {
+    lead: `${name} invited you to ${kind === "staff" ? "a staff seat" : "the client portal"}.`,
+    rest: "The private link is not in this email. Use the link the firm gives you.",
+  };
+}
+
 /** HTML and text for one template. Copy stays generic: no token, no file body, no case narrative. */
 export function renderEmail(context: Context): EmailContent {
   const firm = firmName(context);
   const template = textOf(context.template);
   if (template === "invite") {
-    const kind = textOf(context.kind) === "staff" ? "a staff seat" : "the client portal";
-    return document(
-      `Invitation from ${firm}`,
-      `${firm} invited you to ${kind}. The private link is not in this email. Use the link the firm gives you.`,
-      firm,
-    );
+    const lines = inviteEmailLines(firm, textOf(context.kind) === "staff" ? "staff" : "portal");
+    return document(`Invitation from ${firm}`, `${lines.lead} ${lines.rest}`, firm);
   }
   if (template === "reminder") {
     const due = textOf(context.due_on).trim();
