@@ -44,6 +44,7 @@ In the repository, not yet applied to the live project (do not edit the file in 
 | 20261018010600 | revoke_anon_app_usage | Revokes `usage on schema app` from anon. |
 | 20261018190000 | invitation_email_link | `attach_invitation_email_link` puts a sealed (AES-256-GCM) accept link on a pending invitation email event; `app.scrub_invitation_link`. Never a plaintext token. |
 | 20261018190100 | invitation_email_link_mail_worker | `claim_mail_events` waits up to 10 minutes for the sealed link; `prepare_email_delivery` passes it to the worker; `finish_email_delivery` scrubs it once final. |
+| 20261019000000 | agreement_pdf_layout | The last signature completes the envelope without building a PDF; the app server renders the laid-out sealed PDF and certificate (pdf-lib) and `attach_sealed_agreement` (service_role only) stores them once, hashing them itself. `agreement_seal_source` (service_role only) returns the immutable render input. `sealed_renderer` column; the guard also freezes the hashes, renderer and storage keys. Earlier sealed bytes are untouched. |
 
 `src/types/database.types.ts` includes the live schema through `20261017113202`, extended in this branch for the unapplied migrations above. Do not run `pnpm db:types` until those migrations are applied; a live regeneration would drop the extension.
 
