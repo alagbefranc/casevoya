@@ -131,3 +131,7 @@ Before starting a task: name an owner, identify its PRD acceptance requirement, 
 Before closing: demonstrate the meaningful behavior and failure path, check authorization and affected source provenance, review required design states, add necessary tests rather than implementation-mirroring tests, record migrations/rollbacks where relevant, and update MEMORY with evidence. Label externally dependent work accurately; a stub is not a completed integration.
 
 At each milestone, show a short product demo and retain a release evidence manifest containing environment/build identifier, checks run, results, reviewers, source-pack versions, material limitations and rollback procedure. Keep client secrets and personal records out of this public project documentation.
+
+## Implementation notes
+
+* 2026-10-18 (branch `sheet-firm-admin`): Sheet Roles, Licences (+ Review log), licence-suspended home, Access grants, Intake form builder, Templates and Automations are live on real data (T018 licence evidence and reassignment, T020 versioned builder, T043 grant controls in part). Privacy requests (SEC-06) stays the Designer demo: no register or recording dialog exists. Open items are in DECISIONS.md.
