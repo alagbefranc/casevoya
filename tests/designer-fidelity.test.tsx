@@ -346,7 +346,14 @@ const DESIGNER_CLIENTS: ClientsData = {
 };
 
 function withoutPreloads(html: string): string {
-  return html.replace(/<link rel="preload"[^>]*\/>/g, "");
+  // The Designer's sidebar has no way to sign out; the live one adds a button to its profile row.
+  return html.replace(/<link rel="preload"[^>]*\/>/g, "").replace(SIGN_OUT, "");
+}
+
+const SIGN_OUT = /<form [^>]*action="\/sign-out"[^>]*>[\s\S]*?<\/form>/g;
+
+function sidebar(html: string): string {
+  return html.replace(SIGN_OUT, "");
 }
 
 describe("Designer fidelity", () => {
@@ -376,7 +383,7 @@ describe("Designer fidelity", () => {
 
   it("renders the sidebar exactly as the captured Designer markup", () => {
     const captured = region(renderToStaticMarkup(createElement(IndexMarkup)), '<aside class="side"', "</aside>");
-    const live = region(renderToStaticMarkup(createElement(SheetSidebar, { data: DESIGNER_SIDEBAR })), '<aside class="side"', "</aside>");
+    const live = sidebar(region(renderToStaticMarkup(createElement(SheetSidebar, { data: DESIGNER_SIDEBAR })), '<aside class="side"', "</aside>"));
     expect(live).toBe(captured);
   });
 
