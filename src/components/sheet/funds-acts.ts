@@ -134,15 +134,16 @@ function done(dialog: HTMLDialogElement, router: Router, title: string, sub: str
   router.refresh();
 }
 
-/** Keeps the dialog's fields, the entry and the key, then goes to the step-up screen. */
+/** Keeps the dialog's fields and ticks, the entry and the key, then goes to the step-up screen. */
 function stepUp(dialog: HTMLDialogElement, button: HTMLElement) {
   const fields: Record<string, string> = {};
+  const checks: Record<string, boolean> = {};
   for (const field of dialog.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input[id], select[id], textarea[id]")) {
-    if (field instanceof HTMLInputElement && field.type === "checkbox") continue;
-    fields[field.id] = field.value;
+    if (field instanceof HTMLInputElement && field.type === "checkbox") checks[field.id] = field.checked;
+    else fields[field.id] = field.value;
   }
   try {
-    sessionStorage.setItem(DRAFT, JSON.stringify({ dialog: dialog.id, fields, entry: button.dataset.entry ?? null, key: button.dataset.key ?? null }));
+    sessionStorage.setItem(DRAFT, JSON.stringify({ dialog: dialog.id, fields, checks, entry: button.dataset.entry ?? null, key: button.dataset.key ?? null }));
   } catch {
     // Storage can be unavailable; the person opens the dialog again.
   }
@@ -154,10 +155,13 @@ function failed(dialog: HTMLDialogElement, button: HTMLElement, error: string, s
   toast2(error, { kind: "bad", sub });
 }
 
-/** After a step-up (`?dlg=funds`): reopen the same dialog, for the same entry, with what was typed. */
+/**
+ * After a step-up (`?dlg=funds`): reopen the same dialog, for the same entry, with what was typed and
+ * ticked. The owner verifying their own entry comes back to #dlgVer for that payment, still ticked.
+ */
 export function reopenFundsDialog(root: ParentNode, open: Open) {
   if (new URLSearchParams(window.location.search).get("dlg") !== FUNDS_DIALOG) return;
-  let draft: { dialog?: unknown; fields?: unknown; entry?: unknown; key?: unknown } | null = null;
+  let draft: { dialog?: unknown; fields?: unknown; checks?: unknown; entry?: unknown; key?: unknown } | null = null;
   try {
     const raw = sessionStorage.getItem(DRAFT);
     sessionStorage.removeItem(DRAFT);
@@ -180,6 +184,11 @@ export function reopenFundsDialog(root: ParentNode, open: Open) {
   for (const [id, saved] of Object.entries(fields)) {
     const field = dialog.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`#${CSS.escape(id)}`);
     if (field && typeof saved === "string") field.value = saved;
+  }
+  const checks = (draft.checks ?? {}) as Record<string, unknown>;
+  for (const [id, saved] of Object.entries(checks)) {
+    const field = dialog.querySelector<HTMLInputElement>(`input#${CSS.escape(id)}[type="checkbox"]`);
+    if (field && typeof saved === "boolean") field.checked = saved;
   }
   syncFundsLedger(dialog);
   if (typeof draft.key === "string") {

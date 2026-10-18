@@ -99,3 +99,29 @@ T022 in-house electronic signatures are in the repository and are not applied on
 ### Handoff entry — 14 October 2026
 
 Authored the six-file specification package, incorporating the full prior PRD, the supplied design reference, official-source governance, implementation architecture and 50-task backlog. The package is ready for product and engineering review. Source packs, branding clearance, production software and professional launch approvals remain uncompleted.
+
+### Handoff entry — 18 October 2026
+
+Finance (T030–T033, partial) is implemented, tested and deployed to app.casevoya.ca in **Stripe test mode only**; no live key is used. Evidence: PRs #63, #69, #70, #71, #72 and #74, with additive migrations `20261019100000`–`20261019140000` applied to the live database.
+
+- **Card payments:** invoices, an in-portal Payment Element, a firm-owned Accounts v2 connected account with direct charges, and signed and deduplicated webhooks. Browser-tested end to end: INV-0001, CAD 450, card 4242, marked paid by the webhook.
+- **Payments tab:** a Designer port. Stripe's own screens appear only for onboarding and KYC, in a dialog.
+- **Refunds and disputes:** refunds are full or partial, owner or finance user with step-up, and the database refuses an over-refund. Disputes are recorded only; evidence submission is not built. Browser-tested with RF-0001, CAD 100.
+- **Client funds (T032, manual ledger):** Casevoya records the firm's own client account and never holds money. It covers deposits through verification, per-client and per-matter balances that can't go negative, earned-fee transfers to issued invoices on the same matter, refunds, and reversing corrections.
+- **Client-funds approvals (decided by Francis):**
+  - The owner may approve their own transfer.
+  - A non-owner who recorded a deposit can't verify it; the owner can verify their own deposit, with a fresh step-up.
+- **CICC Code SOR/2022-128 controls**, cited in `docs/legal/client-account-sources.md`:
+  - advance receipts RC-xxxx (s. 32(b))
+  - a 30-day withdraw-by date, shown but not enforced (s. 32(g))
+  - a recorded bank-transfer step after approval
+
+**Verification:** CI on each PR; PGlite RLS tests; browser tests against the production database as the synthetic Walk Test owner and client Priya, both flagged is_sample.
+
+**Unresolved:**
+- Payment receipts (s. 33(3)) are in progress.
+- Receipt emails wait on the owner's HTML email templates, not yet supplied.
+- Reconciliation, credit notes and voids, and multi-line or tax invoices are not built.
+- Stripe live mode needs professional, finance and legal review (T048). Gate E remains open: no finance reviewer has approved the client-money workflow.
+
+**Next:** finish payment receipts, then the calendar and bookings work from PR #73's spec.

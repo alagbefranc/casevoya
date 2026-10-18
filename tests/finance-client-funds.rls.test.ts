@@ -115,8 +115,9 @@ async function deposit(f: Firm, amount: number, options: { userId?: string; matt
   return row.rows[0].id;
 }
 
-async function verify(f: Firm, entryId: string, userId: string = f.owner) {
-  await as(f, userId, false);
+/** Verifies with a fresh step-up: the owner verifying their own entry needs one; no one else does. */
+async function verify(f: Firm, entryId: string, userId: string = f.owner, stepUp = true) {
+  await as(f, userId, stepUp);
   await db.query(`select public.verify_client_deposit($1)`, [entryId]);
 }
 
@@ -586,7 +587,7 @@ describe("second person to verify a deposit", () => {
     const byFinance = await deposit(f, 10_000);
     await expectDbError(() => verify(f, byFinance, f.finance), /recorded a deposit cannot verify it/);
     expect(await entry(byFinance)).toMatchObject({ status: "pending_verification" });
-    await verify(f, byFinance, f.secondFinance);
+    await verify(f, byFinance, f.secondFinance, false);
     expect(await entry(byFinance)).toMatchObject({ status: "verified", verified_by: f.secondFinance, verified_by_owner_self: false });
     // A verified deposit is refused as already verified, before the second-person rule.
     await as(f, f.finance, false);
@@ -597,7 +598,7 @@ describe("second person to verify a deposit", () => {
     expect(await entry(byOwner)).toMatchObject({ status: "verified", verified_by: f.owner, verified_by_owner_self: true });
 
     const forOwner = await deposit(f, 2_000, { userId: f.finance });
-    await verify(f, forOwner, f.owner);
+    await verify(f, forOwner, f.owner, false);
     expect(await entry(forOwner)).toMatchObject({ verified_by: f.owner, verified_by_owner_self: false });
 
     await asMaintenance(db);
@@ -610,6 +611,51 @@ describe("second person to verify a deposit", () => {
       { object_id: byOwner, action: "client_funds.deposit_verified_owner_self" },
       { object_id: forOwner, action: "client_funds.deposit_verified" },
     ]);
+  });
+
+  for (const [label, options] of [
+    ["in an owner-only firm", { finance: false }],
+    ["when the firm has other finance people", { secondFinance: true }],
+  ] as const) {
+    it(`needs a fresh step-up for the owner verifying their own entry ${label} (decided by Francis)`, async () => {
+      const f = await firm(options);
+      const own = await deposit(f, 4_000, { userId: f.owner });
+
+      // No recent step-up at all.
+      await as(f, f.owner, false);
+      await expectDbError(() => db.query(`select public.verify_client_deposit($1)`, [own]), /step-up is required: verifying your own deposit/);
+      // A step-up taken before the deposit was recorded does not count, even within 15 minutes.
+      await asUser(db, { userId: f.owner, aal: "aal2", orgId: f.orgId, totpAgeSeconds: 120 });
+      await expectDbError(() => db.query(`select public.verify_client_deposit($1)`, [own]), /step-up is required: verifying your own deposit/);
+      // An aal1 session has no billing access at all.
+      await asUser(db, { userId: f.owner, aal: "aal1", orgId: f.orgId, totpAgeSeconds: 0 });
+      await expectDbError(() => db.query(`select public.verify_client_deposit($1)`, [own]), /billing access denied/);
+      expect(await entry(own)).toMatchObject({ status: "pending_verification", verified_by: null, verified_by_owner_self: false });
+      expect(await receiptOf(own)).toBeUndefined();
+
+      // A step-up after the deposit was recorded: verified as the owner's own entry, with a receipt.
+      await verify(f, own, f.owner);
+      expect(await entry(own)).toMatchObject({ status: "verified", verified_by: f.owner, verified_by_owner_self: true });
+      expect(await receiptOf(own)).toBeDefined();
+      await asMaintenance(db);
+      const audit = await db.query<{ action: string }>(`select action from public.audit_log where object_id = $1 and action like 'client_funds.deposit_verified%'`, [own]);
+      expect(audit.rows).toEqual([{ action: "client_funds.deposit_verified_owner_self" }]);
+    });
+  }
+
+  it("needs no step-up for anyone verifying someone else's entry, the owner included", async () => {
+    const f = await firm({ secondFinance: true });
+    const byFinance = await deposit(f, 3_000);
+    await verify(f, byFinance, f.secondFinance, false);
+    expect(await entry(byFinance)).toMatchObject({ status: "verified", verified_by: f.secondFinance, verified_by_owner_self: false });
+
+    const forOwner = await deposit(f, 3_000);
+    await verify(f, forOwner, f.owner, false);
+    expect(await entry(forOwner)).toMatchObject({ status: "verified", verified_by: f.owner, verified_by_owner_self: false });
+
+    const byOwner = await deposit(f, 3_000, { userId: f.owner });
+    await verify(f, byOwner, f.finance, false);
+    expect(await entry(byOwner)).toMatchObject({ status: "verified", verified_by: f.finance, verified_by_owner_self: false });
   });
 
   it("can't be forged by writing the entry directly", async () => {
