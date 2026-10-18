@@ -234,7 +234,12 @@ export function readPolicyDraft(fields: {
   const body = (fields.body ?? "").replace(/\r\n/g, "\n").trim();
   if (!body) return { error: "Add the text clients will read." };
   if (body.length > POLICY_BODY_MAX) return { error: `Keep the text to ${POLICY_BODY_MAX.toLocaleString("en-CA")} characters. It has ${body.length.toLocaleString("en-CA")}.` };
-  if (BLANK.test(body)) return { error: "Fill in or remove every part in square brackets that starts with “Add”." };
+  const blanks = body.match(new RegExp(BLANK.source, "g"));
+  if (blanks) {
+    const first = blanks[0].length > 70 ? `${blanks[0].slice(0, 67)}…]` : blanks[0];
+    const more = blanks.length > 1 ? ` (${blanks.length} left)` : "";
+    return { error: `Replace or delete each part in square brackets that starts with “Add”${more}. Next one: ${first}` };
+  }
   return { input: { kind, versionLabel, title, body } };
 }
 
