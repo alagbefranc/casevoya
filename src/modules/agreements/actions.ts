@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { agreementError } from "@/modules/agreements/errors";
+import { sealEnvelope } from "@/modules/agreements/seal";
 import { verifyTotpCode } from "@/lib/auth/verify-totp";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
@@ -46,6 +47,11 @@ export async function signAgreement(input: {
   });
   if (error) return { error: agreementError(error.message) };
   const status = data && typeof data === "object" && !Array.isArray(data) ? data.status : null;
+  if (status === "completed") {
+    // The last signature completes the envelope; the laid-out sealed PDF is rendered here and
+    // attached once. If this fails, the first download renders and attaches it instead.
+    await sealEnvelope(input.envelopeId);
+  }
   return { status: typeof status === "string" ? status : "signed" };
 }
 

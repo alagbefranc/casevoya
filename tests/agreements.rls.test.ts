@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { renderAgreementPdf, renderCertificatePdf, SEAL_RENDERER } from "@/modules/agreements/pdf-render";
+import { parseSealSource } from "@/modules/agreements/seal-source";
 
 let db: TestDb;
 
@@ -322,13 +324,30 @@ describe("in-house agreements and signatures", () => {
     await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
     await db.query(`select public.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `sign2-${randomUUID()}`, IP, AGENT]);
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
-    const done = await db.query<{ result: { status: string; sealed_sha256: string; sealed_version_id: string } }>(
+    const done = await db.query<{ result: { status: string; sealed_sha256: string | null; seal_pending: boolean } }>(
       `select public.sign_agreement($1, true, $2, $3::inet, $4) as result`,
       [envelopeId, `final-${randomUUID()}`, IP, AGENT],
     );
     expect(done.rows[0].result.status).toBe("completed");
-    const sealed = done.rows[0].result.sealed_sha256;
-    const versionId = done.rows[0].result.sealed_version_id;
+    // The last signature completes the envelope; the app server then renders and attaches the
+    // laid-out sealed PDF once, with the service role (src/modules/agreements/seal.ts).
+    expect(done.rows[0].result).toMatchObject({ sealed_sha256: null, seal_pending: true });
+    await asServiceRole(db);
+    const source = parseSealSource(
+      (await db.query<{ source: unknown }>(`select public.agreement_seal_source($1) as source`, [envelopeId])).rows[0].source,
+    );
+    const rendered = await renderAgreementPdf(source);
+    const renderedSha = createHash("sha256").update(rendered).digest("hex");
+    const certificateBytes = await renderCertificatePdf(source, renderedSha);
+    const attach = await db.query<{ result: { attached: boolean; sealed_sha256: string; sealed_version_id: string } }>(
+      `select public.attach_sealed_agreement($1, $2, $3, $4) as result`,
+      [envelopeId, rendered, certificateBytes, SEAL_RENDERER],
+    );
+    expect(attach.rows[0].result.attached).toBe(true);
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const sealed = attach.rows[0].result.sealed_sha256;
+    expect(sealed).toBe(renderedSha);
+    const versionId = attach.rows[0].result.sealed_version_id;
     const stored = await db.query<{ checksum_sha256: string; upload_state: string; storage_key: string; bucket: string }>(
       `select version.checksum_sha256, version.upload_state::text, version.storage_key, version.storage_bucket as bucket
        from public.document_versions version where version.id = $1`,

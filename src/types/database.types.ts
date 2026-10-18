@@ -3211,6 +3211,7 @@ export type Database = {
           provider: string
           sealed_document_version_id: string | null
           sealed_pdf: string | null
+          sealed_renderer: string | null
           sealed_sha256: string | null
           sealed_storage_key: string | null
           sent_at: string
@@ -3237,6 +3238,7 @@ export type Database = {
           provider?: string
           sealed_document_version_id?: string | null
           sealed_pdf?: string | null
+          sealed_renderer?: string | null
           sealed_sha256?: string | null
           sealed_storage_key?: string | null
           sent_at?: string
@@ -3263,6 +3265,7 @@ export type Database = {
           provider?: string
           sealed_document_version_id?: string | null
           sealed_pdf?: string | null
+          sealed_renderer?: string | null
           sealed_sha256?: string | null
           sealed_storage_key?: string | null
           sent_at?: string
@@ -5684,6 +5687,19 @@ export type Database = {
       agreement_certificate_pdf: {
         Args: { p_envelope_id: string }
         Returns: string
+      }
+      agreement_seal_source: {
+        Args: { p_envelope_id: string }
+        Returns: Json
+      }
+      attach_sealed_agreement: {
+        Args: {
+          p_certificate: string
+          p_envelope_id: string
+          p_pdf: string
+          p_renderer: string
+        }
+        Returns: Json
       }
       assign_unsorted_email_file: {
         Args: { p_item_id: string; p_matter_id: string; p_person_id: string }
