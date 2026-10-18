@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { clearMatterOnHold, overrideMatterStage, recordGovernmentStatus, recordMatterOutcome, setMatterOnHold } from "@/modules/matters/actions";
 import { createPortalInvitation } from "@/modules/portal-invitations/actions";
+import { closeMatter } from "@/modules/matters/closure";
 import { acceptLink, guardianSubjects, readPortalInvite } from "@/modules/sheet/portal-invite";
 import { todayIso } from "@/modules/sheet/birth-date";
 import { editNotes, minorOn, readPersonEdit } from "@/modules/sheet/edit-person";
@@ -22,6 +23,8 @@ import { createTask, recordDeadline, scheduleDeadlineReminders, setTaskStatus } 
 type MatterRef = { organizationId: string; matterId: string; version: number };
 
 export async function changeMatterStage(input: MatterRef & { toStage: string; reason: string }) {
+  // Closing records the closure, checks open money and sets the retention date (T040).
+  if (input.toStage === "closed") return closeMatter({ organizationId: input.organizationId, matterId: input.matterId, version: input.version, reason: input.reason });
   return overrideMatterStage({ organizationId: input.organizationId, matterId: input.matterId, toStage: input.toStage, expectedVersion: input.version, reason: input.reason, code: null });
 }
 
