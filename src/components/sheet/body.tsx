@@ -35,6 +35,8 @@ import { ExportsDialog, ExportsHeader, SheetExports } from "@/components/sheet/d
 import { loadSheetExports } from "@/modules/sheet/exports-load";
 import { DocumentReviewDialog, DocumentsHeader, SheetDocuments } from "@/components/sheet/designer/documents";
 import { ComposeDialog, InboxHeader, SheetInbox } from "@/components/sheet/designer/inbox";
+import { PrivacyDialogs, PrivacyHeader, SheetPrivacy } from "@/components/sheet/designer/privacy";
+import { ComplaintsDialogs, ComplaintsHeader, SheetComplaints } from "@/components/sheet/designer/complaints";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
 import { ROLES_CSS, RolesHeader, SheetRoles } from "@/components/sheet/designer/roles";
 import { LicenceAfter, LicenceHeader, SheetLicences } from "@/components/sheet/designer/licence";
@@ -70,6 +72,7 @@ import { loadSheetStaffTab } from "@/modules/sheet/staff-load";
 import { loadSheetTasks } from "@/modules/sheet/tasks-load";
 import { loadSheetDocuments } from "@/modules/sheet/documents-load";
 import { loadSheetInbox } from "@/modules/sheet/inbox-load";
+import { loadSheetComplaints, loadSheetPrivacy } from "@/modules/sheet/compliance-load";
 import { loadSheetAccess, loadSheetBundle } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 import { loadSheetCalendar, loadSheetConsultations } from "@/modules/scheduling/sheet-load";
@@ -226,6 +229,22 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
+  // Compliance > Privacy requests (SEC-05, SEC-06) and Complaints (ADM-05).
+  if (page === "privacy" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetPrivacy(access.staff, query);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<PrivacyHeader data={loaded.header} />}
+          statusbar={loaded.chrome.statusbar}
+          after={<PrivacyDialogs data={loaded.dialogs} />}
+        >
+          <SheetPrivacy data={loaded.page} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
   // Team queue: open tasks, reviews, deadlines to verify and money waiting for a second person.
   if (page === "queue" && (access.kind === "live" || access.kind === "sample")) {
     const { chrome, queue } = await loadSheetQueue(access.staff);
@@ -249,6 +268,21 @@ export async function SheetBody({
           after={<ExportsDialog data={exports.dialog} />}
         >
           <SheetExports data={exports} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  if (page === "complaints" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetComplaints(access.staff, query);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<ComplaintsHeader data={loaded.header} />}
+          statusbar={loaded.chrome.statusbar}
+          after={<ComplaintsDialogs data={loaded.dialogs} />}
+        >
+          <SheetComplaints data={loaded.page} />
         </SheetFrame>
       </SheetScreen>
     );

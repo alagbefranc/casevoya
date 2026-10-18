@@ -59,6 +59,17 @@ import {
 import { openDocReview, reopenDocReview, runDocFile, runDocReview } from "./documents-acts";
 import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
 import { bindGovControls } from "./gov-acts";
+import {
+  openRedaction,
+  reopenComplianceDialog,
+  runComplaintNew,
+  runComplaintStep,
+  runComplianceSettings,
+  runPrivacyClose,
+  runPrivacyNew,
+  runPrivacyStep,
+  runRedaction,
+} from "./compliance-acts";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { markAllNotificationsRead, openNotification } from "./notification-acts";
@@ -567,6 +578,36 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(inboxDismiss, () => runInboxDismiss(inboxDismiss, router));
         return;
       }
+      // Compliance: privacy requests, the complaints register and their settings.
+      const redactionOpen = target.closest<HTMLElement>("[data-redaction-new], [data-redaction-edit]");
+      if (redactionOpen && root.contains(redactionOpen)) {
+        event.preventDefault();
+        openRedaction(redactionOpen, root, openDialog);
+        return;
+      }
+      const compliance = target.closest<HTMLElement>(
+        "[data-privacy-new], [data-privacy-step], [data-privacy-redaction], [data-privacy-close], [data-complaint-new], [data-complaint-step], [data-compliance-settings]",
+      );
+      if (compliance && root.contains(compliance)) {
+        event.preventDefault();
+        const data = compliance.dataset;
+        const run =
+          data.privacyNew !== undefined
+            ? runPrivacyNew
+            : data.privacyStep !== undefined
+              ? runPrivacyStep
+              : data.privacyRedaction !== undefined
+                ? runRedaction
+                : data.privacyClose !== undefined
+                  ? runPrivacyClose
+                  : data.complaintNew !== undefined
+                    ? runComplaintNew
+                    : data.complaintStep !== undefined
+                      ? runComplaintStep
+                      : runComplianceSettings;
+        busyRun(compliance, () => run(compliance, router));
+        return;
+      }
       const nav = target.closest<HTMLElement>("[data-nav]");
       if (nav?.dataset.nav?.startsWith("/sheet/") && root.contains(nav)) {
         event.preventDefault();
@@ -858,6 +899,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     // Leads: the pipeline board, filters, New lead and CSV import; the lead page's actions.
     if (page === "pipeline") wirePipeline(root, router, ac.signal, openDialog);
     if (page === "lead") wireLead(root, router, ac.signal, openDialog);
+    // ?dlg=compliance (back from step-up) reopens the privacy or complaints dialog with what was typed.
+    if (dialogParam === "compliance") window.setTimeout(() => reopenComplianceDialog(root, openDialog), 300);
     // ?dlg=review&doc= (back from step-up) reopens the document review with what was typed.
     if (root.querySelector("dialog#dlgDocRev")) window.setTimeout(() => reopenDocReview(root, openDialog), 300);
 
