@@ -6,14 +6,30 @@ import { verifyTotpCode } from "@/lib/auth/verify-totp";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import type { Json } from "@/types/database.types";
+import { attachInviteEmailLink } from "@/modules/email/invite-link";
+import { acceptLink } from "@/modules/sheet/portal-invite";
 import { portalError } from "@/modules/portal-invitations/errors";
 import { isPortalInviteRole, type PortalAcceptPayload, type PortalInviteRole } from "@/modules/portal-invitations/types";
 
-type RpcResult = { ok?: boolean; error?: string; status?: string; token?: string; invitation_id?: string; expires_at?: string };
+type RpcResult = { ok?: boolean; error?: string; status?: string; token?: string; invitation_id?: string; expires_at?: string; role?: string };
 
 function asResult(data: unknown): RpcResult {
   if (data && typeof data === "object" && !Array.isArray(data)) return data as RpcResult;
   return {};
+}
+
+/**
+ * Seals the private accept link into the invitation email (public.attach_invitation_email_link).
+ * False when the email will go out without it; the inviter still gets the link back.
+ */
+async function attachPortalLink(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  result: RpcResult,
+  fallbackRole: PortalInviteRole | null,
+): Promise<boolean> {
+  const role = result.role && isPortalInviteRole(result.role) ? result.role : fallbackRole;
+  if (!role || !result.token || !result.invitation_id || !isUuid(result.invitation_id)) return false;
+  return attachInviteEmailLink(supabase, result.invitation_id, result.token, acceptLink("", role, result.token));
 }
 
 /**
@@ -62,7 +78,8 @@ export async function createPortalInvitation(input: {
   if (!result.ok || !result.token || !isInvitationToken(result.token)) {
     return { error: portalError(result.error) };
   }
-  return { token: result.token, invitationId: result.invitation_id ?? null, expiresAt: result.expires_at ?? null };
+  const emailLink = await attachPortalLink(session.supabase, result, input.role as PortalInviteRole);
+  return { token: result.token, invitationId: result.invitation_id ?? null, expiresAt: result.expires_at ?? null, emailLink };
 }
 
 export async function resendPortalInvitation(input: { organizationId: string; invitationId: string; code: string }) {
@@ -75,7 +92,8 @@ export async function resendPortalInvitation(input: { organizationId: string; in
   if (error) return { error: safeAccessError(error.message) };
   const result = asResult(data);
   if (!result.ok || !result.token || !isInvitationToken(result.token)) return { error: portalError(result.error) };
-  return { token: result.token, invitationId: result.invitation_id ?? input.invitationId };
+  const emailLink = await attachPortalLink(session.supabase, result, null);
+  return { token: result.token, invitationId: result.invitation_id ?? input.invitationId, emailLink };
 }
 
 export async function revokePortalInvitation(input: { organizationId: string; invitationId: string; code: string }) {

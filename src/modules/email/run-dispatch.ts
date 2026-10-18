@@ -1,6 +1,7 @@
 import "server-only";
 import { sendCloudflareEmail } from "@/modules/email/cloudflare";
 import { dispatchOutbound, type MailDelivery, type PreparedMail } from "@/modules/email/dispatch";
+import { openInviteLink } from "@/modules/email/invite-link-seal";
 import { emailRuntimeConfig } from "@/lib/email/env";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -47,6 +48,9 @@ export async function runEmailDispatch(limit = 20) {
           messages: asMessages(record.messages),
         };
         return prepared;
+      },
+      openLink(sealed, invitationId) {
+        return openInviteLink(config.dispatchSecret, sealed, invitationId);
       },
       send(email) {
         return sendCloudflareEmail(email, { accountId: config.accountId, token: config.token });

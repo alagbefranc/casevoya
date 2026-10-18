@@ -158,12 +158,14 @@ describe("outbound and inbound email", () => {
     ]);
   });
 
+  // Invitation events without a sealed link wait 10 minutes before the linkless email is claimed
+  // (20261018190100), so these invitation rows are written as already 11 minutes old.
   it("sends a claimed event once, suppresses a repeat, and opens one bounce task", async () => {
     const ctx = await firm();
     await asMaintenance(db);
     const event = await db.query<{ id: string }>(
-      `insert into public.outbox_events (organization_id, aggregate_type, aggregate_id, event_type, payload, idempotency_key)
-       values ($1, 'invitation', $2, 'portal_invitation.email_requested', $3::jsonb, $4)
+      `insert into public.outbox_events (organization_id, aggregate_type, aggregate_id, event_type, payload, idempotency_key, occurred_at)
+       values ($1, 'invitation', $2, 'portal_invitation.email_requested', $3::jsonb, $4, now() - interval '11 minutes')
        returning id`,
       [
         ctx.orgId,
@@ -208,8 +210,8 @@ describe("outbound and inbound email", () => {
       [ctx.orgId],
     );
     const suppressedEvent = await db.query<{ id: string }>(
-      `insert into public.outbox_events (organization_id, aggregate_type, aggregate_id, event_type, payload, idempotency_key)
-       values ($1, 'invitation', $2, 'staff_invitation.email_requested', $3::jsonb, $4)
+      `insert into public.outbox_events (organization_id, aggregate_type, aggregate_id, event_type, payload, idempotency_key, occurred_at)
+       values ($1, 'invitation', $2, 'staff_invitation.email_requested', $3::jsonb, $4, now() - interval '11 minutes')
        returning id`,
       [ctx.orgId, randomUUID(), JSON.stringify({ recipient_email: "client@example.test", role: "assistant" }), `staff-${randomUUID()}`],
     );
@@ -247,8 +249,8 @@ describe("outbound and inbound email", () => {
     await asMaintenance(db);
     const eventId = (
       await db.query<{ id: string }>(
-        `insert into public.outbox_events (organization_id, aggregate_type, aggregate_id, event_type, payload, idempotency_key)
-         values ($1, 'invitation', $2, 'portal_invitation.email_requested', $3::jsonb, $4)
+        `insert into public.outbox_events (organization_id, aggregate_type, aggregate_id, event_type, payload, idempotency_key, occurred_at)
+         values ($1, 'invitation', $2, 'portal_invitation.email_requested', $3::jsonb, $4, now() - interval '11 minutes')
          returning id`,
         [
           ctx.orgId,
@@ -469,5 +471,17 @@ describe("outbound and inbound email", () => {
       await asMaintenance(db);
       await db.query(`drop table public.messages`);
     }
+  });
+
+  it("keeps matter reply addresses within the 64-character local-part limit", async () => {
+    const f = await firm();
+    await asMaintenance(db);
+    const short = await db.query<{ address: string }>(`select app.firm_reply_address($1, $2, 'docs.casevoya.ca') as address`, [f.orgId, f.matterId]);
+    expect(short.rows[0].address).toMatch(new RegExp(`^${f.orgSlug}\\+[a-f0-9]{32}@docs\\.casevoya\\.ca$`));
+    const long = `walk-two-immigration-test-${randomUUID().slice(0, 6)}`;
+    await db.query(`update public.organizations set slug = $2 where id = $1`, [f.orgId, long]);
+    const fallback = await db.query<{ address: string }>(`select app.firm_reply_address($1, $2, 'docs.casevoya.ca') as address`, [f.orgId, f.matterId]);
+    expect(fallback.rows[0].address).toBe(`${long}@docs.casevoya.ca`);
+    expect(fallback.rows[0].address.split("@")[0].length).toBeLessThanOrEqual(64);
   });
 });

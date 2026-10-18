@@ -167,7 +167,7 @@ export function staffStepUpLocation(pathname: string, search: string, reopen: bo
   return `/mfa?step=6&next=${encodeURIComponent(`${pathname}${query ? `?${query}` : ""}`)}`;
 }
 
-/** The invitation link the firm shares. The email does not carry it. */
+/** The invitation link. The invitation email carries it; the owner gets it as a backup. */
 export function inviteLink(origin: string, path: string): string {
   return `${origin.replace(/\/+$/, "")}${path}`;
 }

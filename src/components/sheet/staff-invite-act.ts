@@ -22,10 +22,11 @@ function stepUp(reopen: boolean) {
 }
 
 /**
- * The link goes to the owner, once: the invitation email does not carry it. It is copied when
- * the browser allows, and shown in the toast either way.
+ * The invitation email carries their private link. The link also comes back to the owner, once,
+ * as a backup: it is copied when the browser allows, and shown in the toast either way. When the
+ * link could not be sealed into the email, the toast says so and the owner gives it themselves.
  */
-async function shareLink(path: string, title: string) {
+async function shareLink(path: string, title: string, emailLink: boolean) {
   const link = inviteLink(window.location.origin, path);
   let copied = false;
   try {
@@ -34,13 +35,15 @@ async function shareLink(path: string, title: string) {
   } catch {
     copied = false;
   }
-  toast2(title, {
-    kind: "ok",
-    sub: copied
-      ? `Link copied. Send it to them: the invitation email doesn’t include it. It works once and expires in 7 days. ${link}`
-      : `Send them this link: the invitation email doesn’t include it. It works once and expires in 7 days. ${link}`,
-    duration: 30_000,
-  });
+  const expiry = "It works once and expires in 7 days.";
+  const sub = emailLink
+    ? copied
+      ? `The email contains their private link. Link also copied. ${expiry} ${link}`
+      : `The email contains their private link. Here it is too: ${link} ${expiry}`
+    : copied
+      ? `Link copied. Send it to them: the email goes without it this time. ${expiry} ${link}`
+      : `Send them this link: the email goes without it this time. ${expiry} ${link}`;
+  toast2(title, { kind: "ok", sub, duration: 30_000 });
 }
 
 /** Saves the Invite staff dialog through the server action. The database decides. */
@@ -71,7 +74,7 @@ export async function runStaffInvite(button: HTMLElement, router: Router) {
   const input = field(dialog, "sE");
   if (input) input.value = "";
   dialog.close();
-  await shareLink(result.path, button.dataset.toast || "Invitation sent");
+  await shareLink(result.path, button.dataset.toast || "Invitation sent", result.emailLink);
   router.refresh();
 }
 
@@ -102,7 +105,7 @@ export async function runStaffResend(button: HTMLElement, root: ParentNode, rout
     toast2(result.error, { kind: "bad", sub: "Nothing was sent." });
     return;
   }
-  await shareLink(result.path, button.dataset.t || "Invitation sent again");
+  await shareLink(result.path, button.dataset.t || "Invitation sent again", result.emailLink);
   router.refresh();
 }
 

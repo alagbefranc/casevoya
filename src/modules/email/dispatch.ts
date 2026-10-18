@@ -31,7 +31,24 @@ export type DispatchDeps = {
     providerMessageId: string | null,
     error: string | null,
   ) => Promise<void>;
+  /** Opens a sealed invitation link (context.sealed_link) for that invitation. Null when it cannot. */
+  openLink?: (sealed: string, invitationId: string) => Promise<string | null>;
 };
+
+/**
+ * The invitation link, opened from its sealed form, or null. Any failure (no key, tampered or
+ * foreign ciphertext, a throw) means the linkless invitation is sent instead.
+ */
+async function openSealedLink(deps: DispatchDeps, sealed: unknown, invitationId: unknown): Promise<string | null> {
+  if (!deps.openLink || typeof sealed !== "string" || typeof invitationId !== "string" || !sealed || !invitationId) {
+    return null;
+  }
+  try {
+    return await deps.openLink(sealed, invitationId);
+  } catch {
+    return null;
+  }
+}
 
 function includesAddress(list: string[], email: string): boolean {
   const target = email.toLowerCase();
@@ -48,7 +65,13 @@ export async function dispatchOutbound(
     const prepared = await deps.prepare(event.id, options.worker, options.inboundDomain, options.fromAddress);
     if (prepared.action !== "send" || !prepared.messages) continue;
     for (const message of prepared.messages) {
-      const rendered = renderEmail({ ...message.context, template: message.template });
+      // Only a link this worker opened reaches the template; never the sealed form.
+      const context: Record<string, unknown> = { ...message.context };
+      const sealed = context.sealed_link;
+      delete context.sealed_link;
+      delete context.link;
+      const link = await openSealedLink(deps, sealed, context.invitation_id);
+      const rendered = renderEmail({ ...context, template: message.template, ...(link ? { link } : {}) });
       const outcome = await deps.send({
         to: message.to,
         fromAddress: message.from_address,

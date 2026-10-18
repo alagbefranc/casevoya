@@ -18,7 +18,10 @@ export function InviteForm({ organizations }: { organizations: OrgOption[] }) {
       ) : null}
       {state?.link ? (
         <p role="status" className="break-all rounded-control bg-surface-muted px-4 py-3">
-          Share this link once. It expires in 7 days. {state.link}
+          {state.emailLink
+            ? "Invitation sent. The email contains their private link. Here it is too, as a backup. It works once and expires in 7 days. "
+            : "Invitation sent. Share this link once. It expires in 7 days. "}
+          {state.link}
         </p>
       ) : null}
       <label className="flex flex-col gap-2">

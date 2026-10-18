@@ -3,17 +3,19 @@
 import { isInvitationToken } from "@/lib/auth/invitations";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
+import { attachStaffInviteEmailLink } from "@/modules/email/invite-link";
 import { inviteRoleFor, readStaffInvite, staffInviteError, type StaffInviteRole } from "@/modules/sheet/staff-present";
 
 /**
  * Staff invitations from the Designer Sheet's Staff tab. Each call acts as the signed-in user:
  * public.create_staff_invitation / revoke_staff_invitation decide (firm owner, aal2 and a recent
  * step-up). Creating an invitation also queues the firm's invitation email in the same
- * transaction (outbox event staff_invitation.email_requested). That email never carries the
- * link, so the one-time link is returned here, once, for the owner to share.
+ * transaction (outbox event staff_invitation.email_requested). The private link is sealed and
+ * attached to that email here (attachStaffInviteEmailLink); it is also returned once, so the
+ * owner has it as a backup. emailLink says whether the email will carry it.
  */
 
-type Invited = { path: string } | { error: string };
+type Invited = { path: string; emailLink: boolean } | { error: string };
 
 async function ownerClient(organizationId: string) {
   if (!isUuid(organizationId)) return { error: "Choose a firm." as const };
@@ -33,7 +35,8 @@ async function invite(organizationId: string, email: string, role: StaffInviteRo
   });
   if (error) return { error: staffInviteError(error.message) };
   if (typeof token !== "string" || !isInvitationToken(token)) return { error: "The invitation was not created." };
-  return { path: `/invite/${token}` };
+  const emailLink = await attachStaffInviteEmailLink(session.supabase, { organizationId, email, role, token });
+  return { path: `/invite/${token}`, emailLink };
 }
 
 export async function inviteStaff(input: { organizationId: string; email: string; role: string }): Promise<Invited> {

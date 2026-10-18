@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { MatterDialogs, MatterInviteDialog, MatterPeople, type MatterDialogsData, type MatterInviteData } from "@/components/sheet/designer/matter";
 import { InvitationsMarkup } from "@/components/sheet/markup/invitations";
-import { inviteEmailLines, renderEmail } from "@/modules/email/templates";
+import { INVITE_WITHOUT_LINK, inviteEmailLines, renderEmail } from "@/modules/email/templates";
 import { portalError } from "@/modules/portal-invitations/errors";
 import { needsStepUp } from "@/modules/sheet/matter-wire";
 import { safeAccessError } from "@/lib/auth/step-up";
@@ -84,7 +84,8 @@ describe("Invite to the portal dialog", () => {
     expect(html).not.toContain("data-toast");
     expect(html).toContain("<option>Ana Pereira</option>");
     expect(html).toContain("Maple Immigration invited you to the client portal.");
-    expect(html).toContain("The private link is not in this email.");
+    expect(html).toContain("Open your private link in this email to continue. It works once and expires in 7 days.");
+    expect(html).not.toContain("The private link is not in this email.");
     expect(html).toContain("Real client invitations are locked");
     expect(html).not.toMatch(/Northline|Priya|Olena|olena\.k/);
   });
@@ -204,9 +205,17 @@ describe("portal invite helpers", () => {
 });
 
 describe("invitation copy", () => {
-  it("previews exactly the email the outbox sends, which has no link", () => {
+  it("previews the email the outbox sends: their private link, or the linkless fallback", () => {
     const lines = inviteEmailLines("Maple Immigration", "portal");
-    expect(renderEmail({ template: "invite", kind: "portal", firm: "Maple Immigration" }).text).toBe(`${lines.lead} ${lines.rest}\n\nMaple Immigration\n`);
+    const link = `https://app.casevoya.ca/accept/client?token=${"a".repeat(64)}`;
+    const withLink = renderEmail({ template: "invite", kind: "portal", firm: "Maple Immigration", link }).text;
+    expect(withLink).toContain(lines.lead);
+    expect(withLink).toContain(link);
+    expect(withLink).toContain("It works once and expires in 7 days.");
+    expect(lines.rest).toContain("It works once and expires in 7 days.");
+    expect(renderEmail({ template: "invite", kind: "portal", firm: "Maple Immigration" }).text).toBe(
+      `${lines.lead} ${INVITE_WITHOUT_LINK}\n\nMaple Immigration\n`,
+    );
     expect(renderEmail({ template: "invite", kind: "staff", firm: "Maple" }).text).toContain("Maple invited you to a staff seat.");
   });
 
