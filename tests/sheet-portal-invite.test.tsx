@@ -83,8 +83,8 @@ describe("Invite to the portal dialog", () => {
     expect(html).toContain(`data-invite="1" data-org="${ORG}" data-matter="${MATTER}"`);
     expect(html).not.toContain("data-toast");
     expect(html).toContain("<option>Ana Pereira</option>");
-    expect(html).toContain("Maple Immigration invited you to the client portal.");
-    expect(html).toContain("Open your private link in this email to continue. It works once and expires in 7 days.");
+    expect(html).toContain("Your file with Maple Immigration is ready.");
+    expect(html).toContain("Maple Immigration invited you to your client portal. Open your portal to see your first step. Your private link works once and expires in 7 days.");
     expect(html).not.toContain("The private link is not in this email.");
     expect(html).toContain("Real client invitations are locked");
     expect(html).not.toMatch(/Northline|Priya|Olena|olena\.k/);
@@ -209,14 +209,15 @@ describe("invitation copy", () => {
     const lines = inviteEmailLines("Maple Immigration", "portal");
     const link = `https://app.casevoya.ca/accept/client?token=${"a".repeat(64)}`;
     const withLink = renderEmail({ template: "invite", kind: "portal", firm: "Maple Immigration", link }).text;
-    expect(withLink).toContain(lines.lead);
-    expect(withLink).toContain(link);
-    expect(withLink).toContain("It works once and expires in 7 days.");
-    expect(lines.rest).toContain("It works once and expires in 7 days.");
-    expect(renderEmail({ template: "invite", kind: "portal", firm: "Maple Immigration" }).text).toBe(
-      `${lines.lead} ${INVITE_WITHOUT_LINK}\n\nMaple Immigration\n`,
-    );
-    expect(renderEmail({ template: "invite", kind: "staff", firm: "Maple" }).text).toContain("Maple invited you to a staff seat.");
+    // The staff screen shows the heading as its bold lead and the email paragraph word for word.
+    expect(withLink).toContain(lines.lead.replace(/\.$/, ""));
+    expect(withLink).toContain(lines.rest);
+    expect(withLink).toContain(`Open your portal: ${link}`);
+    expect(lines.rest).toContain("Your private link works once and expires in 7 days.");
+    const linkless = renderEmail({ template: "invite", kind: "portal", firm: "Maple Immigration" }).text;
+    expect(linkless).toContain(`Maple Immigration invited you to your client portal. ${INVITE_WITHOUT_LINK}`);
+    expect(linkless).not.toContain("https://");
+    expect(renderEmail({ template: "invite", kind: "staff", firm: "Maple" }).text).toContain("You’re invited to join Maple");
   });
 
   it("explains every refusal create_portal_invitation returns", () => {

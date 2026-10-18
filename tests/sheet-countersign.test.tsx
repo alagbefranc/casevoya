@@ -174,13 +174,13 @@ describe("countersign turn and dialog", () => {
 describe("the consultant's turn email", () => {
   it("is the staff copy of the agreement email, linking to the Sheet's Agreements page", () => {
     const staff = renderEmail({ template: "agreement", firm: "Northline", audience: "staff", link: "https://app.casevoya.ca/sheet/agreements" });
-    expect(staff.subject).toBe("Your countersignature is needed — Northline");
-    expect(staff.text).toContain("It is your turn to countersign it for the firm.");
-    expect(staff.html).toContain('<a href="https://app.casevoya.ca/sheet/agreements">');
+    expect(staff.subject).toBe("Your countersignature is needed at Northline");
+    expect(staff.text).toContain("It is your turn to countersign it for Northline.");
+    expect(staff.html).toContain('<a href="https://app.casevoya.ca/sheet/agreements" style=');
     expect(staff.text).not.toContain("portal");
     const client = renderEmail({ template: "agreement", firm: "Northline" });
-    expect(client.text).toContain("in the portal");
-    expect(client.html).not.toContain("<a ");
+    expect(client.text).toContain("sign in your portal");
+    expect(client.html).toContain('<a href="https://app.casevoya.ca/portal/agreements" style=');
   });
 
   it("gets its link from the worker's app origin, never from the database", async () => {
@@ -227,6 +227,8 @@ describe("the consultant's turn email", () => {
     });
     expect(sent[0].text).toContain("https://app.casevoya.ca/sheet/agreements");
     expect(sent.map((item) => item.text).join(" ")).not.toContain("evil.example");
-    expect(sent[1].text).not.toContain("https://");
+    // The client's button is the portal's Agreements page on the same origin, built by the renderer.
+    expect(sent[1].text).toContain("https://app.casevoya.ca/portal/agreements");
+    expect(sent[1].text).not.toContain("/sheet/");
   });
 });
