@@ -141,8 +141,19 @@ export function parseSealSource(value: unknown): SealSource {
         ip: str(row.ip),
         consentVersion: str(row.consent_version),
       };
-    }),
+    }).sort(byEventOrder),
   };
+}
+
+/** Where events share a timestamp (the last signature and completion do), sent comes first, then signatures by signing order, then completion. */
+const EVENT_RANK: Record<string, number> = { sent: 0, completed: 2 };
+
+function byEventOrder(a: SealEvent, b: SealEvent): number {
+  const time = Date.parse(a.occurredAt) - Date.parse(b.occurredAt);
+  if (time !== 0) return time;
+  const rank = (EVENT_RANK[a.kind] ?? 1) - (EVENT_RANK[b.kind] ?? 1);
+  if (rank !== 0) return rank;
+  return (a.signingOrder ?? 0) - (b.signingOrder ?? 0);
 }
 
 /**
