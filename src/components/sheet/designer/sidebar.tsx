@@ -236,6 +236,11 @@ export function SheetSidebar({ data }: { data: SidebarData }) {
           {data.me.name}
           <small>{data.me.role}</small>
         </div>
+        <form method={"post"} action={"/sign-out"} data-live={"1"} style={{ marginLeft: "auto" }}>
+          <button type={"submit"} aria-label={"Sign out"} title={"Sign out"} style={{ color: "#8b8680", display: "flex", padding: "6px" }}>
+            <Icon name={"logout"} />
+          </button>
+        </form>
       </div>
     </aside>
   );

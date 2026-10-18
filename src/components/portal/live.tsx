@@ -216,6 +216,11 @@ function Account({ viewer }: { viewer: PortalViewer }) {
       ) : (
         <Empty title="No person record" copy="Your login isn’t linked to a person in this firm yet." />
       )}
+      <form method="post" action="/sign-out" style={{ marginTop: "18px" }}>
+        <button className="btn s" type="submit">
+          <svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-logout"></use></svg>Sign out
+        </button>
+      </form>
     </div>
   );
 }
