@@ -23,6 +23,8 @@ import { SampleCasePanel } from "@/components/sheet/designer/sample-case";
 import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
 import { SheetStaffTab, StaffAfter, StaffHeader } from "@/components/sheet/designer/invitations";
 import { PolicyMissingAlert, PortalPoliciesAfter, SettingsPortalHeader, SheetPortalPolicies } from "@/components/sheet/designer/portal-policies";
+import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam } from "@/components/sheet/designer/settings";
+import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
 import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
 import { NotificationsHeader, SheetNotifications } from "@/components/sheet/designer/notifications";
 import { loadSheetNotifications } from "@/modules/sheet/notifications-load";
@@ -336,6 +338,20 @@ export async function SheetBody({
           after={<PortalPoliciesAfter dialogs={dialogs} />}
         >
           <SheetPortalPolicies data={policies} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Team and seats and Security: the firm's team, invitations, continuity contact and sign-in posture.
+  if (page === "settings" && (query.tab === "team" || query.tab === "security") && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, header, content } =
+      query.tab === "team"
+        ? await loadSheetSettingsTeam(access.staff).then((loaded) => ({ ...loaded, content: <SheetSettingsTeam data={loaded.page} /> }))
+        : await loadSheetSettingsSecurity(access.staff).then((loaded) => ({ ...loaded, content: <SheetSettingsSecurity data={loaded.page} /> }));
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={chrome.sidebar} header={<SettingsHeader data={header} />} statusbar={chrome.statusbar}>
+          {content}
         </SheetFrame>
       </SheetScreen>
     );
