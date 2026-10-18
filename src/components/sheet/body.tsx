@@ -21,6 +21,12 @@ import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
 import { SheetStaffTab, StaffAfter, StaffHeader } from "@/components/sheet/designer/invitations";
 import { PolicyMissingAlert, PortalPoliciesAfter, SettingsPortalHeader, SheetPortalPolicies } from "@/components/sheet/designer/portal-policies";
 import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
+import { ReportsExportDialog, ReportsHeader, SheetReports } from "@/components/sheet/designer/reports";
+import { loadSheetReports } from "@/modules/sheet/reports-load";
+import { QueueHeader, SheetQueue } from "@/components/sheet/designer/queue";
+import { loadSheetQueue } from "@/modules/sheet/queue-load";
+import { ExportsDialog, ExportsHeader, SheetExports } from "@/components/sheet/designer/exports";
+import { loadSheetExports } from "@/modules/sheet/exports-load";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
@@ -121,6 +127,49 @@ export async function SheetBody({
           after={<TasksDialog data={tasks.dialog} />}
         >
           <SheetTasks data={tasks} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Reports (T041): Operations, Money, Processing and outcomes, Scheduled. Each tab is role-gated.
+  if (page === "reports" && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, reports } = await loadSheetReports(access.staff, query);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={chrome.sidebar}
+          header={<ReportsHeader tab={reports.tab} pills={reports.pills} />}
+          statusbar={chrome.statusbar}
+          after={<ReportsExportDialog data={reports.dialog} />}
+        >
+          <SheetReports data={reports} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Team queue: open tasks, reviews, deadlines to verify and money waiting for a second person.
+  if (page === "queue" && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, queue } = await loadSheetQueue(access.staff);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={chrome.sidebar} header={<QueueHeader counts={queue.counts} />} statusbar={chrome.statusbar}>
+          <SheetQueue data={queue} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Client-file exports (T040): export jobs for the matters the signed-in person can export.
+  if (page === "exports" && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, exports } = await loadSheetExports(access.staff, query);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={chrome.sidebar}
+          header={<ExportsHeader data={exports.header} />}
+          statusbar={chrome.statusbar}
+          after={<ExportsDialog data={exports.dialog} />}
+        >
+          <SheetExports data={exports} />
         </SheetFrame>
       </SheetScreen>
     );

@@ -6560,6 +6560,222 @@ export type Database = {
         }
         Relationships: []
       }
+      matter_exports: {
+        Row: {
+          byte_size: number | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          contents: Json
+          created_at: string
+          created_by: string | null
+          download_count: number
+          excluded: Json
+          expires_at: string | null
+          failed_at: string | null
+          failure_reason: string | null
+          file_count: number | null
+          id: string
+          idempotency_key: string
+          is_sample: boolean
+          last_downloaded_at: string | null
+          last_downloaded_by: string | null
+          manifest_sha256: string | null
+          matter_id: string
+          organization_id: string
+          progress: number
+          ready_at: string | null
+          record_count: number | null
+          requested_at: string
+          requested_by: string
+          sha256: string | null
+          stage: string
+          status: Database["public"]["Enums"]["matter_export_status"]
+          storage_bucket: string | null
+          storage_key: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          byte_size?: number | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          contents?: Json
+          created_at?: string
+          created_by?: string | null
+          download_count?: number
+          excluded?: Json
+          expires_at?: string | null
+          failed_at?: string | null
+          failure_reason?: string | null
+          file_count?: number | null
+          id?: string
+          idempotency_key: string
+          is_sample?: boolean
+          last_downloaded_at?: string | null
+          last_downloaded_by?: string | null
+          manifest_sha256?: string | null
+          matter_id: string
+          organization_id: string
+          progress?: number
+          ready_at?: string | null
+          record_count?: number | null
+          requested_at?: string
+          requested_by: string
+          sha256?: string | null
+          stage?: string
+          status?: Database["public"]["Enums"]["matter_export_status"]
+          storage_bucket?: string | null
+          storage_key?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          byte_size?: number | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          contents?: Json
+          created_at?: string
+          created_by?: string | null
+          download_count?: number
+          excluded?: Json
+          expires_at?: string | null
+          failed_at?: string | null
+          failure_reason?: string | null
+          file_count?: number | null
+          id?: string
+          idempotency_key?: string
+          is_sample?: boolean
+          last_downloaded_at?: string | null
+          last_downloaded_by?: string | null
+          manifest_sha256?: string | null
+          matter_id?: string
+          organization_id?: string
+          progress?: number
+          ready_at?: string | null
+          record_count?: number | null
+          requested_at?: string
+          requested_by?: string
+          sha256?: string | null
+          stage?: string
+          status?: Database["public"]["Enums"]["matter_export_status"]
+          storage_bucket?: string | null
+          storage_key?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      matter_legal_holds: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          matter_id: string
+          organization_id: string
+          placed_at: string
+          placed_by: string
+          reason: string
+          release_reason: string | null
+          released_at: string | null
+          released_by: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id: string
+          organization_id: string
+          placed_at?: string
+          placed_by: string
+          reason: string
+          release_reason?: string | null
+          released_at?: string | null
+          released_by?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          placed_at?: string
+          placed_by?: string
+          reason?: string
+          release_reason?: string | null
+          released_at?: string | null
+          released_by?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      matter_closures: {
+        Row: {
+          blockers: Json
+          closed_at: string
+          closed_by: string
+          closed_on: string
+          created_at: string
+          created_by: string | null
+          custodian_membership_id: string | null
+          evidence_id: string | null
+          id: string
+          legal_hold_active: boolean
+          matter_id: string
+          organization_id: string
+          override_reason: string | null
+          reason: string
+          retention_on: string
+          retention_policy: Json
+          retention_review_required: boolean
+          retention_years: number
+        }
+        Insert: {
+          blockers?: Json
+          closed_at?: string
+          closed_by: string
+          closed_on: string
+          created_at?: string
+          created_by?: string | null
+          custodian_membership_id?: string | null
+          evidence_id?: string | null
+          id?: string
+          legal_hold_active: boolean
+          matter_id: string
+          organization_id: string
+          override_reason?: string | null
+          reason: string
+          retention_on: string
+          retention_policy: Json
+          retention_review_required?: boolean
+          retention_years: number
+        }
+        Update: {
+          blockers?: Json
+          closed_at?: string
+          closed_by?: string
+          closed_on?: string
+          created_at?: string
+          created_by?: string | null
+          custodian_membership_id?: string | null
+          evidence_id?: string | null
+          id?: string
+          legal_hold_active?: boolean
+          matter_id?: string
+          organization_id?: string
+          override_reason?: string | null
+          reason?: string
+          retention_on?: string
+          retention_policy?: Json
+          retention_review_required?: boolean
+          retention_years?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -6696,6 +6912,60 @@ export type Database = {
       }
       discard_client_reconciliation: {
         Args: { p_reason: string; p_reconciliation_id: string }
+        Returns: string
+      }
+      record_report_export: {
+        Args: { p_format: string; p_organization_id: string; p_range: string; p_tab: string }
+        Returns: string
+      }
+      start_matter_export: {
+        Args: { p_idempotency_key: string; p_matter_id: string }
+        Returns: string
+      }
+      cancel_matter_export: {
+        Args: { p_export_id: string }
+        Returns: undefined
+      }
+      authorize_matter_export_download: {
+        Args: { p_export_id: string }
+        Returns: Json
+      }
+      service_matter_export_progress: {
+        Args: { p_export_id: string; p_progress: number; p_stage: string }
+        Returns: undefined
+      }
+      service_complete_matter_export: {
+        Args: {
+          p_byte_size: number
+          p_contents: Json
+          p_excluded: Json
+          p_export_id: string
+          p_file_count: number
+          p_manifest_sha256: string
+          p_record_count: number
+          p_sha256: string
+          p_storage_key: string
+        }
+        Returns: boolean
+      }
+      service_fail_matter_export: {
+        Args: { p_export_id: string; p_reason: string }
+        Returns: undefined
+      }
+      place_legal_hold: {
+        Args: { p_matter_id: string; p_reason: string }
+        Returns: string
+      }
+      release_legal_hold: {
+        Args: { p_hold_id: string; p_reason: string }
+        Returns: undefined
+      }
+      matter_closure_check: {
+        Args: { p_matter_id: string }
+        Returns: Json
+      }
+      close_matter: {
+        Args: { p_expected_version: number; p_matter_id: string; p_override_reason?: string | null; p_reason: string }
         Returns: string
       }
       firm_payment_account_for_owner: {
@@ -7821,6 +8091,7 @@ export type Database = {
         | "recorded"
       client_fund_method: "bank_transfer" | "interac_e_transfer" | "cheque" | "cash"
       client_reconciliation_status: "pending_review" | "reconciled" | "exceptions" | "discarded"
+      matter_export_status: "building" | "ready" | "failed" | "cancelled"
       credit_note_status: "draft" | "issued" | "declined"
       invoice_status:
         | "draft"
@@ -8249,6 +8520,7 @@ export const Constants = {
       client_fund_entry_status: ["pending_verification", "verified", "rejected", "pending_approval", "approved", "declined", "recorded"],
       client_fund_method: ["bank_transfer", "interac_e_transfer", "cheque", "cash"],
       client_reconciliation_status: ["pending_review", "reconciled", "exceptions", "discarded"],
+      matter_export_status: ["building", "ready", "failed", "cancelled"],
       credit_note_status: ["draft", "issued", "declined"],
       invoice_refund_status: ["pending", "requires_action", "succeeded", "failed", "canceled"],
       invoice_dispute_status: [

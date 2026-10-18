@@ -63,6 +63,7 @@ import { mayOfferPersonEdit, personEditData } from "@/modules/sheet/edit-person"
 import { DEADLINE_KINDS, DEADLINE_ROLES, deadlineSource } from "@/modules/sheet/new-deadline";
 import { missingPolicies } from "@/modules/portal-policies/defaults";
 import { loadCurrentPolicies } from "@/modules/portal-policies/load";
+import { loadClosurePanel } from "@/modules/sheet/closure-load";
 import {
   governmentLabel,
   isoDateInTimeZone,
@@ -548,6 +549,17 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     confirmOutcome,
     closure: { closed: matter.stage === "closed", retention: matter.retention_on ? longDate(matter.retention_on) : null },
   };
+  // The Closure tab's checklist (T040): money, tasks, retention setting and legal hold.
+  if (tab === "closure") {
+    page.closure.panel = await loadClosurePanel(supabase, {
+      organizationId: org,
+      matterId: matter.id,
+      openTasks: taskRows.filter((row) => row.status === "open" || row.status === "blocked").length,
+      consultant: matter.responsible_consultant_membership_id ? (members.get(matter.responsible_consultant_membership_id) ?? null) : null,
+      outcome: matter.outcome ? outcomeLabel(matter.outcome) : null,
+      closed: matter.stage === "closed",
+    });
+  }
 
   return { chrome, header, rbar, dialogs, page, countersign };
 }

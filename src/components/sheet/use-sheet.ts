@@ -59,6 +59,8 @@ import {
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { runNewTask, syncNewTask } from "./new-task-act";
+import { runReportExport } from "./report-acts";
+import { runExportAct } from "./export-acts";
 import { inviteFromEdit, openPersonEdit, runPersonEdit } from "./person-edit-act";
 import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-invite-act";
 import { policyDialogId, restorePolicyDraft, runPublishPolicy } from "./portal-policy-act";
@@ -129,9 +131,12 @@ const FILTER_TOKEN: Record<string, string> = {
   "Partially paid": "partial",
   Paid: "paid",
   "Voided or credited": "closed",
+  Unassigned: "unassigned",
+  Money: "money",
+  Government: "government",
 };
 /** Pages whose `.fp-bar` chips and search filter real rows by their `data-f` tokens. */
-const FILTER_PAGES = new Set(["tasks", "clients", "agreements", "finance"]);
+const FILTER_PAGES = new Set(["tasks", "clients", "agreements", "finance", "queue"]);
 
 export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
   const router = useRouter();
@@ -190,12 +195,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     // The Tasks page's filter chips (All, Mine, Overdue, Blocked, High priority) and the Clients
     // page's (All, Applicants, Sponsors, Dependants, Leads), with search, narrow the real rows by
     // their `data-f` tokens and text, and keep "N of M shown" true where the page has it.
-    const filters = FILTER_PAGES.has(page) ? root.querySelector<HTMLElement>(".fp-bar") : null;
+    // The Team queue's bar is the Designer's plain `.bar`, and its rows are the `#ql` list items.
+    const filters = FILTER_PAGES.has(page) ? root.querySelector<HTMLElement>(page === "queue" ? "#content > .bar" : ".fp-bar") : null;
     const applyFilters = () => {
       if (!filters) return;
       const q = (filters.querySelector("input")?.value ?? "").trim().toLowerCase();
       const token = FILTER_TOKEN[filters.querySelector(".fchip.on")?.textContent?.trim() ?? ""] ?? "";
-      const rows = [...root.querySelectorAll<HTMLElement>(".t tbody tr")];
+      const rows = [...root.querySelectorAll<HTMLElement>(page === "queue" ? "#ql .li" : ".t tbody tr")];
       let shown = 0;
       for (const row of rows) {
         const flags = (row.dataset.f ?? "").split(" ");
@@ -350,6 +356,23 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (task.getAttribute("aria-busy") === "true") return;
         task.setAttribute("aria-busy", "true");
         void runNewTask(task, router).finally(() => task.removeAttribute("aria-busy"));
+        return;
+      }
+      // Reports > Export, and the Client-file exports page (start, cancel, download, closure, legal hold).
+      const reportExport = target.closest<HTMLElement>("[data-report-export]");
+      if (reportExport && root.contains(reportExport)) {
+        event.preventDefault();
+        if (reportExport.getAttribute("aria-busy") === "true" || reportExport.hasAttribute("disabled")) return;
+        reportExport.setAttribute("aria-busy", "true");
+        void runReportExport(reportExport).finally(() => reportExport.removeAttribute("aria-busy"));
+        return;
+      }
+      const exportAct = target.closest<HTMLElement>("[data-export-act]");
+      if (exportAct && root.contains(exportAct)) {
+        event.preventDefault();
+        if (exportAct.getAttribute("aria-busy") === "true" || exportAct.hasAttribute("disabled")) return;
+        exportAct.setAttribute("aria-busy", "true");
+        void runExportAct(exportAct, root, router).finally(() => exportAct.removeAttribute("aria-busy"));
         return;
       }
       const palette = target.closest<HTMLElement>("[data-palette]");
@@ -545,7 +568,7 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
           applyFilters();
         }
       }
-      const row = target.closest<HTMLElement>("tr[data-href]");
+      const row = target.closest<HTMLElement>("tr[data-href], #ql .li[data-href]");
       if (row?.dataset.href && root.contains(row) && !target.closest("a, button, .ck")) {
         router.push(row.dataset.href);
       }

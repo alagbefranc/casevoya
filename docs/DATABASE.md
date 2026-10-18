@@ -235,6 +235,15 @@ Known senders on a matter go through `create_upload_intent` and `complete_docume
 
 Deploy steps and the routing env vars are in `docs/DEPLOY.md`. The Worker does not publish a `workers.dev` hostname (`workers_dev = false`). Each claimed slug gets an exact rule `<slug>@docs.casevoya.ca` named `casevoya-firm:<slug>` on zone `303990065795d627a9fd337b01258024`, action Send to Worker `casevoya-inbound-email`. A failed rule does not roll back the slug. `POST /api/email/routing/reconcile` adds missing firm rules and deletes stale ones with that name prefix. The `casevoya-test@` rule and the catch-all stay. Plus-tags use subaddressing and do not get their own rules. `app.reserved_firm_slugs` is pinned with `search_path = ''` in `20261017200300`. That migration does not alter `storage` tables.
 
+## Reports, client-file exports, legal holds and closure (repository only, `20261019205000`–`20261019205100`)
+
+Not applied on the live project. Additive; no existing function is redefined.
+
+| Migration | What it adds |
+| --- | --- |
+| `20261019205000_matter_records_enums.sql` | `public.matter_export_status` (`building`, `ready`, `failed`, `cancelled`). |
+| `20261019205100_matter_records_exports_closure.sql` | `public.record_report_export` (role per tab, audit `report.exported`). `public.matter_exports` (forced RLS; select for owner, licensed consultant, case manager who can read the matter; written only by functions) with `start_matter_export` (step-up, one building job per matter, stale builds fail after 15 min), `cancel_matter_export`, `authorize_matter_export_download` (requester or owner, step-up, 24-hour window, audited), and service-role-only `service_matter_export_progress`, `service_complete_matter_export` (key must sit under `<org>/<export>/`), `service_fail_matter_export`. Private bucket `matter-exports` (50 MB, `application/zip`, no storage policies). `public.matter_legal_holds` (forced RLS, append-only apart from one release) with `place_legal_hold` / `release_legal_hold` (firm owner + step-up + reason) and `app.guard_legal_hold_delete` BEFORE DELETE triggers (`zz_legal_hold_delete`) on matters, documents, document_versions, document_matter_refs, tasks, deadlines, matter_stage_evidence, agreements, invoices and matter_exports. `public.matter_closures` (forced RLS, append-only) with `app.matter_closure_blockers`, `public.matter_closure_check` and `public.close_matter` (post-decision only; open client funds or unpaid issued invoices need the owner's reviewed reason after a step-up; retention = closure date + the firm's `retention_policy` years, `retention_review_required` true; calls the existing `app.transition_matter_stage` and `app.open_matter_column('retention')`). |
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.
