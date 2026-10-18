@@ -63,7 +63,7 @@ describe("receipt presenter (CICC Code s. 32(b))", () => {
       Matter: "CA-2026-0001 · Synthetic matter",
       Method: "Interac e-Transfer",
       Reference: "REF-55102",
-      "Held in": "Held in the firm’s client account at Synthetic Bank ••• 4410 (Client account)",
+      "Held in": "The firm’s client account at Synthetic Bank ••• 4410 (Client account)",
       Firm: "Synthetic Legal Name Inc. (Synthetic Firm)",
       Licensee: "Synthetic Consultant, CICC licence RCIC R000001",
       Issued: "18 October 2026, 14:05:07 EDT",
@@ -79,7 +79,7 @@ describe("receipt presenter (CICC Code s. 32(b))", () => {
     expect(licenseeLine({ consultantName: "A", consultantLicence: null })).toBe("A");
     expect(licenseeLine({ consultantName: null, consultantLicence: "RCIC R1" })).toBe("CICC licence RCIC R1");
     expect(firmLine({ firmLegalName: "Same", firmDisplayName: "Same" })).toBe("Same");
-    expect(heldIn({ accountLabel: "Trust", accountInstitution: "Bank", accountLast4: "0001" })).toBe("Held in the firm’s client account at Bank ••• 0001 (Trust)");
+    expect(heldIn({ accountLabel: "Trust", accountInstitution: "Bank", accountLast4: "0001" })).toBe("The firm’s client account at Bank ••• 0001 (Trust)");
     expect(longDate("2026-02-01")).toBe("1 February 2026");
     expect(receiptFilename({ number: "RC-0012" })).toBe("receipt-rc-0012.pdf");
   });

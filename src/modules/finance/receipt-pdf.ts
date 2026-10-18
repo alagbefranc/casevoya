@@ -88,7 +88,7 @@ export function licenseeLine(receipt: Pick<ClientFundReceipt, "consultantName" |
 }
 
 export function heldIn(receipt: Pick<ClientFundReceipt, "accountLabel" | "accountInstitution" | "accountLast4">): string {
-  return `Held in the firm’s client account at ${receipt.accountInstitution} ••• ${receipt.accountLast4} (${receipt.accountLabel})`;
+  return `The firm’s client account at ${receipt.accountInstitution} ••• ${receipt.accountLast4} (${receipt.accountLabel})`;
 }
 
 export const RECEIPT_RULE =
