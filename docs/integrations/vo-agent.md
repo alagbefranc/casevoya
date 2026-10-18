@@ -1,0 +1,76 @@
+# Vo agent service (Claude Agent SDK)
+
+Vo, Casevoya's drafting assistant, runs on the Claude Agent SDK in its own container. This note is
+for whoever deploys it and for the privacy reviewer. Status: **built and tested with the SDK
+mocked; not deployed.**
+
+## Sources consulted (retrieved 2026-10-18)
+
+- Claude Agent SDK, TypeScript reference: https://code.claude.com/docs/en/agent-sdk/typescript
+  (`query()`, `Options`: `model`, `tools`, `allowedTools`, `disallowedTools`, `permissionMode`,
+  `canUseTool`, `hooks`, `maxTurns`, `maxBudgetUsd`, `systemPrompt`, `mcpServers`,
+  `settingSources`, `cwd`, `env`; `PreToolUseHookInput`, `SyncHookJSONOutput`
+  `permissionDecision`; `SDKResultMessage` `result`, `usage`, `total_cost_usd`).
+- Claude Agent SDK, custom tools: https://code.claude.com/docs/en/agent-sdk/custom-tools
+  (`tool()`, `createSdkMcpServer()`, `mcp__{server}__{tool}` names, `tools: []` removes every
+  built-in, bare `disallowedTools` names remove a tool from context, `alwaysLoad`).
+- Cloudflare Containers: https://developers.cloudflare.com/containers/get-started/,
+  https://developers.cloudflare.com/containers/configuration/wrangler/,
+  https://developers.cloudflare.com/containers/api/container-class/ (`Container`, `envVars`,
+  `defaultPort`, `sleepAfter`, `getRandom`), https://developers.cloudflare.com/containers/examples/env-vars-and-secrets/.
+
+## Shape
+
+```
+browser ── server action (app Worker, casevoya-app)
+             1. begin_vo_run (DB: staff + MFA + can read the matter, Vo on, capability,
+                sample mode, rate limits) → run id
+             2. POST /v1/run over service binding VO_AGENT, HMAC-signed (VO_AGENT_SECRET),
+                body: run id, firm, membership, task, matter/thread, the user's own
+                short-lived Supabase access token, expiry
+          ── casevoya-vo-agent Worker → VoAgentContainer (Node 22, services/vo-agent)
+             3. verify signature + freshness, build a Supabase client from the USER's token
+                (publishable key, RLS applies; no service-role key exists here)
+             4. Agent SDK query(): model claude-opus-5-5, only our in-process MCP tools
+             5. finish_vo_run as the user (draft saved as vo_drafts status=draft, or abstained /
+                answered / failed), with tool names, tokens and cost
+          ←  outcome to the app; the draft fills the composer; a PERSON presses Send
+```
+
+## Tools (in-process MCP server `casevoya`)
+
+| Tool | Tasks | Reads / writes |
+| --- | --- | --- |
+| `read_matter_summary` | reply, document request, ask | matter, open tasks, deadlines (verified or tentative), open document requests (explanations as data) |
+| `read_person` | all | display names and roles on the matter only |
+| `read_documents_index` | ask | document purposes, filtered by the owner's per-kind switches; no contents |
+| `read_messages_thread` | reply, document request | the run's own conversation (12 latest), only if "Client messages" is on |
+| `search_approved_sources` | reply, ask | titles, publishers, links of verified, current `official_sources`; no content |
+| `find_free_slots` | reply | the firm's next free consultation times (`staff_booking_availability` + the app's slot engine) and the published booking page link |
+| `save_draft` | reply, document request | the only write: keeps the guarded draft for `finish_vo_run` (status draft) |
+
+There is no send, email, submit or update tool. Client-, staff- and third-party-written text comes
+back inside per-run nonce delimiters; identity-number-like strings are removed first.
+
+## Locks
+
+`tools: []`; every built-in name in `disallowedTools`; `allowedTools` = this task's tools only;
+`permissionMode: "dontAsk"`; `canUseTool` denies off-list; a PreToolUse hook denies off-list and
+logs every attempt; `settingSources: []`; empty scratch `cwd`; subprocess env = PATH, HOME,
+ANTHROPIC_API_KEY only; `maxTurns` 8; `maxBudgetUsd` 0.75. The output guard (src/modules/vo/guard.ts)
+removes non-app links, emails, phone numbers and markup and replaces money amounts and durations
+with `[needs a sourced rule]`, which `send_vo_draft` refuses to send.
+
+## To go live (not done)
+
+1. `cd services/vo-agent && npm install && npm run bundle` (writes `dist/server.mjs`).
+2. Secrets on `casevoya-vo-agent`: `wrangler secret put VO_AGENT_SECRET` (32+ random chars) and
+   `wrangler secret put ANTHROPIC_API_KEY`. Then `wrangler deploy` from `services/vo-agent`.
+3. On `casevoya-app`: the same `VO_AGENT_SECRET` as a secret, and a service binding in
+   `wrangler.jsonc`: `"services": [..., { "binding": "VO_AGENT", "service": "casevoya-vo-agent" }]`.
+   Not added in this branch: a binding to a Worker that doesn't exist yet would fail the app deploy.
+4. Apply migrations `20261019207000` and `20261019207100`.
+5. Privacy review: client messages and matter details go to Anthropic (US) through the container.
+   The owner must turn Vo on per firm (off by default for real firms).
+
+Without steps 2–3 the app reports Vo as unavailable and every workflow works by hand.

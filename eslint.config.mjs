@@ -15,6 +15,10 @@ const eslintConfig = defineConfig([
     // OpenNext and Wrangler build output.
     ".open-next/**",
     ".wrangler/**",
+    // The Vo agent container runtime has its own package and tsconfig (services/vo-agent).
+    "services/vo-agent/runtime/**",
+    "services/vo-agent/dist/**",
+    "services/vo-agent/node_modules/**",
   ]),
   {
     files: ["src/components/port/**/*.{ts,tsx}", "src/components/portal/**/*.{ts,tsx}", "src/components/sheet/**/*.{ts,tsx}"],

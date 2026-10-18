@@ -18,6 +18,8 @@ import {
 } from "@/modules/messages/present";
 // HOOK(i18n/translate): "Draft in French". Null until src/modules/i18n/translate.ts lands; see the module.
 import { draftTranslation } from "@/modules/messages/translation-hook";
+import { draftWithVo, sendVoDraft } from "@/modules/vo/actions";
+import { NEEDS_RULE } from "@/modules/vo/prompt";
 import { CHAT_CSS } from "./chat-css";
 
 const SPRITE = "/assets/icons-coreui/sprite.svg";
@@ -44,6 +46,8 @@ type Pending = {
   messageId?: string;
   personIds: string[] | null;
   matterId: string;
+  /** Sent as the reviewed text of this Vo draft (send_vo_draft), not as a fresh message. */
+  voDraftId?: string;
 };
 
 function newKey(): string {
@@ -120,6 +124,9 @@ export function ChatView({ data }: { data: ChatData }) {
   const [acked, setAcked] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [atBottom, setAtBottom] = useState(true);
+  // The Vo draft now in the composer (staff only): Send sends the reviewed text of that draft.
+  const [voDraft, setVoDraft] = useState<string | null>(null);
+  const [voBusy, setVoBusy] = useState(false);
   useFit(root, view);
 
   const thread = data.threads.find((row) => row.id === selected) ?? null;
@@ -212,7 +219,13 @@ export function ChatView({ data }: { data: ChatData }) {
     setView("thread");
     setDocs([]);
     setNotice(null);
+    // A Vo draft belongs to its own conversation.
+    if (voDraft) {
+      setVoDraft(null);
+      setText("");
+    }
     const url = new URL(window.location.href);
+    url.searchParams.delete("vo");
     if (id === NEW) url.searchParams.delete("thread");
     else url.searchParams.set("thread", id);
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
@@ -220,16 +233,18 @@ export function ChatView({ data }: { data: ChatData }) {
 
   const submit = async (row: Pending) => {
     setPending((list) => list.map((item) => (item.key === row.key ? { ...item, state: "sending", error: undefined } : item)));
-    const result = await sendMessage({
-      organizationId: data.organizationId,
-      matterId: row.matterId,
-      threadId: row.threadId === NEW ? null : row.threadId,
-      personIds: row.threadId === NEW ? row.personIds : null,
-      body: row.body,
-      requiresAck: row.requiresAck,
-      documentIds: row.documentIds,
-      clientKey: row.key,
-    });
+    const result = row.voDraftId
+      ? await sendVoDraft({ organizationId: data.organizationId, draftId: row.voDraftId, body: row.body, clientKey: row.key })
+      : await sendMessage({
+          organizationId: data.organizationId,
+          matterId: row.matterId,
+          threadId: row.threadId === NEW ? null : row.threadId,
+          personIds: row.threadId === NEW ? row.personIds : null,
+          body: row.body,
+          requiresAck: row.requiresAck,
+          documentIds: row.documentIds,
+          clientKey: row.key,
+        });
     if ("error" in result) {
       setPending((list) => list.map((item) => (item.key === row.key ? { ...item, state: "failed", error: result.error } : item)));
       return;
@@ -246,6 +261,11 @@ export function ChatView({ data }: { data: ChatData }) {
     if (composing && data.mode === "staff" && people.length === 0) return setNotice("Choose who can read this message.");
     if (composing && !matterId) return setNotice("Choose a matter.");
     const target = thread?.matterId ?? matterId;
+    // A Vo draft goes out only as text a person reviewed: no placeholder may remain, and it
+    // can't carry attachments or a critical-instruction flag it wasn't drafted with.
+    const asVo = voDraft && thread ? voDraft : undefined;
+    if (asVo && body.toLowerCase().includes(NEEDS_RULE)) return setNotice("Replace “[needs a sourced rule]” with a checked, sourced fact, or remove it, before sending.");
+    if (asVo && (docs.length || critical)) return setNotice("Send the Vo draft on its own, then attach documents or mark a critical instruction in a new message.");
     const row: Pending = {
       key: newKey(),
       threadId: thread?.id ?? NEW,
@@ -256,8 +276,10 @@ export function ChatView({ data }: { data: ChatData }) {
       state: "sending",
       personIds: composing ? audiencePeople : null,
       matterId: target,
+      voDraftId: asVo,
     };
     setPending((list) => [...list, row]);
+    setVoDraft(null);
     setText("");
     setDocs([]);
     setCritical(false);
@@ -275,6 +297,47 @@ export function ChatView({ data }: { data: ChatData }) {
     if (!window.matchMedia("(pointer:fine)").matches) return;
     event.preventDefault();
     send();
+  };
+
+  // Opened from Vo drafts (Accept or Edit, `?vo=<draft>`): the draft fills this conversation's
+  // composer for the person to review, edit and send. Nothing is sent until they press Send.
+  const voPrefilled = useRef(false);
+  useEffect(() => {
+    if (voPrefilled.current || !data.vo || !thread) return;
+    voPrefilled.current = true;
+    const id = new URLSearchParams(window.location.search).get("vo");
+    const draft = id ? data.vo.drafts.find((row) => row.id === id && row.threadId === thread.id) : undefined;
+    if (!draft) return;
+    requestAnimationFrame(() => {
+      setVoDraft(draft.id);
+      setText(draft.body);
+      if (draft.needsRule) setNotice("Vo left “[needs a sourced rule]” where a rule, fee or deadline would go. Replace it with a checked, sourced fact, or remove it, before sending.");
+      requestAnimationFrame(() => {
+        grow();
+        input.current?.focus();
+      });
+    });
+  }, [data.vo, thread]);
+
+  const askVo = async (kind: "message_reply" | "document_request") => {
+    if (!thread || voBusy) return;
+    setVoBusy(true);
+    setNotice(null);
+    const result = await draftWithVo({ organizationId: data.organizationId, threadId: thread.id, kind });
+    setVoBusy(false);
+    if ("error" in result) return setNotice(result.error);
+    if ("abstained" in result) return setNotice("Vo didn’t draft this one: it needs a consultant (advice, eligibility or a rule without an approved source). Please answer it yourself.");
+    setVoDraft(result.draftId);
+    setText(result.text);
+    setNotice(
+      result.needsRule
+        ? "Vo’s draft is in the box. Replace “[needs a sourced rule]” with a checked, sourced fact, or remove it, then review and send."
+        : `Vo’s draft is in the box. Review and edit it before you send. Sources: ${result.sources.map((source) => source.label).join(", ")}.`,
+    );
+    requestAnimationFrame(() => {
+      grow();
+      input.current?.focus();
+    });
   };
 
   const acknowledge = async (message: ChatMessage) => {
@@ -532,6 +595,30 @@ export function ChatView({ data }: { data: ChatData }) {
                     </label>
                   ) : null}
                   {/* HOOK(i18n/translate): render a "Draft in French" button here when draftTranslation is set. */}
+                  {data.mode === "staff" && data.vo?.enabled && thread ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn sm"
+                        onClick={() => void askVo("message_reply")}
+                        disabled={voBusy || !data.vo.available}
+                        title={data.vo.available ? "Vo drafts a reply for you to review. Nothing is sent." : "Vo is unavailable right now. Write it yourself."}
+                      >
+                        <Icon name="sparkles" />
+                        {voBusy ? "Vo is drafting…" : "Draft with Vo"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn sm"
+                        onClick={() => void askVo("document_request")}
+                        disabled={voBusy || !data.vo.available}
+                        title={data.vo.available ? "Vo explains the open document requests. Nothing is sent." : "Vo is unavailable right now. Write it yourself."}
+                      >
+                        {"Explain requests with Vo"}
+                      </button>
+                      {voDraft ? <span>Vo draft: review before sending</span> : null}
+                    </>
+                  ) : null}
                 </div>
               ) : null}
             </div>

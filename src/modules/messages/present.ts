@@ -68,6 +68,17 @@ export type ChatData = {
   selfPersonId: string | null;
   /** Staff: the matter whose messages these are. */
   matterId: string | null;
+  /** Staff: "Draft with Vo" (src/modules/vo). Absent in the portal. */
+  vo?: ChatVo;
+};
+
+export type ChatVo = {
+  /** Vo is on for this firm and may read client messages. */
+  enabled: boolean;
+  /** The Vo agent service is reachable here. */
+  available: boolean;
+  /** Drafts waiting on this matter's threads (opened from Vo drafts with ?vo=). */
+  drafts: { id: string; threadId: string; body: string; needsRule: boolean }[];
 };
 
 export const MAX_BODY = 4000;

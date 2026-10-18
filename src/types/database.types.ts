@@ -8429,6 +8429,243 @@ export type Database = {
         }
         Relationships: []
       }
+      vo_drafts: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string
+          edited: boolean | null
+          id: string
+          is_sample: boolean
+          kind: Database["public"]["Enums"]["vo_draft_kind"]
+          matter_id: string
+          model: string
+          needs_rule: boolean
+          organization_id: string
+          prompt_version: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          run_id: string
+          sent_message_id: string | null
+          sources: Json
+          status: Database["public"]["Enums"]["vo_draft_status"]
+          thread_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by: string
+          edited?: boolean | null
+          id?: string
+          is_sample?: boolean
+          kind: Database["public"]["Enums"]["vo_draft_kind"]
+          matter_id: string
+          model: string
+          needs_rule?: boolean
+          organization_id: string
+          prompt_version: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id: string
+          sent_message_id?: string | null
+          sources: Json
+          status?: Database["public"]["Enums"]["vo_draft_status"]
+          thread_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string
+          edited?: boolean | null
+          id?: string
+          is_sample?: boolean
+          kind?: Database["public"]["Enums"]["vo_draft_kind"]
+          matter_id?: string
+          model?: string
+          needs_rule?: boolean
+          organization_id?: string
+          prompt_version?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id?: string
+          sent_message_id?: string | null
+          sources?: Json
+          status?: Database["public"]["Enums"]["vo_draft_status"]
+          thread_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      vo_runs: {
+        Row: {
+          cost_usd: number | null
+          created_at: string
+          failure: string | null
+          finished_at: string | null
+          id: string
+          input_tokens: number | null
+          is_sample: boolean
+          kind: Database["public"]["Enums"]["vo_run_kind"]
+          latency_ms: number | null
+          matter_id: string
+          model: string | null
+          organization_id: string
+          output_tokens: number | null
+          prompt_version: string | null
+          result: Database["public"]["Enums"]["vo_run_result"]
+          source_count: number | null
+          thread_id: string | null
+          tools_called: string[]
+          useful: boolean | null
+          user_id: string
+        }
+        Insert: {
+          cost_usd?: number | null
+          created_at?: string
+          failure?: string | null
+          finished_at?: string | null
+          id?: string
+          input_tokens?: number | null
+          is_sample?: boolean
+          kind: Database["public"]["Enums"]["vo_run_kind"]
+          latency_ms?: number | null
+          matter_id: string
+          model?: string | null
+          organization_id: string
+          output_tokens?: number | null
+          prompt_version?: string | null
+          result?: Database["public"]["Enums"]["vo_run_result"]
+          source_count?: number | null
+          thread_id?: string | null
+          tools_called?: string[]
+          useful?: boolean | null
+          user_id: string
+        }
+        Update: {
+          cost_usd?: number | null
+          created_at?: string
+          failure?: string | null
+          finished_at?: string | null
+          id?: string
+          input_tokens?: number | null
+          is_sample?: boolean
+          kind?: Database["public"]["Enums"]["vo_run_kind"]
+          latency_ms?: number | null
+          matter_id?: string
+          model?: string | null
+          organization_id?: string
+          output_tokens?: number | null
+          prompt_version?: string | null
+          result?: Database["public"]["Enums"]["vo_run_result"]
+          source_count?: number | null
+          thread_id?: string | null
+          tools_called?: string[]
+          useful?: boolean | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      vo_settings: {
+        Row: {
+          enabled: boolean
+          organization_id: string
+          read_client_messages: boolean
+          read_criminal: boolean
+          read_financial: boolean
+          read_identity: boolean
+          read_medical: boolean
+          read_narratives: boolean
+          read_relationship: boolean
+          reply_drafts: boolean
+          staff_answers: boolean
+          updated_at: string
+          updated_by: string
+          composio_accepted_at: string | null
+          composio_accepted_by: string | null
+          composio_enabled: boolean
+        }
+        Insert: {
+          composio_accepted_at?: string | null
+          composio_accepted_by?: string | null
+          composio_enabled?: boolean
+          enabled: boolean
+          organization_id: string
+          read_client_messages?: boolean
+          read_criminal?: boolean
+          read_financial?: boolean
+          read_identity?: boolean
+          read_medical?: boolean
+          read_narratives?: boolean
+          read_relationship?: boolean
+          reply_drafts?: boolean
+          staff_answers?: boolean
+          updated_at?: string
+          updated_by: string
+        }
+        Update: {
+          enabled?: boolean
+          organization_id?: string
+          read_client_messages?: boolean
+          read_criminal?: boolean
+          read_financial?: boolean
+          read_identity?: boolean
+          read_medical?: boolean
+          read_narratives?: boolean
+          read_relationship?: boolean
+          reply_drafts?: boolean
+          staff_answers?: boolean
+          updated_at?: string
+          updated_by?: string
+          composio_accepted_at?: string | null
+          composio_accepted_by?: string | null
+          composio_enabled?: boolean
+        }
+        Relationships: []
+      }
+      staff_connections: {
+        Row: {
+          connected_account_id: string | null
+          created_at: string
+          id: string
+          mail_label: string
+          membership_id: string
+          organization_id: string
+          status: string
+          toolkit: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          connected_account_id?: string | null
+          created_at?: string
+          id?: string
+          mail_label?: string
+          membership_id: string
+          organization_id: string
+          status: string
+          toolkit: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          connected_account_id?: string | null
+          created_at?: string
+          id?: string
+          mail_label?: string
+          membership_id?: string
+          organization_id?: string
+          status?: string
+          toolkit?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       webhook_inbox: {
         Row: {
           connected_account_id: string | null
@@ -10362,6 +10599,63 @@ export type Database = {
         }
         Returns: number
       }
+      begin_vo_run: {
+        Args: {
+          p_kind: Database["public"]["Enums"]["vo_run_kind"]
+          p_matter_id?: string | null
+          p_organization_id: string
+          p_thread_id: string | null
+        }
+        Returns: Json
+      }
+      discard_vo_draft: { Args: { p_draft_id: string }; Returns: undefined }
+      finish_vo_run: {
+        Args: {
+          p_body?: string | null
+          p_cost_usd?: number | null
+          p_failure?: string | null
+          p_input_tokens?: number | null
+          p_latency_ms?: number | null
+          p_model?: string | null
+          p_needs_rule?: boolean
+          p_output_tokens?: number | null
+          p_prompt_version?: string | null
+          p_result: Database["public"]["Enums"]["vo_run_result"]
+          p_run_id: string
+          p_sources?: Json | null
+          p_title?: string | null
+          p_tools?: string[] | null
+        }
+        Returns: string | null
+      }
+      rate_vo_run: { Args: { p_run_id: string; p_useful: boolean }; Returns: undefined }
+      send_vo_draft: {
+        Args: { p_body: string; p_client_key?: string | null; p_draft_id: string }
+        Returns: Json
+      }
+      set_composio_enabled: {
+        Args: { p_accept_disclosure: boolean; p_enabled: boolean; p_organization_id: string }
+        Returns: undefined
+      }
+      save_staff_connection: {
+        Args: {
+          p_connected_account_id?: string | null
+          p_mail_label?: string | null
+          p_organization_id: string
+          p_status: string
+          p_toolkit: string
+        }
+        Returns: string
+      }
+      disconnect_staff_connection: { Args: { p_connection_id: string }; Returns: undefined }
+      replace_external_busy_blocks: {
+        Args: { p_blocks: Json; p_from: string; p_organization_id: string; p_source: string; p_to: string }
+        Returns: number
+      }
+      set_vo_settings: {
+        Args: { p_changes: Json; p_organization_id: string }
+        Returns: Json
+      }
       verify_client_deposit: {
         Args: {
           p_entry_id: string
@@ -10792,6 +11086,10 @@ export type Database = {
       task_audience: "internal" | "client"
       task_priority: "low" | "normal" | "high" | "critical"
       task_status: "open" | "blocked" | "done" | "cancelled"
+      vo_draft_kind: "message_reply" | "document_request"
+      vo_draft_status: "draft" | "sent" | "discarded"
+      vo_run_kind: "message_reply" | "document_request" | "ask"
+      vo_run_result: "running" | "drafted" | "answered" | "abstained" | "failed"
       webhook_inbox_status:
         | "received"
         | "processing"
@@ -11223,6 +11521,10 @@ export const Constants = {
         "review_due",
         "suspended",
       ],
+      vo_draft_kind: ["message_reply", "document_request"],
+      vo_draft_status: ["draft", "sent", "discarded"],
+      vo_run_kind: ["message_reply", "document_request", "ask"],
+      vo_run_result: ["running", "drafted", "answered", "abstained", "failed"],
       webhook_inbox_status: [
         "received",
         "processing",

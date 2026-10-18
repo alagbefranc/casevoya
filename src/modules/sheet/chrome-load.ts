@@ -46,18 +46,20 @@ export async function memberNames(supabase: Client, org: string): Promise<Map<st
 
 /**
  * The Designer's sidebar, top bar and status bar for a firm, read as the signed-in staff
- * member. Features without a backend yet (Vo drafts, leads, finance exceptions) show no count.
+ * member. Features without a backend yet (leads, finance exceptions) show no count; Vo drafts count those waiting.
  */
 export async function loadSheetChrome(staff: SheetStaff, active: string): Promise<SheetChrome> {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
   const count = { count: "exact" as const, head: true };
-  const [matterCount, recentMatters, openCount, unsorted] = await Promise.all([
+  const [matterCount, recentMatters, openCount, unsorted, voDrafts] = await Promise.all([
     supabase.from("matters").select("id", count).eq("organization_id", org).neq("stage", "closed"),
     supabase.from("matters").select("id").eq("organization_id", org).order("updated_at", { ascending: false }).limit(2),
     supabase.from("tasks").select("id", count).eq("organization_id", org).in("status", [...OPEN_TASK]),
     // Email waiting in the Inbox's Email to triage tab.
     supabase.from("inbound_emails").select("id", count).eq("organization_id", org).eq("triage_state", "open"),
+    // Vo drafts waiting for a person on matters this staff member can read.
+    supabase.from("vo_drafts").select("id", count).eq("organization_id", org).eq("status", "draft"),
   ]);
   const pinned = (recentMatters.data ?? []).map((row) => row.id);
   const name = await matterNames(supabase, org, pinned);
@@ -65,7 +67,7 @@ export async function loadSheetChrome(staff: SheetStaff, active: string): Promis
   return {
     sidebar: {
       active,
-      counts: { tasks: openCount.count ?? 0, inbox: unsorted.count ?? 0 },
+      counts: { tasks: openCount.count ?? 0, inbox: unsorted.count ?? 0, drafts: voDrafts.count ?? 0 },
       pinned: pinned.map((id) => ({ href: `/sheet/matters/${id}`, name: name(id) })),
       me: { ...staffPerson(staff.displayName), role: roleLabel(staff.role) },
       tiles: { documents: "/sheet/documents", invoices: "/sheet/finance" },
