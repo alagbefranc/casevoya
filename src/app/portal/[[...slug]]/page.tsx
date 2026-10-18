@@ -11,6 +11,7 @@ import { loadPortalInvoices } from "@/modules/finance/portal-load";
 import { isUuid } from "@/lib/tenant/context";
 import { loadPortalAccess } from "@/modules/portal/load";
 import { payStateFromQuery } from "@/modules/portal/pay";
+import { loadPortalAppointments } from "@/modules/scheduling/portal-load";
 
 export const metadata: Metadata = {
   title: "Portal · Casevoya",
@@ -57,9 +58,10 @@ async function Body({
     page === "payments" || page === "pay"
       ? { data: await loadPortalInvoices(access.viewer), invoiceId: isUuid(invoiceValue) ? invoiceValue : null }
       : null;
+  const appointments = page === "appointments" ? await loadPortalAppointments(access.viewer) : null;
   return (
     <PortalScreen page={page}>
-      <LivePortal page={page} viewer={access.viewer} documents={documents} agreements={agreements} payments={payments} />
+      <LivePortal page={page} viewer={access.viewer} documents={documents} agreements={agreements} payments={payments} appointments={appointments} />
     </PortalScreen>
   );
 }
