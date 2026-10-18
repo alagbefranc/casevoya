@@ -59,6 +59,20 @@ Quoted in fragments from the page above; read the Code itself for the full text.
 | s. 37 | "keep and preserve records in accordance with the by-laws" | No retention period is encoded here; the by-laws were not reviewed for this change. |
 | s. 39(f) | report "an error … with respect to the use or attribution of funds held in trust in a client account" to the Registrar within 30 days | Corrections are reversing entries with a reason, audited. Casevoya does not report to the Registrar or prompt to. Open question. |
 
+## Reconciliation (FIN-12) and credit notes: what is and isn't from the Code
+
+* The Reconciliation tab (`client_account_reconciliations`, migration `20261019184700`) compares the
+  client account's bank statement with the ledger kept under s. 32(d) ("maintain separate records of
+  deposits and withdrawals for each client"): the control ledger and the total of the per-client
+  sub-ledgers as of the statement date. The Code text quoted above sets **no** reconciliation
+  frequency, form, reviewer or sign-off. The monthly three-way check and its signed review are the
+  PRD's product requirement (FIN-12); the second-person sign-off is a product control (the same rule
+  as transfers, decided by Francis). Nothing about reconciliation is cited to the Code on the page.
+* Credit notes (`invoice_credit_notes`, CN-) and voids are not addressed by the sections quoted here.
+  The credit note PDF cites no rule. A credit note never moves client money; if an invoice was paid
+  from the client account (an approved s. 32 transfer), returning the credited amount is a separate
+  step outside Casevoya's card flow (open question for the owner below).
+
 ## Not encoded (deliberately)
 
 * Which banks are approved, account-type requirements, interest handling.
@@ -70,3 +84,7 @@ Quoted in fragments from the page above; read the Code itself for the full text.
   the Code does not require it. The firm owner may verify their own entry (Francis).
 * Two-person approval as a regulatory requirement: it is a product control (maker-checker), with the
   owner-as-sole-approver exception decided by Francis (see `docs/DECISIONS.md`).
+* Open question: when a credit note leaves a credit balance on an invoice that was paid from the
+  client account, whether the money goes back to the client directly from the operating account or
+  is first returned to the client account (and refunded from there with a refund-to-client entry).
+  Casevoya shows the balance and records neither automatically.

@@ -17,6 +17,8 @@ export type PortalInvoice = {
   paidCents: number;
   /** Succeeded card refunds on this invoice (FIN-13). */
   refundedCents: number;
+  /** Issued credit notes on this invoice: they reduce what is due (FIN-06). */
+  creditedCents: number;
   currency: string;
   status: string;
   issuedOn: string | null;
@@ -26,6 +28,8 @@ export type PortalInvoice = {
   state: { tone: string; label: string; detail?: string };
   /** Receipts for the client's own payments of this invoice ("PR-0001", CICC Code s. 33(3)), oldest first. */
   receipts: { id: string; number: string }[];
+  /** Issued credit notes on this invoice ("CN-0001"), oldest first; each has a PDF. */
+  creditNotes: { id: string; number: string; amountCents: number }[];
 };
 
 /** One entry of the client's own client-account ledger that counts (verified, approved or recorded). */
@@ -65,7 +69,7 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
   const today = isoDateInTimeZone(new Date(), viewer.timezone);
   const { data } = await supabase
     .from("invoices")
-    .select("id, matter_id, number, description, amount_cents, paid_cents, refunded_cents, currency, status, issued_on, due_on")
+    .select("id, matter_id, number, description, amount_cents, paid_cents, refunded_cents, credited_cents, currency, status, issued_on, due_on")
     .eq("organization_id", viewer.organizationId)
     .neq("status", "draft")
     .order("created_at", { ascending: false })
@@ -88,6 +92,20 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
   const receiptsOf = new Map<string, { id: string; number: string }[]>();
   for (const row of paymentReceipts?.data ?? []) {
     receiptsOf.set(row.invoice_id, [...(receiptsOf.get(row.invoice_id) ?? []), { id: row.id, number: row.number }]);
+  }
+  // RLS: issued credit notes on invoices the client can read (a party on the matter).
+  const credits = ids.length
+    ? await supabase
+        .from("invoice_credit_notes")
+        .select("id, invoice_id, number, amount_cents")
+        .eq("organization_id", viewer.organizationId)
+        .eq("status", "issued")
+        .in("invoice_id", ids)
+        .order("number", { ascending: true })
+    : null;
+  const creditsOf = new Map<string, { id: string; number: string; amountCents: number }[]>();
+  for (const row of credits?.data ?? []) {
+    creditsOf.set(row.invoice_id, [...(creditsOf.get(row.invoice_id) ?? []), { id: row.id, number: row.number, amountCents: row.amount_cents }]);
   }
   const titles = new Map(viewer.matters.map((matter) => [matter.id, matter.title]));
   const pk = publishableKey();
@@ -132,7 +150,14 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
     payable: Boolean(pk && stripeServer()),
     publishableKey: pk,
     invoices: rows.map((row) => {
-      const state = invoiceState(row.status, row.due_on, today, busy.has(row.id), row.refunded_cents > 0 ? formatMoney(row.refunded_cents, row.currency) : null);
+      const state = invoiceState(
+        row.status,
+        row.due_on,
+        today,
+        busy.has(row.id),
+        row.refunded_cents > 0 ? formatMoney(row.refunded_cents, row.currency) : null,
+        row.credited_cents > 0 && row.status !== "credited" ? formatMoney(row.credited_cents, row.currency) : null,
+      );
       return {
         id: row.id,
         number: row.number,
@@ -141,6 +166,7 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
         amountCents: row.amount_cents,
         paidCents: row.paid_cents,
         refundedCents: row.refunded_cents,
+        creditedCents: row.credited_cents,
         currency: row.currency,
         status: row.status,
         issuedOn: row.issued_on,
@@ -149,6 +175,7 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
         processing: busy.has(row.id),
         state: { tone: state.tone, label: state.label, ...(state.detail ? { detail: state.detail } : {}) },
         receipts: receiptsOf.get(row.id) ?? [],
+        creditNotes: creditsOf.get(row.id) ?? [],
       };
     }),
   };

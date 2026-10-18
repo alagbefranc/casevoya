@@ -45,6 +45,17 @@ import {
   runOutcome,
   syncBookTimes,
 } from "./booking-acts";
+import {
+  openCreditReview,
+  reopenCorrectionsDialog,
+  runCreditDecline,
+  runCreditDraft,
+  runCreditIssue,
+  runRecDiscard,
+  runRecPrepare,
+  runRecSign,
+  runVoid,
+} from "./corrections-acts";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { runNewTask, syncNewTask } from "./new-task-act";
@@ -81,6 +92,20 @@ function runFundsSubmit(button: HTMLElement, router: Parameters<typeof runDeposi
   if ("fundsCorrect" in data) return runCorrection(button, router);
   if ("fundsBank" in data) return runBankTransfer(button, router);
   return runClientAccount(button, router);
+}
+
+/** The single-invoice tab's credit note and void submits, and the Reconciliation tab's. */
+const CORRECTIONS_SUBMIT = "[data-cn-submit], [data-cn-issue], [data-cn-decline], [data-void-submit], [data-rec-prepare], [data-rec-sign], [data-rec-discard]";
+
+function runCorrectionsSubmit(button: HTMLElement, router: Parameters<typeof runDeposit>[1]): Promise<void> {
+  const data = button.dataset;
+  if ("cnSubmit" in data) return runCreditDraft(button, router);
+  if ("cnIssue" in data) return runCreditIssue(button, router);
+  if ("cnDecline" in data) return runCreditDecline(button, router);
+  if ("voidSubmit" in data) return runVoid(button, router);
+  if ("recPrepare" in data) return runRecPrepare(button, router);
+  if ("recSign" in data) return runRecSign(button, router);
+  return runRecDiscard(button, router);
 }
 
 /** How long "Hold to revoke" must be held. */
@@ -252,6 +277,22 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (fundsSubmit.getAttribute("aria-busy") === "true" || fundsSubmit.hasAttribute("disabled")) return;
         fundsSubmit.setAttribute("aria-busy", "true");
         void runFundsSubmit(fundsSubmit, router).finally(() => fundsSubmit.removeAttribute("aria-busy"));
+        return;
+      }
+      // One invoice's credit notes and void, and the Reconciliation tab: a draft's Review fills
+      // #dlgCNR; each submit is keyed by its own attribute.
+      const creditReview = target.closest<HTMLElement>("[data-cn-review]");
+      if (creditReview && root.contains(creditReview)) {
+        event.preventDefault();
+        openCreditReview(creditReview, root, openDialog);
+        return;
+      }
+      const correction = target.closest<HTMLElement>(CORRECTIONS_SUBMIT);
+      if (correction && root.contains(correction)) {
+        event.preventDefault();
+        if (correction.getAttribute("aria-busy") === "true" || correction.hasAttribute("disabled")) return;
+        correction.setAttribute("aria-busy", "true");
+        void runCorrectionsSubmit(correction, router).finally(() => correction.removeAttribute("aria-busy"));
         return;
       }
       // Countersign: the signed-in consultant signs an envelope where it is their turn.
@@ -625,6 +666,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
 
     // ?dlg=invoice (back from step-up) reopens the live New invoice dialog with what was typed.
     if (root.querySelector("dialog#dlgInv [data-new-invoice]")) window.setTimeout(() => reopenInvoiceDialog(root, openDialog), 300);
+    // ?dlg=credit|recon (back from step-up) reopens the credit note, void or reconciliation dialog with what was typed.
+    if (root.querySelector(CORRECTIONS_SUBMIT)) window.setTimeout(() => reopenCorrectionsDialog(root, openDialog), 300);
     // ?dlg=refund (back from step-up) reopens Refund for the same payment with what was typed.
     if (root.querySelector("dialog#dlgRefund [data-refund-submit]")) window.setTimeout(() => reopenRefundDialog(root, openDialog), 300);
     // ?dlg=funds (back from step-up) reopens the Client funds dialog with what was typed; the

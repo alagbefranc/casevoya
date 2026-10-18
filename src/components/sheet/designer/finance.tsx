@@ -18,8 +18,11 @@
  * "Receipt PR-0001" download link (the Designer's rows show "RC-0093" in that place as plain text;
  * the Designer capture has no `receipt`, so the fidelity test renders without it).
  *
- * The Refunds and disputes tab (`variant: "tab-refunds"`) lists the firm's card refunds and the
- * disputes Stripe reported. Its Credit notes panel and the dispute Add evidence button are not ported.
+ * The Refunds and disputes tab (`variant: "tab-refunds"`) lists the firm's card refunds, credit
+ * notes and the disputes Stripe reported. The dispute Add evidence button is not ported.
+ *
+ * The credit note dialog (`#dlgCN`) is `CreditNoteDialog`; the Reconciliation and single-invoice
+ * tabs are in `recon.tsx` and `invoice.tsx`.
  */
 import type { ReactNode } from "react";
 import { REFUND_REASONS } from "@/modules/sheet/finance-present";
@@ -36,7 +39,7 @@ export type FinanceHeaderData = {
   recordPayment: boolean;
   /** The Designer's last tab, one open invoice ("INV-0218"). */
   invoiceTab: string | null;
-  tab: "invoices" | "payments" | "funds" | "refunds";
+  tab: "invoices" | "payments" | "funds" | "recon" | "refunds" | "invoice";
 };
 
 export type FinanceKpi = {
@@ -125,7 +128,9 @@ const UNDERLINE: Record<FinanceHeaderData["tab"], { left: string; width: string 
   invoices: { left: "0px", width: "49px" },
   payments: { left: "75px", width: "56px" },
   funds: { left: "158px", width: "71px" },
+  recon: { left: "255px", width: "85px" },
   refunds: { left: "365px", width: "124px" },
+  invoice: { left: "515px", width: "58px" },
 };
 
 /** The Finance page's own top bar and its tab strip. */
@@ -176,7 +181,7 @@ export function FinanceHeader({ data }: { data: FinanceHeaderData }) {
           </button>
         ))}
         {data.invoiceTab ? (
-          <button role={"tab"} data-t={"invoice"}>
+          <button role={"tab"} data-t={"invoice"} className={data.tab === "invoice" ? "on" : undefined}>
             {data.invoiceTab}
           </button>
         ) : null}
@@ -607,6 +612,19 @@ export type DisputeRow = {
   state: MatterBadge;
 };
 
+export type CreditNoteRow = {
+  key?: string;
+  /** "CN-0007". Live, it links to the invoice's own tab. */
+  number: string;
+  href?: string;
+  /** The invoice number, then the client, with the Designer's separator between them. */
+  invoice: string[];
+  amount: string;
+  reason: string;
+  /** "Lena Park, 8 Sep" when issued; who drafted it and that it waits for review otherwise. */
+  issuedBy: string;
+};
+
 export type RefundsData = {
   intro: string;
   refunds: RefundRow[];
@@ -614,6 +632,9 @@ export type RefundsData = {
   refundsEmpty: { title: string; copy: string };
   /** The Designer's failed-refund banner, for the latest failed refund. */
   failed: null | { title: string; copy: string };
+  /** Credit notes against invoices (issued, waiting for review, declined), newest first. */
+  creditNotes: CreditNoteRow[];
+  creditNotesEmpty: { title: string; copy: string };
   disputes: DisputeRow[];
   disputesEmpty: { title: string; copy: string };
   /** Under the disputes table: the Designer's Add evidence button (demo only) and its note. */
@@ -621,9 +642,10 @@ export type RefundsData = {
 };
 
 /**
- * The Refunds and disputes tab (Designer `tab-refunds`). Its Credit notes panel is not ported:
- * credit notes do not exist yet. Disputes keep the Designer's panel; live, the Add evidence
- * button is not shown because evidence can't be submitted from Casevoya.
+ * The Refunds and disputes tab (Designer `tab-refunds`): refunds, credit notes (CN-, FIN-06) and
+ * disputes, each in the Designer's panel. Live, a credit note's number links to its invoice's tab,
+ * where it is reviewed and downloaded; the Add evidence button is not shown because evidence can't
+ * be submitted from Casevoya.
  */
 export function SheetFinanceRefunds({ data }: { data: RefundsData }) {
   return (
@@ -689,6 +711,55 @@ export function SheetFinanceRefunds({ data }: { data: RefundsData }) {
             </div>
           </div>
         ) : null}
+      </section>
+      <section className={"panel rv"} style={i(2)}>
+        <h2>
+          <Icon name={"note"} />
+          {"Credit notes"}
+        </h2>
+        {data.creditNotes.length ? (
+          <div className={"tw"} role={"region"} aria-label={"Credit notes"} tabIndex={0}>
+            <table className={"t"}>
+              <caption className={"sr"}>{"Credit notes"}</caption>
+              <thead>
+                <tr>
+                  <th scope={"col"}>{"Number"}</th>
+                  <th scope={"col"}>{"Invoice"}</th>
+                  <th scope={"col"} style={RIGHT}>
+                    {"CAD"}
+                  </th>
+                  <th scope={"col"}>{"Reason"}</th>
+                  <th scope={"col"}>{"Issued by"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.creditNotes.map((row, index) => (
+                  <tr key={row.key ?? index}>
+                    <td>
+                      {row.href ? (
+                        <a href={row.href} className={"num"} style={{ color: "var(--blue)" }}>
+                          {row.number}
+                        </a>
+                      ) : (
+                        row.number
+                      )}
+                    </td>
+                    <td>
+                      <Parts parts={row.invoice} />
+                    </td>
+                    <td className={"num"} style={RIGHT}>
+                      {row.amount}
+                    </td>
+                    <td>{row.reason}</td>
+                    <td>{row.issuedBy}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <Empty art={"invoice-plain"} title={data.creditNotesEmpty.title} copy={data.creditNotesEmpty.copy} />
+        )}
       </section>
       <section className={"panel rv"} style={i(3)}>
         <h2>
@@ -816,6 +887,94 @@ export function RefundDialog({ data }: { data: RefundDialogData }) {
         <button className={"btn p"} data-refund-submit={"1"} data-org={data.organizationId} disabled={data.blocked ? true : undefined}>
           {"Refund"}
         </button>
+      </div>
+    </dialog>
+  );
+}
+
+export type CreditNoteDialogData = {
+  /** The Designer's capture: the invoice ("INV-0218") and the amount hint. */
+  designer?: { invoice: string; hint: string };
+  /** One invoice's credit note (the single-invoice tab): drafted here, issued by a second person. */
+  live?: {
+    organizationId: string;
+    invoiceId: string;
+    invoice: string;
+    /** What can still be credited, in cents (the database checks again). */
+    maxCents: number;
+    hint: string;
+    blocked: { title: string; copy: string } | null;
+  };
+};
+
+/**
+ * The Designer's credit note dialog (`#dlgCN`, "Issue a credit note for INV-…"). Given the Designer's
+ * values it renders the capture; live, its Create draft carries `data-cn-submit` in place of the
+ * Designer's toast, and says that someone else reviews the draft before it is issued.
+ */
+export function CreditNoteDialog({ data }: { data: CreditNoteDialogData }) {
+  const live = data.live;
+  const invoice = live?.invoice ?? data.designer?.invoice ?? "an invoice";
+  const hint = live?.hint ?? data.designer?.hint ?? "";
+  return (
+    <dialog className={"dlg"} id={"dlgCN"} aria-labelledby={"dlgCNH"}>
+      <div className={"dh"}>
+        <h2 id={"dlgCNH"}>{`Issue a credit note for ${invoice}`}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={"dlgCN"}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <div className={"fld"}>
+          <label htmlFor={"cnA"}>{"Amount"}</label>
+          <small className={"hint"} id={"cnA-h"}>
+            {hint}
+          </small>
+          {live ? (
+            <input className={"inp"} id={"cnA"} type={"text"} defaultValue={""} placeholder={"e.g. 113.00"} inputMode={"decimal"} autoComplete={"off"} aria-describedby={"cnA-h"} maxLength={16} />
+          ) : (
+            <input className={"inp"} id={"cnA"} type={"text"} defaultValue={""} placeholder={"e.g. 113.00"} />
+          )}
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"cnR"}>{"Reason"}</label>
+          {live ? <textarea className={"ta"} id={"cnR"} maxLength={500} rows={2}></textarea> : <textarea className={"ta"} id={"cnR"}></textarea>}
+        </div>
+        <p className={"fp-note"}>{"A credit note reduces what’s owed. It doesn’t send money back; that’s a refund."}</p>
+        {live ? (
+          live.blocked ? (
+            <Alert tone={"warn"} icon={"info"} title={live.blocked.title}>
+              {live.blocked.copy}
+            </Alert>
+          ) : (
+            <Alert tone={"info"} icon={"info"} title={"Someone else reviews it"}>
+              {
+                "The draft is issued only when another billing person reviews it; the firm owner may issue their own after confirming with their authenticator. If the invoice was already paid, the credit becomes a balance to refund separately."
+              }
+            </Alert>
+          )
+        ) : null}
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={"dlgCN"}>
+          {"Cancel"}
+        </button>
+        {live ? (
+          <button
+            className={"btn p"}
+            data-cn-submit={"1"}
+            data-org={live.organizationId}
+            data-invoice={live.invoiceId}
+            data-max={String(live.maxCents)}
+            disabled={live.blocked ? true : undefined}
+          >
+            {"Create draft"}
+          </button>
+        ) : (
+          <button className={"btn p"} data-close={"dlgCN"} data-toast={"Credit note CN-0008 drafted"} data-toast-sub={"Lena reviews it before it’s issued."}>
+            {"Create draft"}
+          </button>
+        )}
       </div>
     </dialog>
   );

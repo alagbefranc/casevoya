@@ -37,6 +37,7 @@ import {
 } from "@/components/sheet/designer/agreements";
 import { AgreementsMarkup } from "@/components/sheet/markup/agreements";
 import {
+  CreditNoteDialog,
   FinanceHeader,
   NewInvoiceDialog,
   RefundDialog,
@@ -48,6 +49,8 @@ import {
   type PaymentsData,
   type RefundsData,
 } from "@/components/sheet/designer/finance";
+import { CreditReviewDialog, SheetFinanceInvoice, VoidDialog, type InvoiceViewData } from "@/components/sheet/designer/invoice";
+import { ReconDialogs, SheetFinanceRecon, type ReconData } from "@/components/sheet/designer/recon";
 import { FinanceMarkup } from "@/components/sheet/markup/finance";
 import {
   ApproveTransferDialog,
@@ -56,6 +59,9 @@ import {
   SheetFinanceFunds,
   VerifyPaymentDialog,
   type FundsData,
+  type RecordPaymentDialogData,
+  type TransferDialogData,
+  type VerifyDialogData,
 } from "@/components/sheet/designer/funds";
 
 import { BookPage, type BookPageData } from "@/components/sheet/designer/book";
@@ -883,6 +889,9 @@ const DESIGNER_NEW_INVOICE: NewInvoiceDialogData = {
   ],
 };
 
+/** The capture's credit note dialog (`#dlgCN`), now ported. */
+const DESIGNER_CREDIT_NOTE = createElement(CreditNoteDialog, { key: "cn", data: { designer: { invoice: "INV-0218", hint: "Up to CAD 1,130.00, the unpaid balance" } } });
+
 const OK_RECONCILED = { tone: "ok", label: "Reconciled" } as const;
 const RAFAEL_FOR_PRIYA = "Rafael Sharma for Priya";
 
@@ -919,6 +928,8 @@ const DESIGNER_REFUNDS: RefundsData = {
   ],
   refundsEmpty: { title: "No refunds yet", copy: "" },
   failed: { title: "Refund RF-0013 failed", copy: "Sofia’s card was closed. A task was created for Lena to ask for bank details. Nothing was refunded twice." },
+  creditNotes: [{ number: "CN-0007", invoice: ["INV-0199", "Hamid Rahimi"], amount: "452.00", reason: "Service cancelled before work started", issuedBy: "Lena Park, 8 Sep" }],
+  creditNotesEmpty: { title: "No credit notes yet", copy: "" },
   disputes: [{ number: "DP-0003", client: "Grace Okafor", payment: ["Card", "consultation 2 Sep"], amount: "300.00", evidenceDue: "24 Oct", state: { tone: "chg", label: "Evidence needed" } }],
   disputesEmpty: { title: "No disputes", copy: "" },
   disputeFooter: {
@@ -929,10 +940,11 @@ const DESIGNER_REFUNDS: RefundsData = {
 
 describe("Designer fidelity: Finance", () => {
   it("renders the Finance page (Invoices) and its New invoice dialog exactly as the captured Designer markup", () => {
-    // The capture also carries Record a bank payment (#dlgPay), Verify (#dlgVer), Transfer (#dlgTr)
-    // and Credit note (#dlgCN). Those flows are not ported, so the Invoices tab renders without them.
+    // The capture also carries Record a bank payment (#dlgPay), Verify (#dlgVer) and Transfer (#dlgTr):
+    // they live on the Client funds tab, so the Invoices tab renders without them. The credit note
+    // dialog (#dlgCN) is ported.
     let captured = withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup)));
-    for (const id of ["dlgPay", "dlgVer", "dlgTr", "dlgCN"]) {
+    for (const id of ["dlgPay", "dlgVer", "dlgTr"]) {
       captured = captured.replace(new RegExp(`<dialog class="dlg" id="${id}"[\\s\\S]*?</dialog>`), "");
       expect(captured).not.toContain(`id="${id}"`);
     }
@@ -951,7 +963,7 @@ describe("Designer fidelity: Finance", () => {
               queue: { label: "Reminder queue healthy", detail: "0 retries" },
               sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
             },
-            after: createElement(NewInvoiceDialog, { data: DESIGNER_NEW_INVOICE }),
+            after: [DESIGNER_CREDIT_NOTE, createElement(NewInvoiceDialog, { key: "inv", data: DESIGNER_NEW_INVOICE })],
           },
           createElement(SheetFinance, { data: DESIGNER_FINANCE }),
         ),
@@ -986,11 +998,11 @@ describe("Designer fidelity: Finance", () => {
 
   it("renders the Finance page (Payments) exactly as the captured Designer markup", () => {
     // The Payments capture carries the same dialogs as the Invoices one; the bank-transfer flows
-    // (#dlgPay record, #dlgVer verify, #dlgTr transfer approval) and #dlgCN are not ported. Its
+    // (#dlgPay record, #dlgVer verify, #dlgTr transfer approval) live on the Client funds tab. Its
     // "1 bank payment to verify" banner opens #dlgVer, so it is left out too: the live tab puts
     // the Stripe account banner in that slot only when Stripe needs something.
     let captured = withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup, { variant: "tab-payments" })));
-    for (const id of ["dlgPay", "dlgVer", "dlgTr", "dlgCN"]) {
+    for (const id of ["dlgPay", "dlgVer", "dlgTr"]) {
       captured = captured.replace(new RegExp(`<dialog class="dlg" id="${id}"[\\s\\S]*?</dialog>`), "");
       expect(captured).not.toContain(`id="${id}"`);
     }
@@ -1012,7 +1024,7 @@ describe("Designer fidelity: Finance", () => {
               queue: { label: "Reminder queue healthy", detail: "0 retries" },
               sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
             },
-            after: createElement(NewInvoiceDialog, { data: DESIGNER_NEW_INVOICE }),
+            after: [DESIGNER_CREDIT_NOTE, createElement(NewInvoiceDialog, { key: "inv", data: DESIGNER_NEW_INVOICE })],
           },
           createElement(SheetFinancePayments, { data: DESIGNER_PAYMENTS }),
         ),
@@ -1051,18 +1063,14 @@ describe("Designer fidelity: Finance", () => {
   });
 
   it("renders the Finance page (Refunds and disputes) exactly as the captured Designer markup", () => {
-    // The capture carries the same unported dialogs as the other tabs (#dlgPay, #dlgVer, #dlgTr,
-    // #dlgCN). Its Credit notes panel is not ported (credit notes don't exist yet), so it is cut
-    // from the capture; the Disputes panel keeps its own place (--i:3).
+    // The capture carries the Client funds tab's dialogs (#dlgPay, #dlgVer, #dlgTr), which this tab
+    // doesn't render. Its Credit notes panel (--i:2) and the credit note dialog (#dlgCN) are ported.
     let captured = withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup, { variant: "tab-refunds" })));
-    for (const id of ["dlgPay", "dlgVer", "dlgTr", "dlgCN"]) {
+    for (const id of ["dlgPay", "dlgVer", "dlgTr"]) {
       captured = captured.replace(new RegExp(`<dialog class="dlg" id="${id}"[\\s\\S]*?</dialog>`), "");
       expect(captured).not.toContain(`id="${id}"`);
     }
-    const creditNotes = /<section class="panel rv" style="--i:2"><h2><svg class="ic" aria-hidden="true"><use href="[^"]*#i-note"><\/use><\/svg>Credit notes<\/h2>[\s\S]*?<\/section>/;
-    expect(captured).toMatch(creditNotes);
-    captured = captured.replace(creditNotes, "");
-    expect(captured).not.toContain("Credit notes");
+    expect(captured).toContain("Credit notes");
     const live = withoutPreloads(
       renderToStaticMarkup(
         createElement(
@@ -1077,7 +1085,7 @@ describe("Designer fidelity: Finance", () => {
               queue: { label: "Reminder queue healthy", detail: "0 retries" },
               sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
             },
-            after: createElement(NewInvoiceDialog, { data: DESIGNER_NEW_INVOICE }),
+            after: [DESIGNER_CREDIT_NOTE, createElement(NewInvoiceDialog, { key: "inv", data: DESIGNER_NEW_INVOICE })],
           },
           createElement(SheetFinanceRefunds, { data: DESIGNER_REFUNDS }),
         ),
@@ -1099,15 +1107,17 @@ describe("Designer fidelity: Finance", () => {
           refunds: [],
           refundsEmpty: { title: "No refunds yet", copy: "Refund a received card payment from the Payments tab." },
           failed: null,
+          creditNotes: [],
+          creditNotesEmpty: { title: "No credit notes yet", copy: "Correct an issued invoice with a credit note from its own tab." },
           disputes: [],
           disputesEmpty: { title: "No disputes", copy: "Stripe reports disputes here." },
           disputeFooter: null,
         },
       }),
     );
-    expect(empty.match(/class="emp"/g)).toHaveLength(2);
+    expect(empty.match(/class="emp"/g)).toHaveLength(3);
     expect(empty).not.toContain("<table");
-    expect(empty).not.toContain("Credit notes");
+    expect(empty).toContain("No credit notes yet");
     expect(empty).not.toMatch(/Northline|Sofia|Priya|Mei Tanaka|Grace|RF-001|DP-000|evt_5/);
 
     const live = renderToStaticMarkup(
@@ -1117,6 +1127,8 @@ describe("Designer fidelity: Finance", () => {
           refunds: [{ number: "RF-0001", client: "Dana Lee", from: ["Card", "INV-0001"], amount: "100.00", requested: "18 Oct", state: { tone: "rev", label: "Processing" } }],
           refundsEmpty: { title: "x", copy: "x" },
           failed: null,
+          creditNotes: [{ number: "CN-0001", href: "?tab=invoice&view=i1", invoice: ["INV-0001", "Dana Lee"], amount: "40.00", reason: "Duplicate line", issuedBy: "Draft by Sam Kim, waiting for review" }],
+          creditNotesEmpty: { title: "x", copy: "x" },
           disputes: [{ number: "DP-0001", client: "Dana Lee", payment: ["Card", "INV-0001, fraudulent"], amount: "1,130.00", evidenceDue: "2 Nov", state: { tone: "chg", label: "Evidence needed" } }],
           disputesEmpty: { title: "x", copy: "x" },
           disputeFooter: { note: "Evidence can’t be submitted from Casevoya yet; contact Stripe support." },
@@ -1128,6 +1140,9 @@ describe("Designer fidelity: Finance", () => {
     expect(live).not.toContain("data-toast");
     expect(live).not.toMatch(/Respond in Stripe/i);
     expect(live).toContain('<td>DP-0001</td><td>Dana Lee</td><td>Card <span class="sep" aria-hidden="true"></span> INV-0001, fraudulent</td>');
+    expect(live).toContain(
+      '<td><a href="?tab=invoice&amp;view=i1" class="num" style="color:var(--blue)">CN-0001</a></td><td>INV-0001 <span class="sep" aria-hidden="true"></span> Dana Lee</td><td class="num" style="text-align:right">40.00</td><td>Duplicate line</td><td>Draft by Sam Kim, waiting for review</td>',
+    );
   });
 
   it("puts a Refund button on a refundable Payments row and wires the refund dialog by data attributes", () => {
@@ -1231,13 +1246,62 @@ const DESIGNER_FUNDS: FundsData = {
   },
 };
 
+
+const DESIGNER_PAY: RecordPaymentDialogData = {
+  designer: {
+    amount: "1,808.00",
+    methods: ["Bank transfer", "Interac e-Transfer", "Cheque", "Cash (receipt required)"],
+    reference: "RBC-55102",
+    received: "16/10/2026",
+    destinations: ["Client account ••• 4410 (advances)", "Operating account ••• 2208 (earned fees)"],
+    reviewers: ["Amara Osei", "Lena Park"],
+  },
+};
+
+const DESIGNER_VERIFY: VerifyDialogData = {
+  designer: {
+    title: "Verify Kofi Mensah’s payment",
+    rows: [
+      { term: "Amount", parts: ["CAD 1,808.00"] },
+      { term: "Reference", parts: ["RBC-55102"] },
+      { term: "Bank line", parts: ["16 Oct", "“MENSAH K", "RBC-55102”", "CAD 1,808.00"] },
+      { term: "Recorded by", parts: ["Lena Park"] },
+      { term: "Destination", parts: ["Client account ••• 4410"] },
+    ],
+  },
+};
+
+const DESIGNER_TRANSFER: TransferDialogData = {
+  designer: {
+    rows: [
+      { term: "From", parts: ["Priya Sharma’s client ledger", "CAD 1,500.00 available"] },
+      { term: "To", parts: ["Operating account ••• 2208"] },
+      { term: "For", parts: ["INV-0218", "milestone 1 (preparation delivered 1–15 Oct)"] },
+      { term: "Amount", parts: ["CAD 300.00", "within available funds and eligible earned charges"] },
+      { term: "Approvals", parts: ["1. Amara Osei", "approved 16 Oct, 14:05", "2. Lena Park", "waiting"] },
+      { term: "Bank transfer", parts: ["Recorded after both approvals"] },
+    ],
+    note: "Two people approve by default. A solo practice records a self-approval with a reason.",
+    approveLabel: "Approve as Lena Park",
+  },
+};
+
+/** Every dialog in the Finance captures, in their order, from the Designer's values. */
+function designerDialogs() {
+  return [
+    createElement(RecordPaymentDialog, { key: "pay", data: DESIGNER_PAY }),
+    createElement(VerifyPaymentDialog, { key: "ver", data: DESIGNER_VERIFY }),
+    createElement(ApproveTransferDialog, { key: "tr", data: DESIGNER_TRANSFER }),
+    DESIGNER_CREDIT_NOTE,
+    createElement(NewInvoiceDialog, { key: "inv", data: DESIGNER_NEW_INVOICE }),
+  ];
+}
+
 describe("Designer fidelity: Finance, Client funds", () => {
   it("renders the Client funds tab and its payment, verify and transfer dialogs exactly as the captured Designer markup", () => {
-    // Only #dlgCN (credit note) is cut from the capture: credit notes don't exist yet.
-    let captured = withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup, { variant: "tab-funds" })));
-    captured = captured.replace(/<dialog class="dlg" id="dlgCN"[\s\S]*?<\/dialog>/, "");
-    expect(captured).not.toContain('id="dlgCN"');
-    for (const id of ["dlgPay", "dlgVer", "dlgTr", "dlgInv"]) expect(captured).toContain(`id="${id}"`);
+    // Every dialog in the capture is ported, the credit note (#dlgCN) included.
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup, { variant: "tab-funds" })));
+    for (const id of ["dlgPay", "dlgVer", "dlgTr", "dlgCN", "dlgInv"]) expect(captured).toContain(`id="${id}"`);
     const live = withoutPreloads(
       renderToStaticMarkup(
         createElement(
@@ -1252,54 +1316,7 @@ describe("Designer fidelity: Finance, Client funds", () => {
               queue: { label: "Reminder queue healthy", detail: "0 retries" },
               sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
             },
-            after: [
-              createElement(RecordPaymentDialog, {
-                key: "pay",
-                data: {
-                  designer: {
-                    amount: "1,808.00",
-                    methods: ["Bank transfer", "Interac e-Transfer", "Cheque", "Cash (receipt required)"],
-                    reference: "RBC-55102",
-                    received: "16/10/2026",
-                    destinations: ["Client account ••• 4410 (advances)", "Operating account ••• 2208 (earned fees)"],
-                    reviewers: ["Amara Osei", "Lena Park"],
-                  },
-                },
-              }),
-              createElement(VerifyPaymentDialog, {
-                key: "ver",
-                data: {
-                  designer: {
-                    title: "Verify Kofi Mensah’s payment",
-                    rows: [
-                      { term: "Amount", parts: ["CAD 1,808.00"] },
-                      { term: "Reference", parts: ["RBC-55102"] },
-                      { term: "Bank line", parts: ["16 Oct", "“MENSAH K", "RBC-55102”", "CAD 1,808.00"] },
-                      { term: "Recorded by", parts: ["Lena Park"] },
-                      { term: "Destination", parts: ["Client account ••• 4410"] },
-                    ],
-                  },
-                },
-              }),
-              createElement(ApproveTransferDialog, {
-                key: "tr",
-                data: {
-                  designer: {
-                    rows: [
-                      { term: "From", parts: ["Priya Sharma’s client ledger", "CAD 1,500.00 available"] },
-                      { term: "To", parts: ["Operating account ••• 2208"] },
-                      { term: "For", parts: ["INV-0218", "milestone 1 (preparation delivered 1–15 Oct)"] },
-                      { term: "Amount", parts: ["CAD 300.00", "within available funds and eligible earned charges"] },
-                      { term: "Approvals", parts: ["1. Amara Osei", "approved 16 Oct, 14:05", "2. Lena Park", "waiting"] },
-                      { term: "Bank transfer", parts: ["Recorded after both approvals"] },
-                    ],
-                    note: "Two people approve by default. A solo practice records a self-approval with a reason.",
-                    approveLabel: "Approve as Lena Park",
-                  },
-                },
-              }),
-              createElement(NewInvoiceDialog, { key: "inv", data: DESIGNER_NEW_INVOICE }),
-            ],
+            after: designerDialogs(),
           },
           createElement(SheetFinanceFunds, { data: DESIGNER_FUNDS }),
         ),
@@ -1695,5 +1712,239 @@ describe("Designer fidelity: Calendar", () => {
     );
     expect(html).toContain("No deadlines this month");
     expect(html).not.toMatch(/Northline|Amara|Priya|Kofi|Mei Tanaka|Ana Ferreira|Synced/);
+  });
+});
+
+const FINANCE_STATUSBAR = {
+  timezone: "America/Toronto",
+  queue: { label: "Reminder queue healthy", detail: "0 retries" },
+  sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+};
+
+function financePage(tab: "recon" | "invoice", body: ReturnType<typeof createElement>) {
+  return withoutPreloads(
+    renderToStaticMarkup(
+      createElement(
+        SheetFrame,
+        {
+          sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/finance" },
+          header: createElement(FinanceHeader, { data: { pills: ["CAD", { left: "Northline Immigration", right: "fictional" }], recordPayment: true, invoiceTab: "INV-0218", tab } }),
+          statusbar: FINANCE_STATUSBAR,
+          after: designerDialogs(),
+        },
+        body,
+      ),
+    ),
+  );
+}
+
+function sameMarkup(live: string, captured: string) {
+  if (live !== captured) {
+    let i = 0;
+    while (i < live.length && live[i] === captured[i]) i++;
+    console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+  }
+  expect(live).toBe(captured);
+}
+
+const DESIGNER_RECON: ReconData = {
+  period: "October 2026",
+  intro:
+    "Monthly three-way check: the adjusted bank balance, the control ledger and the total of all client ledgers must agree. Your accountant validates the chart of accounts before live use (FIN-12).",
+  pending: {
+    cards: [
+      { title: "Adjusted bank balance", value: "CAD 3,308.00", note: "Statement to 16 Oct, bank ••• 4410" },
+      { title: "Control ledger", value: "CAD 1,500.00", note: "Client account liability" },
+      { title: "Client ledgers, total", value: "CAD 1,500.00", note: "2 clients" },
+    ],
+    alert: {
+      tone: "warn",
+      title: ["CAD 1,808.00 difference", "1 outstanding item"],
+      copy: "The bank shows Kofi Mensah’s transfer (RBC-55102) that isn’t verified in the ledger yet. Verify it, or record why it’s outstanding, before signing.",
+      action: { label: "Verify the payment", primary: true, attrs: { "data-dlg": "dlgVer", "data-fpd": "1" } },
+    },
+    items: [{ item: ["Deposit not in ledger", "Kofi Mensah"], bank: "16 Oct", ledger: "—", amount: "1,808.00", action: { label: "Verify", attrs: { "data-dlg": "dlgVer", "data-fpd": "1" } } }],
+    itemsEmpty: "",
+    steps: [
+      { state: "now", title: "Prepared by Lena Park (finance)", note: ["Not yet", "waiting for the difference to clear"] },
+      { state: "", title: "Reviewed by Amara Osei (practice reviewer)", note: ["After Lena"] },
+    ],
+    sign: { label: "Sign reconciliation", disabled: true, why: "The difference must be zero or explained first", attrs: {} },
+  },
+  start: null,
+  history: [
+    { month: "September 2026", bank: "0.00", control: "0.00", clients: "0.00", signed: "Lena Park and Amara Osei, 2 Oct" },
+    { month: "August 2026", bank: "0.00", control: "0.00", clients: "0.00", signed: "Lena Park and Amara Osei, 3 Sep" },
+  ],
+  historyEmpty: { title: "", copy: "" },
+  payouts: null,
+};
+
+const DESIGNER_INVOICE: InvoiceViewData = {
+  number: "INV-0218",
+  client: "Priya Sharma",
+  intro: ["Matter NL-2026-0142", "spousal sponsorship. Billed to Priya Sharma; payer Rafael Sharma. Payee: Northline Immigration."],
+  badge: { tone: "chg", label: "Partially paid" },
+  tags: [
+    { label: "Issued", value: "2 Oct 2026" },
+    { label: "Balance due", value: "6 Nov 2026" },
+  ],
+  lock: ["Issued", "can’t be edited"],
+  lines: [
+    { category: { text: "Professional fee" }, description: { parts: ["Preparation stage, per service agreement S-05"] }, qty: "1", tax: "HST 13%", amount: { text: "1,900.00" } },
+    { category: { icon: "percent", text: "Tax" }, description: { parts: ["HST 13% on the professional fee"] }, qty: "—", tax: "—", amount: { text: "247.00" } },
+    { category: { text: "Disbursement" }, description: { parts: ["Certified translation, 3 pages (incurred 30 Sep)"] }, qty: "1", tax: "Included", amount: { text: "113.00" } },
+    { category: null, description: { bold: true, parts: ["Total"] }, qty: null, tax: null, amount: { bold: true, text: "2,260.00" } },
+    { category: null, description: { parts: ["Paid 8 Oct", "card", "RC-0093"] }, qty: null, tax: null, amount: { text: "−1,130.00" } },
+    { category: null, description: { bold: true, parts: ["Balance due 6 Nov"] }, qty: null, tax: null, amount: { bold: true, text: "1,130.00" } },
+  ],
+  allocations: [
+    { date: "8 Oct", source: "Card through Northline’s processor", evidence: ["Signed webhook evt_5530", "receipt RC-0093"], amount: "1,130.00", state: { tone: "ok", label: "Reconciled" } },
+    { date: "—", source: "Proposed transfer from Priya’s client account", evidence: ["Milestone 1", "needs 2 approvers"], amount: "300.00", state: { tone: "chg", label: "Pending approval" } },
+  ],
+  allocationsEmpty: "",
+  allocationsNote: "A successful checkout page isn’t proof of payment. Only the verified processor event or a reconciled bank line counts (FIN-08).",
+  creditNotes: null,
+  creditBalance: null,
+  preview: {
+    src: "/assets/docs/invoice-600.webp",
+    srcSet: "/assets/docs/invoice-1200.webp 2x",
+    alt: "Invoice INV-0218 from Northline Immigration: professional fee 1,900.00, HST 247.00, translation 113.00, total CAD 2,260.00, 1,130.00 paid, 1,130.00 due 6 November 2026",
+  },
+  history: [
+    { state: "done", title: "Draft", note: ["Created by Lena Park, 1 Oct"] },
+    { state: "done", title: "Issued", note: ["2 Oct", "emailed with a portal link only"] },
+    { state: "now", title: "Partially paid", note: ["8 Oct", "CAD 1,130.00 allocated"] },
+    { state: "", title: "Paid", note: ["When the balance is allocated"] },
+  ],
+  actions: [
+    {
+      label: "Send a reminder",
+      run: true,
+      icon: "bell",
+      attrs: { "data-run": "ok", "data-done": "Reminder sent", "data-sub": "Minimal email with a portal link. No amounts in the preview.", "data-fpr": "1" },
+    },
+    { label: "Issue a credit note", attrs: { "data-dlg": "dlgCN", "data-fpd": "1" } },
+    { label: "Record a payment", primary: true, attrs: { "data-dlg": "dlgPay", "data-fpd": "1" } },
+  ],
+};
+
+describe("Designer fidelity: Finance, Reconciliation and the single invoice", () => {
+  it("renders the Reconciliation tab and every dialog exactly as the captured Designer markup", () => {
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup, { variant: "tab-recon" })));
+    sameMarkup(financePage("recon", createElement(SheetFinanceRecon, { data: DESIGNER_RECON })), captured);
+  });
+
+  it("renders the single-invoice tab and every dialog exactly as the captured Designer markup", () => {
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup, { variant: "tab-invoice" })));
+    sameMarkup(financePage("invoice", createElement(SheetFinanceInvoice, { data: DESIGNER_INVOICE })), captured);
+  });
+
+  it("shows a firm without a reconciliation an honest start, links item actions to Client funds, and wires the dialogs", () => {
+    const org = "33333333-3333-4333-8333-333333333333";
+    const account = "44444444-4444-4444-8444-444444444444";
+    const empty = renderToStaticMarkup(
+      createElement(SheetFinanceRecon, {
+        data: {
+          period: null,
+          intro: "Synthetic firm",
+          pending: null,
+          start: { title: "No reconciliation waiting for review", copy: "Prepare one.", action: { label: "Prepare a reconciliation", primary: true, attrs: { "data-dlg": "dlgRec" } } },
+          history: [],
+          historyEmpty: { title: "No signed reconciliations yet", copy: "x" },
+          payouts: null,
+        },
+      }),
+    );
+    expect(empty.match(/class="emp"/g)).toHaveLength(2);
+    expect(empty).toContain('<button class="btn p sm" data-dlg="dlgRec">Prepare a reconciliation</button>');
+    expect(empty).toContain("<h1 class=\"display\">Reconciliation</h1>");
+    expect(empty).not.toMatch(/Northline|Kofi|Lena|Amara|RBC-|4410|October 2026/);
+
+    const pending = renderToStaticMarkup(
+      createElement(SheetFinanceRecon, {
+        data: {
+          ...DESIGNER_RECON,
+          pending: {
+            ...DESIGNER_RECON.pending!,
+            items: [{ item: ["Deposit not verified (CF-0003)", "Dana Lee"], bank: "16 Oct", ledger: "—", amount: "50.00", action: { label: "Verify", href: "?tab=funds" } }],
+            sign: { label: "Sign reconciliation", disabled: false, why: null, attrs: { "data-dlg": "dlgRecSign" } },
+          },
+          payouts: { rows: [], empty: "Stripe payouts couldn’t be read right now.", note: "Read-only." },
+        },
+      }),
+    );
+    expect(pending).toContain('<td><a class="btn sm" href="?tab=funds">Verify</a></td>');
+    expect(pending).toContain('<button class="btn p sm" data-dlg="dlgRecSign">Sign reconciliation</button>');
+    expect(pending).not.toContain('class="why"');
+    expect(pending).toContain("Card payouts (Stripe)");
+
+    const dialogs = renderToStaticMarkup(
+      createElement(ReconDialogs, {
+        data: {
+          organizationId: org,
+          today: "2026-10-18",
+          accounts: [{ value: account, label: "Client account ••• 1234", data: { "data-after": "2026-09-30" } }],
+          blocked: null,
+          pending: { id: account, difference: 500, summary: ["As of 16 October 2026", "difference CAD 5.00"], canSign: false, ownPreparation: false },
+        },
+      }),
+    );
+    expect(dialogs).toContain(`data-rec-prepare="1" data-org="${org}" data-today="2026-10-18"`);
+    expect(dialogs).toContain(`<option value="${account}" data-after="2026-09-30">Client account ••• 1234</option>`);
+    expect(dialogs).toContain(`data-rec-sign="1" data-org="${org}" data-rec="${account}" data-difference="500" disabled=""`);
+    expect(dialogs).toContain(`data-rec-discard="1" data-org="${org}" data-rec="${account}"`);
+    expect(dialogs).toContain('<option value="reconciled" disabled="">');
+    expect(dialogs).toContain("Someone else signs it");
+    expect(dialogs).not.toContain("data-toast");
+  });
+
+  it("wires the live credit note, review and void dialogs by data attributes, with no Designer toast", () => {
+    const org = "33333333-3333-4333-8333-333333333333";
+    const invoice = "55555555-5555-4555-8555-555555555555";
+    const html = renderToStaticMarkup(
+      createElement("div", null, [
+        createElement(CreditNoteDialog, {
+          key: "cn",
+          data: { live: { organizationId: org, invoiceId: invoice, invoice: "INV-0001", maxCents: 11_300, hint: "Up to CAD 113.00, the amount not already credited", blocked: null } },
+        }),
+        createElement(CreditReviewDialog, { key: "cnr", data: { organizationId: org } }),
+        createElement(VoidDialog, { key: "void", data: { organizationId: org, invoiceId: invoice, invoice: "INV-0001", blocked: null } }),
+      ]),
+    );
+    expect(html).toContain('<h2 id="dlgCNH">Issue a credit note for INV-0001</h2>');
+    expect(html).toContain('<small class="hint" id="cnA-h">Up to CAD 113.00, the amount not already credited</small>');
+    expect(html).toContain(`data-cn-submit="1" data-org="${org}" data-invoice="${invoice}" data-max="11300"`);
+    expect(html).toContain(`data-cn-issue="1" data-org="${org}"`);
+    expect(html).toContain(`data-cn-decline="1" data-org="${org}"`);
+    expect(html).toContain('<div class="alert warn" id="cnrSelf" hidden="">');
+    expect(html).toContain(`data-void-submit="1" data-org="${org}" data-invoice="${invoice}"`);
+    expect(html).not.toContain("data-toast");
+    expect(html).not.toMatch(/Northline|Priya|Lena|CN-0008/);
+
+    const view = renderToStaticMarkup(
+      createElement(SheetFinanceInvoice, {
+        data: {
+          ...DESIGNER_INVOICE,
+          number: "INV-0001",
+          client: "Dana Lee",
+          preview: null,
+          creditNotes: {
+            rows: [
+              { number: "CN-0001", amount: "40.00", reason: "Duplicate line", state: { tone: "ok", label: "Issued" }, pdf: "/api/invoices/credit-notes/x?organizationId=y" },
+              { number: "CN-0002", amount: "10.00", reason: "Typo", state: { tone: "rev", label: "Draft", detail: "waiting for review" }, review: { "data-cn-review": "n2", "data-can-issue": "0" } },
+            ],
+            empty: "",
+          },
+          creditBalance: { title: "CAD 20.00 to refund to the client", copy: "Refund it separately." },
+          actions: [{ label: "Void invoice", attrs: { "data-dlg": "dlgVoid" } }],
+        },
+      }),
+    );
+    expect(view).not.toContain("invoice-600.webp");
+    expect(view).toContain('<a href="/api/invoices/credit-notes/x?organizationId=y" class="num" style="color:var(--blue)" data-credit-note="1">CN-0001</a>');
+    expect(view).toContain('<button class="btn sm" data-cn-review="n2" data-can-issue="0">Review</button>');
+    expect(view).toContain("CAD 20.00 to refund to the client");
+    expect(view).toContain('<button class="btn sm" data-dlg="dlgVoid">Void invoice</button>');
   });
 });

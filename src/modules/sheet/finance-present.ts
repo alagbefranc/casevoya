@@ -22,16 +22,18 @@ export function invoiceState(
   today: string,
   processing = false,
   refunded: string | null = null,
+  credited: string | null = null,
 ): State & { flag: string } {
   const open = status === "issued" || status === "partially_paid";
-  const detail = refunded ? { detail: `${refunded} refunded` } : {};
+  // A partly credited invoice says how much its credit notes took off (FIN-06); refunds say first.
+  const detail = refunded ? { detail: `${refunded} refunded` } : credited ? { detail: `${credited} credited` } : {};
   if (open && processing) return { tone: "rev", label: "Payment processing", flag: status === "issued" ? "issued" : "partial" };
   if (open && dueOn < today) return { tone: "bad", label: "Overdue", flag: "overdue" };
   switch (status) {
     case "draft":
       return { tone: "gr", label: "Draft", flag: "draft" };
     case "issued":
-      return { tone: "blue", label: "Issued", flag: "issued" };
+      return { tone: "blue", label: "Issued", flag: "issued", ...detail };
     case "partially_paid":
       return { tone: "chg", label: "Partially paid", flag: "partial", ...detail };
     case "paid":

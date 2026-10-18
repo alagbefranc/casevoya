@@ -5,7 +5,9 @@ import { BookDialog, CancelDialog, ConsultationsHeader, RescheduleDialog, SheetC
 import { AvailabilityDialog, BookingTypeDialog } from "@/components/sheet/designer/scheduling-dialogs";
 import { AgreementsHeader, CountersignDialog, NewAgreementDialog, SheetAgreements, TemplateDialog } from "@/components/sheet/designer/agreements";
 import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet/designer/clients";
-import { FinanceHeader, NewInvoiceDialog, RefundDialog, SheetFinance, SheetFinancePayments, SheetFinanceRefunds } from "@/components/sheet/designer/finance";
+import { CreditNoteDialog, FinanceHeader, NewInvoiceDialog, RefundDialog, SheetFinance, SheetFinancePayments, SheetFinanceRefunds } from "@/components/sheet/designer/finance";
+import { CreditReviewDialog, SheetFinanceInvoice, VoidDialog } from "@/components/sheet/designer/invoice";
+import { ReconDialogs, SheetFinanceRecon } from "@/components/sheet/designer/recon";
 import { SheetFrame } from "@/components/sheet/designer/frame";
 import { ApproveTransferDialog, FundsLiveDialogs, RecordPaymentDialog, SheetFinanceFunds, VerifyPaymentDialog } from "@/components/sheet/designer/funds";
 import { StripeAccountStatus } from "@/components/sheet/stripe-connect";
@@ -23,6 +25,7 @@ import { LiveSheet, QuietSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
 import { homeRoute } from "@/lib/auth/home-route";
+import { isUuid } from "@/lib/tenant/context";
 import { signInLocation } from "@/lib/auth/redirect";
 import { loadSheetAgreements } from "@/modules/sheet/agreements-load";
 import { todayIso } from "@/modules/sheet/birth-date";
@@ -207,15 +210,17 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
-  // Finance, Invoices, Payments, Client funds and Refunds and disputes tabs. Reconciliation and
-  // the single invoice view are not ported yet and keep their old view.
+  // Finance: Invoices, Payments, Client funds, Reconciliation, Refunds and disputes, and one
+  // invoice's own tab (`?tab=invoice&view=<invoice id>`).
   if (
     page === "finance" &&
-    (!query.tab || query.tab === "invoices" || query.tab === "payments" || query.tab === "funds" || query.tab === "refunds") &&
+    (!query.tab || ["invoices", "payments", "funds", "recon", "refunds", "invoice"].includes(query.tab)) &&
     (access.kind === "live" || access.kind === "sample")
   ) {
-    const tab = query.tab === "payments" || query.tab === "funds" || query.tab === "refunds" ? query.tab : "invoices";
-    const finance = await loadSheetFinance(access.staff, tab);
+    const invoiceId = query.tab === "invoice" && query.view && isUuid(query.view) ? query.view : null;
+    const tab =
+      query.tab === "payments" || query.tab === "funds" || query.tab === "refunds" || query.tab === "recon" ? query.tab : invoiceId ? "invoice" : "invoices";
+    const finance = await loadSheetFinance(access.staff, tab, invoiceId);
     return (
       <SheetScreen page={page}>
         <SheetFrame
@@ -234,10 +239,22 @@ export async function SheetBody({
               <NewInvoiceDialog data={finance.dialog} />
               {finance.refundDialog ? <RefundDialog data={finance.refundDialog} /> : null}
               {finance.funds ? <FundsLiveDialogs data={finance.funds.more} /> : null}
+              {finance.invoiceView ? (
+                <>
+                  <CreditNoteDialog data={finance.invoiceView.creditDialog} />
+                  {finance.invoiceView.reviewDialog ? <CreditReviewDialog data={finance.invoiceView.reviewDialog} /> : null}
+                  {finance.invoiceView.voidDialog ? <VoidDialog data={finance.invoiceView.voidDialog} /> : null}
+                </>
+              ) : null}
+              {finance.recon ? <ReconDialogs data={finance.recon.dialogs} /> : null}
             </>
           }
         >
-          {finance.funds ? (
+          {finance.invoiceView ? (
+            <SheetFinanceInvoice data={finance.invoiceView.view} />
+          ) : finance.recon ? (
+            <SheetFinanceRecon data={finance.recon.data} />
+          ) : finance.funds ? (
             <SheetFinanceFunds data={finance.funds.data} />
           ) : finance.payments ? (
             <SheetFinancePayments data={finance.payments} status={<StripeAccountStatus data={finance.account} />} />
