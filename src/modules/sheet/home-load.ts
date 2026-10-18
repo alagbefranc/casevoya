@@ -1,13 +1,10 @@
 import "server-only";
-import type { RbarData, StatusbarData, TopBarData } from "@/components/sheet/designer/frame";
+import type { RbarData } from "@/components/sheet/designer/frame";
 import type { HomeData, HomeTask } from "@/components/sheet/designer/home";
-import type { SidebarData } from "@/components/sheet/designer/sidebar";
 import { createClient } from "@/lib/supabase/server";
+import { loadSheetChrome, matterNames, memberNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
-import { roleLabel } from "@/modules/sheet/present";
 import { ago, dayMonth, greeting, isoDate, localNow, monthGrid, summary, taskBadge, zoneCity } from "@/modules/sheet/home-present";
-
-export type SheetChrome = { sidebar: SidebarData; top: TopBarData; statusbar: StatusbarData };
 
 /** What a firm activity looks like in the Designer's notification list. Other actions are not shown. */
 export const NOTICE: Record<string, string> = {
@@ -60,10 +57,9 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
   const monthEnd = isoDate(local.year, local.month, new Date(Date.UTC(local.year, local.month, 0)).getUTCDate());
   const count = { count: "exact" as const, head: true };
 
-  const [matterCount, recentMatters, openTasks, openCount, dueToday, upcoming, monthDeadlines, tentative, accepted, awaiting, requested, onHold, unsorted, activity] =
+  const [chrome, openTasks, dueToday, upcoming, monthDeadlines, tentative, accepted, awaiting, requested, onHold, activity] =
     await Promise.all([
-      supabase.from("matters").select("id", count).eq("organization_id", org).neq("stage", "closed"),
-      supabase.from("matters").select("id, title").eq("organization_id", org).order("updated_at", { ascending: false }).limit(2),
+      loadSheetChrome(staff, "/sheet"),
       supabase
         .from("tasks")
         .select("id, matter_id, title, status, due_on, owner_membership_id")
@@ -71,7 +67,6 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
         .in("status", [...OPEN_TASK])
         .order("due_on", { ascending: true, nullsFirst: false })
         .limit(8),
-      supabase.from("tasks").select("id", count).eq("organization_id", org).in("status", [...OPEN_TASK]),
       supabase.from("tasks").select("id", count).eq("organization_id", org).in("status", [...OPEN_TASK]).eq("due_on", today),
       supabase.from("deadlines").select("id, matter_id, label, due_on, verification").eq("organization_id", org).gte("due_on", today).order("due_on", { ascending: true }).limit(20),
       supabase.from("deadlines").select("due_on").eq("organization_id", org).gte("due_on", monthStart).lte("due_on", monthEnd).limit(200),
@@ -80,7 +75,6 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
       supabase.from("document_versions").select("id", count).eq("organization_id", org).eq("upload_state", "clean").eq("review_state", "pending"),
       supabase.from("document_requests").select("id", count).eq("organization_id", org).eq("status", "open"),
       supabase.from("matters").select("id", count).eq("organization_id", org).eq("on_hold", true),
-      supabase.from("inbound_inbox_items").select("id", count).eq("organization_id", org).eq("upload_state", "clean"),
       supabase
         .from("audit_log")
         .select("action, occurred_at")
@@ -93,51 +87,15 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
 
   const tasks = openTasks.data ?? [];
   const deadlines = upcoming.data ?? [];
-  const matterIds = [
-    ...new Set([...(recentMatters.data ?? []).map((row) => row.id), ...tasks.map((row) => row.matter_id), ...deadlines.map((row) => row.matter_id)].filter((id): id is string => Boolean(id))),
-  ];
-
-  // Name each matter by its applicant, falling back to the matter title.
-  const [participants, titles, members] = await Promise.all([
-    matterIds.length
-      ? supabase.from("matter_participants").select("matter_id, person_id, role").eq("organization_id", org).in("matter_id", matterIds).not("person_id", "is", null)
-      : null,
-    matterIds.length ? supabase.from("matters").select("id, title").eq("organization_id", org).in("id", matterIds) : null,
-    supabase.from("memberships").select("id, user_id").eq("organization_id", org).eq("status", "active"),
+  const [matterName, memberName] = await Promise.all([
+    matterNames(supabase, org, [...tasks.map((row) => row.matter_id), ...deadlines.map((row) => row.matter_id)].filter((id): id is string => Boolean(id))),
+    memberNames(supabase, org),
   ]);
-  const personIds = [...new Set((participants?.data ?? []).map((row) => row.person_id).filter((id): id is string => Boolean(id)))];
-  const userIds = [...new Set((members.data ?? []).map((row) => row.user_id))];
-  const [people, profiles] = await Promise.all([
-    personIds.length ? supabase.from("persons").select("id, display_name").eq("organization_id", org).in("id", personIds) : null,
-    userIds.length ? supabase.from("profiles").select("id, display_name").in("id", userIds) : null,
-  ]);
-
-  const personName = new Map((people?.data ?? []).map((row) => [row.id, row.display_name]));
-  const matterTitle = new Map((titles?.data ?? []).map((row) => [row.id, row.title]));
-  const applicant = new Map<string, string>();
-  const ordered = [...(participants?.data ?? [])].sort((a, b) => Number(b.role === "applicant") - Number(a.role === "applicant"));
-  for (const row of ordered) {
-    const name = row.person_id ? personName.get(row.person_id) : undefined;
-    if (name && !applicant.has(row.matter_id)) applicant.set(row.matter_id, name);
-  }
-  const matterName = (id: string | null) => (id ? applicant.get(id) || matterTitle.get(id) || "Matter" : "Firm task");
-  const profileName = new Map((profiles?.data ?? []).map((row) => [row.id, row.display_name]));
-  const memberName = new Map((members.data ?? []).map((row) => [row.id, profileName.get(row.user_id) || "Unassigned"]));
 
   const total = (result: { count: number | null }) => result.count ?? 0;
   const toReview = total(awaiting);
   const due = total(dueToday);
   const held = total(onHold);
-
-  const sidebar: SidebarData = {
-    active: "/sheet",
-    counts: { tasks: total(openCount), inbox: total(unsorted) },
-    pinned: (recentMatters.data ?? []).map((row) => ({ href: `/sheet/matters/${row.id}`, name: matterName(row.id) })),
-    me: { name: staff.displayName, role: roleLabel(staff.role) },
-    tiles: { documents: "/sheet/documents", invoices: "/sheet/finance" },
-    newMatter: { href: "/sheet/matters?new=1" },
-    createBoard: { href: "/sheet/queue" },
-  };
 
   const nextByMatter = new Map<string, string>();
   for (const row of deadlines) {
@@ -199,13 +157,5 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
     vo: null,
   };
 
-  const chrome: SheetChrome = {
-    sidebar,
-    top: { firmName: staff.organizationName, pills: [`Your matters: ${total(matterCount)}`] },
-    statusbar: {
-      timezone: staff.timezone,
-      sample: staff.sampleMode ? { label: "Sample mode", detail: "practice records are marked sample" } : null,
-    },
-  };
   return { chrome, rbar, home };
 }
