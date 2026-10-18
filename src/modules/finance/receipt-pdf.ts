@@ -1,4 +1,7 @@
 /**
+ * Receipts as PDFs. The shared layout (`renderReceiptLayout`) draws both the advance receipt below
+ * and the invoice payment receipt (`payment-receipt.ts`, CICC Code s. 33(3)).
+ *
  * The receipt for an advance payment (CICC Code of Professional Conduct, SOR/2022-128, s. 32(b):
  * "provide the client with a receipt that clearly indicates the amount of the advance payment").
  *
@@ -34,7 +37,7 @@ export type ClientFundReceipt = {
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-function str(value: unknown): string | null {
+export function str(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
 }
 
@@ -142,14 +145,35 @@ function drawLines(page: PDFPage, text: string, font: PDFFont, size: number, x: 
   return cursor;
 }
 
-/** One page: firm, title, the rows, the rule it is given under, and the sample notice when it is one. */
-export async function renderReceiptPdf(receipt: ClientFundReceipt): Promise<Uint8Array> {
+/**
+ * What a receipt page shows, in the shared layout: the firm with its licensee under it, a heading,
+ * the amount, the label / value rows, then the notes (the rule it is given under first) and the
+ * sample notice. Used by the advance receipt (s. 32(b)) and the invoice payment receipt (s. 33(3)).
+ */
+export type ReceiptLayout = {
+  number: string;
+  issuedAt: string;
+  firmLegalName: string;
+  firmDisplayName: string;
+  consultantName: string | null;
+  consultantLicence: string | null;
+  /** Upper-case heading above the amount ("RECEIPT FOR ADVANCE PAYMENT"). */
+  heading: string;
+  amountCents: number;
+  currency: string;
+  rows: [string, string][];
+  notes: string[];
+  isSample: boolean;
+};
+
+/** One page in the shared receipt layout. Same input, same bytes: dates come from the receipt. */
+export async function renderReceiptLayout(layout: ReceiptLayout): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  doc.setTitle(pdfSafeText(`Receipt ${receipt.number}`));
-  doc.setAuthor(pdfSafeText(receipt.firmLegalName));
+  doc.setTitle(pdfSafeText(`Receipt ${layout.number}`));
+  doc.setAuthor(pdfSafeText(layout.firmLegalName));
   doc.setCreator("Casevoya");
   doc.setProducer("Casevoya (pdf-lib)");
-  const fixed = new Date(receipt.issuedAt);
+  const fixed = new Date(layout.issuedAt);
   if (!Number.isNaN(fixed.getTime())) {
     doc.setCreationDate(fixed);
     doc.setModificationDate(fixed);
@@ -159,20 +183,20 @@ export async function renderReceiptPdf(receipt: ClientFundReceipt): Promise<Uint
   const page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
 
   let y = PAGE_HEIGHT - 56;
-  y = drawLines(page, receipt.firmDisplayName, bold, 15, MARGIN_X, y, CONTENT_WIDTH);
-  if (receipt.firmLegalName !== receipt.firmDisplayName) y = drawLines(page, receipt.firmLegalName, regular, 9, MARGIN_X, y, CONTENT_WIDTH, MUTED);
-  const licensee = licenseeLine(receipt);
+  y = drawLines(page, layout.firmDisplayName, bold, 15, MARGIN_X, y, CONTENT_WIDTH);
+  if (layout.firmLegalName !== layout.firmDisplayName) y = drawLines(page, layout.firmLegalName, regular, 9, MARGIN_X, y, CONTENT_WIDTH, MUTED);
+  const licensee = licenseeLine(layout);
   if (licensee) y = drawLines(page, licensee, regular, 9, MARGIN_X, y, CONTENT_WIDTH, MUTED);
   y -= 18;
-  y = drawLines(page, "RECEIPT FOR ADVANCE PAYMENT", bold, 9, MARGIN_X, y, CONTENT_WIDTH, ACCENT);
+  y = drawLines(page, layout.heading, bold, 9, MARGIN_X, y, CONTENT_WIDTH, ACCENT);
   y -= 4;
   page.drawLine({ start: { x: MARGIN_X, y }, end: { x: PAGE_WIDTH - MARGIN_X, y }, thickness: 0.6, color: HAIRLINE });
   y -= 10;
-  y = drawLines(page, formatMoney(receipt.amountCents, receipt.currency) ?? "", bold, 22, MARGIN_X, y, CONTENT_WIDTH);
+  y = drawLines(page, formatMoney(layout.amountCents, layout.currency) ?? "", bold, 22, MARGIN_X, y, CONTENT_WIDTH);
   y -= 12;
 
   const labelWidth = 120;
-  for (const [label, value] of receiptRows(receipt)) {
+  for (const [label, value] of layout.rows) {
     const top = y;
     const after = drawLines(page, value, regular, 10, MARGIN_X + labelWidth, top, CONTENT_WIDTH - labelWidth);
     drawLines(page, label, bold, 9, MARGIN_X, top - 0.5, labelWidth - 8, MUTED);
@@ -182,12 +206,31 @@ export async function renderReceiptPdf(receipt: ClientFundReceipt): Promise<Uint
   y -= 10;
   page.drawLine({ start: { x: MARGIN_X, y }, end: { x: PAGE_WIDTH - MARGIN_X, y }, thickness: 0.6, color: HAIRLINE });
   y -= 8;
-  y = drawLines(page, RECEIPT_RULE, regular, 8.5, MARGIN_X, y, CONTENT_WIDTH, MUTED);
-  y -= 4;
-  y = drawLines(page, RECEIPT_HOLDING, regular, 8.5, MARGIN_X, y, CONTENT_WIDTH, MUTED);
-  if (receipt.isSample) {
+  layout.notes.forEach((note, index) => {
+    if (index > 0) y -= 4;
+    y = drawLines(page, note, regular, 8.5, MARGIN_X, y, CONTENT_WIDTH, MUTED);
+  });
+  if (layout.isSample) {
     y -= 8;
     drawLines(page, SAMPLE_NOTICE, bold, 10, MARGIN_X, y, CONTENT_WIDTH, WARN);
   }
   return doc.save({ useObjectStreams: false });
+}
+
+/** The advance receipt (s. 32(b)) in the shared layout. */
+export async function renderReceiptPdf(receipt: ClientFundReceipt): Promise<Uint8Array> {
+  return renderReceiptLayout({
+    number: receipt.number,
+    issuedAt: receipt.issuedAt,
+    firmLegalName: receipt.firmLegalName,
+    firmDisplayName: receipt.firmDisplayName,
+    consultantName: receipt.consultantName,
+    consultantLicence: receipt.consultantLicence,
+    heading: "RECEIPT FOR ADVANCE PAYMENT",
+    amountCents: receipt.amountCents,
+    currency: receipt.currency,
+    rows: receiptRows(receipt),
+    notes: [RECEIPT_RULE, RECEIPT_HOLDING],
+    isSample: receipt.isSample,
+  });
 }

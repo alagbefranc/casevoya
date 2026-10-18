@@ -1,0 +1,7 @@
+/**
+ * Download links for invoice payment receipts (CICC Code s. 33(3)). Kept apart from the PDF code so
+ * pages can link a receipt without loading pdf-lib. The route checks access in the database again.
+ */
+export function paymentReceiptHref(receiptId: string, organizationId: string): string {
+  return `/api/invoices/receipts/${receiptId}?organizationId=${organizationId}`;
+}

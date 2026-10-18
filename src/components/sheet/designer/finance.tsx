@@ -13,7 +13,10 @@
  * the "bank payment to verify" banner) are not ported. Two things it adds use the Designer's own
  * anatomy: the Stripe account banner (`.alert` with `.acts`, the slot of the Designer's banner)
  * and the Stripe balance (`.fp-kpi` tiles, as on the Invoices tab). Live, a received card payment
- * that can still be refunded carries a Refund button beside its badge, which opens `#dlgRefund`.
+ * that can still be refunded carries a Refund button beside its badge, which opens `#dlgRefund`,
+ * and a received payment's receipt (CICC Code s. 33(3)) follows its reference as a
+ * "Receipt PR-0001" download link (the Designer's rows show "RC-0093" in that place as plain text;
+ * the Designer capture has no `receipt`, so the fidelity test renders without it).
  *
  * The Refunds and disputes tab (`variant: "tab-refunds"`) lists the firm's card refunds and the
  * disputes Stripe reported. Its Credit notes panel and the dispute Add evidence button are not ported.
@@ -462,6 +465,8 @@ export type PaymentRow = {
   state: MatterBadge;
   /** Live only: a received card payment billing staff may still refund (opens `#dlgRefund`). */
   refund?: { paymentId: string; refundable: string; refundableCents: number; label: string };
+  /** Live only: the payment's receipt ("Receipt PR-0001", CICC Code s. 33(3)), after the reference. */
+  receipt?: { label: string; href: string };
 };
 
 export type PaymentsData = {
@@ -484,6 +489,15 @@ function PaymentLine({ row }: { row: PaymentRow }) {
       <td>{row.method}</td>
       <td>
         <Parts parts={row.reference} />
+        {row.receipt ? (
+          <>
+            {" "}
+            <Sep />{" "}
+            <a href={row.receipt.href} className={"num"} style={{ color: "var(--blue)" }} data-payment-receipt={"1"}>
+              {row.receipt.label}
+            </a>
+          </>
+        ) : null}
       </td>
       <td>{row.goesTo}</td>
       <td className={"num"} style={RIGHT}>

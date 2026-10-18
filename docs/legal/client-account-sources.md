@@ -8,7 +8,35 @@ account at its own bank.
 
 | Source | URL | Retrieved |
 |---|---|---|
-| Code of Professional Conduct for College of Immigration and Citizenship Consultants Licensees, SOR/2022-128 (Justice Laws, "current to 2026-09-30") | https://laws-lois.justice.gc.ca/eng/regulations/sor-2022-128/FullText.html | 2026-10-18 (re-read 2026-10-18 for receipts, the 30-day withdrawal and the bank transfer step) |
+| Code of Professional Conduct for College of Immigration and Citizenship Consultants Licensees, SOR/2022-128 (Justice Laws, "current to 2026-09-30") | https://laws-lois.justice.gc.ca/eng/regulations/sor-2022-128/FullText.html | 2026-10-18 (re-read 2026-10-18 for receipts, the 30-day withdrawal and the bank transfer step; re-read 2026-10-18 for s. 33(3) invoice payment receipts, page still "Regulations are current to 2026-09-30") |
+
+## s. 33(3), receipts for payments of invoices (full text)
+
+Retrieved 2026-10-18 from the page above ("Regulations are current to 2026-09-30"), marginal note
+"Receipt":
+
+> (3) When a payment is received from a client, the licensee must provide the client with a receipt
+> that clearly indicates the invoice to which the payment relates.
+
+What it requires: a receipt, to the client, for each payment received from the client, that clearly
+indicates the invoice the payment relates to. It sets no time limit, format, numbering, delivery
+method or other content. How Casevoya meets it:
+
+* A receipt is issued for each payment of an invoice: a card payment that succeeded (from Stripe's
+  verified event) and an earned-fee transfer from the client account that was approved and applied
+  to the invoice (`invoice_payment_receipts`, `PR-0001` per firm, a series separate from the `RC-`
+  advance receipts). Append-only; a later refund or dispute does not change it.
+* Required by the Code: the invoice (number, description, issue date and total are on the receipt).
+* Product choices, not required by the Code: amount, date paid, client name, matter, method
+  ("Card", or the firm's client account by institution and last four digits), reference, firm
+  names, the responsible consultant and their CICC licence when on file, issued time, the s. 33(3)
+  citation.
+* "Provide the client with a receipt": the client downloads it from `/portal/payments`; billing
+  staff download it from the Finance Payments tab and the client-funds ledger. **Not emailed yet**
+  (owner is preparing HTML templates). Whether a download link counts as "providing" is an open
+  question for the owner.
+* Treating a client-account transfer as "a payment received from a client" is a reading, not a
+  quoted rule: the money was the client's and it paid their invoice. Open question for the owner.
 
 ## What the Code says (s. 32, 33, 36, 37, 39), and how the ledger maps to it
 
@@ -23,7 +51,7 @@ Quoted in fragments from the page above; read the Code itself for the full text.
 | s. 32(e) | "use the funds held in the client account only for the purpose for which they were paid" | A transfer out pays only an issued invoice on the **same matter**, and never more than that client's available balance. |
 | s. 32(f) | "before withdrawing funds from the client account, invoice the client in accordance with subsection 33(1)" | A transfer to operating must reference an issued (earned) invoice. A recorded bank transfer can't be dated before that invoice's issue date. |
 | s. 32(g) | "not later than 30 days after the day on which the client is invoiced under paragraph (f), withdraw the invoiced amount from the client account" | **Shown, not enforced.** Withdraw-by = the invoice's `issued_on` + 30 days (`app.client_funds_withdraw_by`); day 30 is the last day, day 31 is overdue. `list_client_fund_withdrawals()` lists, for billing staff, transfers waiting for approval, approved transfers whose bank transfer isn't recorded, and issued invoices on a matter where the firm holds client money and no transfer was asked for (the smaller of the amount due and the money held). The Client funds tab shows a "Withdraw by" tile and a badge per client ledger; the home page's "financial exceptions" counts overdue ones. A withdrawal is complete when the bank transfer is recorded. Nothing is blocked after the date and no email is sent. |
-| s. 33(3) | "When a payment is received from a client, the licensee must provide the client with a receipt that clearly indicates the invoice to which the payment relates." | Not built for card or client-funds payments of invoices. Out of scope for this change (it concerns payments of invoices, not advances). |
+| s. 33(3) | "When a payment is received from a client, the licensee must provide the client with a receipt that clearly indicates the invoice to which the payment relates." | Built (migration `20261019140000`): one `PR-` receipt per succeeded card payment and per approved client-account transfer to an invoice, naming the invoice. See the section above. |
 | s. 33(1) | "may invoice a client only once they have provided … services … or have made disbursements" | Already how invoices work (delivered work or incurred cost is required). |
 | s. 36(1)(b),(d) | "provide an accounting of all funds received" / "refund to the client any funds held in trust … in excess of the invoiced amount" | Refund-to-client entries exist; an end-of-engagement accounting report is **not built**. |
 | s. 37 | "keep and preserve records in accordance with the by-laws" | No retention period is encoded here; the by-laws were not reviewed for this change. |

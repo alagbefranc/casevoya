@@ -36,6 +36,7 @@ import { createClient } from "@/lib/supabase/server";
 import { stripeServer } from "@/lib/stripe/server";
 import { publishableKey } from "@/modules/finance/keys";
 import { formatAmount, formatMoney, INVOICE_CURRENCIES } from "@/modules/finance/money";
+import { paymentReceiptHref } from "@/modules/finance/receipt-links";
 import { retrieveAccountStatus } from "@/modules/finance/stripe-account";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import {
@@ -122,12 +123,15 @@ async function loadPaymentRows(supabase: Supabase, staff: SheetStaff, canBill: b
   const rows = payments.data ?? [];
   if (!rows.length) return [];
   const received = rows.filter((row) => row.status === "succeeded" && row.amount_received_cents > 0).map((row) => row.id);
-  const [labels, held] = await Promise.all([
+  const [labels, held, receipts] = await Promise.all([
     invoiceLabels(supabase, org, [...new Set(rows.map((row) => row.invoice_id))]),
     canBill && received.length
       ? supabase.from("invoice_refunds").select("payment_id, amount_cents").eq("organization_id", org).in("status", [...HELD_REFUND_STATUSES]).in("payment_id", received)
       : null,
+    // RLS: the matter's billing staff (or the client who paid) read the receipt (CICC Code s. 33(3)).
+    received.length ? supabase.from("invoice_payment_receipts").select("id, payment_id, number").eq("organization_id", org).in("payment_id", received) : null,
   ]);
+  const receiptOf = new Map((receipts?.data ?? []).filter((row) => row.payment_id).map((row) => [row.payment_id as string, row]));
   const heldByPayment = new Map<string, number>();
   for (const refund of held?.data ?? []) heldByPayment.set(refund.payment_id, (heldByPayment.get(refund.payment_id) ?? 0) + refund.amount_cents);
   return rows.map((row) => {
@@ -136,7 +140,9 @@ async function loadPaymentRows(supabase: Supabase, staff: SheetStaff, canBill: b
     const refundable = settled ? Math.max(0, row.amount_received_cents - (heldByPayment.get(row.id) ?? 0)) : 0;
     const client = invoice?.client ?? "Client";
     const goesTo = invoice?.number ?? "Invoice";
+    const receipt = receiptOf.get(row.id);
     return {
+      ...(receipt ? { receipt: { label: `Receipt ${receipt.number}`, href: paymentReceiptHref(receipt.id, org) } } : {}),
       key: row.id,
       received: dayMonth(isoDateInTimeZone(new Date(row.succeeded_at ?? row.updated_at), staff.timezone)),
       from: client,
@@ -248,7 +254,7 @@ export type ClientFundsPage = {
 async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: boolean, today: string): Promise<ClientFundsPage> {
   const org = staff.organizationId;
   const isOwner = staff.role === "firm_owner";
-  const [claims, accounts, ledgers, entries, partyResult, names, receipts, banks, dues] = await Promise.all([
+  const [claims, accounts, ledgers, entries, partyResult, names, receipts, banks, dues, paymentReceipts] = await Promise.all([
     supabase.auth.getClaims(),
     supabase.from("client_accounts").select("id, label, institution, account_last4, is_active").eq("organization_id", org).order("created_at"),
     supabase.from("client_fund_ledgers").select("id, client_account_id, matter_id, person_id, is_sample, created_at").eq("organization_id", org).order("created_at"),
@@ -265,8 +271,13 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
     supabase.from("client_fund_receipts").select("entry_id, number").eq("organization_id", org).limit(FUNDS_READ),
     supabase.from("client_fund_bank_transfers").select("entry_id, transferred_on, bank_reference").eq("organization_id", org).limit(FUNDS_READ),
     canBill ? supabase.rpc("list_client_fund_withdrawals") : null,
+    supabase.from("invoice_payment_receipts").select("id, entry_id, number").eq("organization_id", org).eq("source", "client_funds").limit(FUNDS_READ),
   ]);
   const receiptOf = new Map((receipts.data ?? []).map((row) => [row.entry_id, row.number]));
+  // An approved transfer pays an invoice: its receipt is the invoice payment receipt (CICC Code s. 33(3)).
+  const paymentReceiptOf = new Map(
+    (paymentReceipts.data ?? []).filter((row) => row.entry_id).map((row) => [row.entry_id as string, { id: row.id, number: row.number }]),
+  );
   const bankOf = new Map((banks.data ?? []).map((row) => [row.entry_id, { on: row.transferred_on, reference: row.bank_reference }]));
   const withdrawals: Withdrawal[] = (dues?.data ?? [])
     .filter((row) => row.organization_id === org)
@@ -332,10 +343,14 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
     approvedBy: staffName(row.approved_by),
     ownerSelfApproved: row.owner_self_approved,
     verifiedByOwnerSelf: row.verified_by_owner_self,
-    receiptNumber: receiptOf.get(row.id) ?? null,
+    receiptNumber: row.kind === "transfer" ? (paymentReceiptOf.get(row.id)?.number ?? null) : (receiptOf.get(row.id) ?? null),
+    paymentReceiptId: row.kind === "transfer" ? (paymentReceiptOf.get(row.id)?.id ?? null) : null,
     bank: row.kind === "transfer" && row.status === "approved" ? (bankOf.get(row.id) ?? null) : undefined,
   });
-  const receiptHref = (entry: FundEntry) => `/api/client-funds/receipts/${entry.id}?organizationId=${org}`;
+  const receiptHref = (entry: FundEntry) =>
+    entry.kind === "transfer" && entry.paymentReceiptId
+      ? paymentReceiptHref(entry.paymentReceiptId, org)
+      : `/api/client-funds/receipts/${entry.id}?organizationId=${org}`;
   const byLedger = new Map<string, FundEntry[]>();
   for (const row of entryRows) {
     const list = byLedger.get(row.ledger_id) ?? [];
