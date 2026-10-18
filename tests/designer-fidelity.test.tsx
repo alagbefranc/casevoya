@@ -27,6 +27,15 @@ import { SheetStaffTab, StaffAfter, StaffHeader, type StaffData, type StaffInvit
 import { InvitationsMarkup } from "@/components/sheet/markup/invitations";
 import { ClientsHeader, DuplicateDialog, SheetClients, type ClientsData, type ClientsTab } from "@/components/sheet/designer/clients";
 import { ClientsMarkup } from "@/components/sheet/markup/clients";
+import {
+  AgreementsHeader,
+  NewAgreementDialog,
+  SheetAgreements,
+  TemplateDialog,
+  type AgreementsData,
+  type NewAgreementDialogData,
+} from "@/components/sheet/designer/agreements";
+import { AgreementsMarkup } from "@/components/sheet/markup/agreements";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -648,4 +657,117 @@ describe("Designer fidelity", () => {
       expect(html).not.toMatch(/Northline|Amara|Priya|Kofi|Olena|Rafael|Hamid|Sharma|NL-2026|Merged with history/);
     }
   });
+
+  it("renders the Agreements page (All agreements) and its New quote dialog exactly as the captured Designer markup", () => {
+    // The capture also carries the Void envelope (#dlgVoid) and Record representation authority
+    // (#dlgAuth) dialogs. Their tabs are not ported, so the All agreements tab renders without them.
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(AgreementsMarkup)))
+      .replace(/<dialog class="dlg" id="dlgVoid"[\s\S]*?<\/dialog>/, "")
+      .replace(/<dialog class="dlg" id="dlgAuth"[\s\S]*?<\/dialog>/, "");
+    expect(captured).toContain('id="dlgNewQ"');
+    expect(captured).not.toContain('id="dlgVoid"');
+    expect(captured).not.toContain('id="dlgAuth"');
+    const live = withoutPreloads(
+      renderToStaticMarkup(
+        createElement(SheetFrame, {
+          sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/agreements" },
+          header: createElement(AgreementsHeader, { data: { records: 8, waiting: 2, create: "New quote" } }),
+          statusbar: {
+            timezone: "America/Toronto",
+            queue: { label: "Reminder queue healthy", detail: "0 retries" },
+            sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+          },
+          after: createElement(NewAgreementDialog, { data: DESIGNER_NEW_QUOTE }),
+        }, createElement(SheetAgreements, { data: DESIGNER_AGREEMENTS })),
+      ),
+    );
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+    }
+    expect(live).toBe(captured);
+  });
+
+  it("wires the real Agreements dialogs by data attributes, apart from the New matter dialog", () => {
+    const org = "33333333-3333-4333-8333-333333333333";
+    const html = renderToStaticMarkup(
+      createElement("div", null,
+        createElement(NewAgreementDialog, {
+          data: {
+            title: "New agreement",
+            matterLabel: "Matter",
+            templateLabel: "Approved template",
+            matters: [{ value: "11111111-1111-4111-8111-111111111111", left: "Dana Lee · CV-2026-0001" }],
+            templates: [{ value: "22222222-2222-4222-8222-222222222222", left: "Service · Service agreement" }],
+            submit: "Create and send",
+            live: { organizationId: org, sampleMode: false, blocked: null },
+          },
+        }),
+        createElement(TemplateDialog, {
+          data: { organizationId: org, kinds: [{ value: "service", label: "Service agreement" }], drafts: [{ id: "44444444-4444-4444-8444-444444444444", name: "Fees", kind: "Service agreement" }], canApprove: true },
+        }),
+      ),
+    );
+    expect(html).toContain(`data-new-agreement="1" data-org="${org}"`);
+    expect(html).not.toContain('data-goto-tab="quote"');
+    expect(html).toContain(`data-new-template="1" data-org="${org}"`);
+    expect(html).toContain(`data-approve-template="44444444-4444-4444-8444-444444444444" data-org="${org}"`);
+    // Never the New matter dialog's id or save attribute.
+    expect(html).not.toContain('id="dlgNew"');
+    expect(html).not.toContain("data-new-matter");
+    expect(html).toContain('<option value="11111111-1111-4111-8111-111111111111">Dana Lee · CV-2026-0001</option>');
+  });
+
+  it("shows a firm without agreements an honest empty state, with no sample people", () => {
+    const html = renderToStaticMarkup(
+      createElement(SheetAgreements, {
+        data: {
+          kpis: [{ href: "#", dialog: "dlgTpl", label: "Approved templates", count: 0, warn: true, note: "None approved yet" }],
+          rows: [],
+          empty: { title: "No agreements yet", copy: "Agreements start from an approved template.", action: { label: "Add an agreement template", dialog: "dlgTpl" } },
+        },
+      }),
+    );
+    expect(html).toContain('class="emp"');
+    expect(html).toContain('data-dlg="dlgTpl"');
+    expect(html).not.toMatch(/Northline|Amara|Priya|Kofi|Tomás|Hamid|Sofia|Mei Tanaka|NL-2026|S-05|Q-0044/);
+  });
 });
+
+const DESIGNER_AGREEMENTS: AgreementsData = {
+  kpis: [
+    { href: "?tab=envelope", label: "Waiting for signatures", count: 2, note: "Amara signed amendment 1" },
+    { href: "?tab=editor", label: "Sent, not opened", count: 1, warn: true, note: { left: "Kofi Mensah", right: "3 days" } },
+    { href: "?tab=quote", label: "Quotes out", count: 1, note: { left: "Tomás Duarte", right: "valid to 31 Oct" } },
+    { href: "?tab=authority", label: "Authority missing", count: 1, warn: true, note: { left: "Kofi", right: "needed before submission" } },
+  ],
+  rows: [
+    { client: PRIYA, matter: "NL-2026-0142", record: { href: "?tab=envelope", left: "Service agreement", right: "S-05 v2" }, state: { tone: "ok", label: "Executed" }, signed: "3 of 3", date: "4 Oct 2026" },
+    { client: PRIYA, matter: "NL-2026-0142", record: { href: "?tab=envelope", left: "Amendment 1", right: "add Olena as dependant" }, state: { tone: "blue", label: "Partially signed" }, signed: "1 of 3", date: "Expires 29 Oct" },
+    { client: AV("Kofi Mensah", "av-kofi-client"), matter: "NL-2026-0131", record: { href: "?tab=editor", left: "Service agreement", right: "S-05 v2" }, state: { tone: "rev", label: "Sent" }, signed: "0 of 2", date: "Expires 28 Oct" },
+    { client: AV("Tomás Duarte", "av-tomas-client"), matter: "Lead L6", record: { href: "?tab=quote", left: "Quote Q-0044", right: "PR, family class" }, state: { tone: "gr", label: "Quote", detail: "not an agreement" }, signed: "—", date: "Valid to 31 Oct" },
+    { client: AV("Ana Ferreira", "av-ana-client"), matter: "Lead L5", record: { href: "?tab=list", left: "Consultation agreement", right: "C-02 v3" }, state: { tone: "ok", label: "Executed" }, signed: "2 of 2", date: "12 Oct 2026" },
+    { client: AV("Sofia Reyes", "av-sofia-client"), matter: "Lead L3", record: { href: "?tab=list", left: "Service agreement", right: "S-05 v1" }, state: { tone: "bad", label: "Declined" }, signed: "0 of 2", date: { left: "9 Oct", right: "history kept" } },
+    { client: { name: "Hamid Rahimi" }, matter: "Lead L4", record: { href: "?tab=compare", left: "Service agreement", right: "S-05 v1 → v2" }, state: { tone: "gr", label: "Voided", detail: "fees changed" }, signed: "1 of 2", date: { left: "6 Oct", right: "replaced by v2" } },
+    { client: { name: "Mei Tanaka" }, matter: "Lead L9", record: { href: "?tab=list", left: "Quote Q-0041", right: "work permit" }, state: { tone: "gr", label: "Expired" }, signed: "—", date: "10 Oct 2026" },
+  ],
+  empty: null,
+};
+
+const DESIGNER_NEW_QUOTE: NewAgreementDialogData = {
+  title: "New quote",
+  matterLabel: "Client or lead",
+  templateLabel: "Start from",
+  matters: [
+    { left: "Tomás Duarte", right: "Lead L6" },
+    { left: "Mei Tanaka", right: "Lead L9" },
+    { left: "Grace Okafor", right: "Lead L7" },
+  ],
+  templates: [
+    { left: "Program template", right: "PR family class v4" },
+    { left: "Program template", right: "Work permit v3" },
+    { left: "Blank quote" },
+  ],
+  submit: "Create quote",
+};
