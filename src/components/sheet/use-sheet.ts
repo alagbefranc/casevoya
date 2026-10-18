@@ -19,7 +19,18 @@ function art(name: string, px: number) {
   return `<span class="art" style="--a:${px}px" aria-hidden="true"><img src="/assets/generated/b2/${name}-160@1x.webp" srcset="/assets/generated/b2/${name}-160@2x.webp 2x" width="${px}" height="${px}" alt="" loading="lazy" decoding="async"></span>`;
 }
 
-const FILTER_TOKEN: Record<string, string> = { Mine: "mine", Overdue: "overdue", Blocked: "blocked", "High priority": "high" };
+const FILTER_TOKEN: Record<string, string> = {
+  Mine: "mine",
+  Overdue: "overdue",
+  Blocked: "blocked",
+  "High priority": "high",
+  Applicants: "applicant",
+  Sponsors: "sponsor",
+  Dependants: "dependant",
+  Leads: "lead",
+};
+/** Pages whose `.fp-bar` chips and search filter real rows by their `data-f` tokens. */
+const FILTER_PAGES = new Set(["tasks", "clients"]);
 
 export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
   const router = useRouter();
@@ -75,9 +86,10 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       dialog?.close();
     };
 
-    // The Tasks page's filter chips (All, Mine, Overdue, Blocked, High priority) and search
-    // narrow the real rows by their `data-f` tokens and text, and keep "N of M shown" true.
-    const filters = page === "tasks" ? root.querySelector<HTMLElement>(".fp-bar") : null;
+    // The Tasks page's filter chips (All, Mine, Overdue, Blocked, High priority) and the Clients
+    // page's (All, Applicants, Sponsors, Dependants, Leads), with search, narrow the real rows by
+    // their `data-f` tokens and text, and keep "N of M shown" true where the page has it.
+    const filters = FILTER_PAGES.has(page) ? root.querySelector<HTMLElement>(".fp-bar") : null;
     const applyFilters = () => {
       if (!filters) return;
       const q = (filters.querySelector("input")?.value ?? "").trim().toLowerCase();
