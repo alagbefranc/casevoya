@@ -23,6 +23,8 @@ import { SampleModeMarkup } from "@/components/sheet/markup/sample-mode";
 import { SampleCasePanel, type SampleCaseData } from "@/components/sheet/designer/sample-case";
 import { SheetTasks, TasksDialog, TasksHeader, type TasksData, type TasksTab } from "@/components/sheet/designer/tasks";
 import { TasksMarkup } from "@/components/sheet/markup/tasks";
+import { ClientsHeader, DuplicateDialog, SheetClients, type ClientsData, type ClientsTab } from "@/components/sheet/designer/clients";
+import { ClientsMarkup } from "@/components/sheet/markup/clients";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -239,6 +241,79 @@ const DESIGNER_MATTER_DIALOGS: MatterDialogsData = {
   receivedOn: "2026-10-17",
 };
 
+const DESIGNER_CLIENTS: ClientsData = {
+  tab: "dir",
+  counts: { people: 6, households: 2 },
+  add: { href: "/sheet/invitations", label: "Invite a client" },
+  tabs: { person: "Priya Sharma", household: "Sharma household" },
+  dir: {
+    copy: "Everyone your firm works with, one record per person. Two people who share an email stay separate, and nobody is merged without your confirmation.",
+    rows: [
+      { href: "?tab=person", person: AV("Priya Sharma", "av-priya-applicant"), role: "Applicant", matter: "NL-2026-0142", language: "Hindi, English", timezone: "Asia/Kolkata", portal: "Portal active" },
+      { href: "?tab=person", person: AV("Rafael Sharma", "av-rafael-sponsor"), role: "Sponsor", matter: "NL-2026-0142", language: "English", timezone: "America/Toronto", portal: "Portal active" },
+      { href: "?tab=person", person: AV("Olena Sharma", "av-olena-dependant"), role: "Adult dependant", matter: "NL-2026-0142", language: "English, Ukrainian", timezone: "America/Toronto", portal: { left: "Own login", right: "own consent" } },
+      { href: "?tab=person", person: AV("Kofi Mensah", "av-kofi-client"), role: "Applicant", matter: "NL-2026-0131", language: "English", timezone: "America/Toronto", portal: "Portal active" },
+      { href: "?tab=person", person: AV("Tomás Duarte", "av-tomas-client"), role: "Lead", matter: "Lead L6", language: "Spanish, English", timezone: "America/Toronto", portal: "Not invited" },
+      { href: "?tab=person", person: AV("Ana Ferreira", "av-ana-client"), role: "Applicant", matter: "NL-2026-0129", language: "Portuguese", timezone: "America/Toronto", portal: "Portal active" },
+    ],
+    duplicate: {
+      title: "Possible duplicate: Hamid Rahimi (2024) and Hamid Rahimi (lead L4)",
+      detail: "Same name and date of birth, different email. Review before merging.",
+      columns: ["2024 record", "Lead L4"],
+      rows: [
+        { label: "Name", values: ["Hamid Rahimi", "Hamid Rahimi"] },
+        { label: "Date of birth", values: ["1990-06-02", "1990-06-02"] },
+        { label: "Email", values: ["h.rahimi@example.com", "hamid.r@example.org"] },
+        { label: "Phone", values: ["—", "+1 416 555 0144"] },
+      ],
+      merge: { toast: "Merged with history kept", kind: "ok", sub: "Both records’ history stays visible." },
+    },
+  },
+  person: {
+    name: "Priya Sharma",
+    summary: "Applicant on NL-2026-0142. Language and timezone are stored for her and used in every reminder.",
+    facts: [
+      { fact: "Date of birth", value: { num: "1984-03-09" }, source: { left: "Passport v1, page 1", right: "OCR confirmed by Daniel" }, review: "Approved" },
+      { fact: "Passport number", value: { num: "•••• 4821", suffix: "(masked)" }, source: "Passport v1", review: "Approved" },
+      { fact: "Previous name", value: { text: "Priya Kapoor" }, source: "Intake answer, 3 Oct", review: "Approved" },
+      { fact: "Address 2019–2021", value: { unknown: true }, source: "Intake: “I don’t know the exact dates”", review: { tone: "chg", label: "Review item: gap in history" } },
+    ],
+    superseded: [{ fact: "Address", old: "12 Lake Rd, Pune", new: "4 Park St, Pune", when: { left: "10 Oct", right: "old kept in history" } }],
+    relationships: {
+      rows: [
+        { person: AV("Rafael Sharma", "av-rafael-sponsor"), label: { left: "Spouse", right: "sponsor" } },
+        { person: AV("Olena Sharma", "av-olena-dependant"), label: { left: "Daughter", right: "adult dependant" } },
+      ],
+      note: "Being in the same household doesn’t give anyone access to Priya’s private records.",
+    },
+    matters: {
+      rows: [
+        { href: "/sheet/matters/priya", reference: "NL-2026-0142", role: "Applicant", state: { tone: "blue", label: "Evidence collection" } },
+        { reference: "NL-2019-0044", role: "Visitor record", state: { tone: "ok", label: "Closed 2019", detail: "approved" } },
+      ],
+      note: ["Last portal sign-in 16 Oct, 21:04 IST", "2 tasks open", "1 invoice due 6 Nov."],
+    },
+    preferences: [
+      { label: "Language", value: { left: "Hindi, English", right: "portal in English" } },
+      { label: "Timezone", value: "Asia/Kolkata" },
+      { label: "Contact", value: { left: "Portal and email", right: "no SMS" } },
+      { label: "Marketing", value: "Not subscribed (separate from service messages)" },
+    ],
+  },
+  household: {
+    name: "Sharma household",
+    copy: "How the people on this file are related, and what each can see. Selecting a name never grants access.",
+    members: ["Priya", "Rafael", "Olena"],
+    rows: [
+      { record: "Shared application status", cells: ["Yes", "Yes", "Yes"] },
+      { record: "Priya’s medical history", cells: ["Yes", { left: "No", right: "private" }, { left: "No", right: "private" }] },
+      { record: "Rafael’s income documents", cells: [{ left: "No", right: "private" }, "Yes", { left: "No", right: "private" }] },
+      { record: "Olena’s consent and documents", cells: [{ left: "No", right: "private" }, { left: "No", right: "private" }, "Yes"] },
+      { record: "Invoices (Rafael pays)", cells: ["Yes", { left: "Yes", right: "paying gives no extra access" }, "No"] },
+    ],
+  },
+};
+
 function withoutPreloads(html: string): string {
   return html.replace(/<link rel="preload"[^>]*\/>/g, "");
 }
@@ -453,6 +528,53 @@ describe("Designer fidelity", () => {
       );
       expect(html).toContain('class="emp"');
       expect(html).not.toMatch(/Northline|Amara|Priya|Kofi|Olena|Rafael|Daniel|Lena|NL-2026/);
+    }
+  });
+
+  for (const tab of ["dir", "person", "household"] as ClientsTab[]) {
+    it(`renders the Clients page (${tab} tab) exactly as the captured Designer markup`, () => {
+      const captured = withoutPreloads(renderToStaticMarkup(createElement(ClientsMarkup, { variant: `tab-${tab}` })));
+      const data = { ...DESIGNER_CLIENTS, tab };
+      const live = withoutPreloads(
+        renderToStaticMarkup(
+          createElement(SheetFrame, {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/clients" },
+            header: createElement(ClientsHeader, { data }),
+            statusbar: {
+              timezone: "America/Toronto",
+              queue: { label: "Reminder queue healthy", detail: "0 retries" },
+              sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+            },
+            after: createElement(DuplicateDialog, { data: DESIGNER_CLIENTS.dir!.duplicate! }),
+          }, createElement(SheetClients, { data })),
+        ),
+      );
+      if (live !== captured) {
+        let i = 0;
+        while (i < live.length && live[i] === captured[i]) i++;
+        console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+      }
+      expect(live).toBe(captured);
+    });
+  }
+
+  it("shows a firm without clients the Designer's empty states, with no sample people", () => {
+    for (const tab of ["dir", "person", "household"] as ClientsTab[]) {
+      const html = renderToStaticMarkup(
+        createElement(SheetClients, {
+          data: {
+            tab,
+            counts: { people: 0, households: 0 },
+            add: { href: "/sheet/matters?new=1", label: "Add a client" },
+            tabs: { person: "Person", household: "Household" },
+            dir: { copy: "People on matters you can see.", rows: [], duplicate: null },
+            person: null,
+            household: null,
+          },
+        }),
+      );
+      expect(html).toContain('class="emp"');
+      expect(html).not.toMatch(/Northline|Amara|Priya|Kofi|Olena|Rafael|Hamid|Sharma|NL-2026|Merged with history/);
     }
   });
 });
