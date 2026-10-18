@@ -62,6 +62,7 @@ import { bindGovControls } from "./gov-acts";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { markAllNotificationsRead, openNotification } from "./notification-acts";
+import { wireLead, wirePipeline } from "./pipeline-acts";
 import { runNewTask, syncNewTask } from "./new-task-act";
 import { inviteFromEdit, openPersonEdit, runPersonEdit } from "./person-edit-act";
 import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-invite-act";
@@ -831,6 +832,9 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (dialogParam === "book") window.setTimeout(() => openDialog("dlgBook"), 300);
     }
 
+    // Leads: the pipeline board, filters, New lead and CSV import; the lead page's actions.
+    if (page === "pipeline") wirePipeline(root, router, ac.signal, openDialog);
+    if (page === "lead") wireLead(root, router, ac.signal, openDialog);
     // ?dlg=review&doc= (back from step-up) reopens the document review with what was typed.
     if (root.querySelector("dialog#dlgDocRev")) window.setTimeout(() => reopenDocReview(root, openDialog), 300);
 

@@ -1,5 +1,12 @@
-// Generated from the live schema (project aqjtvqmojfamtspzyeqm) on 2026-10-18 after migrations
-// through 20261019210000 were applied (`pnpm db:types` equivalent via the Management API).
+// Live schema (project aqjtvqmojfamtspzyeqm) through 20261017113202, extended in-repo
+// for unapplied migrations 20261017120000, 20261017140000–20261017140800,
+// 20261017160000 (preview_invitation, request_mfa_reset),
+// 20261017170000–20261017170300, 20261017180000–20261017180100,
+// 20261017190000–20261017190100, and 20261017200000–20261017200200.
+// 20261017200300 only sets search_path on app.reserved_firm_slugs. It does not change this file.
+// Regenerate with `pnpm db:types` only after those migrations are applied live.
+// Table types for tasks, deadlines, intake, engagement and inbound-attachment tables were copied
+// from `pnpm db:types` on 2026-10-17; function signatures keep their hand-reviewed optional arguments.
 
 export type Json =
   | string
@@ -137,22 +144,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "agreement_templates_approved_by_fkey"
-            columns: ["approved_by"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "agreement_templates_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       agreement_versions: {
         Row: {
@@ -215,22 +207,7 @@ export type Database = {
           version?: number
           version_number?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "agreement_versions_agreement_id_organization_id_fkey"
-            columns: ["agreement_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "agreements"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "agreement_versions_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       agreements: {
         Row: {
@@ -281,43 +258,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "agreements_current_version_fkey"
-            columns: ["current_version_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "agreement_versions"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "agreements_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "agreements_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "agreements_supersedes_id_organization_id_fkey"
-            columns: ["supersedes_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "agreements"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "agreements_template_id_organization_id_fkey"
-            columns: ["template_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "agreement_templates"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       audit_log: {
         Row: {
@@ -424,22 +365,7 @@ export type Database = {
           schedule_id?: string
           start_local?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "availability_overrides_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "availability_overrides_schedule_id_organization_id_fkey"
-            columns: ["schedule_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "availability_schedules"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       availability_rules: {
         Row: {
@@ -472,22 +398,7 @@ export type Database = {
           start_local?: string
           weekday?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "availability_rules_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "availability_rules_schedule_id_organization_id_fkey"
-            columns: ["schedule_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "availability_schedules"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       availability_schedules: {
         Row: {
@@ -526,22 +437,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "availability_schedules_membership_id_organization_id_fkey"
-            columns: ["membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "availability_schedules_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       booking_attendees: {
         Row: {
@@ -586,29 +482,7 @@ export type Database = {
           role?: string
           time_zone?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "booking_attendees_booking_id_organization_id_fkey"
-            columns: ["booking_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "bookings"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "booking_attendees_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "booking_attendees_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       booking_event_type_hosts: {
         Row: {
@@ -638,29 +512,7 @@ export type Database = {
           organization_id?: string
           position?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "booking_event_type_hosts_event_type_id_organization_id_fkey"
-            columns: ["event_type_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "booking_event_types"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "booking_event_type_hosts_membership_id_organization_id_fkey"
-            columns: ["membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "booking_event_type_hosts_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       booking_event_types: {
         Row: {
@@ -744,15 +596,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "booking_event_types_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       booking_events: {
         Row: {
@@ -785,22 +629,7 @@ export type Database = {
           organization_id?: string
           payload?: Json
         }
-        Relationships: [
-          {
-            foreignKeyName: "booking_events_booking_id_organization_id_fkey"
-            columns: ["booking_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "bookings"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "booking_events_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       booking_hold_attempts: {
         Row: {
@@ -821,15 +650,7 @@ export type Database = {
           id?: string
           organization_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "booking_hold_attempts_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       bookings: {
         Row: {
@@ -943,43 +764,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "bookings_event_type_id_organization_id_fkey"
-            columns: ["event_type_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "booking_event_types"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "bookings_host_membership_id_organization_id_fkey"
-            columns: ["host_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "bookings_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "bookings_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bookings_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       client_account_reconciliations: {
         Row: {
@@ -1015,33 +800,33 @@ export type Database = {
           version: number
         }
         Insert: {
-          client_account_id: string
-          client_count: number
-          client_ledgers_total_cents: number
+          client_account_id?: string
+          client_count?: number
+          client_ledgers_total_cents?: number
           created_at?: string
           created_by?: string | null
           currency?: string
-          difference_cents: number
+          difference_cents?: number
           discard_reason?: string | null
           discarded_at?: string | null
           discarded_by?: string | null
           id?: string
-          idempotency_key: string
+          idempotency_key?: string
           is_sample?: boolean
-          item_count: number
+          item_count?: number
           items?: Json
-          ledger_balance_cents: number
-          organization_id: string
+          ledger_balance_cents?: number
+          organization_id?: string
           owner_self_signed?: boolean
-          period_start: string
+          period_start?: string
           prepared_at?: string
-          prepared_by: string
+          prepared_by?: string
           preparer_note?: string | null
           review_notes?: string | null
           signed_at?: string | null
           signed_by?: string | null
-          statement_balance_cents: number
-          statement_date: string
+          statement_balance_cents?: number
+          statement_date?: string
           status?: Database["public"]["Enums"]["client_reconciliation_status"]
           updated_at?: string
           version?: number
@@ -1078,22 +863,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "client_account_reconciliation_client_account_id_organizati_fkey"
-            columns: ["client_account_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "client_accounts"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "client_account_reconciliations_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       client_accounts: {
         Row: {
@@ -1135,15 +905,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "client_accounts_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       client_fund_bank_transfers: {
         Row: {
@@ -1197,43 +959,7 @@ export type Database = {
           transferred_on?: string
           withdraw_by?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "client_fund_bank_transfers_entry_id_organization_id_fkey"
-            columns: ["entry_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "client_fund_entries"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "client_fund_bank_transfers_invoice_id_organization_id_fkey"
-            columns: ["invoice_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoices"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "client_fund_bank_transfers_ledger_id_organization_id_fkey"
-            columns: ["ledger_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "client_fund_ledgers"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "client_fund_bank_transfers_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "client_fund_bank_transfers_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       client_fund_entries: {
         Row: {
@@ -1356,57 +1082,7 @@ export type Database = {
           verified_by_owner_self?: boolean
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "client_fund_entries_client_account_id_organization_id_fkey"
-            columns: ["client_account_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "client_accounts"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "client_fund_entries_invoice_id_organization_id_fkey"
-            columns: ["invoice_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoices"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "client_fund_entries_ledger_id_organization_id_fkey"
-            columns: ["ledger_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "client_fund_ledgers"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "client_fund_entries_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "client_fund_entries_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "client_fund_entries_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "client_fund_entries_reverses_entry_id_organization_id_fkey"
-            columns: ["reverses_entry_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "client_fund_entries"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       client_fund_ledgers: {
         Row: {
@@ -1445,36 +1121,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "client_fund_ledgers_client_account_id_organization_id_fkey"
-            columns: ["client_account_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "client_accounts"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "client_fund_ledgers_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "client_fund_ledgers_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "client_fund_ledgers_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       client_fund_receipts: {
         Row: {
@@ -1564,43 +1211,7 @@ export type Database = {
           person_id?: string
           received_on?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "client_fund_receipts_entry_id_organization_id_fkey"
-            columns: ["entry_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "client_fund_entries"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "client_fund_receipts_ledger_id_organization_id_fkey"
-            columns: ["ledger_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "client_fund_ledgers"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "client_fund_receipts_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "client_fund_receipts_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "client_fund_receipts_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       complaint_handlers: {
         Row: {
@@ -1639,22 +1250,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "complaint_handlers_membership_id_organization_id_fkey"
-            columns: ["membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "complaint_handlers_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       complaints: {
         Row: {
@@ -1759,36 +1355,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "complaints_assignee_membership_id_organization_id_fkey"
-            columns: ["assignee_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "complaints_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "complaints_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "complaints_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       compliance_settings: {
         Row: {
@@ -1827,20 +1394,11 @@ export type Database = {
           updated_by?: string | null
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "compliance_settings_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: true
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       consent_records: {
         Row: {
           created_at: string
-          created_by: string | null
           granted: boolean
           id: string
           invitation_id: string | null
@@ -1853,13 +1411,10 @@ export type Database = {
           scope: string | null
           statement_sha256: string
           statement_text: string
-          updated_at: string
-          version: number
           withdrawn_at: string | null
         }
         Insert: {
           created_at?: string
-          created_by?: string | null
           granted: boolean
           id?: string
           invitation_id?: string | null
@@ -1872,66 +1427,12 @@ export type Database = {
           scope?: string | null
           statement_sha256: string
           statement_text: string
-          updated_at?: string
-          version?: number
           withdrawn_at?: string | null
         }
         Update: {
-          created_at?: string
-          created_by?: string | null
-          granted?: boolean
-          id?: string
-          invitation_id?: string | null
-          matter_id?: string | null
-          organization_id?: string
-          person_id?: string
-          policy_document_id?: string | null
-          policy_version?: string | null
-          purpose?: Database["public"]["Enums"]["consent_purpose"]
-          scope?: string | null
-          statement_sha256?: string
-          statement_text?: string
-          updated_at?: string
-          version?: number
           withdrawn_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "consent_records_invitation_id_organization_id_fkey"
-            columns: ["invitation_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "portal_invitations"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "consent_records_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "consent_records_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "consent_records_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "consent_records_policy_document_id_fkey"
-            columns: ["policy_document_id"]
-            isOneToOne: false
-            referencedRelation: "portal_policy_documents"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       consultant_credentials: {
         Row: {
@@ -1951,9 +1452,7 @@ export type Database = {
           next_review_at: string | null
           organization_id: string
           proof_locator: string | null
-          register_status:
-            | Database["public"]["Enums"]["register_licence_status"]
-            | null
+          register_status: Database["public"]["Enums"]["register_licence_status"] | null
           regulator: string
           reviewer_user_id: string | null
           scope_note: string | null
@@ -1981,9 +1480,7 @@ export type Database = {
           next_review_at?: string | null
           organization_id: string
           proof_locator?: string | null
-          register_status?:
-            | Database["public"]["Enums"]["register_licence_status"]
-            | null
+          register_status?: Database["public"]["Enums"]["register_licence_status"] | null
           regulator?: string
           reviewer_user_id?: string | null
           scope_note?: string | null
@@ -2011,9 +1508,7 @@ export type Database = {
           next_review_at?: string | null
           organization_id?: string
           proof_locator?: string | null
-          register_status?:
-            | Database["public"]["Enums"]["register_licence_status"]
-            | null
+          register_status?: Database["public"]["Enums"]["register_licence_status"] | null
           regulator?: string
           reviewer_user_id?: string | null
           scope_note?: string | null
@@ -2028,7 +1523,7 @@ export type Database = {
           {
             foreignKeyName: "consultant_credentials_membership_id_organization_id_fkey"
             columns: ["membership_id", "organization_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "memberships"
             referencedColumns: ["id", "organization_id"]
           },
@@ -2069,36 +1564,7 @@ export type Database = {
           organization_id?: string
           task_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "correspondence_work_links_correspondence_id_organization_i_fkey"
-            columns: ["correspondence_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "government_correspondence"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "correspondence_work_links_deadline_id_organization_id_fkey"
-            columns: ["deadline_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "deadlines"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "correspondence_work_links_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "correspondence_work_links_task_id_organization_id_fkey"
-            columns: ["task_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "tasks"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       credential_change_reports: {
         Row: {
@@ -2365,36 +1831,7 @@ export type Database = {
           organization_id?: string
           task_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "decision_follow_ups_decision_id_organization_id_fkey"
-            columns: ["decision_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "decision_records"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "decision_follow_ups_document_version_id_organization_id_fkey"
-            columns: ["document_version_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "document_versions"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "decision_follow_ups_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "decision_follow_ups_task_id_organization_id_fkey"
-            columns: ["task_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "tasks"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       decision_records: {
         Row: {
@@ -2463,50 +1900,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "decision_records_confirmed_by_membership_id_organization_i_fkey"
-            columns: ["confirmed_by_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "decision_records_correspondence_id_organization_id_fkey"
-            columns: ["correspondence_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "government_correspondence"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "decision_records_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "decision_records_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "decision_records_shared_by_membership_id_organization_id_fkey"
-            columns: ["shared_by_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "decision_records_stage_evidence_id_organization_id_fkey"
-            columns: ["stage_evidence_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matter_stage_evidence"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       decision_steps: {
         Row: {
@@ -2542,29 +1936,7 @@ export type Database = {
           organization_id?: string
           step?: Database["public"]["Enums"]["decision_step"]
         }
-        Relationships: [
-          {
-            foreignKeyName: "decision_steps_decision_id_organization_id_fkey"
-            columns: ["decision_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "decision_records"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "decision_steps_done_by_membership_id_organization_id_fkey"
-            columns: ["done_by_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "decision_steps_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       document_custody_events: {
         Row: {
@@ -2606,22 +1978,7 @@ export type Database = {
           return_on?: string | null
           version_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "document_custody_events_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "document_custody_events_version_id_organization_id_fkey"
-            columns: ["version_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "document_versions"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       document_matter_refs: {
         Row: {
@@ -2654,29 +2011,7 @@ export type Database = {
           removal_reason?: string | null
           removed_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "document_matter_refs_document_id_organization_id_fkey"
-            columns: ["document_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "document_matter_refs_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "document_matter_refs_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       document_requests: {
         Row: {
@@ -2686,8 +2021,8 @@ export type Database = {
           created_by: string | null
           document_id: string | null
           due_on: string | null
-          expires_on: string | null
           explanation: string
+          expires_on: string | null
           id: string
           matter_id: string
           organization_id: string
@@ -2710,8 +2045,8 @@ export type Database = {
           created_by?: string | null
           document_id?: string | null
           due_on?: string | null
-          expires_on?: string | null
           explanation: string
+          expires_on?: string | null
           id?: string
           matter_id: string
           organization_id: string
@@ -2734,8 +2069,8 @@ export type Database = {
           created_by?: string | null
           document_id?: string | null
           due_on?: string | null
-          expires_on?: string | null
           explanation?: string
+          expires_on?: string | null
           id?: string
           matter_id?: string
           organization_id?: string
@@ -2751,43 +2086,7 @@ export type Database = {
           version?: number
           waiver_reason?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "document_requests_document_id_organization_id_fkey"
-            columns: ["document_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "document_requests_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "document_requests_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "document_requests_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "document_requests_rule_version_id_fkey"
-            columns: ["rule_version_id"]
-            isOneToOne: false
-            referencedRelation: "rule_versions"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       document_review_translations: {
         Row: {
@@ -2826,29 +2125,7 @@ export type Database = {
           review_id?: string
           version_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "document_review_translations_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "document_review_translations_review_id_fkey"
-            columns: ["review_id"]
-            isOneToOne: false
-            referencedRelation: "document_reviews"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "document_review_translations_version_id_organization_id_fkey"
-            columns: ["version_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "document_versions"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       document_reviews: {
         Row: {
@@ -2881,22 +2158,7 @@ export type Database = {
           reason?: string
           version_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "document_reviews_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "document_reviews_version_id_organization_id_fkey"
-            columns: ["version_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "document_versions"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       document_versions: {
         Row: {
@@ -2995,43 +2257,7 @@ export type Database = {
           version?: number
           version_number?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "document_versions_document_id_organization_id_fkey"
-            columns: ["document_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "document_versions_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "document_versions_parent_version_id_organization_id_fkey"
-            columns: ["parent_version_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "document_versions"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "document_versions_request_org_fkey"
-            columns: ["request_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "document_requests"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "document_versions_translation_of_version_id_organization_i_fkey"
-            columns: ["translation_of_version_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "document_versions"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       documents: {
         Row: {
@@ -3076,36 +2302,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "documents_current_version_fkey"
-            columns: ["current_version_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "document_versions"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "documents_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documents_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "documents_translates_document_id_organization_id_fkey"
-            columns: ["translates_document_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       email_deliveries: {
         Row: {
@@ -3162,29 +2359,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "email_deliveries_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "email_deliveries_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "email_deliveries_outbox_event_id_fkey"
-            columns: ["outbox_event_id"]
-            isOneToOne: false
-            referencedRelation: "outbox_events"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       email_inbound_windows: {
         Row: {
@@ -3255,15 +2430,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "email_suppressions_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       envelope_signers: {
         Row: {
@@ -3276,7 +2443,7 @@ export type Database = {
           display_name: string
           envelope_id: string
           id: string
-          ip: unknown
+          ip: string | null
           membership_id: string | null
           organization_id: string
           person_id: string | null
@@ -3299,7 +2466,7 @@ export type Database = {
           display_name: string
           envelope_id: string
           id?: string
-          ip?: unknown
+          ip?: string | null
           membership_id?: string | null
           organization_id: string
           person_id?: string | null
@@ -3322,7 +2489,7 @@ export type Database = {
           display_name?: string
           envelope_id?: string
           id?: string
-          ip?: unknown
+          ip?: string | null
           membership_id?: string | null
           organization_id?: string
           person_id?: string | null
@@ -3335,36 +2502,7 @@ export type Database = {
           user_agent?: string | null
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "envelope_signers_envelope_id_organization_id_fkey"
-            columns: ["envelope_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "signature_envelopes"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "envelope_signers_membership_id_organization_id_fkey"
-            columns: ["membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "envelope_signers_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "envelope_signers_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       external_busy_blocks: {
         Row: {
@@ -3397,22 +2535,7 @@ export type Database = {
           starts_at?: string
           synced_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "external_busy_blocks_membership_id_organization_id_fkey"
-            columns: ["membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "external_busy_blocks_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       firm_payment_accounts: {
         Row: {
@@ -3460,15 +2583,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "firm_payment_accounts_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: true
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       firm_reminder_offsets: {
         Row: {
@@ -3575,50 +2690,7 @@ export type Database = {
           verified_by_membership_id?: string | null
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "government_correspondence_corrects_id_organization_id_fkey"
-            columns: ["corrects_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "government_correspondence"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "government_correspondence_evidence_version_id_organization_fkey"
-            columns: ["evidence_version_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "document_versions"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "government_correspondence_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "government_correspondence_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "government_correspondence_shared_by_membership_id_organiza_fkey"
-            columns: ["shared_by_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "government_correspondence_verified_by_membership_id_organi_fkey"
-            columns: ["verified_by_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       government_status_checks: {
         Row: {
@@ -3651,29 +2723,7 @@ export type Database = {
           note?: string
           organization_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "government_status_checks_checked_by_membership_id_organiza_fkey"
-            columns: ["checked_by_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "government_status_checks_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "government_status_checks_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       household_members: {
         Row: {
@@ -3918,29 +2968,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "inbound_emails_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "inbound_emails_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inbound_emails_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       inbound_inbox_items: {
         Row: {
@@ -3976,7 +3004,7 @@ export type Database = {
           sha256?: string | null
           storage_key: string
           updated_at?: string
-          upload_state: string
+          upload_state?: string
           version?: number
         }
         Update: {
@@ -3997,29 +3025,7 @@ export type Database = {
           upload_state?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "inbound_inbox_items_inbound_email_id_organization_id_fkey"
-            columns: ["inbound_email_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "inbound_emails"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "inbound_inbox_items_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "inbound_inbox_items_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       intake_answer_versions: {
         Row: {
@@ -4463,7 +3469,7 @@ export type Database = {
           version: number
         }
         Insert: {
-          amount_cents: number
+          amount_cents?: number
           applied_cents?: number | null
           client_name?: string | null
           consultant_licence?: string | null
@@ -4471,7 +3477,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           credit_balance_cents?: number | null
-          currency: string
+          currency?: string
           decline_reason?: string | null
           declined_at?: string | null
           declined_by?: string | null
@@ -4479,22 +3485,22 @@ export type Database = {
           firm_legal_name?: string | null
           firm_timezone?: string | null
           id?: string
-          idempotency_key: string
+          idempotency_key?: string
           invoice_amount_cents?: number | null
           invoice_description?: string | null
-          invoice_id: string
+          invoice_id?: string
           invoice_issued_on?: string | null
           invoice_number?: string | null
           is_sample?: boolean
           issued_at?: string | null
           issued_by?: string | null
-          matter_id: string
+          matter_id?: string
           matter_label?: string | null
-          number: string
-          organization_id: string
+          number?: string
+          organization_id?: string
           owner_self_approved?: boolean
-          reason: string
-          requested_by: string
+          reason?: string
+          requested_by?: string
           status?: Database["public"]["Enums"]["credit_note_status"]
           updated_at?: string
           version?: number
@@ -4536,29 +3542,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "invoice_credit_notes_invoice_id_organization_id_fkey"
-            columns: ["invoice_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoices"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoice_credit_notes_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoice_credit_notes_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       invoice_disputes: {
         Row: {
@@ -4633,29 +3617,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "invoice_disputes_invoice_id_organization_id_fkey"
-            columns: ["invoice_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoices"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoice_disputes_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_disputes_payment_id_organization_id_fkey"
-            columns: ["payment_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_payments"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       invoice_payment_events: {
         Row: {
@@ -4712,36 +3674,7 @@ export type Database = {
           provider?: string
           webhook_inbox_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "invoice_payment_events_invoice_id_organization_id_fkey"
-            columns: ["invoice_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoices"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoice_payment_events_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_payment_events_payment_id_organization_id_fkey"
-            columns: ["payment_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_payments"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoice_payment_events_webhook_inbox_id_fkey"
-            columns: ["webhook_inbox_id"]
-            isOneToOne: false
-            referencedRelation: "webhook_inbox"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       invoice_payment_receipts: {
         Row: {
@@ -4858,55 +3791,13 @@ export type Database = {
           reference?: string | null
           source?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "invoice_payment_receipts_entry_id_organization_id_fkey"
-            columns: ["entry_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "client_fund_entries"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoice_payment_receipts_invoice_id_organization_id_fkey"
-            columns: ["invoice_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoices"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoice_payment_receipts_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoice_payment_receipts_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_payment_receipts_payment_id_organization_id_fkey"
-            columns: ["payment_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_payments"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoice_payment_receipts_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       invoice_payments: {
         Row: {
           amount_cents: number
           amount_received_cents: number
+          refunded_cents: number
           application_fee_cents: number
           card_brand: string | null
           card_last4: string | null
@@ -4921,7 +3812,6 @@ export type Database = {
           organization_id: string
           payment_intent_id: string
           provider: string
-          refunded_cents: number
           status: Database["public"]["Enums"]["invoice_payment_status"]
           succeeded_at: string | null
           updated_at: string
@@ -4930,6 +3820,7 @@ export type Database = {
         Insert: {
           amount_cents: number
           amount_received_cents?: number
+          refunded_cents?: number
           application_fee_cents?: number
           card_brand?: string | null
           card_last4?: string | null
@@ -4944,7 +3835,6 @@ export type Database = {
           organization_id: string
           payment_intent_id: string
           provider?: string
-          refunded_cents?: number
           status?: Database["public"]["Enums"]["invoice_payment_status"]
           succeeded_at?: string | null
           updated_at?: string
@@ -4953,6 +3843,7 @@ export type Database = {
         Update: {
           amount_cents?: number
           amount_received_cents?: number
+          refunded_cents?: number
           application_fee_cents?: number
           card_brand?: string | null
           card_last4?: string | null
@@ -4967,28 +3858,12 @@ export type Database = {
           organization_id?: string
           payment_intent_id?: string
           provider?: string
-          refunded_cents?: number
           status?: Database["public"]["Enums"]["invoice_payment_status"]
           succeeded_at?: string | null
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "invoice_payments_invoice_id_organization_id_fkey"
-            columns: ["invoice_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoices"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoice_payments_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       invoice_refunds: {
         Row: {
@@ -5066,29 +3941,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "invoice_refunds_invoice_id_organization_id_fkey"
-            columns: ["invoice_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoices"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoice_refunds_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_refunds_payment_id_organization_id_fkey"
-            columns: ["payment_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_payments"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       invoice_reversal_events: {
         Row: {
@@ -5098,9 +3951,7 @@ export type Database = {
           currency: string | null
           detail: string | null
           dispute_id: string | null
-          dispute_status:
-            | Database["public"]["Enums"]["invoice_dispute_status"]
-            | null
+          dispute_status: Database["public"]["Enums"]["invoice_dispute_status"] | null
           event_id: string
           event_type: string
           id: string
@@ -5112,9 +3963,7 @@ export type Database = {
           payment_id: string
           provider: string
           refund_id: string | null
-          refund_status:
-            | Database["public"]["Enums"]["invoice_refund_status"]
-            | null
+          refund_status: Database["public"]["Enums"]["invoice_refund_status"] | null
           webhook_inbox_id: string
         }
         Insert: {
@@ -5124,9 +3973,7 @@ export type Database = {
           currency?: string | null
           detail?: string | null
           dispute_id?: string | null
-          dispute_status?:
-            | Database["public"]["Enums"]["invoice_dispute_status"]
-            | null
+          dispute_status?: Database["public"]["Enums"]["invoice_dispute_status"] | null
           event_id: string
           event_type: string
           id?: string
@@ -5138,9 +3985,7 @@ export type Database = {
           payment_id: string
           provider?: string
           refund_id?: string | null
-          refund_status?:
-            | Database["public"]["Enums"]["invoice_refund_status"]
-            | null
+          refund_status?: Database["public"]["Enums"]["invoice_refund_status"] | null
           webhook_inbox_id: string
         }
         Update: {
@@ -5150,9 +3995,7 @@ export type Database = {
           currency?: string | null
           detail?: string | null
           dispute_id?: string | null
-          dispute_status?:
-            | Database["public"]["Enums"]["invoice_dispute_status"]
-            | null
+          dispute_status?: Database["public"]["Enums"]["invoice_dispute_status"] | null
           event_id?: string
           event_type?: string
           id?: string
@@ -5164,63 +4007,16 @@ export type Database = {
           payment_id?: string
           provider?: string
           refund_id?: string | null
-          refund_status?:
-            | Database["public"]["Enums"]["invoice_refund_status"]
-            | null
+          refund_status?: Database["public"]["Enums"]["invoice_refund_status"] | null
           webhook_inbox_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "invoice_reversal_events_dispute_id_organization_id_fkey"
-            columns: ["dispute_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_disputes"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoice_reversal_events_invoice_id_organization_id_fkey"
-            columns: ["invoice_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoices"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoice_reversal_events_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_reversal_events_payment_id_organization_id_fkey"
-            columns: ["payment_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_payments"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoice_reversal_events_refund_id_organization_id_fkey"
-            columns: ["refund_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "invoice_refunds"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoice_reversal_events_webhook_inbox_id_fkey"
-            columns: ["webhook_inbox_id"]
-            isOneToOne: false
-            referencedRelation: "webhook_inbox"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       invoices: {
         Row: {
           amount_cents: number
-          client_funds_paid_cents: number
           created_at: string
           created_by: string | null
-          credited_cents: number
           currency: string
           description: string
           due_on: string
@@ -5232,21 +4028,21 @@ export type Database = {
           matter_id: string
           number: string
           organization_id: string
+          client_funds_paid_cents: number
+          credited_cents: number
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
           paid_cents: number
           refunded_cents: number
           status: Database["public"]["Enums"]["invoice_status"]
           updated_at: string
           version: number
-          void_reason: string | null
-          voided_at: string | null
-          voided_by: string | null
         }
         Insert: {
           amount_cents: number
-          client_funds_paid_cents?: number
           created_at?: string
           created_by?: string | null
-          credited_cents?: number
           currency?: string
           description: string
           due_on: string
@@ -5258,21 +4054,21 @@ export type Database = {
           matter_id: string
           number: string
           organization_id: string
+          client_funds_paid_cents?: number
+          credited_cents?: number
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
           paid_cents?: number
           refunded_cents?: number
           status?: Database["public"]["Enums"]["invoice_status"]
           updated_at?: string
           version?: number
-          void_reason?: string | null
-          voided_at?: string | null
-          voided_by?: string | null
         }
         Update: {
           amount_cents?: number
-          client_funds_paid_cents?: number
           created_at?: string
           created_by?: string | null
-          credited_cents?: number
           currency?: string
           description?: string
           due_on?: string
@@ -5284,31 +4080,18 @@ export type Database = {
           matter_id?: string
           number?: string
           organization_id?: string
+          client_funds_paid_cents?: number
+          credited_cents?: number
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
           paid_cents?: number
           refunded_cents?: number
           status?: Database["public"]["Enums"]["invoice_status"]
           updated_at?: string
           version?: number
-          void_reason?: string | null
-          voided_at?: string | null
-          voided_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "invoices_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "invoices_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       lead_booking_links: {
         Row: {
@@ -5335,29 +4118,7 @@ export type Database = {
           lead_id?: string
           organization_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "lead_booking_links_booking_id_organization_id_fkey"
-            columns: ["booking_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "bookings"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "lead_booking_links_lead_id_organization_id_fkey"
-            columns: ["lead_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "lead_booking_links_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       lead_consents: {
         Row: {
@@ -5399,22 +4160,7 @@ export type Database = {
           statement_sha256?: string
           statement_text?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "lead_consents_lead_id_organization_id_fkey"
-            columns: ["lead_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "lead_consents_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       lead_duplicate_decisions: {
         Row: {
@@ -5444,29 +4190,7 @@ export type Database = {
           other_lead_id?: string
           same_person?: boolean
         }
-        Relationships: [
-          {
-            foreignKeyName: "lead_duplicate_decisions_lead_id_organization_id_fkey"
-            columns: ["lead_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "lead_duplicate_decisions_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "lead_duplicate_decisions_other_lead_id_organization_id_fkey"
-            columns: ["other_lead_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       lead_enquiry_attempts: {
         Row: {
@@ -5487,15 +4211,7 @@ export type Database = {
           id?: string
           organization_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "lead_enquiry_attempts_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       lead_events: {
         Row: {
@@ -5534,36 +4250,7 @@ export type Database = {
           reason?: string | null
           to_stage_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "lead_events_from_stage_id_organization_id_fkey"
-            columns: ["from_stage_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "lead_stages"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "lead_events_lead_id_organization_id_fkey"
-            columns: ["lead_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "lead_events_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "lead_events_to_stage_id_organization_id_fkey"
-            columns: ["to_stage_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "lead_stages"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       lead_follow_ups: {
         Row: {
@@ -5608,29 +4295,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "lead_follow_ups_lead_id_organization_id_fkey"
-            columns: ["lead_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "lead_follow_ups_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "lead_follow_ups_owner_membership_id_organization_id_fkey"
-            columns: ["owner_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       lead_notes: {
         Row: {
@@ -5657,22 +4322,7 @@ export type Database = {
           lead_id?: string
           organization_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "lead_notes_lead_id_organization_id_fkey"
-            columns: ["lead_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "lead_notes_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       lead_stages: {
         Row: {
@@ -5714,15 +4364,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "lead_stages_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       leads: {
         Row: {
@@ -5830,50 +4472,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "leads_converted_matter_id_organization_id_fkey"
-            columns: ["converted_matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "leads_converted_person_id_organization_id_fkey"
-            columns: ["converted_person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "leads_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_owner_membership_id_organization_id_fkey"
-            columns: ["owner_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "leads_same_person_lead_id_organization_id_fkey"
-            columns: ["same_person_lead_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "leads_stage_id_organization_id_fkey"
-            columns: ["stage_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "lead_stages"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       matter_closures: {
         Row: {
@@ -5936,36 +4535,7 @@ export type Database = {
           retention_review_required?: boolean
           retention_years?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "matter_closures_custodian_membership_id_organization_id_fkey"
-            columns: ["custodian_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "matter_closures_evidence_id_organization_id_fkey"
-            columns: ["evidence_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matter_stage_evidence"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "matter_closures_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "matter_closures_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       matter_engagements: {
         Row: {
@@ -6143,22 +4713,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "matter_exports_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "matter_exports_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       matter_legal_holds: {
         Row: {
@@ -6206,22 +4761,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "matter_legal_holds_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "matter_legal_holds_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       matter_message_attachments: {
         Row: {
@@ -6245,29 +4785,7 @@ export type Database = {
           message_id?: string
           organization_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "matter_message_attachments_document_id_organization_id_fkey"
-            columns: ["document_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "matter_message_attachments_message_id_organization_id_fkey"
-            columns: ["message_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matter_messages"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "matter_message_attachments_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       matter_message_receipts: {
         Row: {
@@ -6294,29 +4812,7 @@ export type Database = {
           read_at?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "matter_message_receipts_message_id_organization_id_fkey"
-            columns: ["message_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matter_messages"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "matter_message_receipts_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "matter_message_receipts_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       matter_messages: {
         Row: {
@@ -6364,43 +4860,7 @@ export type Database = {
           requires_ack?: boolean
           thread_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "matter_messages_author_membership_id_organization_id_fkey"
-            columns: ["author_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "matter_messages_author_person_id_organization_id_fkey"
-            columns: ["author_person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "matter_messages_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "matter_messages_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "matter_messages_thread_id_organization_id_fkey"
-            columns: ["thread_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "message_threads"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       matter_participants: {
         Row: {
@@ -6684,29 +5144,7 @@ export type Database = {
           matter_id?: string
           organization_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "matter_staff_notes_author_membership_id_organization_id_fkey"
-            columns: ["author_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "matter_staff_notes_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "matter_staff_notes_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       matter_stage_evidence: {
         Row: {
@@ -6829,7 +5267,6 @@ export type Database = {
           id: string
           matter_id: string
           organization_id: string
-          override_id: string | null
           reason: string
           to_stage: Database["public"]["Enums"]["matter_stage"]
         }
@@ -6842,7 +5279,6 @@ export type Database = {
           id?: string
           matter_id: string
           organization_id: string
-          override_id?: string | null
           reason: string
           to_stage: Database["public"]["Enums"]["matter_stage"]
         }
@@ -6855,7 +5291,6 @@ export type Database = {
           id?: string
           matter_id?: string
           organization_id?: string
-          override_id?: string | null
           reason?: string
           to_stage?: Database["public"]["Enums"]["matter_stage"]
         }
@@ -6880,13 +5315,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "matter_stage_transitions_override_fk"
-            columns: ["override_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matter_stage_overrides"
-            referencedColumns: ["id", "organization_id"]
           },
         ]
       }
@@ -6971,38 +5399,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "matters_consultant_org_fk"
-            columns: ["responsible_consultant_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "matters_hold_owner_org_fk"
-            columns: ["on_hold_owner_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
             foreignKeyName: "matters_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "matters_predecessor_org_fk"
-            columns: ["predecessor_matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "matters_program_pack_id_fkey"
-            columns: ["program_pack_id"]
-            isOneToOne: false
-            referencedRelation: "rule_pack_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -7085,29 +5485,7 @@ export type Database = {
           person_id?: string
           thread_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "message_thread_people_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "message_thread_people_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "message_thread_people_thread_id_organization_id_fkey"
-            columns: ["thread_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "message_threads"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       message_threads: {
         Row: {
@@ -7140,22 +5518,7 @@ export type Database = {
           matter_id?: string
           organization_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "message_threads_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "message_threads_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       mfa_assurance_proofs: {
         Row: {
@@ -7497,8 +5860,8 @@ export type Database = {
           created_at: string
           created_by: string | null
           default_locale: string
-          display_name: string
           document_max_bytes: number | null
+          display_name: string
           dpa_accepted_at: string | null
           dpa_version: string | null
           id: string
@@ -7529,8 +5892,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           default_locale?: string
-          display_name: string
           document_max_bytes?: number | null
+          display_name: string
           dpa_accepted_at?: string | null
           dpa_version?: string | null
           id?: string
@@ -7561,8 +5924,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           default_locale?: string
-          display_name?: string
           document_max_bytes?: number | null
+          display_name?: string
           dpa_accepted_at?: string | null
           dpa_version?: string | null
           id?: string
@@ -7718,56 +6081,31 @@ export type Database = {
       }
       person_contact_preferences: {
         Row: {
-          created_at: string
-          created_by: string | null
           deadline_reminders: boolean
           email_notices: boolean
           locale: string
           organization_id: string
           person_id: string
-          quiet_hours_end: string | null
-          quiet_hours_start: string | null
           sms_notices: boolean
           updated_at: string
-          version: number
         }
         Insert: {
-          created_at?: string
-          created_by?: string | null
           deadline_reminders?: boolean
           email_notices?: boolean
           locale?: string
           organization_id: string
           person_id: string
-          quiet_hours_end?: string | null
-          quiet_hours_start?: string | null
           sms_notices?: boolean
           updated_at?: string
-          version?: number
         }
         Update: {
-          created_at?: string
-          created_by?: string | null
           deadline_reminders?: boolean
           email_notices?: boolean
           locale?: string
-          organization_id?: string
-          person_id?: string
-          quiet_hours_end?: string | null
-          quiet_hours_start?: string | null
           sms_notices?: boolean
           updated_at?: string
-          version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "person_contact_preferences_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: true
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       person_relationships: {
         Row: {
@@ -7848,60 +6186,29 @@ export type Database = {
           matter_id: string
           organization_id: string
           person_id: string
-          restricted: boolean
+          restricted?: boolean
           section_key: Database["public"]["Enums"]["person_section_key"]
           summary: string
           updated_at?: string
           version?: number
         }
         Update: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          matter_id?: string
-          organization_id?: string
-          person_id?: string
           restricted?: boolean
-          section_key?: Database["public"]["Enums"]["person_section_key"]
           summary?: string
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "person_section_records_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "person_section_records_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "person_section_records_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       persons: {
         Row: {
           birth_date: string | null
-          birth_date_precision:
-            | Database["public"]["Enums"]["date_precision"]
-            | null
-          contact_phone: string | null
+          birth_date_precision: Database["public"]["Enums"]["date_precision"] | null
           created_at: string
           created_by: string | null
           date_of_birth: string | null
           display_name: string
+          contact_phone: string | null
           email: string | null
           id: string
           is_minor: boolean
@@ -7914,12 +6221,10 @@ export type Database = {
         }
         Insert: {
           birth_date?: string | null
-          birth_date_precision?:
-            | Database["public"]["Enums"]["date_precision"]
-            | null
-          contact_phone?: string | null
+          birth_date_precision?: Database["public"]["Enums"]["date_precision"] | null
           created_at?: string
           created_by?: string | null
+          contact_phone?: string | null
           date_of_birth?: string | null
           display_name: string
           email?: string | null
@@ -7934,12 +6239,10 @@ export type Database = {
         }
         Update: {
           birth_date?: string | null
-          birth_date_precision?:
-            | Database["public"]["Enums"]["date_precision"]
-            | null
-          contact_phone?: string | null
+          birth_date_precision?: Database["public"]["Enums"]["date_precision"] | null
           created_at?: string
           created_by?: string | null
+          contact_phone?: string | null
           date_of_birth?: string | null
           display_name?: string
           email?: string | null
@@ -8009,7 +6312,6 @@ export type Database = {
           person_id: string
           revoked_at: string | null
           role: Database["public"]["Enums"]["org_role"]
-          token_hash: string
           updated_at: string
           version: number
         }
@@ -8032,7 +6334,6 @@ export type Database = {
           person_id: string
           revoked_at?: string | null
           role: Database["public"]["Enums"]["org_role"]
-          token_hash: string
           updated_at?: string
           version?: number
         }
@@ -8055,40 +6356,10 @@ export type Database = {
           person_id?: string
           revoked_at?: string | null
           role?: Database["public"]["Enums"]["org_role"]
-          token_hash?: string
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "portal_invitations_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "portal_invitations_membership_id_organization_id_fkey"
-            columns: ["membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "portal_invitations_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "portal_invitations_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       portal_invite_attempts: {
         Row: {
@@ -8168,15 +6439,7 @@ export type Database = {
           version?: number
           version_label?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "portal_policy_documents_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       privacy_request_redactions: {
         Row: {
@@ -8224,22 +6487,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "privacy_request_redactions_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "privacy_request_redactions_request_id_organization_id_fkey"
-            columns: ["request_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "privacy_requests"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       privacy_requests: {
         Row: {
@@ -8255,10 +6503,10 @@ export type Database = {
           due_on: string | null
           evidence_note: string | null
           id: string
-          idempotency_key: string
           identity_method: string | null
           identity_verified_at: string | null
           identity_verified_by: string | null
+          idempotency_key: string
           is_sample: boolean
           kept_records: Json | null
           kind: Database["public"]["Enums"]["privacy_request_kind"]
@@ -8298,19 +6546,17 @@ export type Database = {
           due_on?: string | null
           evidence_note?: string | null
           id?: string
-          idempotency_key: string
           identity_method?: string | null
           identity_verified_at?: string | null
           identity_verified_by?: string | null
+          idempotency_key: string
           is_sample?: boolean
           kept_records?: Json | null
           kind: Database["public"]["Enums"]["privacy_request_kind"]
           matter_id?: string | null
           number: number
           organization_id: string
-          outcome?:
-            | Database["public"]["Enums"]["privacy_request_outcome"]
-            | null
+          outcome?: Database["public"]["Enums"]["privacy_request_outcome"] | null
           outcome_note?: string | null
           person_id?: string | null
           received_on: string
@@ -8343,19 +6589,17 @@ export type Database = {
           due_on?: string | null
           evidence_note?: string | null
           id?: string
-          idempotency_key?: string
           identity_method?: string | null
           identity_verified_at?: string | null
           identity_verified_by?: string | null
+          idempotency_key?: string
           is_sample?: boolean
           kept_records?: Json | null
           kind?: Database["public"]["Enums"]["privacy_request_kind"]
           matter_id?: string | null
           number?: number
           organization_id?: string
-          outcome?:
-            | Database["public"]["Enums"]["privacy_request_outcome"]
-            | null
+          outcome?: Database["public"]["Enums"]["privacy_request_outcome"] | null
           outcome_note?: string | null
           person_id?: string | null
           received_on?: string
@@ -8375,43 +6619,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "privacy_requests_assignee_membership_id_organization_id_fkey"
-            columns: ["assignee_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "privacy_requests_consent_record_id_organization_id_fkey"
-            columns: ["consent_record_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "consent_records"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "privacy_requests_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "privacy_requests_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "privacy_requests_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       product_settings: {
         Row: {
@@ -8624,8 +6832,8 @@ export type Database = {
           matter_id: string
           organization_id: string
           person_id: string
-          revocation_reason: string | null
           revoked_at: string | null
+          revocation_reason: string | null
           scope: string
           updated_at: string
           version: number
@@ -8640,8 +6848,8 @@ export type Database = {
           matter_id: string
           organization_id: string
           person_id: string
-          revocation_reason?: string | null
           revoked_at?: string | null
+          revocation_reason?: string | null
           scope: string
           updated_at?: string
           version?: number
@@ -8656,42 +6864,13 @@ export type Database = {
           matter_id?: string
           organization_id?: string
           person_id?: string
-          revocation_reason?: string | null
           revoked_at?: string | null
+          revocation_reason?: string | null
           scope?: string
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "representation_authorities_agreement_id_organization_id_fkey"
-            columns: ["agreement_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "agreements"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "representation_authorities_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "representation_authorities_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "representation_authorities_person_id_organization_id_fkey"
-            columns: ["person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       rule_definitions: {
         Row: {
@@ -9144,9 +7323,8 @@ export type Database = {
       }
       section_shares: {
         Row: {
-          consent_record_id: string
+          consent_record_id: string | null
           created_at: string
-          created_by: string | null
           grantee_person_id: string
           id: string
           matter_id: string
@@ -9154,13 +7332,10 @@ export type Database = {
           revoked_at: string | null
           section_key: Database["public"]["Enums"]["person_section_key"]
           subject_person_id: string
-          updated_at: string
-          version: number
         }
         Insert: {
-          consent_record_id: string
+          consent_record_id?: string | null
           created_at?: string
-          created_by?: string | null
           grantee_person_id: string
           id?: string
           matter_id: string
@@ -9168,60 +7343,11 @@ export type Database = {
           revoked_at?: string | null
           section_key: Database["public"]["Enums"]["person_section_key"]
           subject_person_id: string
-          updated_at?: string
-          version?: number
         }
         Update: {
-          consent_record_id?: string
-          created_at?: string
-          created_by?: string | null
-          grantee_person_id?: string
-          id?: string
-          matter_id?: string
-          organization_id?: string
           revoked_at?: string | null
-          section_key?: Database["public"]["Enums"]["person_section_key"]
-          subject_person_id?: string
-          updated_at?: string
-          version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "section_shares_consent_record_id_organization_id_fkey"
-            columns: ["consent_record_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "consent_records"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "section_shares_grantee_person_id_organization_id_fkey"
-            columns: ["grantee_person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "section_shares_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "section_shares_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "section_shares_subject_person_id_organization_id_fkey"
-            columns: ["subject_person_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "persons"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       session_revocations: {
         Row: {
@@ -9343,29 +7469,7 @@ export type Database = {
           version_id?: string
           voided_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "signature_envelopes_agreement_id_organization_id_fkey"
-            columns: ["agreement_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "agreements"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "signature_envelopes_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "signature_envelopes_version_id_organization_id_fkey"
-            columns: ["version_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "agreement_versions"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       signature_events: {
         Row: {
@@ -9377,7 +7481,7 @@ export type Database = {
           envelope_id: string
           id: string
           idempotency_key: string
-          ip: unknown
+          ip: string | null
           kind: Database["public"]["Enums"]["signature_event_kind"]
           occurred_at: string
           organization_id: string
@@ -9395,7 +7499,7 @@ export type Database = {
           envelope_id: string
           id?: string
           idempotency_key: string
-          ip?: unknown
+          ip?: string | null
           kind: Database["public"]["Enums"]["signature_event_kind"]
           occurred_at?: string
           organization_id: string
@@ -9413,7 +7517,7 @@ export type Database = {
           envelope_id?: string
           id?: string
           idempotency_key?: string
-          ip?: unknown
+          ip?: string | null
           kind?: Database["public"]["Enums"]["signature_event_kind"]
           occurred_at?: string
           organization_id?: string
@@ -9422,29 +7526,7 @@ export type Database = {
           summary?: Json
           user_agent?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "signature_events_envelope_id_organization_id_fkey"
-            columns: ["envelope_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "signature_envelopes"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "signature_events_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "signature_events_signer_id_organization_id_fkey"
-            columns: ["signer_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "envelope_signers"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       source_check_attempts: {
         Row: {
@@ -9678,15 +7760,7 @@ export type Database = {
           source_id?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "staff_notification_reads_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       submission_handoffs: {
         Row: {
@@ -9767,57 +7841,7 @@ export type Database = {
           verified_by_membership_id?: string | null
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "submission_handoffs_matter_id_organization_id_fkey"
-            columns: ["matter_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matters"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "submission_handoffs_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "submission_handoffs_receipt_version_id_organization_id_fkey"
-            columns: ["receipt_version_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "document_versions"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "submission_handoffs_signoff_membership_id_organization_id_fkey"
-            columns: ["signoff_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "submission_handoffs_stage_evidence_id_organization_id_fkey"
-            columns: ["stage_evidence_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "matter_stage_evidence"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "submission_handoffs_submitted_by_membership_id_organizatio_fkey"
-            columns: ["submitted_by_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "submission_handoffs_verified_by_membership_id_organization_fkey"
-            columns: ["verified_by_membership_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "memberships"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
+        Relationships: []
       }
       task_dependencies: {
         Row: {
@@ -10113,15 +8137,7 @@ export type Database = {
           organization_id?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "translation_draft_requests_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       webhook_inbox: {
         Row: {
@@ -10198,13 +8214,16 @@ export type Database = {
         Args: { p_payload: Json; p_token: string }
         Returns: Json
       }
-      accept_quote: { Args: { p_agreement_id: string }; Returns: undefined }
+      accept_quote: {
+        Args: { p_agreement_id: string }
+        Returns: undefined
+      }
       access_grant_choices: {
         Args: { p_organization_id: string }
         Returns: {
           choice: string
-          matter_id: string
-          matter_reference: string
+          matter_id: string | null
+          matter_reference: string | null
           person_id: string
           person_name: string
         }[]
@@ -10226,22 +8245,26 @@ export type Database = {
           p_decision_id: string
           p_document_version_id: string
           p_due_on: string
-          p_owner_membership_id: string
+          p_owner_membership_id?: string | null
         }
         Returns: string
       }
       add_lead_follow_up: {
         Args: {
-          p_due_on: string
+          p_due_on: string | null
           p_lead: string
           p_org: string
-          p_owner_membership_id: string
+          p_owner_membership_id: string | null
           p_title: string
         }
         Returns: string
       }
       add_lead_note: {
-        Args: { p_body: string; p_lead: string; p_org: string }
+        Args: {
+          p_body: string
+          p_lead: string
+          p_org: string
+        }
         Returns: string
       }
       add_matter_staff_note: {
@@ -10264,7 +8287,10 @@ export type Database = {
         Args: { p_envelope_id: string }
         Returns: string
       }
-      agreement_seal_source: { Args: { p_envelope_id: string }; Returns: Json }
+      agreement_seal_source: {
+        Args: { p_envelope_id: string }
+        Returns: Json
+      }
       apply_document_scan: {
         Args: { p_result: string; p_version_id: string }
         Returns: Database["public"]["Enums"]["document_upload_state"]
@@ -10272,12 +8298,12 @@ export type Database = {
       apply_stripe_payment_event: {
         Args: {
           p_account_id: string
-          p_amount_cents: number
-          p_amount_received_cents: number
-          p_currency: string
+          p_amount_cents: number | null
+          p_amount_received_cents: number | null
+          p_currency: string | null
           p_event_id: string
           p_event_type: string
-          p_invoice_id: string
+          p_invoice_id: string | null
           p_livemode: boolean
           p_payload: Json
           p_payment_intent_id: string
@@ -10287,21 +8313,21 @@ export type Database = {
       apply_stripe_reversal_event: {
         Args: {
           p_account_id: string
-          p_amount_cents: number
-          p_amount_refunded_cents: number
-          p_charge_id: string
-          p_currency: string
-          p_event_created: number
+          p_amount_cents: number | null
+          p_amount_refunded_cents: number | null
+          p_charge_id: string | null
+          p_currency: string | null
+          p_event_created: number | null
           p_event_id: string
           p_event_type: string
-          p_evidence_due_by: string
-          p_failure_reason: string
+          p_evidence_due_by: string | null
+          p_failure_reason: string | null
           p_livemode: boolean
           p_object_id: string
           p_payload: Json
           p_payment_intent_id: string
-          p_reason: string
-          p_status: string
+          p_reason: string | null
+          p_status: string | null
         }
         Returns: Json
       }
@@ -10309,17 +8335,21 @@ export type Database = {
         Args: { p_template_id: string }
         Returns: undefined
       }
-      approve_client_transfer: { Args: { p_entry_id: string }; Returns: Json }
+      approve_client_transfer: {
+        Args: {
+          p_entry_id: string
+        }
+        Returns: Json
+      }
       archive_lead_stage: {
-        Args: { p_org: string; p_stage_id: string }
+        Args: {
+          p_org: string
+          p_stage_id: string
+        }
         Returns: undefined
       }
       assign_responsible_consultant: {
-        Args: {
-          p_expected_version: number
-          p_matter_id: string
-          p_membership_id: string
-        }
+        Args: { p_expected_version: number; p_matter_id: string; p_membership_id: string }
         Returns: number
       }
       assign_unsorted_email_file: {
@@ -10403,13 +8433,13 @@ export type Database = {
       }
       booking_public_hold: {
         Args: {
-          p_client_hash: string
+          p_client_hash: string | null
           p_email: string
           p_event_slug: string
           p_firm_slug: string
           p_idempotency_key: string
           p_name: string
-          p_phone: string
+          p_phone: string | null
           p_start: string
           p_time_zone: string
         }
@@ -10436,16 +8466,19 @@ export type Database = {
         Returns: Json
       }
       clear_matter_on_hold: {
-        Args: {
-          p_expected_version: number
-          p_matter_id: string
-          p_reason: string
-        }
+        Args: { p_expected_version: number; p_matter_id: string; p_reason: string }
         Returns: number
       }
-      client_fund_receipt: { Args: { p_entry_id: string }; Returns: Json }
+      client_fund_receipt: {
+        Args: {
+          p_entry_id: string
+        }
+        Returns: Json
+      }
       client_fund_staff_names: {
-        Args: { p_org: string }
+        Args: {
+          p_org: string
+        }
         Returns: {
           display_name: string
           user_id: string
@@ -10461,23 +8494,21 @@ export type Database = {
         Returns: number
       }
       close_matter: {
-        Args: {
-          p_expected_version: number
-          p_matter_id: string
-          p_override_reason?: string
-          p_reason: string
-        }
+        Args: { p_expected_version: number; p_matter_id: string; p_override_reason?: string | null; p_reason: string }
         Returns: string
       }
-      close_person_break_glass: { Args: { p_id: string }; Returns: undefined }
+      close_person_break_glass: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
       close_privacy_request: {
         Args: {
-          p_consent_record_id: string
-          p_delivery_method: string
-          p_evidence_note: string
+          p_consent_record_id: string | null
+          p_delivery_method: string | null
+          p_evidence_note: string | null
           p_outcome: string
-          p_outcome_note: string
-          p_refusal_reason: string
+          p_outcome_note: string | null
+          p_refusal_reason: string | null
           p_request_id: string
         }
         Returns: undefined
@@ -10487,16 +8518,14 @@ export type Database = {
         Returns: Json
       }
       complete_email_upload: {
-        Args: {
-          p_header_hex: string
-          p_inbound_id: string
-          p_ordinal: number
-          p_sha256: string
-        }
+        Args: { p_header_hex: string; p_inbound_id: string; p_ordinal: number; p_sha256: string }
         Returns: Json
       }
       complete_lead_follow_up: {
-        Args: { p_follow_up: string; p_org: string }
+        Args: {
+          p_follow_up: string
+          p_org: string
+        }
         Returns: undefined
       }
       complete_sample_proof: {
@@ -10516,14 +8545,17 @@ export type Database = {
       }
       confirm_decision: {
         Args: {
-          p_consultant_interpretation: string
+          p_consultant_interpretation?: string | null
           p_decision_id: string
           p_expected_version: number
           p_next_steps: string
         }
         Returns: number
       }
-      consume_recovery_code: { Args: { p_code: string }; Returns: boolean }
+      consume_recovery_code: {
+        Args: { p_code: string }
+        Returns: boolean
+      }
       consume_translation_draft: {
         Args: { p_char_count: number; p_organization_id: string }
         Returns: Json
@@ -10534,7 +8566,7 @@ export type Database = {
           p_expected_version: number
           p_lead: string
           p_org: string
-          p_rule_pack_version_id?: string
+          p_rule_pack_version_id?: string | null
         }
         Returns: Json
       }
@@ -10551,18 +8583,18 @@ export type Database = {
       create_agreement: {
         Args: {
           p_body: string
-          p_comparison: string
-          p_currency: string
-          p_exclusions: string
-          p_fee_cents: number
-          p_government_fee_note: string
+          p_comparison: string | null
+          p_currency: string | null
+          p_exclusions: string | null
+          p_fee_cents: number | null
+          p_government_fee_note: string | null
           p_kind: Database["public"]["Enums"]["agreement_kind"]
           p_matter_id: string
-          p_quote_expires_on: string
-          p_refund_policy: string
+          p_quote_expires_on: string | null
+          p_refund_policy: string | null
           p_scope: string
-          p_supersedes_id: string
-          p_template_id: string
+          p_supersedes_id: string | null
+          p_template_id: string | null
           p_title: string
         }
         Returns: string
@@ -10586,15 +8618,15 @@ export type Database = {
       }
       create_client_matter: {
         Args: {
-          p_applicant_date_of_birth?: string
-          p_applicant_email: string
+          p_applicant_date_of_birth?: string | null
+          p_applicant_email: string | null
           p_applicant_name: string
           p_consultant_membership_id: string
-          p_rule_pack_version_id?: string
-          p_sponsor_date_of_birth?: string
-          p_sponsor_email: string
-          p_sponsor_name: string
-          p_title?: string
+          p_rule_pack_version_id?: string | null
+          p_sponsor_date_of_birth?: string | null
+          p_sponsor_email: string | null
+          p_sponsor_name: string | null
+          p_title?: string | null
         }
         Returns: Json
       }
@@ -10602,34 +8634,29 @@ export type Database = {
         Args: {
           p_acceptable_formats: string[]
           p_audience: Database["public"]["Enums"]["document_audience"]
-          p_due_on: string
-          p_expires_on: string
+          p_due_on: string | null
           p_explanation: string
+          p_expires_on: string | null
           p_matter_id: string
           p_person_id: string
           p_purpose: string
-          p_review_criteria: string
-          p_rule_item_key?: string
-          p_rule_version_id?: string
+          p_review_criteria: string | null
+          p_rule_item_key: string | null
+          p_rule_version_id: string | null
           p_sensitivity: Database["public"]["Enums"]["document_sensitivity"]
         }
         Returns: string
       }
       create_email_upload_intent: {
-        Args: {
-          p_byte_size: number
-          p_filename: string
-          p_inbound_id: string
-          p_ordinal: number
-        }
+        Args: { p_byte_size: number; p_filename: string; p_inbound_id: string; p_ordinal: number }
         Returns: Json
       }
       create_engaged_matter: {
         Args: {
           p_consultant_membership_id: string
           p_is_sample: boolean
-          p_rule_pack_version_id?: string
-          p_scope?: string
+          p_rule_pack_version_id?: string | null
+          p_scope?: string | null
           p_title: string
         }
         Returns: Json
@@ -10647,27 +8674,30 @@ export type Database = {
       }
       create_lead: {
         Args: {
-          p_country_now: string
-          p_email: string
-          p_language: string
+          p_country_now: string | null
+          p_email: string | null
+          p_language: string | null
           p_marketing_consent: boolean
           p_name: string
-          p_note: string
+          p_note: string | null
           p_org: string
-          p_owner_membership_id: string
-          p_phone: string
-          p_preferred_contact: string
-          p_proposed_fee_cents: number
+          p_owner_membership_id: string | null
+          p_phone: string | null
+          p_preferred_contact: string | null
+          p_proposed_fee_cents: number | null
           p_reply_consent: boolean
-          p_service_interest: string
+          p_service_interest: string | null
           p_source: Database["public"]["Enums"]["lead_source"]
-          p_source_detail: string
+          p_source_detail: string | null
           p_tags: string[]
         }
         Returns: string
       }
       create_lead_from_booking: {
-        Args: { p_booking: string; p_org: string }
+        Args: {
+          p_booking: string
+          p_org: string
+        }
         Returns: string
       }
       create_organization: {
@@ -10683,7 +8713,6 @@ export type Database = {
           created_by: string | null
           default_locale: string
           display_name: string
-          document_max_bytes: number | null
           dpa_accepted_at: string | null
           dpa_version: string | null
           id: string
@@ -10691,8 +8720,6 @@ export type Database = {
           legal_name: string
           privacy_contact_email: string | null
           privacy_contact_name: string | null
-          quiet_hours_end: string | null
-          quiet_hours_start: string | null
           retention_policy: Json | null
           sample_mode: boolean
           slug: string
@@ -10737,14 +8764,14 @@ export type Database = {
         Args: {
           p_audience: Database["public"]["Enums"]["task_audience"]
           p_checklist: Json
-          p_due_at: string
-          p_due_on: string
+          p_due_at: string | null
+          p_due_on: string | null
           p_due_timezone: string
-          p_estimated_minutes: number
-          p_intake_field_key: string
+          p_estimated_minutes: number | null
+          p_intake_field_key: string | null
           p_matter_id: string
-          p_owner_membership_id: string
-          p_owner_person_id: string
+          p_owner_membership_id: string | null
+          p_owner_person_id: string | null
           p_priority: Database["public"]["Enums"]["task_priority"]
           p_title: string
         }
@@ -10754,14 +8781,14 @@ export type Database = {
         Args: {
           p_audience: Database["public"]["Enums"]["document_audience"]
           p_declared_byte_size: number
-          p_document_id?: string
+          p_document_id: string | null
           p_filename: string
-          p_language_tag?: string
+          p_language_tag: string | null
           p_matter_id: string
           p_person_id: string
           p_purpose: string
           p_sensitivity: Database["public"]["Enums"]["document_sensitivity"]
-          p_translation_of_version_id?: string
+          p_translation_of_version_id: string | null
         }
         Returns: Json
       }
@@ -10792,26 +8819,32 @@ export type Database = {
         Args: {
           p_envelope_id: string
           p_idempotency_key: string
-          p_ip: unknown
+          p_ip: string
           p_user_agent: string
         }
         Returns: Json
       }
       decline_client_transfer: {
-        Args: { p_entry_id: string; p_reason: string }
+        Args: {
+          p_entry_id: string
+          p_reason: string
+        }
         Returns: string
       }
       decline_credit_note: {
         Args: { p_credit_note_id: string; p_reason: string }
         Returns: string
       }
-      decline_portal_invitation: { Args: { p_token: string }; Returns: Json }
+      decline_portal_invitation: {
+        Args: { p_token: string }
+        Returns: Json
+      }
       discard_client_reconciliation: {
         Args: { p_reason: string; p_reconciliation_id: string }
         Returns: string
       }
       dismiss_inbound_email: {
-        Args: { p_email_id: string; p_note?: string }
+        Args: { p_email_id: string; p_note?: string | null }
         Returns: undefined
       }
       document_request_progress: {
@@ -10823,12 +8856,18 @@ export type Database = {
         Returns: Json
       }
       ensure_sample_case: { Args: never; Returns: string }
-      escalate_overdue_work: { Args: { p_as_of: string }; Returns: number }
+      escalate_overdue_work: {
+        Args: { p_as_of: string }
+        Returns: number
+      }
       evaluate_real_client_invites: {
         Args: { p_organization_id: string }
         Returns: Json
       }
-      expire_booking_holds: { Args: { p_as_of?: string }; Returns: number }
+      expire_booking_holds: {
+        Args: { p_as_of?: string }
+        Returns: number
+      }
       file_inbound_email: {
         Args: { p_email_id: string; p_matter_id: string; p_person_id: string }
         Returns: Json
@@ -10848,19 +8887,14 @@ export type Database = {
         Returns: undefined
       }
       finish_unsorted_email_file: {
-        Args: {
-          p_header_hex: string
-          p_inbound_id: string
-          p_ordinal: number
-          p_sha256: string
-        }
+        Args: { p_header_hex: string; p_inbound_id: string; p_ordinal: number; p_sha256: string }
         Returns: Json
       }
       finish_verified_document_upload: {
         Args: {
           p_actor_user_id: string
           p_byte_size: number
-          p_detected_media_type: string
+          p_detected_media_type: string | null
           p_sha256: string
           p_version_id: string
         }
@@ -10870,91 +8904,115 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: {
           created_at: string
-          expires_at: string
+          expires_at: string | null
           granted_by_grantee: boolean
-          granted_by_name: string
+          granted_by_name: string | null
           grantee_name: string
           id: string
           kind: Database["public"]["Enums"]["access_grant_kind"]
-          matter_reference: string
+          matter_reference: string | null
           purpose: string
-          revoked_at: string
+          revoked_at: string | null
           subject_name: string
         }[]
       }
       firm_payment_account_for_owner: {
         Args: { p_org: string }
-        Returns: string
+        Returns: string | null
       }
       firm_staff_directory: {
         Args: { p_organization_id: string }
         Returns: {
-          display_name: string
-          email: string
+          display_name: string | null
+          email: string | null
           is_licensed: boolean
           is_self: boolean
           membership_id: string
           role: Database["public"]["Enums"]["org_role"]
           status: Database["public"]["Enums"]["membership_status"]
-          two_step: boolean
+          two_step: boolean | null
         }[]
       }
       freeze_intake_response: {
         Args: { p_response_id: string }
         Returns: undefined
       }
-      generate_recovery_codes: { Args: never; Returns: string[] }
+      generate_recovery_codes: {
+        Args: never
+        Returns: string[]
+      }
       import_leads: {
-        Args: { p_file_name: string; p_org: string; p_rows: Json }
+        Args: {
+          p_file_name: string
+          p_org: string
+          p_rows: Json
+        }
         Returns: Json
       }
       intake_template_usage: {
         Args: { p_organization_id: string }
-        Returns: {
-          matters: number
-          stable_key: string
-        }[]
+        Returns: { matters: number; stable_key: string }[]
       }
-      invoice_credit_note: { Args: { p_credit_note_id: string }; Returns: Json }
-      invoice_payment_context: { Args: { p_invoice_id: string }; Returns: Json }
-      invoice_payment_receipt: { Args: { p_receipt_id: string }; Returns: Json }
-      invoice_refund_context: { Args: { p_payment_id: string }; Returns: Json }
-      issue_credit_note: { Args: { p_credit_note_id: string }; Returns: Json }
+      invoice_credit_note: {
+        Args: { p_credit_note_id: string }
+        Returns: Json
+      }
+      invoice_payment_context: {
+        Args: { p_invoice_id: string }
+        Returns: Json
+      }
+      invoice_payment_receipt: {
+        Args: {
+          p_receipt_id: string
+        }
+        Returns: Json
+      }
+      invoice_refund_context: {
+        Args: { p_payment_id: string }
+        Returns: Json
+      }
+      issue_credit_note: {
+        Args: { p_credit_note_id: string }
+        Returns: Json
+      }
       lead_conflict_matches: {
-        Args: { p_lead: string; p_org: string }
+        Args: {
+          p_lead: string
+          p_org: string
+        }
         Returns: Json
       }
       licence_review_log: {
         Args: { p_organization_id: string }
         Returns: {
           actor_is_platform: boolean
-          actor_name: string
+          actor_name: string | null
           at: string
           college_id: string
           credential_id: string
-          holder_name: string
+          holder_name: string | null
           kind: string
-          result: string
+          result: string | null
         }[]
       }
       link_booking_to_lead: {
-        Args: { p_booking: string; p_lead: string; p_org: string }
+        Args: {
+          p_booking: string
+          p_lead: string
+          p_org: string
+        }
         Returns: undefined
       }
       link_correspondence_work: {
         Args: {
           p_correspondence_id: string
-          p_deadline_id: string
-          p_task_id: string
+          p_deadline_id?: string | null
+          p_task_id?: string | null
         }
         Returns: string
       }
       link_successor_matter: {
-        Args: {
-          p_predecessor_id: string
-          p_reason: string
-          p_successor_id: string
-        }
+        Args: { p_predecessor_id: string; p_reason: string; p_successor_id: string }
         Returns: string
       }
       list_client_fund_parties: {
@@ -10973,31 +9031,29 @@ export type Database = {
         Returns: {
           amount_cents: number
           days_left: number
-          entry_id: string
-          entry_number: string
+          entry_id: string | null
+          entry_number: string | null
           invoice_id: string
           invoice_number: string
           invoiced_on: string
           is_sample: boolean
-          ledger_id: string
+          ledger_id: string | null
           matter_id: string
           organization_id: string
           overdue: boolean
-          person_id: string
+          person_id: string | null
           state: string
           withdraw_by: string
         }[]
       }
       list_exportable_matter_ids: {
         Args: never
-        Returns: {
-          matter_id: string
-        }[]
+        Returns: { matter_id: string }[]
       }
       list_matter_billing: {
         Args: never
         Returns: {
-          client_display_name: string
+          client_display_name: string | null
           matter_id: string
           organization_id: string
           stage: Database["public"]["Enums"]["matter_stage"]
@@ -11007,12 +9063,12 @@ export type Database = {
       list_my_sessions: {
         Args: never
         Returns: {
-          aal: string
+          aal: string | null
           created_at: string
-          refreshed_at: string
+          refreshed_at: string | null
           revoked: boolean
           session_id: string
-          user_agent: string
+          user_agent: string | null
         }[]
       }
       mark_message_thread_read: {
@@ -11020,26 +9076,25 @@ export type Database = {
         Returns: number
       }
       mark_staff_notifications_read: {
-        Args: { p_ids?: string[]; p_organization_id: string }
+        Args: { p_ids?: string[] | null; p_organization_id: string }
         Returns: number
       }
-      matter_closure_check: { Args: { p_matter_id: string }; Returns: Json }
+      matter_closure_check: {
+        Args: { p_matter_id: string }
+        Returns: Json
+      }
       move_lead_stage: {
         Args: {
           p_expected_version: number
           p_lead: string
           p_org: string
-          p_reason: string
+          p_reason: string | null
           p_to_stage: string
         }
         Returns: number
       }
       open_intake_response: {
-        Args: {
-          p_matter_id: string
-          p_person_id: string
-          p_template_id: string
-        }
+        Args: { p_matter_id: string; p_person_id: string; p_template_id: string }
         Returns: string
       }
       open_majority_review_task: {
@@ -11051,12 +9106,7 @@ export type Database = {
         Returns: string
       }
       open_unsorted_email_file: {
-        Args: {
-          p_byte_size: number
-          p_filename: string
-          p_inbound_id: string
-          p_ordinal: number
-        }
+        Args: { p_byte_size: number; p_filename: string; p_inbound_id: string; p_ordinal: number }
         Returns: Json
       }
       override_matter_stage: {
@@ -11080,7 +9130,7 @@ export type Database = {
         Args: {
           p_client_account_id: string
           p_idempotency_key: string
-          p_note: string
+          p_note: string | null
           p_statement_balance_cents: number
           p_statement_date: string
         }
@@ -11100,22 +9150,28 @@ export type Database = {
           p_channel: Database["public"]["Enums"]["submission_channel"]
           p_matter_id: string
           p_package_label: string
-          p_package_sha256: string
+          p_package_sha256?: string | null
         }
         Returns: string
       }
       preview_invitation: {
         Args: { p_token: string }
         Returns: {
-          email: string
-          expires_at: string
-          organization_name: string
-          role: string
+          email: string | null
+          expires_at: string | null
+          organization_name: string | null
+          role: string | null
           status: string
         }[]
       }
-      preview_invitation_inviter: { Args: { p_token: string }; Returns: string }
-      preview_portal_invitation: { Args: { p_token: string }; Returns: Json }
+      preview_invitation_inviter: {
+        Args: { p_token: string }
+        Returns: string | null
+      }
+      preview_portal_invitation: {
+        Args: { p_token: string }
+        Returns: Json
+      }
       privacy_request_kept_records: {
         Args: { p_request_id: string }
         Returns: Json
@@ -11125,12 +9181,7 @@ export type Database = {
         Returns: string
       }
       publish_portal_policy: {
-        Args: {
-          p_body: string
-          p_kind: string
-          p_title: string
-          p_version_label: string
-        }
+        Args: { p_body: string; p_kind: string; p_title: string; p_version_label: string }
         Returns: string
       }
       reassign_consultant_matters: {
@@ -11153,8 +9204,8 @@ export type Database = {
       reassign_task: {
         Args: {
           p_expected_version: number
-          p_owner_membership_id: string
-          p_owner_person_id: string
+          p_owner_membership_id: string | null
+          p_owner_person_id: string | null
           p_task_id: string
         }
         Returns: number
@@ -11164,13 +9215,13 @@ export type Database = {
           p_amount_cents: number
           p_client_account_id: string
           p_currency: string
-          p_evidence: string
+          p_evidence: string | null
           p_idempotency_key: string
           p_matter_id: string
           p_method: string
           p_person_id: string
           p_received_on: string
-          p_reference: string
+          p_reference: string | null
         }
         Returns: string
       }
@@ -11190,14 +9241,14 @@ export type Database = {
           p_method: string
           p_paid_on: string
           p_reason: string
-          p_reference: string
+          p_reference: string | null
         }
         Returns: string
       }
       record_client_transfer_bank: {
         Args: {
           p_entry_id: string
-          p_note: string
+          p_note: string | null
           p_reference: string
           p_transferred_on: string
         }
@@ -11211,47 +9262,42 @@ export type Database = {
           p_complainant_name: string
           p_idempotency_key: string
           p_issue: string
-          p_matter_id: string
+          p_matter_id: string | null
           p_org: string
-          p_person_id: string
+          p_person_id: string | null
           p_received_on: string
         }
         Returns: string
       }
       record_complaint_step: {
-        Args: {
-          p_complaint_id: string
-          p_note: string
-          p_on: string
-          p_step: string
-        }
+        Args: { p_complaint_id: string; p_note: string | null; p_on: string | null; p_step: string }
         Returns: undefined
       }
       record_deadline: {
         Args: {
-          p_calculation_note: string
-          p_due_at: string
-          p_due_on: string
-          p_event_on: string
-          p_evidence_locator: string
+          p_calculation_note: string | null
+          p_due_at: string | null
+          p_due_on: string | null
+          p_event_on: string | null
+          p_evidence_locator: string | null
           p_kind: Database["public"]["Enums"]["deadline_kind"]
           p_label: string
           p_matter_id: string
-          p_receipt_on: string
-          p_rule_version_id: string
-          p_source_retrieved_on: string
-          p_source_url: string
-          p_task_id: string
+          p_receipt_on: string | null
+          p_rule_version_id: string | null
+          p_source_retrieved_on: string | null
+          p_source_url: string | null
+          p_task_id: string | null
           p_timezone: string
         }
         Returns: string
       }
       record_decision: {
         Args: {
-          p_authority_reasons: string
+          p_authority_reasons?: string | null
           p_correspondence_id: string
-          p_decided_on: string
-          p_milestone: Database["public"]["Enums"]["decision_milestone"]
+          p_decided_on?: string | null
+          p_milestone?: Database["public"]["Enums"]["decision_milestone"] | null
           p_outcome: Database["public"]["Enums"]["matter_outcome"]
         }
         Returns: string
@@ -11259,7 +9305,7 @@ export type Database = {
       record_decision_step: {
         Args: {
           p_decision_id: string
-          p_note: string
+          p_note?: string | null
           p_step: Database["public"]["Enums"]["decision_step"]
         }
         Returns: string
@@ -11267,11 +9313,11 @@ export type Database = {
       record_document_custody: {
         Args: {
           p_acknowledged: boolean
-          p_location: string
+          p_location: string | null
           p_purpose: string
-          p_received_on: string
-          p_recipient: string
-          p_return_on: string
+          p_received_on: string | null
+          p_recipient: string | null
+          p_return_on: string | null
           p_version_id: string
         }
         Returns: string
@@ -11281,23 +9327,26 @@ export type Database = {
         Returns: string
       }
       record_government_check: {
-        Args: { p_matter_id: string; p_note: string }
+        Args: {
+          p_matter_id: string
+          p_note?: string | null
+        }
         Returns: string
       }
       record_government_correspondence: {
         Args: {
-          p_action_requested: string
+          p_action_requested?: string | null
           p_channel: Database["public"]["Enums"]["correspondence_channel"]
-          p_corrects_id: string
-          p_document_date: string
-          p_evidence_locator: string
-          p_evidence_version_id: string
-          p_issuer: string
+          p_corrects_id?: string | null
+          p_document_date?: string | null
+          p_evidence_locator?: string | null
+          p_evidence_version_id?: string | null
+          p_issuer?: string | null
           p_kind: Database["public"]["Enums"]["correspondence_kind"]
           p_matter_id: string
           p_received_on: string
-          p_reference_text: string
-          p_stated_deadline: string
+          p_reference_text?: string | null
+          p_stated_deadline?: string | null
         }
         Returns: string
       }
@@ -11336,10 +9385,10 @@ export type Database = {
         Args: {
           p_amount_cents: number
           p_currency: string
-          p_idempotency_key: string
+          p_idempotency_key: string | null
           p_livemode: boolean
           p_payment_id: string
-          p_reason: string
+          p_reason: string | null
           p_refund_id: string
         }
         Returns: string
@@ -11348,7 +9397,7 @@ export type Database = {
         Args: {
           p_expected_version: number
           p_lead: string
-          p_note: string
+          p_note: string | null
           p_org: string
           p_result: Database["public"]["Enums"]["lead_conflict_result"]
         }
@@ -11381,8 +9430,8 @@ export type Database = {
       }
       record_matter_engagement: {
         Args: {
-          p_agreement_locator: string
-          p_exception_reason: string
+          p_agreement_locator: string | null
+          p_exception_reason: string | null
           p_matter_id: string
           p_scope: string
           p_use_exception: boolean
@@ -11423,9 +9472,9 @@ export type Database = {
           p_details: string
           p_idempotency_key: string
           p_kind: string
-          p_matter_id: string
+          p_matter_id: string | null
           p_org: string
-          p_person_id: string
+          p_person_id: string | null
           p_received_on: string
           p_requester_name: string
         }
@@ -11436,17 +9485,12 @@ export type Database = {
         Returns: undefined
       }
       record_report_export: {
-        Args: {
-          p_format: string
-          p_organization_id: string
-          p_range: string
-          p_tab: string
-        }
+        Args: { p_format: string; p_organization_id: string; p_range: string; p_tab: string }
         Returns: string
       }
       record_representation_authority: {
         Args: {
-          p_agreement_id: string
+          p_agreement_id: string | null
           p_effective_on: string
           p_evidence_locator: string
           p_matter_id: string
@@ -11457,19 +9501,22 @@ export type Database = {
       }
       record_submission: {
         Args: {
-          p_acknowledged_on: string
+          p_acknowledged_on?: string | null
           p_expected_version: number
           p_external_reference: string
           p_handoff_id: string
-          p_receipt_locator: string
-          p_receipt_version_id: string
+          p_receipt_locator?: string | null
+          p_receipt_version_id?: string | null
           p_submitted_at: string
           p_submitted_by_membership_id: string
         }
         Returns: number
       }
       reject_client_deposit: {
-        Args: { p_entry_id: string; p_reason: string }
+        Args: {
+          p_entry_id: string
+          p_reason: string
+        }
         Returns: string
       }
       release_legal_hold: {
@@ -11490,20 +9537,18 @@ export type Database = {
           p_idempotency_key: string
           p_invoice_id: string
           p_ledger_id: string
-          p_note: string
+          p_note: string | null
         }
         Returns: string
       }
       request_credit_note: {
-        Args: {
-          p_amount_cents: number
-          p_idempotency_key: string
-          p_invoice_id: string
-          p_reason: string
-        }
+        Args: { p_amount_cents: number; p_idempotency_key: string; p_invoice_id: string; p_reason: string }
         Returns: string
       }
-      request_mfa_reset: { Args: { p_reason: string }; Returns: string }
+      request_mfa_reset: {
+        Args: { p_reason: string }
+        Returns: string
+      }
       resend_portal_invitation: {
         Args: { p_invitation_id: string }
         Returns: Json
@@ -11518,7 +9563,7 @@ export type Database = {
       }
       review_document_version: {
         Args: {
-          p_annotations?: string
+          p_annotations: string | null
           p_decision: Database["public"]["Enums"]["document_review_decision"]
           p_expected_version: number
           p_reason: string
@@ -11528,11 +9573,11 @@ export type Database = {
       }
       review_document_version_fr: {
         Args: {
-          p_annotations: string
+          p_annotations: string | null
           p_decision: Database["public"]["Enums"]["document_review_decision"]
           p_expected_version: number
           p_machine_drafted: boolean
-          p_model?: string
+          p_model?: string | null
           p_reason: string
           p_reason_fr: string
           p_version_id: string
@@ -11543,9 +9588,9 @@ export type Database = {
         Args: {
           p_agreement_id: string
           p_body: string
-          p_comparison: string
-          p_fee_cents: number
-          p_government_fee_note: string
+          p_comparison: string | null
+          p_fee_cents: number | null
+          p_government_fee_note: string | null
           p_scope: string
         }
         Returns: string
@@ -11553,8 +9598,8 @@ export type Database = {
       revise_deadline_due: {
         Args: {
           p_deadline_id: string
-          p_due_at: string
-          p_due_on: string
+          p_due_at: string | null
+          p_due_on: string | null
           p_expected_version: number
           p_timezone: string
         }
@@ -11564,8 +9609,14 @@ export type Database = {
         Args: { p_grant_id: string; p_reason: string }
         Returns: undefined
       }
-      revoke_my_session: { Args: { p_session_id: string }; Returns: undefined }
-      revoke_other_sessions: { Args: never; Returns: number }
+      revoke_my_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
+      revoke_other_sessions: {
+        Args: never
+        Returns: number
+      }
       revoke_portal_invitation: {
         Args: { p_invitation_id: string }
         Returns: Json
@@ -11592,19 +9643,19 @@ export type Database = {
         Args: {
           p_buffer_after_min: number
           p_buffer_before_min: number
-          p_daily_capacity: number
-          p_description: string
+          p_daily_capacity: number | null
+          p_description: string | null
           p_duration_min: number
-          p_event_type_id: string
-          p_expected_version: number
+          p_event_type_id: string | null
+          p_expected_version: number | null
           p_host_membership_ids: string[]
-          p_location_detail: string
+          p_location_detail: string | null
           p_location_kind: Database["public"]["Enums"]["booking_location_kind"]
           p_max_advance_days: number
           p_min_notice_min: number
           p_org: string
           p_publish: boolean
-          p_slot_step_min: number
+          p_slot_step_min: number | null
           p_slug: string
           p_title: string
         }
@@ -11629,20 +9680,20 @@ export type Database = {
       }
       save_intake_draft: {
         Args: {
-          p_expected_version: number
+          p_expected_version: number | null
           p_schema: Json
           p_stable_key: string
-          p_template_id: string
+          p_template_id: string | null
           p_title: string
         }
         Returns: Json
       }
       save_intake_template: {
         Args: {
-          p_effective_on: string
+          p_effective_on: string | null
           p_locale: string
           p_publish: boolean
-          p_rule_pack_version_id: string
+          p_rule_pack_version_id: string | null
           p_schema: Json
           p_stable_key: string
           p_title: string
@@ -11655,7 +9706,7 @@ export type Database = {
           p_label: string
           p_org: string
           p_position: number
-          p_stage_id: string
+          p_stage_id: string | null
         }
         Returns: string
       }
@@ -11686,12 +9737,12 @@ export type Database = {
       }
       save_privacy_redaction: {
         Args: {
-          p_record_label: string
-          p_redaction_id: string
-          p_removed: string
+          p_record_label: string | null
+          p_redaction_id: string | null
+          p_removed: string | null
           p_request_id: string
           p_state: string
-          p_third_party: string
+          p_third_party: string | null
         }
         Returns: string
       }
@@ -11711,7 +9762,7 @@ export type Database = {
       send_agreement: {
         Args: {
           p_agreement_id: string
-          p_expires_at: string
+          p_expires_at: string | null
           p_idempotency_key: string
           p_signers: Json
         }
@@ -11720,13 +9771,13 @@ export type Database = {
       send_matter_message: {
         Args: {
           p_body: string
-          p_client_key?: string
-          p_document_ids?: string[]
+          p_client_key?: string | null
+          p_document_ids?: string[] | null
           p_matter_id: string
           p_organization_id: string
-          p_person_ids: string[]
+          p_person_ids: string[] | null
           p_requires_ack?: boolean
-          p_thread_id: string
+          p_thread_id: string | null
         }
         Returns: Json
       }
@@ -11752,34 +9803,36 @@ export type Database = {
         Args: { p_export_id: string; p_progress: number; p_stage: string }
         Returns: undefined
       }
-      session_mfa_satisfied: { Args: never; Returns: boolean }
+      session_mfa_satisfied: {
+        Args: never
+        Returns: boolean
+      }
       set_complaint_handlers: {
         Args: { p_membership_ids: string[]; p_org: string }
         Returns: number
       }
       set_compliance_settings: {
         Args: {
-          p_complaint_ack_days: number
-          p_complaint_escalation_text: string
-          p_complaint_response_days: number
+          p_complaint_ack_days: number | null
+          p_complaint_escalation_text: string | null
+          p_complaint_response_days: number | null
           p_org: string
-          p_privacy_response_days: number
+          p_privacy_response_days: number | null
         }
         Returns: undefined
       }
       set_credential_valid_until: {
-        Args: { p_credential_id: string; p_valid_until: string }
+        Args: { p_credential_id: string; p_valid_until: string | null }
         Returns: string
       }
       set_document_expiry: {
-        Args: {
-          p_expected_version: number
-          p_expires_on: string
-          p_version_id: string
-        }
+        Args: { p_expected_version: number; p_expires_on: string | null; p_version_id: string }
         Returns: number
       }
-      set_document_upload_limit: { Args: { p_bytes: number }; Returns: number }
+      set_document_upload_limit: {
+        Args: { p_bytes: number }
+        Returns: number
+      }
       set_firm_reminder_offsets: {
         Args: { p_days: number[] }
         Returns: undefined
@@ -11799,13 +9852,16 @@ export type Database = {
         Returns: undefined
       }
       set_quiet_hours: {
-        Args: { p_end: string; p_start: string }
+        Args: { p_end: string | null; p_start: string | null }
         Returns: undefined
       }
-      set_sample_mode: { Args: { p_enabled: boolean }; Returns: undefined }
+      set_sample_mode: {
+        Args: { p_enabled: boolean }
+        Returns: undefined
+      }
       set_task_status: {
         Args: {
-          p_blocker_note: string
+          p_blocker_note: string | null
           p_expected_version: number
           p_status: Database["public"]["Enums"]["task_status"]
           p_task_id: string
@@ -11813,7 +9869,10 @@ export type Database = {
         Returns: number
       }
       share_government_record: {
-        Args: { p_id: string; p_kind: string }
+        Args: {
+          p_id: string
+          p_kind: string
+        }
         Returns: undefined
       }
       sign_agreement: {
@@ -11821,21 +9880,20 @@ export type Database = {
           p_consent: boolean
           p_envelope_id: string
           p_idempotency_key: string
-          p_ip: unknown
+          p_ip: string
           p_user_agent: string
         }
         Returns: Json
       }
       sign_client_reconciliation: {
-        Args: {
-          p_notes: string
-          p_outcome: string
-          p_reconciliation_id: string
-        }
+        Args: { p_notes: string | null; p_outcome: string; p_reconciliation_id: string }
         Returns: Json
       }
       sign_off_submission_handoff: {
-        Args: { p_expected_version: number; p_handoff_id: string }
+        Args: {
+          p_expected_version: number
+          p_handoff_id: string
+        }
         Returns: number
       }
       staff_book_consultation: {
@@ -11852,7 +9910,7 @@ export type Database = {
       staff_booking_availability: {
         Args: {
           p_event_type_id: string
-          p_exclude_booking?: string
+          p_exclude_booking?: string | null
           p_from: string
           p_org: string
           p_to: string
@@ -11860,12 +9918,7 @@ export type Database = {
         Returns: Json
       }
       staff_cancel_booking: {
-        Args: {
-          p_booking_id: string
-          p_expected_version: number
-          p_org: string
-          p_reason: string
-        }
+        Args: { p_booking_id: string; p_expected_version: number | null; p_org: string; p_reason: string | null }
         Returns: undefined
       }
       staff_notifications: {
@@ -11877,12 +9930,7 @@ export type Database = {
         Returns: undefined
       }
       staff_reschedule_booking: {
-        Args: {
-          p_booking_id: string
-          p_expected_version: number
-          p_org: string
-          p_start: string
-        }
+        Args: { p_booking_id: string; p_expected_version: number | null; p_org: string; p_start: string }
         Returns: undefined
       }
       start_matter_export: {
@@ -11891,20 +9939,20 @@ export type Database = {
       }
       submit_enquiry: {
         Args: {
-          p_client_hash: string
-          p_consent_version: string
+          p_client_hash: string | null
+          p_consent_version: string | null
           p_contact: string
-          p_country_now: string
+          p_country_now: string | null
           p_firm_slug: string
           p_idempotency_key: string
-          p_language: string
+          p_language: string | null
           p_marketing_consent: boolean
-          p_marketing_statement: string
+          p_marketing_statement: string | null
           p_name: string
-          p_preferred_contact: string
+          p_preferred_contact: string | null
           p_reply_consent: boolean
           p_reply_statement: string
-          p_service_interest: string
+          p_service_interest: string | null
           p_source: Database["public"]["Enums"]["lead_source"]
         }
         Returns: Json
@@ -11942,36 +9990,44 @@ export type Database = {
       }
       update_lead: {
         Args: {
-          p_country_now: string
-          p_date_of_birth: string
-          p_email: string
+          p_country_now: string | null
+          p_date_of_birth: string | null
+          p_email: string | null
           p_expected_version: number
-          p_language: string
+          p_language: string | null
           p_lead: string
           p_name: string
           p_org: string
-          p_owner_membership_id: string
-          p_phone: string
-          p_preferred_contact: string
-          p_proposed_fee_cents: number
-          p_service_interest: string
-          p_source_detail: string
+          p_owner_membership_id: string | null
+          p_phone: string | null
+          p_preferred_contact: string | null
+          p_proposed_fee_cents: number | null
+          p_service_interest: string | null
+          p_source_detail: string | null
           p_tags: string[]
         }
         Returns: number
       }
-      verify_client_deposit: { Args: { p_entry_id: string }; Returns: string }
+      verify_client_deposit: {
+        Args: {
+          p_entry_id: string
+        }
+        Returns: string
+      }
       verify_government_correspondence: {
-        Args: { p_correspondence_id: string; p_expected_version: number }
+        Args: {
+          p_correspondence_id: string
+          p_expected_version: number
+        }
         Returns: number
       }
       verify_submission_receipt: {
         Args: {
-          p_acknowledged_on: string
+          p_acknowledged_on?: string | null
           p_expected_version: number
           p_handoff_id: string
-          p_receipt_locator: string
-          p_receipt_version_id: string
+          p_receipt_locator?: string | null
+          p_receipt_version_id?: string | null
         }
         Returns: number
       }
@@ -11984,11 +10040,7 @@ export type Database = {
         Returns: Json
       }
       waive_document_request: {
-        Args: {
-          p_expected_version: number
-          p_reason: string
-          p_request_id: string
-        }
+        Args: { p_expected_version: number; p_reason: string; p_request_id: string }
         Returns: number
       }
       withdraw_section_share: {
@@ -11998,19 +10050,8 @@ export type Database = {
     }
     Enums: {
       access_grant_kind: "explicit" | "guardian"
-      agreement_kind:
-        | "quote"
-        | "consultation"
-        | "service"
-        | "amendment"
-        | "consent"
-      agreement_signer_role:
-        | "client"
-        | "consultant"
-        | "sponsor"
-        | "dependant"
-        | "guardian"
-        | "firm"
+      agreement_kind: "quote" | "consultation" | "service" | "amendment" | "consent"
+      agreement_signer_role: "client" | "consultant" | "sponsor" | "dependant" | "guardian" | "firm"
       agreement_signer_status: "waiting" | "current" | "signed" | "declined"
       agreement_status:
         | "draft"
@@ -12043,30 +10084,10 @@ export type Database = {
         | "approved"
         | "declined"
         | "recorded"
-      client_fund_method:
-        | "bank_transfer"
-        | "interac_e_transfer"
-        | "cheque"
-        | "cash"
-      client_reconciliation_status:
-        | "pending_review"
-        | "reconciled"
-        | "exceptions"
-        | "discarded"
-      complaint_category:
-        | "fees_billing"
-        | "communication"
-        | "service_quality"
-        | "conduct"
-        | "privacy"
-        | "other"
-      compliance_channel:
-        | "email"
-        | "phone"
-        | "letter"
-        | "in_person"
-        | "portal"
-        | "other"
+      client_fund_method: "bank_transfer" | "interac_e_transfer" | "cheque" | "cash"
+      client_reconciliation_status: "pending_review" | "reconciled" | "exceptions" | "discarded"
+      complaint_category: "fees_billing" | "communication" | "service_quality" | "conduct" | "privacy" | "other"
+      compliance_channel: "email" | "phone" | "letter" | "in_person" | "portal" | "other"
       consent_purpose:
         | "portal_terms"
         | "privacy_notice"
@@ -12121,7 +10142,9 @@ export type Database = {
         | "arrival_confirmed"
         | "status_expiry_recorded"
         | "other"
-      decision_record_state: "awaiting_confirmation" | "confirmed"
+      decision_record_state:
+        | "awaiting_confirmation"
+        | "confirmed"
       decision_step:
         | "withdrawal_instructions"
         | "consultant_review"
@@ -12134,12 +10157,7 @@ export type Database = {
       document_review_decision: "accepted" | "changes_requested"
       document_review_state: "pending" | "accepted" | "rejected"
       document_sensitivity: "ordinary" | "narrative" | "medical" | "criminal"
-      document_upload_state:
-        | "uploading"
-        | "scanning"
-        | "quarantined"
-        | "clean"
-        | "failed"
+      document_upload_state: "uploading" | "scanning" | "quarantined" | "clean" | "failed"
       domain_match_kind: "exact" | "suffix"
       email_delivery_status:
         | "pending"
@@ -12231,11 +10249,7 @@ export type Database = {
         | "voided"
         | "credited"
         | "refunded"
-      lead_conflict_result:
-        | "not_checked"
-        | "clear"
-        | "possible_conflict"
-        | "conflict"
+      lead_conflict_result: "not_checked" | "clear" | "possible_conflict" | "conflict"
       lead_consent_purpose: "enquiry_reply" | "marketing"
       lead_source:
         | "web_form"
@@ -12249,12 +10263,7 @@ export type Database = {
         | "csv_import"
         | "other"
       lead_stage_kind: "open" | "converted" | "lost" | "archived"
-      licence_check_result:
-        | "verified"
-        | "not_entitled"
-        | "inactive"
-        | "suspended"
-        | "revoked"
+      licence_check_result: "verified" | "not_entitled" | "inactive" | "suspended" | "revoked"
       licence_type: "RCIC" | "RISIA"
       matter_export_status: "building" | "ready" | "failed" | "cancelled"
       matter_outcome:
@@ -12339,16 +10348,8 @@ export type Database = {
         | "shared_family_record"
         | "private_record"
       privacy_redaction_state: "to_do" | "redacted" | "excluded" | "kept"
-      privacy_request_kind:
-        | "access"
-        | "correction"
-        | "consent_withdrawal"
-        | "deletion"
-      privacy_request_outcome:
-        | "fulfilled"
-        | "partly_fulfilled"
-        | "refused"
-        | "withdrawn"
+      privacy_request_kind: "access" | "correction" | "consent_withdrawal" | "deletion"
+      privacy_request_outcome: "fulfilled" | "partly_fulfilled" | "refused" | "withdrawn"
       register_licence_status: "active" | "inactive"
       reminder_status: "pending" | "sent" | "cancelled"
       review_decision:
@@ -12376,22 +10377,8 @@ export type Database = {
         | "suspended"
         | "superseded"
         | "rejected"
-      sample_proof_step:
-        | "intake"
-        | "agreement"
-        | "upload"
-        | "reminder"
-        | "invoice"
-        | "export"
-      signature_event_kind:
-        | "sent"
-        | "signed"
-        | "declined"
-        | "voided"
-        | "expired"
-        | "completed"
-        | "superseded"
-        | "replayed"
+      sample_proof_step: "intake" | "agreement" | "upload" | "reminder" | "invoice" | "export"
+      signature_event_kind: "sent" | "signed" | "declined" | "voided" | "expired" | "completed" | "superseded" | "replayed"
       snapshot_review_status:
         | "draft"
         | "evidence_captured"
@@ -12576,167 +10563,27 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      access_grant_kind: ["explicit", "guardian"],
-      agreement_kind: [
-        "quote",
-        "consultation",
-        "service",
-        "amendment",
-        "consent",
-      ],
-      agreement_signer_role: [
-        "client",
-        "consultant",
-        "sponsor",
-        "dependant",
-        "guardian",
-        "firm",
-      ],
-      agreement_signer_status: ["waiting", "current", "signed", "declined"],
-      agreement_status: [
-        "draft",
-        "sent",
-        "partially_signed",
-        "completed",
-        "declined",
-        "expired",
-        "voided",
-        "superseded",
-        "accepted",
-      ],
-      answer_date_kind: ["exact", "year_month", "year"],
-      answer_presence: ["provided", "unknown", "not_applicable", "approximate"],
       booking_actor: ["client", "staff", "system"],
       booking_location_kind: ["video", "phone", "in_person", "meeting_link"],
-      booking_status: [
-        "held",
-        "pending_payment",
-        "confirmed",
-        "cancelled",
-        "expired",
-        "no_show",
-        "completed",
-      ],
+      booking_status: ["held", "pending_payment", "confirmed", "cancelled", "expired", "no_show", "completed"],
+      invoice_status: ["draft", "issued", "partially_paid", "paid", "voided", "credited", "refunded"],
+      invoice_payment_status: ["requires_payment", "processing", "succeeded", "failed", "canceled"],
       client_fund_entry_kind: ["deposit", "transfer", "refund", "correction"],
-      client_fund_entry_status: [
-        "pending_verification",
-        "verified",
-        "rejected",
-        "pending_approval",
-        "approved",
-        "declined",
-        "recorded",
-      ],
-      client_fund_method: [
-        "bank_transfer",
-        "interac_e_transfer",
-        "cheque",
-        "cash",
-      ],
-      client_reconciliation_status: [
-        "pending_review",
-        "reconciled",
-        "exceptions",
-        "discarded",
-      ],
-      complaint_category: [
-        "fees_billing",
-        "communication",
-        "service_quality",
-        "conduct",
-        "privacy",
-        "other",
-      ],
-      compliance_channel: [
-        "email",
-        "phone",
-        "letter",
-        "in_person",
-        "portal",
-        "other",
-      ],
-      consent_purpose: [
-        "portal_terms",
-        "privacy_notice",
-        "processing",
-        "contact_email",
-        "contact_sms",
-        "deadline_reminder",
-        "share_section",
-        "ai_drafting",
-        "participation_declined",
-        "electronic_signature",
-      ],
-      correspondence_channel: [
-        "portal_message",
-        "email",
-        "mail",
-        "courier",
-        "in_person",
-        "other",
-      ],
-      correspondence_kind: [
-        "acknowledgement",
-        "application_number",
-        "request",
-        "biometrics_instruction",
-        "procedural_fairness",
-        "status_update",
-        "decision",
-        "other",
-      ],
-      credential_status: [
-        "declared",
-        "verified",
-        "not_entitled",
-        "inactive",
-        "suspended",
-        "revoked",
-      ],
+      client_fund_entry_status: ["pending_verification", "verified", "rejected", "pending_approval", "approved", "declined", "recorded"],
+      client_fund_method: ["bank_transfer", "interac_e_transfer", "cheque", "cash"],
+      client_reconciliation_status: ["pending_review", "reconciled", "exceptions", "discarded"],
       credit_note_status: ["draft", "issued", "declined"],
-      date_precision: ["day", "month", "year"],
-      deadline_kind: ["legal", "correspondence", "internal"],
-      deadline_verification: ["tentative", "confirmed"],
-      decision_follow_up_kind: [
-        "refusal_review",
-        "client_explanation",
-        "next_steps_meeting",
-        "conditions_summary",
-        "document_delivery",
-        "expiry_reminder",
-        "account_reconciliation",
-        "closure_checklist",
+      invoice_refund_status: ["pending", "requires_action", "succeeded", "failed", "canceled"],
+      invoice_dispute_status: [
+        "warning_needs_response",
+        "warning_under_review",
+        "warning_closed",
+        "needs_response",
+        "under_review",
+        "won",
+        "lost",
+        "prevented",
       ],
-      decision_milestone: [
-        "approval_in_principle",
-        "final_approval",
-        "documents_issued",
-        "arrival_confirmed",
-        "status_expiry_recorded",
-        "other",
-      ],
-      decision_record_state: ["awaiting_confirmation", "confirmed"],
-      decision_step: [
-        "withdrawal_instructions",
-        "consultant_review",
-        "withdrawal_request_sent",
-        "acknowledgement_received",
-        "financial_reconciliation",
-      ],
-      document_audience: ["subject", "matter", "staff"],
-      document_request_source: ["rule", "staff"],
-      document_request_status: ["open", "fulfilled", "waived", "cancelled"],
-      document_review_decision: ["accepted", "changes_requested"],
-      document_review_state: ["pending", "accepted", "rejected"],
-      document_sensitivity: ["ordinary", "narrative", "medical", "criminal"],
-      document_upload_state: [
-        "uploading",
-        "scanning",
-        "quarantined",
-        "clean",
-        "failed",
-      ],
-      domain_match_kind: ["exact", "suffix"],
       email_delivery_status: [
         "pending",
         "sending",
@@ -12761,9 +10608,45 @@ export const Constants = {
         "consultation_booked",
         "consultation_rescheduled",
         "consultation_cancelled",
-        "message",
       ],
-      engagement_status: ["pending", "engaged", "exception", "ended"],
+      access_grant_kind: ["explicit", "guardian"],
+      agreement_kind: ["quote", "consultation", "service", "amendment", "consent"],
+      agreement_status: [
+        "draft",
+        "sent",
+        "partially_signed",
+        "completed",
+        "declined",
+        "expired",
+        "voided",
+        "superseded",
+        "accepted",
+      ],
+      agreement_signer_role: ["client", "consultant", "sponsor", "dependant", "guardian", "firm"],
+      agreement_signer_status: ["waiting", "current", "signed", "declined"],
+      signature_event_kind: ["sent", "signed", "declined", "voided", "expired", "completed", "superseded", "replayed"],
+      consent_purpose: [
+        "portal_terms",
+        "privacy_notice",
+        "processing",
+        "contact_email",
+        "contact_sms",
+        "deadline_reminder",
+        "share_section",
+        "ai_drafting",
+        "participation_declined",
+        "electronic_signature",
+      ],
+      person_section_key: [
+        "passport_bio",
+        "school_transcript",
+        "police_certificate",
+        "shared_family_record",
+        "private_record",
+      ],
+      date_precision: ["day", "month", "year"],
+      credential_status: ["declared", "verified", "not_entitled", "inactive", "suspended", "revoked"],
+      domain_match_kind: ["exact", "suffix"],
       firm_setup_step: [
         "firm_details",
         "terms_and_privacy",
@@ -12774,106 +10657,11 @@ export const Constants = {
         "records_and_retention",
         "sample_case",
       ],
-      government_status: [
-        "not_recorded",
-        "receipt_on_file",
-        "processing_reported",
-        "additional_request_open",
-        "decision_evidence_on_file",
-      ],
-      intake_field_type: [
-        "text",
-        "date",
-        "country",
-        "address",
-        "repeatable",
-        "relationship",
-        "declaration",
-        "file_request",
-        "choice",
-      ],
-      intake_response_status: ["draft", "submitted"],
-      intake_template_status: ["draft", "published", "superseded"],
-      intake_workflow_category: [
-        "temporary_residence",
-        "study",
-        "work",
-        "permanent_residence",
-        "sponsorship",
-        "citizenship",
-        "provincial",
-        "unspecified",
-      ],
-      invoice_dispute_status: [
-        "warning_needs_response",
-        "warning_under_review",
-        "warning_closed",
-        "needs_response",
-        "under_review",
-        "won",
-        "lost",
-        "prevented",
-      ],
-      invoice_payment_status: [
-        "requires_payment",
-        "processing",
-        "succeeded",
-        "failed",
-        "canceled",
-      ],
-      invoice_refund_status: [
-        "pending",
-        "requires_action",
-        "succeeded",
-        "failed",
-        "canceled",
-      ],
-      invoice_status: [
-        "draft",
-        "issued",
-        "partially_paid",
-        "paid",
-        "voided",
-        "credited",
-        "refunded",
-      ],
-      lead_conflict_result: [
-        "not_checked",
-        "clear",
-        "possible_conflict",
-        "conflict",
-      ],
-      lead_consent_purpose: ["enquiry_reply", "marketing"],
-      lead_source: [
-        "web_form",
-        "hosted_page",
-        "booking_page",
-        "phone",
-        "email",
-        "referral",
-        "event",
-        "walk_in",
-        "csv_import",
-        "other",
-      ],
-      lead_stage_kind: ["open", "converted", "lost", "archived"],
-      licence_check_result: [
-        "verified",
-        "not_entitled",
-        "inactive",
-        "suspended",
-        "revoked",
-      ],
+      licence_check_result: ["verified", "not_entitled", "inactive", "suspended", "revoked"],
       licence_type: ["RCIC", "RISIA"],
-      matter_export_status: ["building", "ready", "failed", "cancelled"],
-      matter_outcome: [
-        "approved",
-        "refused",
-        "withdrawn",
-        "returned_or_incomplete",
-        "abandoned",
-        "other_verified",
-      ],
+      register_licence_status: ["active", "inactive"],
+      sample_proof_step: ["intake", "agreement", "upload", "reminder", "invoice", "export"],
+      subscription_status: ["trial", "trial_ended", "active", "cancelled"],
       matter_party_role: [
         "applicant",
         "dependant",
@@ -12913,6 +10701,60 @@ export const Constants = {
         "outcome_and_follow_up",
         "closure",
       ],
+      engagement_status: ["pending", "engaged", "exception", "ended"],
+      government_status: [
+        "not_recorded",
+        "receipt_on_file",
+        "processing_reported",
+        "additional_request_open",
+        "decision_evidence_on_file",
+      ],
+      matter_outcome: [
+        "approved",
+        "refused",
+        "withdrawn",
+        "returned_or_incomplete",
+        "abandoned",
+        "other_verified",
+      ],
+      intake_workflow_category: [
+        "temporary_residence",
+        "study",
+        "work",
+        "permanent_residence",
+        "sponsorship",
+        "citizenship",
+        "provincial",
+        "unspecified",
+      ],
+      intake_template_status: ["draft", "published", "superseded"],
+      intake_response_status: ["draft", "submitted"],
+      intake_field_type: [
+        "text",
+        "date",
+        "country",
+        "address",
+        "repeatable",
+        "relationship",
+        "declaration",
+        "file_request",
+        "choice",
+      ],
+      answer_presence: ["provided", "unknown", "not_applicable", "approximate"],
+      answer_date_kind: ["exact", "year_month", "year"],
+      task_audience: ["internal", "client"],
+      task_priority: ["low", "normal", "high", "critical"],
+      task_status: ["open", "blocked", "done", "cancelled"],
+      deadline_kind: ["legal", "correspondence", "internal"],
+      deadline_verification: ["tentative", "confirmed"],
+      document_audience: ["subject", "matter", "staff"],
+      document_request_source: ["rule", "staff"],
+      document_request_status: ["open", "fulfilled", "waived", "cancelled"],
+      document_review_decision: ["accepted", "changes_requested"],
+      document_review_state: ["pending", "accepted", "rejected"],
+      document_sensitivity: ["ordinary", "narrative", "medical", "criminal"],
+      document_upload_state: ["uploading", "scanning", "quarantined", "clean", "failed"],
+      reminder_status: ["pending", "sent", "cancelled"],
       membership_status: ["invited", "active", "suspended", "revoked"],
       org_role: [
         "firm_owner",
@@ -12949,28 +10791,6 @@ export const Constants = {
         "household",
         "other",
       ],
-      person_section_key: [
-        "passport_bio",
-        "school_transcript",
-        "police_certificate",
-        "shared_family_record",
-        "private_record",
-      ],
-      privacy_redaction_state: ["to_do", "redacted", "excluded", "kept"],
-      privacy_request_kind: [
-        "access",
-        "correction",
-        "consent_withdrawal",
-        "deletion",
-      ],
-      privacy_request_outcome: [
-        "fulfilled",
-        "partly_fulfilled",
-        "refused",
-        "withdrawn",
-      ],
-      register_licence_status: ["active", "inactive"],
-      reminder_status: ["pending", "sent", "cancelled"],
       review_decision: [
         "approved",
         "rejected",
@@ -12999,24 +10819,6 @@ export const Constants = {
         "suspended",
         "superseded",
         "rejected",
-      ],
-      sample_proof_step: [
-        "intake",
-        "agreement",
-        "upload",
-        "reminder",
-        "invoice",
-        "export",
-      ],
-      signature_event_kind: [
-        "sent",
-        "signed",
-        "declined",
-        "voided",
-        "expired",
-        "completed",
-        "superseded",
-        "replayed",
       ],
       snapshot_review_status: [
         "draft",
@@ -13057,24 +10859,6 @@ export const Constants = {
         "review_due",
         "suspended",
       ],
-      submission_channel: [
-        "online_portal",
-        "paper",
-        "email",
-        "in_person",
-        "other",
-      ],
-      submission_handoff_status: [
-        "awaiting_signoff",
-        "authorized",
-        "submission_unverified",
-        "submission_verified",
-        "cancelled",
-      ],
-      subscription_status: ["trial", "trial_ended", "active", "cancelled"],
-      task_audience: ["internal", "client"],
-      task_priority: ["low", "normal", "high", "critical"],
-      task_status: ["open", "blocked", "done", "cancelled"],
       webhook_inbox_status: [
         "received",
         "processing",

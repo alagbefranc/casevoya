@@ -286,6 +286,8 @@ export function SheetFrame({
   styles,
   after,
   statusbar,
+  title,
+  trailing,
   children,
 }: {
   sidebar: SidebarData;
@@ -300,6 +302,10 @@ export function SheetFrame({
   /** A page's dialogs, placed after the frame where the capture has them. */
   after?: ReactNode;
   statusbar: StatusbarData;
+  /** A screen-reader heading placed first in `main` (the Lead pipeline has one). */
+  title?: string;
+  /** Dialogs the capture places after the tooltip rather than before it (the Lead pipeline's). */
+  trailing?: ReactNode;
   children?: ReactNode;
 }) {
   const right = aside ?? (rbar ? <SheetRbar data={rbar} /> : null);
@@ -325,6 +331,7 @@ export function SheetFrame({
       <div className={"frame"}>
         <SheetSidebar data={sidebar} />
         <main className={right ? "sheet wr" : "sheet"}>
+          {title ? <h1 className={"sr"}>{title}</h1> : null}
           <div className={"main"} id={"main"}>
             {header ?? (top ? <SheetTopBar data={top} /> : null)}
             <div id={"content"}>{children}</div>
@@ -336,6 +343,7 @@ export function SheetFrame({
       <div className={"scrimd"} id={"scrimd"}></div>
       {after}
       <div id={"k2wt"} className={"k2-wt"} role={"tooltip"} aria-hidden={"true"}></div>
+      {trailing}
     </>
   );
 }

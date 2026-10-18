@@ -26,6 +26,7 @@ import { PolicyMissingAlert, PortalPoliciesAfter, SettingsPortalHeader, SheetPor
 import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
 import { NotificationsHeader, SheetNotifications } from "@/components/sheet/designer/notifications";
 import { loadSheetNotifications } from "@/modules/sheet/notifications-load";
+import { LeadScreen, PipelineScreen } from "@/components/sheet/lead-screens";
 import { DocumentReviewDialog, DocumentsHeader, SheetDocuments } from "@/components/sheet/designer/documents";
 import { ComposeDialog, InboxHeader, SheetInbox } from "@/components/sheet/designer/inbox";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
@@ -66,6 +67,7 @@ import { loadSheetInbox } from "@/modules/sheet/inbox-load";
 import { loadSheetAccess, loadSheetBundle } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 import { loadSheetCalendar, loadSheetConsultations } from "@/modules/scheduling/sheet-load";
+import { loadSheetLead, loadSheetPipeline } from "@/modules/leads/load";
 
 const PUBLIC = new Set(["enquiry", "book"]);
 
@@ -500,6 +502,26 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
+  // Leads: the pipeline (Board, List, Timeline) and one lead (`/sheet/lead?id=`).
+  if (page === "pipeline" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetPipeline(access.staff, query);
+    return (
+      <SheetScreen page={page}>
+        <PipelineScreen loaded={loaded} />
+      </SheetScreen>
+    );
+  }
+  if (page === "lead" && (access.kind === "live" || access.kind === "sample")) {
+    // The Designer's + Lead goes to /sheet/lead?new=1: New lead is a dialog on the pipeline.
+    if (!query.id) redirect("/sheet/pipeline?new=1");
+    const loaded = await loadSheetLead(access.staff, query.id, { conflict: query.dlg === "conflict" });
+    if (!loaded) notFound();
+    return (
+      <SheetScreen page={page}>
+        <LeadScreen loaded={loaded} />
+      </SheetScreen>
+    );
+  }
   if (page === "matter" && (access.kind === "live" || access.kind === "sample")) {
     const loaded = matterId ? await loadSheetMatter(access.staff, matterId, query) : null;
     if (!loaded) notFound();
@@ -571,5 +593,8 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     thread: one("thread"),
     form: one("form"),
     field: one("field"),
+    id: one("id"),
+    stage: one("stage"),
+    owner: one("owner"),
   };
 }
