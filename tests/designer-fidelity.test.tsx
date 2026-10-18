@@ -144,6 +144,8 @@ import {
   type SettingsTab,
 } from "@/components/sheet/designer/settings-firm";
 import { SettingsMarkup } from "@/components/sheet/markup/settings";
+import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam, type SecurityData, type TeamData } from "@/components/sheet/designer/settings";
+import { securityData, teamData } from "@/modules/sheet/settings-present";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -3192,3 +3194,160 @@ describe("Designer fidelity: Settings, Firm, Offices, Branding and Language and 
     for (const html of [offices, language, branding]) expect(html).not.toMatch(/Northline|Amara|Priya|Olena|Grace Lin|Lena Park/);
   });
 });
+const SETTINGS_STATUSBAR = {
+  timezone: "America/Toronto",
+  queue: { label: "Reminder queue healthy", detail: "0 retries" },
+  sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+};
+
+const OK_ON = { badge: { tone: "ok", label: "On" } } as const;
+
+const DESIGNER_SETTINGS_TEAM: TeamData = {
+  summary: "6 of 10 seats used. Removing someone revokes their access and hands their work to someone else first.",
+  rows: [
+    { name: "Amara Osei", role: ["Owner", "Licensed consultant"], office: "Toronto", twoStep: OK_ON, seat: "Paid" },
+    { name: "Grace Lin", role: "Licensed consultant", office: "Toronto", twoStep: OK_ON, seat: "Paid" },
+    { name: "Daniel Ruiz", role: "Case manager", office: "Toronto", twoStep: OK_ON, seat: "Paid" },
+    { name: "Lena Park", role: "Finance", office: "Toronto", twoStep: OK_ON, seat: "Paid" },
+    { name: "M. Leblanc", role: "External collaborator", office: "—", twoStep: { text: "Email code" }, seat: ["Free", "expires 28 Oct"] },
+  ],
+  invite: true,
+  designerOffboard: true,
+  continuity: {
+    intro:
+      "If Amara can’t practise (illness, suspension or death), this licensed consultant can take over client files after the firm confirms it. Clients see the handover notice in their portal. They are never moved without their agreement.",
+    pairs: [
+      { label: "Continuity consultant", value: ["Grace Lin", "RCIC R709876", "this firm"] },
+      { label: "Backup outside the firm", value: ["Samir Gill", "Maple Pathways", "RCIC R701122", "agreement signed 2 Sep"] },
+      { label: "Who can trigger it", value: "Amara Osei, or two of Grace Lin, Daniel Ruiz and Lena Park together" },
+      { label: "Last confirmed", value: ["2 Sep 2026", "review due 2 Mar 2027"] },
+    ],
+    designerActions: { change: "Change saved as a draft · Amara approves it with two-step sign-in", preview: "Client notice preview" },
+    note: "Required by the CICC Code of Professional Conduct for licensees who practise alone or lead a firm. Policy wording to confirm with Francis.",
+  },
+};
+
+const DESIGNER_SETTINGS_SECURITY: SecurityData = {
+  intro: "Staff sign-in, support access and session rules.",
+  rows: [
+    { title: "Staff multi-factor authentication", detail: "Required for every staff account", badge: { tone: "ok", label: "On" } },
+    { title: "Support access grant", detail: "Time-limited to 60 minutes, approved by the firm owner", badge: { tone: "gr", label: "None active" } },
+    { title: "Session timeout", detail: "30 minutes idle", badge: { tone: "gr", label: "30 min" } },
+    { title: "Download audit", detail: "Every document download is logged", badge: { tone: "ok", label: "On" } },
+  ],
+};
+
+/** The Designer's Offboard dialog (#dlgOff): offboarding is not built, so no live page renders it. */
+const DLG_OFF = /<dialog class="dlg wide" id="dlgOff"[\s\S]*?<\/dialog>/;
+
+function settingsPage(tab: "team" | "security", content: ReturnType<typeof createElement>) {
+  return withoutPreloads(
+    renderToStaticMarkup(
+      createElement(
+        SheetFrame,
+        {
+          sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/settings" },
+          header: createElement(SettingsHeader, { data: { firmName: "Northline Immigration", plan: "Plan: Practice (fictional)", tab } }),
+          statusbar: SETTINGS_STATUSBAR,
+        },
+        content,
+      ),
+    ),
+  );
+}
+
+function expectSame(live: string, captured: string) {
+  if (live !== captured) {
+    let i = 0;
+    while (i < live.length && live[i] === captured[i]) i++;
+    console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+  }
+  expect(live).toBe(captured);
+}
+
+describe("Designer fidelity: Settings, Team and seats and Security", () => {
+  it("renders the Team and seats tab exactly as the captured Designer markup (without the unbuilt Offboard dialog)", () => {
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(SettingsMarkup, { variant: "tab-team" }))).replace(DLG_OFF, "");
+    expect(captured).not.toContain('id="dlgOff"');
+    expectSame(settingsPage("team", createElement(SheetSettingsTeam, { data: DESIGNER_SETTINGS_TEAM })), captured);
+  });
+
+  it("renders the Security tab exactly as the captured Designer markup (without the unbuilt Offboard dialog)", () => {
+    // The capture carries the Team tab's #dlgOff on every Settings tab; it is not ported.
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(SettingsMarkup, { variant: "tab-security" }))).replace(DLG_OFF, "");
+    expectSame(settingsPage("security", createElement(SheetSettingsSecurity, { data: DESIGNER_SETTINGS_SECURITY })), captured);
+  });
+
+  it("keeps the Designer's tab strip: its eleven tabs in order, with the open tab marked", () => {
+    for (const tab of ["team", "security"] as const) {
+      const html = renderToStaticMarkup(createElement(SettingsHeader, { data: { firmName: "Maple", plan: null, tab } }));
+      const tabs = [...html.matchAll(/data-t="([a-z]+)"/g)].map((match) => match[1]);
+      expect(tabs).toEqual(["general", "team", "branding", "offices", "billing", "retention", "integrations", "notifications", "language", "ai", "security"]);
+      expect(html).toContain(`data-t="${tab}" class="on"`);
+      expect(html.match(/class="pill"/g)?.length).toBe(1);
+    }
+  });
+
+  it("shows a real firm's team, invitations and honest gaps, with no Designer people, offboarding or prototype toasts", () => {
+    const now = new Date("2026-10-18T15:00:00Z");
+    const data = teamData({
+      members: [
+        { membershipId: "m1", name: "Dana Lee", email: "dana@maple.test", role: "firm_owner", status: "active", licensed: true, twoStep: true },
+        { membershipId: "m2", name: "Kai Moss", email: "kai@maple.test", role: "case_manager", status: "suspended", licensed: false, twoStep: false },
+      ],
+      security: [
+        { membershipId: "m1", secondFactor: true, passkeys: 0, activeSessions: 1, lastActiveAt: "2026-10-18T14:00:00Z" },
+        { membershipId: "m2", secondFactor: false, passkeys: 1, activeSessions: 0, lastActiveAt: null },
+      ],
+      invites: [{ id: "i1", email: "new@maple.test", role: "assistant", expiresAt: "2026-10-24T15:00:00Z", createdAt: "2026-10-17T15:00:00Z" }],
+      continuity: { name: null, email: null, succession: null },
+      canInvite: true,
+      now,
+      timeZone: "America/Toronto",
+    });
+    const html = renderToStaticMarkup(createElement(SheetSettingsTeam, { data }));
+    expect(html).toContain("1 staff seat in use, 1 suspended, 1 invitation waiting.");
+    expect(html).toContain('<td>Dana Lee</td><td>Owner <span class="sep" aria-hidden="true"></span> Licensed consultant</td><td>All offices</td>');
+    expect(html).toContain('<span class="bd ok"><i></i>Passkey</span>');
+    expect(html).toContain("<td>Suspended</td>");
+    expect(html).toContain('Invited <span class="sep" aria-hidden="true"></span> expires 24 Oct');
+    expect(html).toContain('<a class="btn p sm" href="/sheet/invitations">Invite staff</a>');
+    expect(html).toContain("Not named yet");
+    expect(html).not.toContain("dlgOff");
+    expect(html).not.toContain("data-toast");
+    expect(html).not.toMatch(/Northline|Amara|Grace|Daniel|Lena|Leblanc|Paid|of 10 seats/);
+
+    const viewer = renderToStaticMarkup(createElement(SheetSettingsTeam, { data: { ...data, invite: false, rows: [] } }));
+    expect(viewer).not.toContain("Invite staff");
+    expect(viewer).toContain("No one to show yet");
+  });
+
+  it("states the firm's real security posture and adds owner-only counts as Designer rows", () => {
+    const owner = securityData({
+      owner: true,
+      members: 2,
+      security: [
+        { membershipId: "m1", secondFactor: true, passkeys: 0, activeSessions: 2, lastActiveAt: "2026-10-18T14:00:00Z" },
+        { membershipId: "m2", secondFactor: false, passkeys: 0, activeSessions: 0, lastActiveAt: null },
+      ],
+      events: 0,
+      timeZone: "America/Toronto",
+    });
+    const html = renderToStaticMarkup(createElement(SheetSettingsSecurity, { data: owner }));
+    expect(html).toContain("Required for every staff account · 1 of 2 set up");
+    expect(html).toContain("No idle timeout yet");
+    expect(html).toContain("Support grants aren’t built yet");
+    expect(html).toContain('<span class="bd gr"><i></i>2 sessions</span>');
+    expect(html).not.toMatch(/30 min|60 minutes/);
+    // Live-only rows reuse the Designer's own row: no class beyond the captured Security tab's.
+    const classes = new Set([...html.matchAll(/class="([^"]*)"/g)].map((match) => match[1]));
+    expect([...classes].sort()).toEqual(["bd gr", "bd ok", "display", "li rv", "ph rv", "r"]);
+
+    const staff = renderToStaticMarkup(
+      createElement(SheetSettingsSecurity, { data: securityData({ owner: false, members: 3, security: null, events: null, timeZone: "America/Toronto" }) }),
+    );
+    expect(staff).not.toContain("Signed-in sessions");
+    expect(staff).not.toContain("set up");
+  });
+});
+

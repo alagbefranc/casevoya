@@ -101,6 +101,11 @@ export function invitationRow(invite: PendingInvitation, now: Date, timeZone: st
  * one for the same role.
  */
 export function staffRows(members: readonly DirectoryMember[], invites: readonly PendingInvitation[], now: Date, timeZone: string): StaffRow[] {
+  return [...members.map(memberRow), ...orderedInvitations(invites, now).map((row) => invitationRow(row, now, timeZone))];
+}
+
+/** Open invitations newest first, then the latest expired one per person and role. */
+export function orderedInvitations(invites: readonly PendingInvitation[], now: Date): PendingInvitation[] {
   const at = now.getTime();
   const open = invites.filter((row) => new Date(row.expiresAt).getTime() > at).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const openKey = new Set(open.map((row) => `${row.email}|${row.role}`));
@@ -114,7 +119,7 @@ export function staffRows(members: readonly DirectoryMember[], invites: readonly
     seen.add(key);
     return true;
   });
-  return [...members.map(memberRow), ...[...open, ...latestExpired].map((row) => invitationRow(row, now, timeZone))];
+  return [...open, ...latestExpired];
 }
 
 /** "name@<domain>" from the signed-in person's own address, the way the Designer shows the firm's domain. */

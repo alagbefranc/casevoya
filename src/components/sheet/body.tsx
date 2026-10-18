@@ -26,6 +26,8 @@ import { PolicyMissingAlert, PortalPoliciesAfter, SettingsPortalHeader, SheetPor
 import { SettingsFirmAfter, SettingsFirmHeader, SheetSettingsBranding, SheetSettingsFirm, SheetSettingsLanguage, SheetSettingsOffices } from "@/components/sheet/designer/settings-firm";
 import { loadSheetSettingsFirm } from "@/modules/sheet/settings-firm-load";
 import { settingsTab } from "@/modules/sheet/settings-firm-present";
+import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam } from "@/components/sheet/designer/settings";
+import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
 import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
 import { NotificationsHeader, SheetNotifications } from "@/components/sheet/designer/notifications";
 import { loadSheetNotifications } from "@/modules/sheet/notifications-load";
@@ -355,6 +357,20 @@ export async function SheetBody({
           {view.tab === "offices" ? <SheetSettingsOffices data={view.data} /> : null}
           {view.tab === "branding" ? <SheetSettingsBranding data={view.data} /> : null}
           {view.tab === "language" ? <SheetSettingsLanguage data={view.data} /> : null}
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Team and seats and Security: the firm's team, invitations, continuity contact and sign-in posture.
+  if (page === "settings" && (query.tab === "team" || query.tab === "security") && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, header, content } =
+      query.tab === "team"
+        ? await loadSheetSettingsTeam(access.staff).then((loaded) => ({ ...loaded, content: <SheetSettingsTeam data={loaded.page} /> }))
+        : await loadSheetSettingsSecurity(access.staff).then((loaded) => ({ ...loaded, content: <SheetSettingsSecurity data={loaded.page} /> }));
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame sidebar={chrome.sidebar} header={<SettingsHeader data={header} />} statusbar={chrome.statusbar}>
+          {content}
         </SheetFrame>
       </SheetScreen>
     );

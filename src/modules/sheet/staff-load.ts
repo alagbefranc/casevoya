@@ -24,7 +24,7 @@ const READ = 200;
  * two-step status for a firm owner). Until that function is deployed, the memberships and
  * profiles the viewer can read stand in, without emails.
  */
-async function loadMembers(supabase: Client, org: string): Promise<DirectoryMember[]> {
+export async function loadMembers(supabase: Client, org: string): Promise<DirectoryMember[]> {
   const directory = await supabase.rpc("firm_staff_directory", { p_organization_id: org });
   if (!directory.error && directory.data) {
     return directory.data.map((row) => ({
