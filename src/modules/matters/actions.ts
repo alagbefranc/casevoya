@@ -137,7 +137,8 @@ export async function overrideMatterStage(input: {
   toStage: string;
   expectedVersion: number;
   reason: string;
-  code: string;
+  /** Null relies on the session's recent step-up; the database checks app.mfa_step_up_satisfied() either way. */
+  code: string | null;
 }) {
   if (!isUuid(input.matterId) || !STAGES.includes(input.toStage as MatterStage)) {
     return { error: "Choose a matter and a stage." };
@@ -232,7 +233,8 @@ export async function setMatterOnHold(input: {
   reason: string;
   ownerMembershipId: string;
   reviewOn: string;
-  code: string;
+  /** Null relies on the session's recent step-up; the database checks app.mfa_step_up_satisfied() either way. */
+  code: string | null;
 }) {
   if (!isUuid(input.matterId) || !isUuid(input.ownerMembershipId)) return { error: "Choose a matter and a hold owner." };
   const session = await staffClient(input.organizationId, input.code);
@@ -253,7 +255,8 @@ export async function clearMatterOnHold(input: {
   matterId: string;
   expectedVersion: number;
   reason: string;
-  code: string;
+  /** Null relies on the session's recent step-up; the database checks app.mfa_step_up_satisfied() either way. */
+  code: string | null;
 }) {
   if (!isUuid(input.matterId)) return { error: "Choose a matter." };
   const session = await staffClient(input.organizationId, input.code);
@@ -273,7 +276,8 @@ export async function recordGovernmentStatus(input: {
   status: string;
   expectedVersion: number;
   note: string;
-  code: string;
+  /** Null relies on the session's recent step-up; the database checks app.mfa_step_up_satisfied() either way. */
+  code: string | null;
 }) {
   if (!isUuid(input.matterId) || !GOVERNMENT.includes(input.status as GovernmentStatus)) {
     return { error: "Choose a matter and a recorded status." };
@@ -296,7 +300,8 @@ export async function recordMatterOutcome(input: {
   outcome: string;
   expectedVersion: number;
   note: string;
-  code: string;
+  /** Null relies on the session's recent step-up; the database checks app.mfa_step_up_satisfied() either way. */
+  code: string | null;
 }) {
   if (!isUuid(input.matterId) || !OUTCOMES.includes(input.outcome as MatterOutcome)) {
     return { error: "Choose a matter and an outcome." };
