@@ -122,7 +122,17 @@ export function ChatView({ data }: { data: ChatData }) {
   const [pending, setPending] = useState<Pending[]>([]);
   const [readThreads, setReadThreads] = useState<string[]>([]);
   const [acked, setAcked] = useState<string[]>([]);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNoticeText] = useState<string | null>(null);
+  // An info notice (Vo's draft is ready) is shown as a status, not as an error.
+  const [noticeInfo, setNoticeInfo] = useState(false);
+  const setNotice = (text: string | null) => {
+    setNoticeInfo(false);
+    setNoticeText(text);
+  };
+  const showInfo = (text: string) => {
+    setNoticeInfo(true);
+    setNoticeText(text);
+  };
   const [atBottom, setAtBottom] = useState(true);
   // The Vo draft now in the composer (staff only): Send sends the reviewed text of that draft.
   const [voDraft, setVoDraft] = useState<string | null>(null);
@@ -329,11 +339,8 @@ export function ChatView({ data }: { data: ChatData }) {
     if ("abstained" in result) return setNotice("Vo didn’t draft this one: it needs a consultant (advice, eligibility or a rule without an approved source). Please answer it yourself.");
     setVoDraft(result.draftId);
     setText(result.text);
-    setNotice(
-      result.needsRule
-        ? "Vo’s draft is in the box. Replace “[needs a sourced rule]” with a checked, sourced fact, or remove it, then review and send."
-        : `Vo’s draft is in the box. Review and edit it before you send. Sources: ${result.sources.map((source) => source.label).join(", ")}.`,
-    );
+    if (result.needsRule) setNotice("Vo’s draft is in the box. Replace “[needs a sourced rule]” with a checked, sourced fact, or remove it, then review and send.");
+    else showInfo(`Vo’s draft is in the box. Review and edit it before you send. Sources: ${result.sources.map((source) => source.label).join(", ")}.`);
     requestAnimationFrame(() => {
       grow();
       input.current?.focus();
@@ -498,7 +505,7 @@ export function ChatView({ data }: { data: ChatData }) {
 
             <div className="cv-compose">
               {notice ? (
-                <div className="cv-err" role="alert">
+                <div className={noticeInfo ? "cv-err cv-info" : "cv-err"} role={noticeInfo ? "status" : "alert"}>
                   <span>{notice}</span>
                   <button type="button" className="cv-retry" onClick={() => setNotice(null)}>Dismiss</button>
                 </div>

@@ -55,6 +55,12 @@ export async function runVoTask(request: VoTaskRequest, deps: RunDeps): Promise<
   // No model key: the Designer's "Vo is unavailable" state; everything works by hand.
   if (!deps.apiKey) return failed("unavailable");
 
+  // A reply needs a client message to answer: without one, say so without spending a model call.
+  if (request.task === "message_reply" && request.threadId) {
+    const recent = await deps.data.messages(request.threadId, 12);
+    if (!recent.some((message) => message.authorKind === "client")) return failed("nothing_to_draft");
+  }
+
   const ctx: RunContext = {
     request,
     data: deps.data,
