@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { DemoSheet } from "@/components/sheet/demo";
 import { SheetFrame } from "@/components/sheet/designer/frame";
 import { SheetHome } from "@/components/sheet/designer/home";
-import { MattersTopBar, SheetMatters } from "@/components/sheet/designer/matters";
+import { MattersTopBar, NewMatterDialog, SheetMatters } from "@/components/sheet/designer/matters";
 import { SampleCasePanel } from "@/components/sheet/designer/sample-case";
 import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
@@ -72,11 +72,12 @@ export async function SheetBody({
     );
   }
   if (page === "matters" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, matters } = await loadSheetMatters(access.staff, query);
+    const { chrome, matters, newMatter } = await loadSheetMatters(access.staff, query);
     return (
       <SheetScreen page={page}>
-        <SheetFrame sidebar={chrome.sidebar} header={<MattersTopBar counts={matters.counts} />} statusbar={chrome.statusbar}>
+        <SheetFrame sidebar={chrome.sidebar} header={<MattersTopBar counts={matters.counts} newMatter />} statusbar={chrome.statusbar}>
           <SheetMatters data={matters} />
+          <NewMatterDialog data={newMatter} />
         </SheetFrame>
       </SheetScreen>
     );

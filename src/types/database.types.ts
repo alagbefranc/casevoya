@@ -5246,6 +5246,18 @@ export type Database = {
         }
         Returns: Json
       }
+      create_client_matter: {
+        Args: {
+          p_applicant_email: string | null
+          p_applicant_name: string
+          p_consultant_membership_id: string
+          p_rule_pack_version_id?: string | null
+          p_sponsor_email: string | null
+          p_sponsor_name: string | null
+          p_title?: string | null
+        }
+        Returns: Json
+      }
       assign_responsible_consultant: {
         Args: { p_expected_version: number; p_matter_id: string; p_membership_id: string }
         Returns: number

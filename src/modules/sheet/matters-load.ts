@@ -5,6 +5,7 @@ import { loadSheetChrome, matterNames, memberNames } from "@/modules/sheet/chrom
 import { dayMonth, isoDate, localNow } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { governmentBadge, MATTERS_PAGE, MATTERS_READ, pageLimit, programLabel } from "@/modules/sheet/matters-present";
+import { consultantOptions, programOptions, type NewMatterDialogData } from "@/modules/sheet/new-matter";
 import { matterMatches, mattersTitle, stageLabel, type SheetQuery } from "@/modules/sheet/present";
 
 /** The Designer's Matters list for a firm, read as the signed-in staff member. */
@@ -15,7 +16,7 @@ export async function loadSheetMatters(staff: SheetStaff, query: SheetQuery, now
   const today = isoDate(local.year, local.month, local.day);
   const limit = pageLimit(query.limit);
 
-  const [chrome, matters, deadlines, pending, refs] = await Promise.all([
+  const [chrome, matters, deadlines, pending, refs, consultants, credentials, published] = await Promise.all([
     loadSheetChrome(staff, "/sheet/matters"),
     supabase
       .from("matters")
@@ -26,6 +27,10 @@ export async function loadSheetMatters(staff: SheetStaff, query: SheetQuery, now
     supabase.from("deadlines").select("matter_id, due_on").eq("organization_id", org).gte("due_on", today).order("due_on", { ascending: true }).limit(MATTERS_READ),
     supabase.from("document_versions").select("document_id").eq("organization_id", org).eq("upload_state", "clean").eq("review_state", "pending").limit(MATTERS_READ),
     supabase.from("document_matter_refs").select("document_id, matter_id").eq("organization_id", org).is("removed_at", null).limit(MATTERS_READ),
+    // The New matter dialog: who can be responsible, and which program templates are published.
+    supabase.from("memberships").select("id").eq("organization_id", org).eq("status", "active").eq("role", "licensed_consultant").order("created_at"),
+    supabase.from("consultant_credentials").select("membership_id, status").eq("organization_id", org),
+    supabase.from("rule_pack_versions").select("id, program_key, pack_version, status").in("status", ["published", "review_due"]).limit(100),
   ]);
   const rows = matters.data ?? [];
 
@@ -100,5 +105,15 @@ export async function loadSheetMatters(staff: SheetStaff, query: SheetQuery, now
           ? { kind: "filtered", title: "No matches for these filters", copy: `Nothing is in ${viewTitle.toLowerCase()} right now. Clear the view to see every matter.`, clear: "/sheet/matters" }
           : null,
   };
-  return { chrome, matters: data };
+  const credentialStatus = new Map((credentials.data ?? []).map((row) => [row.membership_id, row.status as string]));
+  const newMatter: NewMatterDialogData = {
+    organizationId: org,
+    consultants: consultantOptions(
+      (consultants.data ?? []).map((row) => ({ id: row.id, name: members.get(row.id) ?? "Unassigned" })),
+      credentialStatus,
+    ),
+    programs: programOptions(published.data ?? []),
+    sampleMode: staff.sampleMode,
+  };
+  return { chrome, matters: data, newMatter };
 }
