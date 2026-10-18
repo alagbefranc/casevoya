@@ -8,6 +8,7 @@ import { isUuid } from "@/lib/tenant/context";
 import type { Json } from "@/types/database.types";
 import { attachInviteEmailLink } from "@/modules/email/invite-link";
 import { acceptLink } from "@/modules/sheet/portal-invite";
+import { acceptWithClient } from "@/modules/portal-invitations/accept";
 import { portalError } from "@/modules/portal-invitations/errors";
 import { policyPublishError, readPolicyDraft } from "@/modules/portal-policies/defaults";
 import { isPortalInviteRole, type PortalAcceptPayload, type PortalInviteRole } from "@/modules/portal-invitations/types";
@@ -213,14 +214,9 @@ export async function acceptPortalInvitation(token: string, payload: PortalAccep
   if ("error" in session) return { error: session.error };
   const { data: claims } = await session.supabase.auth.getClaims();
   if (!claims?.claims?.sub) return { error: "Sign in with the invited email first." };
-  const { data, error } = await session.supabase.rpc("accept_portal_invitation", {
-    p_token: token,
-    p_payload: payload as Json,
-  });
-  if (error) return { error: safeAccessError(error.message) };
-  const result = asResult(data);
-  if (!result.ok) return { error: portalError(result.error) };
-  return { ok: true as const, invitation: data };
+  const accepted = await acceptWithClient(session.supabase, token, payload);
+  if ("error" in accepted) return { error: accepted.error };
+  return { ok: true as const, invitation: accepted.invitation };
 }
 
 export async function withdrawSectionShare(input: { organizationId: string; shareId: string }) {

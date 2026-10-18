@@ -4,14 +4,16 @@ import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import { busyBtn, clearBtn, icon, k2Count, k2Slider, k2Spark, morphText, settleBtn, toast2, voPose } from "./kit";
 
 export type PortResult =
-  | { ok: true; href?: string; codes?: string[] }
+  /** `stay` keeps the person on this step (the step changed in place, e.g. a code was sent). */
+  | { ok: true; href?: string; codes?: string[]; stay?: boolean; message?: string }
   | { ok: false; state?: "error" | "locked"; message: string }
   | null;
 
 export type PortEvent =
   | { type: "click"; page: string; step: number; el: HTMLElement; root: HTMLElement }
   | { type: "otp"; page: string; code: string; then: string; otp: HTMLElement; root: HTMLElement }
-  | { type: "step"; page: string; step: number; root: HTMLElement };
+  | { type: "step"; page: string; step: number; root: HTMLElement }
+  | { type: "resend"; page: string; el: HTMLElement; root: HTMLElement };
 
 const CHECK = `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
 
@@ -114,7 +116,9 @@ export function usePort(
 
     const validate = (scope: ParentNode) => {
       const bad: [string, string][] = [];
+      // A part of the step that is hidden (another sign-in method, say) is not asked for.
       all<HTMLElement>(scope, ".fld[data-req]").forEach((field) => {
+        if (field.closest("[hidden]")) return;
         const input = field.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input,select,textarea");
         let ok = Boolean(input && (input.type === "checkbox" ? (input as HTMLInputElement).checked : input.value.trim() !== ""));
         if (ok && input?.type === "email") ok = /.+@.+\..+/.test(input.value);
@@ -123,6 +127,7 @@ export function usePort(
         if (!ok && input) bad.push([input.id, field.dataset.req || "Check this field"]);
       });
       all<HTMLElement>(scope, ".check[data-req]").forEach((field) => {
+        if (field.closest("[hidden]")) return;
         const input = field.querySelector<HTMLInputElement>("input");
         const ok = Boolean(input?.checked);
         field.classList.toggle("cerr", !ok);
@@ -330,9 +335,22 @@ export function usePort(
         button.onclick = (event) => {
           event.preventDefault();
           if (button.getAttribute("aria-disabled") === "true") return;
-          toast2("New code sent", { kind: "ok", sub: "Check the newest email. Older codes stop working." });
-          left = 30;
-          tick();
+          // A screen that really sends the code says whether it went; others keep the prototype's note.
+          const sent = actionRef.current
+            ? actionRef.current({ type: "resend", page, el: button, root })
+            : Promise.resolve<PortResult>(null);
+          button.setAttribute("aria-disabled", "true");
+          void sent.then((result) => {
+            if (stopped) return;
+            if (result && result.ok === false) {
+              button.removeAttribute("aria-disabled");
+              toast2(result.message, { kind: "bad" });
+              return;
+            }
+            toast2("New code sent", { kind: "ok", sub: "Check the newest email. Older codes stop working." });
+            left = 30;
+            tick();
+          });
         };
         tick();
       });
@@ -435,6 +453,11 @@ export function usePort(
           clearBtn(target);
           if (result.state) showState(result.state);
           else toast2(result.message, { kind: "bad" });
+          return;
+        }
+        if (result?.ok && result.stay) {
+          clearBtn(target);
+          if (result.message) toast2(result.message, { kind: "ok" });
           return;
         }
         if (result?.ok && result.href) target.dataset.href = result.href;

@@ -2,6 +2,7 @@
 
 import { showFace, type InviteFace } from "@/lib/auth/invite-face";
 import { closeDlg, openDlg, toast2 } from "../kit";
+import { PortalSignInFields } from "./portal-sign-in";
 /**
  * Converted from site/app-v2/auth/accept-client.html. Same DOM, classes and copy, plus the
  * processing-consent box from accept-family.html (decision 2026-10-17: every portal role
@@ -38,12 +39,13 @@ export function AcceptClientMarkup({ face }: { face?: InviteFace } = {}) {
 <section data-step="3" data-title="Language and sign-in" data-vo="lock"><div className="wz-head"><div className="wz-vo" data-size="64" data-pose="lock"></div><div><h1>Language and sign-in</h1><p className="lead">You can change these later from your portal.</p></div></div>
 <fieldset className="fld" style={{ "border": "0" }}><legend>Portal language</legend><div className="seg" role="group" aria-label="Language"><button type="button" aria-pressed="true">English</button><button type="button" aria-pressed="false">Français</button></div></fieldset>
 <div role="radiogroup" aria-label="Sign-in method" style={{ "maxWidth": "520px" }}>
-<button className="opt" role="radio" aria-checked="true" type="button"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-key" /></svg></span><span>Use a passkey<small>Your face, fingerprint or phone PIN. Nothing to remember.</small></span></button>
-<button className="opt" role="radio" aria-checked="false" type="button"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-lock" /></svg></span><span>Create a password</span></button></div>
+<button className="opt" role="radio" aria-checked="false" type="button" data-v="passkey"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-key" /></svg></span><span>Use a passkey<small>Your face, fingerprint or phone PIN. Nothing to remember.</small></span></button>
+<button className="opt" role="radio" aria-checked="true" type="button" data-v="password"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-lock" /></svg></span><span>Create a password</span></button></div>
+<PortalSignInFields email={email} then="#4" />
 <p className="why" style={{ "marginTop": "12px" }}><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-shield" /></svg>We’ll ask for an extra check before payments and before downloading your whole file.</p></section>
 <section data-step="4" data-title="Done" data-vo="cheer" data-nofoot=""><div className="wz-head"><div className="wz-vo" data-size="80" data-pose="cheer"></div><div><h1>You’re in</h1><p className="lead">Your first step is waiting.</p></div></div>
-<div className="ready"><div><h2>Upload your passport copy</h2><p>Requested by {consultant}</p></div><a className="btn" href="/sheet/portal-upload">Start</a></div>
-<a className="btn" href="/sheet/portal" style={{ "height": "44px" }}>Go to my portal</a></section></main><footer className="wz-foot"><button className="btn" data-prev="" type="button"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-chevron-left" /></svg>Back</button><span className="save"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-check-circle" /></svg>Your answers are saved</span><span className="sp"></span><button className="btn p" data-next=""><span className="lab">Continue</span><span className="spin" aria-hidden="true"></span></button></footer></div></div>
+<div className="ready" data-first-request="" style={{ "display": "none" }}><div><h2>Upload your passport copy</h2><p>Requested by {consultant}</p></div><a className="btn" href="/portal/upload">Start</a></div>
+<a className="btn" href="/portal" style={{ "height": "44px" }}>Go to my portal</a></section></main><footer className="wz-foot"><button className="btn" data-prev="" type="button"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-chevron-left" /></svg>Back</button><span className="save"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-check-circle" /></svg>Your answers are saved</span><span className="sp"></span><button className="btn p" data-next=""><span className="lab">Continue</span><span className="spin" aria-hidden="true"></span></button></footer></div></div>
 
 
     </>

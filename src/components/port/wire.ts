@@ -12,9 +12,12 @@ import type { PortalAcceptPayload, PortalShareSection } from "@/modules/portal-i
 import {
   createTrialFirm,
   enrollAuthenticator,
+  confirmPortalInvite,
   getAuthContext,
   issueRecoveryCodes,
+  joinPortalInvite,
   joinStaffInvite,
+  resendPortalInviteCode,
   previewStaffInvite,
   redeemRecovery,
   requestMfaReset,
@@ -40,7 +43,7 @@ function checked(root: ParentNode, id: string) {
 
 type InvitePreview = {
   status?: string;
-  invitee?: { display_name?: string };
+  invitee?: { display_name?: string; email?: string };
   organization?: { display_name?: string };
   policies?: { portal_terms?: { id?: string } | null; privacy_notice?: { id?: string } | null };
 };
@@ -78,6 +81,81 @@ function portalAcceptPayload(root: HTMLElement, preview: InvitePreview, page: st
     processing_consent: checked(root, "o1"),
     shares: page === "accept-family" ? shares : undefined,
   };
+}
+
+const PORTAL_ACCEPT = new Set(["accept-client", "accept-family", "accept-sponsor"]);
+
+/** The portal accept screens' sign-in step (the last step before Done, or the last step). */
+function portalSignInStep(page: string) {
+  return page === "accept-sponsor" ? 2 : 3;
+}
+
+type SignInPart = "password" | "passkey" | "code" | "none";
+
+/** Shows one part of the sign-in step (markup/portal-sign-in.tsx). "none": already signed in as the invitee. */
+function showSignIn(root: ParentNode, part: SignInPart) {
+  root.querySelectorAll<HTMLElement>("[data-signin]").forEach((block) => {
+    block.hidden = block.dataset.signin !== part;
+  });
+  const methods = root.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Sign-in method"]');
+  if (methods) methods.hidden = part === "code" || part === "none";
+}
+
+function signInPart(root: ParentNode): SignInPart {
+  const shown = [...root.querySelectorAll<HTMLElement>("[data-signin]")].find((block) => !block.hidden);
+  return (shown?.dataset.signin as SignInPart | undefined) ?? "none";
+}
+
+/** "Create a password" for a new sign-in, or the password of an existing Casevoya sign-in. */
+function setExistingAccount(root: ParentNode, existing: boolean) {
+  const field = root.querySelector<HTMLElement>('[data-signin="password"] .fld');
+  const input = field?.querySelector<HTMLInputElement>("input");
+  if (!field || !input) return;
+  field.dataset.existing = existing ? "1" : "";
+  const message = existing ? "Enter your Casevoya password" : "Choose a password that meets all three rules";
+  field.dataset.req = message;
+  if (existing) delete field.dataset.min;
+  else field.dataset.min = "12";
+  field.classList.remove("err");
+  const label = field.querySelector("label");
+  if (label) label.textContent = existing ? "Your Casevoya password" : "Create a password";
+  const error = field.querySelector(".emsg span");
+  if (error) error.textContent = message;
+  input.autocomplete = existing ? "current-password" : "new-password";
+  const rules = field.querySelector<HTMLElement>(".rules");
+  if (rules) rules.style.display = existing ? "none" : "";
+  const toggle = root.querySelector<HTMLElement>("[data-signin-mode]");
+  if (toggle) toggle.textContent = existing ? "New to Casevoya? Create a password" : "Already have a Casevoya sign-in? Sign in";
+}
+
+function bindPortalSignIn(root: HTMLElement) {
+  if (root.dataset.signinBound === "1") return;
+  root.dataset.signinBound = "1";
+  const methods = root.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Sign-in method"]');
+  methods?.addEventListener("pick", (event) => {
+    const detail = (event as CustomEvent<unknown>).detail;
+    if (signInPart(root) === "code" || signInPart(root) === "none") return;
+    showSignIn(root, detail === "passkey" ? "passkey" : "password");
+  });
+  root.querySelector<HTMLElement>("[data-signin-mode]")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    const field = root.querySelector<HTMLElement>('[data-signin="password"] .fld');
+    setExistingAccount(root, field?.dataset.existing !== "1");
+    root.querySelector<HTMLInputElement>("#ppw")?.focus();
+  });
+}
+
+/** The Done step's first task: the person's real first open request, or nothing. */
+function showFirstRequest(root: ParentNode, request: { purpose: string } | null | undefined) {
+  const card = root.querySelector<HTMLElement>("[data-first-request]");
+  if (!card) return;
+  const title = card.querySelector("h2");
+  if (request?.purpose && title) {
+    title.textContent = request.purpose;
+    card.style.display = "";
+  } else {
+    card.style.display = "none";
+  }
 }
 
 export function usePortActions(page: string, token?: string) {
@@ -144,6 +222,18 @@ export function usePortActions(page: string, token?: string) {
             return { ok: false, message: "This invitation can no longer be used." };
           }
         }
+        if (PORTAL_ACCEPT.has(page) && token) {
+          bindPortalSignIn(event.root);
+          if (event.step === portalSignInStep(page) && signInPart(event.root) !== "code") {
+            if (!invite.current) {
+              const opened = await previewPortalInvitation(token);
+              if (!("error" in opened)) invite.current = asPreview(opened.preview);
+            }
+            const invited = invite.current?.invitee?.email?.trim().toLowerCase();
+            // Already signed in as the invited person: nothing to create, Continue accepts.
+            if (session.signedIn && invited && session.email?.trim().toLowerCase() === invited) showSignIn(event.root, "none");
+          }
+        }
         if (page === "accept-staff" && token && session.configured) {
           const preview = await previewStaffInvite(token);
           if (preview?.email) {
@@ -167,7 +257,36 @@ export function usePortActions(page: string, token?: string) {
         return null;
       }
 
+      if (event.type === "resend") {
+        if (PORTAL_ACCEPT.has(page) && token && session.configured) {
+          const sent = await resendPortalInviteCode(token);
+          if (sent && sent.ok === false) return sent;
+          return sent ? { ok: true } : null;
+        }
+        return null;
+      }
+
       if (event.type === "otp") {
+        if (PORTAL_ACCEPT.has(page) && token) {
+          if (!session.configured) return null;
+          if (!invite.current) {
+            const opened = await previewPortalInvitation(token);
+            if ("error" in opened) return { ok: false, message: opened.error ?? "This invitation could not be opened." };
+            invite.current = asPreview(opened.preview);
+          }
+          const preview = invite.current;
+          if (!preview || preview.status !== "open") return { ok: false, message: "This invitation can no longer be used." };
+          const draft = portalAcceptPayload(event.root, preview, page);
+          if ("error" in draft) return { ok: false, message: draft.error };
+          const confirmed = await confirmPortalInvite({ token, code: event.code, payload: draft });
+          if (!confirmed || confirmed.ok === false) return confirmed;
+          ctx.current = null;
+          if (page === "accept-client") {
+            showFirstRequest(event.root, "firstRequest" in confirmed ? confirmed.firstRequest : null);
+            return { ok: true };
+          }
+          return { ok: true, href: "/portal" };
+        }
         if (!session.configured || !session.signedIn && page !== "start-trial" && page !== "recovery") return null;
         if (page === "recovery" && event.then === "#2") {
           return verifyEmailCode(val(event.root, "rem"), event.code, "recovery");
@@ -293,9 +412,39 @@ export function usePortActions(page: string, token?: string) {
           (page === "accept-family" && event.step === 3) ||
           (page === "accept-sponsor" && event.step === 2);
         if (!finishing) return null;
-        const accepted = await acceptPortalInvitation(token, draft);
-        if ("error" in accepted) return { ok: false, message: accepted.error ?? "That invitation could not be accepted." };
-        if (page === "accept-client") return null;
+        const part = signInPart(event.root);
+        if (part === "passkey") {
+          return { ok: false, message: "Passkeys are coming to Casevoya. Choose “Create a password” for now." };
+        }
+        if (part === "code") return { ok: false, message: "Enter the six-digit code we emailed you." };
+        let firstRequest: { purpose: string } | null = null;
+        if (part === "none" && session.signedIn) {
+          const accepted = await acceptPortalInvitation(token, draft);
+          if ("error" in accepted) return { ok: false, message: accepted.error ?? "That invitation could not be accepted." };
+        } else {
+          const existing =
+            event.root.querySelector<HTMLElement>('[data-signin="password"] .fld')?.dataset.existing === "1";
+          const joined = await joinPortalInvite({
+            token,
+            mode: existing ? "existing" : "create",
+            // Not trimmed: spaces are part of a password.
+            password: event.root.querySelector<HTMLInputElement>("#ppw")?.value ?? "",
+            payload: draft,
+          });
+          if (!joined) return null;
+          if (joined.ok === false) return joined;
+          if (joined.confirm) {
+            showSignIn(event.root, "code");
+            event.root.querySelector<HTMLInputElement>('[data-signin="code"] .otp input')?.focus();
+            return { ok: true, stay: true, message: "Check your email for a six-digit code." };
+          }
+          firstRequest = joined.firstRequest;
+          ctx.current = null;
+        }
+        if (page === "accept-client") {
+          showFirstRequest(event.root, firstRequest);
+          return null;
+        }
         return { ok: true, href: "/portal" };
       }
       if (page === "accept-staff" && token && el.dataset.href?.startsWith("/mfa")) {

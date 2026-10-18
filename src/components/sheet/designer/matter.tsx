@@ -1144,11 +1144,18 @@ export type MatterSigning = {
   hash: string | null;
 };
 
-export function MatterAgreements({ rows, signing }: { rows: MatterAgreementRow[]; signing: MatterSigning | null }) {
+/** `create` is the New agreement dialog on the Agreements page, opened for this matter. */
+export function MatterAgreements({ rows, signing, create }: { rows: MatterAgreementRow[]; signing: MatterSigning | null; create?: string | null }) {
   if (rows.length === 0) {
     return (
       <Panel>
-        <Empty art={"templates-empty"} title={"No agreements yet"} copy={"Quotes and service agreements start from an approved template."} />
+        <Empty art={"templates-empty"} title={"No agreements yet"} copy={"Quotes and service agreements start from an approved template."}>
+          {create ? (
+            <a className={"btn p sm"} href={create}>
+              {"New agreement"}
+            </a>
+          ) : null}
+        </Empty>
       </Panel>
     );
   }
@@ -1446,7 +1453,7 @@ export type MatterPageData = {
   overview: MatterOverviewData;
   people: { cards: MatterPersonCard[]; relationships: MatterRelationship[] };
   documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[] };
-  agreements: { rows: MatterAgreementRow[]; signing: MatterSigning | null };
+  agreements: { rows: MatterAgreementRow[]; signing: MatterSigning | null; create?: string | null };
   /** `record` offers the Record a deadline dialog from the empty state. */
   tasks: { deadline: MatterDeadline | null; tasks: MatterTaskRow[]; record?: boolean };
   outcome: string | null;
@@ -1465,7 +1472,7 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
     case "documents":
       return <MatterDocuments checklist={data.documents.checklist} people={data.documents.people} rows={data.documents.rows} />;
     case "agreements":
-      return <MatterAgreements rows={data.agreements.rows} signing={data.agreements.signing} />;
+      return <MatterAgreements rows={data.agreements.rows} signing={data.agreements.signing} create={data.agreements.create} />;
     case "tasks":
       return <MatterTasks deadline={data.tasks.deadline} tasks={data.tasks.tasks} record={data.tasks.record} />;
     case "decisions":

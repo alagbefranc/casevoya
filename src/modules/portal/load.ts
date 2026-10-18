@@ -68,7 +68,7 @@ export type PortalAccess =
   | { kind: "empty" }
   | { kind: "live"; viewer: PortalViewer };
 
-/** Designer demo pages render only for a signed-in firm with sample mode on. */
+/** Designer demo pages render only for firm staff previewing a sample-mode firm's portal. */
 export async function loadPortalAccess(): Promise<PortalAccess> {
   if (!hasPublicSupabaseEnv()) return { kind: "signed-out" };
   const supabase = await createClient();
@@ -92,7 +92,9 @@ export async function loadPortalAccess(): Promise<PortalAccess> {
     .eq("id", membership.organization_id)
     .maybeSingle();
   if (!org) return { kind: "empty" };
-  if (org.sample_mode) return { kind: "sample" };
+  // Firm staff previewing the portal of a sample-mode firm see the Designer demo. A client,
+  // sponsor or family member always sees their own records (sample matters are real rows).
+  if (org.sample_mode && !isPortalRole(membership.role)) return { kind: "sample" };
 
   const [{ data: matters }, { data: persons }, { data: participants }, { data: grants }, { data: shares }, { data: sections }] =
     await Promise.all([
