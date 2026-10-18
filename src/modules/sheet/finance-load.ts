@@ -1,12 +1,13 @@
 import "server-only";
-import type { FinanceData, FinanceHeaderData, FinanceKpi, InvoiceRow, NewInvoiceDialogData } from "@/components/sheet/designer/finance";
+import type Stripe from "stripe";
+import type { FinanceData, FinanceHeaderData, FinanceKpi, InvoiceRow, NewInvoiceDialogData, PaymentRow, PaymentsData } from "@/components/sheet/designer/finance";
 import { createClient } from "@/lib/supabase/server";
 import { stripeServer } from "@/lib/stripe/server";
 import { publishableKey } from "@/modules/finance/keys";
 import { formatAmount, formatMoney, INVOICE_CURRENCIES } from "@/modules/finance/money";
 import { retrieveAccountStatus } from "@/modules/finance/stripe-account";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
-import { FEE_CATEGORY_LABEL, invoiceState } from "@/modules/sheet/finance-present";
+import { FEE_CATEGORY_LABEL, invoiceState, LISTED_PAYMENT_STATUSES, paymentState, shortStripeId } from "@/modules/sheet/finance-present";
 import { dayMonth } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone, plusDays } from "@/modules/sheet/present";
@@ -22,7 +23,109 @@ export type FinanceAccountData = {
   configured: boolean;
   publishableKey: string | null;
   account: null | { cardPayments: string; payouts: string; requirementsDue: number };
+  /** Firm owner or finance user: the staff who see the firm's billing. */
+  canBill: boolean;
 };
+
+const PAYMENTS_READ = 500;
+
+type Supabase = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * The Payments tab's rows: card payments Stripe has acted on, newest first, read as the signed-in
+ * staff member (RLS: the invoices they may read). Nothing is invented: a sample firm sees its
+ * sample invoices' payments, marked "(sample)".
+ */
+async function loadPaymentRows(supabase: Supabase, staff: SheetStaff): Promise<PaymentRow[]> {
+  const org = staff.organizationId;
+  const payments = await supabase
+    .from("invoice_payments")
+    .select("id, invoice_id, payment_intent_id, last_event_id, amount_cents, amount_received_cents, currency, status, succeeded_at, updated_at")
+    .eq("organization_id", org)
+    .in("status", [...LISTED_PAYMENT_STATUSES])
+    .order("updated_at", { ascending: false })
+    .limit(PAYMENTS_READ);
+  const rows = payments.data ?? [];
+  if (!rows.length) return [];
+  const invoiceIds = [...new Set(rows.map((row) => row.invoice_id))];
+  const invoices = await supabase.from("invoices").select("id, number, matter_id, is_sample").eq("organization_id", org).in("id", invoiceIds);
+  const invoiceById = new Map((invoices.data ?? []).map((row) => [row.id, row]));
+  const matterIds = [...new Set((invoices.data ?? []).map((row) => row.matter_id))];
+  const matters = matterIds.length
+    ? await supabase.from("matters").select("id, title, matter_participants(role, persons(display_name))").eq("organization_id", org).in("id", matterIds)
+    : null;
+  const clientByMatter = new Map(
+    (matters?.data ?? []).map((row) => [
+      row.id,
+      (row.matter_participants ?? [])
+        .filter((party) => party.role === "applicant")
+        .map((party) => party.persons?.display_name)
+        .filter((name): name is string => Boolean(name))
+        .join(", ") ||
+        row.title ||
+        "Client",
+    ]),
+  );
+  return rows.map((row) => {
+    const invoice = invoiceById.get(row.invoice_id);
+    const settled = row.status === "succeeded" && row.amount_received_cents > 0;
+    return {
+      key: row.id,
+      received: dayMonth(isoDateInTimeZone(new Date(row.succeeded_at ?? row.updated_at), staff.timezone)),
+      from: invoice ? (clientByMatter.get(invoice.matter_id) ?? "Client") : "Client",
+      method: "Card",
+      reference: [shortStripeId(row.last_event_id ?? row.payment_intent_id)],
+      goesTo: invoice ? `${invoice.number}${invoice.is_sample ? " (sample)" : ""}` : "Invoice",
+      amount: `${formatAmount(settled ? row.amount_received_cents : row.amount_cents, row.currency)}${row.currency === "CAD" ? "" : ` ${row.currency}`}`,
+      state: paymentState(row.status),
+    };
+  });
+}
+
+function sumCurrency(funds: { amount: number; currency: string }[] | undefined, currency: string): number {
+  return (funds ?? []).filter((fund) => fund.currency.toUpperCase() === currency).reduce((sum, fund) => sum + fund.amount, 0);
+}
+
+const PAYOUTS: Record<string, { value: string; note: string; tone?: "warn" | "bad" }> = {
+  active: { value: "On", note: "Stripe pays out to the firm’s bank" },
+  pending: { value: "Not yet", note: "Stripe needs more information", tone: "warn" },
+  restricted: { value: "Paused", note: "Stripe needs more information", tone: "bad" },
+  unsupported: { value: "Off", note: "Not available for this account", tone: "warn" },
+};
+
+/**
+ * The Stripe balance and payouts tiles, for staff who see the firm's account (RLS on
+ * firm_payment_accounts: owner or finance user). Read from Stripe with the platform's test key;
+ * when Stripe can't be read the tiles say so and show no number.
+ */
+async function loadBalance(stripe: Stripe | null, account: { account_id: string; payouts_status: string }): Promise<FinanceKpi[]> {
+  const href = "?tab=payments";
+  let balance: { available: number; pending: number } | null = null;
+  if (stripe) {
+    try {
+      const read = await stripe.balance.retrieve({}, { stripeAccount: account.account_id });
+      if (!read.livemode) balance = { available: sumCurrency(read.available, "CAD"), pending: sumCurrency(read.pending, "CAD") };
+    } catch {
+      balance = null;
+    }
+  }
+  const payouts = PAYOUTS[account.payouts_status] ?? PAYOUTS.pending;
+  return [
+    {
+      href,
+      label: "Available in Stripe",
+      value: { money: balance ? formatMoney(balance.available, "CAD") : "—" },
+      note: balance ? { left: "Stripe", right: "test mode" } : "Balance unavailable",
+    },
+    {
+      href,
+      label: "On the way",
+      value: { money: balance ? formatMoney(balance.pending, "CAD") : "—" },
+      note: balance ? "Pending in Stripe" : "Balance unavailable",
+    },
+    { href, label: "Payouts", value: { money: payouts.value }, note: payouts.note, tone: payouts.tone },
+  ];
+}
 
 function short(text: string, max = 48): string {
   const clean = text.replace(/\s+/g, " ").trim();
@@ -217,7 +320,33 @@ export async function loadSheetFinance(staff: SheetStaff, tab: "invoices" | "pay
     configured: Boolean(stripe && pk),
     publishableKey: pk,
     account: account ? { cardPayments: account.card_payments_status, payouts: account.payouts_status, requirementsDue: account.requirements_due } : null,
+    canBill,
   };
 
-  return { chrome, header, page, dialog, account: accountData };
+  let payments: PaymentsData | null = null;
+  if (tab === "payments") {
+    const [paymentRows, balance] = await Promise.all([
+      loadPaymentRows(supabase, staff),
+      // The account row is only visible to the owner and finance users (RLS).
+      account && canBill ? loadBalance(stripe, account) : null,
+    ]);
+    payments = {
+      intro: `Money ${staff.organizationName} received by card, into the firm’s own Stripe account. A payment counts only when Stripe’s signed event confirms it. Stripe runs in test mode: no real card is charged, and Casevoya never holds the money.`,
+      currency: "CAD",
+      balance,
+      rows: paymentRows,
+      empty: paymentRows.length
+        ? null
+        : canBill
+          ? { title: "No card payments yet", copy: "Payments show here once a client pays an invoice in their portal and Stripe confirms it." }
+          : { title: "No payments to show", copy: "Payments are shown to the firm owner and the matter’s finance user." },
+      note: [
+        "The same Stripe event arriving twice is counted once (provider",
+        "connected account",
+        "event ID). A payment in another currency can’t pay a CAD invoice. A failed payment leaves the invoice open; it never changes the matter stage.",
+      ],
+    };
+  }
+
+  return { chrome, header, page, dialog, account: accountData, payments };
 }
