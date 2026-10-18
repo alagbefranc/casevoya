@@ -3118,9 +3118,9 @@ describe("Designer fidelity: Settings, Firm, Offices, Branding and Language and 
     },
   };
 
-  /** Live-only additions: the Client portal tab and the row/button dialog hooks. */
+  /** Live-only additions: the Client portal header link and the row/button dialog hooks. */
   function liveOnly(html: string): string {
-    return html.replace(/<button role="tab" data-t="portal">Client portal<\/button>/, "").replace(/ data-(dlg|office)="[^"]*"/g, "");
+    return html.replace(/<a class="btn sm" href="\/sheet\/settings\?tab=portal" data-live-link="portal">Client portal<\/a>/, "").replace(/ data-(dlg|office)="[^"]*"/g, "");
   }
 
   function page(tab: SettingsTab, body: ReturnType<typeof createElement>) {
@@ -3171,17 +3171,18 @@ describe("Designer fidelity: Settings, Firm, Offices, Branding and Language and 
     });
   }
 
-  it("links every Designer Settings tab from the tab strip, in the Designer's order, plus Client portal", () => {
+  it("links every Designer Settings tab from the tab strip, in the Designer's order, and Client portal from the header", () => {
     const captured = renderToStaticMarkup(createElement(SettingsMarkup, { variant: "tab-offices" }));
     const tabsOf = (html: string) => [...html.matchAll(/<button role="tab" data-t="([a-z]+)"[^>]*>([^<]+)<\/button>/g)].map((m) => [m[1], m[2]]);
     const header = renderToStaticMarkup(createElement(SettingsFirmHeader, { data: { tab: "offices", firmName: "Synthetic Firm", plan: null } }));
-    expect(tabsOf(header)).toEqual([...tabsOf(captured), ["portal", "Client portal"]]);
+    expect(tabsOf(header)).toEqual(tabsOf(captured));
+    expect(header).toContain('href="/sheet/settings?tab=portal"');
     expect(header).toContain('<button role="tab" data-t="offices" class="on">Offices</button>');
     expect(header).not.toContain("Plan:");
     const withAct = renderToStaticMarkup(
       createElement(SettingsFirmHeader, { data: { tab: "general", firmName: "Synthetic Firm", plan: null, act: { label: "Edit details", icon: "edit", dialog: "dlgFirm" } } }),
     );
-    expect(withAct).toContain('<span class="acts"><button class="btn p sm" data-dlg="dlgFirm">');
+    expect(withAct).toContain('<span class="acts"><a class="btn sm" href="/sheet/settings?tab=portal" data-live-link="portal">Client portal</a><button class="btn p sm" data-dlg="dlgFirm">');
   });
 
   it("shows a firm's own values and honest empty states, never the Designer's sample firm", () => {

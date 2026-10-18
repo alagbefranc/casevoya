@@ -4,7 +4,7 @@
  * "tab-language"), with the firm's own values. Same DOM, classes and order as the capture.
  *
  * Live-only additions, all stripped by the fidelity test:
- * - the tab strip also carries "Client portal" (Settings > Client portal has no Designer tab);
+ * - the header links to "Client portal" (Settings > Client portal has no Designer tab);
  * - the top bar's `.acts` holds the page's one edit control when the signed-in person may use it
  *   ("Edit details", "Add an office", "Change my timezone"), built from the Designer's `.btn p sm`;
  * - office rows carry `data-office` and `data-dlg` so a firm owner can open the office dialog;
@@ -16,7 +16,7 @@
 import { Fragment } from "react";
 import { Icon, Sep } from "./frame";
 
-/** The Designer's Settings tabs in its order, then Client portal (live only). Own copy until the Settings headers are consolidated. */
+/** The Designer's Settings tabs in its order. Client portal (no Designer tab) is a header link instead, so the strip fits. */
 const SETTINGS_TABS = [
   ["general", "Firm"],
   ["team", "Team and seats"],
@@ -29,7 +29,6 @@ const SETTINGS_TABS = [
   ["language", "Language and time"],
   ["ai", "AI"],
   ["security", "Security"],
-  ["portal", "Client portal"],
 ] as const;
 
 export type SettingsTab = "general" | "offices" | "branding" | "language";
@@ -68,6 +67,9 @@ export function SettingsFirmHeader({ data }: { data: SettingsHeaderData }) {
         <span className={"pill"}>{data.firmName}</span>
         {data.plan ? <span className={"pill"}>{data.plan}</span> : null}
         <span className={"acts"}>
+          <a className={"btn sm"} href={"/sheet/settings?tab=portal"} data-live-link={"portal"}>
+            {"Client portal"}
+          </a>
           {data.act ? (
             <button className={"btn p sm"} data-dlg={data.act.dialog}>
               <Icon name={data.act.icon} cls={"ic s"} />
