@@ -1,45 +1,121 @@
 import "server-only";
-import type { MatterRow, MattersData } from "@/components/sheet/designer/matters";
+import type {
+  MatterRow,
+  MattersData,
+} from "@/components/sheet/designer/matters";
 import { createClient } from "@/lib/supabase/server";
-import { loadSheetChrome, matterNames, memberNames } from "@/modules/sheet/chrome-load";
+import { isLicensedMembership, LICENCE_FACT_COLUMNS } from "@/lib/tenant/roles";
+import {
+  loadSheetChrome,
+  matterNames,
+  memberNames,
+} from "@/modules/sheet/chrome-load";
 import { dayMonth, isoDate, localNow } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
-import { governmentBadge, MATTERS_PAGE, MATTERS_READ, pageLimit, programLabel } from "@/modules/sheet/matters-present";
-import { consultantOptions, programOptions, type NewMatterDialogData } from "@/modules/sheet/new-matter";
-import { matterMatches, mattersTitle, stageLabel, type SheetQuery } from "@/modules/sheet/present";
+import {
+  governmentBadge,
+  MATTERS_PAGE,
+  MATTERS_READ,
+  pageLimit,
+  programLabel,
+} from "@/modules/sheet/matters-present";
+import {
+  consultantOptions,
+  programOptions,
+  type NewMatterDialogData,
+} from "@/modules/sheet/new-matter";
+import {
+  matterMatches,
+  mattersTitle,
+  stageLabel,
+  type SheetQuery,
+} from "@/modules/sheet/present";
 
 /** The Designer's Matters list for a firm, read as the signed-in staff member. */
-export async function loadSheetMatters(staff: SheetStaff, query: SheetQuery, now: Date = new Date()) {
+export async function loadSheetMatters(
+  staff: SheetStaff,
+  query: SheetQuery,
+  now: Date = new Date(),
+) {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
   const local = localNow(staff.timezone, now);
   const today = isoDate(local.year, local.month, local.day);
   const limit = pageLimit(query.limit);
 
-  const [chrome, matters, deadlines, pending, refs, consultants, credentials, published] = await Promise.all([
+  const [
+    chrome,
+    matters,
+    deadlines,
+    pending,
+    refs,
+    consultants,
+    credentials,
+    published,
+  ] = await Promise.all([
     loadSheetChrome(staff, "/sheet/matters"),
     supabase
       .from("matters")
-      .select("id, title, reference, stage, government_status, on_hold, program_pack_id, responsible_consultant_membership_id")
+      .select(
+        "id, title, reference, stage, government_status, on_hold, program_pack_id, responsible_consultant_membership_id",
+      )
       .eq("organization_id", org)
       .order("updated_at", { ascending: false })
       .limit(MATTERS_READ),
-    supabase.from("deadlines").select("matter_id, due_on").eq("organization_id", org).gte("due_on", today).order("due_on", { ascending: true }).limit(MATTERS_READ),
-    supabase.from("document_versions").select("document_id").eq("organization_id", org).eq("upload_state", "clean").eq("review_state", "pending").limit(MATTERS_READ),
-    supabase.from("document_matter_refs").select("document_id, matter_id").eq("organization_id", org).is("removed_at", null).limit(MATTERS_READ),
+    supabase
+      .from("deadlines")
+      .select("matter_id, due_on")
+      .eq("organization_id", org)
+      .gte("due_on", today)
+      .order("due_on", { ascending: true })
+      .limit(MATTERS_READ),
+    supabase
+      .from("document_versions")
+      .select("document_id")
+      .eq("organization_id", org)
+      .eq("upload_state", "clean")
+      .eq("review_state", "pending")
+      .limit(MATTERS_READ),
+    supabase
+      .from("document_matter_refs")
+      .select("document_id, matter_id")
+      .eq("organization_id", org)
+      .is("removed_at", null)
+      .limit(MATTERS_READ),
     // The New matter dialog: who can be responsible, and which program templates are published.
-    supabase.from("memberships").select("id").eq("organization_id", org).eq("status", "active").eq("role", "licensed_consultant").order("created_at"),
-    supabase.from("consultant_credentials").select("membership_id, status").eq("organization_id", org),
-    supabase.from("rule_pack_versions").select("id, program_key, pack_version, status").in("status", ["published", "review_due"]).limit(100),
+    // A firm owner counts when their own licence does (isLicensedMembership, like the database).
+    supabase
+      .from("memberships")
+      .select("id, role")
+      .eq("organization_id", org)
+      .eq("status", "active")
+      .in("role", ["licensed_consultant", "firm_owner"])
+      .order("created_at"),
+    supabase
+      .from("consultant_credentials")
+      .select(`membership_id, ${LICENCE_FACT_COLUMNS}`)
+      .eq("organization_id", org),
+    supabase
+      .from("rule_pack_versions")
+      .select("id, program_key, pack_version, status")
+      .in("status", ["published", "review_due"])
+      .limit(100),
   ]);
   const rows = matters.data ?? [];
 
   const nextDue = new Map<string, string>();
   for (const row of deadlines.data ?? []) {
-    if (row.due_on && !nextDue.has(row.matter_id)) nextDue.set(row.matter_id, row.due_on);
+    if (row.due_on && !nextDue.has(row.matter_id))
+      nextDue.set(row.matter_id, row.due_on);
   }
-  const pendingDocuments = new Set((pending.data ?? []).map((row) => row.document_id));
-  const reviewMatters = new Set((refs.data ?? []).filter((row) => pendingDocuments.has(row.document_id)).map((row) => row.matter_id));
+  const pendingDocuments = new Set(
+    (pending.data ?? []).map((row) => row.document_id),
+  );
+  const reviewMatters = new Set(
+    (refs.data ?? [])
+      .filter((row) => pendingDocuments.has(row.document_id))
+      .map((row) => row.matter_id),
+  );
 
   const visible = rows.filter((row) =>
     matterMatches(
@@ -58,23 +134,44 @@ export async function loadSheetMatters(staff: SheetStaff, query: SheetQuery, now
   );
   const page = visible.slice(0, limit);
 
-  const packIds = [...new Set(page.map((row) => row.program_pack_id).filter((id): id is string => Boolean(id)))];
+  const packIds = [
+    ...new Set(
+      page
+        .map((row) => row.program_pack_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
   const [name, members, packs] = await Promise.all([
-    matterNames(supabase, org, page.map((row) => row.id)),
+    matterNames(
+      supabase,
+      org,
+      page.map((row) => row.id),
+    ),
     memberNames(supabase, org),
-    packIds.length ? supabase.from("rule_pack_versions").select("id, program_key").in("id", packIds) : null,
+    packIds.length
+      ? supabase
+          .from("rule_pack_versions")
+          .select("id, program_key")
+          .in("id", packIds)
+      : null,
   ]);
-  const program = new Map((packs?.data ?? []).map((row) => [row.id, row.program_key]));
+  const program = new Map(
+    (packs?.data ?? []).map((row) => [row.id, row.program_key]),
+  );
 
   const tableRows: MatterRow[] = page.map((row) => {
-    const consultant = row.responsible_consultant_membership_id ? members.get(row.responsible_consultant_membership_id) : undefined;
+    const consultant = row.responsible_consultant_membership_id
+      ? members.get(row.responsible_consultant_membership_id)
+      : undefined;
     const due = nextDue.get(row.id);
     return {
       href: `/sheet/matters/${row.id}`,
       mine: row.responsible_consultant_membership_id === staff.membershipId,
       client: { name: name(row.id) },
       reference: row.reference ?? "—",
-      program: programLabel(row.program_pack_id ? program.get(row.program_pack_id) : null),
+      program: programLabel(
+        row.program_pack_id ? program.get(row.program_pack_id) : null,
+      ),
       stage: { tone: "blue", label: stageLabel(row.stage) },
       government: governmentBadge(row.government_status),
       // Finance is not connected yet, so there is no money state to show.
@@ -91,25 +188,49 @@ export async function loadSheetMatters(staff: SheetStaff, query: SheetQuery, now
     counts: {
       active: active.length,
       blocked: rows.filter((row) => row.on_hold).length,
-      mine: rows.filter((row) => row.responsible_consultant_membership_id === staff.membershipId).length,
+      mine: rows.filter(
+        (row) =>
+          row.responsible_consultant_membership_id === staff.membershipId,
+      ).length,
       everyone: rows.length,
     },
     rows: tableRows,
     shown: tableRows.length,
     total: visible.length,
-    more: visible.length > limit ? `?${new URLSearchParams({ ...(query.view ? { view: query.view } : {}), limit: String(limit + MATTERS_PAGE) })}` : null,
+    more:
+      visible.length > limit
+        ? `?${new URLSearchParams({ ...(query.view ? { view: query.view } : {}), limit: String(limit + MATTERS_PAGE) })}`
+        : null,
     empty:
       rows.length === 0
         ? { kind: "none" }
         : visible.length === 0
-          ? { kind: "filtered", title: "No matches for these filters", copy: `Nothing is in ${viewTitle.toLowerCase()} right now. Clear the view to see every matter.`, clear: "/sheet/matters" }
+          ? {
+              kind: "filtered",
+              title: "No matches for these filters",
+              copy: `Nothing is in ${viewTitle.toLowerCase()} right now. Clear the view to see every matter.`,
+              clear: "/sheet/matters",
+            }
           : null,
   };
-  const credentialStatus = new Map((credentials.data ?? []).map((row) => [row.membership_id, row.status as string]));
+  const credentialRows = credentials.data ?? [];
+  const credentialStatus = new Map(
+    credentialRows.map((row) => [row.membership_id, row.status as string]),
+  );
+  const credentialFacts = new Map(
+    credentialRows.map((row) => [row.membership_id, row]),
+  );
   const newMatter: NewMatterDialogData = {
     organizationId: org,
     consultants: consultantOptions(
-      (consultants.data ?? []).map((row) => ({ id: row.id, name: members.get(row.id) ?? "Unassigned" })),
+      (consultants.data ?? [])
+        .filter((row) =>
+          isLicensedMembership(row.role, credentialFacts.get(row.id)),
+        )
+        .map((row) => ({
+          id: row.id,
+          name: members.get(row.id) ?? "Unassigned",
+        })),
       credentialStatus,
     ),
     programs: programOptions(published.data ?? []),
