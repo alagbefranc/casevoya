@@ -151,6 +151,11 @@ function firmHeader(firmName: string, tagline: string = SHELL_EN.tagline): strin
   );
 }
 
+/** The firm email header exactly as firm emails draw it, in its own table (Settings > Branding preview). */
+export function firmHeaderPreviewHtml(firmName: string): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;font-family:Erode,Georgia,serif;border-collapse:collapse">${firmHeader(firmName)}<tr><td style="height:16px"></td></tr></table>`;
+}
+
 function platformHeader(origin: string): string {
   return `<tr><td>${img(origin, "header-platform.png", 'width="600" height="120" alt="Casevoya" style="display:block;width:100%;height:auto;border:0"')}</td></tr>`;
 }

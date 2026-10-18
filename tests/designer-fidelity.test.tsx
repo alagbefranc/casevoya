@@ -131,6 +131,19 @@ import { PipelineMarkup } from "@/components/sheet/markup/pipeline";
 import { LeadMarkup } from "@/components/sheet/markup/lead";
 import { barColor, buildPipeline, ringOffset, type LeadRow, type StageRow } from "@/modules/leads/present";
 import { Review } from "@/components/portal/documents-live";
+import {
+  SettingsFirmHeader,
+  SheetSettingsBranding,
+  SheetSettingsFirm,
+  SheetSettingsLanguage,
+  SheetSettingsOffices,
+  type BrandingData,
+  type FirmData,
+  type LanguageData,
+  type OfficesData,
+  type SettingsTab,
+} from "@/components/sheet/designer/settings-firm";
+import { SettingsMarkup } from "@/components/sheet/markup/settings";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -3035,3 +3048,147 @@ describe("Designer fidelity: portal document review, French reason (live-only ad
   });
 });
 
+
+describe("Designer fidelity: Settings, Firm, Offices, Branding and Language and time", () => {
+  const DESIGNER_FIRM: FirmData = {
+    firmName: "Northline Immigration",
+    rows: [
+      { label: "Legal name", value: "Northline Immigration Services Inc. (fictional)" },
+      { label: "Display name", value: "Northline Immigration" },
+      { label: "Organisation ID", value: "org_7Q2KX", num: true },
+      { label: "Jurisdictions", value: { parts: ["Canada", "IRCC"] } },
+      { label: "Billing contact", value: "Lena Park" },
+      { label: "Privacy contact", value: "Amara Osei" },
+      { label: "Continuity contact", value: { parts: ["Grace Lin", "succession plan on file (ORG-06)"] } },
+    ],
+  };
+  const DESIGNER_OFFICES: OfficesData = {
+    intro: "Offices can limit what staff see.",
+    rows: [
+      { label: "Toronto", address: "100 Front St W, Suite 400 (fictional)", timezone: "America/Toronto", staff: "5" },
+      { label: "Ottawa (remote)", address: "—", timezone: "America/Toronto", staff: "1" },
+    ],
+    empty: "",
+    canEdit: false,
+  };
+  const DESIGNER_BRANDING: BrandingData = {
+    firmName: "Northline",
+    figures: [
+      { box: "brd-l", images: [{ src: "/assets/firms/northline-lockup.svg", alt: "Northline Immigration logo, full colour", height: 36 }], caption: ["Logo", "light backgrounds"] },
+      { box: "brd-d", images: [{ src: "/assets/firms/northline-lockup-white.svg", alt: "Northline Immigration logo, white", height: 36 }], caption: ["Logo", "portal header and dark emails"] },
+      {
+        box: "brd-s",
+        images: [
+          { src: "/assets/firms/northline-tile.svg", alt: "Northline square tile", width: 56, height: 56 },
+          { picture: { srcSet: "/assets/firms/northline-mark.svg", type: "image/svg+xml" }, src: "/assets/firms/northline-mark-512.png", alt: "Northline mark, 512 pixel upload", width: 56, height: 56 },
+          { src: "/assets/firms/northline-glyph-128.png", alt: "Northline glyph, favicon size", width: 28, height: 28 },
+        ],
+        caption: ["Square mark", "uploaded 512 × 512 PNG"],
+      },
+    ],
+    colourTag: "Firm colour #0A4B93",
+    replace: { label: "Replace logo" },
+    note: "Portal buttons keep Casevoya’s accessible blue; the firm colour is used in the header and emails.",
+    preview: { kind: "image", src: "/assets/email/header-firm.png", alt: "Northline Immigration email header" },
+  };
+  const DESIGNER_LANGUAGE: LanguageData = {
+    rows: [
+      { name: "Amara Osei", language: "English", timezone: "America/Toronto" },
+      { name: "Priya Sharma", language: "English (Hindi spoken)", timezone: "Asia/Kolkata" },
+      { name: "Olena Sharma", language: "English", timezone: "America/Toronto" },
+    ],
+    empty: "",
+    alert: {
+      title: "French is ready, not switched on",
+      body: "Layouts allow 30% longer text. Translations are deferred until Francis decides; professional templates need their own review.",
+    },
+  };
+
+  /** Live-only additions: the Client portal tab and the row/button dialog hooks. */
+  function liveOnly(html: string): string {
+    return html.replace(/<button role="tab" data-t="portal">Client portal<\/button>/, "").replace(/ data-(dlg|office)="[^"]*"/g, "");
+  }
+
+  function page(tab: SettingsTab, body: ReturnType<typeof createElement>) {
+    return liveOnly(
+      withoutPreloads(
+        renderToStaticMarkup(
+          createElement(
+            SheetFrame,
+            {
+              sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/settings" },
+              header: createElement(SettingsFirmHeader, { data: { tab, firmName: "Northline Immigration", plan: "Plan: Practice (fictional)" } }),
+              statusbar: {
+                timezone: "America/Toronto",
+                queue: { label: "Reminder queue healthy", detail: "0 retries" },
+                sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+              },
+            },
+            body,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /** The capture up to the frame's end: the Designer's Team-tab offboarding dialog follows on every tab and is not part of these pages. */
+  function upToDialogs(html: string): string {
+    const end = html.indexOf('<div class="scrimd" id="scrimd"></div>');
+    expect(end).toBeGreaterThan(0);
+    return html.slice(0, end);
+  }
+
+  const cases: [SettingsTab, string, ReturnType<typeof createElement>][] = [
+    ["general", "tab-general", createElement(SheetSettingsFirm, { data: DESIGNER_FIRM })],
+    ["offices", "tab-offices", createElement(SheetSettingsOffices, { data: DESIGNER_OFFICES })],
+    ["branding", "tab-branding", createElement(SheetSettingsBranding, { data: DESIGNER_BRANDING })],
+    ["language", "tab-language", createElement(SheetSettingsLanguage, { data: DESIGNER_LANGUAGE })],
+  ];
+  for (const [tab, variant, body] of cases) {
+    it(`renders Settings (${variant}) exactly as the captured Designer markup`, () => {
+      const captured = upToDialogs(withoutPreloads(renderToStaticMarkup(createElement(SettingsMarkup, { variant }))));
+      const live = upToDialogs(page(tab, body));
+      if (live !== captured) {
+        let i = 0;
+        while (i < live.length && live[i] === captured[i]) i++;
+        console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+      }
+      expect(live).toBe(captured);
+    });
+  }
+
+  it("links every Designer Settings tab from the tab strip, in the Designer's order, plus Client portal", () => {
+    const captured = renderToStaticMarkup(createElement(SettingsMarkup, { variant: "tab-offices" }));
+    const tabsOf = (html: string) => [...html.matchAll(/<button role="tab" data-t="([a-z]+)"[^>]*>([^<]+)<\/button>/g)].map((m) => [m[1], m[2]]);
+    const header = renderToStaticMarkup(createElement(SettingsFirmHeader, { data: { tab: "offices", firmName: "Synthetic Firm", plan: null } }));
+    expect(tabsOf(header)).toEqual([...tabsOf(captured), ["portal", "Client portal"]]);
+    expect(header).toContain('<button role="tab" data-t="offices" class="on">Offices</button>');
+    expect(header).not.toContain("Plan:");
+    const withAct = renderToStaticMarkup(
+      createElement(SettingsFirmHeader, { data: { tab: "general", firmName: "Synthetic Firm", plan: null, act: { label: "Edit details", icon: "edit", dialog: "dlgFirm" } } }),
+    );
+    expect(withAct).toContain('<span class="acts"><button class="btn p sm" data-dlg="dlgFirm">');
+  });
+
+  it("shows a firm's own values and honest empty states, never the Designer's sample firm", () => {
+    const offices = renderToStaticMarkup(createElement(SheetSettingsOffices, { data: { intro: "Your offices.", rows: [], empty: "No offices saved yet.", canEdit: true } }));
+    expect(offices).toContain('<tr><td colSpan="4">No offices saved yet.</td></tr>');
+    const language = renderToStaticMarkup(createElement(SheetSettingsLanguage, { data: { ...DESIGNER_LANGUAGE, rows: [], empty: "No staff yet." } }));
+    expect(language).toContain('<tr><td colSpan="3">No staff yet.</td></tr>');
+    const branding = renderToStaticMarkup(
+      createElement(SheetSettingsBranding, {
+        data: {
+          firmName: "Synthetic Firm",
+          figures: [{ box: "brd-l", images: [], empty: "No logo yet", caption: ["Logo", "PNG or JPG"] }],
+          colourTag: "No firm colour set",
+          replace: { label: "Upload a logo", dialog: "dlgBrand" },
+          note: "Saved for later.",
+          preview: { kind: "html", html: "<table></table>", label: "Synthetic Firm email header" },
+        },
+      }),
+    );
+    expect(branding).toContain('<div class="brd-l"><span>No logo yet</span></div>');
+    expect(branding).toContain('<button class="btn s sm" data-dlg="dlgBrand">');
+    for (const html of [offices, language, branding]) expect(html).not.toMatch(/Northline|Amara|Priya|Olena|Grace Lin|Lena Park/);
+  });
+});

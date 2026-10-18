@@ -1,0 +1,89 @@
+/**
+ * What the Settings dialogs may send, checked before the database checks it again. Pure.
+ * Keys match public.update_firm_profile's; nothing else is passed through.
+ */
+export const FIRM_DETAIL_KEYS = [
+  "legal_name",
+  "display_name",
+  "billing_contact_name",
+  "billing_contact_email",
+  "privacy_contact_name",
+  "privacy_contact_email",
+  "continuity_contact_name",
+  "continuity_contact_email",
+] as const;
+
+const MAX: Record<(typeof FIRM_DETAIL_KEYS)[number], number> = {
+  legal_name: 300,
+  display_name: 200,
+  billing_contact_name: 200,
+  billing_contact_email: 320,
+  privacy_contact_name: 200,
+  privacy_contact_email: 320,
+  continuity_contact_name: 200,
+  continuity_contact_email: 320,
+};
+
+const REQUIRED = new Set(["legal_name", "display_name", "billing_contact_name", "billing_contact_email", "privacy_contact_name", "privacy_contact_email"]);
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+export function firmDetailChanges(fields: Record<string, unknown>): { changes: Record<string, string> } | { error: string } {
+  const changes: Record<string, string> = {};
+  for (const key of FIRM_DETAIL_KEYS) {
+    const raw = fields?.[key];
+    if (typeof raw !== "string") continue;
+    const value = raw.trim();
+    if (REQUIRED.has(key) && !value) return { error: "Names and the billing and privacy contacts can’t be empty." };
+    if (value.length > MAX[key]) return { error: "One of the details is too long." };
+    if (key.endsWith("_email") && value && !EMAIL.test(value)) return { error: "Enter a full email address." };
+    changes[key] = key.endsWith("_email") ? value.toLowerCase() : value;
+  }
+  if (Object.keys(changes).length === 0) return { error: "Nothing to save." };
+  if (Boolean(changes.continuity_contact_email) && changes.continuity_contact_name === "") {
+    return { error: "Add the continuity contact’s name, or clear both." };
+  }
+  return { changes };
+}
+
+/** An IANA-looking zone name, or null. The database checks it is a real one. */
+export function timezoneName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const zone = value.trim();
+  return /^[A-Za-z]+(\/[A-Za-z0-9_+-]+){1,2}$/.test(zone) && zone.length <= 64 ? zone : null;
+}
+
+export type OfficeInput = {
+  label: string;
+  addressLine: string;
+  locality: string;
+  region: string;
+  postalCode: string;
+  countryCode: string;
+  timezone: string | null;
+  primary: boolean;
+};
+
+export function officeInput(fields: Record<string, unknown>): OfficeInput | { error: string } {
+  const text = (key: string) => (typeof fields?.[key] === "string" ? (fields[key] as string).trim() : "");
+  const office: OfficeInput = {
+    label: text("label"),
+    addressLine: text("addressLine"),
+    locality: text("locality"),
+    region: text("region"),
+    postalCode: text("postalCode"),
+    countryCode: (text("countryCode") || "CA").toUpperCase(),
+    timezone: null,
+    primary: fields?.primary === true,
+  };
+  if (!office.label || !office.addressLine || !office.locality) return { error: "Add the office name, street address and city." };
+  if (office.label.length > 120 || office.addressLine.length > 300 || office.locality.length > 120 || office.region.length > 80 || office.postalCode.length > 20) {
+    return { error: "One of the address lines is too long." };
+  }
+  if (!/^[A-Z]{2}$/.test(office.countryCode)) return { error: "Enter the country as two letters, like CA." };
+  const zone = text("timezone");
+  if (zone) {
+    office.timezone = timezoneName(zone);
+    if (!office.timezone) return { error: "Choose a timezone from the list, like America/Toronto." };
+  }
+  return office;
+}

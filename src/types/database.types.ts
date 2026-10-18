@@ -6023,6 +6023,7 @@ export type Database = {
           organization_id: string
           postal_code: string | null
           region: string | null
+          timezone: string | null
           updated_at: string
           version: number
         }
@@ -6038,6 +6039,7 @@ export type Database = {
           organization_id: string
           postal_code?: string | null
           region?: string | null
+          timezone?: string | null
           updated_at?: string
           version?: number
         }
@@ -6053,6 +6055,7 @@ export type Database = {
           organization_id?: string
           postal_code?: string | null
           region?: string | null
+          timezone?: string | null
           updated_at?: string
           version?: number
         }
@@ -10082,6 +10085,10 @@ export type Database = {
         Args: { p_hold_id: string; p_reason: string }
         Returns: undefined
       }
+      remove_firm_office: {
+        Args: { p_office_id: string; p_organization_id: string }
+        Returns: undefined
+      }
       report_licence_change: {
         Args: { p_credential_id: string; p_detail: string }
         Returns: string
@@ -10225,6 +10232,21 @@ export type Database = {
           p_slot_step_min: number | null
           p_slug: string
           p_title: string
+        }
+        Returns: string
+      }
+      save_firm_office: {
+        Args: {
+          p_address_line: string
+          p_country_code: string
+          p_is_primary: boolean
+          p_label: string
+          p_locality: string
+          p_office_id: string | null
+          p_organization_id: string
+          p_postal_code: string
+          p_region: string
+          p_timezone: string | null
         }
         Returns: string
       }
@@ -10434,6 +10456,10 @@ export type Database = {
         Args: { p_end: string | null; p_start: string | null }
         Returns: undefined
       }
+      set_my_timezone: {
+        Args: { p_organization_id: string; p_timezone: string }
+        Returns: undefined
+      }
       set_sample_mode: {
         Args: { p_enabled: boolean }
         Returns: undefined
@@ -10577,6 +10603,10 @@ export type Database = {
       }
       unlink_document_matter: {
         Args: { p_reason: string; p_ref_id: string }
+        Returns: undefined
+      }
+      update_firm_profile: {
+        Args: { p_changes: Json; p_organization_id: string }
         Returns: undefined
       }
       update_lead: {
