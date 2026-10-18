@@ -56,6 +56,8 @@ import {
   runRecSign,
   runVoid,
 } from "./corrections-acts";
+import { openDocReview, reopenDocReview, runDocFile, runDocReview } from "./documents-acts";
+import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
 import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { runNewTask, syncNewTask } from "./new-task-act";
@@ -134,9 +136,12 @@ const FILTER_TOKEN: Record<string, string> = {
   Unassigned: "unassigned",
   Money: "money",
   Government: "government",
+  "Awaiting review": "review",
+  Quarantined: "quarantined",
+  "Expiring soon": "expiring",
 };
 /** Pages whose `.fp-bar` chips and search filter real rows by their `data-f` tokens. */
-const FILTER_PAGES = new Set(["tasks", "clients", "agreements", "finance", "queue"]);
+const FILTER_PAGES = new Set(["tasks", "clients", "agreements", "finance", "documents", "queue"]);
 
 export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
   const router = useRouter();
@@ -473,6 +478,44 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(typeSubmit, () => runBookingType(typeSubmit, router));
         return;
       }
+      // Documents: a To review link opens the review dialog; Save review and Open file go to the database.
+      const docReview = target.closest<HTMLElement>("[data-doc-review]");
+      if (docReview && root.contains(docReview) && root.querySelector("#dlgDocRev")) {
+        event.preventDefault();
+        openDocReview(docReview, root, openDialog);
+        return;
+      }
+      const docSubmit = target.closest<HTMLElement>("[data-doc-review-submit]");
+      if (docSubmit && root.contains(docSubmit)) {
+        event.preventDefault();
+        busyRun(docSubmit, () => runDocReview(docSubmit, router));
+        return;
+      }
+      const docFile = target.closest<HTMLElement>("[data-doc-file]");
+      if (docFile && root.contains(docFile)) {
+        event.preventDefault();
+        busyRun(docFile, () => runDocFile(docFile));
+        return;
+      }
+      // Inbox, Email to triage: file to a person, move a filed email's files, or dismiss.
+      const inboxFile = target.closest<HTMLElement>("[data-inbox-file]");
+      if (inboxFile && root.contains(inboxFile)) {
+        event.preventDefault();
+        busyRun(inboxFile, () => runInboxFile(inboxFile, router));
+        return;
+      }
+      const inboxMove = target.closest<HTMLElement>("[data-inbox-move]");
+      if (inboxMove && root.contains(inboxMove)) {
+        event.preventDefault();
+        busyRun(inboxMove, () => runInboxMove(inboxMove, router));
+        return;
+      }
+      const inboxDismiss = target.closest<HTMLElement>("[data-inbox-dismiss]");
+      if (inboxDismiss && root.contains(inboxDismiss)) {
+        event.preventDefault();
+        busyRun(inboxDismiss, () => runInboxDismiss(inboxDismiss, router));
+        return;
+      }
       const nav = target.closest<HTMLElement>("[data-nav]");
       if (nav?.dataset.nav?.startsWith("/sheet/") && root.contains(nav)) {
         event.preventDefault();
@@ -735,6 +778,9 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       bookDialog.addEventListener("change", () => syncBookTimes(bookDialog), listen);
       if (dialogParam === "book") window.setTimeout(() => openDialog("dlgBook"), 300);
     }
+
+    // ?dlg=review&doc= (back from step-up) reopens the document review with what was typed.
+    if (root.querySelector("dialog#dlgDocRev")) window.setTimeout(() => reopenDocReview(root, openDialog), 300);
 
     window.addEventListener("resize", place, listen);
     return () => ac.abort();

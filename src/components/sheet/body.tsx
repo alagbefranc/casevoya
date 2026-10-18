@@ -27,6 +27,8 @@ import { QueueHeader, SheetQueue } from "@/components/sheet/designer/queue";
 import { loadSheetQueue } from "@/modules/sheet/queue-load";
 import { ExportsDialog, ExportsHeader, SheetExports } from "@/components/sheet/designer/exports";
 import { loadSheetExports } from "@/modules/sheet/exports-load";
+import { DocumentReviewDialog, DocumentsHeader, SheetDocuments } from "@/components/sheet/designer/documents";
+import { ComposeDialog, InboxHeader, SheetInbox } from "@/components/sheet/designer/inbox";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
 import { SHEET_MARKUP, type SheetPage } from "@/components/sheet/markup/registry";
@@ -44,6 +46,8 @@ import { loadSheetMatters } from "@/modules/sheet/matters-load";
 import { loadSheetSample } from "@/modules/sheet/sample-load";
 import { loadSheetStaffTab } from "@/modules/sheet/staff-load";
 import { loadSheetTasks } from "@/modules/sheet/tasks-load";
+import { loadSheetDocuments } from "@/modules/sheet/documents-load";
+import { loadSheetInbox } from "@/modules/sheet/inbox-load";
 import { loadSheetAccess, loadSheetBundle } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 import { loadSheetCalendar, loadSheetConsultations } from "@/modules/scheduling/sheet-load";
@@ -127,6 +131,38 @@ export async function SheetBody({
           after={<TasksDialog data={tasks.dialog} />}
         >
           <SheetTasks data={tasks} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Documents: To review (with the review dialog), All documents and Originals we hold (DOC-01..06).
+  if (page === "documents" && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, documents, dialog } = await loadSheetDocuments(access.staff, query);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={chrome.sidebar}
+          header={<DocumentsHeader tab={documents.tab} pills={documents.pills} />}
+          statusbar={chrome.statusbar}
+          after={dialog ? <DocumentReviewDialog data={dialog} /> : undefined}
+        >
+          <SheetDocuments data={documents} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Inbox: Conversations (filed client email), Email to triage, Delivery problems and Announcements (OPS-06).
+  if (page === "inbox" && (access.kind === "live" || access.kind === "sample")) {
+    const { chrome, pills, inbox, compose } = await loadSheetInbox(access.staff, query);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={chrome.sidebar}
+          header={<InboxHeader tab={inbox.tab} pills={pills} />}
+          statusbar={chrome.statusbar}
+          after={<ComposeDialog data={compose} />}
+        >
+          <SheetInbox data={inbox} />
         </SheetFrame>
       </SheetScreen>
     );
