@@ -12,9 +12,14 @@
  * from `invoice_payments`. The Designer's bank-transfer flows (record, verify, transfer approval,
  * the "bank payment to verify" banner) are not ported. Two things it adds use the Designer's own
  * anatomy: the Stripe account banner (`.alert` with `.acts`, the slot of the Designer's banner)
- * and the Stripe balance (`.fp-kpi` tiles, as on the Invoices tab).
+ * and the Stripe balance (`.fp-kpi` tiles, as on the Invoices tab). Live, a received card payment
+ * that can still be refunded carries a Refund button beside its badge, which opens `#dlgRefund`.
+ *
+ * The Refunds and disputes tab (`variant: "tab-refunds"`) lists the firm's card refunds and the
+ * disputes Stripe reported. Its Credit notes panel and the dispute Add evidence button are not ported.
  */
 import type { ReactNode } from "react";
+import { REFUND_REASONS } from "@/modules/sheet/finance-present";
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair, Sep } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
@@ -28,7 +33,7 @@ export type FinanceHeaderData = {
   recordPayment: boolean;
   /** The Designer's last tab, one open invoice ("INV-0218"). */
   invoiceTab: string | null;
-  tab: "invoices" | "payments";
+  tab: "invoices" | "payments" | "refunds";
 };
 
 export type FinanceKpi = {
@@ -116,6 +121,7 @@ const TABS: [string, string][] = [
 const UNDERLINE: Record<FinanceHeaderData["tab"], { left: string; width: string }> = {
   invoices: { left: "0px", width: "49px" },
   payments: { left: "75px", width: "56px" },
+  refunds: { left: "365px", width: "124px" },
 };
 
 /** The Finance page's own top bar and its tab strip. */
@@ -453,6 +459,8 @@ export type PaymentRow = {
   goesTo: string;
   amount: string;
   state: MatterBadge;
+  /** Live only: a received card payment billing staff may still refund (opens `#dlgRefund`). */
+  refund?: { paymentId: string; refundable: string; refundableCents: number; label: string };
 };
 
 export type PaymentsData = {
@@ -481,7 +489,22 @@ function PaymentLine({ row }: { row: PaymentRow }) {
         {row.amount}
       </td>
       <td>
-        <Badge badge={row.state} />
+        {row.refund ? (
+          <span className={"fp-row"}>
+            <Badge badge={row.state} />
+            <button
+              className={"btn sm"}
+              data-refund-open={row.refund.paymentId}
+              data-refundable={String(row.refund.refundableCents)}
+              data-amount={row.refund.refundable}
+              data-label={row.refund.label}
+            >
+              {"Refund"}
+            </button>
+          </span>
+        ) : (
+          <Badge badge={row.state} />
+        )}
       </td>
     </tr>
   );
@@ -541,5 +564,244 @@ export function SheetFinancePayments({ data, status }: { data: PaymentsData; sta
         <Parts parts={data.note} />
       </p>
     </>
+  );
+}
+
+export type RefundRow = {
+  key?: string;
+  /** "RF-0013". */
+  number: string;
+  client: string;
+  /** "Card", then what the payment paid, with the Designer's separator between them. */
+  from: string[];
+  amount: string;
+  /** Day requested ("11 Oct"), in the firm's timezone. */
+  requested: string;
+  state: MatterBadge;
+};
+
+export type DisputeRow = {
+  key?: string;
+  /** "DP-0003". */
+  number: string;
+  client: string;
+  payment: string[];
+  amount: string;
+  /** Stripe's evidence deadline ("24 Oct"), or "—". */
+  evidenceDue: string;
+  state: MatterBadge;
+};
+
+export type RefundsData = {
+  intro: string;
+  refunds: RefundRow[];
+  /** Shown in the Refunds panel when there are no rows. */
+  refundsEmpty: { title: string; copy: string };
+  /** The Designer's failed-refund banner, for the latest failed refund. */
+  failed: null | { title: string; copy: string };
+  disputes: DisputeRow[];
+  disputesEmpty: { title: string; copy: string };
+  /** Under the disputes table: the Designer's Add evidence button (demo only) and its note. */
+  disputeFooter: null | { evidence?: { toast: string; sub: string }; note: string };
+};
+
+/**
+ * The Refunds and disputes tab (Designer `tab-refunds`). Its Credit notes panel is not ported:
+ * credit notes do not exist yet. Disputes keep the Designer's panel; live, the Add evidence
+ * button is not shown because evidence can't be submitted from Casevoya.
+ */
+export function SheetFinanceRefunds({ data }: { data: RefundsData }) {
+  return (
+    <>
+      <div className={"ph rv"} style={i(0)}>
+        <div>
+          <h1 className={"display"}>{"Refunds and disputes"}</h1>
+          <p>{data.intro}</p>
+        </div>
+      </div>
+      <section className={"panel rv"} style={i(1)}>
+        <h2>
+          <Icon name={"refund"} />
+          {"Refunds"}
+        </h2>
+        {data.refunds.length ? (
+          <div className={"tw"} role={"region"} aria-label={"Refunds"} tabIndex={0}>
+            <table className={"t"}>
+              <caption className={"sr"}>{"Refunds"}</caption>
+              <thead>
+                <tr>
+                  <th scope={"col"}>{"Number"}</th>
+                  <th scope={"col"}>{"Client"}</th>
+                  <th scope={"col"}>{"From payment"}</th>
+                  <th scope={"col"} style={RIGHT}>
+                    {"CAD"}
+                  </th>
+                  <th scope={"col"}>{"Requested"}</th>
+                  <th scope={"col"}>{"State"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.refunds.map((row, index) => (
+                  <tr key={row.key ?? index}>
+                    <td>{row.number}</td>
+                    <td>{row.client}</td>
+                    <td>
+                      <Parts parts={row.from} />
+                    </td>
+                    <td className={"num"} style={RIGHT}>
+                      {row.amount}
+                    </td>
+                    <td>{row.requested}</td>
+                    <td>
+                      <Badge badge={row.state} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <Empty art={"reconciliation"} title={data.refundsEmpty.title} copy={data.refundsEmpty.copy} />
+        )}
+        {data.failed ? (
+          <div className={"fp-pad"}>
+            <div className={"alert bad"} style={{ margin: "0" }}>
+              <Icon name={"x-circle"} />
+              <div>
+                <b>{data.failed.title}</b>
+                {data.failed.copy}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </section>
+      <section className={"panel rv"} style={i(3)}>
+        <h2>
+          <Icon name={"flag"} />
+          {"Disputes and chargebacks"}
+        </h2>
+        {data.disputes.length ? (
+          <div className={"tw"} role={"region"} aria-label={"Disputes"} tabIndex={0}>
+            <table className={"t"}>
+              <caption className={"sr"}>{"Disputes"}</caption>
+              <thead>
+                <tr>
+                  <th scope={"col"}>{"Case"}</th>
+                  <th scope={"col"}>{"Client"}</th>
+                  <th scope={"col"}>{"Payment"}</th>
+                  <th scope={"col"} style={RIGHT}>
+                    {"CAD"}
+                  </th>
+                  <th scope={"col"}>{"Evidence due"}</th>
+                  <th scope={"col"}>{"State"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.disputes.map((row, index) => (
+                  <tr key={row.key ?? index}>
+                    <td>{row.number}</td>
+                    <td>{row.client}</td>
+                    <td>
+                      <Parts parts={row.payment} />
+                    </td>
+                    <td className={"num"} style={RIGHT}>
+                      {row.amount}
+                    </td>
+                    <td>{row.evidenceDue}</td>
+                    <td>
+                      <Badge badge={row.state} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <Empty art={"review-queue-empty"} title={data.disputesEmpty.title} copy={data.disputesEmpty.copy} />
+        )}
+        {data.disputeFooter ? (
+          <div className={"fp-pad"}>
+            <div className={"fp-row"}>
+              {data.disputeFooter.evidence ? (
+                <button className={"btn p sm"} data-toast={data.disputeFooter.evidence.toast} data-sub={data.disputeFooter.evidence.sub} data-fpb={"1"}>
+                  {"Add evidence"}
+                </button>
+              ) : null}
+              <span className={"fp-note"} style={{ margin: "0" }}>
+                {data.disputeFooter.note}
+              </span>
+            </div>
+          </div>
+        ) : null}
+      </section>
+    </>
+  );
+}
+
+export type RefundDialogData = {
+  organizationId: string;
+  /** The firm can refund: billing staff, with Stripe configured. Otherwise why not. */
+  blocked: { title: string; copy: string } | null;
+};
+
+/**
+ * Refund a card payment. The capture has no refund dialog, so this follows `#dlgInv`'s anatomy
+ * (`.dh`, `.db` with `.fld`, `.g2`, `.inp`, `.sel`, `.alert`, `.df`). A Payments row's Refund
+ * button fills it (payment, refundable amount) and opens it; Refund carries `data-refund-submit`.
+ */
+export function RefundDialog({ data }: { data: RefundDialogData }) {
+  return (
+    <dialog className={"dlg"} id={"dlgRefund"} aria-labelledby={"dlgRefundH"}>
+      <div className={"dh"}>
+        <h2 id={"dlgRefundH"}>{"Refund a card payment"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={"dlgRefund"}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <div className={"fld"}>
+          <label htmlFor={"rfP"}>{"Payment"}</label>
+          <input className={"inp"} id={"rfP"} type={"text"} readOnly defaultValue={""} />
+        </div>
+        <div className={"g2"}>
+          <div className={"fld"}>
+            <label htmlFor={"rfA"}>{"Amount"}</label>
+            <small className={"hint"} id={"rfA-h"}>
+              {"Up to what is left to refund on this payment."}
+            </small>
+            <input className={"inp"} id={"rfA"} type={"text"} inputMode={"decimal"} autoComplete={"off"} placeholder={"0.00"} aria-describedby={"rfA-h"} maxLength={16} />
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"rfR"}>{"Reason"}</label>
+            <select className={"sel"} id={"rfR"}>
+              {REFUND_REASONS.map((reason) => (
+                <option key={reason.value} value={reason.value}>
+                  {reason.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {data.blocked ? (
+          <Alert tone={"warn"} icon={"info"} title={data.blocked.title}>
+            {data.blocked.copy}
+          </Alert>
+        ) : (
+          <Alert tone={"info"} icon={"info"} title={"Returned to the client’s card"}>
+            {
+              "Stripe sends the money back to the card that paid (test mode: no real card). The refund shows as processing until Stripe confirms it. The matter stage and government status don’t change."
+            }
+          </Alert>
+        )}
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={"dlgRefund"}>
+          {"Cancel"}
+        </button>
+        <button className={"btn p"} data-refund-submit={"1"} data-org={data.organizationId} disabled={data.blocked ? true : undefined}>
+          {"Refund"}
+        </button>
+      </div>
+    </dialog>
   );
 }

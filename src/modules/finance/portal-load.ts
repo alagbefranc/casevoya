@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { stripeServer } from "@/lib/stripe/server";
 import { publishableKey } from "@/modules/finance/keys";
+import { formatMoney } from "@/modules/finance/money";
 import type { PortalViewer } from "@/modules/portal/load";
 import { invoiceState } from "@/modules/sheet/finance-present";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
@@ -13,13 +14,15 @@ export type PortalInvoice = {
   matterTitle: string;
   amountCents: number;
   paidCents: number;
+  /** Succeeded card refunds on this invoice (FIN-13). */
+  refundedCents: number;
   currency: string;
   status: string;
   issuedOn: string | null;
   dueOn: string;
   open: boolean;
   processing: boolean;
-  state: { tone: string; label: string };
+  state: { tone: string; label: string; detail?: string };
 };
 
 export type PortalInvoices = {
@@ -36,7 +39,7 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
   const today = isoDateInTimeZone(new Date(), viewer.timezone);
   const { data } = await supabase
     .from("invoices")
-    .select("id, matter_id, number, description, amount_cents, paid_cents, currency, status, issued_on, due_on")
+    .select("id, matter_id, number, description, amount_cents, paid_cents, refunded_cents, currency, status, issued_on, due_on")
     .eq("organization_id", viewer.organizationId)
     .neq("status", "draft")
     .order("created_at", { ascending: false })
@@ -54,7 +57,7 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
     payable: Boolean(pk && stripeServer()),
     publishableKey: pk,
     invoices: rows.map((row) => {
-      const state = invoiceState(row.status, row.due_on, today, busy.has(row.id));
+      const state = invoiceState(row.status, row.due_on, today, busy.has(row.id), row.refunded_cents > 0 ? formatMoney(row.refunded_cents, row.currency) : null);
       return {
         id: row.id,
         number: row.number,
@@ -62,13 +65,14 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
         matterTitle: titles.get(row.matter_id) ?? "Your matter",
         amountCents: row.amount_cents,
         paidCents: row.paid_cents,
+        refundedCents: row.refunded_cents,
         currency: row.currency,
         status: row.status,
         issuedOn: row.issued_on,
         dueOn: row.due_on,
         open: row.status === "issued" || row.status === "partially_paid",
         processing: busy.has(row.id),
-        state: { tone: state.tone, label: state.label },
+        state: { tone: state.tone, label: state.label, ...(state.detail ? { detail: state.detail } : {}) },
       };
     }),
   };

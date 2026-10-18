@@ -1,13 +1,33 @@
 import "server-only";
 import type Stripe from "stripe";
-import type { FinanceData, FinanceHeaderData, FinanceKpi, InvoiceRow, NewInvoiceDialogData, PaymentRow, PaymentsData } from "@/components/sheet/designer/finance";
+import type {
+  FinanceData,
+  FinanceHeaderData,
+  FinanceKpi,
+  InvoiceRow,
+  NewInvoiceDialogData,
+  PaymentRow,
+  PaymentsData,
+  RefundDialogData,
+  RefundsData,
+} from "@/components/sheet/designer/finance";
 import { createClient } from "@/lib/supabase/server";
 import { stripeServer } from "@/lib/stripe/server";
 import { publishableKey } from "@/modules/finance/keys";
 import { formatAmount, formatMoney, INVOICE_CURRENCIES } from "@/modules/finance/money";
 import { retrieveAccountStatus } from "@/modules/finance/stripe-account";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
-import { FEE_CATEGORY_LABEL, invoiceState, LISTED_PAYMENT_STATUSES, paymentState, shortStripeId } from "@/modules/sheet/finance-present";
+import {
+  disputeOpen,
+  disputeReason,
+  disputeState,
+  FEE_CATEGORY_LABEL,
+  invoiceState,
+  LISTED_PAYMENT_STATUSES,
+  paymentState,
+  refundState,
+  shortStripeId,
+} from "@/modules/sheet/finance-present";
 import { dayMonth } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone, plusDays } from "@/modules/sheet/present";
@@ -31,25 +51,10 @@ const PAYMENTS_READ = 500;
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
-/**
- * The Payments tab's rows: card payments Stripe has acted on, newest first, read as the signed-in
- * staff member (RLS: the invoices they may read). Nothing is invented: a sample firm sees its
- * sample invoices' payments, marked "(sample)".
- */
-async function loadPaymentRows(supabase: Supabase, staff: SheetStaff): Promise<PaymentRow[]> {
-  const org = staff.organizationId;
-  const payments = await supabase
-    .from("invoice_payments")
-    .select("id, invoice_id, payment_intent_id, last_event_id, amount_cents, amount_received_cents, currency, status, succeeded_at, updated_at")
-    .eq("organization_id", org)
-    .in("status", [...LISTED_PAYMENT_STATUSES])
-    .order("updated_at", { ascending: false })
-    .limit(PAYMENTS_READ);
-  const rows = payments.data ?? [];
-  if (!rows.length) return [];
-  const invoiceIds = [...new Set(rows.map((row) => row.invoice_id))];
+/** Invoice number ("INV-0001", "(sample)" marked) and client name for each invoice id, read through RLS. */
+async function invoiceLabels(supabase: Supabase, org: string, invoiceIds: string[]): Promise<Map<string, { number: string; client: string }>> {
+  if (!invoiceIds.length) return new Map();
   const invoices = await supabase.from("invoices").select("id, number, matter_id, is_sample").eq("organization_id", org).in("id", invoiceIds);
-  const invoiceById = new Map((invoices.data ?? []).map((row) => [row.id, row]));
   const matterIds = [...new Set((invoices.data ?? []).map((row) => row.matter_id))];
   const matters = matterIds.length
     ? await supabase.from("matters").select("id, title, matter_participants(role, persons(display_name))").eq("organization_id", org).in("id", matterIds)
@@ -66,20 +71,142 @@ async function loadPaymentRows(supabase: Supabase, staff: SheetStaff): Promise<P
         "Client",
     ]),
   );
+  return new Map(
+    (invoices.data ?? []).map((row) => [row.id, { number: `${row.number}${row.is_sample ? " (sample)" : ""}`, client: clientByMatter.get(row.matter_id) ?? "Client" }]),
+  );
+}
+
+function money(minor: number, currency: string): string {
+  return `${formatAmount(minor, currency)}${currency === "CAD" ? "" : ` ${currency}`}`;
+}
+
+/** Refunds that hold part of a payment: pending, needing action, or succeeded. */
+const HELD_REFUND_STATUSES = ["pending", "requires_action", "succeeded"] as const;
+
+/**
+ * The Payments tab's rows: card payments Stripe has acted on, newest first, read as the signed-in
+ * staff member (RLS: the invoices they may read). Nothing is invented: a sample firm sees its
+ * sample invoices' payments, marked "(sample)". Billing staff get a Refund button on a received
+ * payment with something left to refund.
+ */
+async function loadPaymentRows(supabase: Supabase, staff: SheetStaff, canBill: boolean): Promise<PaymentRow[]> {
+  const org = staff.organizationId;
+  const payments = await supabase
+    .from("invoice_payments")
+    .select("id, invoice_id, payment_intent_id, last_event_id, amount_cents, amount_received_cents, refunded_cents, currency, status, succeeded_at, updated_at")
+    .eq("organization_id", org)
+    .in("status", [...LISTED_PAYMENT_STATUSES])
+    .order("updated_at", { ascending: false })
+    .limit(PAYMENTS_READ);
+  const rows = payments.data ?? [];
+  if (!rows.length) return [];
+  const received = rows.filter((row) => row.status === "succeeded" && row.amount_received_cents > 0).map((row) => row.id);
+  const [labels, held] = await Promise.all([
+    invoiceLabels(supabase, org, [...new Set(rows.map((row) => row.invoice_id))]),
+    canBill && received.length
+      ? supabase.from("invoice_refunds").select("payment_id, amount_cents").eq("organization_id", org).in("status", [...HELD_REFUND_STATUSES]).in("payment_id", received)
+      : null,
+  ]);
+  const heldByPayment = new Map<string, number>();
+  for (const refund of held?.data ?? []) heldByPayment.set(refund.payment_id, (heldByPayment.get(refund.payment_id) ?? 0) + refund.amount_cents);
   return rows.map((row) => {
-    const invoice = invoiceById.get(row.invoice_id);
+    const invoice = labels.get(row.invoice_id);
     const settled = row.status === "succeeded" && row.amount_received_cents > 0;
+    const refundable = settled ? Math.max(0, row.amount_received_cents - (heldByPayment.get(row.id) ?? 0)) : 0;
+    const client = invoice?.client ?? "Client";
+    const goesTo = invoice?.number ?? "Invoice";
     return {
       key: row.id,
       received: dayMonth(isoDateInTimeZone(new Date(row.succeeded_at ?? row.updated_at), staff.timezone)),
-      from: invoice ? (clientByMatter.get(invoice.matter_id) ?? "Client") : "Client",
+      from: client,
       method: "Card",
       reference: [shortStripeId(row.last_event_id ?? row.payment_intent_id)],
-      goesTo: invoice ? `${invoice.number}${invoice.is_sample ? " (sample)" : ""}` : "Invoice",
-      amount: `${formatAmount(settled ? row.amount_received_cents : row.amount_cents, row.currency)}${row.currency === "CAD" ? "" : ` ${row.currency}`}`,
-      state: paymentState(row.status),
+      goesTo,
+      amount: money(settled ? row.amount_received_cents : row.amount_cents, row.currency),
+      state: paymentState(row.status, { refundedCents: row.refunded_cents, receivedCents: row.amount_received_cents, refunded: formatMoney(row.refunded_cents, row.currency) }),
+      ...(canBill && refundable > 0
+        ? {
+            refund: {
+              paymentId: row.id,
+              refundableCents: refundable,
+              refundable: formatAmount(refundable, row.currency).replaceAll(",", ""),
+              label: `${goesTo} · ${client} · ${formatMoney(refundable, row.currency)} refundable`,
+            },
+          }
+        : {}),
     };
   });
+}
+
+const REFUNDS_READ = 500;
+
+/** The Refunds and disputes tab, read as the signed-in staff member (RLS mirrors invoice_payments). */
+async function loadRefunds(supabase: Supabase, staff: SheetStaff, canBill: boolean): Promise<RefundsData> {
+  const org = staff.organizationId;
+  const [refunds, disputes] = await Promise.all([
+    supabase
+      .from("invoice_refunds")
+      .select("id, invoice_id, payment_id, number, amount_cents, currency, status, failure_reason, created_at")
+      .eq("organization_id", org)
+      .order("created_at", { ascending: false })
+      .limit(REFUNDS_READ),
+    supabase
+      .from("invoice_disputes")
+      .select("id, invoice_id, number, amount_cents, currency, status, reason, evidence_due_by, created_at")
+      .eq("organization_id", org)
+      .order("created_at", { ascending: false })
+      .limit(REFUNDS_READ),
+  ]);
+  const refundRows = refunds.data ?? [];
+  const disputeRows = disputes.data ?? [];
+  const labels = await invoiceLabels(supabase, org, [...new Set([...refundRows.map((row) => row.invoice_id), ...disputeRows.map((row) => row.invoice_id)])]);
+  const day = (iso: string) => dayMonth(isoDateInTimeZone(new Date(iso), staff.timezone));
+
+  // The newest refund of a payment that failed, unless a later refund of that payment replaced it.
+  const latestByPayment = new Map<string, (typeof refundRows)[number]>();
+  for (const row of refundRows) if (!latestByPayment.has(row.payment_id)) latestByPayment.set(row.payment_id, row);
+  const failed = refundRows.find((row) => (row.status === "failed" || row.status === "canceled") && latestByPayment.get(row.payment_id)?.id === row.id);
+  const failedClient = failed ? (labels.get(failed.invoice_id)?.client ?? "the client") : "";
+  const failedWhy = failed ? refundState(failed.status, failed.failure_reason).detail : undefined;
+
+  return {
+    intro: `Card refunds and the disputes Stripe reported for ${staff.organizationName}. Refunding a payment isn’t the same as crediting an invoice; each keeps its own state and links (FIN-13). A refund counts only when Stripe’s signed event confirms it. Disputes never hold back or delete a client’s records, and neither changes a matter’s stage or government status.`,
+    refunds: refundRows.map((row) => ({
+      key: row.id,
+      number: row.number,
+      client: labels.get(row.invoice_id)?.client ?? "Client",
+      from: ["Card", labels.get(row.invoice_id)?.number ?? "Invoice"],
+      amount: money(row.amount_cents, row.currency),
+      requested: day(row.created_at),
+      state: refundState(row.status, row.failure_reason),
+    })),
+    refundsEmpty: canBill
+      ? { title: "No refunds yet", copy: "Refund a received card payment from the Payments tab. It shows here as processing until Stripe confirms it." }
+      : { title: "No refunds to show", copy: "Refunds are shown to the firm owner and the matter’s finance user." },
+    failed: failed
+      ? {
+          title: `Refund ${failed.number} ${failed.status === "canceled" ? "was canceled" : "failed"}`,
+          copy: `Stripe couldn’t return ${formatMoney(failed.amount_cents, failed.currency)} to ${failedClient}’s card${failedWhy ? ` (${failedWhy})` : ""}. Nothing was refunded twice; the amount can be refunded again from the Payments tab.`,
+        }
+      : null,
+    disputes: disputeRows.map((row) => ({
+      key: row.id,
+      number: row.number,
+      client: labels.get(row.invoice_id)?.client ?? "Client",
+      payment: ["Card", `${labels.get(row.invoice_id)?.number ?? "Invoice"}, ${disputeReason(row.reason).toLowerCase()}`],
+      amount: money(row.amount_cents, row.currency),
+      evidenceDue: disputeOpen(row.status) && row.evidence_due_by ? day(row.evidence_due_by) : "—",
+      state: disputeState(row.status),
+    })),
+    disputesEmpty: canBill
+      ? { title: "No disputes", copy: "If a client disputes a card payment with their bank, Stripe reports it and it shows here with its evidence deadline." }
+      : { title: "No disputes to show", copy: "Disputes are shown to the firm owner and the matter’s finance user." },
+    disputeFooter: disputeRows.length
+      ? {
+          note: "Evidence can’t be submitted from Casevoya yet, and the firm’s Stripe account has no Stripe Dashboard: to respond before the due date, contact Stripe support. The client keeps full access to their portal and records during a dispute.",
+        }
+      : null,
+  };
 }
 
 function sumCurrency(funds: { amount: number; currency: string }[] | undefined, currency: string): number {
@@ -136,7 +263,7 @@ function short(text: string, max = 48): string {
  * The Designer's Finance page for a firm, read as the signed-in staff member. RLS decides what is
  * visible: the firm owner sees every invoice, a finance user those on assigned matters.
  */
-export async function loadSheetFinance(staff: SheetStaff, tab: "invoices" | "payments") {
+export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData["tab"]) {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
   const today = isoDateInTimeZone(new Date(), staff.timezone);
@@ -146,7 +273,7 @@ export async function loadSheetFinance(staff: SheetStaff, tab: "invoices" | "pay
     loadSheetChrome(staff, "/sheet/finance"),
     supabase
       .from("invoices")
-      .select("id, matter_id, number, description, fee_category, amount_cents, currency, paid_cents, status, issued_on, due_on, is_sample, created_at")
+      .select("id, matter_id, number, description, fee_category, amount_cents, currency, paid_cents, refunded_cents, status, issued_on, due_on, is_sample, created_at")
       .eq("organization_id", org)
       .order("created_at", { ascending: false })
       .limit(INVOICES_READ),
@@ -219,7 +346,7 @@ export async function loadSheetFinance(staff: SheetStaff, tab: "invoices" | "pay
   const cardReady = account?.card_payments_status === "active";
 
   const tableRows: InvoiceRow[] = rows.map((row) => {
-    const state = invoiceState(row.status, row.due_on, today, processingIds.has(row.id));
+    const state = invoiceState(row.status, row.due_on, today, processingIds.has(row.id), row.refunded_cents > 0 ? formatMoney(row.refunded_cents, row.currency) : null);
     return {
       key: row.id,
       flags: [state.flag].filter(Boolean),
@@ -231,7 +358,7 @@ export async function loadSheetFinance(staff: SheetStaff, tab: "invoices" | "pay
       due: dayMonth(row.due_on),
       total: formatAmount(row.amount_cents, row.currency),
       paid: formatAmount(row.paid_cents, row.currency),
-      state: { tone: state.tone, label: state.label },
+      state: { tone: state.tone, label: state.label, ...(state.detail ? { detail: state.detail } : {}) },
     };
   });
 
@@ -239,8 +366,10 @@ export async function loadSheetFinance(staff: SheetStaff, tab: "invoices" | "pay
   const overdue = open.filter((row) => row.due_on < today);
   const owed = open.reduce((sum, row) => sum + (row.amount_cents - row.paid_cents), 0);
   const overdueSum = overdue.reduce((sum, row) => sum + (row.amount_cents - row.paid_cents), 0);
-  const received = rows.reduce((sum, row) => sum + row.paid_cents, 0);
+  const refunded = rows.reduce((sum, row) => sum + row.refunded_cents, 0);
+  const received = rows.reduce((sum, row) => sum + row.paid_cents, 0) - refunded;
   const paidCount = rows.filter((row) => row.paid_cents > 0).length;
+  const paidNote = paidCount ? `${paidCount} ${paidCount === 1 ? "invoice" : "invoices"} paid` : "No payments yet";
   const oldest = [...overdue].sort((a, b) => a.due_on.localeCompare(b.due_on))[0];
   const daysLate = (due: string) => Math.max(1, Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${due}T12:00:00Z`)) / 86_400_000));
 
@@ -262,7 +391,7 @@ export async function loadSheetFinance(staff: SheetStaff, tab: "invoices" | "pay
       href: "?tab=payments",
       label: "Received by card",
       value: { money: formatMoney(received, "CAD") },
-      note: paidCount ? `${paidCount} ${paidCount === 1 ? "invoice" : "invoices"} paid` : "No payments yet",
+      note: refunded > 0 ? { left: paidNote, right: `${formatMoney(refunded, "CAD")} refunded` } : paidNote,
     },
     {
       href: "?tab=payments",
@@ -324,9 +453,18 @@ export async function loadSheetFinance(staff: SheetStaff, tab: "invoices" | "pay
   };
 
   let payments: PaymentsData | null = null;
+  let refundDialog: RefundDialogData | null = null;
   if (tab === "payments") {
+    refundDialog = {
+      organizationId: org,
+      blocked: !canBill
+        ? { title: "Billing staff only", copy: "The firm owner or the matter’s finance user refunds payments." }
+        : !stripe
+          ? { title: "Stripe isn’t configured", copy: "Refunds go through the firm’s Stripe account, which isn’t reachable in this environment. Nothing can be refunded here." }
+          : null,
+    };
     const [paymentRows, balance] = await Promise.all([
-      loadPaymentRows(supabase, staff),
+      loadPaymentRows(supabase, staff, canBill),
       // The account row is only visible to the owner and finance users (RLS).
       account && canBill ? loadBalance(stripe, account) : null,
     ]);
@@ -343,10 +481,12 @@ export async function loadSheetFinance(staff: SheetStaff, tab: "invoices" | "pay
       note: [
         "The same Stripe event arriving twice is counted once (provider",
         "connected account",
-        "event ID). A payment in another currency can’t pay a CAD invoice. A failed payment leaves the invoice open; it never changes the matter stage.",
+        "event ID). A payment in another currency can’t pay a CAD invoice. A failed payment leaves the invoice open, and a refund never takes back more than was received; neither changes the matter stage.",
       ],
     };
   }
 
-  return { chrome, header, page, dialog, account: accountData, payments };
+  const refunds = tab === "refunds" ? await loadRefunds(supabase, staff, canBill) : null;
+
+  return { chrome, header, page, dialog, account: accountData, payments, refunds, refundDialog };
 }

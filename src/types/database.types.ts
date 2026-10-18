@@ -5002,6 +5002,7 @@ export type Database = {
           number: string
           organization_id: string
           paid_cents: number
+          refunded_cents: number
           status: Database["public"]["Enums"]["invoice_status"]
           updated_at: string
           version: number
@@ -5022,6 +5023,7 @@ export type Database = {
           number: string
           organization_id: string
           paid_cents?: number
+          refunded_cents?: number
           status?: Database["public"]["Enums"]["invoice_status"]
           updated_at?: string
           version?: number
@@ -5042,6 +5044,7 @@ export type Database = {
           number?: string
           organization_id?: string
           paid_cents?: number
+          refunded_cents?: number
           status?: Database["public"]["Enums"]["invoice_status"]
           updated_at?: string
           version?: number
@@ -5052,6 +5055,7 @@ export type Database = {
         Row: {
           amount_cents: number
           amount_received_cents: number
+          refunded_cents: number
           application_fee_cents: number
           connected_account_id: string
           created_at: string
@@ -5072,6 +5076,7 @@ export type Database = {
         Insert: {
           amount_cents: number
           amount_received_cents?: number
+          refunded_cents?: number
           application_fee_cents?: number
           connected_account_id: string
           created_at?: string
@@ -5092,6 +5097,7 @@ export type Database = {
         Update: {
           amount_cents?: number
           amount_received_cents?: number
+          refunded_cents?: number
           application_fee_cents?: number
           connected_account_id?: string
           created_at?: string
@@ -5168,6 +5174,228 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_refunds: {
+        Row: {
+          amount_cents: number
+          connected_account_id: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          failed_at: string | null
+          failure_reason: string | null
+          id: string
+          idempotency_key: string | null
+          invoice_id: string
+          last_event_id: string | null
+          livemode: boolean
+          number: string
+          organization_id: string
+          payment_id: string
+          provider: string
+          reason: string | null
+          refund_id: string
+          requested_by: string | null
+          status: Database["public"]["Enums"]["invoice_refund_status"]
+          succeeded_at: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          amount_cents: number
+          connected_account_id: string
+          created_at?: string
+          created_by?: string | null
+          currency: string
+          failed_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          idempotency_key?: string | null
+          invoice_id: string
+          last_event_id?: string | null
+          livemode?: boolean
+          number: string
+          organization_id: string
+          payment_id: string
+          provider?: string
+          reason?: string | null
+          refund_id: string
+          requested_by?: string | null
+          status?: Database["public"]["Enums"]["invoice_refund_status"]
+          succeeded_at?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          amount_cents?: number
+          connected_account_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          failed_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          idempotency_key?: string | null
+          invoice_id?: string
+          last_event_id?: string | null
+          livemode?: boolean
+          number?: string
+          organization_id?: string
+          payment_id?: string
+          provider?: string
+          reason?: string | null
+          refund_id?: string
+          requested_by?: string | null
+          status?: Database["public"]["Enums"]["invoice_refund_status"]
+          succeeded_at?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      invoice_disputes: {
+        Row: {
+          amount_cents: number
+          charge_id: string | null
+          closed_at: string | null
+          connected_account_id: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          dispute_id: string
+          evidence_due_by: string | null
+          id: string
+          invoice_id: string
+          last_event_created: number | null
+          last_event_id: string | null
+          livemode: boolean
+          number: string
+          organization_id: string
+          payment_id: string
+          provider: string
+          reason: string | null
+          status: Database["public"]["Enums"]["invoice_dispute_status"]
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          amount_cents: number
+          charge_id?: string | null
+          closed_at?: string | null
+          connected_account_id: string
+          created_at?: string
+          created_by?: string | null
+          currency: string
+          dispute_id: string
+          evidence_due_by?: string | null
+          id?: string
+          invoice_id: string
+          last_event_created?: number | null
+          last_event_id?: string | null
+          livemode?: boolean
+          number: string
+          organization_id: string
+          payment_id: string
+          provider?: string
+          reason?: string | null
+          status: Database["public"]["Enums"]["invoice_dispute_status"]
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          amount_cents?: number
+          charge_id?: string | null
+          closed_at?: string | null
+          connected_account_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          dispute_id?: string
+          evidence_due_by?: string | null
+          id?: string
+          invoice_id?: string
+          last_event_created?: number | null
+          last_event_id?: string | null
+          livemode?: boolean
+          number?: string
+          organization_id?: string
+          payment_id?: string
+          provider?: string
+          reason?: string | null
+          status?: Database["public"]["Enums"]["invoice_dispute_status"]
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      invoice_reversal_events: {
+        Row: {
+          amount_cents: number | null
+          connected_account_id: string
+          created_at: string
+          currency: string | null
+          detail: string | null
+          dispute_id: string | null
+          dispute_status: Database["public"]["Enums"]["invoice_dispute_status"] | null
+          event_id: string
+          event_type: string
+          id: string
+          invoice_id: string
+          invoice_status: Database["public"]["Enums"]["invoice_status"]
+          object_id: string | null
+          organization_id: string
+          outcome: string
+          payment_id: string
+          provider: string
+          refund_id: string | null
+          refund_status: Database["public"]["Enums"]["invoice_refund_status"] | null
+          webhook_inbox_id: string
+        }
+        Insert: {
+          amount_cents?: number | null
+          connected_account_id: string
+          created_at?: string
+          currency?: string | null
+          detail?: string | null
+          dispute_id?: string | null
+          dispute_status?: Database["public"]["Enums"]["invoice_dispute_status"] | null
+          event_id: string
+          event_type: string
+          id?: string
+          invoice_id: string
+          invoice_status: Database["public"]["Enums"]["invoice_status"]
+          object_id?: string | null
+          organization_id: string
+          outcome: string
+          payment_id: string
+          provider?: string
+          refund_id?: string | null
+          refund_status?: Database["public"]["Enums"]["invoice_refund_status"] | null
+          webhook_inbox_id: string
+        }
+        Update: {
+          amount_cents?: number | null
+          connected_account_id?: string
+          created_at?: string
+          currency?: string | null
+          detail?: string | null
+          dispute_id?: string | null
+          dispute_status?: Database["public"]["Enums"]["invoice_dispute_status"] | null
+          event_id?: string
+          event_type?: string
+          id?: string
+          invoice_id?: string
+          invoice_status?: Database["public"]["Enums"]["invoice_status"]
+          object_id?: string | null
+          organization_id?: string
+          outcome?: string
+          payment_id?: string
+          provider?: string
+          refund_id?: string | null
+          refund_status?: Database["public"]["Enums"]["invoice_refund_status"] | null
+          webhook_inbox_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -5230,6 +5458,43 @@ export type Database = {
           p_livemode: boolean
           p_payload: Json
           p_payment_intent_id: string
+        }
+        Returns: Json
+      }
+      invoice_refund_context: {
+        Args: { p_payment_id: string }
+        Returns: Json
+      }
+      record_invoice_refund: {
+        Args: {
+          p_amount_cents: number
+          p_currency: string
+          p_idempotency_key: string | null
+          p_livemode: boolean
+          p_payment_id: string
+          p_reason: string | null
+          p_refund_id: string
+        }
+        Returns: string
+      }
+      apply_stripe_reversal_event: {
+        Args: {
+          p_account_id: string
+          p_amount_cents: number | null
+          p_amount_refunded_cents: number | null
+          p_charge_id: string | null
+          p_currency: string | null
+          p_event_created: number | null
+          p_event_id: string
+          p_event_type: string
+          p_evidence_due_by: string | null
+          p_failure_reason: string | null
+          p_livemode: boolean
+          p_object_id: string
+          p_payload: Json
+          p_payment_intent_id: string
+          p_reason: string | null
+          p_status: string | null
         }
         Returns: Json
       }
@@ -6094,12 +6359,28 @@ export type Database = {
         | "paid"
         | "voided"
         | "credited"
+        | "refunded"
       invoice_payment_status:
         | "requires_payment"
         | "processing"
         | "succeeded"
         | "failed"
         | "canceled"
+      invoice_refund_status:
+        | "pending"
+        | "requires_action"
+        | "succeeded"
+        | "failed"
+        | "canceled"
+      invoice_dispute_status:
+        | "warning_needs_response"
+        | "warning_under_review"
+        | "warning_closed"
+        | "needs_response"
+        | "under_review"
+        | "won"
+        | "lost"
+        | "prevented"
       email_delivery_status:
         | "pending"
         | "sending"
@@ -6482,8 +6763,19 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      invoice_status: ["draft", "issued", "partially_paid", "paid", "voided", "credited"],
+      invoice_status: ["draft", "issued", "partially_paid", "paid", "voided", "credited", "refunded"],
       invoice_payment_status: ["requires_payment", "processing", "succeeded", "failed", "canceled"],
+      invoice_refund_status: ["pending", "requires_action", "succeeded", "failed", "canceled"],
+      invoice_dispute_status: [
+        "warning_needs_response",
+        "warning_under_review",
+        "warning_closed",
+        "needs_response",
+        "under_review",
+        "won",
+        "lost",
+        "prevented",
+      ],
       email_delivery_status: [
         "pending",
         "sending",

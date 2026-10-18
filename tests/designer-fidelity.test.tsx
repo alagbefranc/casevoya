@@ -39,11 +39,14 @@ import { AgreementsMarkup } from "@/components/sheet/markup/agreements";
 import {
   FinanceHeader,
   NewInvoiceDialog,
+  RefundDialog,
   SheetFinance,
   SheetFinancePayments,
+  SheetFinanceRefunds,
   type FinanceData,
   type NewInvoiceDialogData,
   type PaymentsData,
+  type RefundsData,
 } from "@/components/sheet/designer/finance";
 import { FinanceMarkup } from "@/components/sheet/markup/finance";
 
@@ -872,6 +875,24 @@ const DESIGNER_PAYMENTS: PaymentsData = {
   ],
 };
 
+const DESIGNER_REFUNDS: RefundsData = {
+  intro:
+    "Refunding a payment isn’t the same as crediting an invoice; each keeps its own state and links (FIN-13). Disputes never hold back or delete a client’s records.",
+  refunds: [
+    { number: "RF-0013", client: "Sofia Reyes", from: ["Card", "consultation INV-0205"], amount: "300.00", requested: "11 Oct", state: { tone: "bad", label: "Failed", detail: "card closed" } },
+    { number: "RF-0012", client: "Priya Sharma", from: ["Card", "duplicate evt_5021"], amount: "300.00", requested: "13 Oct", state: { tone: "rev", label: "Processing" } },
+    { number: "RF-0011", client: "Mei Tanaka", from: ["Client account", "unearned advance"], amount: "500.00", requested: "24 Sep", state: { tone: "ok", label: "Completed 30 Sep" } },
+  ],
+  refundsEmpty: { title: "No refunds yet", copy: "" },
+  failed: { title: "Refund RF-0013 failed", copy: "Sofia’s card was closed. A task was created for Lena to ask for bank details. Nothing was refunded twice." },
+  disputes: [{ number: "DP-0003", client: "Grace Okafor", payment: ["Card", "consultation 2 Sep"], amount: "300.00", evidenceDue: "24 Oct", state: { tone: "chg", label: "Evidence needed" } }],
+  disputesEmpty: { title: "No disputes", copy: "" },
+  disputeFooter: {
+    evidence: { toast: "Evidence added", sub: "Booking record, consultation notes summary and receipt." },
+    note: "Grace keeps full access to her portal and records during the dispute.",
+  },
+};
+
 describe("Designer fidelity: Finance", () => {
   it("renders the Finance page (Invoices) and its New invoice dialog exactly as the captured Designer markup", () => {
     // The capture also carries Record a bank payment (#dlgPay), Verify (#dlgVer), Transfer (#dlgTr)
@@ -993,6 +1014,131 @@ describe("Designer fidelity: Finance", () => {
     expect(html).toContain('class="emp"');
     expect(html).not.toContain("<table");
     expect(html).not.toMatch(/Northline|Priya|Kofi|Ana Ferreira|Rafael|evt_5|INV-02|RBC-|TD-882/);
+  });
+
+  it("renders the Finance page (Refunds and disputes) exactly as the captured Designer markup", () => {
+    // The capture carries the same unported dialogs as the other tabs (#dlgPay, #dlgVer, #dlgTr,
+    // #dlgCN). Its Credit notes panel is not ported (credit notes don't exist yet), so it is cut
+    // from the capture; the Disputes panel keeps its own place (--i:3).
+    let captured = withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup, { variant: "tab-refunds" })));
+    for (const id of ["dlgPay", "dlgVer", "dlgTr", "dlgCN"]) {
+      captured = captured.replace(new RegExp(`<dialog class="dlg" id="${id}"[\\s\\S]*?</dialog>`), "");
+      expect(captured).not.toContain(`id="${id}"`);
+    }
+    const creditNotes = /<section class="panel rv" style="--i:2"><h2><svg class="ic" aria-hidden="true"><use href="[^"]*#i-note"><\/use><\/svg>Credit notes<\/h2>[\s\S]*?<\/section>/;
+    expect(captured).toMatch(creditNotes);
+    captured = captured.replace(creditNotes, "");
+    expect(captured).not.toContain("Credit notes");
+    const live = withoutPreloads(
+      renderToStaticMarkup(
+        createElement(
+          SheetFrame,
+          {
+            sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/finance" },
+            header: createElement(FinanceHeader, {
+              data: { pills: ["CAD", { left: "Northline Immigration", right: "fictional" }], recordPayment: true, invoiceTab: "INV-0218", tab: "refunds" },
+            }),
+            statusbar: {
+              timezone: "America/Toronto",
+              queue: { label: "Reminder queue healthy", detail: "0 retries" },
+              sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+            },
+            after: createElement(NewInvoiceDialog, { data: DESIGNER_NEW_INVOICE }),
+          },
+          createElement(SheetFinanceRefunds, { data: DESIGNER_REFUNDS }),
+        ),
+      ),
+    );
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+    }
+    expect(live).toBe(captured);
+  });
+
+  it("shows a firm without refunds or disputes honest empty panels, and no Add evidence button live", () => {
+    const empty = renderToStaticMarkup(
+      createElement(SheetFinanceRefunds, {
+        data: {
+          intro: "Synthetic firm",
+          refunds: [],
+          refundsEmpty: { title: "No refunds yet", copy: "Refund a received card payment from the Payments tab." },
+          failed: null,
+          disputes: [],
+          disputesEmpty: { title: "No disputes", copy: "Stripe reports disputes here." },
+          disputeFooter: null,
+        },
+      }),
+    );
+    expect(empty.match(/class="emp"/g)).toHaveLength(2);
+    expect(empty).not.toContain("<table");
+    expect(empty).not.toContain("Credit notes");
+    expect(empty).not.toMatch(/Northline|Sofia|Priya|Mei Tanaka|Grace|RF-001|DP-000|evt_5/);
+
+    const live = renderToStaticMarkup(
+      createElement(SheetFinanceRefunds, {
+        data: {
+          intro: "Synthetic firm",
+          refunds: [{ number: "RF-0001", client: "Dana Lee", from: ["Card", "INV-0001"], amount: "100.00", requested: "18 Oct", state: { tone: "rev", label: "Processing" } }],
+          refundsEmpty: { title: "x", copy: "x" },
+          failed: null,
+          disputes: [{ number: "DP-0001", client: "Dana Lee", payment: ["Card", "INV-0001, fraudulent"], amount: "1,130.00", evidenceDue: "2 Nov", state: { tone: "chg", label: "Evidence needed" } }],
+          disputesEmpty: { title: "x", copy: "x" },
+          disputeFooter: { note: "Evidence can’t be submitted from Casevoya yet; contact Stripe support." },
+        },
+      }),
+    );
+    expect(live).toContain('<div class="fp-row"><span class="fp-note" style="margin:0">Evidence can’t be submitted from Casevoya yet; contact Stripe support.</span></div>');
+    expect(live).not.toContain("Add evidence");
+    expect(live).not.toContain("data-toast");
+    expect(live).not.toMatch(/Respond in Stripe/i);
+    expect(live).toContain('<td>DP-0001</td><td>Dana Lee</td><td>Card <span class="sep" aria-hidden="true"></span> INV-0001, fraudulent</td>');
+  });
+
+  it("puts a Refund button on a refundable Payments row and wires the refund dialog by data attributes", () => {
+    const payment = "22222222-2222-4222-8222-222222222222";
+    const org = "33333333-3333-4333-8333-333333333333";
+    const html = renderToStaticMarkup(
+      createElement(SheetFinancePayments, {
+        data: {
+          intro: "Synthetic firm",
+          currency: "CAD",
+          balance: null,
+          rows: [
+            {
+              received: "18 Oct",
+              from: "Dana Lee",
+              method: "Card",
+              reference: ["evt_…abc123"],
+              goesTo: "INV-0001",
+              amount: "1,130.00",
+              state: { tone: "ok", label: "Received", detail: "CAD 100.00 refunded" },
+              refund: { paymentId: payment, refundableCents: 103_000, refundable: "1030.00", label: "INV-0001 · Dana Lee · CAD 1,030.00 refundable" },
+            },
+            { received: "17 Oct", from: "Dana Lee", method: "Card", reference: ["evt_…def456"], goesTo: "INV-0002", amount: "50.00", state: { tone: "bad", label: "Payment failed" } },
+          ],
+          empty: null,
+          note: ["Synthetic note"],
+        },
+      }),
+    );
+    expect(html).toContain(
+      `<td><span class="fp-row"><span class="bd ok"><i></i><span>Received <span class="sep" aria-hidden="true"></span> CAD 100.00 refunded</span></span><button class="btn sm" data-refund-open="${payment}" data-refundable="103000" data-amount="1030.00" data-label="INV-0001 · Dana Lee · CAD 1,030.00 refundable">Refund</button></span></td>`,
+    );
+    expect(html.match(/data-refund-open=/g)).toHaveLength(1);
+    expect(html).toContain('<td><span class="bd bad"><i></i>Payment failed</span></td>');
+
+    const dialog = renderToStaticMarkup(createElement(RefundDialog, { data: { organizationId: org, blocked: null } }));
+    expect(dialog).toMatch(/^<dialog class="dlg" id="dlgRefund" aria-labelledby="dlgRefundH"><div class="dh"><h2 id="dlgRefundH">Refund a card payment<\/h2><button class="x" aria-label="Close" data-close="dlgRefund">/);
+    expect(dialog).toMatch(/<div class="g2"><div class="fld"><label for="rfA">Amount<\/label>[\s\S]*?<label for="rfR">Reason<\/label><select class="sel" id="rfR">/);
+    for (const value of ["requested_by_customer", "duplicate", "fraudulent"]) expect(dialog).toContain(`<option value="${value}">`);
+    expect(dialog).toContain(`<button class="btn p" data-refund-submit="1" data-org="${org}">Refund</button>`);
+    expect(dialog).toContain("The matter stage and government status don’t change.");
+    expect(dialog).not.toContain("data-toast");
+    const blocked = renderToStaticMarkup(createElement(RefundDialog, { data: { organizationId: org, blocked: { title: "Billing staff only", copy: "x" } } }));
+    expect(blocked).toContain(`data-refund-submit="1" data-org="${org}" disabled=""`);
+    expect(blocked).toContain('<div class="alert warn">');
   });
 
   it("shows a firm without invoices an honest empty state, with no sample people", () => {
