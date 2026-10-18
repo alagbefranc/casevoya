@@ -282,6 +282,7 @@ export function SheetFrame({
   header,
   rbar,
   statusbar,
+  overlay,
   children,
 }: {
   sidebar: SidebarData;
@@ -290,6 +291,8 @@ export function SheetFrame({
   header?: ReactNode;
   rbar?: RbarData | null;
   statusbar: StatusbarData;
+  /** A page's own dialogs, which the Designer places after the scrim. */
+  overlay?: ReactNode;
   children?: ReactNode;
 }) {
   return (
@@ -320,6 +323,7 @@ export function SheetFrame({
         <SheetStatusbar data={statusbar} />
       </div>
       <div className={"scrimd"} id={"scrimd"}></div>
+      {overlay}
       <div id={"k2wt"} className={"k2-wt"} role={"tooltip"} aria-hidden={"true"}></div>
     </>
   );
