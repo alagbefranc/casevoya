@@ -129,8 +129,12 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         rubber.querySelectorAll("button").forEach((item) => item.setAttribute("aria-checked", String(item === rubberButton)));
         const mine = /Mine/.test(rubberButton.textContent || "");
         root.querySelectorAll<HTMLElement>("tbody tr").forEach((row) => {
-          row.hidden = mine && !row.querySelector('img[src*="amara"]');
+          row.hidden = mine && !row.hasAttribute("data-mine");
         });
+      }
+      const row = target.closest<HTMLElement>("tr[data-href]");
+      if (row?.dataset.href && root.contains(row) && !target.closest("a, button, .ck")) {
+        router.push(row.dataset.href);
       }
     }, listen);
 

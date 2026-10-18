@@ -1,0 +1,104 @@
+import "server-only";
+import type { MatterRow, MattersData } from "@/components/sheet/designer/matters";
+import { createClient } from "@/lib/supabase/server";
+import { loadSheetChrome, matterNames, memberNames } from "@/modules/sheet/chrome-load";
+import { dayMonth, isoDate, localNow } from "@/modules/sheet/home-present";
+import type { SheetStaff } from "@/modules/sheet/load";
+import { governmentBadge, MATTERS_PAGE, MATTERS_READ, pageLimit, programLabel } from "@/modules/sheet/matters-present";
+import { matterMatches, mattersTitle, stageLabel, type SheetQuery } from "@/modules/sheet/present";
+
+/** The Designer's Matters list for a firm, read as the signed-in staff member. */
+export async function loadSheetMatters(staff: SheetStaff, query: SheetQuery, now: Date = new Date()) {
+  const supabase = await createClient({ organizationId: staff.organizationId });
+  const org = staff.organizationId;
+  const local = localNow(staff.timezone, now);
+  const today = isoDate(local.year, local.month, local.day);
+  const limit = pageLimit(query.limit);
+
+  const [chrome, matters, deadlines, pending, refs] = await Promise.all([
+    loadSheetChrome(staff, "/sheet/matters"),
+    supabase
+      .from("matters")
+      .select("id, title, reference, stage, government_status, on_hold, program_pack_id, responsible_consultant_membership_id")
+      .eq("organization_id", org)
+      .order("updated_at", { ascending: false })
+      .limit(MATTERS_READ),
+    supabase.from("deadlines").select("matter_id, due_on").eq("organization_id", org).gte("due_on", today).order("due_on", { ascending: true }).limit(MATTERS_READ),
+    supabase.from("document_versions").select("document_id").eq("organization_id", org).eq("upload_state", "clean").eq("review_state", "pending").limit(MATTERS_READ),
+    supabase.from("document_matter_refs").select("document_id, matter_id").eq("organization_id", org).is("removed_at", null).limit(MATTERS_READ),
+  ]);
+  const rows = matters.data ?? [];
+
+  const nextDue = new Map<string, string>();
+  for (const row of deadlines.data ?? []) {
+    if (row.due_on && !nextDue.has(row.matter_id)) nextDue.set(row.matter_id, row.due_on);
+  }
+  const pendingDocuments = new Set((pending.data ?? []).map((row) => row.document_id));
+  const reviewMatters = new Set((refs.data ?? []).filter((row) => pendingDocuments.has(row.document_id)).map((row) => row.matter_id));
+
+  const visible = rows.filter((row) =>
+    matterMatches(
+      {
+        onHold: row.on_hold,
+        stage: row.stage,
+        nextDue: nextDue.get(row.id) ?? null,
+        pendingReview: reviewMatters.has(row.id),
+        title: row.title,
+        reference: row.reference,
+      },
+      query.view,
+      undefined,
+      today,
+    ),
+  );
+  const page = visible.slice(0, limit);
+
+  const packIds = [...new Set(page.map((row) => row.program_pack_id).filter((id): id is string => Boolean(id)))];
+  const [name, members, packs] = await Promise.all([
+    matterNames(supabase, org, page.map((row) => row.id)),
+    memberNames(supabase, org),
+    packIds.length ? supabase.from("rule_pack_versions").select("id, program_key").in("id", packIds) : null,
+  ]);
+  const program = new Map((packs?.data ?? []).map((row) => [row.id, row.program_key]));
+
+  const tableRows: MatterRow[] = page.map((row) => {
+    const consultant = row.responsible_consultant_membership_id ? members.get(row.responsible_consultant_membership_id) : undefined;
+    const due = nextDue.get(row.id);
+    return {
+      href: `/sheet/matters/${row.id}`,
+      mine: row.responsible_consultant_membership_id === staff.membershipId,
+      client: { name: name(row.id) },
+      reference: row.reference ?? "—",
+      program: programLabel(row.program_pack_id ? program.get(row.program_pack_id) : null),
+      stage: { tone: "blue", label: stageLabel(row.stage) },
+      government: governmentBadge(row.government_status),
+      // Finance is not connected yet, so there is no money state to show.
+      money: "—",
+      nextDeadline: due ? dayMonth(due) : "—",
+      consultant: consultant ? { name: consultant } : null,
+    };
+  });
+
+  const active = rows.filter((row) => row.stage !== "closed");
+  const viewTitle = mattersTitle(query.view);
+  const data: MattersData = {
+    title: viewTitle,
+    counts: {
+      active: active.length,
+      blocked: rows.filter((row) => row.on_hold).length,
+      mine: rows.filter((row) => row.responsible_consultant_membership_id === staff.membershipId).length,
+      everyone: rows.length,
+    },
+    rows: tableRows,
+    shown: tableRows.length,
+    total: visible.length,
+    more: visible.length > limit ? `?${new URLSearchParams({ ...(query.view ? { view: query.view } : {}), limit: String(limit + MATTERS_PAGE) })}` : null,
+    empty:
+      rows.length === 0
+        ? { kind: "none" }
+        : visible.length === 0
+          ? { kind: "filtered", title: "No matches for these filters", copy: `Nothing is in ${viewTitle.toLowerCase()} right now. Clear the view to see every matter.`, clear: "/sheet/matters" }
+          : null,
+  };
+  return { chrome, matters: data };
+}

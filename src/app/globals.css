@@ -12,6 +12,7 @@
 @import "../styles/kit/portal.css" layer(kit);
 @import "../styles/kit/auth.css" layer(kit);
 @import "../styles/kit/typography.css" layer(kit);
+@import "../styles/kit/compat.css" layer(kit);
 
 /*
  * Casevoya design tokens (docs/spec/DESIGN.md; Francis's overrides:

@@ -152,6 +152,7 @@ export type SheetQuery = {
   dlg?: string;
   q?: string;
   state?: string;
+  limit?: string;
 };
 
 export function sheetVariant(page: string, query: SheetQuery): string {
