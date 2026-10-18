@@ -3,10 +3,13 @@
 import { useEffect, useLayoutEffect, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { toast2 } from "@/components/port/kit";
+import { withoutNew } from "@/modules/sheet/new-matter";
 import { sheetStateCopy } from "@/modules/sheet/present";
 import { runMatterAct } from "./matter-acts";
+import { runNewMatter } from "./new-matter-act";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
+const NEW_MATTER = "/sheet/matters?new=1";
 
 function icon(name: string, cls = ""): string {
   return `<svg class="ic ${cls}" aria-hidden="true"><use href="${ASSET}#i-${name}"/></svg>`;
@@ -96,7 +99,23 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
 
     root.addEventListener("click", (event) => {
       const target = event.target as HTMLElement;
-      const palette = target.closest<HTMLElement>("[data-palette], #newB");
+      // Every "New matter" entry point: the dialog on the Matters page, or the Matters page with it open.
+      const create = target.closest<HTMLElement>(`#newB, a[href="${NEW_MATTER}"], a.add`);
+      if (create && root.contains(create) && (!create.matches("a.add") || create.textContent.trim() === "New matter")) {
+        event.preventDefault();
+        if (root.querySelector("#dlgNew")) openDialog("dlgNew");
+        else window.location.assign(NEW_MATTER);
+        return;
+      }
+      const save = target.closest<HTMLElement>("[data-new-matter]");
+      if (save && root.contains(save)) {
+        event.preventDefault();
+        if (save.getAttribute("aria-busy") === "true") return;
+        save.setAttribute("aria-busy", "true");
+        void runNewMatter(save, router).finally(() => save.removeAttribute("aria-busy"));
+        return;
+      }
+      const palette = target.closest<HTMLElement>("[data-palette]");
       if (palette && root.contains(palette)) {
         event.preventDefault();
         openPalette(root);
@@ -227,6 +246,14 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     const dialog = params.get("dlg");
     if (dialog === "stage" || dialog === "hold" || dialog === "letter") {
       window.setTimeout(() => openDialog(dialog === "stage" ? "dStage" : dialog === "hold" ? "dHold" : "dLetter"), 300);
+    }
+    const newMatter = root.querySelector<HTMLDialogElement>("#dlgNew");
+    if (newMatter) {
+      // ?new=1 (the sidebar link, or coming back from step-up) opens the dialog; closing it drops the flag.
+      if (params.get("new") === "1") window.setTimeout(() => openDialog("dlgNew"), 300);
+      newMatter.addEventListener("close", () => {
+        if (new URLSearchParams(window.location.search).has("new")) router.replace(withoutNew(window.location.pathname, window.location.search));
+      }, listen);
     }
 
     window.addEventListener("resize", place, listen);

@@ -4,6 +4,7 @@ import { safeAccessError } from "@/lib/auth/step-up";
 import { verifyTotpCode } from "@/lib/auth/verify-totp";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
+import { newMatterError, readNewMatter } from "@/modules/sheet/new-matter";
 import type { Database } from "@/types/database.types";
 
 type MatterStage = Database["public"]["Enums"]["matter_stage"];
@@ -82,6 +83,50 @@ export async function createEngagedMatter(input: {
   const result = asRecord(data);
   if (result.ok !== true || typeof result.id !== "string") {
     return { error: result.blocked === "licence" ? "That consultant's licence blocks a new matter." : "The matter was not created." };
+  }
+  return { id: result.id, reference: typeof result.reference === "string" ? result.reference : null };
+}
+
+/**
+ * The Sheet's "New matter": a real client matter with its applicant and optional sponsor,
+ * created as the signed-in staff member (create_client_matter is security invoker, so RLS,
+ * sample mode and the licence lock decide). No authenticator code is sent; an aal2 refusal
+ * comes back as the step-up message so the page can send the person to /mfa?step=6.
+ */
+export async function createClientMatter(input: {
+  organizationId: string;
+  applicantName: string;
+  applicantEmail: string | null;
+  sponsorName: string | null;
+  sponsorEmail: string | null;
+  consultantMembershipId: string;
+  rulePackVersionId: string | null;
+}): Promise<{ id: string; reference: string | null } | { error: string }> {
+  const read = readNewMatter({
+    applicantName: input.applicantName,
+    applicantEmail: input.applicantEmail,
+    sponsorName: input.sponsorName,
+    sponsorEmail: input.sponsorEmail,
+    consultant: input.consultantMembershipId,
+    program: input.rulePackVersionId,
+  });
+  if ("error" in read) return { error: read.error };
+  if (!isUuid(read.input.consultantMembershipId)) return { error: "Choose a responsible consultant." };
+  if (read.input.rulePackVersionId && !isUuid(read.input.rulePackVersionId)) return { error: "Choose a published program template." };
+  const session = await staffClient(input.organizationId, null);
+  if ("error" in session) return { error: session.error ?? "Sign in first." };
+  const { data, error } = await session.supabase.rpc("create_client_matter", {
+    p_applicant_name: read.input.applicantName,
+    p_applicant_email: read.input.applicantEmail,
+    p_sponsor_name: read.input.sponsorName,
+    p_sponsor_email: read.input.sponsorEmail,
+    p_consultant_membership_id: read.input.consultantMembershipId,
+    p_rule_pack_version_id: read.input.rulePackVersionId,
+  });
+  if (error) return { error: newMatterError(error.message) };
+  const result = asRecord(data);
+  if (result.ok !== true || typeof result.id !== "string" || !isUuid(result.id)) {
+    return { error: result.blocked === "licence" ? newMatterError("licence blocks") : "The matter was not created." };
   }
   return { id: result.id, reference: typeof result.reference === "string" ? result.reference : null };
 }
