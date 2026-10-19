@@ -20,5 +20,9 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) return NextResponse.redirect(new URL(next, request.url));
   }
+  // A sign-up link opened on another device or browser confirms the email but can't start a
+  // session there (no PKCE verifier). An invitee goes back to the invitation, where signing in
+  // with the password they chose finishes joining; anyone else signs in as usual.
+  if (next.startsWith("/invite/")) return NextResponse.redirect(new URL(next, request.url));
   return NextResponse.redirect(new URL("/sign-in?error=link_invalid", request.url));
 }
