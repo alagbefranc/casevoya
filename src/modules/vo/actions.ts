@@ -146,6 +146,20 @@ export async function sendVoDraft(input: {
   return { ok: true, messageId: row.message_id, threadId: row.thread_id };
 }
 
+/**
+ * Vo drafts' Accept: the person sends the draft as Vo wrote it, as a matter message (the same
+ * send_vo_draft the composer uses; a draft with a "[needs a sourced rule]" placeholder is refused).
+ * The text is read through RLS here, never taken from the page.
+ */
+export async function acceptVoDraft(input: { organizationId: string; draftId: string }): Promise<Result<{ messageId: string; threadId: string }>> {
+  if (!isUuid(input.organizationId) || !isUuid(input.draftId)) return { error: "Choose a draft." };
+  const supabase = await createClient({ organizationId: input.organizationId });
+  const { data } = await supabase.from("vo_drafts").select("body, status").eq("organization_id", input.organizationId).eq("id", input.draftId).maybeSingle();
+  if (!data) return { error: voError("denied") };
+  if (data.status !== "draft") return { error: voError("reviewed") };
+  return sendVoDraft({ organizationId: input.organizationId, draftId: input.draftId, body: data.body, clientKey: `vo-accept-${input.draftId.replaceAll("-", "")}` });
+}
+
 /** Rejects a draft: it stays in the audit as rejected and is never sent. */
 export async function discardVoDraft(input: { organizationId: string; draftId: string }): Promise<Result> {
   if (!isUuid(input.organizationId) || !isUuid(input.draftId)) return { error: "Choose a draft." };

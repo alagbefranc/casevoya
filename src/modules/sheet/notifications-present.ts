@@ -21,6 +21,20 @@ const KINDS = new Set(["message", "document", "payment", "booking", "deadline"])
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+/** What the System tab lists: the rows Casevoya itself raises (card payments and deadline reminders). */
+export const SYSTEM_KINDS = new Set<NotificationItem["kind"]>(["payment", "deadline"]);
+
+/** The sidebar's Notifications count: unread rows, on every Sheet page. */
+export function unreadCount(items: readonly NotificationItem[]): number {
+  return items.filter((item) => !item.read).length;
+}
+
+/** A matter as notification rows name it: its reference, then its title. */
+export function matterLabel(matter: { reference: string | null; title: string } | undefined): string {
+  if (!matter) return "a matter";
+  return matter.reference ? `${matter.reference} (${matter.title})` : matter.title;
+}
+
 export function notificationsTab(raw: string | undefined): NotificationsTab {
   return raw === "mentions" || raw === "system" ? raw : "all";
 }
@@ -57,7 +71,8 @@ export function shortDate(value: string | null): string {
 export function notificationParts(item: NotificationItem, matterName: (id: string | null) => string): NotificationPart[] {
   switch (item.kind) {
     case "message":
-      return [`${first(item.actor_name)} sent a message about `, { b: matterName(item.matter_id) }];
+      // The matter it is on (its reference, or its title), not the client's own name again.
+      return [`${first(item.actor_name)} sent a message on `, { b: matterName(item.matter_id) }];
     case "document":
       return [`${first(item.actor_name)} uploaded `, { b: item.subject ?? "a document" }, item.detail ? ` (${item.detail})` : ""].filter(Boolean);
     case "payment":
@@ -83,7 +98,7 @@ export function notificationGroups(input: {
 }): NotificationGroup[] {
   if (input.tab === "mentions") return [];
   const items = input.items
-    .filter((item) => input.tab === "all" || item.kind === "deadline")
+    .filter((item) => input.tab === "all" || SYSTEM_KINDS.has(item.kind))
     .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
   const groups: NotificationGroup[] = [];
   for (const item of items) {

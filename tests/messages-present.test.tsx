@@ -198,7 +198,8 @@ describe("staff notifications presentation", () => {
     { id: "4", kind: "booking", occurred_at: "2026-10-17T14:00:00Z", matter_id: null, actor_name: "Synthetic Visitor", subject: "Consultation", detail: "2026-10-22T10:30", href: "/sheet/consultations", read: false },
     { id: "5", kind: "payment", occurred_at: "2026-10-17T13:00:00Z", matter_id: "m1", actor_name: null, subject: "INV-0001", detail: null, href: "/sheet/finance?tab=payments", read: false },
   ];
-  const name = () => "Synthetic Applicant";
+  // The loader names a matter by its reference and title (matterLabel).
+  const name = () => "SF-2026-0001 (Synthetic matter)";
 
   it("drops malformed rows and links that leave the Sheet", () => {
     expect(readItems([...items, { id: "x", kind: "other" }, { ...items[0], href: "https://evil.example" }, null])).toHaveLength(5);
@@ -212,9 +213,9 @@ describe("staff notifications presentation", () => {
       ["Yesterday", ["3", "4", "5"]],
     ]);
     const rows = groups.flatMap((group) => group.rows);
-    expect(rows[0].parts).toEqual(["Synthetic sent a message about ", { b: "Synthetic Applicant" }]);
+    expect(rows[0].parts).toEqual(["Synthetic sent a message on ", { b: "SF-2026-0001 (Synthetic matter)" }]);
     expect(rows[1].parts).toEqual(["Synthetic uploaded ", { b: "Relationship photos" }, " (v2)"]);
-    expect(rows[2].parts).toEqual(["Deadline reminder for ", { b: "Synthetic Applicant" }, ": Respond to request, due Fri 30 Oct"]);
+    expect(rows[2].parts).toEqual(["Deadline reminder for ", { b: "SF-2026-0001 (Synthetic matter)" }, ": Respond to request, due Fri 30 Oct"]);
     expect(rows[3].parts).toEqual(["Synthetic Visitor booked ", { b: "Consultation" }, ": Thu 22 Oct, 10:30"]);
     expect(rows[4].parts).toEqual(["Card payment received for ", { b: "INV-0001" }]);
     expect(rows.map((row) => row.unread)).toEqual([true, false, true, true, true]);
@@ -222,8 +223,8 @@ describe("staff notifications presentation", () => {
     expect(rows[4].lead).toBe("system");
   });
 
-  it("System shows deadline reminders; Mentions is empty until mentions exist", () => {
-    expect(notificationGroups({ items, tab: "system", now: NOW, timezone: ZONE, matterName: name }).flatMap((g) => g.rows.map((r) => r.id))).toEqual(["3"]);
+  it("System shows what Casevoya raises (deadline reminders and card payments); Mentions is empty until mentions exist", () => {
+    expect(notificationGroups({ items, tab: "system", now: NOW, timezone: ZONE, matterName: name }).flatMap((g) => g.rows.map((r) => r.id))).toEqual(["3", "5"]);
     expect(notificationGroups({ items, tab: "mentions", now: NOW, timezone: ZONE, matterName: name })).toEqual([]);
     expect(shortDate("bad")).toBe("");
   });

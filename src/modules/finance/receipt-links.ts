@@ -6,6 +6,11 @@ export function paymentReceiptHref(receiptId: string, organizationId: string): s
   return `/api/invoices/receipts/${receiptId}?organizationId=${organizationId}`;
 }
 
+/** Download link for an issued invoice's PDF. The route reads the invoice through RLS. */
+export function invoicePdfHref(invoiceId: string, organizationId: string): string {
+  return `/api/invoices/pdf/${invoiceId}?organizationId=${organizationId}`;
+}
+
 /** Download link for an issued credit note's PDF. The route checks access in the database again. */
 export function creditNoteHref(creditNoteId: string, organizationId: string): string {
   return `/api/invoices/credit-notes/${creditNoteId}?organizationId=${organizationId}`;

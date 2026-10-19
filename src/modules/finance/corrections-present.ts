@@ -41,9 +41,18 @@ export function creditBalance(invoice: InvoiceMoney): number {
   return Math.max(0, kept + invoice.creditedCents - invoice.amountCents);
 }
 
-/** What can still be credited: the amount less issued credits and drafts waiting for review. */
-export function creditable(invoice: Pick<InvoiceMoney, "amountCents" | "creditedCents">, draftsCents: number): number {
-  return Math.max(0, invoice.amountCents - invoice.creditedCents - draftsCents);
+/**
+ * What can still be credited: the amount less issued credits, drafts waiting for review, and what
+ * was already refunded (that money went back to the client; crediting it too would return it twice).
+ */
+export function creditable(invoice: Pick<InvoiceMoney, "amountCents" | "creditedCents"> & Partial<Pick<InvoiceMoney, "refundedCents">>, draftsCents: number): number {
+  return Math.max(0, invoice.amountCents - invoice.creditedCents - (invoice.refundedCents ?? 0) - draftsCents);
+}
+
+/** The signed reconciliations' heading: "Earlier months", unless one is for the firm's current month. */
+export function reconHistoryTitle(statementDates: readonly string[], today: string): string {
+  const month = today.slice(0, 7);
+  return statementDates.some((date) => date.slice(0, 7) >= month) ? "Signed reconciliations" : "Earlier months";
 }
 
 /** An invoice can be credited while it is issued (paid or not); never a draft, voided or fully credited one. */

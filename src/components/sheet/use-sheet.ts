@@ -12,7 +12,10 @@ import {
   prefillAgreementTerms,
   reopenAgreementDialogs,
   reopenCountersign,
+  runAgreementSend,
+  runAgreementVoid,
   runApproveTemplate,
+  runAuthoritySave,
   runCountersign,
   runNewAgreement,
   runNewTemplate,
@@ -58,10 +61,11 @@ import {
   runRecSign,
   runVoid,
 } from "./corrections-acts";
-import { openDocReview, reopenDocReview, runDocFile, runDocReview } from "./documents-acts";
+import { openDocReview, reopenDocReview, runDocFile, runDocOpen, runDocReview } from "./documents-acts";
 import { restoreDocRequest, runDocRequest } from "./doc-request-act";
 import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
-import { runInboxCompose, runInboxReply } from "./inbox-reply-acts";
+import { runInboxCompose, runInboxMessage, runInboxNote, runInboxReply } from "./inbox-reply-acts";
+import { mountDocOpen, mountDrafts, mountInboxFilters, mountRecordsCrumb } from "./records-acts";
 import { bindGovControls } from "./gov-acts";
 import {
   openRedaction,
@@ -95,7 +99,7 @@ import { openGrantRevoke, reopenGrantDialog, runGrantCreate, runGrantRevoke } fr
 import { runAutomationSave } from "./automations-acts";
 import { signOutOtherSessions } from "@/modules/settings/firm-actions";
 import { mountIntakeBuilder } from "./intake-builder-acts";
-import { runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
+import { runVoAccept, runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
 import { runVoDocAccept, runVoDocDiscard, runVoDocReject, runVoRead } from "./vo-doc-acts";
 import { mountRetentionSlider, runRetentionSave } from "./retention-act";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
@@ -326,6 +330,20 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (agreement.getAttribute("aria-busy") === "true" || agreement.hasAttribute("disabled")) return;
         agreement.setAttribute("aria-busy", "true");
         void runNewAgreement(agreement, router).finally(() => agreement.removeAttribute("aria-busy"));
+        return;
+      }
+      // An agreement's own view (Send for signature, Void) and Record representation authority.
+      const agreementAct = target.closest<HTMLElement>("[data-agreement-send], [data-agreement-void], [data-authority-save]");
+      if (agreementAct && root.contains(agreementAct)) {
+        event.preventDefault();
+        if (agreementAct.getAttribute("aria-busy") === "true" || agreementAct.hasAttribute("disabled")) return;
+        agreementAct.setAttribute("aria-busy", "true");
+        const run = agreementAct.hasAttribute("data-agreement-send")
+          ? runAgreementSend(agreementAct, router)
+          : agreementAct.hasAttribute("data-agreement-void")
+            ? runAgreementVoid(agreementAct, router)
+            : runAuthoritySave(agreementAct, router);
+        void run.finally(() => agreementAct.removeAttribute("aria-busy"));
         return;
       }
       // The Finance page's New invoice.
@@ -734,6 +752,15 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(inboxReply, () => runInboxReply(inboxReply, root, router));
         return;
       }
+      // A portal or WhatsApp conversation's reply, and the reply box's Staff-only note.
+      const inboxMessage = target.closest<HTMLElement>("[data-inbox-message], [data-inbox-note]");
+      if (inboxMessage && root.contains(inboxMessage)) {
+        event.preventDefault();
+        busyRun(inboxMessage, () =>
+          inboxMessage.hasAttribute("data-inbox-note") ? runInboxNote(inboxMessage, root, router) : runInboxMessage(inboxMessage, root, router),
+        );
+        return;
+      }
       const inboxCompose = target.closest<HTMLElement>("[data-inbox-compose]");
       if (inboxCompose && root.contains(inboxCompose)) {
         event.preventDefault();
@@ -786,10 +813,12 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         return;
       }
       // Vo drafts and Vo and AI: Reject, the owner's switches, "useful?" votes and Ask Vo.
-      const vo = target.closest<HTMLElement>("[data-vo-discard], .k2-sw[data-vo-setting], [data-vo-useful], [data-vo-ask]");
+      const vo = target.closest<HTMLElement>("[data-vo-discard], [data-vo-accept], .k2-sw[data-vo-setting], [data-vo-useful], [data-vo-ask]");
       if (vo && root.contains(vo)) {
         event.preventDefault();
-        const run = vo.hasAttribute("data-vo-discard")
+        const run = vo.hasAttribute("data-vo-accept")
+          ? () => runVoAccept(vo, router)
+          : vo.hasAttribute("data-vo-discard")
           ? () => runVoDiscard(vo, router)
           : vo.hasAttribute("data-vo-setting")
             ? () => runVoSetting(vo, router)
@@ -999,6 +1028,12 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
 
     // The Intake form builder: select, rename, switches, add fields, autosave and publish.
     mountIntakeBuilder(root, router, ac.signal);
+    // Records pages: the top bar's "Records" crumb opens a switcher over the Records places; the
+    // Inbox's conversation search and channel chips.
+    mountRecordsCrumb(root, page, (group) => openPalette(root, (href) => router.push(href), group), ac.signal);
+    if (page === "inbox") mountInboxFilters(root, ac.signal);
+    if (page === "documents") mountDocOpen(root, runDocOpen, ac.signal);
+    if (page === "drafts") mountDrafts(root, () => router.refresh(), ac.signal);
     // Back from a Composio Connect Link on Settings > Integrations.
     if (page === "settings") mountIntegrations(root, router);
     // Settings > Team and seats: the Offboard dialog's hold and previews, Change role or access, and
@@ -1131,7 +1166,12 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       }, listen);
       // ?dlg=agreement (from a matter page, or back from step-up) and ?dlg=template reopen the live dialogs.
       window.setTimeout(() => reopenAgreementDialogs(root, openDialog), 300);
-      for (const live of [newAgreement, root.querySelector<HTMLDialogElement>("dialog#dlgTpl")]) {
+      for (const live of [
+        newAgreement,
+        root.querySelector<HTMLDialogElement>("dialog#dlgTpl"),
+        root.querySelector<HTMLDialogElement>("dialog#dlgAuth"),
+        root.querySelector<HTMLDialogElement>("dialog#dlgVoid"),
+      ]) {
         live?.addEventListener("close", () => {
           const search = new URLSearchParams(window.location.search);
           if (!search.has("dlg") || root.querySelector("dialog[open]")) return;
@@ -1336,16 +1376,24 @@ function paletteLabel(link: HTMLAnchorElement): string {
   return copy.textContent?.replace(/\s+/g, " ").trim() || "Open";
 }
 
-function openPalette(root: HTMLElement, go: (href: string) => void) {
-  let scrim = root.querySelector<HTMLElement>(".scrim");
+/**
+ * The search palette over the sidebar's places. Given a sidebar group (the Records crumb's), it
+ * lists only that group's places: the crumb's dropdown mark opens it as a switcher.
+ */
+function openPalette(root: HTMLElement, go: (href: string) => void, group: HTMLElement | null = null) {
+  const scope = group ? (group.querySelector(":scope > button span")?.textContent?.trim() ?? "group") : "all";
+  let scrim = [...root.querySelectorAll<HTMLElement>(".scrim")].find((item) => (item.dataset.scope ?? "all") === scope) ?? null;
   if (!scrim) {
     scrim = document.createElement("div");
     scrim.className = "scrim";
+    if (group) scrim.dataset.scope = scope;
     const seen = new Set<string>();
     const entries: { href: string; label: string }[] = [];
     // Menu items first, then the shortcut tiles, so a place keeps its menu name and link
     // (the Documents tile opens one matter's documents; the Invoices tile is Finance).
-    const links = [...root.querySelectorAll<HTMLAnchorElement>(".nav a[href], .tree a[href]"), ...root.querySelectorAll<HTMLAnchorElement>(".tiles a[href]")];
+    const links = group
+      ? [...group.querySelectorAll<HTMLAnchorElement>(".tree a[href]")]
+      : [...root.querySelectorAll<HTMLAnchorElement>(".nav a[href], .tree a[href]"), ...root.querySelectorAll<HTMLAnchorElement>(".tiles a[href]")];
     for (const link of links) {
       const href = link.getAttribute("href");
       if (!href || href === "#") continue;
@@ -1360,9 +1408,9 @@ function openPalette(root: HTMLElement, go: (href: string) => void) {
     const palette = document.createElement("div");
     palette.className = "palette";
     palette.setAttribute("role", "dialog");
-    palette.setAttribute("aria-label", "Search");
+    palette.setAttribute("aria-label", group ? `Go to ${scope}` : "Search");
     const input = document.createElement("input");
-    input.placeholder = "Search matters, people and actions";
+    input.placeholder = group ? `Go to a ${scope} page` : "Search matters, people and actions";
     input.setAttribute("aria-label", "Search");
     const list = document.createElement("ul");
     for (const entry of entries) {

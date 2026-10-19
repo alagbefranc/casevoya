@@ -8,12 +8,30 @@ import type {
   NewAgreementDialogData,
   TemplateDialogData,
 } from "@/components/sheet/designer/agreements";
+import type {
+  AgreementsPendingData,
+  AuthorityData,
+  AuthorityDialogData,
+  AuthorityRow,
+  EnvelopeAction,
+  EnvelopeStep,
+  EnvelopeViewData,
+} from "@/components/sheet/designer/agreements-live";
 import { createClient } from "@/lib/supabase/server";
+import { isUuid } from "@/lib/tenant/context";
 import { isLicensedMembership, LICENCE_FACT_COLUMNS } from "@/lib/tenant/roles";
 import {
   AGREEMENT_CURRENCIES,
   agreementBadge,
+  agreementEnvelopeHref,
   agreementFlags,
+  agreementPdfHref,
+  agreementsTab,
+  type AgreementsTabKey,
+  AUTHORITY_NEEDED,
+  authorityBadge,
+  authorityStillNeeded,
+  authorityValue,
   COUNTERSIGN_BADGE,
   countersignDialogData,
   countersignDialogId,
@@ -27,8 +45,9 @@ import {
 } from "@/modules/sheet/agreements-present";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import { dayMonth } from "@/modules/sheet/home-present";
+import { sentWhen } from "@/modules/sheet/inbox-present";
 import type { SheetStaff } from "@/modules/sheet/load";
-import { isoDateInTimeZone } from "@/modules/sheet/present";
+import { isoDateInTimeZone, type SheetQuery } from "@/modules/sheet/present";
 
 /** A firm's agreements are read once; each row is small. */
 const AGREEMENTS_READ = 500;
@@ -50,9 +69,11 @@ type EnvelopeRow = {
  * The Designer's Agreements page (All agreements) for a firm, read as the signed-in staff member.
  * RLS decides what is visible: staff with aal2 in a role that reads the matter.
  */
-export async function loadSheetAgreements(staff: SheetStaff) {
+export async function loadSheetAgreements(staff: SheetStaff, query: SheetQuery = {}) {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
+  const tab = agreementsTab(query.tab);
+  const today = isoDateInTimeZone(new Date(), staff.timezone);
   const day = (iso: string) => dayMonth(isoDateInTimeZone(new Date(iso), staff.timezone));
 
   const [chrome, agreements, templates, matters, own] = await Promise.all([
@@ -66,7 +87,7 @@ export async function loadSheetAgreements(staff: SheetStaff) {
     supabase.from("agreement_templates").select("id, kind, name, status, version").eq("organization_id", org).order("created_at").limit(200),
     supabase
       .from("matters")
-      .select("id, reference, title, stage, is_sample")
+      .select("id, reference, title, stage, is_sample, responsible_consultant_membership_id")
       .eq("organization_id", org)
       .neq("stage", "closed")
       .order("updated_at", { ascending: false })
@@ -193,7 +214,8 @@ export async function loadSheetAgreements(staff: SheetStaff) {
       flags: agreementFlags(row.status, row.kind),
       client: { name: clientOf(row.matter_id) },
       matter: referenceOf(row.matter_id),
-      record: { href: matterHref(row.matter_id), left: row.title, right: number ? `v${number}` : kindLabel(row.kind) },
+      // The agreement's own view: its envelope, signers, events and signed copies.
+      record: { href: agreementEnvelopeHref(row.id), left: row.title, right: number ? `v${number}` : kindLabel(row.kind) },
       state: turn ? COUNTERSIGN_BADGE : agreementBadge(row.status, row.kind),
       signed: count ? `${count.signed} of ${count.total}` : "—",
       date,
@@ -213,7 +235,7 @@ export async function loadSheetAgreements(staff: SheetStaff) {
 
   const kpis: AgreementsKpi[] = [
     {
-      href: firstWaiting ? matterHref(firstWaiting.matter_id) : "/sheet/agreements",
+      href: firstWaiting ? agreementEnvelopeHref(firstWaiting.id) : "/sheet/agreements",
       label: "Waiting for signatures",
       count: waiting.length,
       note: firstWaiting
@@ -223,7 +245,7 @@ export async function loadSheetAgreements(staff: SheetStaff) {
         : "Nothing out for signature",
     },
     {
-      href: firstExecuted ? matterHref(firstExecuted.matter_id) : "/sheet/agreements",
+      href: firstExecuted ? agreementEnvelopeHref(firstExecuted.id) : "/sheet/agreements",
       label: "Executed",
       count: executed.length,
       note: firstExecuted
@@ -231,7 +253,8 @@ export async function loadSheetAgreements(staff: SheetStaff) {
         : "None signed yet",
     },
     {
-      href: firstUnsent ? matterHref(firstUnsent.matter_id) : "/sheet/agreements",
+      // Save as draft in the New agreement dialog makes these; each opens to Send for signature.
+      href: firstUnsent ? agreementEnvelopeHref(firstUnsent.id) : "/sheet/agreements",
       label: "Drafts not sent",
       count: unsent.length,
       warn: unsent.length > 0,
@@ -251,6 +274,7 @@ export async function loadSheetAgreements(staff: SheetStaff) {
   const page: AgreementsData = {
     kpis,
     rows: tableRows,
+    filterEmpty: true,
     empty:
       tableRows.length === 0
         ? noTemplate
@@ -270,7 +294,7 @@ export async function loadSheetAgreements(staff: SheetStaff) {
   };
 
   const signable = matterRows.filter((row) => signersFor(partiesOf.get(row.id) ?? [], personName).length > 0);
-  const header: AgreementsHeaderData = { records: rows.length, waiting: waiting.length, create: "New agreement" };
+  const header: AgreementsHeaderData = { records: rows.length, waiting: waiting.length, create: "New agreement", tab };
   const templateOptions = approved.map((row) => ({ value: row.id, left: `${row.name} · ${kindLabel(row.kind)}`, defaults: defaultsFor(row.id) }));
   const firstDefaults = templateOptions[0]?.defaults ?? templateDefaults(null);
   const currencies = [...new Set<string>([...AGREEMENT_CURRENCIES, ...templateOptions.map((option) => option.defaults.currency)])];
@@ -310,5 +334,315 @@ export async function loadSheetAgreements(staff: SheetStaff) {
     drafts: drafts.map((row) => ({ id: row.id, name: row.name, kind: kindLabel(row.kind) })),
     canApprove: Boolean(own.data && isLicensedMembership(own.data.role, credential?.data ?? null)),
   };
-  return { chrome, header, page, dialog, templateDialog, countersign };
+
+  const role = own.data?.role ?? staff.role;
+  let authority: { page: AuthorityData; dialog: AuthorityDialogData } | null = null;
+  if (tab === "authority") {
+    authority = await loadAuthority(supabase, staff, today, {
+      openMatters: matterRows,
+      partiesOf,
+      personName,
+      clientOf,
+      referenceOf,
+      canRecord: AUTHORITY_ROLES.has(role),
+    });
+  }
+  let envelope: { page: EnvelopeViewData; voidDialog: { organizationId: string; envelopeId: string; who: string } | null } | null = null;
+  let pending: AgreementsPendingData | null = PENDING[tab] ?? null;
+  if (tab === "envelope") {
+    const agreementId = query.view && isUuid(query.view) ? query.view : null;
+    envelope = agreementId
+      ? await loadEnvelope(supabase, staff, agreementId, {
+          clientOf,
+          referenceOf,
+          matterHref,
+          turn: (envelopeId) => countersign.some((sign) => sign.envelopeId === envelopeId),
+          canSend: SEND_ROLES.has(role),
+        })
+      : null;
+    if (!envelope) pending = ENVELOPE_PICK;
+  }
+  return { chrome, header, page, dialog, templateDialog, countersign, tab, authority, envelope, pending };
+}
+
+/** Who records representation authority (the database's app.record_representation_authority). */
+const AUTHORITY_ROLES = new Set(["firm_owner", "licensed_consultant"]);
+/** Who sends and voids agreements (send_agreement, void_agreement_envelope). */
+const SEND_ROLES = new Set(["firm_owner", "licensed_consultant", "case_manager"]);
+
+/** Tabs Casevoya does not have a workflow for yet: honest panels inside the live shell. */
+const PENDING: Partial<Record<AgreementsTabKey, AgreementsPendingData>> = {
+  quote: {
+    title: "Quote builder",
+    intro: "Quotes for leads and clients, before a service agreement. An accepted quote is not a signed agreement.",
+    empty: {
+      title: "The quote builder isn’t built yet",
+      copy: "Casevoya doesn’t make quotes yet. An agreement’s fee and scope are set in New agreement, from an approved template.",
+    },
+    action: { label: "New agreement", dialog: "dlgNewQ" },
+  },
+  editor: {
+    title: "Agreement editor",
+    intro: "An agreement’s text comes from an approved template and is locked with its SHA-256 hash when it is sent.",
+    empty: {
+      title: "The agreement editor isn’t built yet",
+      copy: "To change the wording, add a new agreement template; a licensed consultant approves it before it can be sent.",
+    },
+    action: { label: "Agreement templates", dialog: "dlgTpl" },
+  },
+  compare: {
+    title: "Compare versions",
+    intro: "Side-by-side versions of one agreement, with what changed between them.",
+    empty: {
+      title: "Comparing versions isn’t built yet",
+      copy: "Each agreement’s own view shows its version, its hash and every signing event. Open one from All agreements.",
+    },
+    action: { label: "All agreements", href: "/sheet/agreements" },
+  },
+};
+
+const ENVELOPE_PICK: AgreementsPendingData = {
+  title: "Envelope",
+  intro: "One agreement’s signers, signing events, hash and signed copies.",
+  empty: { title: "Choose an agreement", copy: "Open an agreement from All agreements to see its envelope." },
+  action: { label: "All agreements", href: "/sheet/agreements" },
+};
+
+type Client = Awaited<ReturnType<typeof createClient>>;
+
+/** "16 Oct 2026" for a firm-day date. */
+function longDay(date: string): string {
+  const [year] = date.split("-");
+  return `${dayMonth(date)} ${year}`;
+}
+
+/**
+ * The Representation authority tab: authority on file (public.representation_authorities, RLS)
+ * and the open matters before submission with nobody's authority on file yet (sign-off needs one).
+ */
+async function loadAuthority(
+  supabase: Client,
+  staff: SheetStaff,
+  today: string,
+  ctx: {
+    openMatters: { id: string; reference: string | null; title: string; stage: string; is_sample: boolean }[];
+    partiesOf: Map<string, { person_id: string | null; role: string }[]>;
+    personName: Map<string, string>;
+    clientOf: (matterId: string) => string;
+    referenceOf: (matterId: string) => string;
+    canRecord: boolean;
+  },
+): Promise<{ page: AuthorityData; dialog: AuthorityDialogData }> {
+  const org = staff.organizationId;
+  const found = await supabase
+    .from("representation_authorities")
+    .select("id, matter_id, person_id, scope, evidence_locator, effective_on, revoked_at, revocation_reason, created_at")
+    .eq("organization_id", org)
+    .order("created_at", { ascending: false })
+    .limit(500);
+  const records = found.data ?? [];
+  const missing = [...new Set(records.map((row) => row.person_id).filter((id) => !ctx.personName.has(id)))];
+  const more = missing.length ? await supabase.from("persons").select("id, display_name").eq("organization_id", org).in("id", missing) : null;
+  const nameOf = (id: string) => ctx.personName.get(id) ?? (more?.data ?? []).find((row) => row.id === id)?.display_name ?? "Client";
+
+  const rows: AuthorityRow[] = records.map((row) => ({
+    key: row.id,
+    client: { name: nameOf(row.person_id) },
+    scope: `${row.scope}, ${ctx.referenceOf(row.matter_id)}`,
+    evidence: row.revoked_at ? `Revoked, ${dayMonth(isoDateInTimeZone(new Date(row.revoked_at), staff.timezone))}` : row.evidence_locator,
+    effective: row.revoked_at
+      ? `${longDay(row.effective_on)} – ${longDay(isoDateInTimeZone(new Date(row.revoked_at), staff.timezone))}`
+      : longDay(row.effective_on),
+    state: authorityBadge(row, today),
+  }));
+  const covered = new Set(records.filter((row) => !row.revoked_at).map((row) => row.matter_id));
+  for (const matter of ctx.openMatters) {
+    if (covered.has(matter.id) || !authorityStillNeeded(matter.stage)) continue;
+    if (!(ctx.partiesOf.get(matter.id) ?? []).some((party) => party.person_id)) continue;
+    rows.push({
+      key: `needed-${matter.id}`,
+      client: { name: ctx.clientOf(matter.id) },
+      scope: `${matter.title}${matter.is_sample ? " (sample)" : ""}`,
+      evidence: "—",
+      effective: "—",
+      state: AUTHORITY_NEEDED,
+    });
+  }
+
+  const clients: AuthorityDialogData["clients"] = [];
+  for (const matter of ctx.openMatters) {
+    const parties = [...(ctx.partiesOf.get(matter.id) ?? [])].sort((a, b) => Number(b.role === "applicant") - Number(a.role === "applicant"));
+    for (const party of parties) {
+      if (!party.person_id || !ctx.personName.has(party.person_id)) continue;
+      clients.push({
+        value: authorityValue(matter.id, party.person_id),
+        label: `${ctx.personName.get(party.person_id)} · ${matter.reference ?? matter.title}${matter.is_sample ? " (sample)" : ""}`,
+      });
+    }
+  }
+  const why = ctx.canRecord ? null : "Only the firm owner or a licensed consultant records representation authority";
+  return {
+    page: {
+      rows,
+      empty: rows.length
+        ? null
+        : {
+            title: "No representation authority yet",
+            copy: "Record the signed government form, or other authority to represent a client, before a submission is signed off. A signed service agreement doesn’t record it.",
+          },
+      record: { disabled: !ctx.canRecord, why },
+    },
+    dialog: {
+      organizationId: org,
+      clients,
+      today,
+      blocked: ctx.canRecord ? null : { title: "Firm owner or licensed consultant only", copy: `${why}.` },
+    },
+  };
+}
+
+const EVENT_LABEL: Record<string, string> = {
+  sent: "Envelope sent",
+  signed: "signed",
+  declined: "declined",
+  voided: "Envelope voided",
+  expired: "Envelope expired",
+  completed: "Everyone signed",
+  superseded: "Replaced by a new version",
+  replayed: "Same event received twice",
+};
+
+function shortHash(sha: string | null | undefined): string | null {
+  return sha && /^[0-9a-f]{64}$/.test(sha) ? `${sha.slice(0, 4)}…${sha.slice(-4)}` : null;
+}
+
+/** One agreement's own view: its latest envelope, signers in order, signing events, hash and copies. */
+async function loadEnvelope(
+  supabase: Client,
+  staff: SheetStaff,
+  agreementId: string,
+  ctx: {
+    clientOf: (matterId: string) => string;
+    referenceOf: (matterId: string) => string;
+    matterHref: (matterId: string) => string;
+    turn: (envelopeId: string) => boolean;
+    canSend: boolean;
+  },
+): Promise<{ page: EnvelopeViewData; voidDialog: { organizationId: string; envelopeId: string; who: string } | null } | null> {
+  const org = staff.organizationId;
+  const found = await supabase.from("agreements").select("id, matter_id, kind, title, status, current_version_id, created_at").eq("organization_id", org).eq("id", agreementId).maybeSingle();
+  const agreement = found.data;
+  if (!agreement) return null;
+  const [version, envelopes] = await Promise.all([
+    agreement.current_version_id
+      ? supabase.from("agreement_versions").select("version_number, content_sha256").eq("organization_id", org).eq("id", agreement.current_version_id).maybeSingle()
+      : null,
+    supabase
+      .from("signature_envelopes")
+      .select("id, status, sent_at, expires_at, completed_at, voided_at, content_sha256")
+      .eq("organization_id", org)
+      .eq("agreement_id", agreement.id)
+      .order("sent_at", { ascending: false })
+      .limit(1),
+  ]);
+  const envelope = envelopes.data?.[0] ?? null;
+  const [signers, events] = envelope
+    ? await Promise.all([
+        supabase
+          .from("envelope_signers")
+          .select("id, signing_order, display_name, status, signed_at, declined_at")
+          .eq("organization_id", org)
+          .eq("envelope_id", envelope.id)
+          .order("signing_order"),
+        supabase.from("signature_events").select("id, kind, signer_id, occurred_at, content_sha256").eq("organization_id", org).eq("envelope_id", envelope.id).order("occurred_at").limit(100),
+      ])
+    : [null, null];
+
+  const when = (iso: string) => sentWhen(iso, staff.timezone);
+  const client = ctx.clientOf(agreement.matter_id);
+  const reference = ctx.referenceOf(agreement.matter_id);
+  const number = version?.data?.version_number;
+  const document = `${agreement.title}${number ? ` v${number}` : ""}`;
+  const signerRows = signers?.data ?? [];
+  const nameOf = new Map(signerRows.map((row) => [row.id, row.display_name]));
+  const signed = signerRows.filter((row) => row.status === "signed").length;
+  const steps: EnvelopeStep[] = signerRows.map((row, index) => {
+    const first = (name: string) => name.trim().split(/\s+/)[0] || name;
+    if (row.status === "signed") return { state: "done", name: row.display_name, note: [`Signed ${row.signed_at ? when(row.signed_at) : ""}`.trim(), "in-house e-signature"] };
+    if (row.status === "declined") return { state: "", name: row.display_name, note: [`Declined ${row.declined_at ? when(row.declined_at) : ""}`.trim()] };
+    if (row.status === "current" && envelope && ["sent", "partially_signed"].includes(envelope.status)) return { state: "now", name: row.display_name, note: ["Waiting for signature"] };
+    const before = signerRows[index - 1];
+    return { state: "", name: row.display_name, note: [before ? `After ${first(before.display_name)}` : "First to sign"] };
+  });
+  const badge = !envelope
+    ? null
+    : envelope.status === "completed"
+      ? { tone: "ok" as const, label: "Executed" }
+      : envelope.status === "voided"
+        ? { tone: "gr" as const, label: "Voided" }
+        : envelope.status === "declined"
+          ? { tone: "bad" as const, label: "Declined" }
+          : envelope.status === "expired"
+            ? { tone: "gr" as const, label: "Expired" }
+            : { tone: "blue" as const, label: `${signed} of ${signerRows.length} signed` };
+  const eventRows = (events?.data ?? []).map((event) => {
+    const hash = shortHash(event.content_sha256);
+    const who = event.signer_id ? nameOf.get(event.signer_id) : null;
+    const label = EVENT_LABEL[event.kind] ?? event.kind;
+    const parts =
+      event.kind === "sent" && hash
+        ? [label, `document hash ${hash}`]
+        : event.kind === "replayed"
+          ? [label, "ignored, nothing changed"]
+          : who && (event.kind === "signed" || event.kind === "declined")
+            ? [`${who} ${label}`]
+            : [label.charAt(0).toUpperCase() + label.slice(1)];
+    return { key: event.id, when: when(event.occurred_at), event: parts, id: event.id.slice(0, 8) };
+  });
+
+  const waiting = Boolean(envelope && ["sent", "partially_signed"].includes(envelope.status));
+  const actions: EnvelopeAction[] = [];
+  if (envelope?.status === "completed") {
+    actions.push({ label: "Download signed PDF", primary: true, href: agreementPdfHref(envelope.id, org, "executed") });
+    actions.push({ label: "Download completion certificate", href: agreementPdfHref(envelope.id, org, "certificate") });
+  }
+  if (envelope && waiting && ctx.turn(envelope.id)) actions.push({ label: "Countersign", primary: true, attrs: { "data-dlg": countersignDialogId(envelope.id) } });
+  if (!envelope && agreement.status === "draft" && ctx.canSend && isSendableKind(agreement.kind)) {
+    actions.push({ label: "Send for signature", primary: true, attrs: { "data-agreement-send": agreement.id, "data-org": org } });
+  }
+  if (envelope && waiting && ctx.canSend) actions.push({ label: "Void envelope", attrs: { "data-dlg": "dlgVoid" } });
+  actions.push({ label: "Open the matter", href: ctx.matterHref(agreement.matter_id) });
+
+  const state = agreement.status === "draft" ? "Saved as a draft. Not sent yet." : `${agreementBadge(agreement.status, agreement.kind).label}.`;
+  const current = signerRows.find((row) => row.status === "current");
+  return {
+    page: {
+      title: `${document} (${client})`,
+      intro: `${kindLabel(agreement.kind)} on ${reference}. ${state}${envelope && waiting ? ` Expires ${firmDayMonth(envelope.expires_at, staff.timezone)}.` : ""}`,
+      signers: {
+        badge,
+        steps,
+        empty: envelope ? null : "Nobody has been asked to sign yet. Send it for signature: the applicant signs first, then the sponsor, then the consultant for the firm.",
+      },
+      events: eventRows,
+      integrity: [
+        { term: "Document", value: document },
+        { term: "Hash", value: shortHash(envelope?.content_sha256 ?? version?.data?.content_sha256) ? `${shortHash(envelope?.content_sha256 ?? version?.data?.content_sha256)} (SHA-256)` : "Locked when it is sent" },
+        { term: "If fees change", value: "The envelope is voided and a new version is sent, even after someone signs" },
+        { term: "When complete", value: "The signed PDF and completion certificate are stored on the matter and in each signer’s portal" },
+      ],
+      actions,
+      note:
+        envelope?.status === "completed"
+          ? "The executed original can’t be edited."
+          : waiting
+            ? "Casevoya doesn’t send signing reminders from here yet; the signer sees the agreement in their portal."
+            : "History is kept for every envelope, signed or not.",
+    },
+    voidDialog: envelope && waiting && ctx.canSend ? { organizationId: org, envelopeId: envelope.id, who: current?.display_name ?? client } : null,
+  };
+}
+
+function firmDayMonth(iso: string, timeZone: string): string {
+  return dayMonth(isoDateInTimeZone(new Date(iso), timeZone));
 }

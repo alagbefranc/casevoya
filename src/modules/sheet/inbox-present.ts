@@ -38,6 +38,18 @@ export function noticeLabel(template: string, critical: boolean): string {
   return `${templateLabel(template)}${critical ? " (critical)" : ""}`;
 }
 
+/** What counts as a delivery problem, everywhere it is counted: the Inbox pill and the Delivery problems tab. */
+export const DELIVERY_PROBLEM_STATUSES = ["bounced", "suppressed", "failed"] as const;
+export const DELIVERY_PROBLEM_DAYS = 60;
+
+export function deliveryProblemsSince(now: Date): string {
+  return new Date(now.getTime() - DELIVERY_PROBLEM_DAYS * 86_400_000).toISOString();
+}
+
+export function deliveryProblemsPill(count: number): string {
+  return `${count} delivery ${count === 1 ? "problem" : "problems"}`;
+}
+
 export function deliveryProblem(status: string, attempts: number): Text2 {
   if (status === "bounced") return "Address bounced";
   if (status === "suppressed") return "On the do-not-send list";

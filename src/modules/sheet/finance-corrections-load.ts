@@ -13,13 +13,14 @@ import {
   creditBalance,
   creditNoteState,
   monthLabel,
+  reconHistoryTitle,
   signedAmount,
 } from "@/modules/finance/corrections-present";
 import { formatAmount, formatMoney } from "@/modules/finance/money";
 import { cardBrandName } from "@/modules/finance/payment-receipt";
-import { creditNoteHref } from "@/modules/finance/receipt-links";
+import { creditNoteHref, invoicePdfHref } from "@/modules/finance/receipt-links";
 import { longDate } from "@/modules/finance/receipt-pdf";
-import { FEE_CATEGORY_LABEL, invoiceState, paymentState, shortStripeId } from "@/modules/sheet/finance-present";
+import { balanceLine, billedTo, FEE_CATEGORY_LABEL, invoiceState, paymentState, shortStripeId } from "@/modules/sheet/finance-present";
 import { dayMonth } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
@@ -57,10 +58,11 @@ async function clientNames(supabase: Supabase, org: string, matterIds: string[])
   if (!matterIds.length) return new Map();
   const [billing, matters] = await Promise.all([
     supabase.rpc("list_matter_billing"),
-    supabase.from("matters").select("id, title, reference, is_sample").eq("organization_id", org).in("id", matterIds),
+    // The applicant is who an invoice is billed to; list_matter_billing leaves sample matters out.
+    supabase.from("matters").select("id, matter_participants(role, persons(display_name))").eq("organization_id", org).in("id", matterIds),
   ]);
   const names = new Map((billing.data ?? []).filter((row) => row.organization_id === org && row.client_display_name).map((row) => [row.matter_id, row.client_display_name as string]));
-  return new Map((matters.data ?? []).map((row) => [row.id, names.get(row.id) ?? row.title ?? "Client"]));
+  return new Map((matters.data ?? []).map((row) => [row.id, names.get(row.id) ?? billedTo(row.matter_participants ?? [])]));
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +129,7 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
     .maybeSingle();
   const invoice = found.data;
   if (!invoice) return null;
-  const [viewer, matter, clients, payments, transfers, receipts, notes, name] = await Promise.all([
+  const [viewer, matter, clients, payments, transfers, receipts, notes, name, refunds] = await Promise.all([
     viewerId(supabase),
     supabase.from("matters").select("id, reference, title, is_sample").eq("organization_id", org).eq("id", invoice.matter_id).maybeSingle(),
     clientNames(supabase, org, [invoice.matter_id]),
@@ -152,6 +154,13 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
       .eq("invoice_id", invoice.id)
       .order("number", { ascending: true }),
     staffNames(supabase, org, canBill),
+    // Card refunds on this invoice's payments, for its history (RLS mirrors invoice_payments).
+    supabase
+      .from("invoice_refunds")
+      .select("id, number, amount_cents, currency, status, requested_by, succeeded_at, created_at")
+      .eq("organization_id", org)
+      .eq("invoice_id", invoice.id)
+      .order("created_at", { ascending: true }),
   ]);
   const currency = invoice.currency;
   const money = (minor: number) => formatMoney(minor, currency);
@@ -233,7 +242,7 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
   lines.push({
     key: "due",
     category: null,
-    description: { bold: true, parts: [invoice.status === "voided" ? "Voided, nothing due" : `Balance due ${dayMonth(invoice.due_on)}`] },
+    description: { bold: true, parts: [balanceLine(invoice.status, due, dayMonth(invoice.due_on))] },
     qty: null,
     tax: null,
     amount: { bold: true, text: amount(due) },
@@ -310,6 +319,16 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
   for (const note of noteRows.filter((row) => row.status === "issued")) {
     history.push({ key: note.id, state: "done", title: `Credit note ${note.number}`, note: [day(note.issued_at ?? note.created_at), `${money(note.amount_cents)} by ${name(note.issued_by)}`] });
   }
+  // Card refunds: succeeded ones are history; pending ones say so.
+  for (const refund of (refunds.data ?? []).filter((row) => row.status === "succeeded" || row.status === "pending" || row.status === "requires_action")) {
+    const done = refund.status === "succeeded";
+    history.push({
+      key: refund.id,
+      state: "done",
+      title: `Refund ${refund.number}`,
+      note: [day(refund.succeeded_at ?? refund.created_at), `${formatMoney(refund.amount_cents, refund.currency)} to the card${done ? "" : ", waiting for Stripe"}`],
+    });
+  }
   if (invoice.status === "voided") {
     history.push({ key: "voided", state: "now", title: "Voided", note: [day(invoice.voided_at ?? invoice.created_at), `by ${name(invoice.voided_by)}: ${short(invoice.void_reason ?? "", 80)}`] });
   } else if (invoice.status === "partially_paid") {
@@ -332,6 +351,8 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
   const actions: InvoiceAction[] = [];
   if (creditOk) actions.push({ label: "Issue a credit note", attrs: { "data-dlg": "dlgCN" } });
   if (voidable) actions.push({ label: "Void invoice", attrs: { "data-dlg": "dlgVoid" } });
+  // The invoice as a PDF, drawn from the invoice as it stands (the receipts' layout).
+  if (invoice.status !== "draft") actions.push({ label: "Download PDF", attrs: {}, href: invoicePdfHref(invoice.id, org) });
 
   const fromFunds = invoice.client_funds_paid_cents > 0;
   const view: InvoiceViewData = {
@@ -341,13 +362,13 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
     badge: { tone: state.tone, label: state.label, ...(state.detail ? { detail: state.detail } : {}) },
     tags: [
       { label: "Issued", value: invoice.issued_on ? longDate(invoice.issued_on) : "—" },
-      { label: "Balance due", value: longDate(invoice.due_on) },
+      { label: due > 0 || invoice.status === "issued" || invoice.status === "partially_paid" ? "Balance due" : "Was due", value: longDate(invoice.due_on) },
     ],
     lock: invoice.status === "voided" ? ["Voided", "can’t be paid or edited"] : ["Issued", "can’t be edited"],
     lines,
     allocations,
     allocationsEmpty: "Nothing is allocated to this invoice yet.",
-    allocationsNote: "A successful checkout page isn’t proof of payment. Only Stripe’s signed event or an approved transfer from the client account counts (FIN-08). A credit note reduces what’s owed; it isn’t a payment.",
+    allocationsNote: "A successful checkout page isn’t proof of payment. Only Stripe’s signed event or an approved transfer from the client account counts. A credit note reduces what’s owed; it isn’t a payment.",
     creditNotes: { rows: creditRows, empty: canBill ? "No credit notes. Correct an issued invoice with a credit note; it can’t be edited." : "No credit notes." },
     creditBalance:
       balance > 0
@@ -367,7 +388,7 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
       invoiceId: invoice.id,
       invoice: label,
       maxCents: left,
-      hint: left > 0 ? `Up to ${money(left)}, the amount not already credited${due > 0 && due < left ? ` (${money(due)} is unpaid)` : ""}` : "Nothing left to credit",
+      hint: left > 0 ? `Up to ${money(left)}, the amount not already credited or refunded${due > 0 && due < left ? ` (${money(due)} is unpaid)` : ""}` : "Nothing left to credit",
       blocked: !canBill
         ? { title: "Billing staff only", copy: "The firm owner or the matter’s finance user drafts credit notes." }
         : !creditOk
@@ -633,10 +654,12 @@ export async function loadReconciliation(
 
   const data: ReconData = {
     period: pendingRow ? monthLabel(pendingRow.statement_date) : null,
-    intro: `Three-way check of ${staff.organizationName}’s client account: the bank statement’s closing balance, the control ledger and the total of all client ledgers, as of the statement date. Casevoya computes the ledger side from verified deposits, bank transfers recorded as sent, refunds and corrections; it reads no bank feed. Your accountant validates the chart of accounts before live use (FIN-12).`,
+    intro: `Three-way check of ${staff.organizationName}’s client account: the bank statement’s closing balance, the control ledger and the total of all client ledgers, as of the statement date. Casevoya computes the ledger side from verified deposits, bank transfers recorded as sent, refunds and corrections; it reads no bank feed. Your accountant validates the chart of accounts before live use.`,
     pending,
     start,
     history,
+    // "Earlier months" is wrong while this month's own reconciliation is in the list.
+    historyTitle: reconHistoryTitle(signed.map((row) => row.statement_date), today),
     historyEmpty: { title: "No signed reconciliations yet", copy: "Signed reconciliations are listed here, month by month. They can’t be changed once signed." },
     payouts,
   };

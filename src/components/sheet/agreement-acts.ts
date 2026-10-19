@@ -1,18 +1,31 @@
 "use client";
 
 import { toast2 } from "@/components/port/kit";
-import { approveAgreementTemplate, countersignAgreement, createAgreementTemplate, createAndSendAgreement } from "@/modules/agreements/staff-actions";
+import {
+  approveAgreementTemplate,
+  countersignAgreement,
+  createAgreementTemplate,
+  createAndSendAgreement,
+  recordRepresentationAuthority,
+  sendAgreementDraft,
+  voidAgreementEnvelope,
+} from "@/modules/agreements/staff-actions";
 import {
   AGREEMENT_DIALOG,
   agreementStepUpLocation,
+  AUTHORITY_DIALOG,
   COUNTERSIGN_DIALOG,
   countersignDialogId,
   countersignTarget,
   needsStepUp,
+  readAuthority,
   readCountersign,
   readNewAgreement,
   readNewTemplate,
+  readVoid,
+  sentAgreementToast,
   TEMPLATE_DIALOG,
+  VOID_DIALOG,
 } from "@/modules/sheet/agreements-present";
 
 type Router = { refresh: () => void; replace: (href: string) => void };
@@ -32,6 +45,7 @@ function keep(draft: Record<string, string>) {
   }
 }
 
+/** To the step-up screen, coming back to this page (and tab) with the dialog open again. */
 function stepUp(dialog: string | null) {
   window.location.assign(agreementStepUpLocation(window.location.pathname, window.location.search, dialog));
 }
@@ -98,8 +112,10 @@ export async function runNewAgreement(button: HTMLElement, router: Router) {
     toast2(read.error, { kind: "warn", sub: "Nothing was sent." });
     return;
   }
+  // Save as draft keeps it unsent (it waits under "Drafts not sent"); Create and send sends it.
+  const draft = button.dataset.newAgreement === "draft";
   // The fee goes as typed; the server converts it to minor units and checks everything again.
-  const result = await createAndSendAgreement({ organizationId: button.dataset.org ?? "", ...fields });
+  const result = await createAndSendAgreement({ organizationId: button.dataset.org ?? "", draft, ...fields });
   if ("error" in result) {
     if (needsStepUp(result.error)) {
       keep({ ...fields, dialog: AGREEMENT_DIALOG });
@@ -108,16 +124,84 @@ export async function runNewAgreement(button: HTMLElement, router: Router) {
     }
     toast2(result.error, {
       kind: "bad",
-      sub: result.draftId ? "Saved as a draft. It was not sent; try again to send it." : "Nothing was sent.",
+      sub: result.draftId ? "Saved as a draft. It was not sent; try again to send it." : draft ? "Nothing was saved." : "Nothing was sent.",
     });
     if (result.draftId) router.refresh();
     return;
   }
   dialog.close();
-  toast2("Agreement sent for signature", {
-    kind: "ok",
-    sub: "The applicant signs in their portal. They get an email that it is ready. When the firm countersigns, the consultant is emailed at their turn.",
-  });
+  if (draft) {
+    toast2("Saved as a draft", { kind: "ok", sub: "Nobody was asked to sign. Open it from Drafts not sent to send it." });
+  } else {
+    const done = sentAgreementToast(result.sample);
+    toast2(done.title, { kind: "ok", sub: done.sub });
+  }
+  settle(router);
+}
+
+/** An agreement's own view: Send for signature, for a draft saved without sending. */
+export async function runAgreementSend(button: HTMLElement, router: Router) {
+  const result = await sendAgreementDraft({ organizationId: button.dataset.org ?? "", agreementId: button.dataset.agreementSend ?? "" });
+  if ("error" in result) {
+    if (needsStepUp(result.error)) {
+      stepUp(null);
+      return;
+    }
+    toast2(result.error, { kind: "bad", sub: "Nothing was sent." });
+    return;
+  }
+  const done = sentAgreementToast(result.sample);
+  toast2(done.title, { kind: "ok", sub: done.sub });
+  router.refresh();
+}
+
+/** Void envelope: the reason is required and kept with the envelope's events. */
+export async function runAgreementVoid(button: HTMLElement, router: Router) {
+  const dialog = button.closest("dialog");
+  if (!dialog) return;
+  const fields = { envelopeId: button.dataset.agreementVoid ?? "", reason: value(dialog, "voR") };
+  const read = readVoid(fields);
+  if ("error" in read) {
+    toast2(read.error, { kind: "warn", sub: "Nothing was changed." });
+    return;
+  }
+  const result = await voidAgreementEnvelope({ organizationId: button.dataset.org ?? "", ...read.input });
+  if ("error" in result) {
+    if (needsStepUp(result.error)) {
+      keep({ reason: fields.reason, dialog: VOID_DIALOG });
+      stepUp(VOID_DIALOG);
+      return;
+    }
+    toast2(result.error, { kind: "bad", sub: "Nothing was changed." });
+    return;
+  }
+  dialog.close();
+  toast2("Envelope voided", { kind: "ok", sub: "Its history is kept. Send a new version when ready." });
+  settle(router);
+}
+
+/** Record representation authority: saved to public.representation_authorities. The database decides. */
+export async function runAuthoritySave(button: HTMLElement, router: Router) {
+  const dialog = button.closest("dialog");
+  if (!dialog) return;
+  const fields = { client: value(dialog, "raC"), scope: value(dialog, "raS"), evidence: value(dialog, "raE"), effective: value(dialog, "raD") };
+  const read = readAuthority(fields);
+  if ("error" in read) {
+    toast2(read.error, { kind: "warn", sub: "Nothing was saved." });
+    return;
+  }
+  const result = await recordRepresentationAuthority({ organizationId: button.dataset.org ?? "", ...fields });
+  if ("error" in result) {
+    if (needsStepUp(result.error)) {
+      keep({ ...fields, dialog: AUTHORITY_DIALOG });
+      stepUp(AUTHORITY_DIALOG);
+      return;
+    }
+    toast2(result.error, { kind: "bad", sub: "Nothing was saved." });
+    return;
+  }
+  dialog.close();
+  toast2("Authority recorded", { kind: "ok", sub: "It is on file for this matter. A submission can be signed off once it is in effect." });
   settle(router);
 }
 
@@ -216,7 +300,7 @@ export function reopenCountersign(root: ParentNode, open: (id: string) => void) 
 export function reopenAgreementDialogs(root: ParentNode, open: (id: string) => void) {
   const params = new URLSearchParams(window.location.search);
   const which = params.get("dlg");
-  if (which !== AGREEMENT_DIALOG && which !== TEMPLATE_DIALOG) return;
+  if (which !== AGREEMENT_DIALOG && which !== TEMPLATE_DIALOG && which !== AUTHORITY_DIALOG && which !== VOID_DIALOG) return;
   let draft: Record<string, unknown> | null = null;
   try {
     const raw = sessionStorage.getItem(DRAFT);
@@ -246,6 +330,23 @@ export function reopenAgreementDialogs(root: ParentNode, open: (id: string) => v
       set("nqG", draft.government, true);
     }
     open("dlgNewQ");
+    return;
+  }
+  if (which === AUTHORITY_DIALOG) {
+    if (!root.querySelector("dialog#dlgAuth")) return;
+    if (draft?.dialog === AUTHORITY_DIALOG) {
+      set("raC", draft.client);
+      set("raS", draft.scope);
+      set("raE", draft.evidence);
+      set("raD", draft.effective);
+    }
+    open("dlgAuth");
+    return;
+  }
+  if (which === VOID_DIALOG) {
+    if (!root.querySelector("dialog#dlgVoid [data-agreement-void]")) return;
+    if (draft?.dialog === VOID_DIALOG) set("voR", draft.reason);
+    open("dlgVoid");
     return;
   }
   if (draft?.dialog === TEMPLATE_DIALOG) {

@@ -54,6 +54,12 @@ export type ToolSpec = {
   run: (ctx: RunContext, args: Record<string, unknown>) => Promise<ToolResult>;
 };
 
+/** A matter stage as people say it ("evidence_collection" is "Evidence collection"): Vo never repeats a raw key. */
+export function stageWords(stage: string): string {
+  const words = stage.replace(/_/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Unknown";
+}
+
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function day(iso: string | null): string {
   if (!iso) return "no date";
@@ -116,7 +122,7 @@ export const TOOL_SPECS: Record<VoToolName, ToolSpec> = {
       ]);
       if (!matter) return refused("This matter can't be read.");
       cite(ctx, { kind: "matter", id: matter.id, label: matter.reference || matter.title });
-      const lines = [`Matter: ${oneLine(matter.title)}${matter.reference ? ` (${oneLine(matter.reference, 40)})` : ""}; stage: ${oneLine(matter.stage, 40)}`];
+      const lines = [`Matter: ${oneLine(matter.title)}${matter.reference ? ` (${oneLine(matter.reference, 40)})` : ""}; stage: ${oneLine(stageWords(matter.stage), 40)}`];
       lines.push(`Open tasks: ${tasks.length ? "" : "none"}`);
       for (const task of tasks) {
         cite(ctx, { kind: "task", id: task.id, label: `Task: ${task.title}` });
