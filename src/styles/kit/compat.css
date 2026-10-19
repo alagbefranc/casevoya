@@ -39,3 +39,7 @@
   #dlgNew .g2 .fld:has(#nmS),#dlgNew .g2 .fld:has(#nmSE),#dlgNew .g2 .fld:has(#nmSD){order:1}
   #dlgNew .g2 .fld:has(#nmT),#dlgNew .g2 .fld:has(#nmC){order:2}
 }
+
+/* The sidebar still scrolls (wheel, trackpad, touch, keyboard) but shows no scrollbar. */
+.side{scrollbar-width:none;-ms-overflow-style:none}
+.side::-webkit-scrollbar{display:none}
