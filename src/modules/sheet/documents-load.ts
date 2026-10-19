@@ -15,6 +15,7 @@ import {
   type VersionFacts,
 } from "@/modules/sheet/documents-present";
 import { dayMonth } from "@/modules/sheet/home-present";
+import { voReadOffered } from "@/modules/sheet/vo-doc-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone, type SheetQuery } from "@/modules/sheet/present";
 
@@ -170,7 +171,9 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
 
   if (tab === "custody") data.custody = { rows: await loadCustody(supabase, org, documents, versions, nameOf) };
 
-  const dialog: DocumentReviewDialogData | null = canReview ? { organizationId: org, firmName: staff.organizationName } : null;
+  const dialog: DocumentReviewDialogData | null = canReview
+    ? { organizationId: org, firmName: staff.organizationName, vo: await voReadOffered(supabase, org, staff.sampleMode).catch(() => false) }
+    : null;
   return { chrome, documents: data, dialog };
 }
 

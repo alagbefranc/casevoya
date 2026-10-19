@@ -13,7 +13,7 @@ export const VO_REQUEST_MAX_AGE_MS = 60_000;
 export const VO_SIGNATURE_HEADER = "x-vo-signature";
 export const VO_TIMESTAMP_HEADER = "x-vo-timestamp";
 
-export type VoTask = "message_reply" | "document_request" | "ask";
+export type VoTask = "message_reply" | "document_request" | "ask" | "document_review";
 
 export type VoTaskRequest = {
   v: 1;
@@ -26,19 +26,22 @@ export type VoTaskRequest = {
   threadId: string | null;
   /** Ask Vo: the staff member's question. Treated as data like everything else. */
   question: string | null;
+  /** document_review only: the document version Vo reads, downloaded with the staff member's own token. */
+  versionId?: string | null;
   /** The staff member's own Supabase access token (RLS applies to every tool). */
   accessToken: string;
   /** Epoch ms after which the service refuses the request. */
   expiresAt: number;
 };
 
-export type VoSourceRef = { kind: "message" | "matter" | "document_request" | "task" | "deadline"; id: string; label: string };
+export type VoSourceRef = { kind: "message" | "matter" | "document_request" | "task" | "deadline" | "document_version"; id: string; label: string };
 
+/** document_review answers "drafted" too: draftId is the vo_doc_drafts row, text its summary. */
 export type VoTaskResponse =
   | { result: "drafted"; draftId: string; text: string; needsRule: boolean; sources: VoSourceRef[] }
   | { result: "answered"; text: string; needsRule: boolean; sources: VoSourceRef[] }
   | { result: "abstained" }
-  | { result: "failed"; failure: "unavailable" | "failed" | "empty" | "nothing_to_draft" };
+  | { result: "failed"; failure: "unavailable" | "failed" | "empty" | "nothing_to_draft" | "refused" | "unsupported_file" };
 
 const encoder = new TextEncoder();
 
@@ -84,8 +87,11 @@ export function parseVoTaskRequest(raw: unknown, now: number = Date.now()): VoTa
   const r = raw as Record<string, unknown>;
   const id = (value: unknown) => typeof value === "string" && UUID.test(value);
   if (r.v !== 1 || !id(r.runId) || !id(r.organizationId) || !id(r.membershipId) || !id(r.userId) || !id(r.matterId)) return null;
-  if (r.task !== "message_reply" && r.task !== "document_request" && r.task !== "ask") return null;
-  if (r.task === "ask" ? r.threadId !== null : !id(r.threadId)) return null;
+  if (r.task !== "message_reply" && r.task !== "document_request" && r.task !== "ask" && r.task !== "document_review") return null;
+  // A document reading has no conversation and no question, only the version it reads; no other
+  // task names a version.
+  if (r.task === "document_review" ? !id(r.versionId) : r.versionId !== undefined && r.versionId !== null) return null;
+  if (r.task === "ask" || r.task === "document_review" ? r.threadId !== null : !id(r.threadId)) return null;
   if (r.task === "ask" ? typeof r.question !== "string" || !r.question.trim() || r.question.length > 1000 : r.question !== null) return null;
   if (typeof r.accessToken !== "string" || r.accessToken.length < 20 || r.accessToken.length > 8000) return null;
   if (typeof r.expiresAt !== "number" || r.expiresAt < now || r.expiresAt > now + 5 * 60_000) return null;

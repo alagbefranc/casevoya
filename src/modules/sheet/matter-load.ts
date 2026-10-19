@@ -1,6 +1,7 @@
 import "server-only";
 import { loadMatterMessages } from "@/modules/messages/load";
 import { loadVoComposer } from "@/modules/sheet/vo-load";
+import { loadVoReadingPanel } from "@/modules/sheet/vo-doc-load";
 import {
   matterTab,
   type MatterAgreementRow,
@@ -248,16 +249,25 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     ...requestRows.map((row) => ({
       title: row.purpose,
       kind: row.source === "rule" ? "From the checklist" : "Requested by the firm",
+      documentId: row.document_id,
       personId: row.person_id,
       state: documentState({ requestStatus: row.status, version: currentVersion(row.document_id) }, today),
     })),
     ...documentRows
       .filter((row) => !requested.has(row.id))
-      .map((row) => ({ title: row.purpose, kind: "Added to the file", personId: row.person_id, state: documentState({ requestStatus: null, version: currentVersion(row.id) }, today) })),
+      .map((row) => ({
+        title: row.purpose,
+        kind: "Added to the file",
+        documentId: row.id as string | null,
+        personId: row.person_id,
+        state: documentState({ requestStatus: null, version: currentVersion(row.id) }, today),
+      })),
   ];
   const counts = { accepted: 0, review: 0, outstanding: 0 };
   for (const row of checklist) if (row.state.bucket) counts[row.state.bucket] += 1;
 
+  // Vo's reading of one document waiting for review: the Designer's review panel (`#ocr`).
+  const voReading = matterTab(query.tab) === "documents" ? await loadVoReadingPanel(supabase, org, matter.id, query.vo ?? null).catch(() => null) : null;
   const documentTable: MatterDocumentRow[] = checklist.map((row) => ({
     title: row.title,
     kind: row.kind,
@@ -265,6 +275,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     upload: row.state.upload,
     review: row.state.review,
     version: row.state.version,
+    open: voReading && row.documentId === voReading.documentId ? { href: "#ocr", label: "Review" } : null,
   }));
 
   // Overview.
@@ -571,6 +582,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       checklist: program,
       people: [...new Set(checklist.map((row) => firstName(personName(row.personId))))].slice(0, 4),
       rows: documentTable,
+      vo: voReading?.panel ?? null,
     },
     agreements: { rows: agreementTable, signing, create: matter.stage === "closed" ? null : newAgreementHref(matter.id) },
     tasks: { deadline, tasks: taskTable, record: recordsDeadlines },

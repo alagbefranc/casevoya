@@ -20,6 +20,7 @@ export const VO_PROMPT_VERSION: Record<VoTask, string> = {
   message_reply: "reply-1",
   document_request: "docreq-1",
   ask: "ask-1",
+  document_review: "docread-1",
 };
 
 /** What a draft says where it would need an immigration rule, fee, deadline or processing time. */
@@ -79,6 +80,8 @@ const TASK: Record<VoTask, string> = {
     "Answer only from your tools' results and say which records you used. If the question needs an immigration rule, fee, deadline, processing time or a legal judgement, answer with exactly",
     `${NEEDS_CONSULTANT} and nothing else. Keep the answer under 150 words.`,
   ].join("\n"),
+  // The document reading has its own prompt and output schema (vo-doc-prompt.ts).
+  document_review: "Task: read one uploaded document and return proposals only, in the requested format.",
 };
 
 export function voSystemPrompt(task: VoTask, nonce: string): string {

@@ -45,7 +45,7 @@ const TIMEOUT_MS = 90_000;
 
 export async function callVoAgent(
   request: VoTaskRequest,
-  deps: { transport?: VoAgentTransport; secret?: string | null; now?: () => number } = {},
+  deps: { transport?: VoAgentTransport; secret?: string | null; now?: () => number; timeoutMs?: number } = {},
 ): Promise<VoTaskResponse> {
   const transport = deps.transport === undefined ? voAgentTransport() : deps.transport;
   const secret = deps.secret === undefined ? voAgentSecret() : deps.secret;
@@ -58,7 +58,7 @@ export async function callVoAgent(
       method: "POST",
       headers: { "content-type": "application/json", [VO_SIGNATURE_HEADER]: signature, [VO_TIMESTAMP_HEADER]: String(timestamp) },
       body,
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(deps.timeoutMs ?? TIMEOUT_MS),
     });
     if (!response.ok) return { result: "failed", failure: response.status === 503 ? "unavailable" : "failed" };
     const parsed = (await response.json()) as VoTaskResponse;

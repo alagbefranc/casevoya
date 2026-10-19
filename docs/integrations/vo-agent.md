@@ -49,7 +49,24 @@ browser ── server action (app Worker, casevoya-app)
 | `find_free_slots` | reply | the firm's next free consultation times (`staff_booking_availability` + the app's slot engine) and the published booking page link |
 | `save_draft` | reply, document request | the only write: keeps the guarded draft for `finish_vo_run` (status draft) |
 
-There is no send, email, submit or update tool. Client-, staff- and third-party-written text comes
+There is no send, email, submit or update tool.
+
+## Document reading (`document_review`, 2026-10-18)
+
+One task does not use the Agent SDK's tool loop: reading one uploaded document version.
+`src/vo-doc-read.ts` makes ONE Messages API call (`@anthropic-ai/sdk`, `client.beta.messages.create`)
+with model `claude-opus-5-5`, adaptive thinking, effort `high`, `max_tokens` 16000, structured
+outputs (`output_config.format` json_schema built from the firm's switches), server-side refusal
+fallback (`server-side-fallback-2026-07-01`, `fallbacks: "default"`) and **no tools**. The file goes
+in as a base64 `document` block (PDF, up to 20 MB) or `image` block (JPEG/PNG/WebP/GIF, up to 5 MB);
+HEIC and DOCX are refused as `unsupported_file`. Order of checks: the firm's switches and the
+document's category (before any download) → `authorize_document_download` + Storage download with
+the staff member's own token (`src/vo-doc-data.ts`; audited `document.download`) → magic bytes →
+model → `normalizeReading` (capabilities, identity-number redaction, links/emails removed, flags
+never fraud findings, deadlines only on dates read from the page, `[needs a sourced rule]` for
+anything rule-based) → `finish_vo_document_review` as the staff member (checked again in SQL).
+The run log records the served model, `read_document_version` as the tool, tokens and an
+estimated cost, and the version id as the source. Client-, staff- and third-party-written text comes
 back inside per-run nonce delimiters; identity-number-like strings are removed first.
 
 ## Locks
@@ -69,7 +86,8 @@ with `[needs a sourced rule]`, which `send_vo_draft` refuses to send.
 3. On `casevoya-app`: the same `VO_AGENT_SECRET` as a secret, and a service binding in
    `wrangler.jsonc`: `"services": [..., { "binding": "VO_AGENT", "service": "casevoya-vo-agent" }]`.
    Not added in this branch: a binding to a Worker that doesn't exist yet would fail the app deploy.
-4. Apply migrations `20261019207000` and `20261019207100`.
+4. Apply migrations `20261019207000` and `20261019207100` (and, for document reading,
+   `20261019218000` then `20261019218100`; the enum migration must commit first).
 5. Privacy review: client messages and matter details go to Anthropic (US) through the container.
    The owner must turn Vo on per firm (off by default for real firms).
 

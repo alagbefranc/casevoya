@@ -5,7 +5,7 @@ import { isUuid } from "@/lib/tenant/context";
 import { messageError } from "@/modules/messages/present";
 import { callVoAgent, voAgentConfigured } from "./agent-client";
 import { MAX_DRAFT_CHARS } from "./guard";
-import { VO_SETTING_KEYS, voError, type VoSettingKey } from "./errors";
+import { voError, voSettingChanges, type VoSwitchKey } from "./errors";
 import type { VoSourceRef, VoTask, VoTaskRequest } from "./sign";
 
 type Result<T extends object = object> = ({ ok: true } & T) | { error: string };
@@ -165,11 +165,12 @@ export async function rateVoRun(input: { organizationId: string; runId: string; 
 }
 
 /** One Vo switch, changed by the firm owner (the others keep their saved value). */
-export async function saveVoSetting(input: { organizationId: string; setting: VoSettingKey; on: boolean }): Promise<Result> {
+export async function saveVoSetting(input: { organizationId: string; setting: VoSwitchKey; on: boolean }): Promise<Result> {
   if (!isUuid(input.organizationId) || typeof input.on !== "boolean") return { error: "Choose a setting." };
-  if (!(VO_SETTING_KEYS as readonly string[]).includes(input.setting)) return { error: "Choose a setting." };
+  const changes = voSettingChanges(input.setting, input.on);
+  if (!changes) return { error: "Choose a setting." };
   const supabase = await createClient({ organizationId: input.organizationId });
-  const { error } = await supabase.rpc("set_vo_settings", { p_organization_id: input.organizationId, p_changes: { [input.setting]: input.on } });
+  const { error } = await supabase.rpc("set_vo_settings", { p_organization_id: input.organizationId, p_changes: changes });
   if (error) return { error: voError("owner_only") };
   return { ok: true };
 }

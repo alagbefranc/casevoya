@@ -27,6 +27,8 @@ export const TASK_TOOLS: Record<VoTask, readonly VoToolName[]> = {
   message_reply: ["read_matter_summary", "read_person", "read_messages_thread", "search_approved_sources", "find_free_slots", "save_draft"],
   document_request: ["read_matter_summary", "read_person", "read_messages_thread", "save_draft"],
   ask: ["read_matter_summary", "read_person", "read_documents_index", "search_approved_sources"],
+  // A document reading is one model call with no tools at all (vo-doc-read.ts).
+  document_review: [],
 };
 
 export type ToolResult = { content: { type: "text"; text: string }[]; isError?: boolean };
