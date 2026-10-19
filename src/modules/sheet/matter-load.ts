@@ -57,8 +57,8 @@ import { deadlineConfirmable, TASK_STAFF_ROLES, taskManageWire } from "@/modules
 import { clientOptions, dependsOnOptions, matterOptions, staffOptions } from "@/modules/sheet/new-task";
 import { personHref } from "@/modules/sheet/clients-present";
 import { loadMatterBilling } from "@/modules/sheet/matter-billing-load";
+import { agreementViewHref } from "@/modules/sheet/agreements-views-present";
 import {
-  agreementEnvelopeHref,
   COUNTERSIGN_BADGE,
   countersignDialogData,
   countersignDialogId,
@@ -434,8 +434,9 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       parties: people.length ? people.map((signer) => firstName(signer.display_name)).join(", ") : "—",
       signatures: people.length ? `${signedCount} of ${people.length}` : "—",
       state: turn ? COUNTERSIGN_BADGE : agreementState(row.status),
-      // The agreement's own view: its envelope, signers, events and the signed PDF.
-      href: turn && envelope ? countersignHref(envelope.id) : agreementEnvelopeHref(row.id),
+      // The agreement's own view: a quote in the Quote builder, an unsent draft in the Agreement
+      // editor, else its envelope, signers, events and the signed PDF.
+      href: turn && envelope ? countersignHref(envelope.id) : agreementViewHref(row, Boolean(envelope)),
       action: turn ? "Countersign" : envelope && row.status !== "completed" ? "Track envelope" : "Open",
       ...(turn && envelope ? { dialog: countersignDialogId(envelope.id) } : {}),
     };

@@ -11,6 +11,9 @@ import {
   SheetAgreementsPending,
   VoidEnvelopeDialog,
 } from "@/components/sheet/designer/agreements-live";
+import { NewQuoteDialog, QuoteConvertDialog, QuoteEditDialog, QuotePreviewDialog, SheetAgreementQuote, SheetAgreementsPick } from "@/components/sheet/designer/agreements-quote";
+import { ClauseDialog, SheetAgreementEditor } from "@/components/sheet/designer/agreements-editor";
+import { SheetAgreementCompare } from "@/components/sheet/designer/agreements-compare";
 import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet/designer/clients";
 import { CreditNoteDialog, FinanceHeader, NewInvoiceDialog, RefundDialog, SheetFinance, SheetFinancePayments, SheetFinanceRefunds } from "@/components/sheet/designer/finance";
 import { CreditReviewDialog, SheetFinanceInvoice, VoidDialog } from "@/components/sheet/designer/invoice";
@@ -620,11 +623,14 @@ export async function SheetBody({
     );
   }
   // Agreements: All agreements, one agreement's own view (Envelope, `?tab=envelope&view=<id>`),
-  // Representation authority, and honest "not built yet" panels for Quote builder, Agreement
-  // editor and Compare versions. Always this firm's live shell, never the Designer's sample firm.
+  // Representation authority, the Quote builder (`?tab=quote&view=<id>`, its New quote dialog in
+  // place of New agreement), the Agreement editor (`?tab=editor&view=<id>`) and Compare versions
+  // (`?tab=compare&view=<id>`), each with a pick list when no agreement is chosen. Always this
+  // firm's live shell, never the Designer's sample firm.
   if (page === "agreements" && (access.kind === "live" || access.kind === "sample")) {
     const loaded = await loadSheetAgreements(access.staff, query);
     const { chrome, header, dialog, templateDialog, countersign } = loaded;
+    const voidDialog = loaded.envelope?.voidDialog ?? loaded.editor?.voidDialog ?? null;
     return (
       <SheetScreen key={`agreements-${loaded.tab}`} page={page}>
         <SheetFrame
@@ -633,13 +639,19 @@ export async function SheetBody({
           statusbar={chrome.statusbar}
           after={
             <>
-              <NewAgreementDialog data={dialog} />
+              {loaded.newQuote ? <NewQuoteDialog data={loaded.newQuote} /> : <NewAgreementDialog data={dialog} />}
               <TemplateDialog data={templateDialog} />
               {countersign.map((sign) => (
                 <CountersignDialog key={sign.envelopeId} data={sign} />
               ))}
               {loaded.authority ? <AuthorityDialog data={loaded.authority.dialog} /> : null}
-              {loaded.envelope?.voidDialog ? <VoidEnvelopeDialog data={loaded.envelope.voidDialog} /> : null}
+              {voidDialog ? <VoidEnvelopeDialog data={voidDialog} /> : null}
+              {loaded.quote?.edit ? <QuoteEditDialog data={loaded.quote.edit} /> : null}
+              {loaded.quote ? <QuotePreviewDialog data={loaded.quote.preview} /> : null}
+              {loaded.quote?.convert ? <QuoteConvertDialog data={loaded.quote.convert} /> : null}
+              {loaded.editor?.clauses.map((clause) => (
+                <ClauseDialog key={clause.clauseId} data={clause} />
+              ))}
             </>
           }
         >
@@ -647,6 +659,14 @@ export async function SheetBody({
             <SheetAgreementsAuthority data={loaded.authority.page} />
           ) : loaded.envelope ? (
             <SheetAgreementEnvelope data={loaded.envelope.page} />
+          ) : loaded.quote ? (
+            <SheetAgreementQuote data={loaded.quote.page} />
+          ) : loaded.editor ? (
+            <SheetAgreementEditor data={loaded.editor.page} />
+          ) : loaded.compare ? (
+            <SheetAgreementCompare data={loaded.compare.page} />
+          ) : loaded.pick ? (
+            <SheetAgreementsPick data={loaded.pick} />
           ) : loaded.pending ? (
             <SheetAgreementsPending data={loaded.pending} />
           ) : (
