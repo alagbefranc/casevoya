@@ -95,7 +95,10 @@ export const CHAT_CSS = `
 .cv-src summary::-webkit-details-marker{display:none}
 .cv-src ul{list-style:none;display:grid;gap:2px;margin-top:6px;color:var(--ink);font-size:12.5px}
 .cv-src li::before{content:"· ";color:var(--t2)}
-.cv-vo .cv-retry{flex:none}
+.cv-vo .cv-retry{flex:none;order:2}
+.cv-src{order:1}
+.cv-src[open]{order:3;flex-basis:100%}
+.cv-src[open] ul{max-height:120px;overflow:auto}
 .cv-sel{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px 0}
 .cv-sel .cv-chip button{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;color:var(--t2)}
 .cv-ta{display:block;width:100%;resize:none;min-height:52px;max-height:200px;border:0;background:transparent;padding:10px 14px 4px;font:inherit;font-size:15px;line-height:22px;color:var(--ink);outline:0}
