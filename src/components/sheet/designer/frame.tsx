@@ -13,9 +13,10 @@ const WAVE =
   ".m-wave{transform-origin:80px 60px;animation:vwave 300ms var(--ease,ease) infinite}@keyframes vwave{0%,60%,100%{transform:rotate(0)}70%{transform:rotate(14deg)}80%{transform:rotate(-6deg)}90%{transform:rotate(10deg)}}@media (prefers-reduced-motion:reduce){.m-wave{animation:none}}";
 const CMDK = "M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3";
 
-export function Icon({ name, cls = "ic" }: { name: string; cls?: string }) {
+/** `nav`: live only, a Sheet address the icon opens through the client navigation (`data-nav`). */
+export function Icon({ name, cls = "ic", nav }: { name: string; cls?: string; nav?: string }) {
   return (
-    <svg className={cls} aria-hidden={"true"}>
+    <svg className={cls} aria-hidden={"true"} data-nav={nav}>
       <use href={`${SPRITE}#i-${name}`} />
     </svg>
   );
@@ -60,12 +61,13 @@ export function Empty({ art, title, copy, px = 88, children }: { art: string; ti
 
 /** A plain pill, or the Designer's tinted two-part pill ("Trial · 14 days left"). */
 export type TopPill = string | { left: string; right: string; tint: true };
-export type TopBarData = { firmName: string; pills: TopPill[] };
+/** `firmHref`: live only, where the firm-name button goes (`data-nav`). */
+export type TopBarData = { firmName: string; pills: TopPill[]; firmHref?: string };
 
 export function SheetTopBar({ data }: { data: TopBarData }) {
   return (
     <header className={"top"}>
-      <button className={"crumb"}>
+      <button className={"crumb"} data-nav={data.firmHref}>
         <Icon name={"home"} cls={"ic s"} />
         {data.firmName}
         <Icon name={"sort"} cls={"ic dd"} />
@@ -97,12 +99,16 @@ export function SheetTopBar({ data }: { data: TopBarData }) {
   );
 }
 
-export type CalendarDay = { day: number; today?: boolean; marked?: boolean };
+/** `href`: live only, the Calendar on that day (`data-nav`). */
+export type CalendarDay = { day: number; today?: boolean; marked?: boolean; href?: string };
 export type AgendaItem = { time: string; title: string; who: string; note: string; tentative?: boolean; href: string };
-export type NotificationItem = { title: string; source: string; ago: string };
+/** `href`: live only, where the notification's source is; the row is wrapped in a link to it. */
+export type NotificationItem = { title: string; source: string; ago: string; href?: string };
 
 export type RbarData = {
   month: string;
+  /** Live only: the month arrows' addresses (`data-nav`). */
+  nav?: { prev: string; next: string } | null;
   /** Empty cells before the 1st, Monday first. */
   leading: number;
   days: CalendarDay[];
@@ -122,8 +128,8 @@ export function SheetRbar({ data }: { data: RbarData }) {
       <h4 style={{ fontWeight: "500" }}>
         {`${data.month} `}
         <span style={{ color: "var(--t2)", display: "flex", gap: "6px" }}>
-          <Icon name={"chevron-left"} cls={"ic s"} />
-          <Icon name={"chevron-right"} cls={"ic s"} />
+          <Icon name={"chevron-left"} cls={"ic s"} nav={data.nav?.prev} />
+          <Icon name={"chevron-right"} cls={"ic s"} nav={data.nav?.next} />
         </span>
       </h4>
       <div className={"cal"}>
@@ -134,7 +140,7 @@ export function SheetRbar({ data }: { data: RbarData }) {
           <span key={`blank-${index}`} className={"num"}></span>
         ))}
         {data.days.map((day) => (
-          <span key={day.day} className={dayClass(day)}>
+          <span key={day.day} className={dayClass(day)} data-nav={day.href}>
             {String(day.day)}
           </span>
         ))}
@@ -170,16 +176,25 @@ export function SheetRbar({ data }: { data: RbarData }) {
           </div>
         </div>
       ) : (
-        data.notifications.map((item, index) => (
-          <div key={index} className={"nf"}>
-            <div>
-              {item.title}
-              <small>
-                <Pair left={item.source} right={item.ago} />
-              </small>
+        data.notifications.map((item, index) => {
+          const row = (
+            <div key={index} className={"nf"}>
+              <div>
+                {item.title}
+                <small>
+                  <Pair left={item.source} right={item.ago} />
+                </small>
+              </div>
             </div>
-          </div>
-        ))
+          );
+          return item.href ? (
+            <a key={index} href={item.href}>
+              {row}
+            </a>
+          ) : (
+            row
+          );
+        })
       )}
       {data.vo ? <VoCard draft={data.vo.draft} sources={data.vo.sources} /> : null}
     </aside>

@@ -157,6 +157,8 @@ export type SheetQuery = {
   person?: string;
   /** The Calendar page's week: any date in it, YYYY-MM-DD. */
   week?: string;
+  /** The home's right-column calendar month, YYYY-MM. */
+  month?: string;
   /** The open conversation on a matter's Messages tab. */
   thread?: string;
   /** The Intake form builder's form (stable key) and selected field (field key). */

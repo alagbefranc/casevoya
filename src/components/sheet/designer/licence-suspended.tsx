@@ -28,7 +28,8 @@ export type SuspendedData = {
   };
 };
 
-export type SuspendedTop = { firmName: string; pills: string[]; newTitle: string };
+/** `firmHref`: live only, where the firm-name button goes (`data-nav`). */
+export type SuspendedTop = { firmName: string; pills: string[]; newTitle: string; firmHref?: string };
 
 function i(n: number) {
   return { "--i": String(n) } as React.CSSProperties;
@@ -38,7 +39,7 @@ function i(n: number) {
 export function SuspendedTopBar({ data }: { data: SuspendedTop }) {
   return (
     <header className={"top"}>
-      <button className={"crumb"}>
+      <button className={"crumb"} data-nav={data.firmHref}>
         <Icon name={"home"} cls={"ic s"} />
         {data.firmName}
         <Icon name={"sort"} cls={"ic dd"} />

@@ -132,7 +132,7 @@ export async function SheetBody({
   // The licence-suspended home: the Sheet home for a consultant whose own licence check recorded an
   // adverse result (ORG-05). The home shows it too, so the consultant can't miss it.
   if ((page === "index" || page === "licence-suspended") && (access.kind === "live" || access.kind === "sample")) {
-    const suspended = await loadSheetLicenceSuspended(access.staff);
+    const suspended = await loadSheetLicenceSuspended(access.staff, undefined, { month: query.month, path: sheetPath(page) });
     if (!suspended && page === "licence-suspended") redirect("/sheet/licence");
     if (suspended) {
       return (
@@ -150,7 +150,7 @@ export async function SheetBody({
     }
   }
   if (page === "index" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, rbar, home, missingPolicies } = await loadSheetHome(access.staff);
+    const { chrome, rbar, home, missingPolicies } = await loadSheetHome(access.staff, undefined, { month: query.month });
     // Until the firm publishes its portal terms and privacy notice, no invited client can join: say so here.
     const lead = missingPolicies.length ? <PolicyMissingAlert kinds={missingPolicies} style={{ marginBottom: "18px" }} /> : undefined;
     return (
@@ -162,7 +162,7 @@ export async function SheetBody({
     );
   }
   if (page === "sample-mode" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, rbar, home, sample } = await loadSheetSample(access.staff);
+    const { chrome, rbar, home, sample } = await loadSheetSample(access.staff, undefined, { month: query.month, path: "/sheet/sample-mode" });
     return (
       <SheetScreen page={page}>
         <style dangerouslySetInnerHTML={{ __html: SAMPLE_CASE_CSS }} />
@@ -815,6 +815,7 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     limit: one("limit"),
     person: one("person"),
     week: one("week"),
+    month: one("month"),
     thread: one("thread"),
     form: one("form"),
     field: one("field"),
