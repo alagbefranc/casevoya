@@ -133,7 +133,12 @@ describe("privacy requests", () => {
     const second = await recordRequest(f, f.assigned, "correction");
     const row = await request(second);
     expect(row).toMatchObject({ reference: "PR-002", target_days: 21 });
-    expect(String(row.due_on instanceof Date ? row.due_on.toISOString().slice(0, 10) : row.due_on)).toBe(day(19));
+    // Due = received + 21 days. Read from the stored received date: a firmDay() taken after the
+    // request was recorded is a day later when the test crosses midnight in Toronto.
+    const ymd = (value: unknown) => (value instanceof Date ? value.toISOString().slice(0, 10) : String(value));
+    const due = new Date(`${ymd(row.received_on)}T00:00:00Z`);
+    due.setUTCDate(due.getUTCDate() + 21);
+    expect(ymd(row.due_on)).toBe(due.toISOString().slice(0, 10));
   });
 
   it("shows a request to the owner, its assignee and staff who can read the person, never to other staff or firms", async () => {
