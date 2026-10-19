@@ -68,6 +68,12 @@ export function LeadScreen({ loaded }: { loaded: LeadPage }) {
                     {"Close as lost"}
                   </button>
                 ) : null}
+                {dialogs.reopen ? (
+                  <button className={"btn s sm"} type={"button"} title={`Moves the lead back to ${dialogs.reopen.label}`} {...dialogs.reopen.data}>
+                    <Icon name={"history"} cls={"ic s"} />
+                    {"Reopen"}
+                  </button>
+                ) : null}
               </>
             ),
           }}

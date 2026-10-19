@@ -9530,6 +9530,14 @@ export type Database = {
         }
         Returns: Json
       }
+      archive_booking_event_type: {
+        Args: {
+          p_event_type_id: string
+          p_expected_version: number
+          p_org: string
+        }
+        Returns: undefined
+      }
       archive_lead_stage: {
         Args: {
           p_org: string
@@ -11312,6 +11320,15 @@ export type Database = {
       set_my_timezone: {
         Args: { p_organization_id: string; p_timezone: string }
         Returns: undefined
+      }
+      set_lead_source: {
+        Args: {
+          p_expected_version: number
+          p_lead: string
+          p_org: string
+          p_source: Database["public"]["Enums"]["lead_source"]
+        }
+        Returns: number
       }
       set_sample_mode: {
         Args: { p_enabled: boolean }

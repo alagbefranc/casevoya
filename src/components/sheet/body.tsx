@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { DemoSheet } from "@/components/sheet/demo";
 import { CalendarHeader, CalendarRbarView, SheetCalendar } from "@/components/sheet/designer/calendar";
-import { BookDialog, CancelDialog, ConsultationsHeader, RescheduleDialog, SheetConsultations } from "@/components/sheet/designer/consultations";
+import { BookDialog, CancelDialog, ConsultationsHeader, RescheduleDialog, SheetConsultationRecord, SheetConsultations } from "@/components/sheet/designer/consultations";
 import { AvailabilityDialog, BookingTypeDialog } from "@/components/sheet/designer/scheduling-dialogs";
 import { AgreementsHeader, CountersignDialog, NewAgreementDialog, SheetAgreements, TemplateDialog } from "@/components/sheet/designer/agreements";
 import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet/designer/clients";
@@ -242,7 +242,7 @@ export async function SheetBody({
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={chrome.sidebar}
-          header={<ReportsHeader tab={reports.tab} pills={reports.pills} />}
+          header={<ReportsHeader tab={reports.tab} pills={reports.pills} pillTitles={reports.pillTitles} />}
           statusbar={chrome.statusbar}
           after={<ReportsExportDialog data={reports.dialog} />}
         >
@@ -272,7 +272,7 @@ export async function SheetBody({
     const { chrome, queue } = await loadSheetQueue(access.staff);
     return (
       <SheetScreen page={page}>
-        <SheetFrame sidebar={chrome.sidebar} header={<QueueHeader counts={queue.counts} />} statusbar={chrome.statusbar}>
+        <SheetFrame sidebar={chrome.sidebar} header={<QueueHeader counts={queue.counts} filter={{ "data-queue-filter": "1", "aria-controls": "ql", title: "Search and filter the queue" }} />} statusbar={chrome.statusbar}>
           <SheetQueue data={queue} />
         </SheetFrame>
       </SheetScreen>
@@ -668,9 +668,9 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
-  // Consultations: Upcoming, Availability and Booking page tabs (BUILD-SPEC §4). The Consultation
-  // record tab (notes and outcome summaries) is not built and keeps its old view.
-  if (page === "consultations" && query.tab !== "record" && (access.kind === "live" || access.kind === "sample")) {
+  // Consultations: Upcoming, Availability, Booking page and Consultation record tabs (BUILD-SPEC §4).
+  // The record tab shows a real booking's notes (on its lead), outcome and details.
+  if (page === "consultations" && (access.kind === "live" || access.kind === "sample")) {
     const loaded = await loadSheetConsultations(access.staff, query);
     return (
       <SheetScreen page={page}>
@@ -688,7 +688,7 @@ export async function SheetBody({
             </>
           }
         >
-          <SheetConsultations data={loaded.page} />
+          {loaded.record ? <SheetConsultationRecord data={loaded.record} /> : <SheetConsultations data={loaded.page} />}
         </SheetFrame>
       </SheetScreen>
     );
@@ -700,7 +700,7 @@ export async function SheetBody({
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={loaded.chrome.sidebar}
-          header={<CalendarHeader tab={loaded.tab} pills={loaded.pills} create={{ "data-nav": "/sheet/consultations?dlg=book" }} />}
+          header={<CalendarHeader tab={loaded.tab} pills={loaded.pills} create={{ "data-nav": "/sheet/consultations?dlg=book" }} nav={loaded.nav} />}
           aside={<CalendarRbarView data={loaded.rbar} />}
           statusbar={loaded.chrome.statusbar}
         >
@@ -820,6 +820,7 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     limit: one("limit"),
     person: one("person"),
     week: one("week"),
+    month: one("month"),
     thread: one("thread"),
     form: one("form"),
     field: one("field"),

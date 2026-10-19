@@ -28,7 +28,8 @@ export type SidebarData = {
   createBoard: Action;
 };
 
-type Action = { href: string; toast?: string; toastSub?: string };
+/** disabled (live): the link is shown dimmed as unavailable, with this reason as its title. */
+type Action = { href: string; toast?: string; toastSub?: string; disabled?: string };
 
 /** First letters of the first and last words that contain a letter ("Sample permit (E2E)" → "SE"). */
 export function initials(name: string): string {
@@ -83,7 +84,15 @@ function Item({ href, icon, label, active, children }: { href: string; icon: str
 
 function AddLink({ action, label }: { action: Action; label: string }) {
   return (
-    <a className={"add"} href={action.href} data-toast={action.toast} data-toast-sub={action.toastSub}>
+    <a
+      className={"add"}
+      href={action.href}
+      data-toast={action.toast}
+      data-toast-sub={action.toastSub}
+      aria-disabled={action.disabled ? "true" : undefined}
+      title={action.disabled}
+      style={action.disabled ? { opacity: 0.6 } : undefined}
+    >
       <Icon name={"plus"} size={"s"} />
       <span>{label}</span>
     </a>

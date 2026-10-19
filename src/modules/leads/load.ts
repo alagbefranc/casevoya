@@ -33,6 +33,9 @@ import {
   marketingGranted,
   pipelineTab,
   preferredLabel,
+  reopenStage,
+  replyGranted,
+  STAFF_SOURCES,
   shortDay,
   sourceLabel,
   stamp,
@@ -192,6 +195,9 @@ export async function loadSheetPipeline(staff: SheetStaff, query: SheetQuery, no
     csv: {
       file: null,
       map: CSV_MAP,
+      mapLabel: "Columns found in your file",
+      mapNote:
+        "Columns are matched by their header names: Name, Email, Phone, Service interest, Source and Note. To read a column differently, rename it in your file and choose the file again.",
       submit: { label: "Import leads", data: { "data-lead-act": "import", "data-org": org } },
     },
     newLead: {
@@ -222,6 +228,8 @@ export type LeadPage = {
     edit: EditLeadDialogData | null;
     followUp: FollowUpDialogData;
     conflict: Record<string, string> | null;
+    /** A lost (or archived) lead's Reopen: back to the stage it was closed from, or Contacted. */
+    reopen: { label: string; data: Record<string, string> } | null;
   };
   /** The conflict search, run only when the Conflict check dialog is asked for (`?dlg=conflict`); it is audited. */
   conflictMatches: { label: string; detail: string }[] | null;
@@ -392,6 +400,9 @@ export async function loadSheetLead(staff: SheetStaff, leadId: string, options: 
     extra: null,
   };
 
+  const eventRows = (events.data ?? []) as EventRow[];
+  const reopenTo = kind === "lost" || kind === "archived" ? reopenStage(stageRows, eventRows, lead.stage_id) : null;
+
   const followUpRows = (followUps.data ?? []) as FollowUpRow[];
   const page: LeadData = {
     name: lead.display_name,
@@ -421,7 +432,7 @@ export async function loadSheetLead(staff: SheetStaff, leadId: string, options: 
     header,
     page,
     conflict,
-    history: historyItems((events.data ?? []) as EventRow[], stageNames, directory.byUser, tz),
+    history: historyItems(eventRows, stageNames, directory.byUser, tz),
     enquiry,
     consultations: {
       rows: consultationRows,
@@ -478,9 +489,14 @@ export async function loadSheetLead(staff: SheetStaff, leadId: string, options: 
             },
             maxBirthDate: todayIso(),
             marketing: { granted: marketingGranted(consentRows), data: { "data-marketing-was": marketingGranted(consentRows) ? "1" : "0" } },
+            source: { value: lead.source, label: sourceLabel(lead.source), editable: STAFF_SOURCES.has(lead.source) },
+            reply: { granted: replyGranted(consentRows), data: { "data-reply-was": replyGranted(consentRows) ? "1" : "0" } },
           },
       followUp: { data: { "data-lead-act": "follow-up", ...wire }, owners, owner: myOwner },
       conflict: open ? { "data-lead-act": "conflict", ...wire } : null,
+      reopen: reopenTo
+        ? { label: reopenTo.label, data: { "data-lead-act": "reopen", ...wire, "data-stage": reopenTo.id, "data-stage-label": reopenTo.label } }
+        : null,
     },
     conflictMatches: conflictSearch && !conflictSearch.error ? conflictRows(conflictSearch.data, tz) : null,
     wire: { organizationId: org, leadId: lead.id, version: lead.version },

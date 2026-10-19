@@ -85,6 +85,20 @@ export function parsePublicEvent(raw: unknown): PublicEvent | null {
   };
 }
 
+/** `/book/<firm>/<event>`: a firm's public booking page, as slugs (lowercased), or null. */
+export function bookingPagePath(pathname: string): { firm: string; event: string } | null {
+  const match = /^\/book\/([^/]+)\/([^/]+)\/?$/.exec(pathname);
+  if (!match) return null;
+  const [firm, event] = [match[1].toLowerCase(), match[2].toLowerCase()];
+  return SLUG.test(firm) && SLUG.test(event) ? { firm, event } : { firm: "", event: "" };
+}
+
+/** Whether `booking_public_event` returned a page this booking page can show (published and free). */
+export function isBookablePublicEvent(raw: unknown): boolean {
+  const found = parsePublicEvent(raw);
+  return Boolean(found && found.priceCents === 0);
+}
+
 /** A practice page is per viewer (staff only): never cached by a browser or a shared cache. */
 const PRIVATE = "private, no-store";
 

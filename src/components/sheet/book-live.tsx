@@ -38,7 +38,9 @@ export function bookPageBase(event: PublicEvent, zone: string): Omit<BookPageDat
   };
 }
 
-function Confirmation({ booking, ics, email, onAgain }: { booking: BookingSummary; ics: string | null; email: string; onAgain: () => void }) {
+/** The confirmation: the time in the visitor's zone, and in the firm's own zone (never the host's
+ * personal schedule zone) when they differ. Each time names its zone. */
+function Confirmation({ booking, ics, email, onAgain, firmZone }: { booking: BookingSummary; ics: string | null; email: string; onAgain: () => void; firmZone: string }) {
   const download = () => {
     if (!ics) return;
     const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
@@ -57,8 +59,8 @@ function Confirmation({ booking, ics, email, onAgain }: { booking: BookingSummar
       <p className={"num"} style={{ margin: "0" }}>
         {longWhen(start, booking.timeZone)}
       </p>
-      {booking.timeZone !== booking.hostTimeZone ? (
-        <small style={{ color: "#615d59" }}>{`For ${booking.firmName}: ${longWhen(start, booking.hostTimeZone)}`}</small>
+      {booking.timeZone !== firmZone ? (
+        <small style={{ color: "#615d59" }}>{`${booking.firmName}’s time: ${longWhen(start, firmZone)}`}</small>
       ) : null}
       <small style={{ color: "#615d59" }}>{where}</small>
       {booking.locationKind === "meeting_link" && booking.locationDetail ? (
@@ -184,11 +186,13 @@ export function BookLive({ event }: { event: PublicEvent }) {
     live: {
       zone: { value: zone, options: zones },
       phone: event.locationKind === "phone",
-      more: starts != null && (offset + PAGE < starts.length || offset > 0),
+      more: starts != null && offset + PAGE < starts.length,
+      earlier: starts != null && offset > 0,
       empty: starts == null ? "Loading times…" : starts.length === 0 ? "No times are open in the next four weeks. Please check again later." : null,
       error,
       done: done ? (
         <Confirmation
+          firmZone={event.firmTimeZone}
           booking={done.booking}
           ics={done.ics}
           email={done.email}
@@ -205,7 +209,8 @@ export function BookLive({ event }: { event: PublicEvent }) {
         key.current = newKey();
         setError(null);
       },
-      onMore: () => setOffset((current) => (current + PAGE < (starts?.length ?? 0) ? current + PAGE : 0)),
+      onMore: () => setOffset((current) => (current + PAGE < (starts?.length ?? 0) ? current + PAGE : current)),
+      onEarlier: () => setOffset((current) => Math.max(0, current - PAGE)),
       onZone: (next) => setZone(safeZone(next, zone)),
       onSubmit: submit,
     },

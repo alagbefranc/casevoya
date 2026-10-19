@@ -68,6 +68,14 @@ export function sourceLabel(source: string): string {
   return SOURCE_LABEL[source] ?? "Other";
 }
 
+/** A label inside a sentence: "website form", "walk-in", but "CSV import" keeps its acronym. */
+export function inSentence(label: string): string {
+  return label
+    .split(" ")
+    .map((word) => (word.length > 1 && word === word.toUpperCase() && /[A-Z]/.test(word) ? word : word.toLowerCase()))
+    .join(" ");
+}
+
 const BARS = ["#0075DE", "#111", "#62aef0", "#8c8781"];
 
 /** The card's `.lbar` colour, the same for every lead with the same service interest. */
@@ -296,6 +304,23 @@ export function leadHref(id: string): string {
   return `/sheet/lead?id=${id}`;
 }
 
+/**
+ * The List tab's "Next follow-up": the lead's earliest open follow-up with a due date, always with
+ * its date ("Mon 19 Oct", "Mon 12 Oct, 7 days overdue"). Consultations are not follow-ups.
+ */
+export function nextFollowUp(leadId: string, followUps: readonly FollowUpRow[], now: Date, timeZone: string): string {
+  const today = utcToLocal(now.getTime(), safeZone(timeZone)).date;
+  const open = followUps.filter((item) => item.lead_id === leadId && !item.completed_at);
+  const due = open
+    .map((item) => item.due_on)
+    .filter((day): day is string => Boolean(day))
+    .sort()[0];
+  if (!due) return open.length ? "No date" : "—";
+  const late = dayDiff(due, today);
+  if (late > 0) return `${dueLabel(due)}, ${late === 1 ? "1 day" : `${late} days`} overdue`;
+  return due === today ? `Today, ${dueLabel(due)}` : dueLabel(due);
+}
+
 export function buildPipeline(input: PipelineInput): { data: PipelineData; pills: string[]; openCount: number } {
   const stages = boardStages(input.stages);
   const stageById = new Map(input.stages.map((stage) => [stage.id, stage]));
@@ -334,16 +359,28 @@ export function buildPipeline(input: PipelineInput): { data: PipelineData; pills
     };
   };
 
-  const columns: PipelineColumn[] = stages.map((stage) => {
+  // The ‹ › buttons: back never lands on Converted (a lost lead goes back to the last open stage);
+  // a converted lead stays where it is; nothing goes forward from Lost or past the last column.
+  const moves = (index: number): { back: boolean; forward: boolean } => {
+    const kind = stages[index].kind;
+    if (kind === "converted") return { back: false, forward: false };
+    const back = stages.slice(0, index).some((stage) => stage.kind === "open");
+    return { back, forward: kind !== "lost" && index < stages.length - 1 };
+  };
+
+  const columns: PipelineColumn[] = stages.map((stage, index) => {
     const cards = visible.filter((lead) => lead.stage_id === stage.id);
     const total = cards.reduce((sum, lead) => sum + (lead.proposed_fee_cents ?? 0), 0);
+    const move = moves(index);
     return {
       label: stage.label,
       total: columnTotal(total),
       count: leadCount(cards.length),
       offset: ringOffset(cards.length),
-      cards: cards.map(card),
+      cards: cards.map((lead) => ({ ...card(lead), moves: move })),
       data: { "data-stage-id": stage.id, "data-kind": stage.kind },
+      // A Stage filter shows that stage's column only; the others would read "0 leads".
+      hidden: Boolean(stageFilter && stageFilter.id !== stage.id),
     };
   });
 
@@ -359,7 +396,7 @@ export function buildPipeline(input: PipelineInput): { data: PipelineData; pills
       source: sourceLabel(lead.source),
       owner: ownerName(lead.owner_membership_id),
       fee: listFee(lead.proposed_fee_cents),
-      next: steps.get(lead.id)?.[0]?.label ?? "—",
+      next: nextFollowUp(lead.id, input.followUps, input.now, input.timeZone),
     }));
 
   const timeline: TimelineItem[] = visible
@@ -370,6 +407,7 @@ export function buildPipeline(input: PipelineInput): { data: PipelineData; pills
       when: step.overdueDays ? `${step.overdueDays}d overdue` : step.label,
       who: lead.display_name,
       what: step.what,
+      href: leadHref(lead.id),
     }));
 
   const stageCounts = new Map<string, number>();
@@ -471,7 +509,7 @@ export function dueLabel(day: string | null): string {
 export function leadSummary(lead: Pick<LeadRow, "service_interest" | "source">): { left: string; right: string } {
   return {
     left: lead.service_interest ?? "Service not given yet",
-    right: `from ${sourceLabel(lead.source).toLowerCase()}. Passports and detailed histories wait until they’re needed.`,
+    right: `from ${inSentence(sourceLabel(lead.source))}. Passports and detailed histories wait until they’re needed.`,
   };
 }
 
@@ -502,6 +540,25 @@ export function consentValues(rows: readonly ConsentRow[], timeZone: string): { 
 export function marketingGranted(rows: readonly ConsentRow[]): boolean {
   const latest = [...rows].filter((row) => row.purpose === "marketing").sort((a, b) => b.recorded_at.localeCompare(a.recorded_at))[0];
   return Boolean(latest?.granted);
+}
+
+/** Whether the latest reply-consent answer is a yes. */
+export function replyGranted(rows: readonly ConsentRow[]): boolean {
+  const latest = [...rows].filter((row) => row.purpose === "enquiry_reply").sort((a, b) => b.recorded_at.localeCompare(a.recorded_at))[0];
+  return Boolean(latest?.granted);
+}
+
+/** Sources a person records (Edit lead can change them). The others are recorded by the system. */
+export const STAFF_SOURCES: ReadonlySet<string> = new Set(["phone", "email", "referral", "event", "walk_in", "other"]);
+
+/**
+ * Where Reopen puts a lost lead: the open stage it was closed from (the latest "lost" event's
+ * from-stage), else Contacted, else the firm's first open stage.
+ */
+export function reopenStage(stages: readonly StageRow[], events: readonly Pick<EventRow, "kind" | "from_stage_id" | "created_at">[], currentStageId: string): StageRow | null {
+  const open = boardStages(stages).filter((stage) => stage.kind === "open" && stage.id !== currentStageId);
+  const closedFrom = [...events].filter((event) => event.kind === "lost").sort((a, b) => b.created_at.localeCompare(a.created_at))[0]?.from_stage_id;
+  return open.find((stage) => stage.id === closedFrom) ?? open.find((stage) => stage.key === "contacted") ?? open[0] ?? null;
 }
 
 export function preferredLabel(preferred: string | null, email: string | null, phone: string | null): string {
@@ -543,7 +600,7 @@ export function historyItems(
       let what: string;
       switch (event.kind) {
         case "created":
-          what = `Created from ${sourceLabel(String(payload.source ?? "other")).toLowerCase()} in ${stageName(event.to_stage_id)}`;
+          what = `Created from ${inSentence(sourceLabel(String(payload.source ?? "other")))} in ${stageName(event.to_stage_id)}`;
           break;
         case "stage_changed":
           what = `Moved to ${stageName(event.to_stage_id)}${reason}`;
@@ -564,7 +621,7 @@ export function historyItems(
           what = "Owner changed";
           break;
         case "updated":
-          what = "Details edited";
+          what = payload.source_to ? `Source changed to ${inSentence(sourceLabel(String(payload.source_to)))}` : "Details edited";
           break;
         case "booking_linked":
           what = "Consultation linked";
@@ -624,6 +681,7 @@ export function leadError(message: string): string {
     "import up to 500 rows at a time",
     "the file has no rows to import",
     "choose where this lead came from",
+    "this lead's source was recorded when it came in",
     "lead not found",
     "stage not found",
   ];
