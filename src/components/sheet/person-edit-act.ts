@@ -69,11 +69,16 @@ export async function runPersonEdit(button: HTMLElement, router: Router) {
   if ("error" in result) {
     toast2(result.error, {
       kind: "bad",
-      sub: needsStepUp(result.error) ? "Sign in again with your authenticator, then retry. Nothing was saved." : "Nothing was saved.",
+      sub: needsStepUp(result.error)
+        ? "Sign in again with your authenticator, then retry. Nothing was saved."
+        : /nothing was saved/i.test(result.error)
+          ? ""
+          : "Nothing was saved.",
     });
     return;
   }
   dialog.close();
+  if (result.unchanged) return void toast2("No changes to save", { kind: "ok", sub: "Their details are as they were." });
   toast2("Details saved", { kind: "ok", sub: ["Recorded in the firm’s audit log.", ...result.notes].join(" "), duration: result.notes.length ? 12000 : undefined });
   router.refresh();
 }

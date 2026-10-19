@@ -101,6 +101,8 @@ export type MatterSubmissionsData = {
   records: SubmissionRecord[];
   /** Record submission: enabled once signed off. */
   record: GovWire | null;
+  /** Live only: why Record submission is disabled (its title). */
+  recordWhy?: string | null;
   earlier: SubmissionRecord[];
 };
 
@@ -269,11 +271,17 @@ export function MatterSubmissions({ data }: { data: MatterSubmissionsData }) {
               }
             </p>
             <div className={"ea"}>
-              <button className={"btn s sm"} {...(data.record ?? { "aria-disabled": "true" })}>
+              <button className={"btn s sm"} {...(data.record ?? { "aria-disabled": "true", ...(data.recordWhy ? { title: data.recordWhy } : {}) })}>
                 <Icon name={"plus"} cls={"ic s"} />
                 {"Record submission"}
               </button>
             </div>
+            {!data.record && data.recordWhy ? (
+              <p className={"why"}>
+                <Icon name={"lock"} cls={"ic s"} />
+                <span>{data.recordWhy}</span>
+              </p>
+            ) : null}
           </div>
         </div>
       )}
@@ -303,6 +311,8 @@ export type GovLetterRow = {
   parts: string[];
   badge: GovBadge;
   verify?: GovWire | null;
+  /** Live only: Attach evidence, for a letter recorded without it. */
+  attach?: GovWire | null;
   /** The Designer's sample letter thumbnail; never set from real data. */
   thumb?: string | null;
 };
@@ -554,6 +564,12 @@ function LetterRows({ letters, start }: { letters: GovLetterRow[]; start: number
                   {"Verify"}
                 </button>
               ) : null}
+              {letter.attach ? (
+                <button className={"btn s sm"} {...letter.attach}>
+                  <Icon name={"upload"} cls={"ic s"} />
+                  {"Attach evidence"}
+                </button>
+              ) : null}
               <Badge badge={letter.badge} />
             </span>
           </div>
@@ -695,7 +711,8 @@ export function MatterDecisionsLive({ data }: { data: MatterDecisionsData }) {
  * `.fl` fields, `.mu` and `.lock` notes, `.df` with Cancel and a primary button).
  */
 export type GovDialogsData = {
-  prepare: { wire: GovWire; channels: { value: string; label: string }[] } | null;
+  /** `warning`: documents still outstanding (the database allows the handoff; the dialog says so). */
+  prepare: { wire: GovWire; channels: { value: string; label: string }[]; warning?: string | null } | null;
   submit: { wire: GovWire; representatives: { id: string; name: string }[]; now: string } | null;
   receipt: { wire: GovWire; today: string } | null;
 };
@@ -749,6 +766,15 @@ export function GovDialogs({ data }: { data: GovDialogsData }) {
         <dialog className={"dlg wide"} id={"dSubPrep"} aria-labelledby={"dSubPrepT"}>
           <DlgHead id={"dSubPrep"} title={"Start a submission handoff"} />
           <div className={"db"}>
+            {data.prepare.warning ? (
+              <div className={"alert warn"} style={{ marginBottom: "12px" }}>
+                <Icon name={"info"} />
+                <div>
+                  <b>{"The file isn’t complete yet"}</b>
+                  {data.prepare.warning}
+                </div>
+              </div>
+            ) : null}
             <div className={"g2"}>
               <label className={"fl"}>
                 {"Package version"}

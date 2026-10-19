@@ -32,7 +32,18 @@ export type MattersData = {
   more: string | null;
   /** No rows: either the firm has no matters yet or the search and view match none. */
   empty: null | { kind: "none" } | { kind: "filtered"; title: string; copy: string; clear: string };
+  /**
+   * Live only: the saved view shown (its chip is marked on), why the office, program and priority
+   * chips are not filters yet, and the hidden "no match" panel search and Mine show.
+   */
+  live?: { view: string | null; chips: string } | null;
 };
+
+const SAVED_VIEWS = [
+  ["due", "Due this week"],
+  ["review", "Awaiting my review"],
+  ["blocked", "Blocked"],
+] as const;
 
 export function Badge({ badge }: { badge: MatterBadge }) {
   return (
@@ -120,24 +131,28 @@ export function SheetMatters({ data }: { data: MattersData }) {
             <Pair left={"Everyone"} right={String(data.counts.everyone)} />
           </button>
         </div>
-        <span className={"fchip"}>{"All offices"}</span>
-        <span className={"fchip"}>{"Any program"}</span>
-        <span className={"fchip"}>{"Priority"}</span>
+        {["All offices", "Any program", "Priority"].map((label) => (
+          <span key={label} className={"fchip"} {...(data.live ? { "aria-disabled": "true" as const, title: data.live.chips } : {})}>
+            {label}
+          </span>
+        ))}
       </div>
       <p className={"sr rv"} aria-live={"polite"} style={{ "--i": "2" } as React.CSSProperties}></p>
       <div className={"fp-row rv"} style={{ margin: "-6px 0px 14px", gap: "8px", "--i": "3" } as React.CSSProperties} aria-label={"Saved views"}>
-        <a className={"fchip"} href={"?view=due"}>
-          <Icon name={"star"} cls={"ic s"} />
-          {"Due this week"}
-        </a>
-        <a className={"fchip"} href={"?view=review"}>
-          <Icon name={"star"} cls={"ic s"} />
-          {"Awaiting my review"}
-        </a>
-        <a className={"fchip"} href={"?view=blocked"}>
-          <Icon name={"star"} cls={"ic s"} />
-          {"Blocked"}
-        </a>
+        {SAVED_VIEWS.map(([view, label]) => {
+          const on = data.live?.view === view;
+          return (
+            <a
+              key={view}
+              className={on ? "fchip on" : "fchip"}
+              href={on ? "/sheet/matters" : `?view=${view}`}
+              {...(on ? { "aria-current": "page" as const, title: "Showing this view. Click to show every matter." } : {})}
+            >
+              <Icon name={"star"} cls={"ic s"} />
+              {label}
+            </a>
+          );
+        })}
       </div>
       {data.empty ? (
         <div className={"panel rv"} style={{ "--i": "4" } as React.CSSProperties}>
@@ -181,7 +196,20 @@ export function SheetMatters({ data }: { data: MattersData }) {
               </tbody>
             </table>
           </div>
-          <p style={{ color: "var(--t2)", fontSize: "13px", marginTop: "12px", "--i": "5" } as React.CSSProperties} className={"rv"}>
+          {data.live ? (
+            <div className={"panel rv"} style={{ "--i": "4" } as React.CSSProperties} data-matters-none={""} hidden>
+              <Empty art={"filter-empty"} title={"No matters match"} copy={"Nothing on this page matches the search and the Mine switch. Clear the search, or switch to Everyone."}>
+                <button className={"btn s sm"} type={"button"} data-matters-clear={""}>
+                  {"Clear search"}
+                </button>
+              </Empty>
+            </div>
+          ) : null}
+          <p
+            style={{ color: "var(--t2)", fontSize: "13px", marginTop: "12px", "--i": "5" } as React.CSSProperties}
+            className={"rv"}
+            {...(data.live ? { "data-matters-showing": "" } : {})}
+          >
             {`Showing ${data.shown} of ${data.total} `}
             {data.more ? (
               <>
@@ -236,7 +264,7 @@ export function NewMatterDialog({ data }: { data: NewMatterDialogData }) {
             <Icon name={"info"} />
             <div>
               <b>{"This firm is in sample mode"}</b>
-              {"Real client matters open once sample mode is turned off. Until then the firm refuses a real matter."}
+              {"This matter and its people are saved as sample (practice) records. Real client matters open once sample mode is turned off."}
             </div>
           </div>
         ) : null}

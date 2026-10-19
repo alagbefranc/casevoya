@@ -197,7 +197,9 @@ describe("app.firm_today", () => {
       "app.request_version_satisfies",
       "app.accept_quote",
       "app.set_credential_valid_until",
-      "public.create_client_matter",
+      // public.create_client_matter's body (20261020130000_work_pages_fixes.sql).
+      "app.create_client_matter_as",
+      "app.update_task",
       "public.update_lead",
       "public.add_lead_follow_up",
       "app.sign_off_submission_handoff",

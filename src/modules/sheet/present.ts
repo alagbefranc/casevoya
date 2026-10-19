@@ -228,7 +228,14 @@ export type MatterViewInput = {
   onHold: boolean;
   stage: string;
   nextDue: string | null;
+  /** The soonest open task's due date on the matter, when known. */
+  nextTaskDue?: string | null;
   pendingReview: boolean;
+  /**
+   * The viewer is on the matter (responsible consultant or on its team). When given,
+   * "Awaiting my review" lists only those matters; absent, it is firm-wide (the demo bundle).
+   */
+  mine?: boolean;
   title: string;
   reference: string | null;
 };
@@ -239,9 +246,12 @@ export function matterMatches(matter: MatterViewInput, view: string | undefined,
     const hay = `${matter.title} ${matter.reference ?? ""}`.toLowerCase();
     if (!hay.includes(needle)) return false;
   }
+  const week = plusDays(today, 7);
+  const within = (date: string | null | undefined) => Boolean(date && date >= today && date <= week);
   if (view === "blocked") return matter.onHold;
-  if (view === "review") return matter.pendingReview || matter.stage === "consultant_review";
-  if (view === "due") return Boolean(matter.nextDue && matter.nextDue <= plusDays(today, 7) && matter.nextDue >= today);
+  if (view === "review") return (matter.pendingReview || matter.stage === "consultant_review") && matter.mine !== false;
+  // Due this week: a deadline or an open task due in the next 7 days (the firm's calendar).
+  if (view === "due") return within(matter.nextDue) || within(matter.nextTaskDue);
   return true;
 }
 

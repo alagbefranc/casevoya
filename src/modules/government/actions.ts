@@ -53,6 +53,8 @@ type Ref = { organizationId: string };
 export async function prepareHandoff(input: Ref & { matterId: string; packageLabel: string; packageSha256?: string | null; channel: string }) {
   if (!isUuid(input.matterId) || !SUBMISSION_CHANNELS.includes(input.channel as SubmissionChannel)) return { error: "Choose a matter and a channel." };
   if (!text(input.packageLabel)) return { error: "Name the package version." };
+  const hash = text(input.packageSha256);
+  if (hash && !/^[0-9a-f]{64}$/i.test(hash)) return { error: governmentError("package hash") };
   const s = await session(input.organizationId);
   if ("error" in s) return { error: s.error };
   const { data, error } = await s.supabase.rpc("prepare_submission_handoff", {
@@ -168,6 +170,24 @@ export async function verifyCorrespondence(input: Ref & { correspondenceId: stri
   const { data, error } = await s.supabase.rpc("verify_government_correspondence", {
     p_correspondence_id: input.correspondenceId,
     p_expected_version: input.version,
+  });
+  if (error) return { error: refusal(error.message) };
+  return { version: data };
+}
+
+/** Attaches the evidence to a letter recorded without it (public.attach_correspondence_evidence), so it can be verified. */
+export async function attachCorrespondenceEvidence(
+  input: Ref & { correspondenceId: string; version: number; evidenceVersionId: string | null; evidenceLocator?: string | null },
+) {
+  if (!isUuid(input.correspondenceId)) return { error: "Choose the letter." };
+  if (input.evidenceVersionId && !isUuid(input.evidenceVersionId)) return { error: "Use a file that is stored on this matter." };
+  const s = await session(input.organizationId);
+  if ("error" in s) return { error: s.error };
+  const { data, error } = await s.supabase.rpc("attach_correspondence_evidence", {
+    p_correspondence_id: input.correspondenceId,
+    p_expected_version: input.version,
+    p_evidence_version_id: input.evidenceVersionId,
+    p_evidence_locator: input.evidenceLocator ?? null,
   });
   if (error) return { error: refusal(error.message) };
   return { version: data };

@@ -9,11 +9,11 @@ import { createPortalInvitation } from "@/modules/portal-invitations/actions";
 import { closeMatter } from "@/modules/matters/closure";
 import { acceptLink, guardianSubjects, readPortalInvite } from "@/modules/sheet/portal-invite";
 import { todayIso } from "@/modules/sheet/birth-date";
-import { editNotes, minorOn, readPersonEdit } from "@/modules/sheet/edit-person";
+import { editNotes, minorOn, personDetailsChanged, readPersonEdit } from "@/modules/sheet/edit-person";
 import { readDeadline } from "@/modules/sheet/new-deadline";
 import { missingPolicies, POLICIES_MISSING } from "@/modules/portal-policies/defaults";
 import { loadCurrentPolicies } from "@/modules/portal-policies/load";
-import { createTask, recordDeadline, scheduleDeadlineReminders, setTaskStatus } from "@/modules/tasks/actions";
+import { confirmDeadline, createTask, recordDeadline, scheduleDeadlineReminders, setTaskStatus } from "@/modules/tasks/actions";
 
 /**
  * The Designer matter page's dialogs. They send no authenticator code: the database
@@ -28,7 +28,18 @@ export async function changeMatterStage(input: MatterRef & { toStage: string; re
   return overrideMatterStage({ organizationId: input.organizationId, matterId: input.matterId, toStage: input.toStage, expectedVersion: input.version, reason: input.reason, code: null });
 }
 
+/** The firm's today (`YYYY-MM-DD`, its own timezone), read as the signed-in member. */
+async function firmToday(organizationId: string): Promise<string> {
+  if (!isUuid(organizationId)) return todayIso();
+  const supabase = await createClient({ organizationId });
+  const { data } = await supabase.from("organizations").select("timezone").eq("id", organizationId).maybeSingle();
+  return todayIso(new Date(), data?.timezone);
+}
+
 export async function holdMatter(input: MatterRef & { reason: string; ownerMembershipId: string; reviewOn: string }) {
+  // The review date is when someone looks at the hold again, so it is after the firm's today.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.reviewOn ?? "")) return { error: "Pick a review date." };
+  if (input.reviewOn <= (await firmToday(input.organizationId))) return { error: "Pick a review date after today." };
   return setMatterOnHold({
     organizationId: input.organizationId,
     matterId: input.matterId,
@@ -58,12 +69,18 @@ export async function confirmMatterOutcome(input: MatterRef & { outcome: string;
  * licensed step. The database re-checks the official source and the staff role.
  */
 export async function recordMatterDeadline(input: MatterRef & { fields: Parameters<typeof readDeadline>[0] }) {
-  const read = readDeadline(input.fields);
+  // A due date before the firm's today would be overdue the moment it is saved.
+  const read = readDeadline({ ...input.fields, today: await firmToday(input.organizationId) });
   if ("error" in read) return { error: read.error };
   const recorded = await recordDeadline({ organizationId: input.organizationId, matterId: input.matterId, ...read.input });
   if ("error" in recorded) return { error: recorded.error };
   const reminders = await scheduleDeadlineReminders({ organizationId: input.organizationId, deadlineId: recorded.id, asOf: new Date().toISOString() });
   return { id: recorded.id, remindersScheduled: !("error" in reminders) };
+}
+
+/** "Confirm" on a tentative deadline (matter Tasks tab, Tasks › Deadlines). The database decides who may. */
+export async function confirmMatterDeadline(input: { organizationId: string; deadlineId: string; version: number }) {
+  return confirmDeadline({ organizationId: input.organizationId, deadlineId: input.deadlineId, expectedVersion: input.version, code: null });
 }
 
 function field(form: FormData, key: string): string {
@@ -273,7 +290,7 @@ export async function savePersonDetails(input: {
   phone: string;
   /** Blank keeps the date of birth on file as it is. */
   dateOfBirth: string;
-}): Promise<{ error: string } | { saved: true; notes: string[] }> {
+}): Promise<{ error: string } | { saved: true; notes: string[]; unchanged?: boolean }> {
   const today = todayIso();
   const read = readPersonEdit({ ...input, today });
   if ("error" in read) return { error: read.error };
@@ -284,14 +301,16 @@ export async function savePersonDetails(input: {
 
   const { data: current } = await supabase
     .from("persons")
-    .select("id, user_id, date_of_birth, is_minor, version")
+    .select("id, user_id, display_name, email, contact_phone, date_of_birth, is_minor, version")
     .eq("organization_id", org)
     .eq("id", personId)
     .maybeSingle();
-  if (!current) return { error: "You can’t see this person’s record, so nothing was saved." };
+  if (!current) return { error: "You can’t see this person’s record." };
   if (current.version !== version) return { error: CHANGED_SINCE };
 
   const changesBirth = dateOfBirth !== null && dateOfBirth !== current.date_of_birth;
+  // Nothing changed: no save, so no new version and no audit entry.
+  if (!personDetailsChanged(current, { displayName, email, phone }) && !changesBirth) return { saved: true, notes: [], unchanged: true };
   if (changesBirth && current.user_id && !current.is_minor) {
     // A minor cannot hold their own portal login (PRD §5); the database refuses minors at invitation and acceptance.
     const { data: firm } = await supabase.from("organizations").select("age_of_majority_years, timezone").eq("id", org).maybeSingle();

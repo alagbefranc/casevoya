@@ -1,5 +1,5 @@
 /** Pure helpers that turn person, matter and household records into the Designer Clients page's words. */
-import type { ClientsTab, ClientsText, DuplicateData, FactRow } from "@/components/sheet/designer/clients";
+import type { ClientRow, ClientsTab, ClientsText, DuplicateData, FactRow } from "@/components/sheet/designer/clients";
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import { dayMonth } from "@/modules/sheet/home-present";
 import { stageLabel } from "@/modules/sheet/present";
@@ -51,7 +51,7 @@ export function rolesLabel(roles: readonly string[], isMinor: boolean): string {
   return labels.length ? labels.join(", ") : "—";
 }
 
-/** Filter chip tokens for a person's roles. There is no lead record yet, so nobody is a "lead". */
+/** Filter chip tokens for a person's roles. Leads are their own rows (leadRow), flagged "lead". */
 export function roleFlags(roles: readonly string[]): string[] {
   return ["applicant", "sponsor", "dependant"].filter((role) => roles.includes(role));
 }
@@ -93,14 +93,37 @@ export function birthDateLabel(date: string | null, precision: string | null): s
   return date.slice(0, 10);
 }
 
-/** The facts the person record holds. Only the date of birth is a fact here; it carries no review state. */
-export function personFacts(date: string | null, precision: string | null): FactRow[] {
+/**
+ * The facts the person record holds: the date of birth, then how to reach them (email and phone),
+ * as the Designer's person view lists contact details. None of them carries a review state.
+ */
+export function personFacts(date: string | null, precision: string | null, contact: { email?: string | null; phone?: string | null } = {}): FactRow[] {
   const birth = birthDateLabel(date, precision);
   return [
     birth
       ? { fact: "Date of birth", value: { num: birth }, source: "Person record", review: "—" }
       : { fact: "Date of birth", value: { unknown: true }, source: "Not recorded", review: "—" },
+    contact.email
+      ? { fact: "Email", value: { text: contact.email }, source: "Person record", review: "—" }
+      : { fact: "Email", value: { unknown: true }, source: "Not recorded", review: "—" },
+    contact.phone
+      ? { fact: "Phone", value: { num: contact.phone }, source: "Person record", review: "—" }
+      : { fact: "Phone", value: { unknown: true }, source: "Not recorded", review: "—" },
   ];
+}
+
+/** An open lead on the People tab: the "Leads" chip shows it, and the row opens the lead. */
+export function leadRow(lead: { id: string; display_name: string; language: string | null; is_sample: boolean }): ClientRow {
+  return {
+    href: `/sheet/lead?id=${lead.id}`,
+    flags: ["lead"],
+    person: { name: lead.display_name },
+    role: "Lead",
+    matter: lead.is_sample ? "Lead (sample)" : "Lead",
+    language: lead.language || "—",
+    timezone: "—",
+    portal: "Not invited",
+  };
 }
 
 /** A matter's firm stage as a badge. Closed reads as finished; everything else is in progress. */

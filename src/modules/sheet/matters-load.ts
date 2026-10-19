@@ -11,7 +11,9 @@ import {
   matterNames,
   memberNames,
 } from "@/modules/sheet/chrome-load";
-import { dayMonth, isoDate, localNow } from "@/modules/sheet/home-present";
+import { isoDate, localNow } from "@/modules/sheet/home-present";
+import { dayMonthYear } from "@/modules/sheet/matter-present";
+import { moneyCell } from "@/modules/sheet/matter-billing";
 import { todayIso } from "@/modules/sheet/birth-date";
 import type { SheetStaff } from "@/modules/sheet/load";
 import {
@@ -29,6 +31,7 @@ import {
 import {
   matterMatches,
   mattersTitle,
+  plusDays,
   stageLabel,
   type SheetQuery,
 } from "@/modules/sheet/present";
@@ -52,6 +55,8 @@ export async function loadSheetMatters(
     pending,
     refs,
     newMatter,
+    dueTasks,
+    mineParties,
   ] = await Promise.all([
     loadSheetChrome(staff, "/sheet/matters"),
     supabase
@@ -83,6 +88,18 @@ export async function loadSheetMatters(
       .is("removed_at", null)
       .limit(MATTERS_READ),
     loadNewMatterDialog(supabase, staff),
+    // Due this week counts open tasks due in the next 7 days as well as deadlines.
+    supabase
+      .from("tasks")
+      .select("matter_id, due_on")
+      .eq("organization_id", org)
+      .in("status", ["open", "blocked"])
+      .gte("due_on", today)
+      .lte("due_on", plusDays(today, 7))
+      .not("matter_id", "is", null)
+      .limit(MATTERS_READ),
+    // "Awaiting my review": the matters this member is on (responsible, or on the matter's team).
+    supabase.from("matter_participants").select("matter_id").eq("organization_id", org).eq("membership_id", staff.membershipId).limit(MATTERS_READ),
   ]);
   const rows = matters.data ?? [];
 
@@ -99,6 +116,14 @@ export async function loadSheetMatters(
       .filter((row) => pendingDocuments.has(row.document_id))
       .map((row) => row.matter_id),
   );
+  const taskDue = new Map<string, string>();
+  for (const row of dueTasks.data ?? []) {
+    if (!row.matter_id || !row.due_on) continue;
+    const known = taskDue.get(row.matter_id);
+    if (!known || row.due_on < known) taskDue.set(row.matter_id, row.due_on);
+  }
+  const onMatter = new Set((mineParties.data ?? []).map((row) => row.matter_id));
+  const isMine = (row: (typeof rows)[number]) => row.responsible_consultant_membership_id === staff.membershipId || onMatter.has(row.id);
 
   const visible = rows.filter((row) =>
     matterMatches(
@@ -106,7 +131,9 @@ export async function loadSheetMatters(
         onHold: row.on_hold,
         stage: row.stage,
         nextDue: nextDue.get(row.id) ?? null,
+        nextTaskDue: taskDue.get(row.id) ?? null,
         pendingReview: reviewMatters.has(row.id),
+        mine: isMine(row),
         title: row.title,
         reference: row.reference,
       },
@@ -124,7 +151,8 @@ export async function loadSheetMatters(
         .filter((id): id is string => Boolean(id)),
     ),
   ];
-  const [name, members, packs] = await Promise.all([
+  const pageIds = page.map((row) => row.id);
+  const [name, members, packs, invoices, entries] = await Promise.all([
     matterNames(
       supabase,
       org,
@@ -136,6 +164,14 @@ export async function loadSheetMatters(
           .from("rule_pack_versions")
           .select("id, program_key")
           .in("id", packIds)
+      : null,
+    // The Money column: what is owed on the matter's invoices and what client funds it holds,
+    // as row-level security shows them (the firm owner and the matter's finance user).
+    pageIds.length
+      ? supabase.from("invoices").select("matter_id, amount_cents, paid_cents, credited_cents, status, currency").eq("organization_id", org).in("matter_id", pageIds).limit(MATTERS_READ * 4)
+      : null,
+    pageIds.length
+      ? supabase.from("client_fund_entries").select("matter_id, kind, status, direction, amount_cents").eq("organization_id", org).in("matter_id", pageIds).limit(MATTERS_READ * 8)
       : null,
   ]);
   const program = new Map(
@@ -157,9 +193,11 @@ export async function loadSheetMatters(
       ),
       stage: { tone: "blue", label: stageLabel(row.stage) },
       government: governmentBadge(row.government_status),
-      // Finance is not connected yet, so there is no money state to show.
-      money: "—",
-      nextDeadline: due ? dayMonth(due) : "—",
+      money: moneyCell(
+        (invoices?.data ?? []).filter((invoice) => invoice.matter_id === row.id),
+        (entries?.data ?? []).filter((entry) => entry.matter_id === row.id),
+      ),
+      nextDeadline: due ? dayMonthYear(due, today) : "—",
       consultant: consultant ? staffPerson(consultant) : null,
     };
   });
@@ -195,6 +233,10 @@ export async function loadSheetMatters(
               clear: "/sheet/matters",
             }
           : null,
+    live: {
+      view: query.view === "due" || query.view === "review" || query.view === "blocked" ? query.view : null,
+      chips: "Office, program and priority filters aren’t available yet. Search by client or reference instead.",
+    },
   };
   return { chrome, matters: data, newMatter };
 }
@@ -244,6 +286,7 @@ export async function loadNewMatterDialog(supabase: Client, staff: SheetStaff): 
         .map((row) => ({
           id: row.id,
           name: members.get(row.id) ?? "Unassigned",
+          role: row.role,
         })),
       credentialStatus,
     ),

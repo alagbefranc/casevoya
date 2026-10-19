@@ -131,6 +131,14 @@ export function minorOn(dateOfBirth: string, majorityYears: number, today: strin
   return adult.toISOString().slice(0, 10) > today;
 }
 
+/** Whether the name, email or phone differ from what is on file (the date of birth is compared separately). */
+export function personDetailsChanged(
+  current: { display_name: string; email: string | null; contact_phone: string | null },
+  next: { displayName: string; email: string | null; phone: string | null },
+): boolean {
+  return current.display_name !== next.displayName || (current.email ?? null) !== next.email || (current.contact_phone ?? null) !== next.phone;
+}
+
 /** What the save toast says, in order: the change itself, then anything the database did because of it. */
 export function editNotes(change: { becameAdult: boolean; becameMinor: boolean }): string[] {
   const notes: string[] = [];
