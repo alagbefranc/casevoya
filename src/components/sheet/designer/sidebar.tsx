@@ -228,7 +228,6 @@ export function SheetSidebar({ data }: { data: SidebarData }) {
         <Item href={"/sheet/privacy"} icon={"privacy"} label={"Privacy requests"} active={active} />
         <Item href={"/sheet/exports"} icon={"download"} label={"Client-file exports"} active={active} />
         <Item href={"/sheet/migration"} icon={"import"} label={"Migration import"} active={active} />
-        <Item href={"/sheet/states"} icon={"grid"} label={"System states"} active={active} />
       </Group>
       <div className={"me"}>
         <Avatar person={data.me} />
