@@ -65,7 +65,9 @@ async function firm() {
   return { orgId, owner, consultant, sponsorLogin, matterId, applicant: id("Synthetic applicant"), sponsor: id("Synthetic sponsor"), cousin: id("Synthetic cousin") };
 }
 
-const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+// The database counts days in the firm's timezone (America/Toronto by default), so the tests do too.
+const torontoDay = (offsetDays = 0) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto" }).format(new Date(Date.now() + offsetDays * 86_400_000));
+const inDays = (days: number) => torontoDay(days);
 
 async function grant(userId: string, orgId: string, f: Awaited<ReturnType<typeof firm>>, overrides: { grantee?: string; expires?: string; purpose?: string } = {}) {
   await as(userId, orgId);
