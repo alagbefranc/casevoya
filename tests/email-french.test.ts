@@ -144,8 +144,8 @@ function approved(ids: string[], drafted: DraftFile = FR_DRAFTS): DraftFile {
 }
 
 describe("localized builders", () => {
-  it("cover every catalog template except the EM14 French previews", () => {
-    const catalog = (Object.keys(EMAIL_TEMPLATES) as TemplateId[]).filter((id) => !id.startsWith("EM14"));
+  it("cover every catalog template except the EM14 French previews and EX15 (a staff member's own words)", () => {
+    const catalog = (Object.keys(EMAIL_TEMPLATES) as TemplateId[]).filter((id) => !id.startsWith("EM14") && id !== "EX15");
     expect([...CATALOGUED].sort()).toEqual([...catalog].sort());
     expect(Object.keys(EN_SOURCE).sort()).toEqual(["_shared", ...LOCALIZED_IDS].sort());
   });

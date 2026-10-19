@@ -32,8 +32,12 @@ import {
 
 export type Lang = "en" | "fr";
 
-/** The ids that have a string table: every catalog template except the EM14 French previews, plus "generic". */
-export type LocalizedId = Exclude<TemplateId, "EM14a" | "EM14b" | "EM14c"> | "generic";
+/**
+ * The ids that have a string table: every catalog template except the EM14 French previews and
+ * EX15 (a staff member's own words, sent as written: its few shell lines stay English until the
+ * owner decides how a staff email should read in French), plus "generic".
+ */
+export type LocalizedId = Exclude<TemplateId, "EM14a" | "EM14b" | "EM14c" | "EX15"> | "generic";
 
 type Table = Record<string, Record<string, string>>;
 export type DraftString = { en: string; fr: string; origin: "machine" | "hand" | "reviewer"; note?: string };

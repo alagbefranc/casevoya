@@ -70,7 +70,8 @@ type Wired =
   | "EM16a"
   | "EM16b"
   | "EM16c"
-  | "EX07";
+  | "EX07"
+  | "EX15";
 
 /** Which approved design a queued delivery uses, from its database template and context. */
 export function designFor(context: Context): Wired | "generic" {
@@ -112,6 +113,9 @@ export function designFor(context: Context): Wired | "generic" {
     // Matter messaging (20261019203100_matter_messaging.sql): a staff message. Firm name only.
     case "message":
       return "EX07";
+    // Inbox replies (20261019215100_inbox_reply_emails.sql): a staff member's own email.
+    case "staff_message":
+      return "EX15";
     default:
       return "generic";
   }
@@ -169,6 +173,15 @@ function contextFor(design: Wired, context: Context, firm: string): EmailContext
     case "EX10":
     case "EX07":
       return { firmName: firm };
+    // The text and subject come with the message (never the delivery context); see dispatch.ts.
+    case "EX15":
+      return {
+        firmName: firm,
+        senderName: textOf(context.sender) || null,
+        body: textOf(context.body),
+        subject: textOf(context.subject) || null,
+        portal: context.portal === true,
+      };
   }
 }
 
@@ -187,7 +200,9 @@ function genericEnglish(firm: string, origin: string): EmailCopy {
 
 /**
  * HTML, text, subject and preheader for one queued delivery. Copy stays generic: no file body, no
- * case narrative, no document name, no amount. Links are built from the app origin and fixed
+ * case narrative, no document name, no amount. The one exception is EX15, a staff member's own
+ * email from the Sheet Inbox: its body is their text as written (context.body, put there by the
+ * mail worker from the prepared message), escaped, with no links made from it. Links are built from the app origin and fixed
  * paths; the only link taken from the context is an invitation's private link that the mail
  * worker opened from its sealed form (context.link). Without it the invitation says the link is
  * not in the email. (A cancelled consultation may link to /book/<firm slug>: the path is fixed and
@@ -201,10 +216,13 @@ export function renderEmail(context: Context, options: { origin?: string } = {})
   const origin = emailOrigin(options.origin ?? DEFAULT_EMAIL_ORIGIN);
   const firm = firmName(context);
   const design = designFor(context);
-  const lang = chooseEmailLanguage(design, context.locale);
+  // EX15 is the staff member's own words, sent as written (English shell; no French string table).
+  const lang = design === "EX15" ? "en" : chooseEmailLanguage(design, context.locale);
   let copy: EmailCopy;
   if (design === "generic") {
     copy = lang === "fr" ? buildLocalized("generic", "fr", { firmName: firm }, origin) : genericEnglish(firm, origin);
+  } else if (design === "EX15") {
+    copy = renderTemplate("EX15", contextFor("EX15", context, firm) as EmailContexts["EX15"], origin);
   } else {
     const typed = contextFor(design, context, firm);
     copy = lang === "fr" ? buildLocalized(design, "fr", typed as never, origin) : renderTemplate(design, typed as never, origin);

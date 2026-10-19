@@ -10,6 +10,11 @@ export type MailDelivery = {
   reply_to_name: string;
   template: string;
   context: Record<string, unknown>;
+  /** A staff email (template staff_message): the staff member's text and subject, outside the context. */
+  body?: string | null;
+  subject?: string | null;
+  /** Threading headers of a reply (In-Reply-To, References). Anything else is dropped. */
+  headers?: Record<string, unknown> | null;
 };
 
 export type PreparedMail = {
@@ -65,6 +70,21 @@ async function openSealedLink(deps: DispatchDeps, sealed: unknown, invitationId:
   }
 }
 
+/** A Message-ID as a mail header carries it: one <id>, no spaces or angle brackets inside. */
+const MESSAGE_ID = /^<[^<>\s]{1,498}>$/;
+
+/** Only the threading headers, and only well-formed. */
+export function threadingHeaders(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const key of ["In-Reply-To", "References"]) {
+    const header = record[key];
+    if (typeof header === "string" && MESSAGE_ID.test(header.trim())) out[key] = header.trim();
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 function includesAddress(list: string[], email: string): boolean {
   const target = email.toLowerCase();
   return list.some((item) => item.toLowerCase() === target);
@@ -89,6 +109,14 @@ export async function dispatchOutbound(
       delete context.sealed_link;
       delete context.link;
       delete context.locale;
+      delete context.body;
+      delete context.subject;
+      // A staff email's own words and subject (EX15) come with the message, never the context.
+      if (message.template === "staff_message") {
+        if (typeof message.body === "string") context.body = message.body;
+        if (typeof message.subject === "string") context.subject = message.subject;
+      }
+      const headers = message.template === "staff_message" ? threadingHeaders(message.headers) : undefined;
       const locale = locales[message.delivery_id];
       if (locale === "fr-CA") context.locale = locale;
       const link = await openSealedLink(deps, sealed, context.invitation_id);
@@ -105,6 +133,7 @@ export async function dispatchOutbound(
         subject: rendered.subject,
         html: rendered.html,
         text: rendered.text,
+        ...(headers ? { headers } : {}),
       });
       if (!outcome.ok) {
         await deps.finish(

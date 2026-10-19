@@ -58,6 +58,7 @@ import {
 } from "./corrections-acts";
 import { openDocReview, reopenDocReview, runDocFile, runDocReview } from "./documents-acts";
 import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
+import { runInboxCompose, runInboxReply } from "./inbox-reply-acts";
 import { bindGovControls } from "./gov-acts";
 import {
   openRedaction,
@@ -620,6 +621,19 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (inboxDismiss && root.contains(inboxDismiss)) {
         event.preventDefault();
         busyRun(inboxDismiss, () => runInboxDismiss(inboxDismiss, router));
+        return;
+      }
+      // Inbox, Conversations and New message: send a reply or a new email to a person on a matter.
+      const inboxReply = target.closest<HTMLElement>("[data-inbox-reply]");
+      if (inboxReply && root.contains(inboxReply)) {
+        event.preventDefault();
+        busyRun(inboxReply, () => runInboxReply(inboxReply, root, router));
+        return;
+      }
+      const inboxCompose = target.closest<HTMLElement>("[data-inbox-compose]");
+      if (inboxCompose && root.contains(inboxCompose)) {
+        event.preventDefault();
+        busyRun(inboxCompose, () => runInboxCompose(inboxCompose, root, router));
         return;
       }
       // Compliance: privacy requests, the complaints register and their settings.
