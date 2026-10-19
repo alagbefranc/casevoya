@@ -23,6 +23,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { DPA_AVAILABLE, DPA_VERSION } from "@/modules/firm-onboarding/legal";
 import { LICENCE_PROOF_BUCKET, ownLicenceProofKey } from "@/modules/firm-onboarding/licence-proof";
 import { FIRM_LOGO_BUCKET, ownFirmLogoKey } from "@/modules/firm-onboarding/firm-logo";
+import { todayIso } from "@/modules/sheet/birth-date";
 
 export type PortResult =
   | { ok: true; href?: string; codes?: string[] }
@@ -322,8 +323,10 @@ export async function saveSetupStep(
     // "Valid until" (#ex) is optional; when given it must be a real date that hasn't passed.
     const validUntil = text(fields, "ex");
     if (validUntil && !isIsoDate(validUntil)) return fail("Enter the “Valid until” date as a full date.");
-    if (validUntil && validUntil < new Date().toISOString().slice(0, 10)) {
-      return fail("Enter a “Valid until” date that hasn’t passed.");
+    if (validUntil) {
+      // The firm's today, as app.set_credential_valid_until counts it.
+      const { data: firmZone } = await supabase.from("organizations").select("timezone").eq("id", organizationId).maybeSingle();
+      if (validUntil < todayIso(new Date(), firmZone?.timezone)) return fail("Enter a “Valid until” date that hasn’t passed.");
     }
     const { data: existing } = await supabase
       .from("consultant_credentials")
