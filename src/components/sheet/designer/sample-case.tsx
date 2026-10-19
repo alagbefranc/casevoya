@@ -3,6 +3,7 @@
  * from the firm's real sample case and its recorded sample proofs. Same DOM, classes and copy.
  */
 import { Icon, Sep } from "./frame";
+import { GoLiveSwitch } from "./go-live-switch";
 import { SampleStepCheck } from "./sample-step-check";
 
 export type SampleStep = {
@@ -20,7 +21,81 @@ export type SampleCaseData = {
   steps: SampleStep[];
   /** Who the licence check is for and where it stands ("waiting for review"). */
   licence: { holder: string; status: string } | null;
+  /** Live addition: the go-live checklist and Switch to live. Absent for a live firm. */
+  live?: GoLiveData | null;
 };
+
+/**
+ * Live addition (no Designer screen; approved by Francis 2026-10-19). The two licence steps (and
+ * an ended trial) that also keep real client invitations locked, as more of the Designer's
+ * `.smp-i` step tiles in a second `.smp-g` row, and the firm owner's Switch to live.
+ */
+export type GoLiveData = {
+  licence: {
+    added: boolean;
+    verified: boolean;
+    /** Where the latest check stands in the panel's words ("waiting for review"); null without a licence. */
+    status: string | null;
+  };
+  trialEnded: boolean;
+  /** Plain words for everything still blocking, in order. Empty when the firm can go live. */
+  remaining: string[];
+  /** Only the firm owner switches the firm to live. */
+  owner: boolean;
+};
+
+const B2 = "/assets/generated/b2";
+
+function GoLiveTile({ art, title, note, href, go, done }: { art: string; title: string; note: string; href: string; go: string; done: boolean }) {
+  return (
+    <div className={done ? "smp-i d k2-spot" : "smp-i k2-spot"} data-spot={"1"}>
+      <div className={"smp-il"}>
+        <img src={`${B2}/${art}-72@1x.webp`} srcSet={`${B2}/${art}-72@2x.webp 2x`} width={64} height={64} alt={""} loading={"lazy"} />
+      </div>
+      <span>
+        <a href={href}>{title}</a>
+        <small>{note}</small>
+      </span>
+      {done ? (
+        <span className={"bd ok"}>
+          <i></i>
+          {"Done"}
+        </span>
+      ) : (
+        <a className={"go"} href={href}>
+          {`${go} `}
+          <Icon name={"arrow-right"} cls={"ic s"} />
+        </a>
+      )}
+    </div>
+  );
+}
+
+/** The go-live steps row, placed under the six sample steps. */
+export function GoLiveSteps({ data }: { data: GoLiveData }) {
+  const { licence } = data;
+  const verifiedNote = licence.verified
+    ? "Checked by hand on the CICC public register"
+    : licence.added
+      ? `Licence check: ${licence.status ?? "not recorded yet"}`
+      : "Record the check from the CICC public register once your licence is added";
+  return (
+    <div className={"smp-g"} data-golive={"steps"}>
+      <GoLiveTile
+        art={"licence-card"}
+        title={"Add your CICC licence"}
+        note={licence.added ? "Your licence is on file" : "Your college ID from the CICC public register"}
+        href={"/sheet/licence"}
+        go={"Add it"}
+        done={licence.added}
+      />
+      <GoLiveTile art={"licence-pending"} title={"Licence verified against the CICC register"} note={verifiedNote} href={"/sheet/licence"} go={"Check it"} done={licence.verified} />
+      {data.trialEnded ? (
+        <GoLiveTile art={"invoice-plain"} title={"Your trial has ended"} note={"Choose a plan to keep going"} href={"/sheet/settings?tab=billing"} go={"Choose a plan"} done={false} />
+      ) : null}
+    </div>
+  );
+}
 
 function VoPointing() {
   return (
@@ -117,6 +192,7 @@ export function SampleCasePanel({ data }: { data: SampleCaseData }) {
           <Step key={step.key} step={step} />
         ))}
       </div>
+      {data.live ? <GoLiveSteps data={data.live} /> : null}
       <div className={"smp-f"}>
         <div className={"alert lockd"} style={{ margin: "0", flex: "1", alignItems: "center" }}>
           <span className={"art"} style={{ "--a": "36px" } as React.CSSProperties} aria-hidden={"true"}>
@@ -153,6 +229,7 @@ export function SampleCasePanel({ data }: { data: SampleCaseData }) {
             {"Opens after verification"}
           </p>
         </div>
+        {data.live ? <GoLiveSwitch data={data.live} /> : null}
       </div>
     </section>
   );

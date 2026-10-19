@@ -22,7 +22,9 @@ import { IndexMarkup } from "@/components/sheet/markup/index";
 import { MatterMarkup } from "@/components/sheet/markup/matter";
 import { MattersMarkup } from "@/components/sheet/markup/matters";
 import { SampleModeMarkup } from "@/components/sheet/markup/sample-mode";
-import { SampleCasePanel, type SampleCaseData } from "@/components/sheet/designer/sample-case";
+import { GoLiveSteps, SampleCasePanel, type GoLiveData, type SampleCaseData } from "@/components/sheet/designer/sample-case";
+import { GoLiveSwitch } from "@/components/sheet/designer/go-live-switch";
+import { SetupBanner } from "@/components/sheet/designer/setup-banner";
 import { SheetTasks, TasksDialog, TasksHeader, type TasksData, type TasksTab } from "@/components/sheet/designer/tasks";
 import { TasksMarkup } from "@/components/sheet/markup/tasks";
 import { SheetStaffTab, StaffAfter, StaffHeader, type StaffData, type StaffInviteDialogData } from "@/components/sheet/designer/invitations";
@@ -165,7 +167,7 @@ import { securityData, teamData } from "@/modules/sheet/settings-present";
 import { OffboardDialog, type OffboardDialogData } from "@/components/sheet/designer/settings-staff-admin";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
-vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
+vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }), switchToLive: async () => ({ ok: true }) }));
 
 /**
  * The data-driven Designer components must produce the same HTML as the captured
@@ -686,6 +688,62 @@ describe("Designer fidelity", () => {
       console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
     }
     expect(live).toBe(captured);
+  });
+
+  it("adds the Finish setup banner and the go-live checklist to the sample-mode page without changing the captured Designer markup", () => {
+    // Live only (approved by Francis 2026-10-19): the sample-mode banner first in #content, the
+    // licence steps row under the six steps, and Switch to live beside Invite a real client.
+    // Each is a whole element; with each one's own markup removed, the page is exactly the capture.
+    const sample: SampleCaseData = {
+      applicant: "Priya",
+      steps: [
+        { key: "intake", image: "intake", title: "Send an intake form", note: "Priya fills in her history", href: "/sheet/matters/priya?tab=intake", done: true },
+        { key: "agreement", image: "agreement", title: "Send a service agreement", note: "Signing order: Priya, then Rafael", href: "/sheet/portal-agreements", done: true },
+        { key: "upload", image: "upload", title: "Request and review an upload", note: "Marriage certificate", href: "/sheet/matters/priya?tab=documents", done: false },
+        { key: "reminder", image: "reminder", title: "Schedule a reminder", note: "Police certificate due in 14 days", href: "/sheet/automations", done: false },
+        { key: "invoice", image: "invoice", title: "Issue an invoice", note: "From Northline to Priya", href: "/sheet/matters/priya?tab=billing", done: false },
+        { key: "export", image: "export", title: "Export the file", note: "ZIP with the audit trail", href: "/sheet/two-step?step=6", done: false },
+      ],
+      licence: { holder: "Amara Osei", status: "waiting for review" },
+    };
+    const golive: GoLiveData = {
+      licence: { added: true, verified: false, status: "waiting for review" },
+      trialEnded: false,
+      remaining: ["Licence verified against the CICC register", "Practice step: request and review an upload"],
+      owner: true,
+    };
+    const banner = { firmName: "Northline Immigration", progress: "4 of 8 done. Still to do: get it verified against the CICC register, 4 practice steps.", collapsed: false };
+    const content = (html: string) => region(html, '<div id="content">', '<aside id="rbar"');
+    const captured = withoutPreloads(content(renderToStaticMarkup(createElement(SampleModeMarkup))));
+    const live = withoutPreloads(
+      content(
+        renderToStaticMarkup(
+          createElement(SheetFrame, {
+            sidebar: DESIGNER_SIDEBAR,
+            top: { firmName: "Northline Immigration", pills: [] },
+            rbar: DESIGNER_RBAR,
+            statusbar: { timezone: "America/Toronto", setup: banner },
+          }, createElement(SheetHome, {
+            data: {
+              ...DESIGNER_HOME,
+              greeting: "Welcome to Northline, Amara.",
+              summary: "You’re exploring with sample data. Everyone here is fictional, so nothing you send reaches a real person.",
+            },
+            lead: createElement(SampleCasePanel, { data: { ...sample, live: golive } }),
+          })),
+        ),
+      ),
+    );
+    const parts = [
+      renderToStaticMarkup(createElement(SetupBanner, { data: banner })),
+      renderToStaticMarkup(createElement(GoLiveSteps, { data: golive })),
+      renderToStaticMarkup(createElement(GoLiveSwitch, { data: golive })),
+    ];
+    for (const part of parts) expect(live).toContain(part);
+    expect(parts[0]).toMatch(/^<div class="alert warn" role="status" data-setup-banner="1">/);
+    expect(live.indexOf(parts[0])).toBe('<div id="content">'.length);
+    const stripped = parts.reduce((html, part) => html.replace(part, ""), live);
+    expect(stripped).toBe(captured);
   });
 
   for (const tab of ["internal", "client", "deadlines"] as TasksTab[]) {

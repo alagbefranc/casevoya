@@ -4,6 +4,8 @@
  * from props so the same frame shows a firm's real records.
  */
 import type { ReactNode } from "react";
+import type { SetupBannerData } from "@/modules/sheet/setup-present";
+import { SetupBanner } from "./setup-banner";
 import { SheetSidebar, type SidebarData } from "./sidebar";
 
 const SPRITE = "/assets/icons-coreui/sprite.svg";
@@ -238,6 +240,11 @@ export type StatusbarData = {
   queue?: { label: string; detail: string } | null;
   /** The Designer's `.demo` note, used for sample mode. */
   sample?: { label: string; detail: string } | null;
+  /**
+   * Live addition: a sample-mode firm's Finish setup banner, shown first in the content on every
+   * staff page. Carried with the status bar's sample note because every page passes it through.
+   */
+  setup?: SetupBannerData | null;
 };
 
 export function SheetStatusbar({ data }: { data: StatusbarData }) {
@@ -334,7 +341,10 @@ export function SheetFrame({
           {title ? <h1 className={"sr"}>{title}</h1> : null}
           <div className={"main"} id={"main"}>
             {header ?? (top ? <SheetTopBar data={top} /> : null)}
-            <div id={"content"}>{children}</div>
+            <div id={"content"}>
+              {statusbar.setup ? <SetupBanner data={statusbar.setup} /> : null}
+              {children}
+            </div>
           </div>
           {right}
         </main>

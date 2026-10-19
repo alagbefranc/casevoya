@@ -5,6 +5,7 @@ import { matterNames } from "@/modules/sheet/chrome-load";
 import { loadSheetHome } from "@/modules/sheet/home-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { licenceCheckWords, sampleSteps, trialDaysLeft } from "@/modules/sheet/sample-present";
+import { loadSheetSetup } from "@/modules/sheet/setup-load";
 
 /**
  * The sample-mode page: the home page plus the firm's real sample case and the sample proofs it
@@ -13,7 +14,7 @@ import { licenceCheckWords, sampleSteps, trialDaysLeft } from "@/modules/sheet/s
 export async function loadSheetSample(staff: SheetStaff, now: Date = new Date()) {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
-  const [base, ensured, proofs, subscription, credential] = await Promise.all([
+  const [base, ensured, proofs, subscription, credential, setup] = await Promise.all([
     loadSheetHome(staff, now),
     supabase.rpc("ensure_sample_case"),
     supabase.from("sample_proof_steps").select("step").eq("organization_id", org),
@@ -25,6 +26,8 @@ export async function loadSheetSample(staff: SheetStaff, now: Date = new Date())
       .order("declared_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    // Sample mode only: the go-live checklist (licence added, licence verified, an ended trial).
+    loadSheetSetup(supabase, staff),
   ]);
   const matterId = typeof ensured.data === "string" ? ensured.data : null;
   const name = matterId ? await matterNames(supabase, org, [matterId]) : null;
@@ -41,6 +44,18 @@ export async function loadSheetSample(staff: SheetStaff, now: Date = new Date())
     applicant,
     steps: sampleSteps(matterId, staff.organizationName, applicant, new Set((proofs.data ?? []).map((row) => row.step as string))),
     licence: credential.data && holder ? { holder, status: licenceCheckWords(credential.data.status) } : null,
+    live: setup
+      ? {
+          licence: {
+            added: setup.state.hasCredential,
+            verified: !setup.state.remaining.some((step) => step.key === "licence_verified"),
+            status: credential.data ? licenceCheckWords(credential.data.status) : null,
+          },
+          trialEnded: setup.state.trialEnded,
+          remaining: setup.state.remaining.map((step) => step.label),
+          owner: staff.role === "firm_owner",
+        }
+      : null,
   };
 
   const days = subscription.data?.status === "trial" ? trialDaysLeft(subscription.data.trial_ends_at, now) : null;
