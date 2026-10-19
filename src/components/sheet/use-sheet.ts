@@ -64,6 +64,7 @@ import {
 } from "./corrections-acts";
 import { openDocReview, reopenDocReview, runDocFile, runDocOpen, runDocReview } from "./documents-acts";
 import { restoreDocRequest, runDocRequest } from "./doc-request-act";
+import { armIntakeReview, runIntakeFreeze, runIntakeSend } from "./intake-delivery-acts";
 import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
 import { runInboxCompose, runInboxMessage, runInboxNote, runInboxReply } from "./inbox-reply-acts";
 import { mountDocOpen, mountDrafts, mountInboxFilters, mountRecordsCrumb } from "./records-acts";
@@ -758,6 +759,21 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(docSubmit, () => runDocReview(docSubmit, router));
         return;
       }
+      // The matter's Intake tab: Send a form, Freeze snapshot, and Mark reviewed once its fuse settles.
+      const intakeSend = target.closest<HTMLElement>("[data-intake-send]");
+      if (intakeSend && root.contains(intakeSend)) {
+        event.preventDefault();
+        busyRun(intakeSend, () => runIntakeSend(intakeSend, router));
+        return;
+      }
+      const intakeFreeze = target.closest<HTMLElement>("[data-intake-freeze]");
+      if (intakeFreeze && root.contains(intakeFreeze)) {
+        event.preventDefault();
+        busyRun(intakeFreeze, () => runIntakeFreeze(intakeFreeze, router));
+        return;
+      }
+      const intakeReview = target.closest<HTMLElement>("[data-intake-review] .k2-fb-idle");
+      if (intakeReview && root.contains(intakeReview)) armIntakeReview(intakeReview, router);
       // The matter page's Request a document: Send request goes to public.create_document_request.
       const docRequest = target.closest<HTMLElement>("[data-doc-request]");
       if (docRequest && root.contains(docRequest)) {

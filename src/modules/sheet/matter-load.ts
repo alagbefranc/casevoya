@@ -76,6 +76,7 @@ import { DEADLINE_KINDS, DEADLINE_ROLES, deadlineSource } from "@/modules/sheet/
 import { missingPolicies } from "@/modules/portal-policies/defaults";
 import { loadCurrentPolicies } from "@/modules/portal-policies/load";
 import { loadClosurePanel } from "@/modules/sheet/closure-load";
+import { loadMatterIntake } from "@/modules/sheet/matter-intake-load";
 import { docRequestPersonLabel, mayRequestDocuments } from "@/modules/sheet/doc-request";
 import {
   governmentLabel,
@@ -713,6 +714,19 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       outcome: matter.outcome ? outcomeLabel(matter.outcome) : null,
       closed: matter.stage === "closed",
     });
+  }
+
+  // Intake delivery: each person's forms, answers with provenance, review state and flags.
+  if (tab === "intake") {
+    const intakePeople = ordered
+      .filter((row, index) => row.person_id && ordered.findIndex((other) => other.person_id === row.person_id) === index)
+      .flatMap((row) => {
+        const found = person.get(row.person_id as string);
+        return found
+          ? [{ id: found.id, name: found.display_name, role: partyRole(row.role), hasLogin: Boolean(found.user_id), dateOfBirth: found.date_of_birth, birthPrecision: found.birth_date_precision }]
+          : [];
+      });
+    page.intake = await loadMatterIntake(supabase, { staff, matter, people: intakePeople, today }).catch(() => null);
   }
 
   return { chrome, header, rbar, dialogs, page, countersign, governmentDialogs: government.dialogs };

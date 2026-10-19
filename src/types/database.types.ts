@@ -3196,6 +3196,65 @@ export type Database = {
         }
         Relationships: []
       }
+      intake_answer_reviews: {
+        Row: {
+          answer_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          organization_id: string
+          response_id: string
+          reviewer_membership_id: string
+        }
+        Insert: {
+          answer_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id: string
+          response_id: string
+          reviewer_membership_id: string
+        }
+        Update: {
+          answer_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id?: string
+          response_id?: string
+          reviewer_membership_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_answer_reviews_answer_id_organization_id_fkey"
+            columns: ["answer_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "intake_answer_versions"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "intake_answer_reviews_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_answer_reviews_response_id_organization_id_fkey"
+            columns: ["response_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "intake_responses"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "intake_answer_reviews_reviewer_membership_id_organization_id_fkey"
+            columns: ["reviewer_membership_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
       intake_answer_versions: {
         Row: {
           approximate_note: string | null
@@ -3261,6 +3320,185 @@ export type Database = {
             columns: ["response_id", "organization_id"]
             isOneToOne: false
             referencedRelation: "intake_responses"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      intake_corrections: {
+        Row: {
+          answer_id: string | null
+          correction_number: number
+          created_at: string
+          created_by: string | null
+          description: string | null
+          field_key: string | null
+          id: string
+          organization_id: string
+          previous_answer_id: string | null
+          proof_document_id: string | null
+          reason: string | null
+          response_id: string
+        }
+        Insert: {
+          answer_id?: string | null
+          correction_number: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          field_key?: string | null
+          id?: string
+          organization_id: string
+          previous_answer_id?: string | null
+          proof_document_id?: string | null
+          reason?: string | null
+          response_id: string
+        }
+        Update: {
+          answer_id?: string | null
+          correction_number?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          field_key?: string | null
+          id?: string
+          organization_id?: string
+          previous_answer_id?: string | null
+          proof_document_id?: string | null
+          reason?: string | null
+          response_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_corrections_answer_id_organization_id_fkey"
+            columns: ["answer_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "intake_answer_versions"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "intake_corrections_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_corrections_previous_answer_id_organization_id_fkey"
+            columns: ["previous_answer_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "intake_answer_versions"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "intake_corrections_proof_document_id_organization_id_fkey"
+            columns: ["proof_document_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "intake_corrections_response_id_organization_id_fkey"
+            columns: ["response_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "intake_responses"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      intake_requests: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          due_on: string | null
+          id: string
+          is_sample: boolean
+          matter_id: string
+          message: string | null
+          organization_id: string
+          person_id: string
+          response_id: string
+          sent_by_membership_id: string
+          task_id: string | null
+          template_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          due_on?: string | null
+          id?: string
+          is_sample?: boolean
+          matter_id: string
+          message?: string | null
+          organization_id: string
+          person_id: string
+          response_id: string
+          sent_by_membership_id: string
+          task_id?: string | null
+          template_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          due_on?: string | null
+          id?: string
+          is_sample?: boolean
+          matter_id?: string
+          message?: string | null
+          organization_id?: string
+          person_id?: string
+          response_id?: string
+          sent_by_membership_id?: string
+          task_id?: string | null
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_requests_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "intake_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_requests_person_id_organization_id_fkey"
+            columns: ["person_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "intake_requests_response_id_organization_id_fkey"
+            columns: ["response_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "intake_responses"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "intake_requests_sent_by_membership_id_organization_id_fkey"
+            columns: ["sent_by_membership_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "intake_requests_task_id_organization_id_fkey"
+            columns: ["task_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "intake_requests_template_id_organization_id_fkey"
+            columns: ["template_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "intake_templates"
             referencedColumns: ["id", "organization_id"]
           },
         ]
@@ -10880,6 +11118,17 @@ export type Database = {
         }
         Returns: Json
       }
+      intake_response_forms: {
+        Args: { p_response_ids: string[] }
+        Returns: {
+          locale: string
+          response_id: string
+          schema: Json
+          template_id: string
+          title: string
+          version_number: number
+        }[]
+      }
       intake_template_usage: {
         Args: { p_organization_id: string }
         Returns: { matters: number; stable_key: string }[]
@@ -11516,6 +11765,18 @@ export type Database = {
         Args: { p_amount_cents: number; p_idempotency_key: string; p_invoice_id: string; p_reason: string }
         Returns: string
       }
+      request_intake_correction: {
+        Args: {
+          p_description: string | null
+          p_field_key: string | null
+          p_presence: Database["public"]["Enums"]["answer_presence"] | null
+          p_proof_document_id: string | null
+          p_reason: string | null
+          p_response_id: string
+          p_value: Json | null
+        }
+        Returns: Json
+      }
       request_mfa_reset: {
         Args: { p_reason: string }
         Returns: string
@@ -11531,6 +11792,10 @@ export type Database = {
           p_target_user_id: string
         }
         Returns: undefined
+      }
+      review_intake_answer: {
+        Args: { p_answer_id: string }
+        Returns: string
       }
       review_document_version: {
         Args: {
@@ -11767,6 +12032,16 @@ export type Database = {
           p_expires_at: string | null
           p_idempotency_key: string
           p_signers: Json
+        }
+        Returns: Json
+      }
+      send_intake_request: {
+        Args: {
+          p_due_on: string | null
+          p_matter_id: string
+          p_message: string | null
+          p_person_id: string
+          p_template_id: string
         }
         Returns: Json
       }

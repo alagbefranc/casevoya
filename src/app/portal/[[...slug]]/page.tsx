@@ -13,6 +13,8 @@ import { loadPortalMessages } from "@/modules/messages/load";
 import { loadPortalAccess } from "@/modules/portal/load";
 import { payStateFromQuery } from "@/modules/portal/pay";
 import { loadPortalAppointments } from "@/modules/scheduling/portal-load";
+import { loadPortalIntake } from "@/modules/intake/portal-load";
+import { countPortalTasks, loadPortalTasks } from "@/modules/portal/tasks-load";
 
 export const metadata: Metadata = {
   title: "Portal · Casevoya",
@@ -27,7 +29,7 @@ async function Body({
   searchParams,
 }: {
   params: Promise<{ slug?: string[] }>;
-  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[] }>;
+  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[]; response?: string | string[]; field?: string | string[] }>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const page = slug?.[0] ?? "home";
@@ -63,9 +65,20 @@ async function Body({
   const threadValue = Array.isArray(query.thread) ? query.thread[0] : query.thread;
   // A failed read shows the chat's error state (null), not a broken page.
   const messages = page === "messages" ? await loadPortalMessages(access.viewer, threadValue ?? null).catch(() => null) : undefined;
+  // Intake delivery: the person's own forms (?response= opens one) and client tasks.
+  const responseValue = Array.isArray(query.response) ? query.response[0] : query.response;
+  const fieldValue = Array.isArray(query.field) ? query.field[0] : query.field;
+  const intake =
+    page === "intake" || page === "correction"
+      ? await loadPortalIntake(access.viewer, responseValue ?? null)
+          .then((data) => ({ data, field: fieldValue && /^[a-z][a-z0-9_]{0,63}$/.test(fieldValue) ? fieldValue : null }))
+          .catch(() => null)
+      : null;
+  const tasks = page === "tasks" ? await loadPortalTasks(access.viewer).catch(() => null) : null;
+  const taskCount = tasks ? tasks.filter((task) => task.status !== "done").length : await countPortalTasks(access.viewer).catch(() => 0);
   return (
     <PortalScreen page={page}>
-      <LivePortal page={page} viewer={access.viewer} documents={documents} agreements={agreements} payments={payments} appointments={appointments} messages={messages} />
+      <LivePortal page={page} viewer={access.viewer} documents={documents} agreements={agreements} payments={payments} appointments={appointments} messages={messages} intake={intake} tasks={tasks} taskCount={taskCount} />
     </PortalScreen>
   );
 }
@@ -75,7 +88,7 @@ export default function PortalPage({
   searchParams,
 }: {
   params: Promise<{ slug?: string[] }>;
-  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[] }>;
+  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[]; response?: string | string[]; field?: string | string[] }>;
 }) {
   return (
     <Suspense fallback={<PortalScreen page="home"><EmptyPortal /></PortalScreen>}>
