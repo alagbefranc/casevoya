@@ -3,6 +3,7 @@ import "server-only";
 import { documentCardFlags, progressLine, type ReviewState, type UploadState } from "@/modules/documents/present";
 import { textForViewer, type ShownText } from "@/modules/i18n/display";
 import type { PortalViewer } from "@/modules/portal/load";
+import { todayIso } from "@/modules/sheet/birth-date";
 import { createClient } from "@/lib/supabase/server";
 
 const REVIEW_ROLES = new Set(["firm_owner", "licensed_consultant", "case_manager"]);
@@ -74,9 +75,10 @@ function formatWhen(value: string | null, timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", { day: "numeric", month: "short", timeZone }).format(date);
 }
 
-function expired(expiresOn: string | null): boolean {
+/** Past its expiry on the firm's today, as app.request_version_satisfies counts it. */
+function expired(expiresOn: string | null, timeZone: string): boolean {
   if (!expiresOn) return false;
-  return expiresOn < new Date().toISOString().slice(0, 10);
+  return expiresOn < todayIso(new Date(), timeZone);
 }
 
 export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalDocuments> {
@@ -141,7 +143,7 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
       uploadState: version ? asUpload(version.upload_state) : null,
       reviewState: version ? asReview(version.review_state) : null,
       superseded: Boolean(version?.superseded_at),
-      expired: expired(version?.expires_on ?? request.expires_on),
+      expired: expired(version?.expires_on ?? request.expires_on, viewer.timezone),
     });
     const personName = names.get(request.person_id) ?? "Person";
     const ref = doc ? refByDocument.get(doc.id) : request.document_id ? refByDocument.get(request.document_id) : undefined;
@@ -180,7 +182,7 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
       uploadState: asUpload(version.upload_state),
       reviewState: asReview(version.review_state),
       superseded: Boolean(version.superseded_at),
-      expired: expired(version.expires_on),
+      expired: expired(version.expires_on, viewer.timezone),
     });
     const ref = refByDocument.get(documentId);
     cards.push({

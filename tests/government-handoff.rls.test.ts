@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { firmDay } from "./helpers/firm-day";
 
 /**
  * T036 to T039 against the real migrations: manual submission handoff, government
@@ -116,9 +117,10 @@ type Firm = Awaited<ReturnType<typeof firm>>;
 
 async function representation(ctx: Firm) {
   await fresh(ctx.consultant, ctx.orgId);
-  await db.query(`select public.record_representation_authority($1, $2, 'Synthetic representation scope', 'Synthetic signed form', current_date, null)`, [
+  await db.query(`select public.record_representation_authority($1, $2, 'Synthetic representation scope', 'Synthetic signed form', $3::date, null)`, [
     ctx.matterId,
     ctx.personId,
+    firmDay(),
   ]);
 }
 
@@ -213,7 +215,7 @@ describe("T036 manual submission handoff", () => {
     // A receipt verifies it and writes the stage-entry evidence; the matter can then move.
     const unverified = await versionOf("submission_handoffs", id);
     await fresh(ctx.manager, ctx.orgId);
-    await db.query(`select public.verify_submission_receipt($1, $2, null, 'Synthetic confirmation page', current_date)`, [id, unverified]);
+    await db.query(`select public.verify_submission_receipt($1, $2, null, 'Synthetic confirmation page', $3::date)`, [id, unverified, firmDay()]);
     expect(await stageEvidence(ctx.matterId, "submission_confirmation")).toBe(1);
     await fresh(ctx.consultant, ctx.orgId);
     const latest = await db.query<{ version: number; government_status: string }>(
@@ -290,8 +292,8 @@ describe("T037 government correspondence", () => {
     await expectDbError(
       () =>
         db.query(
-          `select public.record_government_correspondence($1, 'request', null, 'mail', null, current_date + 1, null, null, null, null, null, null)`,
-          [ctx.matterId],
+          `select public.record_government_correspondence($1, 'request', null, 'mail', null, $2::date, null, null, null, null, null, null)`,
+          [ctx.matterId, firmDay(1)],
         ),
       /future/,
     );
