@@ -8368,6 +8368,157 @@ export type Database = {
         }
         Relationships: []
       }
+      support_access_requests: {
+        Row: {
+          approved_at: string | null
+          approved_by_membership_id: string | null
+          created_at: string
+          created_by: string | null
+          decline_reason: string | null
+          ended_at: string | null
+          ended_by_user_id: string | null
+          ends_at: string | null
+          extension_count: number
+          id: string
+          matter_id: string | null
+          not_included: string | null
+          organization_id: string
+          reason: string
+          requested_by_email: string | null
+          requested_by_name: string
+          requested_by_user_id: string | null
+          requested_minutes: number
+          scope: Database["public"]["Enums"]["support_access_scope"]
+          starts_at: string | null
+          status: Database["public"]["Enums"]["support_access_status"]
+          ticket_ref: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          decline_reason?: string | null
+          ended_at?: string | null
+          ended_by_user_id?: string | null
+          ends_at?: string | null
+          extension_count?: number
+          id?: string
+          matter_id?: string | null
+          not_included?: string | null
+          organization_id: string
+          reason: string
+          requested_by_email?: string | null
+          requested_by_name: string
+          requested_by_user_id?: string | null
+          requested_minutes?: number
+          scope: Database["public"]["Enums"]["support_access_scope"]
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["support_access_status"]
+          ticket_ref?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          decline_reason?: string | null
+          ended_at?: string | null
+          ended_by_user_id?: string | null
+          ends_at?: string | null
+          extension_count?: number
+          id?: string
+          matter_id?: string | null
+          not_included?: string | null
+          organization_id?: string
+          reason?: string
+          requested_by_email?: string | null
+          requested_by_name?: string
+          requested_by_user_id?: string | null
+          requested_minutes?: number
+          scope?: Database["public"]["Enums"]["support_access_scope"]
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["support_access_status"]
+          ticket_ref?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_access_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_access_requests_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "support_access_requests_approved_by_membership_id_organization_id_fkey"
+            columns: ["approved_by_membership_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      support_access_uses: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          id: string
+          object_id: string | null
+          object_table: string
+          occurred_at: string
+          organization_id: string
+          request_id: string
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          id?: string
+          object_id?: string | null
+          object_table: string
+          occurred_at?: string
+          organization_id: string
+          request_id: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          id?: string
+          object_id?: string | null
+          object_table?: string
+          occurred_at?: string
+          organization_id?: string
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_access_uses_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_access_uses_request_id_organization_id_fkey"
+            columns: ["request_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "support_access_requests"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
       task_dependencies: {
         Row: {
           created_at: string
@@ -9646,6 +9797,10 @@ export type Database = {
         }
         Returns: Json
       }
+      approve_support_access_request: {
+        Args: { p_id: string }
+        Returns: string
+      }
       cancel_matter_export: {
         Args: { p_export_id: string }
         Returns: undefined
@@ -10093,6 +10248,10 @@ export type Database = {
         Args: { p_is_sample: boolean; p_title: string }
         Returns: Json
       }
+      cancel_support_access_request: {
+        Args: { p_id: string; p_reason: string }
+        Returns: undefined
+      }
       create_staff_invitation: {
         Args: {
           email: string
@@ -10157,6 +10316,21 @@ export type Database = {
           p_membership_id: string
           p_proof_locator: string
           p_scope_note: string
+        }
+        Returns: string
+      }
+      create_support_access_request: {
+        Args: {
+          p_organization_id: string
+          p_requester_name: string
+          p_requester_email: string
+          p_ticket_ref: string
+          p_scope: Database["public"]["Enums"]["support_access_scope"]
+          p_matter_id: string
+          p_not_included: string
+          p_reason: string
+          p_minutes?: number
+          p_requested_by_user_id?: string
         }
         Returns: string
       }
@@ -10253,6 +10427,18 @@ export type Database = {
         }
         Returns: Json
       }
+      decline_support_access_request: {
+        Args: { p_id: string; p_reason: string }
+        Returns: undefined
+      }
+      end_support_access: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
+      extend_support_access: {
+        Args: { p_id: string; p_minutes?: number }
+        Returns: string
+      }
       firm_access_grants: {
         Args: { p_organization_id: string }
         Returns: {
@@ -10274,6 +10460,10 @@ export type Database = {
         Returns: string | null
       }
       firm_subscription_usage: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      firm_support_access: {
         Args: { p_organization_id: string }
         Returns: Json
       }
@@ -11469,6 +11659,14 @@ export type Database = {
         Args: { p_expected_version: number; p_response_id: string }
         Returns: number
       }
+      support_read_firm_settings: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      support_read_matter: {
+        Args: { p_request_id: string; p_matter_id: string }
+        Returns: Json
+      }
       sync_firm_payment_account: {
         Args: {
           p_account_id: string
@@ -11810,6 +12008,8 @@ export type Database = {
         | "consultation_cancelled"
         | "message"
         | "staff_message"
+        | "support_requested"
+        | "support_granted"
       engagement_status: "pending" | "engaged" | "exception" | "ended"
       firm_setup_step:
         | "firm_details"
@@ -12062,6 +12262,8 @@ export type Database = {
         | "submission_verified"
         | "cancelled"
       subscription_status: "trial" | "trial_ended" | "active" | "cancelled"
+      support_access_scope: "firm_settings" | "matter_documents" | "matter_records" | "matter_all" | "records_set"
+      support_access_status: "pending" | "approved" | "declined" | "expired" | "ended" | "cancelled"
       task_audience: "internal" | "client"
       task_priority: "low" | "normal" | "high" | "critical"
       task_status: "open" | "blocked" | "done" | "cancelled"
@@ -12255,6 +12457,8 @@ export const Constants = {
         "consultation_rescheduled",
         "consultation_cancelled",
         "staff_message",
+        "support_requested",
+        "support_granted",
       ],
       access_grant_kind: ["explicit", "guardian"],
       agreement_kind: ["quote", "consultation", "service", "amendment", "consent"],
@@ -12309,6 +12513,8 @@ export const Constants = {
       register_licence_status: ["active", "inactive"],
       sample_proof_step: ["intake", "agreement", "upload", "reminder", "invoice", "export"],
       subscription_status: ["trial", "trial_ended", "active", "cancelled"],
+      support_access_scope: ["firm_settings", "matter_documents", "matter_records", "matter_all", "records_set"],
+      support_access_status: ["pending", "approved", "declined", "expired", "ended", "cancelled"],
       matter_party_role: [
         "applicant",
         "dependant",

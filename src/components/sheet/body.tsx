@@ -65,7 +65,7 @@ import { ROLE_MATRIX } from "@/modules/staff/role-matrix";
 import { SUSPENDED_CSS, SuspendedAlert, SuspendedPanel, SuspendedTopBar } from "@/components/sheet/designer/licence-suspended";
 import { loadSheetLicenceSuspended } from "@/modules/sheet/licence-suspended-load";
 import { SUSPENDED_REVEAL } from "@/modules/sheet/licence-suspended-present";
-import { GrantDialog, GrantRevokeDialog, GrantsHeader, SheetGrants } from "@/components/sheet/designer/grants";
+import { GrantDialog, GrantRevokeDialog, GrantsHeader, SheetGrants, SupportDeclineDialog } from "@/components/sheet/designer/grants";
 import { loadSheetGrants } from "@/modules/sheet/grants-load";
 import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder } from "@/components/sheet/designer/intake-builder";
 import { loadSheetIntakeBuilder } from "@/modules/sheet/intake-builder-load";
@@ -507,6 +507,7 @@ export async function SheetBody({
             <>
               <GrantDialog data={loaded.dialog} />
               {loaded.dialog.organizationId && access.staff.role === "firm_owner" ? <GrantRevokeDialog organizationId={loaded.dialog.organizationId} /> : null}
+              {loaded.dialog.organizationId && access.staff.role === "firm_owner" && tab === "support" ? <SupportDeclineDialog organizationId={loaded.dialog.organizationId} /> : null}
             </>
           }
         >

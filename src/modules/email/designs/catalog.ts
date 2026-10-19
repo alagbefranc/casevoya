@@ -666,8 +666,9 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
     name: "Support access granted",
     audience: "firm owner",
     brand: "platform",
-    trigger: "A firm owner approves a Casevoya support access request. Support access is not built yet",
-    status: "ready-not-wired",
+    trigger:
+      "A firm owner approves a Casevoya support access request (approve_support_access_request; outbox support_access.approved, template support_granted), to every active firm owner at their sign-in address. The approver's name, the minutes, the end time in the firm's zone; never the matter or the reason",
+    status: "wired",
     ctaTarget: PATHS.sheetGrants,
     mergeFields: ["firm_name", "approver_name", "minutes", "ends_at", "time_zone"],
     sample: { firmName: SYNTHETIC_FIRM, approverName: "Sam Example", minutes: 60, endsAt: "2026-10-22T15:40:00Z", timeZone: "America/Toronto" },
@@ -1016,8 +1017,9 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
     name: "Support access requested",
     audience: "firm owner",
     brand: "platform",
-    trigger: "Casevoya support asks for access. Support access is not built yet",
-    status: "ready-not-wired",
+    trigger:
+      "Casevoya support asks a firm for access from the admin portal (create_support_access_request; outbox support_access.requested, template support_requested), to every active firm owner at their sign-in address. The minutes asked for only; never the matter or the reason",
+    status: "wired",
     ctaTarget: PATHS.sheetGrants,
     mergeFields: ["firm_name", "minutes"],
     sample: { firmName: SYNTHETIC_FIRM, minutes: 60 },

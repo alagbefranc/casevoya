@@ -7,7 +7,7 @@ import { dayLabel, clockLabel } from "@/modules/messages/present";
 
 export type NotificationItem = {
   id: string;
-  kind: "message" | "document" | "payment" | "booking" | "deadline";
+  kind: "message" | "document" | "payment" | "booking" | "deadline" | "support";
   occurred_at: string;
   matter_id: string | null;
   actor_name: string | null;
@@ -17,12 +17,12 @@ export type NotificationItem = {
   read: boolean;
 };
 
-const KINDS = new Set(["message", "document", "payment", "booking", "deadline"]);
+const KINDS = new Set(["message", "document", "payment", "booking", "deadline", "support"]);
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-/** What the System tab lists: the rows Casevoya itself raises (card payments and deadline reminders). */
-export const SYSTEM_KINDS = new Set<NotificationItem["kind"]>(["payment", "deadline"]);
+/** What the System tab lists: the rows Casevoya itself raises (card payments, deadline reminders, support requests). */
+export const SYSTEM_KINDS = new Set<NotificationItem["kind"]>(["payment", "deadline", "support"]);
 
 /** The sidebar's Notifications count: unread rows, on every Sheet page. */
 export function unreadCount(items: readonly NotificationItem[]): number {
@@ -85,6 +85,11 @@ export function notificationParts(item: NotificationItem, matterName: (id: strin
       const due = shortDate(item.detail);
       return ["Deadline reminder for ", { b: matterName(item.matter_id) }, `: ${item.subject ?? "deadline"}${due ? `, due ${due}` : ""}`];
     }
+    // Support access (SEC-09): the minutes asked for and what it would open; nothing opens until approved.
+    case "support": {
+      const minutes = /^\d+$/.test(item.detail ?? "") ? `${item.detail} minutes of access` : "access";
+      return ["Casevoya support asked for ", { b: minutes }, ` to ${item.subject ?? "your firm"}. Nothing opens until you approve`];
+    }
   }
 }
 
@@ -106,7 +111,7 @@ export function notificationGroups(input: {
     const row: NotificationRow = {
       id: item.id,
       href: item.href,
-      lead: item.kind === "payment" || item.kind === "deadline" ? "system" : { name: item.actor_name?.trim() || "Client" },
+      lead: SYSTEM_KINDS.has(item.kind) ? "system" : { name: item.actor_name?.trim() || "Client" },
       parts: notificationParts(item, input.matterName),
       time: clockLabel(item.occurred_at, input.timezone),
       unread: !item.read,

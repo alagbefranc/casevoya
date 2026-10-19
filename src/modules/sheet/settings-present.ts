@@ -141,10 +141,23 @@ function lastActive(rows: readonly MemberSecurity[], timeZone: string): string |
   return latest ? dayMonth(isoDateInTimeZone(new Date(latest), timeZone)) : null;
 }
 
+/** The Support access grant row's real state (SEC-09), from public.firm_support_access; null when not readable. */
+export type SupportState = { active: { endsAt: string } | null; pending: number } | null;
+
+function supportBadge(support: SupportState, timeZone: string): SecurityRow["badge"] {
+  if (support?.active) {
+    const ends = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(support.active.endsAt));
+    return { tone: "chg", label: `Active until ${ends}` };
+  }
+  if (support?.pending) return { tone: "chg", label: plural(support.pending, "request waiting", "requests waiting") };
+  return { tone: "gr", label: "None active" };
+}
+
 /**
  * The Security tab. Staff MFA and the download audit are enforced by the database for every firm;
- * support access and an idle timeout are not built, and say so. A firm owner also sees how many of
- * the team have a second factor or passkey, open sign-in sessions, and recent sign-in events.
+ * an idle timeout is not built, and says so. Support access (SEC-09) shows the real state of the
+ * firm's grants. A firm owner also sees how many of the team have a second factor or passkey, open
+ * sign-in sessions, and recent sign-in events.
  */
 export function securityData(input: {
   owner: boolean;
@@ -156,6 +169,8 @@ export function securityData(input: {
   timeZone: string;
   /** Live: adds "Sign out my other sessions" for the signed-in person. */
   organizationId?: string;
+  /** The firm's support access state (owner only). */
+  support?: SupportState;
 }): SecurityData {
   const security = input.security;
   const known = security && security.length === input.members && security.every((row) => row.secondFactor || row.passkeys !== null);
@@ -174,8 +189,8 @@ export function securityData(input: {
     },
     {
       title: "Support access grant",
-      detail: "Casevoya support can’t open your client files. Support access isn’t offered, so there’s nothing to approve",
-      badge: { tone: "gr", label: "None active" },
+      detail: "Casevoya support opens your records only after you approve a request: scoped, time-limited, ends on its own, and every record they open is logged",
+      badge: supportBadge(input.support ?? null, input.timeZone),
     },
     {
       title: "Session timeout",

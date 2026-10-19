@@ -8,8 +8,12 @@
  * `data-grant-row` on an active grant's row, which opens the live-only Revoke dialog (#dlgGX,
  * built from the Designer's own `.dlg`/`.fld`/`.btn` classes). A grant can't be edited in place:
  * the database has create and revoke only, so the dialog says to revoke and create a new one.
- * Support access has no backend yet (SEC-09 is not built): the tab shows no request, an honest
- * empty history, and the capture's note that there is no hidden way in.
+ * Support access (SEC-09): the alert, the waiting request and the history come from
+ * public.firm_support_access. Live-only additions there are `data-support-act` (approve, decline,
+ * end, extend) with `data-support-id` / `data-org` on the Designer's own buttons, the Approve
+ * label's real minutes, and the Decline dialog (#dlgSX, from the Designer's `.dlg` parts), whose
+ * button carries `data-support-decline`. With no request the tab shows an honest empty history
+ * and the capture's note that there is no hidden way in.
  */
 import { Fragment } from "react";
 import { Empty, Icon, Pair } from "./frame";
@@ -30,11 +34,18 @@ export type GrantRow = {
   attrs?: Record<string, string>;
 };
 
+/** Live only: `data-support-id` and `data-org`, put on the Designer's buttons with their `data-support-act`. */
+type SupportWire = Record<string, string>;
+
 export type SupportRequest = {
-  alert: { title: string; parts: string[] } | null;
-  request: { from: string; scope: string; notIncluded: string; duration: string; reason: Text } | null;
+  alert: { title: string; parts: string[]; wire?: SupportWire } | null;
+  request: { from: string; scope: string; notIncluded: string; duration: string; reason: Text; approveLabel?: string; wire?: SupportWire } | null;
   history: { when: string; who: string; scope: string; approvedBy: string; opened: string }[];
 };
+
+function supportAct(wire: SupportWire | undefined, act: "approve" | "decline" | "end" | "extend"): SupportWire | undefined {
+  return wire ? { ...wire, "data-support-act": act } : undefined;
+}
 
 export type GrantsData = {
   tab: GrantsTab;
@@ -213,10 +224,10 @@ function Support({ data }: { data: GrantsData }) {
             <Parts parts={alert.parts} />
           </div>
           <div className={"acts"}>
-            <button className={"btn sm"} data-toast={"Support access ended"} data-sub={"Logged in the audit trail."} data-fpb={"1"}>
+            <button className={"btn sm"} data-toast={"Support access ended"} data-sub={"Logged in the audit trail."} data-fpb={"1"} {...supportAct(alert.wire, "end")}>
               {"End now"}
             </button>
-            <button className={"btn sm"} data-toast={"Extension requested"} data-sub={"Needs your approval again."} data-fpb={"1"}>
+            <button className={"btn sm"} data-toast={"Extension requested"} data-sub={"Needs your approval again."} data-fpb={"1"} {...supportAct(alert.wire, "extend")}>
               {"Extend 30 min"}
             </button>
           </div>
@@ -260,11 +271,12 @@ function Support({ data }: { data: GrantsData }) {
                 data-done={"Support access approved"}
                 data-sub={"Ends automatically. You’ll see each thing they open."}
                 data-fpr={"1"}
+                {...supportAct(request.wire, "approve")}
               >
-                <span className={"lab"}>{"Approve for 60 minutes"}</span>
+                <span className={"lab"}>{request.approveLabel ?? "Approve for 60 minutes"}</span>
                 <span className={"spin"} aria-hidden={"true"}></span>
               </button>
-              <button className={"btn sm"} data-toast={"Request declined"} data-sub={""} data-fpb={"1"}>
+              <button className={"btn sm"} data-toast={"Request declined"} data-sub={""} data-fpb={"1"} {...supportAct(request.wire, "decline")}>
                 {"Decline"}
               </button>
             </div>
@@ -379,6 +391,40 @@ export function GrantRevokeDialog({ organizationId }: { organizationId: string }
         </button>
         <button className={"btn p"} data-grant-revoke={"1"} data-org={organizationId}>
           {"Revoke grant"}
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
+/** Live only: Decline support request (#dlgSX), opened from the waiting request's Decline. */
+export function SupportDeclineDialog({ organizationId }: { organizationId: string }) {
+  return (
+    <dialog className={"dlg"} id={"dlgSX"} aria-labelledby={"dlgSXH"}>
+      <div className={"dh"}>
+        <h2 id={"dlgSXH"}>{"Decline support request"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={"dlgSX"}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <p id={"sxW"} style={{ marginBottom: "12px" }}>
+          {"Nothing opens. Casevoya support can ask again with a different scope or reason."}
+        </p>
+        <div className={"fld"}>
+          <label htmlFor={"sxR"}>{"Reason"}</label>
+          <small className={"hint"} id={"sxR-h"}>
+            {"Required. Kept with the request for your records; the audit trail keeps its length only."}
+          </small>
+          <input className={"inp"} id={"sxR"} type={"text"} defaultValue={""} placeholder={""} aria-describedby={"sxR-h"} />
+        </div>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={"dlgSX"}>
+          {"Cancel"}
+        </button>
+        <button className={"btn p"} data-support-decline={"1"} data-org={organizationId}>
+          {"Decline request"}
         </button>
       </div>
     </dialog>

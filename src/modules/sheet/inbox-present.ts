@@ -28,6 +28,8 @@ const TEMPLATE_LABEL: Record<string, string> = {
   consultation_cancelled: "Consultation cancelled",
   message: "New message notice",
   staff_message: "Email from staff",
+  support_requested: "Support access requested",
+  support_granted: "Support access granted",
 };
 
 export function templateLabel(template: string): string {

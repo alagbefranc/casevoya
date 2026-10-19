@@ -19,6 +19,11 @@ function textOf(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+/** A whole number of minutes from the delivery context, or null (the design then says "support access"). */
+function minutesOf(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
+}
+
 function firmName(context: Context): string {
   return cleanText(context.firm) || "Your firm";
 }
@@ -71,7 +76,9 @@ type Wired =
   | "EM16b"
   | "EM16c"
   | "EX07"
-  | "EX15";
+  | "EX15"
+  | "EX11"
+  | "EM17";
 
 /** Which approved design a queued delivery uses, from its database template and context. */
 export function designFor(context: Context): Wired | "generic" {
@@ -116,6 +123,11 @@ export function designFor(context: Context): Wired | "generic" {
     // Inbox replies (20261019215100_inbox_reply_emails.sql): a staff member's own email.
     case "staff_message":
       return "EX15";
+    // Support access (20261020170200_support_access_mail.sql): to the firm's owners.
+    case "support_requested":
+      return "EX11";
+    case "support_granted":
+      return "EM17";
     default:
       return "generic";
   }
@@ -173,6 +185,17 @@ function contextFor(design: Wired, context: Context, firm: string): EmailContext
     case "EX10":
     case "EX07":
       return { firmName: firm };
+    // Support access: minutes asked for; on approval the approver, the minutes, the end and the firm's zone.
+    case "EX11":
+      return { firmName: firm, minutes: minutesOf(context.minutes) };
+    case "EM17":
+      return {
+        firmName: firm,
+        approverName: textOf(context.approver) || null,
+        minutes: minutesOf(context.minutes),
+        endsAt: textOf(context.ends_at) || null,
+        timeZone: textOf(context.time_zone) || null,
+      };
     // The text and subject come with the message (never the delivery context); see dispatch.ts.
     case "EX15":
       return {

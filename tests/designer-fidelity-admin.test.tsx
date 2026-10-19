@@ -12,7 +12,7 @@ import { SheetHome, type HomeData } from "@/components/sheet/designer/home";
 import { SUSPENDED_CSS, SuspendedAlert, SuspendedPanel, SuspendedTopBar, type SuspendedData } from "@/components/sheet/designer/licence-suspended";
 import { LicenceSuspendedMarkup } from "@/components/sheet/markup/licence-suspended";
 import { SUSPENDED_REVEAL } from "@/modules/sheet/licence-suspended-present";
-import { GrantDialog, GrantsHeader, SheetGrants, type GrantDialogData, type GrantsData, type GrantsTab } from "@/components/sheet/designer/grants";
+import { GrantDialog, GrantsHeader, SheetGrants, SupportDeclineDialog, type GrantDialogData, type GrantsData, type GrantsTab } from "@/components/sheet/designer/grants";
 import { GrantsMarkup } from "@/components/sheet/markup/grants";
 import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder, type IntakeBuilderData, type IntakeTab } from "@/components/sheet/designer/intake-builder";
 import { IntakeBuilderMarkup } from "@/components/sheet/markup/intake-builder";
@@ -405,6 +405,33 @@ describe("Designer fidelity: Access grants", () => {
     expect(html).toContain('<option data-person="11111111-1111-4111-8111-111111111111">Ana Diaz</option>');
     expect(html).toContain('data-matter="22222222-2222-4222-8222-222222222222" data-subject="44444444-4444-4444-8444-444444444444"');
     expect(html).toContain('data-grant-create="1" data-org="33333333-3333-4333-8333-333333333333"');
+  });
+
+  it("wires the Support access tab's Designer buttons by data attributes only, with the request's real minutes", () => {
+    const org = "33333333-3333-4333-8333-333333333333";
+    const wire = (id: string) => ({ "data-support-id": id, "data-org": org });
+    const support = {
+      alert: { ...DESIGNER_GRANTS.support.alert!, wire: wire("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa") },
+      request: { ...DESIGNER_GRANTS.support.request!, approveLabel: "Approve for 45 minutes", wire: wire("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb") },
+      history: DESIGNER_GRANTS.support.history,
+    };
+    const html = renderToStaticMarkup(
+      createElement("div", null, createElement(SheetGrants, { data: { ...DESIGNER_GRANTS, tab: "support", support } }), createElement(SupportDeclineDialog, { organizationId: org })),
+    );
+    for (const act of ["end", "extend"]) {
+      expect(html).toContain(`data-fpb="1" data-support-id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" data-org="${org}" data-support-act="${act}"`);
+    }
+    expect(html).toContain(`data-fpr="1" data-support-id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" data-org="${org}" data-support-act="approve"><span class="lab">Approve for 45 minutes</span>`);
+    expect(html).toContain(`data-support-id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" data-org="${org}" data-support-act="decline">Decline</button>`);
+    expect(html).toContain('<dialog class="dlg" id="dlgSX"');
+    expect(html).toContain(`data-support-decline="1" data-org="${org}">Decline request</button>`);
+    // The Designer's own classes only.
+    const classes = new Set([...html.matchAll(/class="([^"]*)"/g)].map((match) => match[1]));
+    for (const cls of classes) expect(["dlg", "dh", "x", "ic s", "db", "fld", "hint", "inp", "df", "btn", "btn p"].includes(cls) || !cls.startsWith("sx")).toBe(true);
+    // Without the wire (the Designer's data) nothing is added.
+    const designer = renderToStaticMarkup(createElement(SheetGrants, { data: { ...DESIGNER_GRANTS, tab: "support" } }));
+    expect(designer).not.toContain("data-support");
+    expect(designer).toContain("Approve for 60 minutes");
   });
 });
 

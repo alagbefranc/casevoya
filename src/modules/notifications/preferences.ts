@@ -50,6 +50,7 @@ export const IN_APP_ROWS: readonly { kind: string; label: string; small: string 
   { kind: "payment", label: "A card payment is received", small: "For the staff who handle that matter’s billing" },
   { kind: "booking", label: "A consultation is booked", small: "From the firm’s booking page, for scheduling staff" },
   { kind: "deadline", label: "A deadline reminder comes due", small: "On matters you can open" },
+  { kind: "support", label: "Casevoya support asks for access", small: "Firm owners only. Nothing opens until you approve" },
 ];
 
 /** Quiet hours turned on from Settings use the Designer's 21:00–08:00. */

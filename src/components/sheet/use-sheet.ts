@@ -95,7 +95,7 @@ import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-
 import { policyDialogId, restorePolicyDraft, runPublishPolicy } from "./portal-policy-act";
 import { POLICY_KINDS, policyKindForDialog } from "@/modules/portal-policies/defaults";
 import { restoreStaffInvite, runStaffInvite, runStaffResend, runStaffRevoke } from "./staff-invite-act";
-import { openGrantRevoke, reopenGrantDialog, runGrantCreate, runGrantRevoke } from "./grants-acts";
+import { openGrantRevoke, reopenGrantDialog, reopenSupport, runGrantCreate, runGrantRevoke, runSupportAct, runSupportDecline } from "./grants-acts";
 import { runAutomationSave } from "./automations-acts";
 import { signOutOtherSessions } from "@/modules/settings/firm-actions";
 import { mountIntakeBuilder } from "./intake-builder-acts";
@@ -470,6 +470,16 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (grantCreate.getAttribute("aria-busy") === "true") return;
         grantCreate.setAttribute("aria-busy", "true");
         void runGrantCreate(grantCreate, router).finally(() => grantCreate.removeAttribute("aria-busy"));
+        return;
+      }
+      // Access grants > Support access: Approve, Decline (opens #dlgSX), End now, Extend 30 min, Decline request.
+      const supportAct = target.closest<HTMLElement>("[data-support-act], [data-support-decline]");
+      if (supportAct && root.contains(supportAct)) {
+        event.preventDefault();
+        if (supportAct.getAttribute("aria-busy") === "true") return;
+        supportAct.setAttribute("aria-busy", "true");
+        const run = supportAct.hasAttribute("data-support-decline") ? runSupportDecline(supportAct, router) : runSupportAct(supportAct, router, root, openDialog);
+        void run.finally(() => supportAct.removeAttribute("aria-busy"));
         return;
       }
       // A live button that leads to another page (`data-go`), e.g. Staff › More → Team and seats.
@@ -1254,11 +1264,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     const grantDialog = root.querySelector<HTMLDialogElement>("dialog#dlgG");
     if (grantDialog?.querySelector("[data-grant-create]")) {
       window.setTimeout(() => reopenGrantDialog(root, openDialog), 300);
-      for (const dialog of [grantDialog, root.querySelector<HTMLDialogElement>("dialog#dlgGX")]) {
+      for (const dialog of [grantDialog, root.querySelector<HTMLDialogElement>("dialog#dlgGX"), root.querySelector<HTMLDialogElement>("dialog#dlgSX")]) {
         dialog?.addEventListener("close", () => {
           if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
         }, listen);
       }
+      // Support access: ?dlg=support (back from step-up) finishes the pressed action, or reopens Decline.
+      if (root.querySelector("[data-support-act]")) window.setTimeout(() => reopenSupport(root, openDialog, router), 300);
     }
 
     const newTask = root.querySelector<HTMLDialogElement>("dialog#dlgTask");

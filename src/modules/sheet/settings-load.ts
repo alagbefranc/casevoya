@@ -3,6 +3,7 @@ import type { SecurityData, SettingsHeaderData, TeamData } from "@/components/sh
 import type { ContinuityDialogData, MemberDialogData, OffboardDialogData } from "@/components/sheet/designer/settings-staff-admin";
 import { createClient } from "@/lib/supabase/server";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
+import { readSupportAccess } from "@/modules/sheet/grants-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { planPill, securityData, SIGN_IN_EVENT_ACTIONS, teamData, type MemberSecurity } from "@/modules/sheet/settings-present";
 import { continuityDialog, memberDialog, offboardDialog, parseOffboardFacts, type OffboardFacts } from "@/modules/sheet/settings-staff-admin-present";
@@ -110,7 +111,7 @@ export async function loadSheetSettingsSecurity(staff: SheetStaff, now: Date = n
   const org = staff.organizationId;
   const owner = staff.role === "firm_owner";
   const since = new Date(now.getTime() - 30 * 86_400_000).toISOString();
-  const [chrome, header, members, security, events] = await Promise.all([
+  const [chrome, header, members, security, events, support] = await Promise.all([
     loadSheetChrome(staff, "/sheet/settings"),
     loadHeader(supabase, staff, "security"),
     loadMembers(supabase, org),
@@ -123,7 +124,9 @@ export async function loadSheetSettingsSecurity(staff: SheetStaff, now: Date = n
           .in("action", [...SIGN_IN_EVENT_ACTIONS])
           .gte("occurred_at", since)
       : null,
+    owner ? supabase.rpc("firm_support_access", { p_organization_id: org }) : null,
   ]);
+  const supportAccess = support && !support.error ? readSupportAccess(support.data) : null;
   const page: SecurityData = securityData({
     owner,
     members: members.length,
@@ -131,6 +134,7 @@ export async function loadSheetSettingsSecurity(staff: SheetStaff, now: Date = n
     events: events && !events.error ? (events.count ?? 0) : null,
     timeZone: staff.timezone,
     organizationId: org,
+    support: supportAccess ? { active: supportAccess.alert ? { endsAt: supportAccess.alert.ends_at } : null, pending: supportAccess.pending } : null,
   });
   return { chrome, header, page };
 }

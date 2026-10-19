@@ -1,8 +1,9 @@
 "use client";
 
-import { toast2 } from "@/components/port/kit";
+import { busyBtn, clearBtn, settleBtn, toast2 } from "@/components/port/kit";
 import { grantDraftProblem } from "@/modules/sheet/grants-present";
 import { createAccessGrant, revokeAccessGrant } from "@/modules/staff/grant-actions";
+import { approveSupportAccess, declineSupportAccess, endSupportAccess, extendSupportAccess, type SupportResult } from "@/modules/staff/support-actions";
 
 type Router = { refresh: () => void };
 type Open = (id: string) => void;
@@ -133,6 +134,119 @@ function reopenGrantRevoke(root: ParentNode, open: Open) {
   }
   const row = [...root.querySelectorAll<HTMLElement>("[data-grant-row]")].find((item) => item.dataset.grantRow === draft.grantId);
   if (row) openGrantRevoke(row, root, open, draft.reason ?? "");
+}
+
+// ---------------------------------------------------------------------------
+// Support access (SEC-09): Approve, Decline (#dlgSX), End now, Extend 30 min.
+// ---------------------------------------------------------------------------
+export const SUPPORT_DIALOG = "support";
+const SUPPORT_DRAFT = "cv-support-draft";
+
+type SupportAct = "approve" | "decline" | "end" | "extend";
+
+type SupportDraft = { act: SupportAct; requestId: string; reason?: string };
+
+/** Confirm it's you, then come back to the Support access tab and finish the same action. */
+function supportStepUp(draft: SupportDraft) {
+  try {
+    sessionStorage.setItem(SUPPORT_DRAFT, JSON.stringify(draft));
+  } catch {
+    // Storage can be unavailable; the person presses the button again.
+  }
+  const params = new URLSearchParams(window.location.search);
+  params.set("tab", "support");
+  params.set("dlg", SUPPORT_DIALOG);
+  const next = `${window.location.pathname}?${params.toString()}`;
+  toast2("Confirm it’s you", { kind: "warn", sub: draft.act === "decline" ? "Then the dialog opens again with your reason." : "Then this finishes on its own." });
+  window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`), 900);
+}
+
+/** The waiting request's Decline opens the dialog for that request. */
+export function openSupportDecline(button: HTMLElement, root: ParentNode, open: Open, reason = "") {
+  const dialog = root.querySelector<HTMLDialogElement>("dialog#dlgSX");
+  if (!dialog) return;
+  dialog.dataset.request = button.dataset.supportId ?? "";
+  const input = el(dialog, "sxR");
+  if (input) input.value = reason;
+  open("dlgSX");
+  input?.focus();
+}
+
+function supportFailed(result: SupportResult, draft: SupportDraft, unchanged: string): result is { error: string; stepUp?: boolean } {
+  if (!("error" in result)) return false;
+  if (result.stepUp) supportStepUp(draft);
+  else toast2(result.error, { kind: "bad", sub: unchanged });
+  return true;
+}
+
+/** Approve, End now and Extend 30 min: the database decides (firm owner; step-up to approve or extend). */
+export async function runSupportAct(button: HTMLElement, router: Router, root: ParentNode, open: Open) {
+  const act = button.dataset.supportAct as SupportAct | undefined;
+  const requestId = button.dataset.supportId ?? "";
+  const organizationId = button.dataset.org ?? "";
+  if (!act || !requestId) return;
+  if (act === "decline") return openSupportDecline(button, root, open);
+  const draft: SupportDraft = { act, requestId };
+  if (act === "approve") {
+    busyBtn(button);
+    const result = await approveSupportAccess({ organizationId, requestId });
+    if (supportFailed(result, draft, "Nothing opened.")) return clearBtn(button);
+    await settleBtn(button, "ok");
+    toast2(button.dataset.done || "Support access approved", { kind: "ok", sub: button.dataset.sub || "Ends automatically. You’ll see each thing they open." });
+    router.refresh();
+    return;
+  }
+  if (act === "end") {
+    const result = await endSupportAccess({ organizationId, requestId });
+    if (supportFailed(result, draft, "Support access is unchanged.")) return;
+    toast2(button.dataset.toast || "Support access ended", { kind: "ok", sub: button.dataset.sub || "Logged in the audit trail." });
+    router.refresh();
+    return;
+  }
+  const result = await extendSupportAccess({ organizationId, requestId, minutes: 30 });
+  if (supportFailed(result, draft, "Support access is unchanged.")) return;
+  toast2("Support access extended by 30 minutes", { kind: "ok", sub: "Logged in the audit trail. 240 minutes in all at most." });
+  router.refresh();
+}
+
+/** Decline request (#dlgSX): reason first, then the database (firm owner). */
+export async function runSupportDecline(button: HTMLElement, router: Router) {
+  const dialog = button.closest<HTMLDialogElement>("dialog");
+  if (!dialog) return;
+  const requestId = dialog.dataset.request ?? "";
+  const reason = el(dialog, "sxR")?.value.trim() ?? "";
+  if (reason.length < 3) {
+    toast2("Give a reason", { kind: "warn", sub: "At least 3 characters. Support sees it with the decision." });
+    el(dialog, "sxR")?.focus();
+    return;
+  }
+  const result = await declineSupportAccess({ organizationId: button.dataset.org ?? "", requestId, reason });
+  if (supportFailed(result, { act: "decline", requestId, reason }, "The request is still waiting.")) return;
+  dialog.close();
+  toast2("Request declined", { kind: "ok", sub: "Nothing opened. Logged in the audit trail." });
+  router.refresh();
+}
+
+/** ?dlg=support (back from step-up): finish the pressed action, or reopen Decline with the reason. */
+export function reopenSupport(root: ParentNode, open: Open, router: Router) {
+  if (new URLSearchParams(window.location.search).get("dlg") !== SUPPORT_DIALOG) return;
+  let draft: Partial<SupportDraft> = {};
+  try {
+    const raw = sessionStorage.getItem(SUPPORT_DRAFT);
+    sessionStorage.removeItem(SUPPORT_DRAFT);
+    draft = raw ? (JSON.parse(raw) as Partial<SupportDraft>) : {};
+  } catch {
+    draft = {};
+  }
+  if (!draft.act || !draft.requestId) return;
+  const button = [...root.querySelectorAll<HTMLElement>("[data-support-act]")].find(
+    (item) => item.dataset.supportAct === draft.act && item.dataset.supportId === draft.requestId,
+  );
+  if (!button) return;
+  if (draft.act === "decline") return openSupportDecline(button, root, open, draft.reason ?? "");
+  if (button.getAttribute("aria-busy") === "true") return;
+  button.setAttribute("aria-busy", "true");
+  void runSupportAct(button, router, root, open).finally(() => button.removeAttribute("aria-busy"));
 }
 
 /** ?dlg=grant (back from step-up) reopens New access grant with what was typed. */
