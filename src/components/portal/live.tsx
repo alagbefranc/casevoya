@@ -4,6 +4,8 @@ import { AgreementsLive } from "./agreements-live";
 import { AppointmentsLive } from "./appointments-live";
 import { ChatError, ChatView } from "@/components/messages/chat";
 import { DocumentsLive } from "./documents-live";
+import { IntakeLive } from "./intake-live";
+import { TasksLive } from "./tasks-live";
 import { PayLive } from "./pay-live";
 import { PaymentsLive } from "./payments-live";
 import { WithdrawShare } from "./withdraw-share";
@@ -13,6 +15,8 @@ import type { PortalInvoices } from "@/modules/finance/portal-load";
 import type { PortalViewer } from "@/modules/portal/load";
 import type { PortalAppointments } from "@/modules/scheduling/portal-load";
 import type { ChatData } from "@/modules/messages/present";
+import type { PortalIntake } from "@/modules/intake/portal-load";
+import type { PortalTask } from "@/modules/portal/tasks-load";
 
 export type PortalPayments = { data: PortalInvoices; invoiceId: string | null };
 
@@ -43,6 +47,9 @@ export function LivePortal({
   payments,
   appointments,
   messages,
+  intake,
+  tasks,
+  taskCount,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -52,6 +59,12 @@ export function LivePortal({
   appointments?: PortalAppointments | null;
   /** The Messages page's data; null when it failed to load. */
   messages?: ChatData | null;
+  /** Intake delivery: the person's intake forms (Background questions and Request a correction). */
+  intake?: { data: PortalIntake; field: string | null } | null;
+  /** Intake delivery: the person's own client tasks (the Tasks page). */
+  tasks?: PortalTask[] | null;
+  /** Open client tasks, intake requests included: the Designer's count on Tasks. */
+  taskCount?: number;
 }) {
   const name = viewer.person?.displayName ?? "Your account";
   const matter = viewer.matters[0];
@@ -75,6 +88,7 @@ export function LivePortal({
               <a key={href} href={href} className={href === current ? "on" : undefined} aria-current={href === current ? "page" : undefined}>
                 {icon(glyph)}
                 <span>{label}</span>
+                {href === "/portal/tasks" && taskCount ? <span className="k b">{taskCount}</span> : null}
               </a>
             ))}
           </nav>
@@ -91,7 +105,7 @@ export function LivePortal({
               <span className="pill">{matter ? matter.title : viewer.organizationName}</span>
               <span className="acts"><a className="btn s sm" href="/help/client-home-screen" id="help">Help</a></span>
             </header>
-            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} messages={messages} />
+            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} messages={messages} intake={intake ?? null} tasks={tasks ?? null} />
           </div>
         </main>
         <footer className="statusbar">
@@ -112,6 +126,8 @@ function LiveMain({
   payments,
   appointments,
   messages,
+  intake,
+  tasks,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -120,6 +136,8 @@ function LiveMain({
   payments: PortalPayments | null;
   appointments: PortalAppointments | null;
   messages?: ChatData | null;
+  intake: { data: PortalIntake; field: string | null } | null;
+  tasks: PortalTask[] | null;
 }) {
   // Messages: the chat view (redesigned as a chat view at the owner's request, 2026-10-18).
   if (page === "messages" && messages !== undefined) {
@@ -160,7 +178,9 @@ function LiveMain({
   if (page === "family" || page === "rafael" || page === "olena") return <People viewer={viewer} />;
   if (page === "guardian") return <Guardian viewer={viewer} />;
   if (page === "account") return <Account viewer={viewer} />;
+  if ((page === "intake" || page === "correction") && intake) return <IntakeLive viewer={viewer} data={intake.data} correction={page === "correction"} field={intake.field} />;
   if (page === "intake" || page === "correction") return <Sections viewer={viewer} correction={page === "correction"} />;
+  if (page === "tasks" && tasks) return <TasksLive viewer={viewer} tasks={tasks} />;
   return <Stub page={page} />;
 }
 
@@ -268,7 +288,7 @@ function Sections({ viewer, correction }: { viewer: PortalViewer; correction: bo
 
 function Stub({ page }: { page: string }) {
   const copy: Record<string, [string, string]> = {
-    tasks: ["No tasks yet", "Tasks aren’t stored yet. Your firm will email you when something needs you."],
+    tasks: ["No tasks yet", "Your tasks couldn’t be shown just now. Try again in a moment."],
     documents: ["No documents yet", "When your firm asks for a document, it appears here."],
     upload: ["Nothing to upload", "Your firm has not requested a document."],
     messages: ["No messages yet", "Messages aren’t stored yet."],

@@ -7,7 +7,7 @@ import { dayLabel, clockLabel } from "@/modules/messages/present";
 
 export type NotificationItem = {
   id: string;
-  kind: "message" | "document" | "payment" | "booking" | "booking_cancelled" | "booking_rescheduled" | "deadline" | "support";
+  kind: "message" | "document" | "payment" | "booking" | "booking_cancelled" | "booking_rescheduled" | "deadline" | "support" | "intake_submitted" | "intake_correction";
   occurred_at: string;
   matter_id: string | null;
   actor_name: string | null;
@@ -17,7 +17,7 @@ export type NotificationItem = {
   read: boolean;
 };
 
-const KINDS = new Set(["message", "document", "payment", "booking", "booking_cancelled", "booking_rescheduled", "deadline", "support"]);
+const KINDS = new Set(["message", "document", "payment", "booking", "booking_cancelled", "booking_rescheduled", "deadline", "support", "intake_submitted", "intake_correction"]);
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -99,6 +99,11 @@ export function notificationParts(item: NotificationItem, matterName: (id: strin
       const minutes = /^\d+$/.test(item.detail ?? "") ? `${item.detail} minutes of access` : "access";
       return ["Casevoya support asked for ", { b: minutes }, ` to ${item.subject ?? "your firm"}. Nothing opens until you approve`];
     }
+    // Intake delivery (20261020180100): a client sent a form, or asked for a correction after sending.
+    case "intake_submitted":
+      return [`${first(item.actor_name)} sent `, { b: item.subject ?? "an intake form" }, " on ", { b: matterName(item.matter_id) }];
+    case "intake_correction":
+      return [`${first(item.actor_name)} asked for a correction to `, { b: item.subject ?? "an intake form" }, item.detail ? ` (${item.detail})` : ""].filter(Boolean);
   }
 }
 
