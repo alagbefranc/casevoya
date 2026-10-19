@@ -54,8 +54,10 @@ export async function runMatterAct(button: HTMLElement, root: HTMLElement, route
     const selects = scope.querySelectorAll<HTMLSelectElement>("select");
     const reason = (selects[0]?.selectedOptions[0]?.textContent ?? "").trim();
     const ownerMembershipId = selects[1]?.value ?? "";
+    const reviewInput = scope.querySelector<HTMLInputElement>('input[type="date"]');
     const reviewOn = text(scope, 'input[type="date"]');
     if (!reviewOn) return void toast2("Pick a review date", { kind: "warn", sub: "On hold needs a date to look at it again." });
+    if (reviewInput?.min && reviewOn < reviewInput.min) return void toast2("Pick a review date after today", { kind: "warn", sub: "On hold needs a future date to look at it again." });
     result = await holdMatter({ ...ref, reason, ownerMembershipId, reviewOn });
   } else if (act === "letter") {
     // T037: the letter is kept as received (its own row, unverified); the government status
@@ -80,8 +82,8 @@ export async function runMatterAct(button: HTMLElement, root: HTMLElement, route
       sourceUrl: text(scope, "#ddU"),
       retrievedOn: text(scope, "#ddR"),
     };
-    // Checked here for a quick answer, and again by the server action and the database.
-    const read = readDeadline(fields);
+    // Checked here for a quick answer (the date field's min is the firm's today), and again by the server action and the database.
+    const read = readDeadline({ ...fields, today: scope.querySelector<HTMLInputElement>("#ddD")?.min || null });
     if ("error" in read) return void toast2(read.error, { kind: "warn", sub: "Nothing was saved." });
     result = await recordMatterDeadline({ ...ref, fields });
     // T037: a deadline from a government letter is linked to that letter (its origin).

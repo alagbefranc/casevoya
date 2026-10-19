@@ -365,7 +365,7 @@ describe("leads: conversion through create_client_matter", () => {
     await expectDbError(() => db.query(`select public.convert_lead_to_matter($1, $2, 3, $3, null)`, [ctx.orgId, id, ctx.consultantMembership]), /already converted/);
   });
 
-  it("refuses a forged finish for a matter that was not made for the lead, and a sample-mode conversion leaves nothing", async () => {
+  it("refuses a forged finish for a matter that was not made for the lead; a sample lead becomes a sample matter", async () => {
     const ctx = await firm();
     const id = await createLead(ctx);
     await as(ctx, ctx.consultant);
@@ -388,11 +388,30 @@ describe("leads: conversion through create_client_matter", () => {
     expect((await lead(sampleLead)).is_sample).toBe(true);
     await as(sample, sample.manager);
     await db.query(`select public.record_lead_conflict_check($1, $2, 1, 'clear', null)`, [sample.orgId, sampleLead]);
-    await expectDbError(
-      () => db.query(`select public.convert_lead_to_matter($1, $2, 2, $3, null)`, [sample.orgId, sampleLead, sample.consultantMembership]),
-      /sample mode/,
+    const converted = await db.query<{ r: { ok: boolean; id: string; is_sample: boolean; applicant_id: string } }>(
+      `select public.convert_lead_to_matter($1, $2, 2, $3, null) as r`,
+      [sample.orgId, sampleLead, sample.consultantMembership],
     );
-    expect((await lead(sampleLead)).converted_at).toBeNull();
+    expect(converted.rows[0].r).toMatchObject({ ok: true, is_sample: true });
+    expect((await lead(sampleLead)).converted_at).not.toBeNull();
+    await asMaintenance(db);
+    const made = await db.query<{ matter: boolean; person: boolean }>(
+      `select m.is_sample as matter, p.is_sample as person from public.matters m, public.persons p where m.id = $1 and p.id = $2`,
+      [converted.rows[0].r.id, converted.rows[0].r.applicant_id],
+    );
+    expect(made.rows[0]).toEqual({ matter: true, person: true });
+
+    // A sample lead still becomes a sample matter after the firm goes live.
+    const leftover = await createLead(sample);
+    await asMaintenance(db);
+    await db.query(`update public.organizations set sample_mode = false where id = $1`, [sample.orgId]);
+    await as(sample, sample.manager);
+    await db.query(`select public.record_lead_conflict_check($1, $2, 1, 'clear', null)`, [sample.orgId, leftover]);
+    const later = await db.query<{ r: { ok: boolean; is_sample: boolean } }>(
+      `select public.convert_lead_to_matter($1, $2, 2, $3, null) as r`,
+      [sample.orgId, leftover, sample.consultantMembership],
+    );
+    expect(later.rows[0].r).toMatchObject({ ok: true, is_sample: true });
   });
 });
 

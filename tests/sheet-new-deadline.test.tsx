@@ -142,7 +142,7 @@ const EMPTY_TASKS: MatterPageData = {
   people: { cards: [], relationships: [] },
   documents: { checklist: null, people: [], rows: [] },
   agreements: { rows: [], signing: null },
-  tasks: { deadline: null, tasks: [] },
+  tasks: { deadlines: [], tasks: [] },
   outcome: null,
   closure: { closed: false, retention: null },
 };
@@ -177,7 +177,7 @@ describe("Record a deadline: the dialog on the matter page", () => {
   });
 
   it("puts the action in the empty Tasks tab, without sample rows", () => {
-    const html = renderToStaticMarkup(createElement(SheetMatter, { data: { ...EMPTY_TASKS, tasks: { deadline: null, tasks: [], record: true } } }));
+    const html = renderToStaticMarkup(createElement(SheetMatter, { data: { ...EMPTY_TASKS, tasks: { deadlines: [], tasks: [], record: true } } }));
     expect(html).toContain('<div class="emp-a"><button class="btn p sm" data-open="dDeadline">Record a deadline</button></div>');
     expect(html).not.toMatch(/Northline|Amara|Priya|Kofi|Rafael|Daniel|NL-2026|30 Oct/);
     expect(renderToStaticMarkup(createElement(SheetMatter, { data: EMPTY_TASKS }))).not.toContain("emp-a");

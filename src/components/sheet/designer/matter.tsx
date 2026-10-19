@@ -16,6 +16,7 @@ import { DOC_REQUEST_DIALOG, DocRequestDialog, type DocRequestDialogData } from 
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
 import type { PersonEditData } from "@/modules/sheet/edit-person";
 import { ChatError, ChatView } from "@/components/messages/chat";
+import { TaskEditDialog, TasksDialog, type TaskEditDialogData, type TasksDialogData } from "./tasks";
 import type { ChatData } from "@/modules/messages/present";
 
 export const MATTER_TABS = [
@@ -94,17 +95,26 @@ export type MatterHeaderData = {
   deadline?: boolean;
   /** Live only: Request document opens the Request a document dialog (`#dReq`) instead of the Documents tab. */
   request?: boolean;
+  /**
+   * Live only: where the header crumbs go. "Matters" opens the matters list; the client crumb
+   * opens the client's record (null when the viewer can't open one). Absent, they are the Designer's.
+   */
+  crumbs?: { client: string | null } | null;
+  /** Live only: "Add task" on the Tasks and deadlines tab opens New task (`#dlgTask`) for this matter. */
+  addTask?: boolean;
 };
 
 export function MatterTopBar({ data }: { data: MatterHeaderData }) {
   const [left, width] = UNDERLINE[data.tab];
+  // While the matter is on hold, the header's hold button resumes it (live) instead of reopening the hold dialog.
+  const resume = Boolean(data.hold && data.wire);
   return (
     <>
       <header className={"top"}>
         <a className={"back"} href={"/sheet/matters"} aria-label={"Back"}>
           <Icon name={"chevron-left"} cls={"ic s"} />
         </a>
-        <button className={"crumb"}>
+        <button className={"crumb"} {...(data.crumbs ? { "data-nav": "/sheet/matters" } : {})}>
           <Icon name={"folder"} cls={"ic s"} />
           {"Matters"}
           <Icon name={"sort"} cls={"ic dd"} />
@@ -112,7 +122,10 @@ export function MatterTopBar({ data }: { data: MatterHeaderData }) {
         <span className={"cs"} aria-hidden={"true"}>
           {"/"}
         </span>
-        <button className={"crumb"}>
+        <button
+          className={"crumb"}
+          {...(data.crumbs?.client ? { "data-nav": data.crumbs.client } : data.crumbs ? { disabled: true, title: "You can’t open this client’s record" } : {})}
+        >
           <Avatar person={data.client} />
           {data.client.name}
           <Icon name={"sort"} cls={"ic dd"} />
@@ -123,10 +136,17 @@ export function MatterTopBar({ data }: { data: MatterHeaderData }) {
           </span>
         ))}
         <span className={"acts"}>
-          <button className={"btn s sm"} data-hold={""}>
-            <Icon name={"clock"} cls={"ic s"} />
-            {"On hold"}
-          </button>
+          {resume ? (
+            <button className={"btn s sm"} {...wireProps("resume", data.wire)}>
+              <Icon name={"clock"} cls={"ic s"} />
+              {"Resume"}
+            </button>
+          ) : (
+            <button className={"btn s sm"} data-hold={""}>
+              <Icon name={"clock"} cls={"ic s"} />
+              {"On hold"}
+            </button>
+          )}
           <button className={"btn s sm"} data-letter={""}>
             <Icon name={"mail"} cls={"ic s"} />
             {"Record letter"}
@@ -139,6 +159,12 @@ export function MatterTopBar({ data }: { data: MatterHeaderData }) {
             <button className={"btn s sm"} data-open={"dDeadline"}>
               <Icon name={"alarm"} cls={"ic s"} />
               {"Record deadline"}
+            </button>
+          ) : null}
+          {data.wire && data.addTask && data.tab === "tasks" ? (
+            <button className={"btn s sm"} data-dlg={"dlgTask"}>
+              <Icon name={"plus"} cls={"ic s"} />
+              {"Add task"}
             </button>
           ) : null}
           <button
@@ -677,6 +703,17 @@ export type MatterDialogsData = {
   edit?: PersonEditDialogData | null;
   /** Live only: Request a document, for staff who may request one. Absent, it is not rendered. */
   request?: DocRequestDialogData | null;
+  /**
+   * Live only: the stages (indexes) the database allows from the current one. The others are
+   * disabled with the reason, and the internal version number is not shown.
+   */
+  allowed?: number[] | null;
+  /** Live only: the earliest review date a hold accepts (the day after the firm's today). */
+  minReview?: string | null;
+  /** Live only: New task for this matter (`#dlgTask`). */
+  newTask?: TasksDialogData | null;
+  /** Live only: the Task dialog (`#dTask`): edit, reassign or complete one task. */
+  task?: TaskEditDialogData | null;
 };
 
 export type MatterDeadlineDialog = {
@@ -687,6 +724,8 @@ export type MatterDeadlineDialog = {
   kinds: readonly { value: string; label: string }[];
   /** Government letters on the matter; the deadline is linked to the one chosen (T037). */
   letters?: { id: string; label: string }[];
+  /** The firm's today (`YYYY-MM-DD`): the earliest due date the dialog offers. */
+  today?: string;
 };
 
 /** The record a dialog's confirm button saves to; the kit reads these from the button. */
@@ -720,10 +759,21 @@ function StageOption({ index, data }: { index: number; data: MatterDialogsData }
   const [label, entry] = STAGE_ENTRY[index];
   const current = index === data.current;
   const back = index < data.current;
-  const evidence = back ? ({ tone: "gr", label: "Going back" } as MatterBadge) : current ? null : data.evidence[index] ?? null;
+  // Live: a stage the database won't move to from here is disabled, and says why.
+  const blocked = !current && Boolean(data.allowed) && !data.allowed?.includes(index);
+  const evidence = blocked
+    ? ({ tone: "unv", label: "Not a next step" } as MatterBadge)
+    : back
+      ? ({ tone: "gr", label: "Going back" } as MatterBadge)
+      : current
+        ? null
+        : data.evidence[index] ?? null;
   return (
-    <label className={current ? "st cur" : "st"}>
-      <input type={"radio"} {...(current ? { disabled: true } : {})} name={"stg"} {...(index === data.target ? { defaultChecked: true } : {})} value={String(index)} />
+    <label
+      className={current ? "st cur" : "st"}
+      {...(blocked ? { title: `A matter at ${STAGE_ENTRY[data.current]?.[0] ?? "this stage"} can’t move straight to ${label}. Move one stage at a time.`, "aria-disabled": "true" } : {})}
+    >
+      <input type={"radio"} {...(current || blocked ? { disabled: true } : {})} name={"stg"} {...(index === data.target ? { defaultChecked: true } : {})} value={String(index)} />
       <span className={"num"}>{String(index + 1)}</span>
       <div>
         <b>{current ? <Pair left={label} right={"current"} /> : label}</b>
@@ -750,7 +800,9 @@ export function MatterDialogs({ data }: { data: MatterDialogsData }) {
             <b style={{ fontWeight: "500", color: "var(--ink)" }}>{currentLabel}</b>
             {" "}
             <Sep />
-            {` version ${data.version}. Pick the next stage. Each stage needs its entry evidence.`}
+            {data.allowed
+              ? " Pick where it moves next. Each stage needs its entry evidence; stages the matter can’t move to from here are greyed out."
+              : ` version ${data.version}. Pick the next stage. Each stage needs its entry evidence.`}
           </p>
           <div className={"stl k2-gr"} role={"radiogroup"} aria-label={"Target stage"} data-glide={"1"} style={{ position: "relative" }}>
             <span
@@ -804,7 +856,7 @@ export function MatterDialogs({ data }: { data: MatterDialogsData }) {
           </label>
           <label className={"fl"}>
             {"Review on"}
-            <input type={"date"} defaultValue={data.reviewOn} />
+            <input type={"date"} defaultValue={data.reviewOn} {...(data.minReview ? { min: data.minReview } : {})} />
           </label>
           <p className={"lock"} style={{ fontSize: "13.5px", marginTop: "10px" }}>
             <Icon name={"alarm"} cls={"ic s"} />
@@ -870,7 +922,7 @@ export function MatterDialogs({ data }: { data: MatterDialogsData }) {
             </label>
             <label className={"fl"}>
               {"Deadline in the letter"}
-              <input placeholder={"Type exactly as written"} />
+              {data.wire ? <input id={"ltD"} type={"date"} /> : <input placeholder={"Type exactly as written"} />}
             </label>
           </div>
           <p className={"mu"} style={{ fontSize: "13px", marginTop: "8px" }}>
@@ -888,6 +940,8 @@ export function MatterDialogs({ data }: { data: MatterDialogsData }) {
       {data.edit ? <PersonEditDialog data={data.edit} /> : null}
       {data.wire && data.deadline ? <DeadlineDialog data={data.deadline} wire={data.wire} /> : null}
       {data.request ? <DocRequestDialog data={data.request} /> : null}
+      {data.newTask ? <TasksDialog data={data.newTask} /> : null}
+      {data.task ? <TaskEditDialog data={data.task} /> : null}
     </>
   );
 }
@@ -932,7 +986,7 @@ function DeadlineDialog({ data, wire }: { data: MatterDeadlineDialog; wire: Matt
           </label>
           <label className={"fl"}>
             {"Due on"}
-            <input id={"ddD"} type={"date"} />
+            <input id={"ddD"} type={"date"} {...(data.today ? { min: data.today } : {})} />
           </label>
           <label className={"fl"}>
             {"Due time (optional)"}
@@ -1011,10 +1065,16 @@ export type MatterPersonCard = {
    * invitation (when `invite` is set too) is offered from that dialog's footer.
    */
   edit?: PersonEditData | null;
+  /** Live only: a staff member's card. Manage opens Settings, where staff are managed. */
+  staff?: string | null;
+  /** Live only: why Manage does nothing for this card; the button is disabled with this as its title. */
+  inert?: string | null;
 };
 
 /** The Manage button's `data-*`: Edit details, the invitation dialog, or nothing for the Designer's inert button. */
 function manageProps(card: MatterPersonCard) {
+  if (card.staff) return { "data-nav": card.staff, title: "Manage staff in Settings" };
+  if (card.inert && !card.edit && !card.invite) return { disabled: true, title: card.inert };
   if (card.edit) {
     return {
       ...personEditProps(card.edit),
@@ -1113,6 +1173,8 @@ export type MatterDocumentRow = {
   version: string;
   /** The Designer's "Review" link to the review panel below (`#ocr`), on the row it shows. */
   open?: { href: string; label: string } | null;
+  /** Live only: the person chip that shows this row (their first name). */
+  who?: string | null;
 };
 
 export function MatterDocuments({
@@ -1120,11 +1182,14 @@ export function MatterDocuments({
   people,
   rows,
   vo,
+  filter = false,
 }: {
   checklist: string | null;
   people: string[];
   rows: MatterDocumentRow[];
   vo?: MatterDocumentReviewData | null;
+  /** Live only: the person chips filter the rows (`data-who-chip`, `data-who`). */
+  filter?: boolean;
 }) {
   if (rows.length === 0) {
     return (
@@ -1140,9 +1205,16 @@ export function MatterDocuments({
           <Icon name={"document-scan"} />
           <span>{checklist ? <Pair left={"Checklist"} right={checklist} /> : "Checklist"}</span>
           <span className={"r"} style={{ display: "flex", gap: "6px" }}>
-            <span className={"fchip on"}>{"Everyone"}</span>
+            <span className={"fchip on"} {...(filter ? { "data-who-chip": "", role: "button", tabIndex: 0, "aria-pressed": "true" as const } : {})}>
+              {"Everyone"}
+            </span>
             {people.map((name) => (
-              <span key={name} className={"fchip"} style={{ background: "transparent" }}>
+              <span
+                key={name}
+                className={"fchip"}
+                style={{ background: "transparent" }}
+                {...(filter ? { "data-who-chip": name, role: "button", tabIndex: 0, "aria-pressed": "false" as const } : {})}
+              >
                 {name}
               </span>
             ))}
@@ -1162,7 +1234,12 @@ export function MatterDocuments({
             </thead>
             <tbody>
               {rows.map((row, index) => (
-                <tr key={index} className={row.open ? "sel" : ""} {...(row.open ? { "aria-current": "true" as const, title: "Open in the review panel below" } : {})}>
+                <tr
+                  key={index}
+                  className={row.open ? "sel" : ""}
+                  {...(row.open ? { "aria-current": "true" as const, title: "Open in the review panel below" } : {})}
+                  {...(filter && row.who ? { "data-who": row.who } : {})}
+                >
                   <td style={{ paddingLeft: "18px" }}>
                     {row.title}
                     <br />
@@ -1308,35 +1385,114 @@ export type MatterDeadline = {
   origin: string;
   reminders: { label: string; date: string; badge: MatterBadge }[];
   timezone: string;
+  /** Live only: "Confirm" beside "Not verified yet", for someone the database lets confirm it. */
+  confirm?: Record<`data-${string}`, string> | null;
+  /** Live only: why this tentative deadline can't be confirmed here; shown as the badge's title. */
+  confirmWhy?: string | null;
 };
-export type MatterTaskRow = { title: string; parts: string[]; badge: MatterBadge; owner: SidebarPerson };
+export type MatterTaskRow = {
+  title: string;
+  parts: string[];
+  badge: MatterBadge;
+  owner: SidebarPerson;
+  /** Live only: the row's tick marks the task done (`data-task-done`). */
+  done?: Record<`data-${string}`, string> | null;
+  /** Live only: the row's Manage button opens the Task dialog (`data-task-open`). */
+  manage?: Record<`data-${string}`, string> | null;
+};
 
-export function MatterTasks({ deadline, tasks, record = false }: { deadline: MatterDeadline | null; tasks: MatterTaskRow[]; record?: boolean }) {
-  if (!deadline && tasks.length === 0) {
+export function MatterTasks({
+  deadlines,
+  tasks,
+  record = false,
+  add = false,
+}: {
+  deadlines: MatterDeadline[];
+  tasks: MatterTaskRow[];
+  record?: boolean;
+  /** Live only: the empty state also offers "Add a task" (New task for this matter). */
+  add?: boolean;
+}) {
+  if (deadlines.length === 0 && tasks.length === 0) {
     return (
       <Panel>
         <Empty art={"portal-nothing-due"} title={"No open tasks"} copy={"Client tasks and internal tasks appear here with owners and due dates."}>
-          {record ? (
-            <button className={"btn p sm"} data-open={"dDeadline"}>
-              {"Record a deadline"}
-            </button>
+          {record || add ? (
+            <>
+              {record ? (
+                <button className={"btn p sm"} data-open={"dDeadline"}>
+                  {"Record a deadline"}
+                </button>
+              ) : null}
+              {add ? (
+                <button className={"btn s sm"} data-dlg={"dlgTask"}>
+                  {"Add a task"}
+                </button>
+              ) : null}
+            </>
           ) : null}
         </Empty>
       </Panel>
     );
   }
-  const offset = deadline ? 1 : 0;
+  const offset = deadlines.length;
   return (
     <>
-      {deadline ? (
-        <Panel>
+      {deadlines.map((deadline, at) => (
+        <DeadlinePanel key={at} deadline={deadline} index={at} />
+      ))}
+      <h3 className={"sub rv"} style={css({ "--i": String(offset) })}>
+        {"Tasks"}
+      </h3>
+      {tasks.length === 0 ? (
+        <div className={"li rv"} style={css({ "--i": String(offset + 1) })}>
+          <div>
+            <b>{"No open tasks"}</b>
+            <small>{"Client tasks and internal tasks appear here with owners and due dates."}</small>
+          </div>
+        </div>
+      ) : (
+        tasks.map((task, index) => (
+          <div key={index} className={"li rv"} style={css({ "--i": String(offset + 1 + index) })}>
+            <span className={"ck"} {...(task.done ? { role: "checkbox", "aria-checked": "false" as const, tabIndex: 0, "aria-label": `Mark “${task.title}” done`, ...task.done } : {})}></span>
+            <div>
+              <b>{task.title}</b>
+              <small>
+                <Joined parts={task.parts} />
+              </small>
+            </div>
+            <span className={"r"}>
+              <Plain badge={task.badge} />
+              <Avatar person={task.owner} />
+              {task.manage ? (
+                <button className={"btn s sm"} aria-label={`Manage ${task.title}`} {...task.manage}>
+                  <Icon name={"more"} cls={"ic s"} />
+                </button>
+              ) : null}
+            </span>
+          </div>
+        ))
+      )}
+    </>
+  );
+}
+
+function DeadlinePanel({ deadline, index }: { deadline: MatterDeadline; index: number }) {
+  return (
+        <Panel index={index}>
           <h2>
             <Icon name={"alarm"} />
             <span>
               <Pair left={deadline.label} right={deadline.due} />
             </span>
-            <span className={"r"}>
+            <span className={"r"} {...(deadline.confirm ? { style: { display: "flex", gap: "6px" } } : deadline.confirmWhy ? { title: deadline.confirmWhy } : {})}>
               <Plain badge={deadline.verified} />
+              {deadline.confirm ? (
+                <button className={"btn s sm"} {...deadline.confirm}>
+                  <Icon name={"check-circle"} cls={"ic s"} />
+                  {"Confirm"}
+                </button>
+              ) : null}
             </span>
           </h2>
           <div className={"split"}>
@@ -1372,33 +1528,115 @@ export function MatterTasks({ deadline, tasks, record = false }: { deadline: Mat
             </div>
           </div>
         </Panel>
-      ) : null}
-      <h3 className={"sub rv"} style={css({ "--i": String(offset) })}>
-        {"Tasks"}
-      </h3>
-      {tasks.length === 0 ? (
-        <div className={"li rv"} style={css({ "--i": String(offset + 1) })}>
+  );
+}
+
+/* --------------------------------------------------------------- billing */
+
+/** The matter's Billing tab (Designer `tab-billing`): money held and invoiced, then its invoices. */
+export type MatterBillingData = {
+  /** Client account (advance): what is held for this matter, and what waits for verification. */
+  held: { amount: string; count: number; note: string };
+  invoiced: { amount: string; count: number; note: string[] };
+  invoices: { number: string; categories: string[]; issued: string; state: MatterBadge; total: string; payment: string[] }[];
+  /** Nobody on this matter may read its invoices (they are shown to the firm owner and finance). */
+  hidden?: boolean;
+};
+
+export function MatterBilling({ data }: { data: MatterBillingData | null }) {
+  if (!data || data.hidden || (data.invoices.length === 0 && data.held.count === 0)) {
+    return (
+      <Panel>
+        <Empty
+          art={"invoice-plain"}
+          title={data?.hidden ? "Invoices are shown to billing staff" : "No invoices yet"}
+          copy={data?.hidden ? "The firm owner and the matter’s finance user see this matter’s invoices and client funds." : "Invoices you issue from a matter appear here."}
+        />
+      </Panel>
+    );
+  }
+  return (
+    <>
+      <p className={"fp-note rv"} style={css({ margin: "0px 0px 12px", "--i": "0" })}>
+        <Icon name={"wallet"} cls={"ic s"} />
+        {" Firm-wide invoices, client funds and reconciliation are in "}
+        <a href={"/sheet/finance"} style={{ color: "var(--blue)" }}>
+          {"Finance"}
+        </a>
+        {"."}
+      </p>
+      <div className={"panel rv"} style={css({ "--i": "1" })}>
+        <h2>
+          <Icon name={"wallet"} />
+          {"Money for this matter"}
+          <span className={"r"}>
+            <span className={"pill"}>{"CAD"}</span>
+          </span>
+        </h2>
+        <div className={"split"} style={css({ "--n": "2" })}>
           <div>
-            <b>{"No open tasks"}</b>
-            <small>{"Client tasks and internal tasks appear here with owners and due dates."}</small>
+            <h3>{"Client account (advance)"}</h3>
+            <b className={"display num"} style={{ fontSize: "30px", display: "block" }}>
+              {data.held.amount}
+            </b>
+            <small style={{ color: "var(--t2)", fontSize: "13px" }}>{data.held.note}</small>
+          </div>
+          <div>
+            <h3>{"Invoiced (earned fees)"}</h3>
+            <b className={"display num"} style={{ fontSize: "30px", display: "block" }}>
+              {data.invoiced.amount}
+            </b>
+            <small style={{ color: "var(--t2)", fontSize: "13px" }}>
+              <Joined parts={data.invoiced.note} />
+            </small>
+          </div>
+        </div>
+      </div>
+      <h3 className={"sub rv"} style={css({ "--i": "2" })}>
+        {"Invoices"}
+      </h3>
+      {data.invoices.length === 0 ? (
+        <div className={"li rv"} style={css({ "--i": "3" })}>
+          <div>
+            <b>{"No invoices yet"}</b>
+            <small>{"Invoices you issue from a matter appear here."}</small>
           </div>
         </div>
       ) : (
-        tasks.map((task, index) => (
-          <div key={index} className={"li rv"} style={css({ "--i": String(offset + 1 + index) })}>
-            <span className={"ck"}></span>
-            <div>
-              <b>{task.title}</b>
-              <small>
-                <Joined parts={task.parts} />
-              </small>
-            </div>
-            <span className={"r"}>
-              <Plain badge={task.badge} />
-              <Avatar person={task.owner} />
-            </span>
-          </div>
-        ))
+        <div className={"tw rv"} style={css({ "--i": "3" })}>
+          <table className={"t"}>
+            <thead>
+              <tr>
+                <th>{"Number"}</th>
+                <th>{"Line categories"}</th>
+                <th>{"Issued"}</th>
+                <th>{"State"}</th>
+                <th style={{ textAlign: "right" }}>{"Total"}</th>
+                <th>{"Payment"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.invoices.map((row) => (
+                <tr key={row.number}>
+                  <td className={"num"}>{row.number}</td>
+                  <td>
+                    <Joined parts={row.categories} />
+                  </td>
+                  <td className={"num"}>{row.issued}</td>
+                  <td>
+                    <Plain badge={row.state} />
+                  </td>
+                  <td className={"num"} style={{ textAlign: "right" }}>
+                    {row.total}
+                  </td>
+                  <td>
+                    <Joined parts={row.payment} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );
@@ -1602,10 +1840,12 @@ export type MatterPageData = {
   overview: MatterOverviewData;
   people: { cards: MatterPersonCard[]; relationships: MatterRelationship[] };
   /** `vo`: Vo's reading of one document, in the Designer's review panel (`#ocr`). */
-  documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[]; vo?: MatterDocumentReviewData | null };
+  documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[]; vo?: MatterDocumentReviewData | null; filter?: boolean };
   agreements: { rows: MatterAgreementRow[]; signing: MatterSigning | null; create?: string | null };
-  /** `record` offers the Record a deadline dialog from the empty state. */
-  tasks: { deadline: MatterDeadline | null; tasks: MatterTaskRow[]; record?: boolean };
+  /** Every upcoming deadline, soonest first. `record` and `add` offer Record a deadline and New task from the empty state. */
+  tasks: { deadlines: MatterDeadline[]; tasks: MatterTaskRow[]; record?: boolean; add?: boolean };
+  /** The Billing tab's invoices and money; absent, the tab keeps its empty state. */
+  billing?: MatterBillingData | null;
   outcome: string | null;
   /** Set when decision evidence is on file and no outcome is recorded yet. */
   confirmOutcome?: MatterOutcomeConfirm | null;
@@ -1626,11 +1866,15 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
     case "people":
       return <MatterPeople cards={data.people.cards} relationships={data.people.relationships} />;
     case "documents":
-      return <MatterDocuments checklist={data.documents.checklist} people={data.documents.people} rows={data.documents.rows} vo={data.documents.vo} />;
+      return (
+        <MatterDocuments checklist={data.documents.checklist} people={data.documents.people} rows={data.documents.rows} vo={data.documents.vo} filter={data.documents.filter} />
+      );
     case "agreements":
       return <MatterAgreements rows={data.agreements.rows} signing={data.agreements.signing} create={data.agreements.create} />;
     case "tasks":
-      return <MatterTasks deadline={data.tasks.deadline} tasks={data.tasks.tasks} record={data.tasks.record} />;
+      return <MatterTasks deadlines={data.tasks.deadlines} tasks={data.tasks.tasks} record={data.tasks.record} add={data.tasks.add} />;
+    case "billing":
+      return data.billing === undefined ? <MatterTabEmpty tab={data.tab} /> : <MatterBilling data={data.billing} />;
     case "submissions":
       return data.submissions ? <MatterSubmissions data={data.submissions} /> : <MatterTabEmpty tab={data.tab} />;
     case "decisions":

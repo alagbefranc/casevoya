@@ -11500,6 +11500,16 @@ export type Database = {
         Args: { p_changes: Json; p_organization_id: string }
         Returns: undefined
       }
+      update_task: {
+        Args: {
+          p_due_on: string | null
+          p_expected_version: number
+          p_priority: Database["public"]["Enums"]["task_priority"] | null
+          p_task_id: string
+          p_title: string
+        }
+        Returns: number
+      }
       update_lead: {
         Args: {
           p_country_now: string | null
@@ -11619,6 +11629,15 @@ export type Database = {
       verify_government_correspondence: {
         Args: {
           p_correspondence_id: string
+          p_expected_version: number
+        }
+        Returns: number
+      }
+      attach_correspondence_evidence: {
+        Args: {
+          p_correspondence_id: string
+          p_evidence_locator: string | null
+          p_evidence_version_id: string | null
           p_expected_version: number
         }
         Returns: number

@@ -169,19 +169,39 @@ describe("create_client_matter", () => {
     expect(title.rows[0].title).toBe("Work permit");
   });
 
-  it("refuses a real matter in sample mode and leaves nothing behind", async () => {
+  it("opens a sample matter with sample people in a sample-mode firm (decision 2026-10-19)", async () => {
     const ctx = await firm({ sampleMode: true });
-    await expectDbError(
-      () => create(ctx.consultant, ctx.orgId, ["Real Client", null, null, null, ctx.consultantMembership, null, null]),
-      /sample mode/,
-    );
+    const created = await create(ctx.manager, ctx.orgId, ["Practice Client", null, "Practice Sponsor", null, ctx.consultantMembership, null, null]);
+    expect(created).toMatchObject({ ok: true, is_sample: true });
     await asMaintenance(db);
-    const left = await db.query<{ n: number }>(
-      `select (select count(*) from public.matters where organization_id = $1)::int
-            + (select count(*) from public.persons where organization_id = $1)::int as n`,
-      [ctx.orgId],
+    const matter = await db.query<{ is_sample: boolean }>(`select is_sample from public.matters where id = $1`, [created.id]);
+    expect(matter.rows[0].is_sample).toBe(true);
+    const people = await db.query<{ is_sample: boolean }>(`select is_sample from public.persons where id = any($1::uuid[])`, [[created.applicant_id, created.sponsor_id]]);
+    expect(people.rows.map((row) => row.is_sample)).toEqual([true, true]);
+
+    // A sample matter takes new work while the firm is in sample mode.
+    await asUser(db, { userId: ctx.manager, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const task = await db.query<{ id: string }>(
+      `select public.create_task($1, 'internal', 'Practice task', $2, null, 'normal', null, null, 'America/Toronto', null, null, '[]'::jsonb) as id`,
+      [created.id, ctx.managerMembership],
     );
-    expect(left.rows[0].n).toBe(0);
+    expect(task.rows[0].id).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("opens a real matter once the firm is out of sample mode", async () => {
+    const ctx = await firm({ sampleMode: false });
+    const created = await create(ctx.manager, ctx.orgId, ["Real Client", null, null, null, ctx.consultantMembership, null, null]);
+    expect(created).toMatchObject({ ok: true, is_sample: false });
+  });
+
+  it("does not let a caller forge the sample flag through the internal function in another firm", async () => {
+    const ctx = await firm({ sampleMode: false });
+    const other = await firm({ sampleMode: true });
+    await asUser(db, { userId: ctx.manager, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const sample = await db.query<{ v: boolean | null }>(`select app.firm_in_sample_mode($1) as v`, [other.orgId]);
+    expect(sample.rows[0].v).toBeNull();
+    const own = await db.query<{ v: boolean | null }>(`select app.firm_in_sample_mode($1) as v`, [ctx.orgId]);
+    expect(own.rows[0].v).toBe(false);
   });
 
   it("returns the licence refusal, and checks the caller, the fields and the session", async () => {

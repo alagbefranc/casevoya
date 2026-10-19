@@ -193,3 +193,85 @@ describe("Record a deadline (public.record_deadline)", () => {
     expect(grants.rows[0]).toEqual({ anon: false, authenticated: true });
   });
 });
+
+describe("Proposed reminders (app.schedule_deadline_reminders)", () => {
+  async function remindersFor(ctx: Awaited<ReturnType<typeof firm>>, input: NewDeadlineInput) {
+    await asMaintenance(db);
+    await db.query(`insert into public.firm_reminder_offsets (organization_id, offset_days) values ($1, 14), ($1, 7), ($1, 1) on conflict do nothing`, [ctx.orgId]);
+    const saved = await record(ctx.consultant, ctx.orgId, ctx.matterId, input);
+    expect(saved.error).toBeUndefined();
+    await db.query(`select public.schedule_deadline_reminders($1, '2026-10-19T12:00:00Z')`, [saved.id]);
+    const rows = await db.query<{ offset_days: number; local: string }>(
+      `select offset_days, to_char(scheduled_for at time zone 'America/Toronto', 'YYYY-MM-DD HH24:MI') as local
+       from public.reminder_schedules where deadline_id = $1 and reminder_kind = 'routine' and status = 'pending' order by offset_days desc`,
+      [saved.id],
+    );
+    return rows.rows;
+  }
+
+  it("puts “14 days before” a date-only 20 Nov deadline on 6 Nov, not 7 Nov", async () => {
+    const ctx = await firm();
+    const rows = await remindersFor(ctx, parsed({ kind: "internal", label: "Send the package", dueOn: "2026-11-20", timezone: "America/Toronto" }));
+    expect(rows).toEqual([
+      { offset_days: 14, local: "2026-11-06 00:00" },
+      { offset_days: 7, local: "2026-11-13 00:00" },
+      { offset_days: 1, local: "2026-11-19 00:00" },
+    ]);
+  });
+
+  it("keeps a timed deadline's reminders N days before its due time", async () => {
+    const ctx = await firm();
+    const rows = await remindersFor(ctx, parsed({ ...LETTER, dueOn: "2026-11-20", dueTime: "17:00" }));
+    expect(rows[0]).toEqual({ offset_days: 14, local: "2026-11-06 17:00" });
+  });
+
+  it("computes the corrected slot the one-time migration moves pending reminders to", async () => {
+    await asMaintenance(db);
+    const slot = await db.query<{ local: string }>(
+      `select to_char(app.reminder_slot('2026-11-20'::date, null, 'America/Toronto', 14) at time zone 'America/Toronto', 'YYYY-MM-DD HH24:MI') as local`,
+    );
+    expect(slot.rows[0].local).toBe("2026-11-06 00:00");
+  });
+});
+
+describe("Confirm a deadline (public.confirm_deadline), the control on the Tasks tab", () => {
+  it("lets the firm owner (licensed, decision 2026-10-19) confirm a letter deadline with a recent step-up", async () => {
+    const ctx = await firm();
+    const saved = await record(ctx.consultant, ctx.orgId, ctx.matterId, parsed(LETTER));
+    // Without a recent step-up: the step-up message, which sends the person to /mfa.
+    await asUser(db, { userId: ctx.owner, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 3600 });
+    let refused = "";
+    try {
+      await db.query(`select public.confirm_deadline($1, 1)`, [saved.id]);
+    } catch (error) {
+      refused = error instanceof Error ? error.message : String(error);
+    }
+    expect(refused).toMatch(/step-up/);
+    await asUser(db, { userId: ctx.owner, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    await db.query(`select public.confirm_deadline($1, 1)`, [saved.id]);
+    await asMaintenance(db);
+    const row = await db.query<{ verification: string }>(`select verification::text from public.deadlines where id = $1`, [saved.id]);
+    expect(row.rows[0].verification).toBe("confirmed");
+  });
+
+  it("refuses a finance user", async () => {
+    const ctx = await firm();
+    const saved = await record(ctx.consultant, ctx.orgId, ctx.matterId, parsed({ kind: "internal", label: "Draft", dueOn: "2026-12-01", timezone: "America/Toronto" }));
+    await asUser(db, { userId: ctx.finance, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    let refused = "";
+    try {
+      await db.query(`select public.confirm_deadline($1, 1)`, [saved.id]);
+    } catch (error) {
+      refused = error instanceof Error ? error.message : String(error);
+    }
+    expect(refused).toMatch(/denied/);
+  });
+});
+
+describe("Record a deadline: dates in the past", () => {
+  it("refuses a due date before the firm's today, and accepts today", () => {
+    const base = { kind: "internal", label: "Draft", timezone: "America/Toronto" };
+    expect(readDeadline({ ...base, dueOn: "2026-10-18", today: "2026-10-19" })).toEqual({ error: "The due date can’t be in the past." });
+    expect("input" in readDeadline({ ...base, dueOn: "2026-10-19", today: "2026-10-19" })).toBe(true);
+  });
+});

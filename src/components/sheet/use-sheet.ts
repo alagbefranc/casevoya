@@ -74,6 +74,7 @@ import {
   runRedaction,
 } from "./compliance-acts";
 import { runMatterAct } from "./matter-acts";
+import { bindWorkControls, wireMattersList } from "./work-acts";
 import { runNewMatter } from "./new-matter-act";
 import { markAllNotificationsRead, openNotification } from "./notification-acts";
 import { wireLead, wirePipeline } from "./pipeline-acts";
@@ -210,6 +211,10 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     scrim?.addEventListener("click", shut, listen);
     // Government status, Submissions and Decisions (T036 to T039): `data-gov` controls and file picks.
     bindGovControls(root, router, listen);
+    // Task ticks and the Task dialog, Confirm on a deadline, Change stage's label, checklist person chips.
+    bindWorkControls(root, router, listen);
+    // The Matters list: search and Mine together, its counts and no-match panel, Select all.
+    if (page === "matters") wireMattersList(root, listen);
 
     root.querySelectorAll<HTMLButtonElement>(".grp>button").forEach((button) => {
       button.addEventListener("click", () => {
@@ -953,6 +958,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     for (const type of ["pointerup", "pointerout", "pointercancel", "keyup"]) root.addEventListener(type, release, listen);
 
     root.querySelectorAll<HTMLInputElement>('.bar input').forEach((input) => {
+      // The Matters list's search is combined with its Mine switch in wireMattersList.
+      if (page === "matters" && root.querySelector("[data-matters-showing]")) return;
       if (filters?.contains(input)) {
         const preset = new URLSearchParams(window.location.search).get("q");
         if (preset && !input.value) input.value = preset;

@@ -4,8 +4,9 @@ import { safeAccessError } from "@/lib/auth/step-up";
 import { verifyTotpCode } from "@/lib/auth/verify-totp";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
+import { todayIso } from "@/modules/sheet/birth-date";
 import { deadlineError } from "@/modules/sheet/new-deadline";
-import { dependencyError, newTaskError, readNewTask } from "@/modules/sheet/new-task";
+import { dependencyError, newTaskError, readNewTask, readTaskEdit, taskChangeError } from "@/modules/sheet/new-task";
 import type { Database, Json } from "@/types/database.types";
 
 type Audience = Database["public"]["Enums"]["task_audience"];
@@ -90,6 +91,7 @@ export async function createSheetTask(input: {
   dueOn: string | null;
   dependsOnTaskId: string | null;
 }): Promise<{ id: string; dependency: string | null } | { error: string }> {
+  const timezone = typeof input.timezone === "string" && /^[A-Za-z0-9_+/-]{1,64}$/.test(input.timezone) ? input.timezone : "America/Toronto";
   const read = readNewTask({
     matter: input.matterId,
     title: input.title,
@@ -97,9 +99,10 @@ export async function createSheetTask(input: {
     owner: input.audience === "client" ? input.ownerPersonId : input.ownerMembershipId,
     due: input.dueOn,
     dependsOn: input.dependsOnTaskId,
+    // A due date in the past is refused: the firm's today, in its timezone.
+    today: todayIso(new Date(), timezone),
   });
   if ("error" in read) return { error: read.error };
-  const timezone = typeof input.timezone === "string" && /^[A-Za-z0-9_+/-]{1,64}$/.test(input.timezone) ? input.timezone : "America/Toronto";
   const session = await clientFor(input.organizationId, null);
   if ("error" in session) return { error: session.error ?? "Sign in first." };
   const task = read.input;
@@ -147,13 +150,88 @@ export async function setTaskStatus(input: {
   return { version: data };
 }
 
+/**
+ * The Sheet's task controls (Tasks page rows and the matter's Tasks tab): mark a task done.
+ * public.set_task_status decides (role, version, open dependencies) and cancels its pending reminders.
+ */
+export async function completeSheetTask(input: { organizationId: string; taskId: string; version: number }): Promise<{ version: number } | { error: string }> {
+  if (!isUuid(input.taskId) || !Number.isInteger(input.version)) return { error: "Choose a task." };
+  const session = await clientFor(input.organizationId, null);
+  if ("error" in session) return { error: session.error ?? "Sign in first." };
+  const { data, error } = await session.supabase.rpc("set_task_status", {
+    p_task_id: input.taskId,
+    p_expected_version: input.version,
+    p_status: "done",
+    p_blocker_note: null,
+  });
+  if (error) return { error: taskChangeError(error.message) };
+  return { version: typeof data === "number" ? data : input.version };
+}
+
+/**
+ * The Task dialog's Save: the title and due date (public.update_task) and, when another staff
+ * member is chosen, the owner (public.reassign_task, which needs a recent step-up: the refusal
+ * comes back as the step-up message). Each change is checked again by the database.
+ */
+export async function saveSheetTask(input: {
+  organizationId: string;
+  taskId: string;
+  version: number;
+  timezone: string;
+  title: string;
+  due: string;
+  ownerMembershipId: string | null;
+  currentOwnerMembershipId: string | null;
+  currentDueOn: string | null;
+}): Promise<{ version: number; reassigned: boolean } | { error: string }> {
+  if (!isUuid(input.taskId) || !Number.isInteger(input.version)) return { error: "Choose a task." };
+  const read = readTaskEdit({ title: input.title, due: input.due });
+  if ("error" in read) return { error: read.error };
+  const timezone = /^[A-Za-z0-9_+/-]{1,64}$/.test(input.timezone ?? "") ? input.timezone : "America/Toronto";
+  if (read.dueOn && read.dueOn !== input.currentDueOn && read.dueOn < todayIso(new Date(), timezone)) {
+    return { error: "The due date can’t be in the past." };
+  }
+  if (input.ownerMembershipId && !isUuid(input.ownerMembershipId)) return { error: "Choose a staff owner." };
+  const session = await clientFor(input.organizationId, null);
+  if ("error" in session) return { error: session.error ?? "Sign in first." };
+  let version = input.version;
+  // The owner first: it is the change that can need a step-up, so a refusal leaves nothing half saved.
+  const reassign = Boolean(input.ownerMembershipId && input.ownerMembershipId !== input.currentOwnerMembershipId);
+  if (reassign) {
+    const moved = await session.supabase.rpc("reassign_task", {
+      p_task_id: input.taskId,
+      p_expected_version: version,
+      p_owner_membership_id: input.ownerMembershipId,
+      p_owner_person_id: null,
+    });
+    if (moved.error) {
+      return { error: /step-up|aal2/i.test(moved.error.message) ? safeAccessError(moved.error.message) : taskChangeError(moved.error.message) };
+    }
+    version = typeof moved.data === "number" ? moved.data : version;
+  }
+  const updated = await session.supabase.rpc("update_task", {
+    p_task_id: input.taskId,
+    p_expected_version: version,
+    p_title: read.title,
+    p_due_on: read.dueOn,
+    p_priority: null,
+  });
+  if (updated.error) {
+    const copy = taskChangeError(updated.error.message);
+    return { error: reassign ? `The new owner was saved, but not the other changes: ${copy}` : copy };
+  }
+  version = typeof updated.data === "number" ? updated.data : version;
+  return { version, reassigned: reassign };
+}
+
 export async function reassignTask(input: {
   organizationId: string;
   taskId: string;
   expectedVersion: number;
   ownerMembershipId?: string | null;
   ownerPersonId?: string | null;
-  code: string;
+  /** Null relies on the session's recent step-up; the database checks app.mfa_step_up_satisfied() either way. */
+  code: string | null;
 }) {
   if (!isUuid(input.taskId)) return { error: "Choose a task." };
   const session = await clientFor(input.organizationId, input.code);
@@ -243,21 +321,41 @@ export async function recordDeadline(input: {
   return { id: data };
 }
 
+/**
+ * Confirms a tentative deadline (public.confirm_deadline): a legal or letter date needs a licensed
+ * member (an owner counts, decision 2026-10-19), an official source or published rule, and a
+ * recent step-up; an internal target needs staff and a step-up. With `code` null the session's
+ * recent step-up is relied on, and a refusal comes back as the step-up message.
+ */
 export async function confirmDeadline(input: {
   organizationId: string;
   deadlineId: string;
   expectedVersion: number;
-  code: string;
+  code: string | null;
 }) {
-  if (!isUuid(input.deadlineId)) return { error: "Choose a deadline." };
+  if (!isUuid(input.deadlineId) || !Number.isInteger(input.expectedVersion)) return { error: "Choose a deadline." };
   const session = await clientFor(input.organizationId, input.code);
-  if ("error" in session) return { error: session.error };
+  if ("error" in session) return { error: session.error ?? "Sign in first." };
   const { data, error } = await session.supabase.rpc("confirm_deadline", {
     p_deadline_id: input.deadlineId,
     p_expected_version: input.expectedVersion,
   });
-  if (error) return { error: safeAccessError(error.message) };
+  if (error) return { error: confirmDeadlineError(error.message) };
   return { version: data };
+}
+
+/** User-facing copy for a refused confirmation. Never passes a database message through. */
+function confirmDeadlineError(message: string): string {
+  if (/stays tentative without an official source/i.test(message)) {
+    return "A legal or letter deadline stays tentative until it cites its official source or a published rule.";
+  }
+  if (/allowlisted official url|published rule version/i.test(message)) return "Its source isn’t an accepted official page, so it can’t be confirmed.";
+  if (/licence blocks/i.test(message)) return "Your licence status blocks this consultant action.";
+  if (/version conflict/i.test(message)) return "Someone changed this deadline since you opened it. Reload and try again.";
+  if (/staff access denied|confirmation denied/i.test(message)) {
+    return "Your role can’t confirm this deadline. A licensed consultant or the firm owner confirms legal and letter deadlines.";
+  }
+  return safeAccessError(message);
 }
 
 export async function scheduleDeadlineReminders(input: {

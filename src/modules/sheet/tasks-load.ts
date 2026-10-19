@@ -19,9 +19,13 @@ import {
   isOverdue,
   priorityChip,
   reminderOffsets,
+  deadlineConfirmable,
+  TASK_STAFF_ROLES,
+  taskManageWire,
   TASKS_READ,
   tasksTab,
 } from "@/modules/sheet/tasks-present";
+import { isLicensedMembership } from "@/lib/tenant/roles";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -48,7 +52,7 @@ async function loadInternal(supabase: Client, staff: SheetStaff, today: string, 
   const org = staff.organizationId;
   const tasks = await supabase
     .from("tasks")
-    .select("id, matter_id, title, priority, status, owner_membership_id, due_on, due_at, due_timezone, escalated_at")
+    .select("id, matter_id, title, priority, status, owner_membership_id, due_on, due_at, due_timezone, escalated_at, audience, version")
     .eq("organization_id", org)
     .eq("audience", "internal")
     .in("status", [...OPEN_TASK])
@@ -96,6 +100,7 @@ async function loadInternal(supabase: Client, staff: SheetStaff, today: string, 
       priority: priorityChip(row.priority),
       dependsOn: dependsOnLabel(dependsOn.get(row.id) ?? []),
       state: internalState(row.status, row.escalated_at),
+      manage: TASK_STAFF_ROLES.includes(staff.role) ? taskManageWire(row) : null,
     };
   });
 
@@ -118,7 +123,7 @@ async function loadClient(supabase: Client, staff: SheetStaff, today: string): P
   const since = `${plusDays(today, -RECENT_DAYS)}T00:00:00Z`;
   const tasks = await supabase
     .from("tasks")
-    .select("id, matter_id, title, status, owner_person_id, due_on, due_at, due_timezone, completed_at")
+    .select("id, matter_id, title, status, owner_person_id, owner_membership_id, due_on, due_at, due_timezone, completed_at, audience, version")
     .eq("organization_id", org)
     .eq("audience", "client")
     .or(`status.in.(open,blocked),and(status.eq.done,completed_at.gte.${since})`)
@@ -154,6 +159,7 @@ async function loadClient(supabase: Client, staff: SheetStaff, today: string): P
       // Quiet hours are a firm setting the page cannot read yet, so they are not claimed.
       reminders: days.length ? { offsets: days, quietHours: false } : null,
       state: clientState(row.status),
+      manage: row.status !== "done" && TASK_STAFF_ROLES.includes(staff.role) ? taskManageWire(row) : null,
     };
   });
   return { rows: table };
@@ -164,7 +170,7 @@ async function loadDeadlines(supabase: Client, staff: SheetStaff, today: string)
   const sinceDay = plusDays(today, -RECENT_DAYS);
   const deadlines = await supabase
     .from("deadlines")
-    .select("id, matter_id, label, due_on, due_at, timezone, source_url, source_retrieved_on, receipt_on, rule_version_id, verifying_membership_id, verification")
+    .select("id, matter_id, kind, label, due_on, due_at, timezone, source_url, source_retrieved_on, receipt_on, rule_version_id, verifying_membership_id, verification, version")
     .eq("organization_id", org)
     .or(`due_on.gte.${sinceDay},due_at.gte.${sinceDay}T00:00:00Z`)
     .order("due_on", { ascending: true, nullsFirst: false })
@@ -172,10 +178,17 @@ async function loadDeadlines(supabase: Client, staff: SheetStaff, today: string)
   const rows = deadlines.data ?? [];
   const [matter, members] = await Promise.all([matterLabels(supabase, org, rows.map((row) => row.matter_id)), memberNames(supabase, org)]);
   const when = (row: (typeof rows)[number]) => row.due_on ?? (row.due_at ? isoDateInTimeZone(new Date(row.due_at), staff.timezone) : "");
+  const licensed = isLicensedMembership(staff.role);
   const table: DeadlineRow[] = [...rows]
     .sort((a, b) => when(a).localeCompare(when(b)))
-    .map((row) => ({
-      href: `/sheet/matters/${row.matter_id}`,
+    .map((row) => {
+      const can = deadlineConfirmable(
+        { kind: row.kind, verification: row.verification, sourceUrl: row.source_url, ruleVersionId: row.rule_version_id },
+        staff.role,
+        licensed,
+      );
+      return {
+      href: `/sheet/matters/${row.matter_id}?tab=tasks`,
       label: row.label,
       matter: matter(row.matter_id),
       source: deadlineSource({ sourceUrl: row.source_url, retrievedOn: row.source_retrieved_on, receiptOn: row.receipt_on, ruleVersion: Boolean(row.rule_version_id) }),
@@ -183,7 +196,10 @@ async function loadDeadlines(supabase: Client, staff: SheetStaff, today: string)
       verifiedBy:
         row.verification === "confirmed" && row.verifying_membership_id ? members.get(row.verifying_membership_id) || "A former member" : "—",
       state: deadlineState(row.verification),
-    }));
+      confirm: can.ok ? { "data-deadline-confirm": row.id, "data-org": org, "data-version": String(row.version) } : null,
+      confirmWhy: can.ok ? null : can.why,
+      };
+    });
   return { rows: table };
 }
 
@@ -213,6 +229,9 @@ export async function loadSheetTasks(staff: SheetStaff, query: SheetQuery, now: 
     client,
     deadlines,
     dialog,
+    edit: TASK_STAFF_ROLES.includes(staff.role)
+      ? { organizationId: org, timezone: staff.timezone, today, owners: (dialog.owners ?? []).filter((o) => o.kind === "internal" && o.value).map((o) => ({ value: o.value as string, label: o.label })) }
+      : null,
   };
   return { chrome, tasks };
 }

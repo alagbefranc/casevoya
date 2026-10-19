@@ -31,7 +31,7 @@ import { TeamDialogs } from "@/components/sheet/designer/settings-staff-admin";
 import { SettingsBillingHeader, SheetRetention, SheetSubscription } from "@/components/sheet/designer/settings-billing";
 import { loadSheetRetention, loadSheetSubscription } from "@/modules/sheet/settings-billing-load";
 import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
-import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
+import { SheetTasks, TaskEditDialog, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
 import { ComposioDialog, IntegrationsSettingsHeader, SheetIntegrations, SheetNotificationPrefs } from "@/components/sheet/designer/settings-integrations";
 import { loadSheetSettingsIntegrations } from "@/modules/sheet/settings-integrations-load";
 import { NotificationsHeader, SheetNotifications } from "@/components/sheet/designer/notifications";
@@ -191,7 +191,12 @@ export async function SheetBody({
           sidebar={chrome.sidebar}
           header={<TasksHeader tab={tasks.tab} counts={tasks.counts} />}
           statusbar={chrome.statusbar}
-          after={<TasksDialog data={tasks.dialog} />}
+          after={
+            <>
+              <TasksDialog data={tasks.dialog} />
+              {tasks.edit ? <TaskEditDialog data={tasks.edit} /> : null}
+            </>
+          }
         >
           <SheetTasks data={tasks} />
         </SheetFrame>

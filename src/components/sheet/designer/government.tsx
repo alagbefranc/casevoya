@@ -80,6 +80,8 @@ export type GovernmentRow = {
   lastChecked: string;
   /** A live Verify button in the Verified cell. */
   verify?: GovWire | null;
+  /** Live only: Attach evidence in the Verified cell, for a letter recorded without it. */
+  attach?: GovWire | null;
   /** The firm-wide view: the row opens its matter. */
   href?: string | null;
 };
@@ -173,6 +175,10 @@ export function SheetGovernment({ data }: { data: GovernmentPageData }) {
                     <button className={"btn s sm"} {...row.verify}>
                       {"Verify"}
                     </button>
+                  ) : row.attach ? (
+                    <button className={"btn s sm"} {...row.attach}>
+                      {"Attach evidence"}
+                    </button>
                   ) : (
                     row.verified
                   )}
@@ -205,7 +211,11 @@ export function SheetGovernment({ data }: { data: GovernmentPageData }) {
                 {"Evidence"}
                 <input placeholder={"Attach the IRCC letter or screenshot"} {...(data.record.save ? { readOnly: true, "data-gov-file": "1" } : {})} />
               </label>
-              <small style={{ color: "var(--t2)", fontSize: "13px" }}>{"Required. Without evidence the entry stays “unverified”."}</small>
+              <small style={{ color: "var(--t2)", fontSize: "13px" }}>
+                {data.record.save
+                  ? "Required for a letter or a status change. “Checked, no change” needs none. Without evidence the entry stays “unverified”."
+                  : "Required. Without evidence the entry stays “unverified”."}
+              </small>
               {data.record.save ? (
                 <div style={{ display: "flex", gap: "8px", marginTop: "14px" }}>
                   <button className={"btn p"} {...data.record.save}>
