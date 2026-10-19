@@ -8,6 +8,17 @@ import type { SheetStaff } from "@/modules/sheet/load";
 import { missingPolicies } from "@/modules/portal-policies/defaults";
 import { loadCurrentPolicies } from "@/modules/portal-policies/load";
 import { NOTICE, ago, dayMonth, greeting, isoDate, localNow, monthGrid, summary, taskBadge, zoneCity } from "@/modules/sheet/home-present";
+import {
+  HOME_QUICK,
+  HOME_TASK_READ,
+  TASKS_PAGE,
+  activityMatter,
+  calendarDayHref,
+  homeMonth,
+  homeTaskTokens,
+  monthNav,
+  notificationHref,
+} from "@/modules/sheet/home-controls";
 
 const SOURCE: Record<string, string> = {
   document: "Documents",
@@ -32,14 +43,19 @@ function plural(count: number, one: string, many: string) {
  * row-level security decides what is visible. Features without a backend yet (Vo drafts,
  * leads) report nothing rather than a made-up number. Financial exceptions are client-account
  * withdrawals past their CICC Code s. 32(g) date.
+ *
+ * `month` (`YYYY-MM`, from `?month=`) is the month the right column's calendar shows; its arrows
+ * link to `path` with the month before and after.
  */
-export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
+export async function loadSheetHome(staff: SheetStaff, now: Date = new Date(), view: { month?: string; path?: string } = {}) {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
   const local = localNow(staff.timezone, now);
   const today = isoDate(local.year, local.month, local.day);
-  const monthStart = isoDate(local.year, local.month, 1);
-  const monthEnd = isoDate(local.year, local.month, new Date(Date.UTC(local.year, local.month, 0)).getUTCDate());
+  const shown = homeMonth(view.month, { year: local.year, month: local.month });
+  const thisMonth = shown.year === local.year && shown.month === local.month;
+  const monthStart = isoDate(shown.year, shown.month, 1);
+  const monthEnd = isoDate(shown.year, shown.month, new Date(Date.UTC(shown.year, shown.month, 0)).getUTCDate());
   const count = { count: "exact" as const, head: true };
   // Clients can't accept an invitation until the firm publishes both portal documents.
   const policies = loadCurrentPolicies(supabase, org);
@@ -53,7 +69,8 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
         .eq("organization_id", org)
         .in("status", [...OPEN_TASK])
         .order("due_on", { ascending: true, nullsFirst: false })
-        .limit(8),
+        // Enough for the task bar's Mine and Today to find the viewer's tasks; it shows 8 at once.
+        .limit(HOME_TASK_READ),
       supabase.from("tasks").select("id", count).eq("organization_id", org).in("status", [...OPEN_TASK]).eq("due_on", today),
       supabase.from("deadlines").select("id, matter_id, label, due_on, verification").eq("organization_id", org).gte("due_on", today).order("due_on", { ascending: true }).limit(20),
       supabase.from("deadlines").select("due_on").eq("organization_id", org).gte("due_on", monthStart).lte("due_on", monthEnd).limit(200),
@@ -64,7 +81,7 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
       supabase.from("matters").select("id", count).eq("organization_id", org).eq("on_hold", true),
       supabase
         .from("audit_log")
-        .select("action, occurred_at")
+        .select("action, occurred_at, object_table, object_id, context")
         .eq("organization_id", org)
         .in("action", Object.keys(NOTICE))
         .eq("result", "success")
@@ -102,18 +119,13 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
     when: row.due_on === today ? "Today" : row.due_on ? dayMonth(row.due_on) : "No due date",
     badge: taskBadge(row.status, row.due_on, today),
     owner: ownerOf(row.owner_membership_id),
+    f: homeTaskTokens(row, staff.membershipId, today),
   }));
 
   const home: HomeData = {
     greeting: greeting(local.hour, staff.displayName),
     summary: summary(local, zoneCity(staff.timezone), toReview, total(tentative)),
-    quick: {
-      lead: "/sheet/pipeline",
-      document: "/sheet/documents",
-      consultation: "/sheet/consultations",
-      invoice: "/sheet/finance",
-      draft: "/sheet/drafts",
-    },
+    quick: { ...HOME_QUICK },
     gauge: [
       { label: "Accepted by firm", count: total(accepted), color: "#0075DE" },
       { label: "Awaiting review", count: toReview, color: "#62aef0" },
@@ -129,11 +141,15 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
     ],
     byDeadline: [...nextByMatter].slice(0, 5).map(([matter, date]) => ({ href: `/sheet/matters/${matter}`, name: matterName(matter), date: dayMonth(date) })),
     tasks: homeTasks,
+    bar: { filterHref: TASKS_PAGE },
   };
 
   const marked = new Set((monthDeadlines.data ?? []).map((row) => Number((row.due_on ?? "").slice(8, 10))).filter((day) => day > 0));
+  const grid = monthGrid(shown.year, shown.month, thisMonth ? local.day : null, marked);
   const rbar: RbarData = {
-    ...monthGrid(local.year, local.month, local.day, marked),
+    ...grid,
+    days: grid.days.map((cell) => ({ ...cell, href: calendarDayHref(shown.year, shown.month, cell.day) })),
+    nav: monthNav(view.path ?? "/sheet", shown.year, shown.month),
     today: deadlines
       .filter((row) => row.due_on === today)
       .map((row) => ({
@@ -148,6 +164,7 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date()) {
       title: NOTICE[row.action] ?? row.action,
       source: SOURCE[row.action.split(".")[0]] ?? "Activity",
       ago: ago(row.occurred_at, now),
+      href: notificationHref(row.action, activityMatter(row)),
     })),
     vo: null,
   };

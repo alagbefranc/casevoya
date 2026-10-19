@@ -133,6 +133,15 @@ function switchAttrs(viewer: VoViewer, key: VoSwitchKey | null): Attrs {
   return viewer.isOwner ? { "data-vo-setting": key, "data-org": viewer.organizationId } : { disabled: true, title: "Only the firm owner can change this" };
 }
 
+/**
+ * What "waiting" means for Vo drafts, everywhere it is counted (the sidebar badge, the drafts
+ * page's heading and pill): reply drafts (`vo_drafts`) and document readings (`vo_doc_drafts`)
+ * still in `draft`, the two kinds the drafts page lists as cards.
+ */
+export function voDraftsWaiting(replyDrafts: number | null | undefined, readings: number | null | undefined): number {
+  return (replyDrafts ?? 0) + (readings ?? 0);
+}
+
 export function draftsHeader(viewer: VoViewer, settings: VoSettings, waiting: number): DraftsHeaderData {
   const pills = [`${waiting} waiting`, settings.enabled ? "AI on for this firm" : "AI off for this firm", "Drafts only"];
   if (viewer.sampleMode && settings.enabled) pills.push("Sample records only");
@@ -231,7 +240,7 @@ export function draftsPage(input: {
 }): DraftsData {
   const { viewer, settings, names } = input;
   const readings = input.readings ?? [];
-  const count = input.waiting.length + readings.length;
+  const count = voDraftsWaiting(input.waiting.length, readings.length);
   const heading = count === 0 ? "No drafts waiting for you." : `Vo drafted ${WORDS[count] ?? String(count)} ${count === 1 ? "thing" : "things"} for you.`;
   const switches: DraftSwitch[] = [
     { id: "swVoClassify", label: "Document classification", on: settings.doc_classification, attrs: switchAttrs(viewer, "doc_classification") },

@@ -3,7 +3,15 @@
 import { toast2 } from "@/components/port/kit";
 import { createInvoice, refundPayment } from "@/modules/finance/staff-actions";
 import { formatMoney } from "@/modules/finance/money";
-import { financeNeedsStepUp, financeStepUpLocation, INVOICE_DIALOG, readNewInvoice, readRefund, REFUND_DIALOG } from "@/modules/sheet/finance-present";
+import {
+  financeNeedsStepUp,
+  financeStepUpLocation,
+  INVOICE_DIALOG,
+  invoiceDialogOpening,
+  readNewInvoice,
+  readRefund,
+  REFUND_DIALOG,
+} from "@/modules/sheet/finance-present";
 
 type Router = { refresh: () => void; replace: (href: string) => void };
 
@@ -39,7 +47,7 @@ export async function runNewInvoice(button: HTMLElement, router: Router) {
   if ("error" in result) {
     if (financeNeedsStepUp(result.error)) {
       try {
-        sessionStorage.setItem(DRAFT, JSON.stringify({ ...typed, key: idempotencyKey }));
+        sessionStorage.setItem(DRAFT, JSON.stringify({ ...typed, key: idempotencyKey, at: Date.now() }));
       } catch {
         // Storage can be unavailable; the person types it again.
       }
@@ -59,18 +67,22 @@ export async function runNewInvoice(button: HTMLElement, router: Router) {
   router.refresh();
 }
 
-/** After a step-up (`?dlg=invoice`): reopen New invoice with what was typed. */
+/**
+ * `?dlg=invoice` opens New invoice: empty from a plain link (the home's Issue invoice), or, back
+ * from a step-up, with what was typed and the same idempotency key.
+ */
 export function reopenInvoiceDialog(root: ParentNode, open: (id: string) => void) {
   if (new URLSearchParams(window.location.search).get("dlg") !== INVOICE_DIALOG) return;
   if (!root.querySelector("[data-new-invoice]")) return;
-  let draft: Record<string, unknown> | null = null;
+  let saved: Record<string, unknown> | null = null;
   try {
     const raw = sessionStorage.getItem(DRAFT);
     sessionStorage.removeItem(DRAFT);
-    draft = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+    saved = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
   } catch {
-    draft = null;
+    saved = null;
   }
+  const { draft } = invoiceDialogOpening(window.location.search, saved, Date.now());
   const set = (id: string, next: unknown) => {
     const field = root.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`#${id}`);
     if (field && typeof next === "string" && next) field.value = next;

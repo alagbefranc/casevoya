@@ -16,6 +16,7 @@ import {
   type VoRunRow,
   type VoSource,
   type VoViewer,
+  voDraftsWaiting,
 } from "@/modules/sheet/vo-present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
@@ -207,7 +208,7 @@ export async function loadSheetDrafts(staff: SheetStaff) {
   });
   return {
     chrome,
-    header: draftsHeader(base.viewer, base.settings, waitingRows.length + readings.length),
+    header: draftsHeader(base.viewer, base.settings, voDraftsWaiting(waitingRows.length, readings.length)),
     data,
     ask: base.settings.enabled && base.settings.staff_answers ? { organizationId: org, matters } : null,
   };
