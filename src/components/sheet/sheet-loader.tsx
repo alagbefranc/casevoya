@@ -2,14 +2,14 @@
  * The Sheet's loading screen, shown while a staff page loads (the Suspense fallback of the Sheet
  * routes). It is the favicon, animated: the blue tile breathes with soft rings, the white "vo" mark
  * writes itself in from left to right, and a shine passes over the tile. The background is the
- * shell's dark at once, so moving between pages never flashes a light or empty page; the mark
- * fades in after a beat, so quick loads show only the dark shell. Geometry matches favicon.svg
+ * light page canvas (#F6F5F4) at once, so moving between pages never flashes a dark or empty
+ * page; the mark fades in after a beat, so quick loads show only the canvas. Geometry matches favicon.svg
  * (32-unit tile, mark at 3.52/11.14, 24.95 wide) scaled to 56px.
  */
 const CSS = `
-.cv-load{position:fixed;inset:0;display:grid;place-items:center;background:#111;z-index:50}
+.cv-load{position:fixed;inset:0;display:grid;place-items:center;background:#f6f5f4;z-index:50}
 .cv-load .cv-mark{position:relative;width:56px;height:56px;opacity:0;animation:cvLoadIn .2s ease-out .15s forwards}
-.cv-load .cv-tile{position:relative;width:56px;height:56px;border-radius:12.25px;background:#0075de;overflow:hidden;box-shadow:0 8px 24px rgba(0,117,222,.35);animation:cvBreathe 1.8s ease-in-out infinite}
+.cv-load .cv-tile{position:relative;width:56px;height:56px;border-radius:12.25px;background:#0075de;overflow:hidden;box-shadow:0 8px 20px rgba(0,117,222,.25);animation:cvBreathe 1.8s ease-in-out infinite}
 .cv-load .cv-tile img{position:absolute;left:6.16px;top:19.5px;width:43.66px;height:18.13px;animation:cvWrite 1.8s cubic-bezier(.6,0,.3,1) infinite}
 .cv-load .cv-tile::after{content:"";position:absolute;inset:-20%;background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.35) 50%,transparent 60%);transform:translateX(-100%);animation:cvShine 1.8s ease-in-out infinite}
 .cv-load .cv-ring{position:absolute;inset:0;border-radius:14px;border:2px solid #0075de;animation:cvRing 1.8s ease-out infinite}
