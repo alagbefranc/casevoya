@@ -1,8 +1,12 @@
 import type { NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
+import { applyFraming } from "@/lib/security/framing";
 
 export async function proxy(request: NextRequest) {
-  return updateSession(request);
+  const response = await updateSession(request);
+  // Only a firm's embedded enquiry form may be framed by another site.
+  applyFraming(response.headers, request.nextUrl.pathname);
+  return response;
 }
 
 export const config = {

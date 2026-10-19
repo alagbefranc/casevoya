@@ -70,6 +70,10 @@ import {
 
 import { BookPage, type BookPageData } from "@/components/sheet/designer/book";
 import { BookMarkup } from "@/components/sheet/markup/book";
+import { EnquiryPage, type EnquiryPageData } from "@/components/sheet/designer/enquiry";
+import { EnquiryMarkup } from "@/components/sheet/markup/enquiry";
+import { EnquiryLive } from "@/components/sheet/enquiry-live";
+import { enquiryPageBase } from "@/modules/leads/enquiry-present";
 import { PRACTICE_NOTICE } from "@/modules/scheduling/format";
 import {
   BookDialog,
@@ -1781,6 +1785,77 @@ describe("Designer fidelity: public booking page", () => {
     );
     expect(html).toMatch(/<\/header><div class="card" role="note"[^>]*><b class="demo"[^>]*>Sample mode · practice records are marked sample<\/b>/);
     expect(html).toContain("Practice page: only your team can open it until your firm is verified. Bookings made here are sample records.");
+  });
+});
+
+describe("Designer fidelity: public enquiry page", () => {
+  const SCRIPT = '<script src="https://northline.casevoya.example/embed.js" data-form="enquiry"></script>';
+  const DESIGNER_ENQUIRY: EnquiryPageData = {
+    header: { logo: { src: "/assets/firms/northline-lockup.svg", alt: "Northline Immigration" } },
+    title: "Tell us what you need",
+    lead: "A licensed consultant reads every enquiry. We only ask for what we need to reply; don’t send passport details or documents yet.",
+    art: "/assets/generated/b2/client-welcome-160@2x.webp",
+    embed: { code: SCRIPT, note: "Same fields, same consent wording, source recorded as “Website form”." },
+    errors: {
+      title: "Fix 2 things",
+      items: [
+        { field: "n", label: "Enter your name" },
+        { field: "c", label: "Enter an email or phone number" },
+      ],
+      shown: false,
+    },
+    preferred: ["Email", "Phone"],
+    services: ["Visit", "Study", "Work", "Permanent residence", "Sponsor a family member", "Citizenship", "Not sure"],
+    consent: {
+      reply: "Northline may use these details to reply to my enquiry",
+      replyNote: "Required. We record when you agreed.",
+      marketing: "Send me Northline news ",
+      marketingNote: "Separate from replies about your enquiry. You can stop any time.",
+    },
+    submit: { label: "Send enquiry" },
+    footer: { firm: "Northline Immigration (fictional demo firm)", privacyHref: "/sheet/privacy" },
+  };
+  const captured = renderToStaticMarkup(createElement(EnquiryMarkup));
+
+  it("renders the enquiry page exactly as the captured Designer markup", () => {
+    const live = renderToStaticMarkup(createElement(EnquiryPage, { data: DESIGNER_ENQUIRY }));
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+    }
+    expect(live).toBe(captured);
+  });
+
+  it("the live page (enquiryPageBase + EnquiryLive) differs only by its documented additions", () => {
+    // Documented live-only additions, stripped here: the wrapper the page measures, data-live="1",
+    // field names and lengths, the hidden honeypot (#ew), and an empty, hidden error summary until
+    // there is something to fix. The firm's name stands where the Designer says "Northline".
+    const base = {
+      ...enquiryPageBase({ firmName: "Northline", logo: "/assets/firms/northline-lockup.svg", embedded: false, snippet: SCRIPT, practice: null }),
+      header: { logo: { src: "/assets/firms/northline-lockup.svg", alt: "Northline Immigration" } },
+      footer: { firm: "Northline Immigration (fictional demo firm)", privacyHref: "/sheet/privacy" },
+    };
+    const live = renderToStaticMarkup(createElement(EnquiryLive, { base, firmSlug: "northline", firmName: "Northline" }));
+    const stripped = live
+      .replace("<div><style", "<style")
+      .replace(/<\/div>$/, "")
+      .replace(' data-live="1"', "")
+      .replace(/ name="[a-z]+"/g, "")
+      .replace(/ maxLength="\d+"/g, "")
+      .replace(/<div aria-hidden="true" style="position:absolute[^"]*"><label for="ew">Leave this empty<\/label><input id="ew"[^>]*\/><\/div>/, "")
+      .replace(
+        '<div class="errsum" id="es" hidden="" tabindex="-1" role="alert"><b></b></div>',
+        '<div class="errsum" id="es" hidden="" tabindex="-1" role="alert"><b>Fix 2 things</b><ul><li><a href="#n">Enter your name</a></li><li><a href="#c">Enter an email or phone number</a></li></ul></div>',
+      );
+    expect(stripped).toBe(captured);
+  });
+
+  it("puts Share enquiry form on the Pipeline header only on a live page", () => {
+    const plain = renderToStaticMarkup(createElement(PipelineHeader, { data: { tab: "board", pills: [] } }));
+    const shared = renderToStaticMarkup(createElement(PipelineHeader, { data: { tab: "board", pills: [], share: true } }));
+    expect(plain).not.toContain("dlgShare");
+    expect(shared.replace(/<button class="btn s sm" type="button" data-open="dlgShare">.*?Share enquiry form<\/button>/, "")).toBe(plain);
   });
 });
 

@@ -5,12 +5,57 @@
  * marketing is a separate, optional box (CASL; PRD OPS-05, SEC-05).
  */
 
-/** Bump the version whenever either statement changes; stored with every answer. */
+/**
+ * Bump the version whenever either statement changes; stored with every answer. enquiry-v2: the
+ * hosted page and the embed name the firm, and the stored text is exactly what the visitor saw
+ * (enquiryStatements). The generic wording here is the version-1 text, kept for reference.
+ */
 export const ENQUIRY_CONSENT = {
-  version: "enquiry-v1",
+  version: "enquiry-v2",
   reply: "The firm may use these details to reply to my enquiry.",
   marketing: "Send me the firm’s news. Separate from replies about my enquiry; I can stop any time.",
 } as const;
+
+/** The two boxes as the visitor sees them on the firm's page, and the exact text stored with a tick. */
+export function enquiryStatements(firmName: string) {
+  const firm = firmName.replace(/\s+/g, " ").trim().slice(0, 200) || "The firm";
+  const marketingNote = "Separate from replies about your enquiry. You can stop any time.";
+  return {
+    reply: `${firm} may use these details to reply to my enquiry`,
+    replyNote: "Required. We record when you agreed.",
+    marketingLabel: `Send me ${firm} news `,
+    marketingNote,
+    /** Stored when the marketing box is ticked: its label and the line under it. */
+    marketing: `Send me ${firm} news. ${marketingNote}`,
+  };
+}
+
+/** Under this many milliseconds between the form opening and sending, it is treated as a script. */
+export const ENQUIRY_MIN_FORM_MS = 2500;
+
+const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+
+export function isFirmSlug(value: string): boolean {
+  return SLUG.test(value);
+}
+
+/** The firm's hosted enquiry page (/enquiry/<firm>) or its embedded form (/embed/enquiry/<firm>). */
+export function enquiryPagePath(pathname: string): { firm: string; embed: boolean } | null {
+  const match = /^\/(embed\/)?enquiry\/([^/]+)\/?$/.exec(pathname);
+  if (!match) return null;
+  const firm = match[2].toLowerCase();
+  return { firm: SLUG.test(firm) ? firm : "", embed: Boolean(match[1]) };
+}
+
+export type PublicEnquiryFirm = { firmName: string; firmSlug: string; practice: boolean; staff: boolean };
+
+/** What enquiry_public_firm returned, or null (unknown firm, no privacy notice, not open to this viewer). */
+export function parsePublicFirm(raw: unknown): PublicEnquiryFirm | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const row = raw as Record<string, unknown>;
+  if (typeof row.firm_name !== "string" || typeof row.firm_slug !== "string" || !SLUG.test(row.firm_slug)) return null;
+  return { firmName: row.firm_name, firmSlug: row.firm_slug, practice: row.practice === true, staff: row.staff === true };
+}
 
 export const ENQUIRY_SERVICES = ["Visit", "Study", "Work", "Permanent residence", "Sponsor a family member", "Citizenship", "Not sure"] as const;
 
@@ -27,7 +72,7 @@ export type EnquiryInput = {
   key: string;
 };
 
-export type EnquiryRefusal = "name_required" | "contact_required" | "email_invalid" | "phone_invalid" | "consent_required" | "invalid";
+export type EnquiryRefusal = "name_required" | "contact_required" | "email_invalid" | "phone_invalid" | "consent_required" | "too_fast" | "invalid";
 
 function str(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
@@ -41,6 +86,9 @@ export function readEnquiry(body: unknown): { input: EnquiryInput } | { error: E
   const raw = body as Record<string, unknown>;
   // Honeypot: a field people never see. Filled in means a script.
   if (typeof raw.website === "string" && raw.website.trim()) return { error: "invalid" };
+  // Form timer: how long the form was open before it was sent. People take longer than this.
+  if (typeof raw.elapsedMs !== "number" || !Number.isFinite(raw.elapsedMs) || raw.elapsedMs < 0) return { error: "invalid" };
+  if (raw.elapsedMs < ENQUIRY_MIN_FORM_MS) return { error: "too_fast" };
   const name = str(raw.name, 200);
   if (!name) return { error: "name_required" };
   const contact = str(raw.contact, 320);
@@ -76,6 +124,7 @@ export const ENQUIRY_MESSAGES: Record<EnquiryRefusal | "form_unavailable" | "enq
   email_invalid: "Enter a valid email address.",
   phone_invalid: "Enter a valid phone number.",
   consent_required: "Tick the box so the firm can reply to you.",
+  too_fast: "Please take a moment to check your details, then send again.",
   invalid: "Check the form and try again.",
   form_unavailable: "This form isn’t available.",
   enquiry_rate_limited: "Too many enquiries from here. Try again in a few minutes.",
