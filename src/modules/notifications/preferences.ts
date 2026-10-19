@@ -52,6 +52,7 @@ export const IN_APP_ROWS: readonly { kind: string; label: string; small: string 
   { kind: "booking_change", label: "A client moves or cancels a consultation", small: "From their portal, for the call’s host and the firm owner" },
   { kind: "deadline", label: "A deadline reminder comes due", small: "On matters you can open" },
   { kind: "support", label: "Casevoya support asks for access", small: "Firm owners only. Nothing opens until you approve" },
+  { kind: "intake", label: "A client sends a form or asks for a correction", small: "On matters you can open" },
 ];
 
 /** Quiet hours turned on from Settings use the Designer's 21:00–08:00. */

@@ -13,6 +13,7 @@ import { PolicyMissingAlert } from "./portal-policies";
 import { MatterDecisionsLive, MatterSubmissions, type MatterDecisionsData, type MatterSubmissionsData } from "./matter-government";
 import { MatterDocumentReview, type MatterDocumentReviewData } from "./vo-doc-review";
 import { DOC_REQUEST_DIALOG, DocRequestDialog, type DocRequestDialogData } from "./doc-request";
+import { MatterIntake, type MatterIntakeData } from "./matter-intake";
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
 import type { PersonEditData } from "@/modules/sheet/edit-person";
 import { ChatError, ChatView } from "@/components/messages/chat";
@@ -1856,6 +1857,8 @@ export type MatterPageData = {
   submissions?: MatterSubmissionsData | null;
   /** T037 and T038 letters and decisions; absent, the tab keeps the outcome-only view. */
   decisions?: MatterDecisionsData | null;
+  /** Intake delivery: the people's intake forms and answers; absent, the tab keeps its empty state. */
+  intake?: MatterIntakeData | null;
 };
 
 /** The open tab's content. */
@@ -1879,6 +1882,8 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
       return data.submissions ? <MatterSubmissions data={data.submissions} /> : <MatterTabEmpty tab={data.tab} />;
     case "decisions":
       return data.decisions ? <MatterDecisionsLive data={data.decisions} /> : <MatterDecisions outcome={data.outcome} confirm={data.confirmOutcome} />;
+    case "intake":
+      return data.intake ? <MatterIntake data={data.intake} /> : <MatterTabEmpty tab={data.tab} />;
     case "closure":
       return <MatterClosure closed={data.closure.closed} retention={data.closure.retention} panel={data.closure.panel} />;
     // Redesigned as a chat view at the owner's request (2026-10-18); the other tabs keep the Designer's markup.
