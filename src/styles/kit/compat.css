@@ -48,3 +48,12 @@
 /* The sidebar still scrolls (wheel, trackpad, touch, keyboard) but shows no scrollbar. */
 .side{scrollbar-width:none;-ms-overflow-style:none}
 .side::-webkit-scrollbar{display:none}
+
+/* A button waiting on the server (aria-busy, set by every Sheet action while it runs) shows a
+   spinner in place of its label and takes no further clicks, so a press never looks ignored. */
+.btn[aria-busy="true"],button[aria-busy="true"].btn{cursor:progress;pointer-events:none;color:transparent!important}
+.btn[aria-busy="true"]>*{visibility:hidden}
+.btn[aria-busy="true"]::after{content:"";position:absolute;inset:0;margin:auto;width:16px;height:16px;border-radius:50%;border:2px solid rgba(17,17,17,.2);border-top-color:#111;animation:cvBusy .7s linear infinite}
+.btn.p[aria-busy="true"]::after,.btn.dk[aria-busy="true"]::after{border-color:rgba(255,255,255,.35);border-top-color:#fff}
+@keyframes cvBusy{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.btn[aria-busy="true"]::after{animation-duration:1.6s}}
