@@ -483,7 +483,7 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       const palette = target.closest<HTMLElement>("[data-palette]");
       if (palette && root.contains(palette)) {
         event.preventDefault();
-        openPalette(root);
+        openPalette(root, (href) => router.push(href));
         return;
       }
       // Edit details: opened from a person (Clients page person tab, a matter People card), saved through RLS.
@@ -1106,40 +1106,107 @@ function armFuse(button: HTMLElement) {
   void done;
 }
 
-function openPalette(root: HTMLElement) {
+/**
+ * The palette's label for a link: a tile's aria-label, or a menu item's own label `<span>`, so the
+ * tile's shortcut hint (`<kbd>`), a count badge (`.k`) and avatar initials stay out of it.
+ */
+function paletteLabel(link: HTMLAnchorElement): string {
+  const named = link.getAttribute("aria-label")?.trim() || link.querySelector(":scope > span:not([class])")?.textContent?.trim();
+  if (named) return named;
+  const copy = link.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll("kbd, .tip, .sr, .k, .av, .ava, svg").forEach((node) => node.remove());
+  return copy.textContent?.replace(/\s+/g, " ").trim() || "Open";
+}
+
+function openPalette(root: HTMLElement, go: (href: string) => void) {
   let scrim = root.querySelector<HTMLElement>(".scrim");
   if (!scrim) {
     scrim = document.createElement("div");
     scrim.className = "scrim";
-    const links = [...root.querySelectorAll<HTMLAnchorElement>(".tree a[href], .nav a[href], .tiles a[href]")]
-      .filter((link) => link.getAttribute("href") && link.getAttribute("href") !== "#")
-      .slice(0, 24);
-    scrim.innerHTML = `<div class="palette" role="dialog" aria-label="Search"><input placeholder="Search matters, people and actions" aria-label="Search"><ul>${links
-      .map((link) => `<li data-u="${link.getAttribute("href")}">${link.textContent?.trim() || "Open"}</li>`)
-      .join("")}</ul></div>`;
+    const seen = new Set<string>();
+    const entries: { href: string; label: string }[] = [];
+    // Menu items first, then the shortcut tiles, so a place keeps its menu name and link
+    // (the Documents tile opens one matter's documents; the Invoices tile is Finance).
+    const links = [...root.querySelectorAll<HTMLAnchorElement>(".nav a[href], .tree a[href]"), ...root.querySelectorAll<HTMLAnchorElement>(".tiles a[href]")];
+    for (const link of links) {
+      const href = link.getAttribute("href");
+      if (!href || href === "#") continue;
+      const label = paletteLabel(link);
+      // The sidebar repeats some places (a tile and a menu item): list each once.
+      const key = label.toLowerCase();
+      if (seen.has(key) || seen.has(href)) continue;
+      seen.add(key);
+      seen.add(href);
+      entries.push({ href, label });
+    }
+    const palette = document.createElement("div");
+    palette.className = "palette";
+    palette.setAttribute("role", "dialog");
+    palette.setAttribute("aria-label", "Search");
+    const input = document.createElement("input");
+    input.placeholder = "Search matters, people and actions";
+    input.setAttribute("aria-label", "Search");
+    const list = document.createElement("ul");
+    for (const entry of entries) {
+      const item = document.createElement("li");
+      item.dataset.u = entry.href;
+      item.textContent = entry.label;
+      list.append(item);
+    }
+    palette.append(input, list);
+    scrim.append(palette);
     root.append(scrim);
+
+    const close = () => scrim?.classList.remove("on");
+    const visible = () => [...list.querySelectorAll<HTMLElement>("li")].filter((item) => !item.hidden);
+    const mark = (item: HTMLElement | undefined) => {
+      list.querySelectorAll("li.on").forEach((node) => node.classList.remove("on"));
+      if (!item) return;
+      item.classList.add("on");
+      item.scrollIntoView({ block: "nearest" });
+    };
+    const open = (item: HTMLElement | undefined) => {
+      const href = item?.dataset.u;
+      if (!href) return;
+      close();
+      go(href);
+    };
     scrim.addEventListener("click", (event) => {
-      if (event.target === scrim) scrim?.classList.remove("on");
+      if (event.target === scrim) close();
     });
-    scrim.querySelectorAll<HTMLElement>("li").forEach((item) => {
-      item.addEventListener("click", () => {
-        const href = item.dataset.u;
-        if (href) window.location.assign(href);
-      });
+    list.addEventListener("click", (event) => open((event.target as HTMLElement).closest<HTMLElement>("li") ?? undefined));
+    list.addEventListener("mousemove", (event) => {
+      const item = (event.target as HTMLElement).closest<HTMLElement>("li");
+      if (item && !item.classList.contains("on")) mark(item);
     });
-    const input = scrim.querySelector("input");
-    input?.addEventListener("input", () => {
+    input.addEventListener("input", () => {
       const q = input.value.trim().toLowerCase();
-      scrim?.querySelectorAll<HTMLElement>("li").forEach((item) => {
+      list.querySelectorAll<HTMLElement>("li").forEach((item) => {
         item.hidden = Boolean(q) && !item.textContent.toLowerCase().includes(q);
       });
+      mark(visible()[0]);
     });
-    input?.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") scrim?.classList.remove("on");
+    input.addEventListener("keydown", (event) => {
+      const items = visible();
+      const at = items.findIndex((item) => item.classList.contains("on"));
+      if (event.key === "Escape") close();
+      else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const step = event.key === "ArrowDown" ? 1 : -1;
+        mark(items[(at + step + items.length) % items.length]);
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        open(items[Math.max(at, 0)]);
+      }
     });
   }
+  const input = scrim.querySelector("input");
+  if (input) {
+    input.value = "";
+    input.dispatchEvent(new Event("input"));
+  }
   scrim.classList.add("on");
-  window.setTimeout(() => scrim?.querySelector("input")?.focus(), 30);
+  window.setTimeout(() => input?.focus(), 30);
 }
 
 function applyState(root: HTMLElement, page: string, state: string) {
