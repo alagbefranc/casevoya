@@ -3061,8 +3061,18 @@ describe("Designer fidelity: Lead pipeline", () => {
       timeZone: "America/Toronto",
       now,
     });
-    const strip = (html: string) => html.replace(/ data-(org|stage-id|kind|version|href)="[^"]*"/g, "");
-    const real = strip(renderToStaticMarkup(createElement(SheetPipeline, { data: built.data })));
+    // Also documented live-only: a ‹ › button that can't move its card is disabled with a title
+    // (New's back, Converted's both, Lost's forward, the last column's forward).
+    const strip = (html: string) =>
+      html
+        .replace(/ data-(org|stage-id|kind|version|href)="[^"]*"/g, "")
+        .replace(/ disabled="" title="(Already in the first stage it can be in|It can’t move forward from this stage)"/g, "");
+    const rendered = renderToStaticMarkup(createElement(SheetPipeline, { data: built.data }));
+    // New: back disabled; Converted: both; Lost: forward (it goes back to an open stage).
+    expect(rendered.match(/disabled="" title="Already in the first stage it can be in"/g)?.length).toBe(
+      (built.data.columns[0].cards.length) + (built.data.columns[6].cards.length),
+    );
+    const real = strip(rendered);
     const designer = renderToStaticMarkup(
       createElement(SheetPipeline, {
         data: {

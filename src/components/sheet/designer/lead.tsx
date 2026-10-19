@@ -12,6 +12,7 @@
  */
 import type { ReactNode } from "react";
 import { Icon, Pair, Sep } from "./frame";
+import { LEAD_SOURCES } from "./pipeline";
 
 type Attrs = Record<string, string>;
 type Text = string | { left: string; right: string };
@@ -154,7 +155,8 @@ export function SheetLead({ data }: { data: LeadData }) {
           </h2>
           <div className={"tw"} role={"region"} aria-label={"Follow-ups"} tabIndex={0}>
             <table className={"t"}>
-              <caption className={"sr"}>{"Follow-ups"}</caption>
+              {/* Live: the panel's heading already names the table (the region keeps its label). */}
+              {live ? null : <caption className={"sr"}>{"Follow-ups"}</caption>}
               <thead>
                 <tr>
                   <th scope={"col"}>{"Task"}</th>
@@ -688,6 +690,10 @@ export type EditLeadDialogData = {
   };
   maxBirthDate: string;
   marketing: { granted: boolean; data: Attrs };
+  /** Where the lead came from: staff-recorded sources can change; system-recorded ones are shown, fixed. */
+  source?: { value: string; label: string; editable: boolean } | null;
+  /** Reply consent (CASL), recorded as a new answer when it changes. */
+  reply?: { granted: boolean; data: Attrs } | null;
 };
 
 function EditField({ id, label, value, type = "text", hint, max }: { id: string; label: string; value: string; type?: string; hint?: string; max?: string }) {
@@ -743,9 +749,46 @@ export function EditLeadDialog({ data }: { data: EditLeadDialogData }) {
           <EditField id={"edL"} label={"Language"} value={v.language} />
           <EditField id={"edD"} label={"Date of birth"} value={v.dateOfBirth} type={"date"} hint={"Optional. Helps tell people with the same name apart."} max={data.maxBirthDate} />
           <EditField id={"edF"} label={"Proposed fee (CAD)"} value={v.fee} type={"number"} hint={"The firm’s own fee."} />
+          {data.source ? (
+            <div className={"fld"}>
+              <label htmlFor={"edSrc"}>{"Source"}</label>
+              {data.source.editable ? null : (
+                <small className={"hint"} id={"edSrc-h"}>
+                  {"Recorded when the lead came in."}
+                </small>
+              )}
+              <select
+                className={"sel"}
+                id={"edSrc"}
+                defaultValue={data.source.value}
+                disabled={data.source.editable ? undefined : true}
+                aria-describedby={data.source.editable ? undefined : "edSrc-h"}
+                data-source-was={data.source.value}
+              >
+                {data.source.editable ? (
+                  LEAD_SOURCES.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))
+                ) : (
+                  <option value={data.source.value}>{data.source.label}</option>
+                )}
+              </select>
+            </div>
+          ) : null}
           <EditField id={"edSd"} label={"Source detail"} value={v.sourceDetail} hint={"For example, who referred them."} />
           <EditField id={"edT"} label={"Tags"} value={v.tags} hint={"Separate tags with commas."} />
         </div>
+        {data.reply ? (
+          <label className={"check"}>
+            <input type={"checkbox"} id={"edR"} defaultChecked={data.reply.granted} {...data.reply.data} />
+            <span>
+              {"They agreed we may use these details to reply"}
+              <small>{"Replies about this enquiry only. A change is recorded as a new answer, with the date and who recorded it."}</small>
+            </span>
+          </label>
+        ) : null}
         <label className={"check"}>
           <input type={"checkbox"} id={"edM"} defaultChecked={data.marketing.granted} {...data.marketing.data} />
           <span>

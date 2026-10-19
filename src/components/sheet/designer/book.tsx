@@ -38,6 +38,9 @@ export type BookPageData = {
     zone: { value: string; options: string[] };
     phone: boolean;
     more: boolean;
+    /** Earlier times: back from "Later times". */
+    earlier?: boolean;
+    onEarlier?: () => void;
     /** Shown in place of the slot grid when there is nothing to choose. */
     empty?: string | null;
     error?: string | null;
@@ -111,10 +114,19 @@ export function BookPage({ data }: { data: BookPageData }) {
                     ))}
                   </div>
                 )}
-                {live?.more ? (
-                  <button className={"btn s sm"} type={"button"} style={{ marginTop: "10px" }} onClick={live.onMore}>
-                    {"Later times"}
-                  </button>
+                {live?.earlier || live?.more ? (
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
+                    {live.earlier ? (
+                      <button className={"btn s sm"} type={"button"} onClick={live.onEarlier}>
+                        {"Earlier times"}
+                      </button>
+                    ) : null}
+                    {live.more ? (
+                      <button className={"btn s sm"} type={"button"} onClick={live.onMore}>
+                        {"Later times"}
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
               </fieldset>
               {live ? (
