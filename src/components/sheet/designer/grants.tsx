@@ -4,7 +4,10 @@
  * New access grant dialog (#dlgG). Same DOM, classes and order; values come from the firm.
  *
  * Live-only additions are data attributes: `data-grant-create` and `data-org` on Create grant,
- * `data-person` on each person option and `data-matter`/`data-subject` on each scope option.
+ * `data-person` on each person option and `data-matter`/`data-subject` on each scope option;
+ * `data-grant-row` on an active grant's row, which opens the live-only Revoke dialog (#dlgGX,
+ * built from the Designer's own `.dlg`/`.fld`/`.btn` classes). A grant can't be edited in place:
+ * the database has create and revoke only, so the dialog says to revoke and create a new one.
  * Support access has no backend yet (SEC-09 is not built): the tab shows no request, an honest
  * empty history, and the capture's note that there is no hidden way in.
  */
@@ -16,7 +19,16 @@ export type GrantsTab = "grants" | "support" | "limits";
 
 type Text = string | { left: string; right: string };
 
-export type GrantRow = { who: string; canSee: Text; why: string; grantedBy: string; expires: { num: string } | string; state: MatterBadge };
+export type GrantRow = {
+  who: string;
+  canSee: Text;
+  why: string;
+  grantedBy: string;
+  expires: { num: string } | string;
+  state: MatterBadge;
+  /** Live only: an active grant's row opens the Revoke dialog (#dlgGX). */
+  attrs?: Record<string, string>;
+};
 
 export type SupportRequest = {
   alert: { title: string; parts: string[] } | null;
@@ -37,6 +49,8 @@ export type GrantsData = {
 
 export type GrantDialogData = {
   organizationId?: string;
+  /** Live only: the firm's today (YYYY-MM-DD) so the form checks the end date before any step-up. */
+  today?: string;
   people: { label: string; personId?: string }[];
   scopes: { label: Text; matterId?: string; subjectId?: string }[];
 };
@@ -156,7 +170,7 @@ function Grants({ data }: { data: GrantsData }) {
             </thead>
             <tbody>
               {data.grants.map((row, index) => (
-                <tr key={index}>
+                <tr key={index} {...row.attrs}>
                   <td>{row.who}</td>
                   <td>
                     <Show text={row.canSee} />
@@ -339,6 +353,38 @@ export function SheetGrants({ data }: { data: GrantsData }) {
   return <Grants data={data} />;
 }
 
+/** Live only: Revoke access grant (#dlgGX), opened from an active grant's row. */
+export function GrantRevokeDialog({ organizationId }: { organizationId: string }) {
+  return (
+    <dialog className={"dlg"} id={"dlgGX"} aria-labelledby={"dlgGXH"}>
+      <div className={"dh"}>
+        <h2 id={"dlgGXH"}>{"Revoke access grant"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={"dlgGX"}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <p id={"gxW"} style={{ marginBottom: "12px" }}></p>
+        <div className={"fld"}>
+          <label htmlFor={"gxR"}>{"Reason"}</label>
+          <small className={"hint"} id={"gxR-h"}>
+            {"Required. Kept in the audit trail. To change the end date or what they can see, revoke this grant and create a new one."}
+          </small>
+          <input className={"inp"} id={"gxR"} type={"text"} defaultValue={""} placeholder={""} aria-describedby={"gxR-h"} />
+        </div>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={"dlgGX"}>
+          {"Cancel"}
+        </button>
+        <button className={"btn p"} data-grant-revoke={"1"} data-org={organizationId}>
+          {"Revoke grant"}
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
 /** The Designer's New access grant dialog. It sits after the frame, beside the scrim. */
 export function GrantDialog({ data }: { data: GrantDialogData }) {
   return (
@@ -394,6 +440,7 @@ export function GrantDialog({ data }: { data: GrantDialogData }) {
           data-toast-kind={"ok"}
           data-grant-create={data.organizationId ? "1" : undefined}
           data-org={data.organizationId}
+          data-today={data.today}
         >
           {"Create grant"}
         </button>

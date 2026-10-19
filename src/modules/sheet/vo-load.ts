@@ -13,6 +13,7 @@ import {
   type ApprovedSourceRow,
   type VoDraftRow,
   type VoNames,
+  type VoReadingAuditRow,
   type VoRunRow,
   type VoSource,
   type VoViewer,
@@ -221,6 +222,7 @@ export async function loadSheetAi(staff: SheetStaff, tab: AiTab) {
   let runs: VoRunRow[] = [];
   let drafts: VoDraftRow[] = [];
   let approved: ApprovedSourceRow[] = [];
+  let readingsAudit: VoReadingAuditRow[] = [];
   let nm: VoNames = { matter: () => "Matter", reference: () => "—", person: () => "—" };
   if (tab === "runs") {
     const { data } = await supabase.from("vo_runs").select(RUN_COLUMNS).eq("organization_id", org).order("created_at", { ascending: false }).limit(100);
@@ -237,15 +239,38 @@ export async function loadSheetAi(staff: SheetStaff, tab: AiTab) {
     nm = await names(supabase, org, rows.map((row) => row.matter_id), rows.map((row) => row.user_id));
   }
   if (tab === "audit") {
-    const { data } = await supabase.from("vo_drafts").select(DRAFT_COLUMNS).eq("organization_id", org).order("created_at", { ascending: false }).limit(100);
+    const [{ data }, docs] = await Promise.all([
+      supabase.from("vo_drafts").select(DRAFT_COLUMNS).eq("organization_id", org).order("created_at", { ascending: false }).limit(100),
+      // Document readings are drafts too (vo_doc_drafts): include them, with their proposal decisions.
+      supabase
+        .from("vo_doc_drafts")
+        .select("id, matter_id, title, status, reviewed_by, reviewed_at, created_at")
+        .eq("organization_id", org)
+        .order("created_at", { ascending: false })
+        .limit(100),
+    ]);
     const rows = (data ?? []) as DraftDb[];
     drafts = rows.map((row) => draftRow(row, new Map()));
-    nm = await names(supabase, org, rows.map((row) => row.matter_id), rows.map((row) => row.reviewed_by ?? ""));
+    readingsAudit = (docs.data ?? []).map((row) => ({
+      id: row.id,
+      matterId: row.matter_id,
+      title: row.title,
+      status: String(row.status),
+      reviewedBy: row.reviewed_by,
+      reviewedAt: row.reviewed_at,
+      createdAt: row.created_at,
+    }));
+    nm = await names(
+      supabase,
+      org,
+      [...rows.map((row) => row.matter_id), ...readingsAudit.map((row) => row.matterId ?? "")].filter(Boolean),
+      [...rows.map((row) => row.reviewed_by ?? ""), ...readingsAudit.map((row) => row.reviewedBy ?? "")],
+    );
   }
   if (tab === "sources") {
     const { data } = await supabase
       .from("official_sources")
-      .select("title, publisher, review_status, change_state, next_review_at, canonical_url")
+      .select("title, publisher, review_status, change_state, next_review_at, canonical_url, last_checked_at, last_attempt_result")
       .or(`organization_id.is.null,organization_id.eq.${org}`)
       .neq("discovery_status", "archived")
       .order("title", { ascending: true })
@@ -257,9 +282,11 @@ export async function loadSheetAi(staff: SheetStaff, tab: AiTab) {
       changeState: String(row.change_state),
       nextReviewAt: row.next_review_at,
       canonicalUrl: row.canonical_url,
+      lastCheckedAt: row.last_checked_at,
+      lastResult: row.last_attempt_result ? String(row.last_attempt_result) : null,
     }));
   }
-  return { chrome, data: aiPage({ tab, viewer: base.viewer, settings: base.settings, runs, drafts, sources: approved, names: nm }) };
+  return { chrome, data: aiPage({ tab, viewer: base.viewer, settings: base.settings, runs, drafts, sources: approved, names: nm, readings: readingsAudit }) };
 }
 
 /** For the matter Messages composer: whether Vo can draft here, and drafts waiting on its threads. */

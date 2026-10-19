@@ -124,7 +124,7 @@ export function SheetSettingsFirm({ data }: { data: FirmData }) {
       <div className={"ph rv"} style={i(0)}>
         <div>
           <h1 className={"display"}>{"Firm"}</h1>
-          <p>{`${data.firmName}’s details. The organisation ID is the boundary for all its data (ORG-01).`}</p>
+          <p>{`${data.firmName}’s details. The organisation ID is the boundary for all its data.`}</p>
         </div>
       </div>
       <section className={"panel rv"} style={i(1)}>

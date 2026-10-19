@@ -169,6 +169,8 @@ export type SheetQuery = {
   owner?: string;
   /** A Vo draft or document reading to open (matter Messages and Documents tabs). */
   vo?: string;
+  /** Where the page was opened from ("settings": Vo and AI reached from Settings › AI keeps that trail). */
+  from?: string;
 };
 
 export function sheetVariant(page: string, query: SheetQuery): string {

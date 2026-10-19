@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
+import { privacyCloseProblem } from "./checks";
 import { complianceError, readDate, readDays } from "./format";
 
 /**
@@ -110,8 +111,8 @@ export async function closePrivacyRequest(input: {
   consentRecordId: string | null;
 }): Promise<Result> {
   if (!isUuid(input.requestId)) return { error: "Refresh the page and try again." };
-  if (!["fulfilled", "partly_fulfilled", "refused", "withdrawn"].includes(input.outcome)) return { error: "Choose an outcome." };
-  if (input.outcome === "refused" && input.refusalReason.trim().length < 3) return { error: "Give the reason for refusing." };
+  const problem = privacyCloseProblem(input);
+  if (problem) return { error: problem.error };
   const auth = await session(input.organizationId);
   if (!auth.supabase) return { error: auth.error ?? "Sign in first." };
   const blank = (value: string) => (value.trim() ? value.trim() : null);

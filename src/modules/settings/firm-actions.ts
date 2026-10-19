@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isUuid } from "@/lib/tenant/context";
 import { FIRM_LOGO_BUCKET, ownFirmLogoKey } from "@/modules/firm-onboarding/firm-logo";
-import { firmDetailChanges, officeInput, timezoneName } from "@/modules/settings/firm-input";
+import { firmDetailChanges, officeInput, sameOffice, timezoneName } from "@/modules/settings/firm-input";
 import type { Json } from "@/types/database.types";
 
 /**
@@ -25,6 +25,8 @@ function refused(message: string): { error: string; stepUp?: boolean } {
   if (/main office cannot be removed/i.test(message)) return { error: "The main office can’t be removed." };
   if (/office address is incomplete/i.test(message)) return { error: "Add the office name, street address and city." };
   if (/office not found/i.test(message)) return { error: "That office isn’t on file." };
+  if (/office is already saved/i.test(message)) return { error: "That office is already saved. Edit it from the list instead." };
+  if (/country code/i.test(message)) return { error: "Enter the country as its two-letter ISO code, like CA, US or GB." };
   if (/accent must be a hex colour/i.test(message)) return { error: "Enter the colour as # and six letters or digits, like #0A4B93." };
   if (/organizations_branding_logo_ck/i.test(message)) return { error: "Upload your logo again." };
   if (/staff access denied/i.test(message)) return { error: "You can’t make that change." };
@@ -56,6 +58,14 @@ export async function saveFirmOffice(input: { organizationId: string; officeId: 
   if ("error" in office) return office;
   const session = await signedIn(input.organizationId);
   if ("error" in session) return session;
+  if (input.officeId === null) {
+    // Saving the same new office twice (a second click, or the dialog reopened with its values) adds nothing.
+    const { data: saved } = await session.supabase
+      .from("organization_offices")
+      .select("id, label, address_line, locality")
+      .eq("organization_id", input.organizationId);
+    if ((saved ?? []).some((row) => sameOffice(row, office))) return { error: "That office is already saved. Edit it from the list instead." };
+  }
   const { error } = await session.supabase.rpc("save_firm_office", {
     p_organization_id: input.organizationId,
     p_office_id: input.officeId,

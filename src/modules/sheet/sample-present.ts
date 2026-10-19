@@ -1,5 +1,6 @@
 /** Pure helpers for the sample-mode page. */
 import type { SampleStep } from "@/components/sheet/designer/sample-case";
+import { licenceState } from "@/modules/sheet/licence-state";
 
 /** The six sample proofs in the Designer's order and words. */
 export function sampleSteps(matterId: string | null, firm: string, applicant: string, done: Set<string>): SampleStep[] {
@@ -15,9 +16,11 @@ export function sampleSteps(matterId: string | null, firm: string, applicant: st
 }
 
 /** How the licence check reads on the sample panel. */
-export function licenceCheckWords(status: string): string {
-  if (status === "verified") return "passed";
-  if (status === "declared" || status === "pending_review") return "waiting for review";
+export function licenceCheckWords(status: string, latestResult: string | null = null): string {
+  const state = licenceState({ status, latestResult });
+  if (state === "verified") return "verified";
+  if (state === "needs_review") return "needs review";
+  if (state === "declared") return "declared";
   return "needs attention";
 }
 

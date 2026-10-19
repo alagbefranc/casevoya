@@ -64,6 +64,7 @@ import { bindGovControls } from "./gov-acts";
 import {
   openRedaction,
   reopenComplianceDialog,
+  fillLinkedName,
   runComplaintNew,
   runComplaintStep,
   runComplianceSettings,
@@ -85,7 +86,8 @@ import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-
 import { policyDialogId, restorePolicyDraft, runPublishPolicy } from "./portal-policy-act";
 import { POLICY_KINDS, policyKindForDialog } from "@/modules/portal-policies/defaults";
 import { restoreStaffInvite, runStaffInvite, runStaffResend, runStaffRevoke } from "./staff-invite-act";
-import { reopenGrantDialog, runGrantCreate } from "./grants-acts";
+import { openGrantRevoke, reopenGrantDialog, runGrantCreate, runGrantRevoke } from "./grants-acts";
+import { runAutomationSave } from "./automations-acts";
 import { mountIntakeBuilder } from "./intake-builder-acts";
 import { runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
 import { runVoDocAccept, runVoDocDiscard, runVoDocReject, runVoRead } from "./vo-doc-acts";
@@ -422,6 +424,37 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (grantCreate.getAttribute("aria-busy") === "true") return;
         grantCreate.setAttribute("aria-busy", "true");
         void runGrantCreate(grantCreate, router).finally(() => grantCreate.removeAttribute("aria-busy"));
+        return;
+      }
+      // A live button that leads to another page (`data-go`), e.g. Staff › More → Team and seats.
+      const go = target.closest<HTMLElement>("button[data-go]");
+      if (go?.dataset.go && root.contains(go) && go.dataset.go.startsWith("/")) {
+        event.preventDefault();
+        router.push(go.dataset.go);
+        return;
+      }
+      // Automations: Reminder settings' Save (the firm owner's reminder days and quiet hours).
+      const autoSave = target.closest<HTMLElement>("[data-auto-save]");
+      if (autoSave && root.contains(autoSave)) {
+        event.preventDefault();
+        if (autoSave.getAttribute("aria-busy") === "true") return;
+        autoSave.setAttribute("aria-busy", "true");
+        void runAutomationSave(autoSave, router).finally(() => autoSave.removeAttribute("aria-busy"));
+        return;
+      }
+      // Access grants: an active grant's row opens Revoke; Revoke grant asks the database.
+      const grantRevoke = target.closest<HTMLElement>("[data-grant-revoke]");
+      if (grantRevoke && root.contains(grantRevoke)) {
+        event.preventDefault();
+        if (grantRevoke.getAttribute("aria-busy") === "true") return;
+        grantRevoke.setAttribute("aria-busy", "true");
+        void runGrantRevoke(grantRevoke, router).finally(() => grantRevoke.removeAttribute("aria-busy"));
+        return;
+      }
+      const grantRow = target.closest<HTMLElement>("[data-grant-row]");
+      if (grantRow && root.contains(grantRow) && root.querySelector("dialog#dlgGX")) {
+        event.preventDefault();
+        openGrantRevoke(grantRow, root, openDialog);
         return;
       }
       // The Staff tab: Invite staff opens the Designer's dialog; Send, Resend and revoke go to the database.
@@ -842,9 +875,11 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
           applyFilters();
         }
       }
-      const row = target.closest<HTMLElement>("tr[data-href], #ql .li[data-href]");
+      const row = target.closest<HTMLElement>("tr[data-href], #ql .li[data-href], #content .li[data-href]");
       if (row?.dataset.href && root.contains(row) && !target.closest("a, button, .ck")) {
-        router.push(row.dataset.href);
+        // An /api/ address (an email preview) is a whole page of its own, not a Sheet route.
+        if (row.dataset.href.startsWith("/api/")) window.location.assign(row.dataset.href);
+        else router.push(row.dataset.href);
       }
     }, listen);
 
@@ -1045,9 +1080,11 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     const grantDialog = root.querySelector<HTMLDialogElement>("dialog#dlgG");
     if (grantDialog?.querySelector("[data-grant-create]")) {
       window.setTimeout(() => reopenGrantDialog(root, openDialog), 300);
-      grantDialog.addEventListener("close", () => {
-        if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
-      }, listen);
+      for (const dialog of [grantDialog, root.querySelector<HTMLDialogElement>("dialog#dlgGX")]) {
+        dialog?.addEventListener("close", () => {
+          if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
+        }, listen);
+      }
     }
 
     const newTask = root.querySelector<HTMLDialogElement>("dialog#dlgTask");
@@ -1070,6 +1107,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     if (page === "lead") wireLead(root, router, ac.signal, openDialog);
     // ?dlg=compliance (back from step-up) reopens the privacy or complaints dialog with what was typed.
     if (dialogParam === "compliance") window.setTimeout(() => reopenComplianceDialog(root, openDialog), 300);
+    // Record a complaint / privacy request: linking a client record fills in the name when it's empty.
+    for (const [dialogId, linkId, nameId] of [["dlgC", "cP", "cW"], ["dlgPR", "prP", "prN"]] as const) {
+      const linkDialog = root.querySelector<HTMLDialogElement>(`dialog#${dialogId}`);
+      linkDialog?.addEventListener("change", (event) => {
+        if ((event.target as HTMLElement | null)?.id === linkId) fillLinkedName(linkDialog, linkId, nameId);
+      }, listen);
+    }
     // ?dlg=review&doc= (back from step-up) reopens the document review with what was typed.
     if (root.querySelector("dialog#dlgDocRev")) window.setTimeout(() => reopenDocReview(root, openDialog), 300);
 

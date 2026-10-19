@@ -14,8 +14,15 @@ export type AutomationsTab = "builder" | "runs";
 type Text = string | { left: string; right: string };
 
 export type AutomationStep = { icon: string; title: string; text: Text; badge: { tone?: "chg"; label: string }; warn?: boolean };
-export type AutomationRun = { title: Text; note: Text; state: MatterBadge; when: string };
-export type AutomationSetting = { label: string; value: string; icon?: string; person?: SidebarPerson };
+/** `href` (live only): the run's matter. */
+export type AutomationRun = { title: Text; note: Text; state: MatterBadge; when: string; href?: string };
+/** `attrs` (live only): a setting the firm owner can change opens #dlgAuto. */
+export type AutomationSetting = { label: string; value: string; icon?: string; person?: SidebarPerson; attrs?: Record<string, string> };
+
+/** Live only: the firm owner's Reminder settings dialog. */
+export const AUTOMATION_DIALOG = "dlgAuto";
+
+export type AutomationsDialogData = { organizationId: string; days: string; quietStart: string; quietEnd: string };
 
 export type AutomationsData = {
   tab: AutomationsTab;
@@ -114,7 +121,7 @@ export function SheetAutomations({ data }: { data: AutomationsData }) {
           </div>
         ) : (
           data.runs.map((run, index) => (
-            <div key={index} className={"li rv"} style={{ "--i": String(index + 1) } as React.CSSProperties}>
+            <div key={index} className={"li rv"} style={{ "--i": String(index + 1) } as React.CSSProperties} data-href={run.href}>
               <div>
                 <b>
                   <Show text={run.title} />
@@ -168,6 +175,53 @@ export function SheetAutomations({ data }: { data: AutomationsData }) {
   );
 }
 
+/**
+ * Live only: Reminder settings (#dlgAuto), built from the Designer's dialog parts. The firm owner
+ * changes the firm's reminder days (public.set_firm_reminder_offsets) and quiet hours
+ * (public.set_quiet_hours); both ask for a recent step-up. New deadlines use the new days.
+ */
+export function AutomationsDialog({ data }: { data: AutomationsDialogData }) {
+  return (
+    <dialog className={"dlg"} id={AUTOMATION_DIALOG} aria-labelledby={"dlgAutoH"}>
+      <div className={"dh"}>
+        <h2 id={"dlgAutoH"}>{"Reminder settings"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={AUTOMATION_DIALOG}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <div className={"fld"}>
+          <label htmlFor={"auD"}>{"Reminder days before a deadline"}</label>
+          <small className={"hint"}>{"Whole days, separated by commas, like 14, 7, 3, 1. Deadlines saved from now on use them."}</small>
+          <input className={"inp"} id={"auD"} type={"text"} defaultValue={data.days} inputMode={"numeric"} />
+        </div>
+        <div className={"g2"}>
+          <div className={"fld"}>
+            <label htmlFor={"auQS"}>{"Quiet hours start"}</label>
+            <input className={"inp"} id={"auQS"} type={"time"} defaultValue={data.quietStart} />
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"auQE"}>{"Quiet hours end"}</label>
+            <input className={"inp"} id={"auQE"} type={"time"} defaultValue={data.quietEnd} />
+          </div>
+        </div>
+        <p className={"why"}>
+          <Icon name={"moon"} cls={"ic s"} />
+          {"Routine reminders wait until quiet hours end; a deadline due within a day still gets its reminder. Leave both times empty for none."}
+        </p>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={AUTOMATION_DIALOG}>
+          {"Cancel"}
+        </button>
+        <button className={"btn p"} data-auto-save={"1"} data-org={data.organizationId}>
+          {"Save"}
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
 /** The Settings column, in place of the calendar column. */
 export function AutomationsSettings({ data }: { data: AutomationsData }) {
   return (
@@ -175,7 +229,7 @@ export function AutomationsSettings({ data }: { data: AutomationsData }) {
       <h4>{"Settings"}</h4>
       <div className={"rank"} style={{ fontSize: "13.5px" }}>
         {data.settings.map((setting) => (
-          <div key={setting.label}>
+          <div key={setting.label} {...setting.attrs} style={setting.attrs ? { cursor: "pointer" } : undefined}>
             {setting.icon ? (
               <>
                 <Icon name={setting.icon} cls={"ic s"} />

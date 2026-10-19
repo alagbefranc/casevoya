@@ -29,6 +29,8 @@ export type ComplaintRowData = {
   response_due_on: string | null;
   assignee_membership_id: string;
   acknowledged_on: string | null;
+  /** Optional; older loaders don't read it. */
+  ack_note?: string | null;
   reviewed_at: string | null;
   reviewed_by: string | null;
   evidence_note: string | null;
@@ -90,25 +92,33 @@ function short(text: string, max = 60): string {
 }
 
 export function complaintSteps(row: ComplaintRowData, ctx: ComplaintsContext): Step[] {
+  const ackNote = row.ack_note?.trim() ? [short(row.ack_note)] : [];
   const ack: Line | undefined = row.acknowledged_on
     ? row.ack_due_on
-      ? [dayMonth(row.acknowledged_on), row.acknowledged_on <= row.ack_due_on ? "within the firm’s target" : "after the firm’s target"]
-      : dayMonth(row.acknowledged_on)
+      ? [dayMonth(row.acknowledged_on), row.acknowledged_on <= row.ack_due_on ? "within the firm’s target" : "after the firm’s target", ...ackNote]
+      : [dayMonth(row.acknowledged_on), ...ackNote]
     : row.ack_due_on
       ? `Due ${dayMonth(row.ack_due_on)}`
       : undefined;
+  const reviewed = row.evidence_note?.trim() ? `Evidence reviewed: ${short(row.evidence_note)}` : "No evidence note";
   const steps: { title: string; done: boolean; small?: Line }[] = [
     { title: "Received", done: true, small: `${dayMonth(row.received_on)}, by ${CHANNEL_LABEL[row.channel] ?? row.channel}` },
     { title: "Acknowledged", done: Boolean(row.acknowledged_on), small: ack },
     {
       title: "Reviewed",
       done: Boolean(row.reviewed_at),
-      small: row.reviewed_at ? [ctx.userName(row.reviewed_by), `evidence: ${row.evidence_note ?? ""}`] : ctx.memberName(row.assignee_membership_id),
+      small: row.reviewed_at ? [ctx.userName(row.reviewed_by), reviewed] : ctx.memberName(row.assignee_membership_id),
     },
     {
       title: "Response sent",
       done: Boolean(row.response_sent_on),
-      small: row.response_sent_on ? dayMonth(row.response_sent_on) : row.response_due_on ? `Due ${dayMonth(row.response_due_on)}` : undefined,
+      small: row.response_sent_on
+        ? row.response_note?.trim()
+          ? [dayMonth(row.response_sent_on), short(row.response_note)]
+          : dayMonth(row.response_sent_on)
+        : row.response_due_on
+          ? `Due ${dayMonth(row.response_due_on)}`
+          : undefined,
     },
     { title: "Resolution recorded", done: Boolean(row.resolved_on), small: row.resolved_on ? [dayMonth(row.resolved_on), row.resolution ?? ""] : undefined },
   ];
@@ -230,7 +240,8 @@ export function complaintsDialogs(input: {
           ackDays: input.settings.ackDays === null ? "" : String(input.settings.ackDays),
           responseDays: input.settings.responseDays === null ? "" : String(input.settings.responseDays),
           escalation: input.settings.escalation ?? "",
-          staff: input.staff,
+          // The firm owner always handles complaints; an empty list says why instead of looking broken.
+          staff: input.staff.length ? input.staff : [["", "No other active staff yet. Invite staff in Settings › Staff, then choose them here."]],
           handlers: input.handlers,
         }
       : null,

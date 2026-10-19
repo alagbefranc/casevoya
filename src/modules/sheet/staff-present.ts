@@ -48,7 +48,12 @@ export type PendingInvitation = {
   role: string;
   expiresAt: string;
   createdAt: string;
+  /** Set when the firm revoked it; kept on the list, greyed, for the record. */
+  revokedAt?: string | null;
 };
+
+/** Why the invite dialog's Office field has one choice. */
+export const STAFF_INVITE_OFFICE_HINT = "Staff access is firm-wide today, so an invitation isn’t tied to one office.";
 
 /** "Owner · Licensed consultant" for an owner who holds a licence; otherwise the role's own label. */
 export function staffRoleCell(role: string, licensed: boolean): StaffRow["role"] {
@@ -71,7 +76,11 @@ export function memberRow(member: DirectoryMember): StaffRow {
     role: staffRoleCell(member.role, member.licensed),
     state: member.status === "suspended" ? { tone: "chg", label: "Suspended" } : { tone: "ok", label: "Accepted" },
     note: twoStepNote(member.twoStep),
-    action: { kind: "more" },
+    action: {
+      kind: "more",
+      go: `/sheet/settings?tab=team&dlg=dlgMem&member=${encodeURIComponent(member.membershipId)}`,
+      title: "Change role or access in Settings › Team and seats",
+    },
   };
 }
 
@@ -84,10 +93,23 @@ export function inviteePerson(email: string) {
 export function invitationRow(invite: PendingInvitation, now: Date, timeZone: string): StaffRow {
   const expires = dayMonth(isoDateInTimeZone(new Date(invite.expiresAt), timeZone));
   const expired = new Date(invite.expiresAt).getTime() <= now.getTime();
+  const invited = `Invited ${dayMonth(isoDateInTimeZone(new Date(invite.createdAt), timeZone))}`;
+  if (invite.revokedAt) {
+    return {
+      person: inviteePerson(invite.email),
+      name: invite.email,
+      email: invited,
+      role: roleLabel(invite.role),
+      state: { tone: "gr", label: `Revoked ${dayMonth(isoDateInTimeZone(new Date(invite.revokedAt), timeZone))}` },
+      note: "The link no longer works",
+      action: { kind: "none" },
+      muted: true,
+    };
+  }
   return {
     person: inviteePerson(invite.email),
     name: invite.email,
-    email: `Invited ${dayMonth(isoDateInTimeZone(new Date(invite.createdAt), timeZone))}`,
+    email: invited,
     role: roleLabel(invite.role),
     state: expired ? { tone: "chg", label: `Expired ${expires}` } : { tone: "rev", label: "Sent", detail: `expires ${expires}` },
     note: "Single use",
@@ -104,14 +126,18 @@ export function staffRows(members: readonly DirectoryMember[], invites: readonly
   return [...members.map(memberRow), ...orderedInvitations(invites, now).map((row) => invitationRow(row, now, timeZone))];
 }
 
-/** Open invitations newest first, then the latest expired one per person and role. */
+/**
+ * Open invitations newest first, then the latest expired or revoked one per person and role.
+ * A revoked invitation replaced by a newer one (Resend) isn't shown: the new one is.
+ */
 export function orderedInvitations(invites: readonly PendingInvitation[], now: Date): PendingInvitation[] {
   const at = now.getTime();
-  const open = invites.filter((row) => new Date(row.expiresAt).getTime() > at).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const open = invites.filter((row) => !row.revokedAt && new Date(row.expiresAt).getTime() > at).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const openKey = new Set(open.map((row) => `${row.email}|${row.role}`));
+  const ended = (row: PendingInvitation) => row.revokedAt ?? row.expiresAt;
   const expired = invites
-    .filter((row) => new Date(row.expiresAt).getTime() <= at && !openKey.has(`${row.email}|${row.role}`))
-    .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt));
+    .filter((row) => (row.revokedAt || new Date(row.expiresAt).getTime() <= at) && !openKey.has(`${row.email}|${row.role}`))
+    .sort((a, b) => ended(b).localeCompare(ended(a)));
   const seen = new Set<string>();
   const latestExpired = expired.filter((row) => {
     const key = `${row.email}|${row.role}`;
@@ -120,6 +146,67 @@ export function orderedInvitations(invites: readonly PendingInvitation[], now: D
     return true;
   });
   return [...open, ...latestExpired];
+}
+
+export type PortalInvitation = {
+  id: string;
+  personName: string | null;
+  email: string;
+  role: string;
+  matterReference: string | null;
+  expiresAt: string;
+  createdAt: string;
+  openedAt: string | null;
+  consumedAt: string | null;
+  revokedAt: string | null;
+  declinedAt: string | null;
+};
+
+const PORTAL_ROLE: Record<string, string> = {
+  client: "Applicant",
+  adult_dependant: "Adult dependant",
+  sponsor: "Sponsor",
+  guardian: "Guardian",
+  employer_contact: "Employer contact",
+};
+
+function portalRoleLabel(role: string): string {
+  return PORTAL_ROLE[role] ?? role.replace(/_/g, " ").replace(/^./, (first) => first.toUpperCase());
+}
+
+/**
+ * One client portal invitation on the Clients and family tab, in the Designer's words: accepted,
+ * opened but not finished, sent (with its expiry), declined, expired (Resend) or revoked (greyed).
+ */
+export function portalInvitationRow(invite: PortalInvitation, organizationId: string, now: Date, timeZone: string): StaffRow {
+  const day = (iso: string) => dayMonth(isoDateInTimeZone(new Date(iso), timeZone));
+  const name = invite.personName || invite.email;
+  const role = portalRoleLabel(invite.role);
+  const base = {
+    person: { name },
+    name,
+    email: invite.matterReference ? { left: role, right: invite.matterReference } : role,
+    role,
+  };
+  if (invite.consumedAt) return { ...base, state: { tone: "ok", label: "Accepted" }, note: `Joined ${day(invite.consumedAt)}`, action: { kind: "none" } };
+  if (invite.revokedAt) {
+    return { ...base, state: { tone: "gr", label: `Revoked ${day(invite.revokedAt)}` }, note: "The link no longer works", action: { kind: "none" }, muted: true };
+  }
+  if (invite.declinedAt) return { ...base, state: { tone: "gr", label: `Declined ${day(invite.declinedAt)}` }, note: invite.email, action: { kind: "none" } };
+  if (new Date(invite.expiresAt).getTime() <= now.getTime()) {
+    return { ...base, state: { tone: "chg", label: `Expired ${day(invite.expiresAt)}` }, note: invite.email, action: { kind: "resend", invitationId: invite.id, portal: true, organizationId } };
+  }
+  return {
+    ...base,
+    state: invite.openedAt ? { tone: "unv", label: "Opened", detail: "not finished" } : { tone: "rev", label: "Sent", detail: `expires ${day(invite.expiresAt)}` },
+    note: invite.email,
+    action: { kind: "revoke", invitationId: invite.id, portal: true, organizationId },
+  };
+}
+
+/** The firm's portal invitations, newest first. */
+export function portalInvitationRows(invites: readonly PortalInvitation[], organizationId: string, now: Date, timeZone: string): StaffRow[] {
+  return [...invites].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((row) => portalInvitationRow(row, organizationId, now, timeZone));
 }
 
 /** "name@<domain>" from the signed-in person's own address, the way the Designer shows the firm's domain. */

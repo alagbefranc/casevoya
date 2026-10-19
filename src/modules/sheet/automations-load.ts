@@ -23,8 +23,9 @@ export async function loadSheetAutomations(staff: SheetStaff, tab: AutomationsTa
   ]);
   const rows = schedules.data ?? [];
   const deadlineIds = [...new Set(rows.map((row) => row.deadline_id).filter((id): id is string => Boolean(id)))];
-  const deadlines = deadlineIds.length ? await supabase.from("deadlines").select("id, matter_id").in("id", deadlineIds) : null;
+  const deadlines = deadlineIds.length ? await supabase.from("deadlines").select("id, matter_id, label, due_on").in("id", deadlineIds) : null;
   const matterOf = new Map((deadlines?.data ?? []).map((row) => [row.id, row.matter_id]));
+  const deadlineOf = new Map((deadlines?.data ?? []).map((row) => [row.id, { label: row.label, dueOn: row.due_on }]));
   const matterIds = [...new Set([...matterOf.values()])];
   const [name, matters] = await Promise.all([
     matterNames(supabase, org, matterIds),
@@ -42,6 +43,8 @@ export async function loadSheetAutomations(staff: SheetStaff, tab: AutomationsTa
       createdAt: row.created_at,
       matterName: matter ? name(matter) : "Task reminder",
       reference: matter ? (referenceOf.get(matter) ?? null) : null,
+      deadline: row.deadline_id ? (deadlineOf.get(row.deadline_id) ?? null) : null,
+      matterId: matter,
     };
   });
   const { days, firmSet } = reminderDays((offsets.data ?? []).map((row) => row.offset_days), proposed.data?.value ?? null);
@@ -53,6 +56,16 @@ export async function loadSheetAutomations(staff: SheetStaff, tab: AutomationsTa
     runs,
     now,
     timeZone: staff.timezone,
+    editable: staff.role === "firm_owner",
   });
-  return { chrome, data };
+  const dialog =
+    staff.role === "firm_owner"
+      ? {
+          organizationId: org,
+          days: days.join(", "),
+          quietStart: (firm.data?.quiet_hours_start ?? "").slice(0, 5),
+          quietEnd: (firm.data?.quiet_hours_end ?? "").slice(0, 5),
+        }
+      : null;
+  return { chrome, data, dialog };
 }

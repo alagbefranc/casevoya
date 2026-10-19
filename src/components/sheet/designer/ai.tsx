@@ -26,7 +26,8 @@ function Show({ text }: { text: Text }) {
   return typeof text === "string" ? <>{text}</> : <Pair left={text.left} right={text.right} />;
 }
 
-export type AiSwitch = { id: string; label: string; small?: string; sr: string; on: boolean; attrs: Attrs };
+/** `disabled` (live only): why the switch can't be used now (Vo is off for the whole firm). */
+export type AiSwitch = { id: string; label: string; small?: string; sr: string; on: boolean; attrs: Attrs; disabled?: string };
 export type AiTerm = { term: string; value: string };
 
 export type AiSettings = {
@@ -41,6 +42,8 @@ export type AiSettings = {
 export type AiRunRow = {
   when: string;
   matter: string;
+  /** Live only: the matter's page, linked from its reference. */
+  matterHref?: string;
   task: string;
   model: { left: string; right: string };
   prompt: string;
@@ -54,7 +57,8 @@ export type AiRunRow = {
 
 export type AiRuns = { intro: string; chips: string[]; rows: AiRunRow[]; note: string; empty: { title: string; copy: string } | null };
 
-export type AiSourceRow = { source: string; publisher: string; effective: string; review: Text; owner: string; state: MatterBadge };
+/** `href` (live only): the source's official page, opened from its name. */
+export type AiSourceRow = { source: string; href?: string; publisher: string; effective: string; review: Text; owner: string; state: MatterBadge };
 export type AiSourceDetail = {
   publisher: string;
   state: MatterBadge;
@@ -71,7 +75,8 @@ export type AiStates = {
 
 export type AiRules = { approvals: [string, string][]; never: string[]; gates: AiTerm[] };
 
-export type AiAuditRow = { draft: string; matter: string; result: MatterBadge; by: string; when: string; change: Text };
+/** `href` (live only): the row opens the draft on its matter. */
+export type AiAuditRow = { draft: string; matter: string; result: MatterBadge; by: string; when: string; change: Text; href?: string };
 export type AiAudit = { rows: AiAuditRow[]; empty: { title: string; copy: string } | null };
 
 export type AiData = {
@@ -87,14 +92,15 @@ export type AiData = {
 
 const I = (n: number) => ({ "--i": String(n) }) as React.CSSProperties;
 
-export function AiHeader({ data }: { data: Pick<AiData, "tab" | "pills"> }) {
+export function AiHeader({ data, fromSettings = false }: { data: Pick<AiData, "tab" | "pills">; fromSettings?: boolean }) {
   const current = TABS.find((tab) => tab.key === data.tab) ?? TABS[0];
   return (
     <>
       <header className={"top"}>
         <button className={"crumb"}>
           <Icon name={"settings"} cls={"ic s"} />
-          {"Practice"}
+          {/* Live: opened from Settings › AI, the trail says where the person came from. */}
+          {fromSettings ? "Settings" : "Practice"}
           <Icon name={"sort"} cls={"ic dd"} />
         </button>
         <span className={"cs"} aria-hidden={"true"}>
@@ -142,7 +148,15 @@ function Switch({ item }: { item: AiSwitch }) {
         {item.small ? <small>{item.small}</small> : null}
       </div>
       <span className={"r"}>
-        <button type={"button"} className={"k2-sw"} role={"switch"} aria-checked={item.on ? "true" : "false"} id={item.id} {...item.attrs}>
+        <button
+          type={"button"}
+          className={"k2-sw"}
+          role={"switch"}
+          aria-checked={item.on ? "true" : "false"}
+          id={item.id}
+          {...item.attrs}
+          {...(item.disabled ? { disabled: true, "aria-disabled": "true", title: item.disabled, style: { opacity: 0.5, cursor: "not-allowed" } } : {})}
+        >
           <span className={"k2-th"} aria-hidden={"true"}></span>
           <span className={"k2-sr"}>{item.sr}</span>
         </button>
@@ -252,7 +266,15 @@ function RunsTab({ data }: { data: AiRuns }) {
               {data.rows.map((row, index) => (
                 <tr key={index} {...(row.attrs ?? {})}>
                   <td>{row.when}</td>
-                  <td>{row.matter}</td>
+                  <td>
+                    {row.matterHref ? (
+                      <a className={"tl"} href={row.matterHref}>
+                        {row.matter}
+                      </a>
+                    ) : (
+                      row.matter
+                    )}
+                  </td>
                   <td>{row.task}</td>
                   <td>
                     <Pair left={row.model.left} right={row.model.right} />
@@ -282,6 +304,12 @@ function RunsTab({ data }: { data: AiRuns }) {
           </table>
         </div>
       )}
+      {data.rows.length ? (
+        // Live only: shown by the page's filter when no run matches the chip or search.
+        <div className={"fp-fe rv"} hidden style={I(2)}>
+          <Empty art={"filter-empty"} title={"No runs match"} copy={"Try another filter or clear the search."} />
+        </div>
+      ) : null}
       <p className={"fp-note rv"} style={I(3)}>
         {data.note}
       </p>
@@ -311,7 +339,15 @@ function SourcesTab({ data }: { data: AiSources }) {
             <tbody>
               {data.rows.map((row, index) => (
                 <tr key={index}>
-                  <td>{row.source}</td>
+                  <td>
+                    {row.href ? (
+                      <a className={"tl"} href={row.href} target={"_blank"} rel={"noopener noreferrer"}>
+                        {row.source}
+                      </a>
+                    ) : (
+                      row.source
+                    )}
+                  </td>
                   <td>{row.publisher}</td>
                   <td>{row.effective}</td>
                   <td>
@@ -538,7 +574,7 @@ function AuditTab({ data }: { data: AiAudit }) {
             </thead>
             <tbody>
               {data.rows.map((row, index) => (
-                <tr key={index}>
+                <tr key={index} data-href={row.href}>
                   <td>{row.draft}</td>
                   <td>{row.matter}</td>
                   <td>

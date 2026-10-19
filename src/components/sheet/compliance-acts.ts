@@ -10,6 +10,7 @@ import {
   savePrivacyRedaction,
   saveComplianceSettings,
 } from "@/modules/compliance/actions";
+import { privacyCloseProblem } from "@/modules/compliance/checks";
 import { needsStepUp } from "@/modules/sheet/matter-wire";
 
 /**
@@ -33,8 +34,36 @@ function keyFor(button: HTMLElement, prefix: string): string {
   return button.dataset.key;
 }
 
+/** Empties a saved dialog back to how the page drew it, so the next step never reuses a note. */
+export function resetDialogFields(dialog: ParentNode) {
+  for (const field of dialog.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input[id], textarea[id]")) {
+    field.value = field.defaultValue;
+  }
+  for (const select of dialog.querySelectorAll<HTMLSelectElement>("select[id]")) {
+    for (const option of select.options) option.selected = option.defaultSelected;
+  }
+}
+
+/**
+ * Linking a client record fills the name field with that person's name when the field is empty
+ * or still holds a name filled in this way. A typed name is never replaced.
+ */
+export function fillLinkedName(dialog: ParentNode, linkId: string, nameId: string) {
+  const link = dialog.querySelector<HTMLSelectElement>(`#${linkId}`);
+  const name = dialog.querySelector<HTMLInputElement>(`#${nameId}`);
+  if (!link || !name) return;
+  const option = link.selectedOptions[0];
+  const linked = option && option.value && option.value !== "none" ? (option.textContent ?? "").trim() : "";
+  const auto = name.dataset.filledWith !== undefined && name.value === name.dataset.filledWith;
+  if (name.value.trim() && !auto) return;
+  name.value = linked;
+  if (linked) name.dataset.filledWith = linked;
+  else delete name.dataset.filledWith;
+}
+
 function done(dialog: HTMLDialogElement, router: Router, title: string, sub: string) {
   for (const button of dialog.querySelectorAll<HTMLElement>("[data-key]")) delete button.dataset.key;
+  resetDialogFields(dialog);
   dialog.close();
   toast2(title, { kind: "ok", sub });
   const params = new URLSearchParams(window.location.search);
@@ -169,15 +198,25 @@ export async function runRedaction(button: HTMLElement, router: Router) {
 export async function runPrivacyClose(button: HTMLElement, router: Router) {
   const dialog = button.closest("dialog");
   if (!dialog) return;
-  const result = await closePrivacyRequest({
-    organizationId: button.dataset.org ?? "",
-    requestId: button.dataset.privacyClose ?? "",
+  const draft = {
     outcome: value(dialog, "pcO"),
-    consentRecordId: value(dialog, "pcK") || null,
     deliveredBy: value(dialog, "pcD"),
     evidence: value(dialog, "pcE"),
     refusalReason: value(dialog, "pcR"),
     note: value(dialog, "pcN"),
+  };
+  // Check the form first: an incomplete form never goes to the step-up page.
+  const problem = privacyCloseProblem(draft);
+  if (problem) {
+    toast2(problem.error, { kind: "warn", sub: "The request is still open." });
+    dialog.querySelector<HTMLElement>(`#${problem.field}`)?.focus();
+    return;
+  }
+  const result = await closePrivacyRequest({
+    organizationId: button.dataset.org ?? "",
+    requestId: button.dataset.privacyClose ?? "",
+    consentRecordId: value(dialog, "pcK") || null,
+    ...draft,
   });
   if ("error" in result) return failed(dialog, button, result.error, "The request is still open.");
   done(dialog, router, "Request closed", "The outcome and evidence are saved.");

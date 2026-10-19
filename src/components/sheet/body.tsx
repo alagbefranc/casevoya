@@ -21,7 +21,7 @@ import { MattersTopBar, NewMatterDialog, SheetMatters } from "@/components/sheet
 import { PersonEditDialog } from "@/components/sheet/designer/person-edit";
 import { SampleCasePanel } from "@/components/sheet/designer/sample-case";
 import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
-import { SheetStaffTab, StaffAfter, StaffHeader } from "@/components/sheet/designer/invitations";
+import { INVITATIONS_CSS, SheetClientsTab, SheetStaffTab, StaffAfter, StaffHeader } from "@/components/sheet/designer/invitations";
 import { PolicyMissingAlert, PortalPoliciesAfter, SettingsPortalHeader, SheetPortalPolicies } from "@/components/sheet/designer/portal-policies";
 import { SettingsFirmAfter, SettingsFirmHeader, SheetSettingsBranding, SheetSettingsFirm, SheetSettingsLanguage, SheetSettingsOffices } from "@/components/sheet/designer/settings-firm";
 import { loadSheetSettingsFirm } from "@/modules/sheet/settings-firm-load";
@@ -58,13 +58,13 @@ import { ROLE_MATRIX } from "@/modules/staff/role-matrix";
 import { SUSPENDED_CSS, SuspendedAlert, SuspendedPanel, SuspendedTopBar } from "@/components/sheet/designer/licence-suspended";
 import { loadSheetLicenceSuspended } from "@/modules/sheet/licence-suspended-load";
 import { SUSPENDED_REVEAL } from "@/modules/sheet/licence-suspended-present";
-import { GrantDialog, GrantsHeader, SheetGrants } from "@/components/sheet/designer/grants";
+import { GrantDialog, GrantRevokeDialog, GrantsHeader, SheetGrants } from "@/components/sheet/designer/grants";
 import { loadSheetGrants } from "@/modules/sheet/grants-load";
 import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder } from "@/components/sheet/designer/intake-builder";
 import { loadSheetIntakeBuilder } from "@/modules/sheet/intake-builder-load";
 import { SheetTemplates, TemplatesHeader } from "@/components/sheet/designer/templates";
 import { loadSheetTemplates } from "@/modules/sheet/templates-load";
-import { AutomationsHeader, AutomationsSettings, SheetAutomations } from "@/components/sheet/designer/automations";
+import { AutomationsDialog, AutomationsHeader, AutomationsSettings, SheetAutomations } from "@/components/sheet/designer/automations";
 import { loadSheetAutomations } from "@/modules/sheet/automations-load";
 import { SheetScreen } from "@/components/sheet/screen";
 import { AskVoDialog, DraftsHeader, DraftsRbar, SheetDrafts } from "@/components/sheet/designer/drafts";
@@ -83,7 +83,7 @@ import { loadSheetPortalPolicies } from "@/modules/sheet/portal-policies-load";
 import { loadSheetMatter } from "@/modules/sheet/matter-load";
 import { loadSheetMatters } from "@/modules/sheet/matters-load";
 import { loadSheetSample } from "@/modules/sheet/sample-load";
-import { loadSheetStaffTab } from "@/modules/sheet/staff-load";
+import { loadSheetClientsTab, loadSheetStaffTab } from "@/modules/sheet/staff-load";
 import { loadSheetTasks } from "@/modules/sheet/tasks-load";
 import { loadSheetDocuments } from "@/modules/sheet/documents-load";
 import { loadSheetInbox } from "@/modules/sheet/inbox-load";
@@ -315,10 +315,22 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
-  // People and invitations, Clients and family tab: not ported, so a real firm goes to the Clients
-  // page, where client and family records live and portal invitations are sent from the matter.
+  // People and invitations, Clients and family tab: the firm's client portal invitations with their
+  // state and revoke. New ones are sent from a matter's people, so Invite to portal goes to Matters.
   if (page === "invitations" && query.tab === "clients" && (access.kind === "live" || access.kind === "sample")) {
-    redirect("/sheet/clients");
+    const loaded = await loadSheetClientsTab(access.staff);
+    return (
+      <SheetScreen page={page}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<StaffHeader firmName={loaded.firmName} tab={"clients"} inviteGo={"/sheet/matters"} />}
+          statusbar={loaded.chrome.statusbar}
+          after={<style dangerouslySetInnerHTML={{ __html: INVITATIONS_CSS }} />}
+        >
+          <SheetClientsTab rows={loaded.rows} />
+        </SheetFrame>
+      </SheetScreen>
+    );
   }
   // People and invitations, Staff tab.
   if (page === "invitations" && query.tab !== "clients" && (access.kind === "live" || access.kind === "sample")) {
@@ -472,7 +484,12 @@ export async function SheetBody({
           sidebar={loaded.chrome.sidebar}
           header={<GrantsHeader tab={tab} pills={loaded.page.pills} />}
           statusbar={loaded.chrome.statusbar}
-          after={<GrantDialog data={loaded.dialog} />}
+          after={
+            <>
+              <GrantDialog data={loaded.dialog} />
+              {loaded.dialog.organizationId && access.staff.role === "firm_owner" ? <GrantRevokeDialog organizationId={loaded.dialog.organizationId} /> : null}
+            </>
+          }
         >
           <SheetGrants data={loaded.page} />
         </SheetFrame>
@@ -490,6 +507,7 @@ export async function SheetBody({
           header={<AutomationsHeader data={loaded.data} />}
           aside={<AutomationsSettings data={loaded.data} />}
           statusbar={loaded.chrome.statusbar}
+          after={loaded.dialog ? <AutomationsDialog data={loaded.dialog} /> : undefined}
         >
           <SheetAutomations data={loaded.data} />
         </SheetFrame>
@@ -515,14 +533,14 @@ export async function SheetBody({
   }
   // Practice > Vo and AI: settings, run log, citations library, abstain and offline, human approval, draft audit.
   if (page === "settings" && query.tab === "ai" && (access.kind === "live" || access.kind === "sample")) {
-    redirect("/sheet/ai");
+    redirect("/sheet/ai?from=settings");
   }
   if (page === "ai" && (access.kind === "live" || access.kind === "sample")) {
     const tab: AiTab = query.tab === "runs" || query.tab === "sources" || query.tab === "states" || query.tab === "rules" || query.tab === "audit" ? query.tab : "settings";
     const loaded = await loadSheetAi(access.staff, tab);
     return (
       <SheetScreen page={page}>
-        <SheetFrame sidebar={loaded.chrome.sidebar} header={<AiHeader data={loaded.data} />} statusbar={loaded.chrome.statusbar}>
+        <SheetFrame sidebar={loaded.chrome.sidebar} header={<AiHeader data={loaded.data} fromSettings={query.from === "settings"} />} statusbar={loaded.chrome.statusbar}>
           <SheetAi data={loaded.data} />
         </SheetFrame>
       </SheetScreen>
@@ -822,5 +840,6 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     stage: one("stage"),
     owner: one("owner"),
     vo: one("vo"),
+    from: one("from"),
   };
 }

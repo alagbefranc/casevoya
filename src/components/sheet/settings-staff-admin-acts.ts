@@ -295,7 +295,8 @@ export function reopenStaffAdmin(root: HTMLElement, open: Open) {
     set("#ofP", draft.person);
     set("#ofR", draft.receiver);
   } else if (id === MEMBER_DIALOG) {
-    set("#mmP", draft.person);
+    // From People and invitations › More: `member` names the person to select.
+    set("#mmP", draft.person ?? new URLSearchParams(window.location.search).get("member") ?? undefined);
     set("#mmR", draft.role);
   } else {
     set("#ctN", draft.name);

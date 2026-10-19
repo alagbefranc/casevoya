@@ -39,9 +39,11 @@ export function consultantOptions(
 ): NewMatterOption[] {
   return members.map((member) => {
     const status = credentialStatus.get(member.id);
-    if (status === "verified") return { value: member.id, label: member.name };
-    if (status && BLOCKING.has(status)) return { value: member.id, label: `${member.name} (licence blocks new matters)` };
-    return { value: member.id, label: `${member.name} (licence check pending: can’t sign yet)` };
+    // One set of licence words (decision 2026-10-19): a declared licence is enough to work and sign;
+    // only a blocked one locks new matters. A firm owner without a credential counts as licensed.
+    if (!status || status === "verified") return { value: member.id, label: member.name };
+    if (BLOCKING.has(status)) return { value: member.id, label: `${member.name} (licence blocks new matters)` };
+    return { value: member.id, label: `${member.name} (licence declared)` };
   });
 }
 

@@ -82,6 +82,7 @@ export async function loadSheetLicence(staff: SheetStaff, tab: LicenceTab, now: 
     checkTarget: checkTargetLabel(setting("licence.manual_check_target")),
     firmHasVerifiedLicence: credentials.some((credential) => credential.status === "verified" && activeLicensed.has(credential.membershipId)),
     viewerIsOwner: staff.role === "firm_owner",
+    organizationId: org,
   };
   const logRows: LicenceLogRow[] = (log.data ?? []).map((row) => ({
     at: row.at,

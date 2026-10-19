@@ -27,7 +27,8 @@ export type LicenceValue =
   | { left: string; right: string };
 
 export type LicenceProof =
-  | { kind: "file"; name: string; meta: string[]; date: string; states: MatterBadge[] }
+  /** Live: `href` opens the proof through a short signed link (owner or the licence holder only). */
+  | { kind: "file"; name: string; meta: string[]; date: string; states: MatterBadge[]; href?: string }
   | { kind: "none"; text: string };
 
 export type LicenceSource = {
@@ -190,7 +191,15 @@ function Proof({ proof }: { proof: LicenceProof }) {
         <Icon name={"file-pdf"} cls={"ic l"} />
       </div>
       <div>
-        <h4>{proof.name}</h4>
+        <h4>
+          {proof.href ? (
+            <a className={"tl"} href={proof.href} target={"_blank"} rel={"noopener"}>
+              {proof.name}
+            </a>
+          ) : (
+            proof.name
+          )}
+        </h4>
         <div className={"meta"}>
           {items}
           <span className={"sep"}></span>

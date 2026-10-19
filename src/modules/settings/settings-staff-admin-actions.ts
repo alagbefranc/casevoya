@@ -3,6 +3,7 @@
 import { safeAccessError } from "@/lib/auth/step-up";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
+import { continuityProblem } from "@/modules/settings/firm-input";
 import {
   STAFF_ROLE_CHOICES,
   parseOffboardFacts,
@@ -93,7 +94,8 @@ export async function saveContinuity(input: { organizationId: string; name: stri
   const email = (input.email ?? "").trim();
   const succession = (input.succession ?? "").trim();
   if (name.length > 200 || email.length > 320 || succession.length > 2000) return { error: "That’s too long. Shorten it and try again." };
-  if (email && !name) return { error: "Add the continuity contact’s name, or clear both." };
+  const continuity = continuityProblem(name, email);
+  if (continuity) return { error: continuity };
   const session = await signedIn(input.organizationId);
   if ("error" in session) return session;
   const { error } = await session.supabase.rpc("set_firm_continuity", {

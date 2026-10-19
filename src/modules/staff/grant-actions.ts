@@ -53,3 +53,16 @@ export async function createAccessGrant(input: {
   });
   return error ? refused(error.message) : { ok: true };
 }
+
+/** Revoke an access grant: the firm owner, with a recent step-up and a reason (audited by the database). */
+export async function revokeAccessGrant(input: { organizationId: string; grantId: string; reason: string }): Promise<GrantResult> {
+  if (!isUuid(input.grantId)) return { error: "Choose the grant to revoke." };
+  const reason = (input.reason ?? "").trim();
+  if (reason.length < 3 || reason.length > 500) return { error: "Give a reason of at least 3 characters." };
+  if (!isUuid(input.organizationId)) return { error: "Choose a firm." };
+  const supabase = await createClient({ organizationId: input.organizationId });
+  const { data: claims } = await supabase.auth.getClaims();
+  if (!claims?.claims?.sub) return { error: "Sign in first." };
+  const { error } = await supabase.rpc("revoke_access_grant", { p_grant_id: input.grantId, p_reason: reason });
+  return error ? refused(error.message) : { ok: true };
+}

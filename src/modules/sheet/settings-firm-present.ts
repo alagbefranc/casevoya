@@ -148,7 +148,8 @@ export function officesPage(offices: readonly OfficeRecord[], firmTimezone: stri
     intro: "Where your firm works. Staff access is firm-wide today: an office doesn’t limit what staff see.",
     rows: ordered(offices).map((office) => ({
       id: office.id,
-      label: office.is_primary ? `${office.label} (main office)` : office.label,
+      // An office already named "Main office" doesn't need the "(main office)" marker twice.
+      label: office.is_primary && !/\bmain office\b/i.test(office.label) ? `${office.label} (main office)` : office.label,
       address: officeAddress(office),
       timezone: office.timezone ?? firmTimezone,
       // Staff aren't assigned to offices in Casevoya, so there is no count to show.
@@ -186,7 +187,8 @@ export function brandingPage(input: { firmName: string; branding: unknown; logoU
       },
     ],
     colourTag: accent ? `Firm colour ${accent.toUpperCase()}` : "No firm colour set",
-    replace: input.owner ? { label: input.logoUrl ? "Replace logo" : "Upload a logo", dialog: BRAND_DIALOG } : null,
+    // One dialog holds both the logo and the firm colour, so the button names both.
+    replace: input.owner ? { label: input.logoUrl ? "Change logo or colour" : "Add a logo or colour", dialog: BRAND_DIALOG } : null,
     note: "Portal buttons keep Casevoya’s accessible blue. Your logo and firm colour appear on sealed agreement PDFs. The portal and emails don’t show them yet: emails use the header on the right.",
     preview: { kind: "html", html: firmHeaderPreviewHtml(input.firmName), label: `${input.firmName} email header` },
   };

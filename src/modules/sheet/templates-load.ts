@@ -3,10 +3,11 @@ import type { TemplatesTab } from "@/components/sheet/designer/templates";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { EMAIL_TEMPLATES } from "@/modules/email/designs/catalog";
+import { frenchApproved } from "@/modules/email/designs/french";
 import { loadSheetChrome, memberNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
-import { messageRows, programRows, templatesData, type CatalogRow, type RuleRow } from "@/modules/sheet/templates-present";
+import { designUse, messageRows, programRows, templatesData, type CatalogRow, type RuleRow } from "@/modules/sheet/templates-present";
 
 const READ = 200;
 
@@ -29,7 +30,7 @@ export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, v
     supabase.from("rule_pack_versions").select("id, program_key, jurisdiction, pack_version, status, organization_id, next_review_at").order("updated_at", { ascending: false }).limit(READ),
     supabase.from("matters").select("program_pack_id").eq("organization_id", org).not("program_pack_id", "is", null).limit(1000),
     supabase.from("agreement_templates").select("id, name, kind, status, approved_at, approved_by, version").eq("organization_id", org).order("updated_at", { ascending: false }).limit(READ),
-    supabase.from("agreements").select("template_id").eq("organization_id", org).not("template_id", "is", null).limit(1000),
+    supabase.from("agreements").select("template_id, matter_id").eq("organization_id", org).not("template_id", "is", null).limit(1000),
     supabase.from("rule_versions").select("id, definition_id, version_number, status, effective_from, next_review_at, claim, applicability_note").order("updated_at", { ascending: false }).limit(READ),
     supabase.from("rule_definitions").select("id, stable_key, jurisdiction, program_key").limit(READ),
     supabase.from("professional_reviews").select("rule_version_id, reviewer_membership_id, decided_at").eq("organization_id", org).order("decided_at", { ascending: false }).limit(READ),
@@ -44,7 +45,8 @@ export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, v
   const sources = sourceIds.length ? await supabase.from("official_sources").select("id, title").in("id", sourceIds) : null;
 
   const pinned = tally((pinnedMatters.data ?? []).map((row) => row.program_pack_id));
-  const used = tally((agreements.data ?? []).map((row) => row.template_id));
+  // Distinct matters per agreement template (two agreements on one matter count once).
+  const used = tally([...new Set((agreements.data ?? []).map((row) => `${row.template_id}|${row.matter_id}`))].map((key) => key.split("|")[0]));
   const definitionOf = new Map((definitions.data ?? []).map((row) => [row.id, row]));
   const reviewerOf = new Map<string, string>();
   for (const review of reviews.data ?? []) {
@@ -89,7 +91,22 @@ export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, v
     ];
   });
 
-  const catalog: CatalogRow[] = Object.values(EMAIL_TEMPLATES).map((template) => ({ name: template.name, audience: template.audience, status: template.status }));
+  const catalog: CatalogRow[] = Object.values(EMAIL_TEMPLATES).map((template) => ({
+    id: template.id,
+    name: template.name,
+    audience: template.audience,
+    status: template.status,
+    frenchApproved: frenchApproved(template.id),
+  }));
+  // What the firm actually sent, per design and language (RLS: staff who can read the matter).
+  const deliveries = await supabase
+    .from("email_deliveries")
+    .select("template, context, status, updated_at")
+    .eq("organization_id", org)
+    .eq("status", "sent")
+    .order("updated_at", { ascending: false })
+    .limit(2000);
+  const use = designUse(deliveries.data ?? []);
   const agreementRows = (agreementTemplates.data ?? []).map((row) => ({
     id: row.id,
     name: row.name,
@@ -112,7 +129,7 @@ export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, v
   const data = templatesData({
     tab,
     program: programRows(packRows, pinned, agreementRows, used),
-    messages: messageRows(catalog),
+    messages: messageRows(catalog, use, staff.timezone),
     rules,
     packs: packRows.length,
     selected,

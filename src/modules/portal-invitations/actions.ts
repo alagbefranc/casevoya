@@ -84,7 +84,7 @@ export async function createPortalInvitation(input: {
   return { token: result.token, invitationId: result.invitation_id ?? null, expiresAt: result.expires_at ?? null, emailLink };
 }
 
-export async function resendPortalInvitation(input: { organizationId: string; invitationId: string; code: string }) {
+export async function resendPortalInvitation(input: { organizationId: string; invitationId: string; code: string | null }) {
   if (!isUuid(input.invitationId)) return { error: "Choose an invitation." };
   const session = await staffClient(input.organizationId, input.code);
   if ("error" in session) return { error: session.error };
@@ -98,7 +98,7 @@ export async function resendPortalInvitation(input: { organizationId: string; in
   return { token: result.token, invitationId: result.invitation_id ?? input.invitationId, emailLink };
 }
 
-export async function revokePortalInvitation(input: { organizationId: string; invitationId: string; code: string }) {
+export async function revokePortalInvitation(input: { organizationId: string; invitationId: string; code: string | null }) {
   if (!isUuid(input.invitationId)) return { error: "Choose an invitation." };
   const session = await staffClient(input.organizationId, input.code);
   if ("error" in session) return { error: session.error };

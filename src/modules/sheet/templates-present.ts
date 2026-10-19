@@ -7,10 +7,21 @@ import type { MessageRow, ProgramRow, RuleDetail, SourceKpi, SourceRow, Template
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import { dayMonth } from "@/modules/sheet/home-present";
 import { longDate } from "@/modules/sheet/matter-present";
+import { isoDateInTimeZone } from "@/modules/sheet/present";
+import { chooseEmailLanguage } from "@/modules/email/designs/french";
+import { designFor } from "@/modules/email/templates";
 
 export type PackRow = { id: string; programKey: string; jurisdiction: string; packVersion: number; status: string; firm: boolean; nextReviewAt: string | null };
 export type AgreementTemplateRow = { id: string; name: string; kind: string; status: string; approvedAt: string | null; approvedBy: string | null; version: number };
-export type CatalogRow = { name: string; audience: string; status: "wired" | "ready-not-wired" | "deferred" };
+export type CatalogRow = {
+  name: string;
+  audience: string;
+  status: "wired" | "ready-not-wired" | "deferred";
+  /** The design id ("EM02"); live only. */
+  id?: string;
+  /** Its French text is approved by a named reviewer (fr-drafts.json). */
+  frenchApproved?: boolean;
+};
 export type RuleRow = {
   id: string;
   stableKey: string;
@@ -65,9 +76,13 @@ export function programRows(packs: readonly PackRow[], pinned: ReadonlyMap<strin
     effective: DASH,
     pinned: String(pinned.get(pack.id) ?? 0),
   }));
+  // An agreement template has no jurisdiction of its own: its kind goes with its name, and
+  // "Matters pinned" counts the distinct matters that used it (not the agreements).
   const agreementRows: ProgramRow[] = agreements.map((template) => ({
-    template: template.name,
-    jurisdiction: { left: "Firm", right: KIND[template.kind] ?? template.kind },
+    template: `${template.name} (${KIND[template.kind] ?? template.kind})`,
+    jurisdiction: DASH,
+    // Opens the Agreements page's template dialog, where firm templates are reviewed and approved.
+    href: "/sheet/agreements?dlg=template",
     version: `v${template.version}`,
     state: template.status === "approved" ? { tone: "ok", label: "Approved" } : { tone: "gr", label: "Draft" },
     source: "Firm template",
@@ -80,19 +95,57 @@ export function programRows(packs: readonly PackRow[], pinned: ReadonlyMap<strin
 
 const AUDIENCE: Record<string, string> = { staff: "Staff", "firm owner": "Firm owner", client: "Clients", "adult dependant": "Adult dependants" };
 
-export function messageRows(catalog: readonly CatalogRow[]): MessageRow[] {
-  return catalog.map((row) => ({
-    template: row.name,
-    channel: "Email",
-    usedBy: AUDIENCE[row.audience] ?? row.audience,
-    languages: { left: "English", right: "French deferred" },
-    state:
-      row.status === "wired"
-        ? { tone: "ok", label: "Approved, in use" }
-        : row.status === "ready-not-wired"
+/** What the firm's own email deliveries say about one design: how many went out, when, in which languages. */
+export type DesignUse = { sent: number; lastSentAt: string | null; french: number };
+
+/** Sent deliveries per approved design (the same choice the dispatcher makes): count, latest, French. */
+export function designUse(rows: readonly { template: string; context: unknown; updated_at: string }[]): Map<string, DesignUse> {
+  const use = new Map<string, DesignUse>();
+  for (const row of rows) {
+    const context = row.context && typeof row.context === "object" && !Array.isArray(row.context) ? (row.context as Record<string, unknown>) : {};
+    const design = designFor({ ...context, template: row.template });
+    if (design === "generic") continue;
+    const entry = use.get(design) ?? { sent: 0, lastSentAt: null, french: 0 };
+    entry.sent += 1;
+    if (!entry.lastSentAt || row.updated_at > entry.lastSentAt) entry.lastSentAt = row.updated_at;
+    if (design !== "EX15" && chooseEmailLanguage(design, context.locale) === "fr") entry.french += 1;
+    use.set(design, entry);
+  }
+  return use;
+}
+
+/**
+ * The Message templates tab from real data: State says whether this firm ever sent the email (and
+ * when last), or that it is approved but not sent yet / not wired / deferred; Languages says
+ * whether French went out, is approved, or isn't approved yet. Each row previews the design with
+ * synthetic sample values.
+ */
+export function messageRows(catalog: readonly CatalogRow[], use: ReadonlyMap<string, DesignUse> = new Map(), timeZone = "America/Toronto"): MessageRow[] {
+  return catalog.map((row) => {
+    const used = row.id ? use.get(row.id) : undefined;
+    const sent = used?.sent ?? 0;
+    const languages: MessageRow["languages"] = used?.french
+      ? { left: "English", right: "French sent" }
+      : row.frenchApproved
+        ? { left: "English", right: "French approved" }
+        : { left: "English", right: "French not approved yet" };
+    const state: MatterBadge =
+      sent > 0
+        ? { tone: "ok", label: `Sent ${sent} time${sent === 1 ? "" : "s"}`, ...(used?.lastSentAt ? { detail: `last ${dayMonth(isoDateInTimeZone(new Date(used.lastSentAt), timeZone))}` } : {}) }
+        : row.status === "wired"
           ? { tone: "rev", label: "Approved, not sent yet" }
-          : { tone: "gr", label: "Deferred" },
-  }));
+          : row.status === "ready-not-wired"
+            ? { tone: "gr", label: "Approved, not in use yet" }
+            : { tone: "gr", label: "Deferred" };
+    return {
+      template: row.name,
+      channel: "Email",
+      usedBy: AUDIENCE[row.audience] ?? row.audience,
+      languages,
+      state,
+      ...(row.id ? { href: `/api/email-designs/preview?id=${encodeURIComponent(row.id)}` } : {}),
+    };
+  });
 }
 
 const NEEDS_REVIEW = new Set(["review_due", "evidence_captured", "professional_review", "draft"]);
@@ -176,6 +229,7 @@ export function templatesData(input: {
     pills: [review === 1 ? "1 source needs review" : `${review} sources need review`],
     reviewCount: review,
     newTemplateHref: "/sheet/agreements?dlg=template",
+    newTemplateLabel: "New agreement template",
     program: { rows: input.program, note: "Firm templates are labelled so you can tell them apart from centrally reviewed content." },
     messages: { rows: input.messages },
     checklists: { cards: [] },

@@ -1,7 +1,8 @@
 "use client";
 
 import { toast2 } from "@/components/port/kit";
-import { createAccessGrant } from "@/modules/staff/grant-actions";
+import { grantDraftProblem } from "@/modules/sheet/grants-present";
+import { createAccessGrant, revokeAccessGrant } from "@/modules/staff/grant-actions";
 
 type Router = { refresh: () => void };
 type Open = (id: string) => void;
@@ -28,6 +29,13 @@ export async function runGrantCreate(button: HTMLElement, router: Router) {
   };
   if (!draft.personId || !draft.matterId) {
     toast2("Choose a person and what they can see", { kind: "warn", sub: "Only people with a portal login can be given access." });
+    return;
+  }
+  // Check the form before asking for a step-up, so an empty form never leaves the page.
+  const problem = grantDraftProblem(draft.expires, draft.reason, button.dataset.today || firmTodayIso());
+  if (problem) {
+    toast2(problem.title, { kind: "warn", sub: problem.sub });
+    el(dialog, problem.field)?.focus();
     return;
   }
   const result = await createAccessGrant({ organizationId: button.dataset.org ?? "", ...draft });
@@ -57,8 +65,79 @@ export async function runGrantCreate(button: HTMLElement, router: Router) {
   router.refresh();
 }
 
+/** Fallback when the page gave no firm day: the browser's date. The database checks the firm's day. */
+function firmTodayIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+export const GRANT_REVOKE_DIALOG = "grant-revoke";
+const REVOKE_DRAFT = "cv-grant-revoke-draft";
+
+/** An active grant's row opens Revoke access grant (#dlgGX) for that grant. */
+export function openGrantRevoke(row: HTMLElement, root: ParentNode, open: Open, reason = "") {
+  const dialog = root.querySelector<HTMLDialogElement>("dialog#dlgGX");
+  if (!dialog) return;
+  dialog.dataset.grant = row.dataset.grantRow ?? "";
+  const who = el<HTMLElement>(dialog, "gxW");
+  if (who) who.textContent = `${row.dataset.grantLabel ?? ""} Revoking ends their access now; the grant stays on record.`;
+  const input = el(dialog, "gxR");
+  if (input) input.value = reason;
+  open("dlgGX");
+  input?.focus();
+}
+
+/** Revoke grant: reason first, then the database (firm owner, recent step-up). */
+export async function runGrantRevoke(button: HTMLElement, router: Router) {
+  const dialog = button.closest<HTMLDialogElement>("dialog");
+  if (!dialog) return;
+  const grantId = dialog.dataset.grant ?? "";
+  const reason = el(dialog, "gxR")?.value.trim() ?? "";
+  if (reason.length < 3) {
+    toast2("Give a reason", { kind: "warn", sub: "At least 3 characters. It is kept in the audit trail." });
+    el(dialog, "gxR")?.focus();
+    return;
+  }
+  const result = await revokeAccessGrant({ organizationId: button.dataset.org ?? "", grantId, reason });
+  if ("error" in result) {
+    if (result.stepUp) {
+      try {
+        sessionStorage.setItem(REVOKE_DRAFT, JSON.stringify({ grantId, reason }));
+      } catch {
+        // Storage can be unavailable; the person types the reason again.
+      }
+      const params = new URLSearchParams(window.location.search);
+      params.set("dlg", GRANT_REVOKE_DIALOG);
+      const next = `${window.location.pathname}?${params.toString()}`;
+      toast2("Confirm it’s you", { kind: "warn", sub: "Then the dialog opens again with your reason." });
+      window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`), 900);
+      return;
+    }
+    toast2(result.error, { kind: "bad", sub: "The grant is unchanged." });
+    return;
+  }
+  dialog.close();
+  toast2("Grant revoked", { kind: "ok", sub: "Their access ended now. Logged in the audit trail." });
+  router.refresh();
+}
+
+/** ?dlg=grant-revoke (back from step-up) reopens Revoke for the same grant with the reason typed. */
+function reopenGrantRevoke(root: ParentNode, open: Open) {
+  let draft: { grantId?: string; reason?: string } = {};
+  try {
+    const raw = sessionStorage.getItem(REVOKE_DRAFT);
+    sessionStorage.removeItem(REVOKE_DRAFT);
+    draft = raw ? (JSON.parse(raw) as typeof draft) : {};
+  } catch {
+    draft = {};
+  }
+  const row = [...root.querySelectorAll<HTMLElement>("[data-grant-row]")].find((item) => item.dataset.grantRow === draft.grantId);
+  if (row) openGrantRevoke(row, root, open, draft.reason ?? "");
+}
+
 /** ?dlg=grant (back from step-up) reopens New access grant with what was typed. */
 export function reopenGrantDialog(root: ParentNode, open: Open) {
+  if (new URLSearchParams(window.location.search).get("dlg") === GRANT_REVOKE_DIALOG) return reopenGrantRevoke(root, open);
   if (new URLSearchParams(window.location.search).get("dlg") !== GRANT_DIALOG || !root.querySelector("#dlgG")) return;
   let draft: Record<string, string> = {};
   try {
