@@ -8,6 +8,7 @@
  * row, `data-type` on each field type, `data-intake-publish` on Publish and
  * `data-goto-tab="preview"` on Preview.
  */
+import { ShareEnquiryButton } from "./enquiry-share";
 import { Icon, Pair, VoCard } from "./frame";
 
 export const INTAKE_BUILDER_CSS = ".ib{display:grid;grid-template-columns:200px 1fr;gap:16px}.ft{display:flex;gap:10px;align-items:center;padding:9px 6px;font-size:14px;border-radius:8px;cursor:grab}.ft:hover{background:var(--canvas)}.ft .ic{color:#8b8680}\n.qq{display:flex;gap:12px;align-items:center;padding:10px 12px;border-radius:10px;background:var(--canvas);margin-bottom:8px;cursor:pointer;transition:box-shadow var(--fast),background var(--fast)}.qq b{font-weight:500;font-size:14.5px}.qq small{display:block;color:var(--t2);font-size:13px}.qq .ic{color:#8b8680}.qq .btn{background:#fff}\n.qq.on{box-shadow:inset 0 0 0 1.5px #8fc4f5;background:#fff}.qq.ind{margin-left:16px;border-left:3px solid var(--blue)}@media(max-width:900px){.ib{grid-template-columns:1fr}}";
@@ -54,7 +55,8 @@ function i(n: number) {
   return { "--i": String(n) } as React.CSSProperties;
 }
 
-export function IntakeHeader({ data }: { data: IntakeBuilderData }) {
+/** share (live only): "Share enquiry form" before Preview, opening #dlgShare (designer/enquiry-share.tsx). */
+export function IntakeHeader({ data, share }: { data: IntakeBuilderData; share?: boolean }) {
   return (
     <>
       <header className={"top"}>
@@ -84,6 +86,7 @@ export function IntakeHeader({ data }: { data: IntakeBuilderData }) {
           ),
         )}
         <span className={"acts"}>
+          {share ? <ShareEnquiryButton /> : null}
           <button className={"btn s sm"} data-goto-tab={data.live ? "preview" : undefined}>
             <Icon name={"eye"} cls={"ic s"} />
             {"Preview"}

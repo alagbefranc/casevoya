@@ -10711,6 +10711,7 @@ export type Database = {
         Args: { p_delivery_ids: string[] }
         Returns: Json
       }
+      enquiry_public_firm: { Args: { p_firm_slug: string }; Returns: Json }
       ensure_sample_case: { Args: never; Returns: string }
       escalate_overdue_work: {
         Args: { p_as_of: string }
