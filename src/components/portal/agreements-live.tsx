@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type CSSProperties } from "react";
+import { Fragment, useState, useTransition, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { acceptQuote, declineAgreement, signAgreement } from "@/modules/agreements/actions";
 import type { PortalAgreement, PortalAgreements } from "@/modules/agreements/load";
@@ -168,23 +168,66 @@ function Done({ card, organizationId }: { card: PortalAgreement; organizationId:
   );
 }
 
+const LINE_CATEGORY: Record<string, string> = {
+  professional_fee: "Professional fee",
+  tax: "Tax",
+  disbursement: "Disbursement",
+  government_fee: "Government fee",
+};
+
+function money(cents: number, currency: string): string {
+  return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(cents / 100);
+}
+
+function shortDate(iso: string): string {
+  return new Intl.DateTimeFormat("en-CA", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${iso.slice(0, 10)}T12:00:00Z`));
+}
+
 function Terms({ card }: { card: PortalAgreement }) {
-  const fee = card.feeCents == null
-    ? null
-    : new Intl.NumberFormat("en-CA", { style: "currency", currency: card.currency }).format(card.feeCents / 100);
+  const fee = card.feeCents == null ? null : money(card.feeCents, card.currency);
+  const quote = card.quote;
+  const government = quote?.lines.filter((line) => line.category === "government_fee") ?? [];
   return (
     <details className="src" style={{ marginTop: 6 }}>
       <summary>
         <svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-info" /></svg>
-        What you agreed to, in short
+        {quote ? "What this quote covers" : "What you agreed to, in short"}
         <svg className="ic s ch" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-chevron-down" /></svg>
       </summary>
       <dl>
-        <dt>Services</dt><dd>{card.scope}</dd>
+        <dt>{quote ? "Scope" : "Services"}</dt><dd>{card.scope}</dd>
+        {quote?.services ? <><dt>Services</dt><dd>{quote.services}</dd></> : null}
+        {quote?.deliverables ? <><dt>Deliverables</dt><dd>{quote.deliverables}</dd></> : null}
         {card.exclusions ? <><dt>Not included</dt><dd>{card.exclusions}</dd></> : null}
-        {fee ? <><dt>Professional fee</dt><dd className="num">{fee}</dd></> : null}
+        {quote?.feeStructure ? <><dt>Fee structure</dt><dd>{quote.feeStructure}</dd></> : null}
+        {quote?.lines.filter((line) => line.category !== "government_fee").map((line) => (
+          <Fragment key={line.id}>
+            <dt>{LINE_CATEGORY[line.category] ?? line.category}</dt>
+            <dd><span>{line.description}</span> <span className="num">{money(line.amountCents, card.currency)}</span></dd>
+          </Fragment>
+        ))}
+        {quote && quote.lines.length ? <><dt>Total to the firm</dt><dd className="num">{money(quote.totalCents, card.currency)}</dd></> : null}
+        {!quote && fee ? <><dt>Professional fee</dt><dd className="num">{fee}</dd></> : null}
+        {quote?.instalments.map((row) => (
+          <Fragment key={row.id}>
+            <dt>{row.label}</dt>
+            <dd><span className="num">{money(row.amountCents, card.currency)}</span> · {row.paidAs === "advance" ? "advance, held in the client account" : "invoiced after delivery"}</dd>
+          </Fragment>
+        ))}
+        {government.map((line) => (
+          <Fragment key={line.id}>
+            <dt>Government fee, separate</dt>
+            <dd>
+              {line.description}: <span className="num">{money(line.amountCents, card.currency)}</span>
+              {line.sourceNote ? `, from ${line.sourceNote}` : ""}
+              {line.enteredOn ? ` (checked ${shortDate(line.enteredOn)})` : ""}. Paid by you to IRCC, not through the firm.
+            </dd>
+          </Fragment>
+        ))}
         {card.governmentFeeNote ? <><dt>Government fees</dt><dd>{card.governmentFeeNote}</dd></> : null}
         {card.refundPolicy ? <><dt>Refunds</dt><dd>{card.refundPolicy}</dd></> : null}
+        {quote?.expiresOn ? <><dt>Valid until</dt><dd className="num">{shortDate(quote.expiresOn)}</dd></> : null}
+        {quote?.acceptedAt ? <><dt>Accepted</dt><dd className="num">{shortDate(quote.acceptedAt)}</dd></> : null}
         {card.comparison ? <><dt>What changed</dt><dd>{card.comparison}</dd></> : null}
         {card.contentSha ? <><dt>Locked hash</dt><dd className="num">{card.contentSha}</dd></> : null}
       </dl>

@@ -264,6 +264,24 @@ A sent version stores SHA-256 of its canonical text and cannot be edited. A fee 
 
 `agreements.envelope_days` is 14 and `agreements.esign_consent` is version `esign-consent-2026-10-17`. Both have `pending_confirmation` true.
 
+### Quote builder, Agreement editor and Compare versions (repository only, `20261020140000`–`20261020140100`)
+
+Not applied on the live project. `20261020140000` adds the enums `quote_line_category` (professional_fee, tax, disbursement, government_fee), `quote_paid_as` (advance, invoice_after_delivery) and `agreement_clause_source` (template, edited) in their own migration. `20261020140100` adds:
+
+| Table | Holds | Who reads it |
+|---|---|---|
+| `quote_lines` | One priced line of a quote version: position, category, description, `amount_cents`, optional `tax_rate_bps`, and for a government fee the dated reference typed by staff (`source_note`, `entered_by`, `entered_on`; a check refuses a government fee without them). `is_sample` follows the matter. | Whoever may read the agreement (`app.can_read_agreement`): the firm's staff on the matter, and the quote's client. |
+| `quote_instalments` | When each part is paid: position, label ("On signing" or a milestone), `amount_cents`, `paid_as`. They add up to the total to the firm (every line but government fees). | As above. |
+| `agreement_clauses` | One version's text split into clauses: position, title, body, `mandatory`, `headed` (false for a Preamble or a text without titles), `source` (template or edited). Rebuilt whenever the version's text changes. | As above. |
+
+Columns added: `agreement_versions.body` (the text alone; null for versions made before this migration), `services`, `deliverables`, `fee_structure` (quote fields); `agreement_templates.mandatory_clauses text[]`; `agreements.accepted_at`, `accepted_by`. Product setting `agreements.quote_days` = 30 (`pending_confirmation`).
+
+Rows of a locked version never change (`app.guard_version_children` on insert, update and delete); there is no insert, update or delete grant. Clause convention (`app.split_agreement_clauses`): a line starting `## ` is a clause title; `## !` marks it mandatory; text before the first title is the "Preamble"; a text with no titles is one clause, "Agreement text". `app.store_agreement_clauses` marks a clause mandatory when the template's `mandatory_clauses` names its title, and `edited` when its wording differs from the template's clause of the same title.
+
+Functions (security definer, `search_path = ''`, revoked from public and anon; public wrappers are security invoker): `public.create_quote(matter, title, template)` (licensed membership with step-up, `app.require_licensed_staff`; expiry = `app.quote_default_expiry` = firm today + `agreements.quote_days`), `public.save_quote(agreement, scope, services, exclusions, deliverables, fee_structure, refund_policy, expires_on, government_fee_note, lines jsonb, instalments jsonb)` (validates and totals in cents; in place while unlocked, else version N+1 "Quote revised" and back to draft; refuses an accepted quote; audited `agreement.quote_saved` / `quote_revised`), `public.send_quote(agreement)` (`app.send_agreement` for a quote: hash, lock, status sent, no envelope, no email; audited `agreement.quote_sent`), `public.quote_to_agreement(quote, service template)` (a service draft with the quote's terms; audited `agreement.created_from_quote`), `public.edit_agreement_clause(agreement, clause, body)` (owner, licensed consultant or case manager with step-up; refuses mandatory clauses and executed or accepted agreements; rebuilds the text and calls `app.revise_agreement`, so an open envelope is superseded). Redefined from their latest definitions: `app.create_agreement` and `app.revise_agreement` (store `body` and rebuild clauses), `app.accept_quote` (records `accepted_at`, `accepted_by`).
+
+Tested in `tests/agreements-quote-editor.rls.test.ts`.
+
 ## Email (repository only, `20261017200000`–`20261017200200`)
 
 Not applied on the live project. Do not run `pnpm db:types` or `supabase db push` for them. Do not deploy the Worker from CI.
