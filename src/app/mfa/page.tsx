@@ -8,18 +8,12 @@ import { PortScreen } from "@/components/port/screen";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { readPendingTotp, withQr } from "@/lib/auth/mfa-pending";
 import { createClient } from "@/lib/supabase/server";
+import { mfaActiveStep } from "@/lib/auth/mfa-step";
 
 export const metadata: Metadata = {
   title: "Two-step sign-in · Casevoya",
   robots: { index: false, follow: false },
 };
-
-/** Code entry when a factor is already verified. Setup otherwise. Explicit recovery and step-up steps stay available. */
-export function mfaActiveStep(hasVerifiedFactor: boolean, requested: number | null): number {
-  if (!hasVerifiedFactor) return 2;
-  if (requested === 1 || requested === 5 || requested === 6) return requested;
-  return 0;
-}
 
 async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: string; next?: string }> }) {
   const params = await searchParams;
