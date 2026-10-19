@@ -44,6 +44,7 @@ pnpm run deploy:app
 ```
 
 - `wrangler.jsonc` mirrors the live Worker: compatibility date and flags, `ASSETS`, the `WORKER_SELF_REFERENCE` service binding, the custom domain `app.casevoya.ca`, `workers_dev = false`.
+- Deploy from a clean checkout. Turbopack scans the project folder, so nested git worktrees (for example `.claude/worktrees/`, about 9 GB here) pushed the build past 15 GB and the kernel killed it; from a clean checkout the Workers build peaks near 5 GB. Do not switch the build to webpack: `globals.css` relies on Turbopack's Tailwind loader for its `@import ... layer(kit)` lines, and a webpack build ships the site without the kit CSS (tried and rolled back on 2026-10-19).
 - `CASEVOYA_TARGET=workers` (set by `build:workers`) turns `cacheComponents` and `partialPrefetching` off until opennextjs-cloudflare#1318 is fixed. Local and CI builds keep them on.
 - `.env.production` holds only the two public Supabase values, which Next.js inlines at build time.
 - Secrets stay on the Worker (`wrangler secret put <NAME>`). Wrangler keeps existing secrets on deploy, and `keep_vars` keeps dashboard variables.
