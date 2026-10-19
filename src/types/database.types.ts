@@ -12660,7 +12660,6 @@ export type Database = {
         | "archived"
       subscription_plan: "solo" | "practice" | "firm" | "enterprise"
       billing_interval: "month" | "year"
-      subscription_status: "trial" | "trial_ended" | "active" | "cancelled"
       support_access_scope: "firm_settings" | "matter_documents" | "matter_records" | "matter_all" | "records_set"
       support_access_status: "pending" | "approved" | "declined" | "expired" | "ended" | "cancelled"
       task_audience: "internal" | "client"
@@ -12925,7 +12924,6 @@ export const Constants = {
       ],
       subscription_plan: ["solo", "practice", "firm", "enterprise"],
       billing_interval: ["month", "year"],
-      subscription_status: ["trial", "trial_ended", "active", "cancelled"],
       support_access_scope: ["firm_settings", "matter_documents", "matter_records", "matter_all", "records_set"],
       support_access_status: ["pending", "approved", "declined", "expired", "ended", "cancelled"],
       matter_party_role: [
