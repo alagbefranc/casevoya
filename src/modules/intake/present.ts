@@ -54,6 +54,20 @@ function sameJson(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+function stable(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stable);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([key, item]) => [key, stable(item)]));
+  }
+  return value;
+}
+
+/** Whether an answer is the same as a saved version (key order ignored), as public.request_intake_correction checks. */
+export function sameAnswer(answer: { presence: Presence; value: Record<string, unknown> }, saved: Pick<AnswerVersion, "presence" | "value"> | undefined): boolean {
+  if (!saved) return false;
+  return answer.presence === saved.presence && JSON.stringify(stable(answer.value)) === JSON.stringify(stable(saved.value ?? {}));
+}
+
 /** Mirrors app.intake_field_visible: a conditional question shows once the question it depends on has the answer it names. */
 export function fieldVisible(field: IntakeField, answers: ReadonlyMap<string, LatestAnswer>): boolean {
   if (!field.show_when) return true;
