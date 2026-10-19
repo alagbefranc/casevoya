@@ -5,6 +5,7 @@
 import { safeAccessError } from "@/lib/auth/step-up";
 import { readBirthDate, todayIso } from "@/modules/sheet/birth-date";
 import { programLabel } from "@/modules/sheet/matters-present";
+import { entitlementError } from "@/modules/subscription/errors";
 
 export type NewMatterOption = { value: string; label: string };
 
@@ -119,6 +120,8 @@ const STEP_UP_ERRORS = new Set([safeAccessError("step-up is required"), safeAcce
 
 /** User-facing copy for a refused create. Never passes a database message through. */
 export function newMatterError(message: string): string {
+  const entitlement = entitlementError(message);
+  if (entitlement) return entitlement;
   if (/sample mode/i.test(message)) {
     return "This firm is still in sample mode, so new matters can only be fictional samples. Turn sample mode off to open a real client’s matter.";
   }

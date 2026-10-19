@@ -6266,33 +6266,75 @@ export type Database = {
       }
       organization_subscriptions: {
         Row: {
+          archived_at: string | null
+          billing_interval: Database["public"]["Enums"]["billing_interval"] | null
+          cancel_at: string | null
+          cancelled_at: string | null
           created_at: string
           created_by: string | null
+          current_period_end: string | null
           duration_snapshot: Json | null
+          extra_seats: number
+          last_webhook_event_id: string | null
+          latest_invoice_status: string | null
+          latest_invoice_url: string | null
           organization_id: string
+          past_due_since: string | null
+          plan: Database["public"]["Enums"]["subscription_plan"] | null
+          restricted_at: string | null
           status: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
           trial_ends_at: string | null
           trial_started_at: string
           updated_at: string
           version: number
         }
         Insert: {
+          archived_at?: string | null
+          billing_interval?: Database["public"]["Enums"]["billing_interval"] | null
+          cancel_at?: string | null
+          cancelled_at?: string | null
           created_at?: string
           created_by?: string | null
+          current_period_end?: string | null
           duration_snapshot?: Json | null
+          extra_seats?: number
+          last_webhook_event_id?: string | null
+          latest_invoice_status?: string | null
+          latest_invoice_url?: string | null
           organization_id: string
+          past_due_since?: string | null
+          plan?: Database["public"]["Enums"]["subscription_plan"] | null
+          restricted_at?: string | null
           status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           trial_ends_at?: string | null
           trial_started_at?: string
           updated_at?: string
           version?: number
         }
         Update: {
+          archived_at?: string | null
+          billing_interval?: Database["public"]["Enums"]["billing_interval"] | null
+          cancel_at?: string | null
+          cancelled_at?: string | null
           created_at?: string
           created_by?: string | null
+          current_period_end?: string | null
           duration_snapshot?: Json | null
+          extra_seats?: number
+          last_webhook_event_id?: string | null
+          latest_invoice_status?: string | null
+          latest_invoice_url?: string | null
           organization_id?: string
+          past_due_since?: string | null
+          plan?: Database["public"]["Enums"]["subscription_plan"] | null
+          restricted_at?: string | null
           status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           trial_ends_at?: string | null
           trial_started_at?: string
           updated_at?: string
@@ -8520,6 +8562,121 @@ export type Database = {
           },
         ]
       }
+      subscription_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          occurred_at: string
+          organization_id: string
+          payload: Json
+          stripe_event_id: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          occurred_at?: string
+          organization_id: string
+          payload?: Json
+          stripe_event_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          occurred_at?: string
+          organization_id?: string
+          payload?: Json
+          stripe_event_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_invoices: {
+        Row: {
+          amount_due_cents: number
+          amount_paid_cents: number
+          created_at: string
+          created_by: string | null
+          currency: string
+          hosted_invoice_url: string | null
+          id: string
+          number: string | null
+          organization_id: string
+          pdf_url: string | null
+          period_end: string | null
+          period_start: string | null
+          status: string
+          stripe_created_at: string | null
+          stripe_invoice_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          amount_due_cents: number
+          amount_paid_cents?: number
+          created_at?: string
+          created_by?: string | null
+          currency: string
+          hosted_invoice_url?: string | null
+          id?: string
+          number?: string | null
+          organization_id: string
+          pdf_url?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          status: string
+          stripe_created_at?: string | null
+          stripe_invoice_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          amount_due_cents?: number
+          amount_paid_cents?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          hosted_invoice_url?: string | null
+          id?: string
+          number?: string | null
+          organization_id?: string
+          pdf_url?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          status?: string
+          stripe_created_at?: string | null
+          stripe_invoice_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_invoices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           audience: Database["public"]["Enums"]["task_audience"]
@@ -10276,6 +10433,43 @@ export type Database = {
       firm_subscription_usage: {
         Args: { p_organization_id: string }
         Returns: Json
+      }
+      firm_subscription: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      subscription_plan_catalog: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      subscription_entitlements: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      subscription_checkout_allowed: {
+        Args: {
+          p_extra_seats: number
+          p_interval: Database["public"]["Enums"]["billing_interval"]
+          p_organization_id: string
+          p_plan: Database["public"]["Enums"]["subscription_plan"]
+        }
+        Returns: Json
+      }
+      subscription_portal_allowed: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      record_subscription_customer: {
+        Args: { p_organization_id: string; p_stripe_customer_id: string }
+        Returns: undefined
+      }
+      apply_stripe_subscription_event: {
+        Args: { p_event: Json }
+        Returns: Json
+      }
+      cache_subscription_stripe_prices: {
+        Args: { p_mode: string; p_prices: Json }
+        Returns: undefined
       }
       firm_staff_directory: {
         Args: { p_organization_id: string }
@@ -12061,7 +12255,16 @@ export type Database = {
         | "submission_unverified"
         | "submission_verified"
         | "cancelled"
-      subscription_status: "trial" | "trial_ended" | "active" | "cancelled"
+      subscription_status:
+        | "trial"
+        | "trial_ended"
+        | "active"
+        | "cancelled"
+        | "past_due"
+        | "restricted"
+        | "archived"
+      subscription_plan: "solo" | "practice" | "firm" | "enterprise"
+      billing_interval: "month" | "year"
       task_audience: "internal" | "client"
       task_priority: "low" | "normal" | "high" | "critical"
       task_status: "open" | "blocked" | "done" | "cancelled"
@@ -12308,7 +12511,17 @@ export const Constants = {
       licence_type: ["RCIC", "RISIA"],
       register_licence_status: ["active", "inactive"],
       sample_proof_step: ["intake", "agreement", "upload", "reminder", "invoice", "export"],
-      subscription_status: ["trial", "trial_ended", "active", "cancelled"],
+      subscription_status: [
+        "trial",
+        "trial_ended",
+        "active",
+        "cancelled",
+        "past_due",
+        "restricted",
+        "archived",
+      ],
+      subscription_plan: ["solo", "practice", "firm", "enterprise"],
+      billing_interval: ["month", "year"],
       matter_party_role: [
         "applicant",
         "dependant",

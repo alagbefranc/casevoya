@@ -192,5 +192,6 @@ export function realClientInviteBlockers(input: {
   if (input.ownerLicence === "missing") blockers.push("owner_licence_missing");
   else if (input.ownerLicence === "blocked") blockers.push("owner_licence_blocked");
   if (input.subscriptionStatus === "trial_ended") blockers.push("trial_ended");
+  if (input.subscriptionStatus === "restricted" || input.subscriptionStatus === "cancelled" || input.subscriptionStatus === "archived") blockers.push("subscription_restricted");
   return blockers;
 }

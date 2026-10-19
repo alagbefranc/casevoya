@@ -8,6 +8,7 @@ import { safeAccessError } from "@/lib/auth/step-up";
 import { staffPerson } from "@/modules/sheet/avatar";
 import { dayMonth } from "@/modules/sheet/home-present";
 import { isoDateInTimeZone, roleLabel } from "@/modules/sheet/present";
+import { entitlementError } from "@/modules/subscription/errors";
 
 /**
  * The dialog's roles, in the Designer's order, and the staff role each one invites.
@@ -241,6 +242,8 @@ const STEP_UP_ERRORS = new Set([safeAccessError("step-up is required"), safeAcce
 
 /** User-facing copy for a refused invite. Never passes a database message through. */
 export function staffInviteError(message: string): string {
+  const entitlement = entitlementError(message);
+  if (entitlement) return entitlement;
   if (/only a firm owner/i.test(message)) return "Only a firm owner can invite or remove staff.";
   if (/cannot be revoked/i.test(message)) return "That invitation was already used or revoked.";
   return safeAccessError(message);

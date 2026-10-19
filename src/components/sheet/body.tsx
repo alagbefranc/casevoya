@@ -35,7 +35,7 @@ import { loadSheetSettingsFirm } from "@/modules/sheet/settings-firm-load";
 import { settingsTab } from "@/modules/sheet/settings-firm-present";
 import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam } from "@/components/sheet/designer/settings";
 import { TeamDialogs } from "@/components/sheet/designer/settings-staff-admin";
-import { SettingsBillingHeader, SheetRetention, SheetSubscription } from "@/components/sheet/designer/settings-billing";
+import { PlanDialog, SettingsBillingHeader, SheetRetention, SheetSubscription } from "@/components/sheet/designer/settings-billing";
 import { loadSheetRetention, loadSheetSubscription } from "@/modules/sheet/settings-billing-load";
 import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
 import { SheetTasks, TaskEditDialog, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
@@ -444,6 +444,7 @@ export async function SheetBody({
           sidebar={loaded.chrome.sidebar}
           header={<SettingsBillingHeader firmName={access.staff.organizationName} pill={loaded.pill} tab={"billing"} />}
           statusbar={loaded.chrome.statusbar}
+          after={loaded.page.dialog ? <PlanDialog data={loaded.page.dialog} /> : null}
         >
           <SheetSubscription data={loaded.page} />
         </SheetFrame>
