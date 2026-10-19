@@ -292,6 +292,15 @@ describe("portal invitations", () => {
     expect(accepted.rows[0].result.ok).toBe(true);
     expect(accepted.rows[0].result.role).toBe("guardian");
 
+    // A portal user saves their own contact choices (the variable/column clash made this fail).
+    await db.query(`select public.save_my_contact_preferences(true, false, true, 'en-CA')`);
+    await asMaintenance(db);
+    const prefs = await db.query<{ email_notices: boolean; deadline_reminders: boolean }>(
+      `select email_notices, deadline_reminders from public.person_contact_preferences where person_id = $1`,
+      [guardian],
+    );
+    expect(prefs.rows).toEqual([{ email_notices: true, deadline_reminders: true }]);
+
     await asMaintenance(db);
     const grants = await db.query<{ kind: string }>(
       `select kind::text as kind from public.access_grants

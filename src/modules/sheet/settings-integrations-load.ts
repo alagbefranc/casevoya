@@ -5,14 +5,18 @@ import { createClient } from "@/lib/supabase/server";
 import { composioConfigured } from "@/modules/integrations/composio";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
-import { composioDialog, integrationsData, notificationPrefsData, type StaffConnection } from "@/modules/sheet/settings-integrations-present";
+import { composioDialog, integrationsData, notificationPrefsData, type StaffConnection, type WhatsAppInput } from "@/modules/sheet/settings-integrations-present";
+import { zernioConfigured } from "@/modules/whatsapp/env";
+import { displayPhone } from "@/modules/whatsapp/phone";
+import { createZernioClient } from "@/modules/whatsapp/zernio";
 
 const BILLING_ROLES = new Set(["firm_owner", "finance_user"]);
 
 /**
  * Settings > Integrations: the firm's real connection state, read as the signed-in staff member
  * (RLS decides): the owner's connected-accounts switch, this person's own Composio connections and
- * last busy-time read, and the firm's stored Stripe status. Nothing calls Composio or Stripe here.
+ * last busy-time read, the firm's stored Stripe status, and its WhatsApp number. Nothing calls
+ * Composio or Stripe here; Zernio is asked only for a connected number's live status (read-only).
  */
 async function loadIntegrations(staff: SheetStaff) {
   const supabase = await createClient({ organizationId: staff.organizationId });
@@ -33,6 +37,7 @@ async function loadIntegrations(staff: SheetStaff) {
       .maybeSingle(),
     canBill ? supabase.from("firm_payment_accounts").select("card_payments_status, requirements_due").eq("organization_id", org).maybeSingle() : null,
   ]);
+  const whatsapp = await loadWhatsApp(supabase, org);
   const mail = emailRuntimeConfig();
   const input = {
     organizationId: org,
@@ -52,9 +57,38 @@ async function loadIntegrations(staff: SheetStaff) {
       isOwner: staff.role === "firm_owner",
       account: account?.data ? { cardPayments: account.data.card_payments_status, requirementsDue: account.data.requirements_due } : null,
     },
+    whatsapp,
     timeZone: staff.timezone,
   };
   return { integrations: integrationsData(input), dialog: composioDialog(input) };
+}
+
+/**
+ * The firm's WhatsApp number (RLS: the firm's staff) and, when connected, Meta's live view of it
+ * through Zernio's number-info (a 400 there means Meta no longer serves the number). A slow or
+ * failed read just leaves the live status out.
+ */
+async function loadWhatsApp(supabase: Awaited<ReturnType<typeof createClient>>, org: string): Promise<WhatsAppInput> {
+  const configured = zernioConfigured();
+  const { data } = await supabase
+    .from("firm_whatsapp_accounts")
+    .select("status, zernio_account_id, display_phone, is_sandbox, connected_at")
+    .eq("organization_id", org)
+    .maybeSingle();
+  const status = data?.status ?? "none";
+  let live: WhatsAppInput["live"] = null;
+  if (configured && status === "connected" && data?.zernio_account_id) {
+    const info = await createZernioClient({ apiKey: process.env.ZERNIO_API_KEY ?? "", timeoutMs: 3000 }).numberInfo(data.zernio_account_id);
+    live = info.ok ? { status: info.data.status, quality: info.data.quality } : info.status === 400 ? "dead" : null;
+  }
+  return {
+    configured,
+    status,
+    phone: displayPhone(data?.display_phone) ?? data?.display_phone ?? null,
+    sandbox: data?.is_sandbox === true,
+    connectedAt: data?.connected_at ?? null,
+    live,
+  };
 }
 
 /** Settings > Notifications: this person's own email choices and the firm's quiet hours. */

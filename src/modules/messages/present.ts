@@ -28,6 +28,8 @@ export type ChatMessage = {
   readBy: string[];
   unread: boolean;
   attachments: ChatAttachment[];
+  /** How it reached the firm: the portal or Sheet, or a WhatsApp message from the client. */
+  channel?: "portal" | "whatsapp";
 };
 
 export type ChatThread = {
@@ -43,6 +45,11 @@ export type ChatThread = {
   preview: string;
   unread: number;
   sample: boolean;
+  /**
+   * Staff: someone on this thread chose WhatsApp. `until` is when their 24-hour window closes
+   * (a reply goes on WhatsApp until then); null when it is closed (the email notice goes instead).
+   */
+  whatsapp?: { until: string | null } | null;
 };
 
 export type ChatAudienceOption = { personId: string; name: string; role: string; email: boolean };
@@ -180,6 +187,14 @@ export function audienceLine(input: {
   }
   const visible = `${joinNames(input.audience)} and staff on this matter`;
   return { visible, hidden: input.excluded.length ? `Not ${joinNames(input.excluded).replace(/ and /g, " or ")}` : null };
+}
+
+/** The staff composer's WhatsApp line for a thread, or null when nobody on it chose WhatsApp. */
+export function whatsappLine(thread: Pick<ChatThread, "whatsapp"> | null | undefined, timezone: string): string | null {
+  const wa = thread?.whatsapp;
+  if (!wa) return null;
+  if (wa.until) return `Your reply also goes to them on WhatsApp (window open until ${clockLabel(wa.until, timezone)}).`;
+  return "WhatsApp’s 24-hour reply window is closed: they get the usual email notice, and a WhatsApp notice to open the portal.";
 }
 
 /** Threads newest first; unread first among equals is not applied (time order is the contract). */

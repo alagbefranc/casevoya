@@ -101,6 +101,8 @@ import {
   runIntSync,
   runNotifPref,
   runQuietHours,
+  runWaConnect,
+  runWaDisconnect,
 } from "./settings-integrations-acts";
 import { reopenFirmDialog, runFirmSave } from "./settings-firm-acts";
 import { bindOffboardHold, mountMember, mountOffboard, reopenStaffAdmin, runContinuitySave, runMemberAct } from "./settings-staff-admin-acts";
@@ -737,14 +739,18 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       // Settings > Integrations and Notifications: connected accounts, connections, busy times,
       // the person's own email switches and the firm's quiet hours.
       const setting = target.closest<HTMLElement>(
-        ".k2-sw[data-composio], [data-composio-enable], [data-int-connect], [data-int-disconnect], [data-int-sync], .k2-sw[data-notif-pref], .k2-sw[data-quiet]",
+        ".k2-sw[data-composio], [data-composio-enable], [data-int-connect], [data-int-disconnect], [data-int-sync], .k2-sw[data-notif-pref], .k2-sw[data-quiet], [data-wa-connect], [data-wa-disconnect]",
       );
       if (setting && root.contains(setting)) {
         event.preventDefault();
         if (setting.hasAttribute("disabled")) return;
         const data = setting.dataset;
         const run =
-          data.composio !== undefined
+          data.waConnect !== undefined
+            ? () => runWaConnect(setting)
+            : data.waDisconnect !== undefined
+              ? () => runWaDisconnect(setting, router)
+              : data.composio !== undefined
             ? () => runComposioSwitch(setting, openDialog, router)
             : data.composioEnable !== undefined
               ? () => runComposioEnable(setting, router)

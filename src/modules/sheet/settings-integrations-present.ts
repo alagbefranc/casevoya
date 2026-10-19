@@ -31,7 +31,21 @@ export type IntegrationsInput = {
   /** When their Google Calendar busy times were last read, if ever. */
   busySyncedAt: string | null;
   stripe: { canSee: boolean; isOwner: boolean; account: { cardPayments: string; requirementsDue: number } | null };
+  /** The firm's WhatsApp number through Zernio. Absent: shown as not available. */
+  whatsapp?: WhatsAppInput;
   timeZone: string;
+};
+
+/** The firm's WhatsApp connection (firm_whatsapp_accounts) and Meta's live view of the number. */
+export type WhatsAppInput = {
+  /** ZERNIO_API_KEY is set on this server. */
+  configured: boolean;
+  status: "none" | "pending" | "connected" | "disconnected";
+  phone: string | null;
+  sandbox: boolean;
+  connectedAt: string | null;
+  /** GET /v1/whatsapp/number-info: null when not read; "dead" when Meta no longer serves the number. */
+  live: { status: string | null; quality: string | null } | "dead" | null;
 };
 
 /** Where the Connect Link comes back to (connectAccount accepts app.casevoya.ca only). */
@@ -102,6 +116,50 @@ function composioRow(input: IntegrationsInput, toolkit: ComposioToolkit, name: s
     unlink,
     action: toolkit === "googlecalendar" ? { label: "Sync busy times", attrs: { "data-int-sync": "1", "data-org": org } } : connect("Reconnect"),
   };
+}
+
+const QUALITY: Record<string, string> = { GREEN: "quality high", YELLOW: "quality medium", RED: "quality low" };
+
+/**
+ * WhatsApp through Zernio: the firm's own number, connected by the owner with Meta's Embedded
+ * Signup. Only the owner gets Connect and Disconnect (both need a recent step-up); everyone else
+ * sees the state. Built from the same row parts as the Composio and Stripe rows.
+ */
+function whatsappRow(input: IntegrationsInput): IntegrationRow {
+  const wa = input.whatsapp;
+  const org = input.organizationId;
+  const base = {
+    logo: "/assets/logos/whatsapp.svg",
+    name: "WhatsApp",
+    tag: wa?.sandbox ? "sandbox" : "optional",
+    sub: "Client notices and replies, with each client’s consent",
+  } as const;
+  if (!wa?.configured) {
+    return { ...base, state: { tone: "gr", label: "Not available" }, action: { label: "Connect", attrs: { disabled: true, title: "WhatsApp isn’t set up on this server" } } };
+  }
+  if (wa.status === "connected") {
+    const live = wa.live;
+    const right =
+      live === "dead"
+        ? "Meta no longer serves this number"
+        : live
+          ? [live.status ? `Meta: ${live.status.toLowerCase()}` : null, live.quality ? (QUALITY[live.quality] ?? null) : null].filter(Boolean).join(", ") || "Meta status unknown"
+          : wa.connectedAt
+            ? `connected ${day(wa.connectedAt, input.timeZone)}`
+            : "connected";
+    return {
+      ...base,
+      sub: { left: wa.phone ?? "Your firm’s number", right },
+      state: live === "dead" ? { tone: "bad", label: "Needs reconnecting" } : { tone: "ok", label: "Connected" },
+      unlink: input.isOwner ? { "aria-label": "Disconnect WhatsApp", "data-wa-disconnect": "1", "data-org": org, "data-fpb": "1" } : null,
+      action: null,
+    };
+  }
+  const state: MatterBadge = wa.status === "pending" ? { tone: "chg", label: "Pending", detail: "finish with Meta" } : NOT_CONNECTED;
+  if (!input.isOwner) {
+    return { ...base, state, action: { label: "Connect", attrs: { disabled: true, title: "Only the firm owner can connect WhatsApp" } } };
+  }
+  return { ...base, state, action: { label: "Connect", attrs: { "data-wa-connect": "1", "data-org": org } } };
 }
 
 function stripeRow(input: IntegrationsInput): IntegrationRow {
@@ -189,7 +247,7 @@ export function integrationsData(input: IntegrationsInput): IntegrationsData {
       planned("Google Meet", "googlemeet.svg", "Meetings"),
       planned("Twilio", "twilio.svg", { left: "SMS reminders", right: "optional" }),
       later("Xero", "xero.svg", "Accounting export", { tone: "gr", label: "Later" }),
-      later("WhatsApp", "whatsapp.svg", "Messaging", { tone: "gr", label: "Later", detail: "approved channel only" }),
+      whatsappRow(input),
     ],
   };
 }

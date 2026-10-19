@@ -8,6 +8,7 @@ import { DEFAULT_QUIET_HOURS } from "@/modules/notifications/preferences";
 import { needsStepUp } from "@/modules/sheet/matter-wire";
 import { INTEGRATIONS_PATH } from "@/modules/sheet/settings-integrations-present";
 import { setQuietHours } from "@/modules/tasks/actions";
+import { disconnectWhatsApp, finishWhatsAppConnect, startWhatsAppConnect } from "@/modules/whatsapp/actions";
 
 type Router = { replace: (href: string) => void; refresh: () => void };
 
@@ -80,12 +81,66 @@ export async function runIntSync(button: HTMLElement, router: Router) {
   router.refresh();
 }
 
+function stepUp() {
+  toast2("Confirm it’s you first", { kind: "warn", sub: "Then try again. Only the firm owner can change WhatsApp." });
+  window.location.assign(`/mfa?step=6&next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`);
+}
+
+/** WhatsApp Connect (firm owner): Meta's Embedded Signup through Zernio; it comes back to this tab. */
+export async function runWaConnect(button: HTMLElement) {
+  const result = await startWhatsAppConnect({ organizationId: button.dataset.org ?? "" });
+  if ("error" in result) {
+    if (needsStepUp(result.error)) return stepUp();
+    toast2(result.error, { kind: "bad", sub: "Nothing was connected." });
+    return;
+  }
+  window.location.assign(result.url);
+}
+
+/** WhatsApp Disconnect (firm owner): nothing more goes out on WhatsApp from now on. */
+export async function runWaDisconnect(button: HTMLElement, router: Router) {
+  const result = await disconnectWhatsApp({ organizationId: button.dataset.org ?? "" });
+  if ("error" in result) {
+    if (needsStepUp(result.error)) return stepUp();
+    toast2(result.error, { kind: "bad", sub: "Nothing was changed." });
+    return;
+  }
+  toast2("WhatsApp disconnected", { kind: "ok", sub: "Clients get email notices only. Their WhatsApp choices are kept for when you reconnect." });
+  router.refresh();
+}
+
+/** Back from Embedded Signup (`?wa=1&connected=whatsapp&accountId=…`, or `&error=…`). */
+function mountWhatsApp(root: HTMLElement, router: Router, url: URL): boolean {
+  if (url.searchParams.get("wa") !== "1") return false;
+  const organizationId = root.querySelector<HTMLElement>("[data-org]")?.dataset.org ?? "";
+  const accountId = url.searchParams.get("accountId") ?? "";
+  const failed = url.searchParams.get("error");
+  if (failed || !accountId) {
+    router.replace(INTEGRATIONS_PATH);
+    toast2("WhatsApp wasn’t connected", { kind: "warn", sub: failed === "connection_cancelled" ? "The sign-up was cancelled." : "Meta didn’t finish the sign-up. Try Connect again." });
+    return true;
+  }
+  void finishWhatsAppConnect({ organizationId, accountId }).then((result) => {
+    if ("error" in result) {
+      if (needsStepUp(result.error)) return stepUp();
+      router.replace(INTEGRATIONS_PATH);
+      toast2(result.error, { kind: "bad", sub: "Try Connect again." });
+      return;
+    }
+    router.replace(INTEGRATIONS_PATH);
+    toast2("WhatsApp connected", { kind: "ok", sub: "Clients who choose WhatsApp now get portal notices there. Meta must approve the message templates first." });
+    router.refresh();
+  });
+  return true;
+}
+
 /**
  * Back from the Connect Link (`?tab=integrations&connected=gmail`): records the connection when
  * Composio reports it active, then shows the tab without the extra parameters.
  */
 export function mountIntegrations(root: HTMLElement, router: Router) {
   const url = new URL(window.location.href);
+  if (url.searchParams.get("tab") === "integrations" && mountWhatsApp(root, router, url)) return;
   const toolkit = url.searchParams.get("connected");
   if (url.searchParams.get("tab") !== "integrations" || !isToolkit(toolkit)) return;
   const organizationId = root.querySelector<HTMLElement>("[data-org]")?.dataset.org ?? "";
