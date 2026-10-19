@@ -48,6 +48,9 @@ const WIRED: Record<string, Record<string, unknown>> = {
   EM16a: { template: "consultation_booked", firm: FIRM, starts_at: "2026-10-22T14:30:00Z", time_zone: "America/Vancouver", consultant_name: "Sam Example", portal: false, location_kind: "phone" },
   EM16b: { template: "consultation_rescheduled", firm: FIRM, starts_at: "2026-10-27T14:30:00Z", time_zone: "America/Toronto", portal: true },
   EM16c: { template: "consultation_cancelled", firm: FIRM, starts_at: "2026-10-27T14:30:00Z", time_zone: "America/Toronto", portal: false, booking_page: "maple-example" },
+  // Support access (20261020170200_support_access_mail.sql): to the firm's owners.
+  EX11: { template: "support_requested", firm: FIRM, minutes: 60 },
+  EM17: { template: "support_granted", firm: FIRM, approver: "Sam Example", minutes: 60, ends_at: "2026-10-22T15:40:00Z", time_zone: "America/Toronto" },
 };
 
 function slug(name: string): string {

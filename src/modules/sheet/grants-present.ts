@@ -1,11 +1,181 @@
 /**
  * Pure helpers for the Sheet's Access grants page: the firm's explicit and guardian grants in the
- * Designer's words, the New access grant dialog's choices, and the date it reads.
+ * Designer's words, the Support access tab from public.firm_support_access (SEC-09), the New
+ * access grant dialog's choices, and the date it reads.
  */
-import type { GrantDialogData, GrantRow, GrantsData, GrantsTab } from "@/components/sheet/designer/grants";
+import type { GrantDialogData, GrantRow, GrantsData, GrantsTab, SupportRequest } from "@/components/sheet/designer/grants";
 import { dayMonth } from "@/modules/sheet/home-present";
 import { longDate } from "@/modules/sheet/matter-present";
 import { isoDateInTimeZone, roleLabel } from "@/modules/sheet/present";
+
+export type SupportScope = "firm_settings" | "matter_documents" | "matter_records" | "matter_all" | "records_set";
+
+export type SupportStatus = "pending" | "approved" | "declined" | "expired" | "ended" | "cancelled";
+
+/** public.firm_support_access(org): the open grant, the waiting request, and the history. */
+export type FirmSupportAccess = {
+  alert: {
+    id: string;
+    requester_name: string;
+    ticket_ref: string | null;
+    scope: SupportScope;
+    matter_reference: string | null;
+    matter_title: string | null;
+    reason: string;
+    approved_by_name: string | null;
+    approved_at: string | null;
+    starts_at: string | null;
+    ends_at: string;
+    extension_count: number;
+    uses: number;
+  } | null;
+  request: {
+    id: string;
+    requester_name: string;
+    requester_email: string | null;
+    ticket_ref: string | null;
+    scope: SupportScope;
+    matter_reference: string | null;
+    matter_title: string | null;
+    not_included: string | null;
+    reason: string;
+    requested_minutes: number;
+    created_at: string;
+  } | null;
+  pending: number;
+  history: {
+    id: string;
+    status: SupportStatus;
+    requester_name: string;
+    scope: SupportScope;
+    matter_reference: string | null;
+    approved_by_name: string | null;
+    created_at: string;
+    starts_at: string | null;
+    ends_at: string | null;
+    ended_at: string | null;
+    decline_reason: string | null;
+    uses: number;
+  }[];
+};
+
+const SCOPES = new Set<string>(["firm_settings", "matter_documents", "matter_records", "matter_all", "records_set"]);
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+/** Only a well-formed answer from the database; anything else reads as "nothing" rather than a guess. */
+export function readSupportAccess(raw: unknown): FirmSupportAccess | null {
+  const root = record(raw);
+  if (!root) return null;
+  const alert = record(root.alert);
+  const request = record(root.request);
+  const okScope = (row: Record<string, unknown> | null) => Boolean(row && typeof row.id === "string" && SCOPES.has(String(row.scope)));
+  return {
+    alert: okScope(alert) && typeof alert!.ends_at === "string" ? (alert as FirmSupportAccess["alert"]) : null,
+    request: okScope(request) && typeof request!.requested_minutes === "number" ? (request as FirmSupportAccess["request"]) : null,
+    pending: typeof root.pending === "number" ? root.pending : 0,
+    history: Array.isArray(root.history) ? (root.history.filter((row) => okScope(record(row))) as FirmSupportAccess["history"]) : [],
+  };
+}
+
+function matterName(reference: string | null, title: string | null): string {
+  return reference || title || "one matter";
+}
+
+/** A grant's scope in the Designer's words: the alert's clause, the request's Scope line, the history's cell. */
+export function supportScopeLabel(scope: SupportScope, matterReference: string | null, matterTitle: string | null, form: "alert" | "request" | "history"): string {
+  const matter = matterName(matterReference, matterTitle);
+  switch (scope) {
+    case "firm_settings":
+      return form === "request" ? "Firm settings" : "Firm settings only";
+    case "matter_documents":
+      return form === "alert" ? `${matter} documents only` : form === "request" ? `Document records for ${matter}` : `${matter} documents`;
+    case "matter_records":
+      return form === "alert" ? `${matter} records only` : form === "request" ? `Parties, tasks and deadlines for ${matter}` : `${matter} records`;
+    case "matter_all":
+      return form === "alert" ? `${matter}, all records` : form === "request" ? `All records for ${matter}` : `${matter}, all records`;
+    case "records_set":
+      return form === "request" ? "A named set of records" : "A named set of records only";
+  }
+}
+
+/** What a scope never opens, when the request did not say. */
+export function supportNotIncluded(scope: SupportScope): string {
+  switch (scope) {
+    case "firm_settings":
+      return "Client files, document contents, messages, finance";
+    case "records_set":
+      return "Everything the request doesn’t name";
+    default:
+      return "Document contents, messages, finance, other matters";
+  }
+}
+
+function clock(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
+}
+
+/** "2 records, both listed in Audit": how many records support opened under a grant. */
+export function supportOpened(uses: number, status: SupportStatus): string {
+  if (status === "declined" || status === "cancelled") return "Nothing";
+  if (uses === 0) return "Nothing opened";
+  if (uses === 1) return "1 record, listed in Audit";
+  if (uses === 2) return "2 records, both listed in Audit";
+  return `${uses} records, all listed in Audit`;
+}
+
+export function supportPill(pending: number): string {
+  if (pending === 0) return "No support requests";
+  return pending === 1 ? "1 support request" : `${pending} support requests`;
+}
+
+/** The Support access tab from the database's answer. `organizationId` wires the buttons (live only). */
+export function supportData(raw: FirmSupportAccess | null, now: Date, timeZone: string, organizationId?: string): SupportRequest {
+  if (!raw) return { alert: null, request: null, history: [] };
+  const wire = (id: string) => (organizationId ? { "data-support-id": id, "data-org": organizationId } : undefined);
+  const alert = raw.alert;
+  const minutesLeft = alert ? Math.max(1, Math.ceil((new Date(alert.ends_at).getTime() - now.getTime()) / 60_000)) : 0;
+  const request = raw.request;
+  return {
+    alert: alert
+      ? {
+          title: `Support grant ends in ${minutesLeft} ${minutesLeft === 1 ? "minute" : "minutes"}`,
+          parts: [
+            `Casevoya support (${alert.requester_name})`,
+            supportScopeLabel(alert.scope, alert.matter_reference, alert.matter_title, "alert"),
+            `approved by ${alert.approved_by_name || "a firm owner"}${alert.approved_at ? ` at ${clock(alert.approved_at, timeZone)}` : ""}`,
+            `reason: “${alert.reason}”.`,
+          ],
+          wire: wire(alert.id),
+        }
+      : null,
+    request: request
+      ? {
+          from: `${request.requester_name}, Casevoya platform support`,
+          scope: supportScopeLabel(request.scope, request.matter_reference, request.matter_title, "request"),
+          notIncluded: request.not_included || supportNotIncluded(request.scope),
+          duration: `${request.requested_minutes} minutes from approval`,
+          reason: request.ticket_ref ? { left: `Ticket ${request.ticket_ref}`, right: request.reason } : request.reason,
+          approveLabel: `Approve for ${request.requested_minutes} minutes`,
+          wire: wire(request.id),
+        }
+      : null,
+    history: raw.history.map((row) => {
+      const start = row.starts_at ?? row.created_at;
+      const end = row.ended_at ?? row.ends_at;
+      const day = dayMonth(isoDateInTimeZone(new Date(start), timeZone));
+      return {
+        when: row.starts_at && end ? `${day} ${clock(start, timeZone)}–${clock(end, timeZone)}` : `${day} ${clock(start, timeZone)}`,
+        who: row.requester_name,
+        scope: supportScopeLabel(row.scope, row.matter_reference, null, "history"),
+        approvedBy: row.approved_by_name || (row.status === "declined" ? "Declined" : row.status === "cancelled" ? "Withdrawn by support" : "A firm owner"),
+        opened: supportOpened(row.uses, row.status),
+      };
+    }),
+  };
+}
 
 export type FirmGrant = {
   id: string;
@@ -66,7 +236,7 @@ export function grantRow(grant: FirmGrant, now: Date, timeZone: string): GrantRo
 }
 
 export const SUPPORT_INTRO =
-  "Casevoya support can’t see your client files. Support access isn’t offered: support can’t ask to open a matter, so there’s nothing to approve here.";
+  "Casevoya support can’t see your client files unless you approve a request. Access is scoped, lasts 60 minutes by default, ends on its own, and every record support opens is logged.";
 
 export const LIMITS_INTRO =
   "Casevoya doesn’t narrow a role to an office or team yet. Everyone works firm-wide within their role and the matters they’re assigned to.";
@@ -74,14 +244,22 @@ export const LIMITS_INTRO =
 export const GRANTS_NOTE =
   "A grant opens one matter’s records for one person, read only, until the end date. They can’t browse your directory or see other matters.";
 
-export function grantsData(tab: GrantsTab, grants: readonly FirmGrant[], staff: readonly GrantStaff[], now: Date, timeZone: string): GrantsData {
+export function grantsData(
+  tab: GrantsTab,
+  grants: readonly FirmGrant[],
+  staff: readonly GrantStaff[],
+  now: Date,
+  timeZone: string,
+  support: FirmSupportAccess | null = null,
+  organizationId?: string,
+): GrantsData {
   const active = grants.filter((grant) => grantActive(grant, now)).length;
   return {
     tab,
-    pills: [`${active} active`, "No support requests"],
+    pills: [`${active} active`, supportPill(support?.pending ?? 0)],
     grants: grants.map((grant) => grantRow(grant, now, timeZone)),
     grantsNote: GRANTS_NOTE,
-    support: { alert: null, request: null, history: [] },
+    support: supportData(support, now, timeZone, organizationId),
     supportIntro: SUPPORT_INTRO,
     limits: staff
       .filter((member) => member.status === "active")

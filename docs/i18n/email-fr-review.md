@@ -395,7 +395,7 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:2742831211c
 
 ## EM17: Support access granted
 
-A firm owner approves a Casevoya support access request. Support access is not built yet. Audience: firm owner. [French preview](../email/previews/fr/EM17.html)
+A firm owner approves a Casevoya support access request (approve_support_access_request; outbox support_access.approved, template support_granted), to every active firm owner at their sign-in address. The approver's name, the minutes, the end time in the firm's zone; never the matter or the reason. Audience: firm owner. [French preview](../email/previews/fr/EM17.html)
 
 Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:d1e82f0bd39e…`
 
@@ -616,7 +616,7 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:5609f6110cb
 
 ## EX11: Support access requested
 
-Casevoya support asks for access. Support access is not built yet. Audience: firm owner. [French preview](../email/previews/fr/EX11.html)
+Casevoya support asks a firm for access from the admin portal (create_support_access_request; outbox support_access.requested, template support_requested), to every active firm owner at their sign-in address. The minutes asked for only; never the matter or the reason. Audience: firm owner. [French preview](../email/previews/fr/EX11.html)
 
 Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:d2d35292fe75…`
 
