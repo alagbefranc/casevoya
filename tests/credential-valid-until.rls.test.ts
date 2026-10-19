@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asAnon, asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { firmDay } from "./helpers/firm-day";
 
 let db: TestDb;
 
@@ -95,10 +96,9 @@ async function storedValidUntil(credentialId: string) {
   return row.rows[0]?.valid_until ?? null;
 }
 
+// The firm's date (America/Toronto, the default), as app.set_credential_valid_until counts it.
 async function futureDate(days: number) {
-  await asMaintenance(db);
-  const row = await db.query<{ d: string }>(`select (current_date + $1::int)::text as d`, [days]);
-  return row.rows[0].d;
+  return firmDay(days);
 }
 
 async function firm() {

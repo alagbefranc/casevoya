@@ -8,9 +8,20 @@ const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 /** The earliest date of birth the dialogs accept. */
 export const EARLIEST_BIRTH_DATE = "1900-01-01";
 
-/** Today as `YYYY-MM-DD` in UTC, the calendar the database's current_date uses. */
-export function todayIso(now: Date = new Date()): string {
-  return now.toISOString().slice(0, 10);
+/** The firm's timezone when none is known: the database's default (organizations.timezone). */
+export const DEFAULT_FIRM_TIME_ZONE = "America/Toronto";
+
+/**
+ * Today as `YYYY-MM-DD` in the firm's timezone, the calendar the database's app.firm_today uses
+ * (America/Toronto when the zone is not given or not usable).
+ */
+export function todayIso(now: Date = new Date(), timeZone: string | null | undefined = DEFAULT_FIRM_TIME_ZONE): string {
+  const format = (zone: string) => new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  try {
+    return format(timeZone || DEFAULT_FIRM_TIME_ZONE);
+  } catch {
+    return format(DEFAULT_FIRM_TIME_ZONE);
+  }
 }
 
 /**

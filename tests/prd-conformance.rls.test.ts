@@ -556,7 +556,7 @@ describe("date of birth and minor status", () => {
     );
     expect(stillFlag.rows[0].is_minor).toBe(true);
     await db.query(
-      `update public.persons set date_of_birth = (current_date - interval '18 years')::date, birth_date_precision = 'day' where id = $1`,
+      `update public.persons set date_of_birth = (app.firm_today(organization_id) - interval '18 years')::date, birth_date_precision = 'day' where id = $1`,
       [child],
     );
     const after = await db.query<{ is_minor: boolean; live: boolean }>(
