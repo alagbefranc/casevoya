@@ -17,6 +17,7 @@ import type { ReactNode } from "react";
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
+import { FilterEmpty } from "./filter-empty";
 
 export type AgreementsText = string | { left: string; right: string };
 
@@ -63,9 +64,12 @@ export type AgreementsData = {
   rows: AgreementRow[];
   /** No rows. `action` is the empty state's button: New agreement, or add a template first. */
   empty: null | { title: string; copy: string; action: { label: string; dialog: string } };
+  /** Live only: the hidden "Nothing matches" panel the chips and search show when no row matches. */
+  filterEmpty?: boolean;
 };
 
-export type AgreementsHeaderData = { records: number; waiting: number; create: string };
+
+export type AgreementsHeaderData = { records: number; waiting: number; create: string; tab?: AgreementsTab };
 
 /** What choosing a template fills in (only fields the person has not changed). */
 export type AgreementTermDefaults = { fee: string; currency: string; exclusions: string; refund: string; government: string };
@@ -114,10 +118,30 @@ function Text({ value }: { value: AgreementsText }) {
   return typeof value === "string" ? <>{value}</> : <Pair left={value.left} right={value.right} />;
 }
 
-const UNDERLINE = { left: "0px", width: "88px" };
+export type AgreementsTab = "list" | "quote" | "editor" | "envelope" | "compare" | "authority";
 
-/** The Agreements page's own top bar and its tab strip, All agreements selected. */
+/** The captured underline under each tab. */
+const UNDERLINE: Record<AgreementsTab, { left: string; width: string }> = {
+  list: { left: "0px", width: "88px" },
+  quote: { left: "114px", width: "80px" },
+  editor: { left: "220px", width: "102px" },
+  envelope: { left: "348px", width: "55px" },
+  compare: { left: "429px", width: "105px" },
+  authority: { left: "560px", width: "143px" },
+};
+
+const TABS: [AgreementsTab, string][] = [
+  ["list", "All agreements"],
+  ["quote", "Quote builder"],
+  ["editor", "Agreement editor"],
+  ["envelope", "Envelope"],
+  ["compare", "Compare versions"],
+  ["authority", "Representation authority"],
+];
+
+/** The Agreements page's own top bar and its tab strip (All agreements selected unless `tab` says otherwise). */
 export function AgreementsHeader({ data }: { data: AgreementsHeaderData }) {
+  const tab = data.tab ?? "list";
   return (
     <>
       <header className={"top"}>
@@ -143,25 +167,12 @@ export function AgreementsHeader({ data }: { data: AgreementsHeaderData }) {
         </span>
       </header>
       <div className={"tabs"} role={"tablist"}>
-        <button role={"tab"} data-t={"list"} className={"on"}>
-          {"All agreements"}
-        </button>
-        <button role={"tab"} data-t={"quote"}>
-          {"Quote builder"}
-        </button>
-        <button role={"tab"} data-t={"editor"}>
-          {"Agreement editor"}
-        </button>
-        <button role={"tab"} data-t={"envelope"}>
-          {"Envelope"}
-        </button>
-        <button role={"tab"} data-t={"compare"}>
-          {"Compare versions"}
-        </button>
-        <button role={"tab"} data-t={"authority"}>
-          {"Representation authority"}
-        </button>
-        <i className={"ul"} style={UNDERLINE}></i>
+        {TABS.map(([key, label]) => (
+          <button key={key} role={"tab"} data-t={key} className={key === tab ? "on" : undefined}>
+            {label}
+          </button>
+        ))}
+        <i className={"ul"} style={UNDERLINE[tab]}></i>
       </div>
     </>
   );
@@ -280,10 +291,11 @@ export function SheetAgreements({ data }: { data: AgreementsData }) {
           </table>
         </div>
       )}
+      {data.filterEmpty && !data.empty ? <FilterEmpty n={3} /> : null}
       <p className={"fp-note rv"} style={i(4)}>
         <Icon name={"info"} cls={"ic s"} />
         {
-          " Declined, expired, voided and partially signed envelopes keep their full event history (AGR-04). Casevoya doesn’t judge whether an agreement is legally sufficient; your professional reviewer owns the mandatory clauses."
+          " Declined, expired, voided and partially signed envelopes keep their full event history. Casevoya doesn’t judge whether an agreement is legally sufficient; your professional reviewer owns the mandatory clauses."
         }
       </p>
     </>
@@ -451,9 +463,14 @@ export function NewAgreementDialog({ data }: { data: NewAgreementDialogData }) {
           {"Cancel"}
         </button>
         {live ? (
-          <button className={"btn p"} data-new-agreement={"1"} data-org={live.organizationId} disabled={live.blocked ? true : undefined}>
-            {data.submit}
-          </button>
+          <>
+            <button className={"btn"} data-new-agreement={"draft"} data-org={live.organizationId} disabled={live.blocked ? true : undefined}>
+              {"Save as draft"}
+            </button>
+            <button className={"btn p"} data-new-agreement={"1"} data-org={live.organizationId} disabled={live.blocked ? true : undefined}>
+              {data.submit}
+            </button>
+          </>
         ) : (
           <button className={"btn p"} data-close={"dlgNewQ"} data-goto-tab={"quote"}>
             {data.submit}

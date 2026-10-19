@@ -411,6 +411,8 @@ export function agreementStaffError(message: string): string {
   if (/identity does not match/i.test(message)) return "This signature is waiting for someone else.";
   if (/envelope expired/i.test(message)) return "This envelope expired. Send a new one.";
   if (/no longer open/i.test(message)) return "This agreement is no longer open for signature.";
+  if (/void needs a reason/i.test(message)) return "Say why this envelope is voided.";
+  if (/executed envelope cannot be voided/i.test(message)) return "An executed agreement can’t be voided. Send an amendment instead.";
   if (/agreement denied/i.test(message)) return "You can’t create agreements on this matter.";
   if (/staff access denied/i.test(message)) {
     return "Your role can’t do that. A licensed consultant approves templates; an owner, consultant or case manager sends agreements.";
@@ -421,6 +423,104 @@ export function agreementStaffError(message: string): string {
 /** `?dlg=` values that reopen this page's dialogs after a step-up. */
 export const AGREEMENT_DIALOG = "agreement";
 export const TEMPLATE_DIALOG = "template";
+export const AUTHORITY_DIALOG = "authority";
+export const VOID_DIALOG = "void";
+
+/** The Agreements page's tabs, in the Designer's order. */
+export const AGREEMENT_TABS = ["list", "quote", "editor", "envelope", "compare", "authority"] as const;
+export type AgreementsTabKey = (typeof AGREEMENT_TABS)[number];
+
+export function agreementsTab(raw: string | null | undefined): AgreementsTabKey {
+  return (AGREEMENT_TABS as readonly string[]).includes(raw ?? "") ? (raw as AgreementsTabKey) : "list";
+}
+
+/** One agreement's own view: its envelope, signers, events and signed copies. */
+export function agreementEnvelopeHref(agreementId: string): string {
+  return `/sheet/agreements?${new URLSearchParams({ tab: "envelope", view: agreementId })}`;
+}
+
+/** The sealed PDF (or completion certificate) of a completed envelope, read through RLS. */
+export function agreementPdfHref(envelopeId: string, organizationId: string, which: "executed" | "certificate"): string {
+  const params = new URLSearchParams({ organizationId });
+  if (which === "certificate") params.set("which", "certificate");
+  return `/api/agreements/${envelopeId}/pdf?${params}`;
+}
+
+/**
+ * The toast after an agreement is sent. A sample matter's people are fictional: nobody is
+ * emailed, so the toast never says they are.
+ */
+export function sentAgreementToast(sample: boolean): { title: string; sub: string } {
+  if (sample) {
+    return {
+      title: "Sample agreement sent for signature",
+      sub: "This is a sample matter, so nobody is emailed. Sign it as the sample client in the portal preview, or from the matter.",
+    };
+  }
+  return {
+    title: "Agreement sent for signature",
+    sub: "The applicant signs in their portal. They get an email that it is ready. When the firm countersigns, the consultant is emailed at their turn.",
+  };
+}
+
+/** What Void envelope sends, or the first thing to fix. */
+export function readVoid(fields: { envelopeId?: string | null; reason?: string | null }): { input: { envelopeId: string; reason: string } } | { error: string } {
+  const envelopeId = clean(fields.envelopeId);
+  const reason = clean(fields.reason);
+  if (!UUID.test(envelopeId)) return { error: "Choose the envelope to void." };
+  if (reason.length < 3) return { error: "Say why this envelope is voided. It stays on the record." };
+  if (reason.length > 500) return { error: "Keep the reason to 500 characters." };
+  return { input: { envelopeId, reason } };
+}
+
+/** The Record authority dialog's client choice: which matter and person. */
+export function authorityValue(matterId: string, personId: string): string {
+  return `${matterId}:${personId}`;
+}
+
+export type AuthorityInput = { matterId: string; personId: string; scope: string; evidence: string; effectiveOn: string };
+
+/** What Record representation authority sends, or the first thing to fix. The database checks it again. */
+export function readAuthority(fields: { client?: string | null; scope?: string | null; evidence?: string | null; effective?: string | null }):
+  | { input: AuthorityInput }
+  | { error: string } {
+  const [matterId, personId, extra] = clean(fields.client).split(":");
+  if (extra !== undefined || !UUID.test(matterId ?? "") || !UUID.test(personId ?? "")) return { error: "Choose the client." };
+  const scope = clean(fields.scope);
+  if (scope.length < 3) return { error: "Describe what the authority covers, like the application it is for." };
+  if (scope.length > 1000) return { error: "Keep the scope to 1,000 characters." };
+  const evidence = clean(fields.evidence);
+  if (!evidence) return { error: "Say where the signed authority is kept, like the document’s name on the matter." };
+  if (evidence.length > 300) return { error: "Keep the evidence to 300 characters." };
+  const effectiveOn = clean(fields.effective);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveOn) || Number.isNaN(Date.parse(`${effectiveOn}T12:00:00Z`))) return { error: "Enter the date the authority takes effect." };
+  return { input: { matterId, personId, scope, evidence, effectiveOn } };
+}
+
+/** The Representation authority table's state for one row (firm-day dates, YYYY-MM-DD). */
+export function authorityBadge(row: { effective_on: string; revoked_at: string | null }, today: string): MatterBadge {
+  if (row.revoked_at) return { tone: "gr", label: "Revoked" };
+  if (row.effective_on > today) return { tone: "rev", label: "On file", detail: "not in effect yet" };
+  return { tone: "ok", label: "On file" };
+}
+
+/** A matter with nobody's authority on file, before its submission sign-off. */
+export const AUTHORITY_NEEDED: MatterBadge = { tone: "chg", label: "Needed before submission" };
+
+/** Matter stages after which a submission sign-off is no longer ahead. */
+const PAST_SUBMISSION = new Set(["submitted", "government_processing", "decision_review", "post_decision", "closed"]);
+
+export function authorityStillNeeded(stage: string): boolean {
+  return !PAST_SUBMISSION.has(stage);
+}
+
+/** Plain words for a refused authority record. */
+export function authorityError(message: string): string {
+  if (/scope, evidence, and effective date/i.test(message)) return "Add the scope, where the evidence is kept, and the date it takes effect.";
+  if (/representation denied/i.test(message)) return "You can’t record authority for this client on this matter.";
+  if (/staff access denied/i.test(message)) return "Only the firm owner or a licensed consultant records representation authority.";
+  return safeAccessError(message);
+}
 
 /** The step-up screen, coming back to this page with the dialog open again. */
 export function agreementStepUpLocation(pathname: string, search: string, dialog: string | null, extra: Record<string, string> = {}): string {

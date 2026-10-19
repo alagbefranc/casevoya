@@ -201,7 +201,9 @@ describe("document reading presentation", () => {
     expect(data.heading).toBe("Vo drafted one thing for you.");
     expect(data.cards[0]).toMatchObject({
       meta: ["Read by Vo", "needs your review", "Document reading"],
-      accept: { "data-nav": `/sheet/matters/${MATTER}?tab=documents&vo=${DRAFT}#ocr` },
+      // A reading is decided per proposal on the matter: Edit opens it; Accept says so.
+      accept: { disabled: true },
+      edit: { "data-nav": `/sheet/matters/${MATTER}?tab=documents&vo=${DRAFT}#ocr` },
       reject: { "data-vo-doc-discard": DRAFT, "data-org": ORG },
     });
     expect(data.cards[0].timeline.items).toContain("4 proposals to decide");

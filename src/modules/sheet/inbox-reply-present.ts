@@ -45,6 +45,51 @@ export function outboundMail(input: { author: string; when: string; body: string
   };
 }
 
+export type MessageChannel = "portal" | "whatsapp";
+
+/** The conversation list's chip tokens for the channels a conversation has (Portal, Email, WhatsApp). */
+export function conversationChannels(channels: readonly ("email" | MessageChannel)[]): string[] {
+  return ["portal", "email", "whatsapp"].filter((channel) => channels.includes(channel as "email" | MessageChannel));
+}
+
+/** One secure matter message in a conversation: "Priya · 18 Oct 09:12 · via portal", then the text. */
+export function messageMail(input: { author: string; when: string; body: string; channel: MessageChannel; ack: boolean }): ThreadMail {
+  return {
+    meta: [firstName(input.author), input.when, input.channel === "whatsapp" ? "via WhatsApp" : "via portal", ...(input.ack ? ["acknowledgement asked"] : [])],
+    body: input.body.trim().slice(0, 4000) || "(no text)",
+    files: null,
+  };
+}
+
+/** "Send to …" when the conversation's latest message is a portal or WhatsApp one: a reply in that matter thread. */
+export function messageSendAttrs(input: { organizationId: string; matterId: string; threadId: string; name: string }): Attrs {
+  return {
+    "data-inbox-message": input.threadId,
+    "data-org": input.organizationId,
+    "data-matter": input.matterId,
+    "data-name": firstName(input.name),
+  };
+}
+
+/** "Staff-only note": the reply box's text, kept on the matter for staff only (public.add_matter_staff_note). */
+export function noteAttrs(organizationId: string, matterId: string): Attrs {
+  return { "data-inbox-note": matterId, "data-org": organizationId };
+}
+
+/**
+ * Who the New message dialog can write to by email: a person with an address who hasn't turned
+ * email off and whose address isn't on the do-not-send list (send_matter_email refuses both).
+ */
+export function canEmail(person: { email: string | null; emailOff: boolean }, suppressed: ReadonlySet<string>): boolean {
+  const email = (person.email ?? "").trim().toLowerCase();
+  return Boolean(email) && !person.emailOff && !suppressed.has(email);
+}
+
+/** The toast after a portal reply. It names no email: whether one goes out is the client's own setting. */
+export function messageSentToast(name: string, ack: boolean): { title: string; kind: string; sub: string } {
+  return { title: `Message to ${name} sent`, kind: "ok", sub: `${ack ? "They’re asked to acknowledge it. " : ""}They read it in their portal.` };
+}
+
 /** The Compose dialog's To option value: which matter and person. */
 export function composeValue(matterId: string, personId: string): string {
   return `${matterId}:${personId}`;

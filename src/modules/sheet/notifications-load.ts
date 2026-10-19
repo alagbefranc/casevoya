@@ -1,9 +1,9 @@
 import "server-only";
 import type { NotificationsData } from "@/components/sheet/designer/notifications";
 import { createClient } from "@/lib/supabase/server";
-import { loadSheetChrome, matterNames } from "@/modules/sheet/chrome-load";
+import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
-import { notificationGroups, notificationsTab, readItems } from "@/modules/sheet/notifications-present";
+import { matterLabel, notificationGroups, notificationsTab, readItems, unreadCount } from "@/modules/sheet/notifications-present";
 import type { SheetQuery } from "@/modules/sheet/present";
 
 /**
@@ -18,11 +18,14 @@ export async function loadSheetNotifications(staff: SheetStaff, query: SheetQuer
     supabase.rpc("staff_notifications", { p_organization_id: staff.organizationId, p_limit: 100 }),
   ]);
   const items = readItems(read.error ? [] : read.data);
-  const name = await matterNames(supabase, staff.organizationId, items.map((item) => item.matter_id).filter((id): id is string => Boolean(id)));
+  const ids = [...new Set(items.map((item) => item.matter_id).filter((id): id is string => Boolean(id)))];
+  const matters = ids.length ? await supabase.from("matters").select("id, reference, title").eq("organization_id", staff.organizationId).in("id", ids) : null;
+  const byId = new Map((matters?.data ?? []).map((row) => [row.id, row]));
+  const name = (id: string | null) => matterLabel(id ? byId.get(id) : undefined);
   const tab = notificationsTab(query.tab);
   const data: NotificationsData = {
     tab,
-    unread: items.filter((item) => !item.read).length,
+    unread: unreadCount(items),
     groups: notificationGroups({ items, tab, now: now.toISOString(), timezone: staff.timezone, matterName: name }),
     organizationId: staff.organizationId,
   };

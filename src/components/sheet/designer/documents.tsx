@@ -7,6 +7,7 @@
  * `.alert`, `.btn`), the same ones as the Inbox's New message dialog.
  */
 import { Empty, Icon, Pair, Sep } from "./frame";
+import { FilterEmpty } from "./filter-empty";
 
 export type DocumentsTab = "review" | "all" | "custody";
 export type DocTone = "ok" | "rev" | "chg" | "bad" | "unv";
@@ -31,6 +32,8 @@ export type DocCard = {
   thumb: { doc: string } | { icon: string } | { locked: [string, string] };
   meta?: { parts: string[]; version?: string; when?: string };
   states: DocChip[];
+  /** Live only: an accepted file opens (`data-doc-open`, a signed link after an access check). */
+  open?: Record<string, string>;
 };
 
 export type CustodyRow = {
@@ -55,7 +58,8 @@ export type DocumentsData = {
   /** "6 to review", "1 quarantined". */
   pills: string[];
   firmName: string;
-  review?: { rows: ReviewRow[] };
+  /** `filterEmpty` (live only): the hidden "Nothing matches" panel for the chips and search. */
+  review?: { rows: ReviewRow[]; filterEmpty?: boolean };
   all?: { cards: DocCard[] };
   custody?: { rows: CustodyRow[] };
 };
@@ -119,7 +123,7 @@ export function DocumentsHeader({ tab, pills }: { tab: DocumentsTab; pills: stri
   );
 }
 
-function Review({ rows, firmName }: { rows: ReviewRow[]; firmName: string }) {
+function Review({ rows, firmName, filterEmpty }: { rows: ReviewRow[]; firmName: string; filterEmpty?: boolean }) {
   return (
     <>
       <div className={"ph v rv"} style={i(0)}>
@@ -208,6 +212,7 @@ function Review({ rows, firmName }: { rows: ReviewRow[]; firmName: string }) {
           </table>
         </div>
       )}
+      {filterEmpty && rows.length ? <FilterEmpty n={2} /> : null}
       <p className={"fp-note rv"} style={i(3)}>
         {"Files are checked for their real type, not the name. Quarantined files never open; the client is asked to upload again."}
       </p>
@@ -242,7 +247,11 @@ function Thumb({ thumb, title }: { thumb: DocCard["thumb"]; title: string }) {
 function Card({ card }: { card: DocCard }) {
   const locked = "locked" in card.thumb ? card.thumb.locked : null;
   return (
-    <article className={locked ? "fcard locked k2-spot" : "fcard k2-spot"} data-spot={"1"}>
+    <article
+      className={locked ? "fcard locked k2-spot" : "fcard k2-spot"}
+      data-spot={"1"}
+      {...(card.open ? { ...card.open, role: "button", tabIndex: 0, "aria-label": `Open ${card.title}`, title: "Open the file", style: { cursor: "pointer" } } : {})}
+    >
       <Thumb thumb={card.thumb} title={card.title} />
       <div>
         <h4>{card.title}</h4>
@@ -331,7 +340,7 @@ function Custody({ rows }: { rows: CustodyRow[] }) {
       <div className={"ph rv"} style={i(0)}>
         <div>
           <h1 className={"display"}>{"Originals we hold"}</h1>
-          <p>{"Paper originals in the office, with where they are and when they go back (DOC-07)."}</p>
+          <p>{"Paper originals in the office, with where they are and when they go back."}</p>
         </div>
       </div>
       {rows.length === 0 ? (
@@ -380,7 +389,7 @@ function Custody({ rows }: { rows: CustodyRow[] }) {
 export function SheetDocuments({ data }: { data: DocumentsData }) {
   if (data.tab === "all") return <All cards={data.all?.cards ?? []} />;
   if (data.tab === "custody") return <Custody rows={data.custody?.rows ?? []} />;
-  return <Review rows={data.review?.rows ?? []} firmName={data.firmName} />;
+  return <Review rows={data.review?.rows ?? []} firmName={data.firmName} filterEmpty={data.review?.filterEmpty} />;
 }
 
 /**

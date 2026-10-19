@@ -48,6 +48,8 @@ export type ReconData = {
   start: null | { title: string; copy: string; action: ReconAction | null };
   history: ReconHistoryRow[];
   historyEmpty: { title: string; copy: string };
+  /** The signed list's heading: the Designer's "Earlier months", or live "Signed reconciliations" when the current month is in it. */
+  historyTitle?: string;
   payouts: null | { rows: PayoutRow[]; empty: string; note: string };
 };
 
@@ -72,7 +74,7 @@ function History({ data, index }: { data: ReconData; index: number }) {
     <section className={"panel rv"} style={i(index)}>
       <h2>
         <Icon name={"history"} />
-        {"Earlier months"}
+        {data.historyTitle ?? "Earlier months"}
       </h2>
       {data.history.length ? (
         <div className={"tw"} role={"region"} aria-label={"Earlier reconciliations"} tabIndex={0}>

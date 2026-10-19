@@ -69,7 +69,7 @@ export type InvoiceCreditRow = {
   review?: Record<string, string>;
 };
 
-export type InvoiceAction = { label: string; primary?: boolean; attrs: Record<string, string>; icon?: string; run?: boolean };
+export type InvoiceAction = { label: string; primary?: boolean; attrs: Record<string, string>; icon?: string; run?: boolean; /** Live: a download link (the invoice PDF) in place of a button. */ href?: string };
 
 export type InvoiceViewData = {
   number: string;
@@ -127,6 +127,13 @@ function Line({ row }: { row: LineRow }) {
 
 function Action({ action }: { action: InvoiceAction }) {
   const cls = action.primary ? "btn p sm" : "btn sm";
+  if (action.href) {
+    return (
+      <a className={cls} href={action.href} {...action.attrs}>
+        {action.label}
+      </a>
+    );
+  }
   if (action.run) {
     return (
       <button className={cls} {...action.attrs}>

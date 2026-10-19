@@ -127,6 +127,20 @@ export async function runDocReview(button: HTMLElement, router: Router) {
   router.refresh();
 }
 
+/** All documents: an accepted card opens its file, by a short-lived link after a fresh access check. */
+export async function runDocOpen(card: HTMLElement) {
+  const result = await authorizeDocumentDownload({ organizationId: card.dataset.org ?? "", versionId: card.dataset.docOpen ?? "" });
+  if ("error" in result) {
+    if (needsStepUp(result.error)) {
+      window.location.assign(`/mfa?step=6&next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`);
+      return;
+    }
+    toast2(result.error ?? "That file cannot be opened.", { kind: "bad" });
+    return;
+  }
+  window.open(result.url, "_blank", "noopener,noreferrer");
+}
+
 /** Open file: a short-lived link after a fresh access check. */
 export async function runDocFile(button: HTMLElement) {
   const dialog = button.closest("dialog");

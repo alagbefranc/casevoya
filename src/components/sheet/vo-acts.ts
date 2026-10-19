@@ -1,7 +1,7 @@
 "use client";
 
 import { toast2 } from "@/components/port/kit";
-import { askVo, discardVoDraft, rateVoRun, saveVoSetting } from "@/modules/vo/actions";
+import { acceptVoDraft, askVo, discardVoDraft, rateVoRun, saveVoSetting } from "@/modules/vo/actions";
 import type { VoSettingKey } from "@/modules/vo/errors";
 
 type Router = { push: (href: string) => void; refresh: () => void };
@@ -16,6 +16,17 @@ export async function runVoDiscard(button: HTMLElement, router: Router) {
     return;
   }
   toast2("Draft rejected", { kind: "ok", sub: "It wasn’t sent. The draft audit keeps the record." });
+  router.refresh();
+}
+
+/** Vo drafts: Accept sends the draft to the client as written. Edit opens it in the composer instead. */
+export async function runVoAccept(button: HTMLElement, router: Router) {
+  const result = await acceptVoDraft({ organizationId: button.dataset.org ?? "", draftId: button.dataset.voAccept ?? "" });
+  if ("error" in result) {
+    toast2(result.error, { kind: "bad", sub: "Nothing was sent. Choose Edit to change it first." });
+    return;
+  }
+  toast2("Draft accepted and sent", { kind: "ok", sub: "It went to the client as a message on the matter. The draft audit records who sent it." });
   router.refresh();
 }
 
@@ -63,7 +74,15 @@ export async function runVoAsk(button: HTMLElement) {
   out.hidden = false;
   text.textContent = "Vo is checking this matter’s records…";
   sources.textContent = "";
-  const result = await askVo({ organizationId: button.dataset.org ?? "", matterId, question });
+  // A run that fails or never answers must not leave "checking" on screen.
+  let result: Awaited<ReturnType<typeof askVo>>;
+  try {
+    result = await askVo({ organizationId: button.dataset.org ?? "", matterId, question });
+  } catch {
+    text.textContent = "Vo didn’t answer. Try again, or answer it from the matter’s records yourself.";
+    sources.textContent = "Nothing was kept";
+    return;
+  }
   if ("error" in result) {
     text.textContent = result.error;
     return;

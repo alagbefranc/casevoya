@@ -11,6 +11,7 @@ import type {
   RefundDialogData,
   RefundsData,
 } from "@/components/sheet/designer/finance";
+import { FINANCE_CHIPS } from "@/components/sheet/designer/finance";
 import type {
   FundsAction,
   FundsData,
@@ -40,6 +41,7 @@ import { paymentReceiptHref } from "@/modules/finance/receipt-links";
 import { retrieveAccountStatus } from "@/modules/finance/stripe-account";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import {
+  cardReceived,
   disputeOpen,
   disputeReason,
   disputeState,
@@ -206,7 +208,7 @@ async function loadRefunds(supabase: Supabase, staff: SheetStaff, canBill: boole
   const failedWhy = failed ? refundState(failed.status, failed.failure_reason).detail : undefined;
 
   return {
-    intro: `Card refunds, credit notes and the disputes Stripe reported for ${staff.organizationName}. Refunding a payment isn’t the same as crediting an invoice; each keeps its own state and links (FIN-13). A refund counts only when Stripe’s signed event confirms it. Disputes never hold back or delete a client’s records, and none of these changes a matter’s stage or government status.`,
+    intro: `Card refunds, credit notes and the disputes Stripe reported for ${staff.organizationName}. Refunding a payment isn’t the same as crediting an invoice; each keeps its own state and links. A refund counts only when Stripe’s signed event confirms it. Disputes never hold back or delete a client’s records, and none of these changes a matter’s stage or government status.`,
     refunds: refundRows.map((row) => ({
       key: row.id,
       number: row.number,
@@ -539,7 +541,12 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
       value: { money: day(firstDue.withdrawBy) },
       note: {
         left: formatMoney(totalDue, "CAD"),
-        right: overdue ? `${overdue} overdue` : `${firstDue.invoiceNumber}, ${withdrawalState(firstDue)} · ${withdrawalTiming(firstDue).toLowerCase()}`,
+        // The total covers every invoice still to withdraw for; name them all, not only the first.
+        right: overdue
+          ? `${overdue} overdue`
+          : withdrawals.length > 1
+            ? `${withdrawals.length} invoices, first ${firstDue.invoiceNumber} · ${withdrawalTiming(firstDue).toLowerCase()}`
+            : `${firstDue.invoiceNumber}, ${withdrawalState(firstDue)} · ${withdrawalTiming(firstDue).toLowerCase()}`,
       },
       tone: overdue ? "bad" : firstDue.daysLeft <= 7 ? "warn" : undefined,
     });
@@ -572,7 +579,7 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
 
   return {
     data: {
-      intro: `Advances held in ${staff.organizationName}’s client account at its own bank, per client and per matter. They’re a liability, not revenue, until an approved earned-fee transfer (FIN-10, FIN-11). Casevoya records the account; it never holds the money.`,
+      intro: `Advances held in ${staff.organizationName}’s client account at its own bank, per client and per matter. They’re a liability, not revenue, until an approved earned-fee transfer. Casevoya records the account; it never holds the money.`,
       kpis,
       panels,
       empty,
@@ -701,11 +708,18 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
   const billing = [...(billable?.data ?? []).filter((row) => row.organization_id === org && row.stage !== "closed"), ...sampleBilling];
   const matterIds = [...new Set([...rows.map((row) => row.matter_id), ...billing.map((row) => row.matter_id)])];
   const invoiceIds = rows.map((row) => row.id);
-  const [matters, processing] = await Promise.all([
+  const [matters, processing, cardPayments] = await Promise.all([
     matterIds.length ? supabase.from("matters").select("id, reference, title, is_sample").eq("organization_id", org).in("id", matterIds) : null,
     invoiceIds.length
       ? supabase.from("invoice_payments").select("invoice_id").eq("organization_id", org).eq("status", "processing").in("invoice_id", invoiceIds)
       : null,
+    // "Received by card": only Stripe-confirmed card payments, net of their refunds.
+    supabase
+      .from("invoice_payments")
+      .select("invoice_id, status, currency, amount_received_cents, refunded_cents")
+      .eq("organization_id", org)
+      .eq("status", "succeeded")
+      .limit(PAYMENTS_READ),
   ]);
   const matterById = new Map((matters?.data ?? []).map((row) => [row.id, row]));
   const clientByMatter = new Map(billing.map((row) => [row.matter_id, row.client_display_name || row.title]));
@@ -768,10 +782,10 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
   const overdue = open.filter((row) => row.due_on < today);
   const owed = open.reduce((sum, row) => sum + Math.max(0, row.amount_cents - row.paid_cents - row.credited_cents), 0);
   const overdueSum = overdue.reduce((sum, row) => sum + Math.max(0, row.amount_cents - row.paid_cents - row.credited_cents), 0);
-  const refunded = rows.reduce((sum, row) => sum + row.refunded_cents, 0);
-  const received = rows.reduce((sum, row) => sum + row.paid_cents, 0) - refunded;
-  const paidCount = rows.filter((row) => row.paid_cents > 0).length;
-  const paidNote = paidCount ? `${paidCount} ${paidCount === 1 ? "invoice" : "invoices"} paid` : "No payments yet";
+  const card = cardReceived(cardPayments?.data ?? [], "CAD");
+  const received = card.netCents;
+  const refunded = card.refundedCents;
+  const paidNote = card.payments ? `${card.payments} card ${card.payments === 1 ? "payment" : "payments"}` : "No card payments yet";
   const oldest = [...overdue].sort((a, b) => a.due_on.localeCompare(b.due_on))[0];
   const daysLate = (due: string) => Math.max(1, Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${due}T12:00:00Z`)) / 86_400_000));
 
@@ -808,6 +822,9 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
     intro: `Invoices for ${staff.organizationName}’s earned fees, paid by card into the firm’s own Stripe account (test mode). Advances held in the client account and government fees paid to IRCC stay separate. A payment never changes a government status.`,
     kpis,
     rows: tableRows,
+    // The Draft chip only when this firm has a draft invoice: issued invoices are never drafts.
+    chips: rows.some((row) => row.status === "draft") ? undefined : FINANCE_CHIPS.filter((chip) => chip !== "Draft"),
+    filterEmpty: true,
     empty: tableRows.length
       ? null
       : canBill

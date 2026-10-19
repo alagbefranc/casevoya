@@ -238,7 +238,10 @@ describe("presentation", () => {
     expect(card.meta).toEqual(["Drafted by Vo", "needs your review", "Administrative reply", "needs a sourced rule"]);
     expect(card.timeline.items).toEqual(["Client message 17 Oct", "SF-2026-0001", "Run logged"]);
     expect(card.timeline.said).toBe("Checked 2 sources in 4.2s");
-    expect(card.accept).toEqual({ "data-nav": `/sheet/matters/${MATTER}?tab=messages&thread=${THREAD}&vo=${DRAFT}` });
+    // Accept sends the draft as written; with a "[needs a sourced rule]" placeholder it waits for Edit.
+    expect(card.accept).toMatchObject({ disabled: true });
+    expect(card.accept).not.toHaveProperty("data-vo-accept");
+    expect(card.edit).toEqual({ "data-nav": `/sheet/matters/${MATTER}?tab=messages&thread=${THREAD}&vo=${DRAFT}` });
     expect(card.reject).toEqual({ "data-vo-discard": DRAFT, "data-org": ORG });
   });
 

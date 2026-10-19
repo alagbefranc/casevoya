@@ -29,6 +29,7 @@ import { REFUND_REASONS } from "@/modules/sheet/finance-present";
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair, Sep } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
+import { FilterEmpty } from "./filter-empty";
 
 export type FinanceText = string | { left: string; right: string };
 
@@ -72,6 +73,10 @@ export type FinanceData = {
   kpis: FinanceKpi[];
   rows: InvoiceRow[];
   empty: null | { title: string; copy: string; action?: { label: string; dialog: string } };
+  /** Live: the filter chips after All (the Designer's list without Draft when no invoice is a draft). */
+  chips?: string[];
+  /** Live only: the hidden "Nothing matches" panel for the chips and search. */
+  filterEmpty?: boolean;
 };
 
 export type InvoiceOption = { value?: string; left: string; right?: string };
@@ -250,7 +255,7 @@ function Row({ row }: { row: InvoiceRow }) {
   );
 }
 
-const CHIPS = ["Draft", "Issued", "Partially paid", "Overdue", "Paid", "Voided or credited"];
+export const FINANCE_CHIPS = ["Draft", "Issued", "Partially paid", "Overdue", "Paid", "Voided or credited"];
 const HEADS: [string, boolean][] = [
   ["Number", false],
   ["Client", false],
@@ -283,7 +288,7 @@ export function SheetFinance({ data }: { data: FinanceData }) {
         <button className={"fchip on"} aria-pressed={"true"}>
           {"All"}
         </button>
-        {CHIPS.map((label) => (
+        {(data.chips ?? FINANCE_CHIPS).map((label) => (
           <button key={label} className={"fchip"} aria-pressed={"false"}>
             {label}
           </button>
@@ -320,9 +325,10 @@ export function SheetFinance({ data }: { data: FinanceData }) {
           </table>
         </div>
       )}
+      {data.filterEmpty && !data.empty ? <FilterEmpty n={3} /> : null}
       <p className={"fp-note rv"} style={i(4)}>
         {
-          "State comes from payment allocations, never typed by hand (FIN-07). Issued invoices can’t be edited; correct them with a credit note. In the Canada RCIC set-up, an invoice needs delivered work or an incurred disbursement first; before that, send a quote or an advance request."
+          "State comes from payment allocations, never typed by hand. Issued invoices can’t be edited; correct them with a credit note. In the Canada RCIC set-up, an invoice needs delivered work or an incurred disbursement first; before that, send a quote or an advance request."
         }
       </p>
     </>
