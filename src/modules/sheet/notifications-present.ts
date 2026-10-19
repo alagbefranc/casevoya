@@ -7,7 +7,7 @@ import { dayLabel, clockLabel } from "@/modules/messages/present";
 
 export type NotificationItem = {
   id: string;
-  kind: "message" | "document" | "payment" | "booking" | "deadline";
+  kind: "message" | "document" | "payment" | "booking" | "booking_cancelled" | "booking_rescheduled" | "deadline";
   occurred_at: string;
   matter_id: string | null;
   actor_name: string | null;
@@ -17,7 +17,7 @@ export type NotificationItem = {
   read: boolean;
 };
 
-const KINDS = new Set(["message", "document", "payment", "booking", "deadline"]);
+const KINDS = new Set(["message", "document", "payment", "booking", "booking_cancelled", "booking_rescheduled", "deadline"]);
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -80,6 +80,15 @@ export function notificationParts(item: NotificationItem, matterName: (id: strin
     case "booking": {
       const when = shortDate(item.detail);
       return [`${item.actor_name?.trim() || "Someone"} booked `, { b: item.subject ?? "a consultation" }, when ? `: ${when}` : ""].filter(Boolean);
+    }
+    // Portal appointments (20261020150100): a client cancelled or moved their own consultation.
+    case "booking_cancelled": {
+      const when = shortDate(item.detail);
+      return [`${item.actor_name?.trim() || "A client"} cancelled `, { b: item.subject ?? "a consultation" }, when ? `, ${when}` : ""].filter(Boolean);
+    }
+    case "booking_rescheduled": {
+      const when = shortDate(item.detail);
+      return [`${item.actor_name?.trim() || "A client"} moved `, { b: item.subject ?? "a consultation" }, when ? ` to ${when}` : ""].filter(Boolean);
     }
     case "deadline": {
       const due = shortDate(item.detail);

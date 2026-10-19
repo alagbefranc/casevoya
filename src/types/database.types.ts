@@ -10693,6 +10693,22 @@ export type Database = {
         Args: { p_matter_id: string; p_reason: string }
         Returns: string
       }
+      portal_booking_availability: {
+        Args: { p_booking_id: string; p_from: string; p_org: string; p_to: string }
+        Returns: Json
+      }
+      portal_booking_rules: {
+        Args: { p_org: string }
+        Returns: Json
+      }
+      portal_cancel_booking: {
+        Args: { p_booking_id: string; p_expected_version: number | null; p_org: string; p_reason?: string | null }
+        Returns: Json
+      }
+      portal_reschedule_booking: {
+        Args: { p_booking_id: string; p_expected_version: number | null; p_org: string; p_start: string; p_time_zone: string }
+        Returns: undefined
+      }
       prepare_client_reconciliation: {
         Args: {
           p_client_account_id: string
