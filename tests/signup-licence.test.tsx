@@ -37,12 +37,12 @@ describe("the licence at sign-up", () => {
   });
 
   it("asks for it on the resume screen too (signed in, no firm yet)", () => {
-    const resume = renderToStaticMarkup(createElement(StartTrialMarkup, { resume: { email: "owner@example.test" } }));
+    const resume = renderToStaticMarkup(<StartTrialMarkup resume={{ email: "owner@example.test" }} />);
     for (const id of START_TRIAL_LICENCE_FIELDS) expect(field(resume, id)).toBe(field(setup, id));
   });
 
   it("shows the licence declared at sign-up on the setup screen's licence step", () => {
-    const filled = renderToStaticMarkup(createElement(SetupMarkup, { licence: { number: "R512345", className: "RCIC" } }));
+    const filled = renderToStaticMarkup(<SetupMarkup licence={{ number: "R512345", className: "RCIC" }} />);
     expect(field(filled, "lno")).toContain('value="R512345"');
     expect(field(filled, "cl")).toContain('<option selected="">RCIC</option><option>RCIC-IRB</option>');
   });
