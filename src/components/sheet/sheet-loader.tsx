@@ -1,11 +1,12 @@
 /**
  * The Sheet's loading screen, shown while a staff page loads (the Suspense fallback of the Sheet
  * routes). The brand tile breathes with a soft ring on the shell's dark background, so moving
- * between pages never flashes an empty page. It fades in after a beat, so quick loads show nothing.
+ * between pages never flashes a light or empty page. The background is dark at once; the mark
+ * fades in after a beat, so quick loads show only the dark shell.
  */
 const CSS = `
-.cv-load{position:fixed;inset:0;display:grid;place-items:center;background:#111;z-index:50;opacity:0;animation:cvLoadIn .2s ease-out .15s forwards}
-.cv-load .cv-mark{position:relative;width:56px;height:56px}
+.cv-load{position:fixed;inset:0;display:grid;place-items:center;background:#111;z-index:50}
+.cv-load .cv-mark{position:relative;width:56px;height:56px;opacity:0;animation:cvLoadIn .2s ease-out .15s forwards}
 .cv-load img{position:relative;width:56px;height:56px;border-radius:13px;display:block;animation:cvBreathe 1.4s ease-in-out infinite;box-shadow:0 8px 24px rgba(0,117,222,.35)}
 .cv-load .cv-ring{position:absolute;inset:0;border-radius:15px;border:2px solid #0075de;animation:cvRing 1.4s ease-out infinite}
 .cv-load .cv-ring+.cv-ring{animation-delay:.7s}
@@ -13,7 +14,7 @@ const CSS = `
 @keyframes cvLoadIn{to{opacity:1}}
 @keyframes cvBreathe{0%,100%{transform:scale(.92)}50%{transform:scale(1)}}
 @keyframes cvRing{0%{transform:scale(.9);opacity:.7}100%{transform:scale(1.9);opacity:0}}
-@media (prefers-reduced-motion:reduce){.cv-load,.cv-load img,.cv-load .cv-ring{animation:none;opacity:1}.cv-load .cv-ring{display:none}}
+@media (prefers-reduced-motion:reduce){.cv-load .cv-mark,.cv-load img,.cv-load .cv-ring{animation:none;opacity:1}.cv-load .cv-ring{display:none}}
 `;
 
 export function SheetLoader() {
