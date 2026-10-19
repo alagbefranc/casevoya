@@ -18,6 +18,7 @@ import {
   templateLabel,
   type Candidate,
 } from "@/modules/sheet/inbox-present";
+import { composeSendAttrs, composeValue, outboundMail, outboundStatus, replySendAttrs } from "@/modules/sheet/inbox-reply-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone, plusDays, type SheetQuery } from "@/modules/sheet/present";
 
@@ -27,13 +28,6 @@ const READ = 100;
 const RECENT_DAYS = 60;
 const DEFAULT_INBOUND_DOMAIN = "docs.casevoya.ca";
 
-/** The live New message dialog: real people on the matters the viewer can open; Send says nothing is sent yet. */
-const COMPOSE_SEND = { toast: "Messages aren’t sent from Casevoya yet", kind: "warn", sub: "Nothing was sent." };
-const REPLY_SEND = {
-  "data-toast": "Replies aren’t sent from Casevoya yet",
-  "data-toast-kind": "warn",
-  "data-toast-sub": "Nothing was sent. Reply from your own email for now; their answer comes back to this inbox.",
-};
 const NOTE_SEND = { "data-toast": "Staff-only notes aren’t saved here yet", "data-toast-kind": "warn", "data-toast-sub": "Nothing was saved." };
 
 function firstName(name: string): string {
@@ -172,20 +166,48 @@ async function loadConversations(supabase: Client, staff: SheetStaff, query: She
     .not("person_id", "is", null)
     .order("created_at", { ascending: false })
     .limit(READ * 2);
-  const rows = emails.data ?? [];
-  const personIds = [...new Set(rows.map((row) => row.person_id).filter((id): id is string => Boolean(id)))];
+  // Email staff wrote from here (matter_outbound_emails: staff who can read the matter only).
+  const sentRows = await supabase
+    .from("matter_outbound_emails")
+    .select("id, matter_id, person_id, author_name, body, is_sample, outbox_event_id, created_at")
+    .eq("organization_id", org)
+    .order("created_at", { ascending: false })
+    .limit(READ * 2);
+  type Item =
+    | { kind: "in"; id: string; matter_id: string | null; person_id: string; created_at: string; subject: string | null; text: string | null }
+    | { kind: "out"; id: string; matter_id: string; person_id: string; created_at: string; author: string; text: string; sample: boolean; event: string };
+  const rows: Item[] = [
+    ...(emails.data ?? []).flatMap((row): Item[] =>
+      row.person_id ? [{ kind: "in", id: row.id, matter_id: row.matter_id, person_id: row.person_id, created_at: row.created_at, subject: row.subject, text: row.text_body }] : [],
+    ),
+    ...(sentRows.data ?? []).map(
+      (row): Item => ({
+        kind: "out",
+        id: row.id,
+        matter_id: row.matter_id,
+        person_id: row.person_id,
+        created_at: row.created_at,
+        author: row.author_name,
+        text: row.body,
+        sample: row.is_sample,
+        event: row.outbox_event_id,
+      }),
+    ),
+  ].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const personIds = [...new Set(rows.map((row) => row.person_id))];
   const matterIds = [...new Set(rows.map((row) => row.matter_id).filter((id): id is string => Boolean(id)))];
   const [people, labels, parties] = await Promise.all([
-    personIds.length ? supabase.from("persons").select("id, display_name").eq("organization_id", org).in("id", personIds) : null,
+    personIds.length ? supabase.from("persons").select("id, display_name, email").eq("organization_id", org).in("id", personIds) : null,
     matterLabels(supabase, org, matterIds),
     matterIds.length ? supabase.from("matter_participants").select("matter_id, person_id, role").eq("organization_id", org).in("matter_id", matterIds) : null,
   ]);
   const name = new Map((people?.data ?? []).map((row) => [row.id, row.display_name]));
+  const emailOf = new Map((people?.data ?? []).map((row) => [row.id, row.email]));
 
   // One conversation per person, newest first. The person must be readable to the viewer.
-  const threads = new Map<string, typeof rows>();
+  const threads = new Map<string, Item[]>();
   for (const row of rows) {
-    if (!row.person_id || !name.has(row.person_id)) continue;
+    if (!name.has(row.person_id)) continue;
     threads.set(row.person_id, [...(threads.get(row.person_id) ?? []), row]);
   }
   const keys = [...threads.keys()];
@@ -197,14 +219,20 @@ async function loadConversations(supabase: Client, staff: SheetStaff, query: She
       selected: personId === selected,
       person: { name: name.get(personId) ?? "Person" },
       unread: false,
-      line: [latest.matter_id ? labels.get(latest.matter_id) ?? "Matter" : "No matter", snippet(latest.subject, latest.text_body)],
+      line: [latest.matter_id ? labels.get(latest.matter_id) ?? "Matter" : "No matter", snippet(latest.kind === "in" ? latest.subject : null, latest.text)],
       when: listWhen(latest.created_at, staff.timezone, today),
     };
   });
 
   if (!selected) return { filters: ["All"], threads: items, view: null };
-  const mails = [...threads.get(selected)!].slice(0, 20).reverse();
+  const all = [...threads.get(selected)!].slice(0, 20).reverse();
+  const mails = all.filter((mail) => mail.kind === "in");
+  const sent = all.filter((mail) => mail.kind === "out");
   const ids = mails.map((mail) => mail.id);
+  const deliveries = sent.length
+    ? await supabase.from("email_deliveries").select("outbox_event_id, status").eq("organization_id", org).in("outbox_event_id", sent.map((mail) => mail.event))
+    : null;
+  const deliveryOf = new Map((deliveries?.data ?? []).map((row) => [row.outbox_event_id, row.status as string]));
   const files = ids.length
     ? await supabase.from("inbound_attachment_files").select("inbound_email_id, version_id, inbox_item_id").eq("organization_id", org).in("inbound_email_id", ids)
     : null;
@@ -217,17 +245,34 @@ async function loadConversations(supabase: Client, staff: SheetStaff, query: She
   }
   const personName = name.get(selected) ?? "Person";
   const first = firstName(personName);
-  const latestMatter = mails[mails.length - 1].matter_id;
+  const latestMatter = all[all.length - 1].matter_id;
   const role = partyRoleLabel((parties?.data ?? []).find((party) => party.person_id === selected && party.matter_id === latestMatter)?.role);
-  const threadMails: ThreadMail[] = mails.map((mail) => {
+  const threadMails: ThreadMail[] = all.map((mail) => {
+    const when = mailWhen(mail.created_at, staff.timezone, today);
+    if (mail.kind === "out") {
+      return outboundMail({ author: mail.author, when, body: mail.text, status: outboundStatus(deliveryOf.get(mail.event), mail.sample).label });
+    }
     const count = filesOf.get(mail.id);
     const total = count ? count.filed + count.waiting : 0;
     return {
-      meta: [first, mailWhen(mail.created_at, staff.timezone, today), "via email"],
-      body: (mail.text_body ?? "").trim().slice(0, 4000) || mail.subject || "(no text)",
+      meta: [first, when, "via email"],
+      body: (mail.text ?? "").trim().slice(0, 4000) || mail.subject || "(no text)",
       files: total ? [plural(total, "file"), count!.waiting ? "some still in Email to triage" : "filed to documents"] : null,
     };
   });
+  // Send writes to this person on the latest mail's matter; it is a reply (threaded, "Re:") to
+  // their latest filed email on that matter, when there is one.
+  const replyTo = [...mails].reverse().find((mail) => mail.matter_id === latestMatter)?.id ?? null;
+  const send = latestMatter
+    ? replySendAttrs({
+        organizationId: org,
+        matterId: latestMatter,
+        personId: selected,
+        name: personName,
+        hasEmail: Boolean(emailOf.get(selected)),
+        replyToEmailId: replyTo,
+      })
+    : { "data-toast": "This email isn’t on a matter", "data-toast-kind": "warn", "data-toast-sub": "Nothing was sent." };
   return {
     filters: ["All"],
     threads: items,
@@ -240,7 +285,7 @@ async function loadConversations(supabase: Client, staff: SheetStaff, query: She
         title: `Audience: ${personName}${role ? ` (${role.toLowerCase()})` : ""} and ${staff.organizationName} staff on this file`,
         copy: "Other people’s private records can’t be attached to this message.",
       },
-      reply: { send: { label: `Send to ${first}`, attrs: REPLY_SEND }, note: NOTE_SEND, acknowledge: `Ask ${first} to acknowledge` },
+      reply: { send: { label: `Send to ${first}`, attrs: send }, note: NOTE_SEND, acknowledge: `Ask ${first} to acknowledge` },
     },
   };
 }
@@ -296,11 +341,13 @@ async function loadCompose(supabase: Client, staff: SheetStaff): Promise<Compose
   const org = staff.organizationId;
   const matters = await supabase.from("matters").select("id, reference, title").eq("organization_id", org).neq("stage", "closed").order("updated_at", { ascending: false }).limit(30);
   const label = new Map((matters.data ?? []).map((row) => [row.id, row.reference || row.title]));
-  const people = await participants(supabase, org, [...label.keys()]);
+  // Only people with an email address can be written to; the database checks it again on send.
+  const people = (await participants(supabase, org, [...label.keys()])).filter((person) => Boolean(person.email)).slice(0, 60);
   return {
-    to: people.slice(0, 60).map((person) => [person.name, label.get(person.matterId) ?? "Matter"]),
+    to: people.map((person) => [person.name, label.get(person.matterId) ?? "Matter"]),
+    toValues: people.map((person) => composeValue(person.matterId, person.personId)),
     templates: ["None"],
-    send: COMPOSE_SEND,
+    send: { attrs: composeSendAttrs(org) },
   };
 }
 

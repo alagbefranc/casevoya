@@ -101,13 +101,14 @@ portal choice "Email notices" is off is recorded as `skipped`, not emailed.
 | EX12 | Licence check attention | The register re-check cannot confirm a consultant’s licence. Re-check reminders are not wired to email yet | firm owner · platform | A licence check needs attention | Open Licences in Casevoya to review it. | Open licences → `/sheet/licence` | `firm_name`, `consultant_name` | ready-not-wired |
 | EX13 | Privacy request received | A client makes a privacy request. Privacy requests are not built yet | client · firm | {firm_name} received your privacy request | You can follow it in your portal. | Open your portal → `/portal` | `firm_name`, `reply_by` | ready-not-wired |
 | EX14 | Complaint received | A client files a complaint. Complaints are not built yet | client · firm | {firm_name} received your complaint | We’ll respond in writing. | — | `firm_name`, `respond_by`, `handler_name` | ready-not-wired |
+| EX15 | Message from staff (engineering-built at the owner's request 2026-10-19; copy pending Francis) | Staff reply to a client's email or write a new one from the Sheet Inbox (`send_matter_email`; outbox matter_email.sent, template staff_message), to one person on the matter at their stored address. The staff member's text verbatim; Reply-To the matter reply address; In-Reply-To/References on a reply. Never sent for a sample matter. English only | client · firm | Re: {original subject}, or Message from {firm_name} | Reply to this email to answer {firm_name}. | Open your portal → `/portal` (only with a portal login) | `firm_name`, `sender_name`, `body`, `subject`, `portal` | wired |
 
 A database template the renderer does not know falls back to a neutral firm notice ("An update
 from {firm_name}", button to `/portal`) instead of failing the send.
 
 ### French (fr-CA)
 
-Every template above except EM14a–c, plus the generic notice, has a French draft in
+Every template above except EM14a–c and EX15 (sent as the staff member wrote it), plus the generic notice, has a French draft in
 `src/modules/email/designs/fr-drafts.json`, built by a parallel builder (`localized.ts`) that the
 tests prove has the same branches, values and links as the English. Drafted 2026-10-18 with
 Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast` (prompt `fr-ca-2026-10-18.3`), with the
@@ -141,6 +142,7 @@ per template is the "Status" table of `docs/i18n/email-fr-review.md`; how to app
 | `refund_started` (new) | | EX09 |
 | `refund_complete` (new) | | EX10 |
 | `message` (new) | firm name only | EX07 |
+| `staff_message` (new) | `sender`, `portal`; the text, subject and threading headers come with the prepared message, not the context | EX15 |
 | `payment_receipt` (hook, no enum value yet) | `receipt_number`, `advance` | EM11 |
 | `consultation_booked` (new) | `starts_at` (UTC), `time_zone` (the attendee's), `consultant_name`, `portal` (the attendee's person has a portal login), `location_kind`, `address` (in person only) | EM16a |
 | `consultation_rescheduled` (new) | `starts_at`, `time_zone`, `portal` | EM16b |

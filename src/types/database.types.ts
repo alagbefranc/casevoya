@@ -4862,6 +4862,60 @@ export type Database = {
         }
         Relationships: []
       }
+      matter_outbound_emails: {
+        Row: {
+          author_membership_id: string
+          author_name: string
+          author_user_id: string
+          body: string
+          client_key: string | null
+          created_at: string
+          id: string
+          is_sample: boolean
+          matter_id: string
+          organization_id: string
+          outbox_event_id: string
+          person_id: string
+          recipient_email: string
+          reply_to_inbound_id: string | null
+          subject: string | null
+        }
+        Insert: {
+          author_membership_id: string
+          author_name: string
+          author_user_id: string
+          body: string
+          client_key?: string | null
+          created_at?: string
+          id?: string
+          is_sample?: boolean
+          matter_id: string
+          organization_id: string
+          outbox_event_id: string
+          person_id: string
+          recipient_email: string
+          reply_to_inbound_id?: string | null
+          subject?: string | null
+        }
+        Update: {
+          author_membership_id?: string
+          author_name?: string
+          author_user_id?: string
+          body?: string
+          client_key?: string | null
+          created_at?: string
+          id?: string
+          is_sample?: boolean
+          matter_id?: string
+          organization_id?: string
+          outbox_event_id?: string
+          person_id?: string
+          recipient_email?: string
+          reply_to_inbound_id?: string | null
+          subject?: string | null
+        }
+        Relationships: []
+      }
       matter_participants: {
         Row: {
           created_at: string
@@ -10461,6 +10515,17 @@ export type Database = {
         }
         Returns: Json
       }
+      send_matter_email: {
+        Args: {
+          p_body: string
+          p_client_key?: string | null
+          p_matter_id: string
+          p_organization_id: string
+          p_person_id: string
+          p_reply_to_email_id?: string | null
+        }
+        Returns: Json
+      }
       send_matter_message: {
         Args: {
           p_body: string
@@ -10990,6 +11055,7 @@ export type Database = {
         | "consultation_rescheduled"
         | "consultation_cancelled"
         | "message"
+        | "staff_message"
       engagement_status: "pending" | "engaged" | "exception" | "ended"
       firm_setup_step:
         | "firm_details"
@@ -11427,6 +11493,7 @@ export const Constants = {
         "consultation_booked",
         "consultation_rescheduled",
         "consultation_cancelled",
+        "staff_message",
       ],
       access_grant_kind: ["explicit", "guardian"],
       agreement_kind: ["quote", "consultation", "service", "amendment", "consent"],

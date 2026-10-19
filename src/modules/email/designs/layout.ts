@@ -39,6 +39,11 @@ export type EmailCopy = {
   brand: Brand;
   lang?: "en" | "fr";
   /**
+   * The body is a person's own words (EX15): its line breaks are kept (as <br> in HTML). Every
+   * other design's body is one plain paragraph.
+   */
+  verbatim?: boolean;
+  /**
    * The shell's own words in this email's language (header tagline, footer lines), set by the
    * French builders (localized.ts). Only the text changes; markup and styles stay the Designer's.
    * Absent: the English shell (and, for lang "fr", the earlier hand-drafted French footer).
@@ -189,6 +194,12 @@ function fontFaces(): string {
   );
 }
 
+/** The body paragraph's HTML: escaped, and for a verbatim body each line break kept as <br>. */
+function bodyHtml(copy: EmailCopy): string {
+  const text = escapeHtml(copy.body);
+  return copy.verbatim ? text.replace(/\r\n?|\n/g, "<br>") : text;
+}
+
 export function renderHtml(copy: EmailCopy, origin: string = DEFAULT_EMAIL_ORIGIN): string {
   const lang = copy.lang ?? "en";
   const shell = shellFor(copy);
@@ -210,7 +221,7 @@ export function renderHtml(copy: EmailCopy, origin: string = DEFAULT_EMAIL_ORIGI
     `<table role="presentation" width="600" cellpadding="0" cellspacing="0" class="mail" align="center" style="width:600px;max-width:600px;background:#ffffff;border-radius:14px;overflow:hidden;font-family:Erode,Georgia,serif">${header}\n` +
     `<tr><td style="padding:28px 40px 4px">${img(origin, `spot-${copy.spot}.png`, 'class="spot" width="72" height="72" alt="" style="display:block;border:0"')}</td></tr>\n` +
     `<tr><td style="padding:12px 40px 0"><h1 style="margin:0;font-weight:400;font-size:24px;line-height:1.25;color:#111">${escapeHtml(copy.heading)}</h1></td></tr>\n` +
-    `<tr><td style="padding:10px 40px 16px;font-size:16px;line-height:1.5;color:#3b3935">${escapeHtml(copy.body)}</td></tr>${button}\n` +
+    `<tr><td style="padding:10px 40px 16px;font-size:16px;line-height:1.5;color:#3b3935">${bodyHtml(copy)}</td></tr>${button}\n` +
     `${footer(origin, copy.brand, shell)}</table>\n` +
     `</td></tr></table>\n` +
     `</body></html>\n`
