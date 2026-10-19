@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import type { Json } from "@/types/database.types";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { passwordOk } from "@/lib/auth/password";
@@ -518,10 +519,16 @@ export async function joinStaffInvite(input: {
     claims = null;
   }
   if (!claims?.claims?.sub) {
+    // The confirmation link brings them back to this invitation, not to the app home (where
+    // someone with no firm yet is offered a new firm of their own).
+    const origin = (await headers()).get("origin") ?? "";
     const signedUp = await supabase.auth.signUp({
       email: row.email ?? input.email.trim(),
       password: input.password,
-      options: { data: { display_name: input.name.trim().slice(0, 200) } },
+      options: {
+        data: { display_name: input.name.trim().slice(0, 200) },
+        emailRedirectTo: `${origin}/auth/confirm?next=${encodeURIComponent(`/invite/${input.token}`)}`,
+      },
     });
     if (signedUp.error && !/already/i.test(signedUp.error.message)) return fail(signedUp.error.message);
     if (!signedUp.data.session) {
