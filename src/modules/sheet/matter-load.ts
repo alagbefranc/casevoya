@@ -68,6 +68,7 @@ import { DEADLINE_KINDS, DEADLINE_ROLES, deadlineSource } from "@/modules/sheet/
 import { missingPolicies } from "@/modules/portal-policies/defaults";
 import { loadCurrentPolicies } from "@/modules/portal-policies/load";
 import { loadClosurePanel } from "@/modules/sheet/closure-load";
+import { docRequestPersonLabel, mayRequestDocuments } from "@/modules/sheet/doc-request";
 import {
   governmentLabel,
   isoDateInTimeZone,
@@ -512,7 +513,17 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
   const wire = { organizationId: org, matterId: matter.id, version: matter.version };
   // public.record_deadline accepts these roles; anyone else is not offered the dialog.
   const recordsDeadlines = (DEADLINE_ROLES as readonly string[]).includes(staff.role);
-  const header: MatterHeaderData = { client, pills: headerPills(matter.updated_at, matter.created_at, staff.timezone, now), hold, tab, wire, deadline: recordsDeadlines };
+  // public.create_document_request accepts these roles; anyone else keeps the Designer's link to the Documents tab.
+  const requestsDocuments = mayRequestDocuments(staff.role);
+  const header: MatterHeaderData = {
+    client,
+    pills: headerPills(matter.updated_at, matter.created_at, staff.timezone, now),
+    hold,
+    tab,
+    wire,
+    deadline: recordsDeadlines,
+    request: requestsDocuments,
+  };
 
   const inviteDialog: MatterInviteData = {
     matter: { client: clientName, reference: matter.reference },
@@ -545,6 +556,21 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     invite: canInvite ? inviteDialog : null,
     edit: cards.some((card) => card.edit) ? { maxBirthDate: todayIso(), invite: canInvite } : null,
     deadline: recordsDeadlines ? { timezone: staff.timezone, sampleMode: staff.sampleMode && !matter.is_sample, kinds: DEADLINE_KINDS } : null,
+    // Request a document: the people on the matter (the database checks each is a participant).
+    request: requestsDocuments
+      ? {
+          organizationId: org,
+          matterId: matter.id,
+          people: ordered
+            .filter((row, index) => row.person_id && ordered.findIndex((other) => other.person_id === row.person_id) === index)
+            .map((row) => ({
+              id: row.person_id as string,
+              label: docRequestPersonLabel(personName(row.person_id), partyRole(row.role), Boolean(person.get(row.person_id as string)?.user_id)),
+            })),
+          today,
+          sampleMode: staff.sampleMode && !matter.is_sample,
+        }
+      : null,
   };
   // Submissions and Decisions (T036 to T039), read as this member like everything above.
   const government = await loadMatterGovernment(supabase, {

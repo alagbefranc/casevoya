@@ -12,6 +12,7 @@ import { PersonEditDialog, personEditProps, type PersonEditDialogData } from "./
 import { PolicyMissingAlert } from "./portal-policies";
 import { MatterDecisionsLive, MatterSubmissions, type MatterDecisionsData, type MatterSubmissionsData } from "./matter-government";
 import { MatterDocumentReview, type MatterDocumentReviewData } from "./vo-doc-review";
+import { DOC_REQUEST_DIALOG, DocRequestDialog, type DocRequestDialogData } from "./doc-request";
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
 import type { PersonEditData } from "@/modules/sheet/edit-person";
 import { ChatError, ChatView } from "@/components/messages/chat";
@@ -91,6 +92,8 @@ export type MatterHeaderData = {
   wire?: MatterWire | null;
   /** Shows "Record deadline" on the Tasks and deadlines tab. Only when wired and the role may record one. */
   deadline?: boolean;
+  /** Live only: Request document opens the Request a document dialog (`#dReq`) instead of the Documents tab. */
+  request?: boolean;
 };
 
 export function MatterTopBar({ data }: { data: MatterHeaderData }) {
@@ -138,7 +141,11 @@ export function MatterTopBar({ data }: { data: MatterHeaderData }) {
               {"Record deadline"}
             </button>
           ) : null}
-          <button className={"btn p sm"} data-goto-tab={data.wire ? "documents" : undefined}>
+          <button
+            className={"btn p sm"}
+            data-goto-tab={data.wire && !data.request ? "documents" : undefined}
+            data-open={data.request ? DOC_REQUEST_DIALOG : undefined}
+          >
             <Icon name={"upload"} cls={"ic s"} />
             {"Request document"}
           </button>
@@ -668,6 +675,8 @@ export type MatterDialogsData = {
   deadline?: MatterDeadlineDialog | null;
   /** Edit details, opened from a client's People card. Absent, it is not rendered. */
   edit?: PersonEditDialogData | null;
+  /** Live only: Request a document, for staff who may request one. Absent, it is not rendered. */
+  request?: DocRequestDialogData | null;
 };
 
 export type MatterDeadlineDialog = {
@@ -878,6 +887,7 @@ export function MatterDialogs({ data }: { data: MatterDialogsData }) {
       {data.invite ? <MatterInviteDialog data={data.invite} /> : null}
       {data.edit ? <PersonEditDialog data={data.edit} /> : null}
       {data.wire && data.deadline ? <DeadlineDialog data={data.deadline} wire={data.wire} /> : null}
+      {data.request ? <DocRequestDialog data={data.request} /> : null}
     </>
   );
 }

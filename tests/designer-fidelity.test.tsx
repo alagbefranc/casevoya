@@ -615,6 +615,37 @@ describe("Designer fidelity", () => {
     expect(live).toBe(captured);
   });
 
+  it("adds Request a document to the matter page without changing the captured Designer markup", () => {
+    // Live only: the header's Request document opens #dReq (data-open) and the dialog sits with
+    // the others. With both stripped, the page is exactly the capture.
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(MatterMarkup)));
+    const live = withoutPreloads(
+      renderToStaticMarkup(
+        createElement(SheetFrame, {
+          sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/matters/priya" },
+          header: createElement(MatterTopBar, { data: { ...DESIGNER_MATTER_HEADER, request: true } }),
+          aside: createElement(MatterRbar, { data: DESIGNER_MATTER_RBAR }),
+          styles: MATTER_CSS,
+          after: createElement(MatterDialogs, {
+            data: {
+              ...DESIGNER_MATTER_DIALOGS,
+              request: { organizationId: "org-1", matterId: "m-1", people: [{ id: "p-1", label: "Priya Sharma · Applicant · Portal active" }], today: "2026-10-19", sampleMode: false },
+            },
+          }),
+          statusbar: {
+            timezone: "America/Toronto",
+            queue: { label: "Reminder queue healthy", detail: "0 retries" },
+            sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+          },
+        }, createElement(MatterOverview, { data: DESIGNER_MATTER })),
+      ),
+    );
+    expect(live).toContain('<button class="btn p sm" data-open="dReq">');
+    expect(live).toContain('<dialog class="dlg wide" id="dReq" aria-labelledby="dReqT">');
+    const stripped = live.replace(/<dialog class="dlg wide" id="dReq"[\s\S]*?<\/dialog>/, "").replace(' data-open="dReq"', "");
+    expect(stripped).toBe(captured);
+  });
+
   it("renders the sample-mode content exactly as the captured Designer markup", () => {
     const sample: SampleCaseData = {
       applicant: "Priya",
