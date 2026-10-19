@@ -198,7 +198,7 @@ describe("CSV import", () => {
 
 describe("public enquiry", () => {
   it("requires the reply consent, keeps marketing optional and separate, and drops a filled honeypot", () => {
-    const base = { name: " Wei  Zhang ", contact: "wei@example.test", reply: true, key: "k-12345678", service: "Study" };
+    const base = { name: " Wei  Zhang ", contact: "wei@example.test", reply: true, key: "k-12345678", service: "Study", elapsedMs: 5000 };
     expect(readEnquiry(base)).toEqual({
       input: { name: "Wei Zhang", contact: "wei@example.test", preferred: null, service: "Study", country: null, language: null, reply: true, marketing: false, source: "hosted_page", key: "k-12345678" },
     });

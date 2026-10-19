@@ -19,13 +19,16 @@ import {
   SheetLead,
 } from "@/components/sheet/designer/lead";
 import { BookingLeadsDialog, CsvDialog, NewLeadDialog, PipelineHeader, SheetPipeline } from "@/components/sheet/designer/pipeline";
+import { EnquiryShareDialog } from "@/components/sheet/designer/enquiry-share";
 import type { LeadPage, PipelinePage } from "@/modules/leads/load";
+import type { EnquiryShareData } from "@/modules/leads/share";
 
-export function PipelineScreen({ loaded }: { loaded: PipelinePage }) {
+/** share (live only): the firm's public links, behind "Share enquiry form" in the header. */
+export function PipelineScreen({ loaded, share }: { loaded: PipelinePage; share?: EnquiryShareData | null }) {
   return (
     <SheetFrame
       sidebar={loaded.chrome.sidebar}
-      header={<PipelineHeader data={loaded.header} />}
+      header={<PipelineHeader data={{ ...loaded.header, share: Boolean(share) }} />}
       statusbar={loaded.chrome.statusbar}
       title={"Lead pipeline"}
       trailing={
@@ -38,6 +41,7 @@ export function PipelineScreen({ loaded }: { loaded: PipelinePage }) {
           />
           <NewLeadDialog data={loaded.newLead} />
           {loaded.bookings ? <BookingLeadsDialog data={loaded.bookings} /> : null}
+          {share ? <EnquiryShareDialog data={share} /> : null}
         </>
       }
     >

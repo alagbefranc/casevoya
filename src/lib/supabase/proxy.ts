@@ -6,6 +6,7 @@ import { isGatedPath, signInLocation } from "@/lib/auth/redirect";
 import { isStaffArea, staffMfaRedirectPath } from "@/lib/auth/staff-session";
 import { REQUEST_ID_HEADER, resolveRequestId } from "@/lib/tenant/context";
 import { bookingPagePath, isBookablePublicEvent } from "@/modules/scheduling/public-api";
+import { enquiryPagePath, parsePublicFirm } from "@/modules/leads/enquiry";
 
 function redirectKeepingSession(request: NextRequest, response: NextResponse, pathname: string, search: string) {
   const redirectUrl = request.nextUrl.clone();
@@ -79,6 +80,25 @@ export async function updateSession(request: NextRequest) {
       rewrite.headers.set("Cache-Control", "private, no-store");
       return rewrite;
     }
+  }
+
+  // The same for a firm's enquiry page and its embedded form (CRM-01): unknown firm, no published
+  // privacy notice, or a sample-mode firm for anyone but its staff answers 404. Per viewer (a
+  // practice page is staff only), so never cached.
+  const enquiry = enquiryPagePath(path);
+  if (enquiry) {
+    const found = enquiry.firm ? await supabase.rpc("enquiry_public_firm", { p_firm_slug: enquiry.firm }) : { data: null, error: null };
+    if (!found.error && !parsePublicFirm(found.data)) {
+      const missing = request.nextUrl.clone();
+      missing.pathname = "/_enquiry/unavailable";
+      missing.search = "";
+      const rewrite = NextResponse.rewrite(missing, { status: 404 });
+      response.cookies.getAll().forEach((cookie) => rewrite.cookies.set(cookie));
+      rewrite.headers.set(REQUEST_ID_HEADER, requestId);
+      rewrite.headers.set("Cache-Control", "private, no-store");
+      return rewrite;
+    }
+    response.headers.set("Cache-Control", "private, no-store");
   }
 
   if (

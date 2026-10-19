@@ -11,6 +11,7 @@
  * the Designer does not have (its + Lead goes to `/sheet/lead?new=1`).
  */
 import type { ReactNode } from "react";
+import { ShareEnquiryButton } from "./enquiry-share";
 import { Empty, Icon, Pair, Sep } from "./frame";
 import { Avatar, type SidebarPerson } from "./sidebar";
 
@@ -93,6 +94,8 @@ export type PipelineHeaderData = {
   /** Live: attributes on Import CSV and + Lead. */
   csv?: Attrs | null;
   newLead?: Attrs | null;
+  /** Live only: "Share enquiry form" (opens #dlgShare, designer/enquiry-share.tsx) before Import CSV. */
+  share?: boolean;
 };
 
 const UNDERLINE: Record<PipelineTab, { left: string; width: string }> = {
@@ -133,6 +136,7 @@ export function PipelineHeader({ data }: { data: PipelineHeaderData }) {
           </span>
         ))}
         <span className={"acts"}>
+          {data.share ? <ShareEnquiryButton /> : null}
           <button className={"btn s sm"} {...(data.csv ?? {})}>
             <Icon name={"upload"} cls={"ic s"} />
             {"Import CSV"}

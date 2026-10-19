@@ -102,6 +102,8 @@ import { loadSheetAccess, loadSheetBundle } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 import { loadSheetCalendar, loadSheetConsultations } from "@/modules/scheduling/sheet-load";
 import { loadSheetLead, loadSheetPipeline } from "@/modules/leads/load";
+import { EnquiryShareDialog } from "@/components/sheet/designer/enquiry-share";
+import { loadEnquiryShare } from "@/modules/leads/share-load";
 
 const PUBLIC = new Set(["enquiry", "book"]);
 
@@ -585,15 +587,16 @@ export async function SheetBody({
   // Practice > Intake forms: the versioned form builder (Build and Preview tabs).
   if (page === "intake-builder" && (access.kind === "live" || access.kind === "sample")) {
     const tab = query.tab === "preview" ? "preview" : "build";
-    const loaded = await loadSheetIntakeBuilder(access.staff, tab, { form: query.form, field: query.field });
+    const [loaded, share] = await Promise.all([loadSheetIntakeBuilder(access.staff, tab, { form: query.form, field: query.field }), loadEnquiryShare(access.staff)]);
     return (
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={loaded.chrome.sidebar}
-          header={<IntakeHeader data={loaded.data} />}
+          header={<IntakeHeader data={loaded.data} share={Boolean(share)} />}
           aside={<IntakeSettings data={loaded.data} />}
           styles={[INTAKE_BUILDER_CSS]}
           statusbar={loaded.chrome.statusbar}
+          after={share ? <EnquiryShareDialog data={share} /> : undefined}
         >
           <SheetIntakeBuilder data={loaded.data} />
         </SheetFrame>
@@ -800,10 +803,10 @@ export async function SheetBody({
   }
   // Leads: the pipeline (Board, List, Timeline) and one lead (`/sheet/lead?id=`).
   if (page === "pipeline" && (access.kind === "live" || access.kind === "sample")) {
-    const loaded = await loadSheetPipeline(access.staff, query);
+    const [loaded, share] = await Promise.all([loadSheetPipeline(access.staff, query), loadEnquiryShare(access.staff)]);
     return (
       <SheetScreen page={page}>
-        <PipelineScreen loaded={loaded} />
+        <PipelineScreen loaded={loaded} share={share} />
       </SheetScreen>
     );
   }
