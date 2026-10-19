@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AppointmentsLive } from "@/components/portal/appointments-live";
 import { renderEmail } from "@/modules/email/templates";
 import type { PortalViewer } from "@/modules/portal/load";
@@ -93,8 +93,10 @@ describe("consultation emails (EM16a–c) through the mail worker's renderer", (
   });
 });
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => undefined }) }));
+
 describe("portal Appointments", () => {
-  const base = { hostName: "Kim Host", locationKind: "phone", locationDetail: null, timeZone: "America/Vancouver" };
+  const base = { hostName: "Kim Host", locationKind: "phone", locationDetail: null, timeZone: "America/Vancouver", version: 1, isSample: false, rules: null };
   it("lists the client's coming and past calls with their zone, and the firm's booking pages", () => {
     const html = renderToStaticMarkup(
       createElement(AppointmentsLive, {
@@ -113,7 +115,22 @@ describe("portal Appointments", () => {
     expect(html).toContain("/api/appointments/00000000-0000-4000-8000-0000000000a2/ics?organizationId=");
     expect(html).toContain("Attended");
     expect(html).toContain('href="/book/maple/initial"');
+    // A phone call has no join button; the client can move or cancel it.
     expect(html).not.toMatch(/Northline|Amara|Priya|IST|Join video call/);
+    expect(html).toContain('<button class="btn sm" id="rs">Reschedule</button><button class="btn sm" id="cx">Cancel</button>');
+    // A call with the firm's meeting link has the join button (the link itself only once it opens).
+    const linked = renderToStaticMarkup(
+      createElement(AppointmentsLive, {
+        viewer,
+        data: {
+          now: Date.parse("2026-10-20T12:00:00Z"),
+          rows: [{ ...base, id: "00000000-0000-4000-8000-0000000000a3", title: "Initial consultation", startsAt: "2026-10-22T14:30:00Z", endsAt: "2026-10-22T15:00:00Z", status: "confirmed", locationKind: "meeting_link", locationDetail: "https://meet.example.test/x" }],
+          bookable: [],
+        },
+      }),
+    );
+    expect(linked).toContain("Join video call");
+    expect(linked).not.toContain("https://meet.example.test/x");
   });
 
   it("shows honest empty states", () => {

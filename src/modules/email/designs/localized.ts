@@ -397,11 +397,13 @@ const BUILDERS: Builders = {
     const when = f.dateTimeIn(context.startsAt, context.timeZone);
     const page = context.portal ? null : bookingPageHref(origin, context.bookingPage);
     const href = context.portal ? appLink(origin, PATHS.portalAppointments) : page;
+    // Who cancelled: the attendee from their portal (the _self strings), or the firm.
+    const self = context.cancelledBy === "client";
     const which = when
-      ? t("body_when", { date_time: when, time_zone_label: zoneLabel(kit, context.timeZone), firm_name: firmName })
-      : t("body", { firm_name: firmName });
+      ? t(self ? "body_when_self" : "body_when", { date_time: when, time_zone_label: zoneLabel(kit, context.timeZone), firm_name: firmName })
+      : t(self ? "body_self" : "body", { firm_name: firmName });
     return copy(kit, {
-      subject: t("subject", { firm_name: firmName }),
+      subject: t(self ? "subject_self" : "subject", { firm_name: firmName }),
       preheader: context.portal ? t("preheader_portal") : page ? t("preheader_page") : t("preheader"),
       heading: t("heading"),
       body: href ? which : `${which} ${t("contact_to_book", { firm_name: firmName })}`,
