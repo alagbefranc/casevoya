@@ -152,6 +152,9 @@
     "heading": "Your consultation was cancelled",
     "body_when": "Your consultation on {date_time} ({time_zone_label}) was cancelled by {firm_name}.",
     "body": "Your consultation was cancelled by {firm_name}.",
+    "subject_self": "Your consultation with {firm_name} is cancelled",
+    "body_when_self": "You cancelled your consultation on {date_time} ({time_zone_label}) with {firm_name}.",
+    "body_self": "You cancelled your consultation with {firm_name}.",
     "contact_to_book": "To book another time, contact {firm_name}.",
     "cta": "Book another time"
   },
