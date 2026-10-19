@@ -5,7 +5,7 @@
 import type { AiAudit, AiData, AiRunRow, AiRules, AiSettings, AiSources, AiStates, AiSwitch, AiTab } from "@/components/sheet/designer/ai";
 import type { Attrs, DraftCard, DraftsData, DraftsHeaderData, DraftSwitch } from "@/components/sheet/designer/drafts";
 import type { MatterBadge } from "@/components/sheet/designer/matters";
-import type { VoSettingKey } from "@/modules/vo/errors";
+import type { VoSettingKey, VoSwitchKey } from "@/modules/vo/errors";
 
 export type VoSettingsRow = {
   enabled: boolean;
@@ -18,9 +18,18 @@ export type VoSettingsRow = {
   read_medical: boolean;
   read_criminal: boolean;
   read_narratives: boolean;
+  doc_classification: boolean;
+  ocr_normalisation: boolean;
+  missing_fields: boolean;
+  inconsistency_flags: boolean;
 };
 
 export type VoSettings = VoSettingsRow & { saved: boolean };
+
+/** Whether Vo may be asked to read a document at all (each category is still checked on the run). */
+export function voCanReadDocuments(settings: VoSettings, viewer: { agentReady: boolean }): boolean {
+  return settings.enabled && viewer.agentReady && (settings.doc_classification || settings.ocr_normalisation || settings.missing_fields || settings.inconsistency_flags);
+}
 
 /** The firm's effective switches: the owner's saved row, or the defaults (on only in sample mode). */
 export function effectiveSettings(row: Partial<VoSettingsRow> | null, sampleMode: boolean): VoSettings {
@@ -36,6 +45,10 @@ export function effectiveSettings(row: Partial<VoSettingsRow> | null, sampleMode
     read_medical: row?.read_medical ?? false,
     read_criminal: row?.read_criminal ?? false,
     read_narratives: row?.read_narratives ?? false,
+    doc_classification: row?.doc_classification ?? true,
+    ocr_normalisation: row?.ocr_normalisation ?? true,
+    missing_fields: row?.missing_fields ?? true,
+    inconsistency_flags: row?.inconsistency_flags ?? true,
   };
 }
 
@@ -64,7 +77,7 @@ export type VoDraftRow = {
 
 export type VoRunRow = {
   id: string;
-  kind: "message_reply" | "document_request" | "ask";
+  kind: "message_reply" | "document_request" | "ask" | "document_review";
   result: "running" | "drafted" | "answered" | "abstained" | "failed";
   matterId: string;
   threadId: string | null;
@@ -77,7 +90,10 @@ export type VoRunRow = {
   failure: string | null;
   useful: boolean | null;
   createdAt: string;
-  draft: { status: "draft" | "sent" | "discarded"; edited: boolean | null } | null;
+  /** A document reading's draft is "reviewed" once every proposal is decided. */
+  draft: { status: "draft" | "sent" | "discarded" | "reviewed"; edited: boolean | null } | null;
+  /** document_review: the version Vo read (the run's source). */
+  versionId?: string | null;
 };
 
 export type VoNames = {
@@ -112,7 +128,7 @@ function seconds(ms: number | null): string {
 const KIND_LABEL: Record<VoDraftRow["kind"], string> = { message_reply: "Administrative reply", document_request: "Document request" };
 
 /** Live switch attributes: the owner saves; everyone else sees the state; unbuilt ones stay off. */
-function switchAttrs(viewer: VoViewer, key: VoSettingKey | null): Attrs {
+function switchAttrs(viewer: VoViewer, key: VoSwitchKey | null): Attrs {
   if (!key) return { disabled: true, title: "Not available in Casevoya yet" };
   return viewer.isOwner ? { "data-vo-setting": key, "data-org": viewer.organizationId } : { disabled: true, title: "Only the firm owner can change this" };
 }
@@ -154,6 +170,54 @@ function draftCard(row: VoDraftRow, names: VoNames, viewer: VoViewer): DraftCard
   };
 }
 
+/** A Vo document reading waiting for review (vo_doc_drafts, draft kind document_review). */
+export type VoReadingRow = {
+  id: string;
+  runId: string;
+  title: string;
+  body: string;
+  matterId: string;
+  versionId: string;
+  sources: VoSource[];
+  needsRule: boolean;
+  isSample: boolean;
+  createdAt: string;
+  latencyMs: number | null;
+  /** Proposals still waiting for a decision. */
+  waiting: number;
+};
+
+/** Where a reading's proposals are reviewed: the matter's Documents tab, Vo's review panel. */
+export function readingHref(row: { matterId: string; id: string }): string {
+  return `/sheet/matters/${row.matterId}?tab=documents&vo=${row.id}#ocr`;
+}
+
+export function readingCard(row: VoReadingRow, names: VoNames, viewer: VoViewer): DraftCard {
+  const sources = row.sources.map((source) => source.label);
+  const meta = ["Read by Vo", "needs your review", "Document reading"];
+  if (row.needsRule) meta.push("needs a sourced rule");
+  if (row.isSample) meta.push("sample");
+  const open = readingHref(row);
+  return {
+    id: row.id,
+    meta,
+    title: row.title,
+    sub: { left: names.matter(row.matterId), right: names.reference(row.matterId) },
+    body: `“${row.body}”`,
+    timeline: {
+      id: `tl${row.id.replace(/-/g, "").slice(0, 8)}`,
+      summary: `${sources.join(", ").toLowerCase()} · run logged · ${seconds(row.latencyMs)}`,
+      done: true,
+      said: `Read ${sources.length === 1 ? "one document" : `${sources.length} documents`} in ${seconds(row.latencyMs)}`,
+      clock: "",
+      items: [...sources, `${row.waiting} ${row.waiting === 1 ? "proposal" : "proposals"} to decide`, "Run logged"],
+    },
+    accept: { "data-nav": open },
+    edit: { "data-nav": open },
+    reject: { "data-vo-doc-discard": row.id, "data-org": viewer.organizationId },
+  };
+}
+
 export function draftsPage(input: {
   viewer: VoViewer;
   settings: VoSettings;
@@ -162,14 +226,17 @@ export function draftsPage(input: {
   running: VoRunRow | null;
   abstained: VoRunRow | null;
   names: VoNames;
+  /** Document readings waiting for review, shown with the drafts (newest first). */
+  readings?: VoReadingRow[];
 }): DraftsData {
   const { viewer, settings, names } = input;
-  const count = input.waiting.length;
+  const readings = input.readings ?? [];
+  const count = input.waiting.length + readings.length;
   const heading = count === 0 ? "No drafts waiting for you." : `Vo drafted ${WORDS[count] ?? String(count)} ${count === 1 ? "thing" : "things"} for you.`;
   const switches: DraftSwitch[] = [
-    { id: "swVoClassify", label: "Document classification", on: false, attrs: switchAttrs(viewer, null) },
-    { id: "swVoOcr", label: "OCR field suggestions", on: false, attrs: switchAttrs(viewer, null) },
-    { id: "swVoFlags", label: "Missing-field and inconsistency flags", on: false, attrs: switchAttrs(viewer, null) },
+    { id: "swVoClassify", label: "Document classification", on: settings.doc_classification, attrs: switchAttrs(viewer, "doc_classification") },
+    { id: "swVoOcr", label: "OCR field suggestions", on: settings.ocr_normalisation, attrs: switchAttrs(viewer, "ocr_normalisation") },
+    { id: "swVoFlags", label: "Missing-field and inconsistency flags", on: settings.missing_fields && settings.inconsistency_flags, attrs: switchAttrs(viewer, "doc_flags") },
     { id: "swVoSummaries", label: "Matter summaries", on: settings.staff_answers, attrs: switchAttrs(viewer, "staff_answers") },
     { id: "swVoReplies", label: "Administrative replies", on: settings.reply_drafts, attrs: switchAttrs(viewer, "reply_drafts") },
     { id: "swVoLetters", label: "First drafts of letters from approved facts", on: false, attrs: switchAttrs(viewer, null) },
@@ -181,11 +248,16 @@ export function draftsPage(input: {
     heading,
     intro: "Vo prepares drafts from your firm’s own records. Nothing is sent, signed or changed until a person accepts it.",
     loading: input.running ? { label: "Vo is drafting", clock: seconds(Math.max(0, Date.now() - Date.parse(input.running.createdAt))) } : null,
-    cards: input.waiting.map((row) => draftCard(row, names, viewer)),
+    cards: [
+      ...input.waiting.map((row) => ({ at: row.createdAt, card: draftCard(row, names, viewer) })),
+      ...readings.map((row) => ({ at: row.createdAt, card: readingCard(row, names, viewer) })),
+    ]
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .map((item) => item.card),
     running: input.running
       ? {
           started: parts(input.running.createdAt, viewer.timeZone).time,
-          text: `${input.running.kind === "ask" ? "An answer" : "A draft"} for ${names.matter(input.running.matterId)}. Usually ready in under a minute. You can leave this page.`,
+          text: `${input.running.kind === "ask" ? "An answer" : input.running.kind === "document_review" ? "A document reading" : "A draft"} for ${names.matter(input.running.matterId)}. Usually ready in under a minute. You can leave this page.`,
         }
       : null,
     abstain: input.abstained
@@ -199,7 +271,7 @@ export function draftsPage(input: {
       ? {
           title: "Nothing to review",
           copy: settings.enabled
-            ? "Open a conversation on a matter and choose Draft with Vo. Drafts wait here until someone sends or rejects them."
+            ? "Open a conversation on a matter and choose Draft with Vo, or Read with Vo when reviewing a document. Drafts wait here until someone decides."
             : "Vo is off for this firm. Every workflow works by hand; the firm owner can turn Vo on in Vo and AI.",
         }
       : null,
@@ -224,10 +296,10 @@ export function aiSettings(viewer: VoViewer, settings: VoSettings): AiSettings {
     intro: "Turn Vo off for the whole firm, for one capability or for a sensitive kind of document. Switched off, every workflow still works by hand (AI-01, AI-06).",
     firm: [
       aiSwitch("swVoFirm", `Vo for ${viewer.firmName}`, settings.enabled, a("enabled"), "Drafts only. People accept, edit or reject everything."),
-      aiSwitch("swVoClassify", "Document classification", false, a(null)),
-      aiSwitch("swVoOcr", "OCR normalisation (names, dates, numbers)", false, a(null)),
-      aiSwitch("swVoMissing", "Missing-field detection", false, a(null)),
-      aiSwitch("swVoFlags", "Inconsistency flags (not fraud findings)", false, a(null)),
+      aiSwitch("swVoClassify", "Document classification", settings.doc_classification, a("doc_classification")),
+      aiSwitch("swVoOcr", "OCR normalisation (names, dates, numbers)", settings.ocr_normalisation, a("ocr_normalisation")),
+      aiSwitch("swVoMissing", "Missing-field detection", settings.missing_fields, a("missing_fields")),
+      aiSwitch("swVoFlags", "Inconsistency flags (not fraud findings)", settings.inconsistency_flags, a("inconsistency_flags")),
       aiSwitch("swVoSummaries", "Matter summaries for staff", settings.staff_answers, a("staff_answers")),
       aiSwitch("swVoReplies", "Administrative reply drafts", settings.reply_drafts, a("reply_drafts")),
       aiSwitch("swVoLetters", "First drafts of letters from approved facts", false, a(null)),
@@ -251,8 +323,21 @@ export function aiSettings(viewer: VoViewer, settings: VoSettings): AiSettings {
   };
 }
 
-const TASK_LABEL: Record<VoRunRow["kind"], string> = { message_reply: "Reply draft", document_request: "Document request explanation", ask: "Ask Vo" };
-const FAILURE_LABEL: Record<string, string> = { unavailable: "Vo unavailable", empty: "No usable draft", nothing_to_draft: "Nothing to draft", expired: "Timed out", failed: "Didn’t finish" };
+const TASK_LABEL: Record<VoRunRow["kind"], string> = {
+  message_reply: "Reply draft",
+  document_request: "Document request explanation",
+  ask: "Ask Vo",
+  document_review: "Document reading",
+};
+const FAILURE_LABEL: Record<string, string> = {
+  unavailable: "Vo unavailable",
+  empty: "No usable draft",
+  nothing_to_draft: "Nothing to draft",
+  expired: "Timed out",
+  failed: "Didn’t finish",
+  refused: "Switched off",
+  unsupported_file: "File type not supported",
+};
 
 export function runReview(run: VoRunRow): { badge: MatterBadge; token: string } {
   if (run.result === "running") return { badge: { tone: "rev", label: "Running" }, token: "" };
@@ -261,6 +346,7 @@ export function runReview(run: VoRunRow): { badge: MatterBadge; token: string } 
   if (run.result === "failed") return { badge: { tone: "gr", label: FAILURE_LABEL[run.failure ?? "failed"] ?? "Didn’t finish" }, token: "" };
   if (!run.draft || run.draft.status === "draft") return { badge: { tone: "rev", label: "Waiting" }, token: "" };
   if (run.draft.status === "discarded") return { badge: { tone: "bad", label: "Rejected" }, token: "rejected" };
+  if (run.draft.status === "reviewed") return { badge: { tone: "ok", label: "Reviewed", detail: "each proposal decided" }, token: "accepted" };
   return run.draft.edited ? { badge: { tone: "ok", label: "Edited" }, token: "edited" } : { badge: { tone: "ok", label: "Accepted" }, token: "accepted" };
 }
 
@@ -275,7 +361,12 @@ export function aiRunRows(runs: VoRunRow[], names: VoNames, viewer: VoViewer): A
       task: `${TASK_LABEL[run.kind]}${run.kind === "ask" ? "" : ` for ${names.matter(run.matterId)}`}`,
       model: { left: run.model ?? "—", right: `${run.tools.length} tool ${run.tools.length === 1 ? "call" : "calls"}` },
       prompt: run.promptVersion ?? "—",
-      sources: run.sourceCount ? `${run.sourceCount} ${run.sourceCount === 1 ? "record" : "records"}` : "—",
+      sources:
+        run.kind === "document_review" && run.versionId
+          ? `Document version ${run.versionId.slice(0, 8)}`
+          : run.sourceCount
+            ? `${run.sourceCount} ${run.sourceCount === 1 ? "record" : "records"}`
+            : "—",
       actor: names.person(run.userId),
       cost: run.costUsd != null ? `$${run.costUsd.toFixed(4)}` : "—",
       review: review.badge,

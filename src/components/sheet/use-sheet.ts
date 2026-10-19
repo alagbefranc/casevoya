@@ -87,6 +87,7 @@ import { restoreStaffInvite, runStaffInvite, runStaffResend, runStaffRevoke } fr
 import { reopenGrantDialog, runGrantCreate } from "./grants-acts";
 import { mountIntakeBuilder } from "./intake-builder-acts";
 import { runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
+import { runVoDocAccept, runVoDocDiscard, runVoDocReject, runVoRead } from "./vo-doc-acts";
 import { mountRetentionSlider, runRetentionSave } from "./retention-act";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
 import {
@@ -675,6 +676,21 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
                       ? runComplaintStep
                       : runComplianceSettings;
         busyRun(compliance, () => run(compliance, router));
+        return;
+      }
+      // Vo document reading: Read with Vo, the review panel's Accept ticked / Reject the rest, and
+      // Reject on a reading's card.
+      const voDoc = target.closest<HTMLElement>("[data-vo-read], [data-vo-doc-accept], [data-vo-doc-reject], [data-vo-doc-discard]");
+      if (voDoc && root.contains(voDoc)) {
+        event.preventDefault();
+        const run = voDoc.hasAttribute("data-vo-read")
+          ? () => runVoRead(voDoc, router)
+          : voDoc.hasAttribute("data-vo-doc-accept")
+            ? () => runVoDocAccept(voDoc, router)
+            : voDoc.hasAttribute("data-vo-doc-reject")
+              ? () => runVoDocReject(voDoc, router)
+              : () => runVoDocDiscard(voDoc, router);
+        busyRun(voDoc, run);
         return;
       }
       // Vo drafts and Vo and AI: Reject, the owner's switches, "useful?" votes and Ask Vo.

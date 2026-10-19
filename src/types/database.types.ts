@@ -8646,6 +8646,7 @@ export type Database = {
           tools_called: string[]
           useful: boolean | null
           user_id: string
+          version_id: string | null
         }
         Insert: {
           cost_usd?: number | null
@@ -8668,6 +8669,7 @@ export type Database = {
           tools_called?: string[]
           useful?: boolean | null
           user_id: string
+          version_id?: string | null
         }
         Update: {
           cost_usd?: number | null
@@ -8690,6 +8692,148 @@ export type Database = {
           tools_called?: string[]
           useful?: boolean | null
           user_id?: string
+          version_id?: string | null
+        }
+        Relationships: []
+      }
+      vo_doc_drafts: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string
+          document_id: string
+          id: string
+          is_sample: boolean
+          kind: Database["public"]["Enums"]["vo_draft_kind"]
+          matter_id: string
+          model: string
+          needs_rule: boolean
+          organization_id: string
+          prompt_version: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          run_id: string
+          sources: Json
+          status: Database["public"]["Enums"]["vo_draft_status"]
+          title: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by: string
+          document_id: string
+          id?: string
+          is_sample?: boolean
+          kind?: Database["public"]["Enums"]["vo_draft_kind"]
+          matter_id: string
+          model: string
+          needs_rule?: boolean
+          organization_id: string
+          prompt_version: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id: string
+          sources: Json
+          status?: Database["public"]["Enums"]["vo_draft_status"]
+          title: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string
+          document_id?: string
+          id?: string
+          is_sample?: boolean
+          kind?: Database["public"]["Enums"]["vo_draft_kind"]
+          matter_id?: string
+          model?: string
+          needs_rule?: boolean
+          organization_id?: string
+          prompt_version?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id?: string
+          sources?: Json
+          status?: Database["public"]["Enums"]["vo_draft_status"]
+          title?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: []
+      }
+      vo_doc_proposals: {
+        Row: {
+          accepted_due_on: string | null
+          accepted_value: string | null
+          category: string | null
+          confidence: number | null
+          created_at: string
+          deadline_id: string | null
+          detail: string | null
+          draft_id: string
+          due_on: string | null
+          edited: boolean | null
+          id: string
+          kind: Database["public"]["Enums"]["vo_proposal_kind"]
+          label: string
+          organization_id: string
+          page: number | null
+          position: number
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sensitivity: Database["public"]["Enums"]["document_sensitivity"] | null
+          status: Database["public"]["Enums"]["vo_proposal_status"]
+          value: string | null
+        }
+        Insert: {
+          accepted_due_on?: string | null
+          accepted_value?: string | null
+          category?: string | null
+          confidence?: number | null
+          created_at?: string
+          deadline_id?: string | null
+          detail?: string | null
+          draft_id: string
+          due_on?: string | null
+          edited?: boolean | null
+          id?: string
+          kind: Database["public"]["Enums"]["vo_proposal_kind"]
+          label: string
+          organization_id: string
+          page?: number | null
+          position: number
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sensitivity?: Database["public"]["Enums"]["document_sensitivity"] | null
+          status?: Database["public"]["Enums"]["vo_proposal_status"]
+          value?: string | null
+        }
+        Update: {
+          accepted_due_on?: string | null
+          accepted_value?: string | null
+          category?: string | null
+          confidence?: number | null
+          created_at?: string
+          deadline_id?: string | null
+          detail?: string | null
+          draft_id?: string
+          due_on?: string | null
+          edited?: boolean | null
+          id?: string
+          kind?: Database["public"]["Enums"]["vo_proposal_kind"]
+          label?: string
+          organization_id?: string
+          page?: number | null
+          position?: number
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sensitivity?: Database["public"]["Enums"]["document_sensitivity"] | null
+          status?: Database["public"]["Enums"]["vo_proposal_status"]
+          value?: string | null
         }
         Relationships: []
       }
@@ -8711,11 +8855,19 @@ export type Database = {
           composio_accepted_at: string | null
           composio_accepted_by: string | null
           composio_enabled: boolean
+          doc_classification: boolean
+          inconsistency_flags: boolean
+          missing_fields: boolean
+          ocr_normalisation: boolean
         }
         Insert: {
           composio_accepted_at?: string | null
           composio_accepted_by?: string | null
           composio_enabled?: boolean
+          doc_classification?: boolean
+          inconsistency_flags?: boolean
+          missing_fields?: boolean
+          ocr_normalisation?: boolean
           enabled: boolean
           organization_id: string
           read_client_messages?: boolean
@@ -8731,6 +8883,10 @@ export type Database = {
           updated_by: string
         }
         Update: {
+          doc_classification?: boolean
+          inconsistency_flags?: boolean
+          missing_fields?: boolean
+          ocr_normalisation?: boolean
           enabled?: boolean
           organization_id?: string
           read_client_messages?: boolean
@@ -10829,6 +10985,35 @@ export type Database = {
         Returns: Json
       }
       discard_vo_draft: { Args: { p_draft_id: string }; Returns: undefined }
+      begin_vo_document_review: {
+        Args: { p_organization_id: string; p_version_id: string }
+        Returns: Json
+      }
+      finish_vo_document_review: {
+        Args: {
+          p_body?: string | null
+          p_cost_usd?: number | null
+          p_failure?: string | null
+          p_input_tokens?: number | null
+          p_latency_ms?: number | null
+          p_model?: string | null
+          p_needs_rule?: boolean
+          p_output_tokens?: number | null
+          p_prompt_version?: string | null
+          p_proposals?: Json | null
+          p_result: Database["public"]["Enums"]["vo_run_result"]
+          p_run_id: string
+          p_title?: string | null
+          p_tools?: string[] | null
+        }
+        Returns: string | null
+      }
+      accept_vo_doc_proposal: {
+        Args: { p_due_on?: string | null; p_proposal_id: string; p_value?: string | null }
+        Returns: Json
+      }
+      reject_vo_doc_proposal: { Args: { p_proposal_id: string }; Returns: Json }
+      discard_vo_doc_draft: { Args: { p_draft_id: string }; Returns: undefined }
       finish_vo_run: {
         Args: {
           p_body?: string | null
@@ -11311,9 +11496,11 @@ export type Database = {
       task_audience: "internal" | "client"
       task_priority: "low" | "normal" | "high" | "critical"
       task_status: "open" | "blocked" | "done" | "cancelled"
-      vo_draft_kind: "message_reply" | "document_request"
-      vo_draft_status: "draft" | "sent" | "discarded"
-      vo_run_kind: "message_reply" | "document_request" | "ask"
+      vo_draft_kind: "message_reply" | "document_request" | "document_review"
+      vo_draft_status: "draft" | "sent" | "discarded" | "reviewed"
+      vo_proposal_kind: "classification" | "field" | "missing_field" | "inconsistency" | "deadline" | "needs_rule"
+      vo_proposal_status: "proposed" | "accepted" | "rejected"
+      vo_run_kind: "message_reply" | "document_request" | "ask" | "document_review"
       vo_run_result: "running" | "drafted" | "answered" | "abstained" | "failed"
       webhook_inbox_status:
         | "received"
@@ -11747,9 +11934,11 @@ export const Constants = {
         "review_due",
         "suspended",
       ],
-      vo_draft_kind: ["message_reply", "document_request"],
-      vo_draft_status: ["draft", "sent", "discarded"],
-      vo_run_kind: ["message_reply", "document_request", "ask"],
+      vo_draft_kind: ["message_reply", "document_request", "document_review"],
+      vo_draft_status: ["draft", "sent", "discarded", "reviewed"],
+      vo_proposal_kind: ["classification", "field", "missing_field", "inconsistency", "deadline", "needs_rule"],
+      vo_proposal_status: ["proposed", "accepted", "rejected"],
+      vo_run_kind: ["message_reply", "document_request", "ask", "document_review"],
       vo_run_result: ["running", "drafted", "answered", "abstained", "failed"],
       webhook_inbox_status: [
         "received",

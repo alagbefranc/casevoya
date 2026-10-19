@@ -43,7 +43,12 @@ export type CustodyRow = {
   acknowledged: DocChip | string;
 };
 
-export type DocumentReviewDialogData = { organizationId: string; firmName: string };
+export type DocumentReviewDialogData = {
+  organizationId: string;
+  firmName: string;
+  /** "Read with Vo": shown when Vo is on, available and a document capability is on (AI-01). */
+  vo?: boolean;
+};
 
 export type DocumentsData = {
   tab: DocumentsTab;
@@ -382,6 +387,8 @@ export function SheetDocuments({ data }: { data: DocumentsData }) {
  * Live-only: review one document version. Opened by a To review row's link (`data-doc-review`);
  * use-sheet fills it from that link. Save goes through public.review_document_version (and
  * public.set_document_expiry when a date is given); the database checks role, scope and step-up.
+ * "Read with Vo" (when Vo can read documents) asks Vo for proposals on this version; they wait on
+ * the matter's Documents tab and change nothing until a person accepts them.
  */
 export function DocumentReviewDialog({ data }: { data: DocumentReviewDialogData }) {
   return (
@@ -434,6 +441,11 @@ export function DocumentReviewDialog({ data }: { data: DocumentReviewDialogData 
         </div>
       </div>
       <div className={"df"}>
+        {data.vo ? (
+          <button className={"btn"} data-vo-read={"1"} data-org={data.organizationId}>
+            {"Read with Vo"}
+          </button>
+        ) : null}
         <button className={"btn"} data-doc-file={"1"} data-org={data.organizationId}>
           {"Open file"}
         </button>

@@ -11,6 +11,7 @@ import { Empty, Icon, Pair, Sep } from "./frame";
 import { PersonEditDialog, personEditProps, type PersonEditDialogData } from "./person-edit";
 import { PolicyMissingAlert } from "./portal-policies";
 import { MatterDecisionsLive, MatterSubmissions, type MatterDecisionsData, type MatterSubmissionsData } from "./matter-government";
+import { MatterDocumentReview, type MatterDocumentReviewData } from "./vo-doc-review";
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
 import type { PersonEditData } from "@/modules/sheet/edit-person";
 import { ChatError, ChatView } from "@/components/messages/chat";
@@ -1100,9 +1101,21 @@ export type MatterDocumentRow = {
   upload: MatterBadge;
   review: MatterBadge;
   version: string;
+  /** The Designer's "Review" link to the review panel below (`#ocr`), on the row it shows. */
+  open?: { href: string; label: string } | null;
 };
 
-export function MatterDocuments({ checklist, people, rows }: { checklist: string | null; people: string[]; rows: MatterDocumentRow[] }) {
+export function MatterDocuments({
+  checklist,
+  people,
+  rows,
+  vo,
+}: {
+  checklist: string | null;
+  people: string[];
+  rows: MatterDocumentRow[];
+  vo?: MatterDocumentReviewData | null;
+}) {
   if (rows.length === 0) {
     return (
       <Panel>
@@ -1139,7 +1152,7 @@ export function MatterDocuments({ checklist, people, rows }: { checklist: string
             </thead>
             <tbody>
               {rows.map((row, index) => (
-                <tr key={index} className={""}>
+                <tr key={index} className={row.open ? "sel" : ""} {...(row.open ? { "aria-current": "true" as const, title: "Open in the review panel below" } : {})}>
                   <td style={{ paddingLeft: "18px" }}>
                     {row.title}
                     <br />
@@ -1157,7 +1170,13 @@ export function MatterDocuments({ checklist, people, rows }: { checklist: string
                   <td className={"num"} style={{ color: "var(--t2)" }}>
                     {row.version}
                   </td>
-                  <td></td>
+                  <td>
+                    {row.open ? (
+                      <a className={"btn p sm"} href={row.open.href}>
+                        {row.open.label}
+                      </a>
+                    ) : null}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1167,6 +1186,7 @@ export function MatterDocuments({ checklist, people, rows }: { checklist: string
       <p style={css({ color: "var(--t2)", fontSize: "13px", margin: "-10px 0px 22px", "--i": "1" })} className={"rv"}>
         {"Upload state and firm review are separate. Accepted means accepted by the firm for this purpose, not validated by IRCC."}
       </p>
+      {vo ? <MatterDocumentReview data={vo} /> : null}
     </>
   );
 }
@@ -1571,7 +1591,8 @@ export type MatterPageData = {
   tab: MatterTab;
   overview: MatterOverviewData;
   people: { cards: MatterPersonCard[]; relationships: MatterRelationship[] };
-  documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[] };
+  /** `vo`: Vo's reading of one document, in the Designer's review panel (`#ocr`). */
+  documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[]; vo?: MatterDocumentReviewData | null };
   agreements: { rows: MatterAgreementRow[]; signing: MatterSigning | null; create?: string | null };
   /** `record` offers the Record a deadline dialog from the empty state. */
   tasks: { deadline: MatterDeadline | null; tasks: MatterTaskRow[]; record?: boolean };
@@ -1595,7 +1616,7 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
     case "people":
       return <MatterPeople cards={data.people.cards} relationships={data.people.relationships} />;
     case "documents":
-      return <MatterDocuments checklist={data.documents.checklist} people={data.documents.people} rows={data.documents.rows} />;
+      return <MatterDocuments checklist={data.documents.checklist} people={data.documents.people} rows={data.documents.rows} vo={data.documents.vo} />;
     case "agreements":
       return <MatterAgreements rows={data.agreements.rows} signing={data.agreements.signing} create={data.agreements.create} />;
     case "tasks":

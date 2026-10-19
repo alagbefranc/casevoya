@@ -7,6 +7,8 @@
 import { parseVoTaskRequest, verifyVoRequest, VO_SIGNATURE_HEADER, VO_TIMESTAMP_HEADER, type VoTaskResponse } from "../../../src/modules/vo/sign";
 import { supabaseVoData, type VoData } from "./data";
 import { runVoTask, type AgentSdk } from "./task";
+import { supabaseVoDocData, type VoDocData } from "./vo-doc-data";
+import { runDocumentReview, type DocModel } from "./vo-doc-read";
 
 export type ServiceEnv = {
   VO_AGENT_SECRET?: string;
@@ -24,6 +26,10 @@ export type HandlerDeps = {
   /** Tests replace the Supabase data layer. */
   dataFor?: (input: { accessToken: string; organizationId: string }) => VoData;
   now?: () => number;
+  /** Document reading: the Messages API client (runtime/server.ts) and its data layer. */
+  docModel?: DocModel | null;
+  docDataFor?: (input: { accessToken: string; organizationId: string }) => VoDocData;
+  classifyError?: (error: unknown) => "unavailable" | "failed";
 };
 
 export async function handleRun(
@@ -43,6 +49,26 @@ export async function handleRun(
   }
   const task = parseVoTaskRequest(parsed, now());
   if (!task) return { status: 400, body: { error: "body" } };
+  if (task.task === "document_review") {
+    const docDataFor =
+      deps.docDataFor ??
+      ((input: { accessToken: string; organizationId: string }) => {
+        if (!deps.env.SUPABASE_URL || !deps.env.SUPABASE_PUBLISHABLE_KEY) throw new Error("not configured");
+        return supabaseVoDocData({ url: deps.env.SUPABASE_URL, publishableKey: deps.env.SUPABASE_PUBLISHABLE_KEY, ...input });
+      });
+    let docData: VoDocData;
+    try {
+      docData = docDataFor({ accessToken: task.accessToken, organizationId: task.organizationId });
+    } catch {
+      return { status: 503, body: { result: "failed", failure: "unavailable" } };
+    }
+    const read = await runDocumentReview(task, { model: deps.docModel ?? null, data: docData, apiKey: deps.env.ANTHROPIC_API_KEY || null, now, classifyError: deps.classifyError });
+    // Like the other tasks, only the outcome goes back to the app.
+    const { tools: _readTools, downloaded: _downloaded, ...readBody } = read;
+    void _readTools;
+    void _downloaded;
+    return { status: 200, body: readBody };
+  }
   const dataFor =
     deps.dataFor ??
     ((input: { accessToken: string; organizationId: string }) => {

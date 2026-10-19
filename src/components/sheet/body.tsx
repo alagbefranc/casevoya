@@ -821,5 +821,6 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     id: one("id"),
     stage: one("stage"),
     owner: one("owner"),
+    vo: one("vo"),
   };
 }

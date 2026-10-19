@@ -15,6 +15,8 @@ import {
   type MatterRbarData,
 } from "@/components/sheet/designer/matter";
 import { MATTER_CSS } from "@/components/sheet/designer/matter-css";
+import { MatterDocuments } from "@/components/sheet/designer/matter";
+import { MatterDocumentReview, type MatterDocumentReviewData } from "@/components/sheet/designer/vo-doc-review";
 import { SheetSidebar, type SidebarData } from "@/components/sheet/designer/sidebar";
 import { IndexMarkup } from "@/components/sheet/markup/index";
 import { MatterMarkup } from "@/components/sheet/markup/matter";
@@ -3713,5 +3715,97 @@ describe("Designer fidelity: Settings, Subscription and Retention", () => {
     expect(viewer).toContain("No retention period is set");
     expect(viewer).toContain("<dt>Policy version</dt><dd>Not set</dd>");
 
+  });
+});
+
+describe("Designer fidelity: matter Documents review panel (Vo document reading)", () => {
+  const captured = () => withoutPreloads(renderToStaticMarkup(createElement(MatterMarkup, { variant: "tab-documents" })));
+  function same(live: string, expected: string) {
+    if (live !== expected) {
+      let i = 0;
+      while (i < live.length && live[i] === expected[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + expected.slice(i - 160, i + 160) + "\nGOT " + live.slice(i - 160, i + 160));
+    }
+    expect(live).toBe(expected);
+  }
+
+  /** The Designer's own sample: Priya's marriage certificate. */
+  const SAMPLE: MatterDocumentReviewData = {
+    title: "Marriage certificate",
+    badge: { tone: "rev", label: "Awaiting review" },
+    pill: ["v1", "PDF", "2 pages", "sha256 4f1c…a90e"],
+    paper: {
+      title: ["Certificate of marriage", "page 1 of 2"],
+      text: [
+        "This certifies that ",
+        { hl: "Priya Sharma", f: "0" },
+        " and Rafael Sharma were married on ",
+        { hl: "14 February 2024", f: "1" },
+        " at Pune, Maharashtra. Registration no. ",
+        { hl: "MH-PN-2024-0381", f: "2" },
+        ".",
+      ],
+      note: ["Sample document, fictional", "preview is an inert render"],
+    },
+    heading: ["Extracted fields", "confirm before they become facts"],
+    rows: [
+      { f: "0", label: "Spouse name", value: "Priya Sharma", badge: { tone: "ok", label: "98%", detail: "p.1" }, check: "Confirm Spouse name" },
+      { f: "1", label: "Date of marriage", value: "14 Feb 2024", badge: { tone: "ok", label: "91%", detail: "p.1" }, check: "Confirm Date of marriage" },
+      { f: "2", label: "Registration no.", value: "MH-PN-2024-0381", badge: { tone: "chg", label: "72%", detail: "p.1" }, check: "Confirm Registration no." },
+    ],
+    note: "The 72% field is below the confirm threshold, so it stays unknown until you check it against the page.",
+    accept: { label: "Accept document" },
+    reject: { label: "Request changes" },
+  };
+
+  it("renders the review panel exactly as the captured #ocr panel", () => {
+    const html = captured();
+    const start = html.indexOf('<div class="panel rv" id="ocr"');
+    expect(start).toBeGreaterThan(0);
+    const live = renderToStaticMarkup(createElement(MatterDocumentReview, { data: SAMPLE }));
+    same(live, html.slice(start, start + live.length));
+    // The panel is the last thing in the tab's content.
+    expect(html.slice(start + live.length).startsWith('</div></div><aside id="rbar"')).toBe(true);
+  });
+
+  it("renders the selected row's Review link exactly as captured", () => {
+    const html = captured();
+    const start = html.indexOf('<tr class="sel" aria-current="true"');
+    expect(start).toBeGreaterThan(0);
+    const row = html.slice(start, html.indexOf("</tr>", start) + 5);
+    const live = renderToStaticMarkup(
+      createElement(MatterDocuments, {
+        checklist: null,
+        people: [],
+        rows: [
+          {
+            title: "Marriage certificate",
+            kind: "Relationship",
+            person: { name: "Priya Sharma", avatarUrl: "/assets/av-priya-applicant.png" },
+            upload: { tone: "gr", label: "Uploaded", detail: "scanned" },
+            review: { tone: "rev", label: "Awaiting review" },
+            version: "v2",
+            open: { href: "#ocr", label: "Review" },
+          },
+        ],
+      }),
+    );
+    const liveStart = live.indexOf("<tr class=\"sel\"");
+    same(live.slice(liveStart, live.indexOf("</tr>", liveStart) + 5), row);
+  });
+
+  it("adds only data attributes and an editable value live, and stays plain text", () => {
+    const live = renderToStaticMarkup(
+      createElement(MatterDocumentReview, {
+        data: {
+          ...SAMPLE,
+          rows: [{ ...SAMPLE.rows[0], value: "<b>Priya</b>", editable: true, attrs: { "data-proposal": "p1", "data-kind": "field", "data-original": "Priya" } }],
+          accept: { label: "Accept ticked", attrs: { "data-vo-doc-accept": "d1", "data-org": "o1" } },
+        },
+      }),
+    );
+    expect(live).toContain('<div class="fieldr" data-f="0" data-proposal="p1" data-kind="field" data-original="Priya">');
+    expect(live).toContain('<b contentEditable="plaintext-only" data-vo-value="1">&lt;b&gt;Priya&lt;/b&gt;</b>');
+    expect(live).toContain('<button class="btn p" id="acc" data-vo-doc-accept="d1" data-org="o1">Accept ticked</button>');
   });
 });

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loadSheetChrome, matterNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { voAgentConfigured } from "@/modules/vo/agent-client";
+import { loadVoReadings } from "@/modules/sheet/vo-doc-load";
 import {
   aiPage,
   draftsHeader,
@@ -71,7 +72,8 @@ function draftRow(row: DraftDb, latency: Map<string, number | null>): VoDraftRow
 
 type RunDb = {
   id: string;
-  kind: "message_reply" | "document_request" | "ask";
+  kind: "message_reply" | "document_request" | "ask" | "document_review";
+  version_id?: string | null;
   result: "running" | "drafted" | "answered" | "abstained" | "failed";
   matter_id: string;
   thread_id: string | null;
@@ -87,9 +89,9 @@ type RunDb = {
   latency_ms: number | null;
 };
 
-const RUN_COLUMNS = "id, kind, result, matter_id, thread_id, user_id, model, prompt_version, source_count, tools_called, cost_usd, failure, useful, created_at, latency_ms";
+const RUN_COLUMNS = "id, kind, result, matter_id, thread_id, version_id, user_id, model, prompt_version, source_count, tools_called, cost_usd, failure, useful, created_at, latency_ms";
 
-function runRow(row: RunDb, drafts: Map<string, { status: VoDraftRow["status"]; edited: boolean | null }>): VoRunRow {
+function runRow(row: RunDb, drafts: Map<string, NonNullable<VoRunRow["draft"]>>): VoRunRow {
   return {
     id: row.id,
     kind: row.kind,
@@ -106,6 +108,7 @@ function runRow(row: RunDb, drafts: Map<string, { status: VoDraftRow["status"]; 
     useful: row.useful,
     createdAt: row.created_at,
     draft: drafts.get(row.id) ?? null,
+    versionId: row.version_id ?? null,
   };
 }
 
@@ -155,7 +158,7 @@ export async function loadSheetDrafts(staff: SheetStaff) {
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const { data: claims } = await supabase.auth.getClaims();
   const me = String(claims?.claims?.sub ?? "");
-  const [chrome, base, waiting, week, running, abstained, matters] = await Promise.all([
+  const [chrome, base, waiting, week, running, abstained, matters, readings] = await Promise.all([
     loadSheetChrome(staff, "/sheet/drafts"),
     viewerAndSettings(supabase, staff),
     supabase.from("vo_drafts").select(DRAFT_COLUMNS).eq("organization_id", org).eq("status", "draft").order("created_at", { ascending: false }).limit(30),
@@ -171,6 +174,8 @@ export async function loadSheetDrafts(staff: SheetStaff) {
       .limit(1),
     supabase.from("vo_runs").select(RUN_COLUMNS).eq("organization_id", org).eq("result", "abstained").gte("created_at", weekAgo).order("created_at", { ascending: false }).limit(1),
     askMatters(supabase, org),
+    // Vo document readings waiting for review (vo_doc_drafts).
+    loadVoReadings(supabase, org).catch(() => []),
   ]);
   const waitingRows = (waiting.data ?? []) as DraftDb[];
   const runIds = waitingRows.map((row) => row.run_id);
@@ -181,7 +186,12 @@ export async function loadSheetDrafts(staff: SheetStaff) {
   const nm = await names(
     supabase,
     org,
-    [...waitingRows.map((row) => row.matter_id), ...(runningRow ? [runningRow.matter_id] : []), ...(abstainedRow ? [abstainedRow.matter_id] : [])],
+    [
+      ...waitingRows.map((row) => row.matter_id),
+      ...readings.map((row) => row.matterId),
+      ...(runningRow ? [runningRow.matter_id] : []),
+      ...(abstainedRow ? [abstainedRow.matter_id] : []),
+    ],
     [],
   );
   const empty = new Map();
@@ -193,10 +203,11 @@ export async function loadSheetDrafts(staff: SheetStaff) {
     running: runningRow ? runRow(runningRow, empty) : null,
     abstained: abstainedRow ? runRow(abstainedRow, empty) : null,
     names: nm,
+    readings,
   });
   return {
     chrome,
-    header: draftsHeader(base.viewer, base.settings, waitingRows.length),
+    header: draftsHeader(base.viewer, base.settings, waitingRows.length + readings.length),
     data,
     ask: base.settings.enabled && base.settings.staff_answers ? { organizationId: org, matters } : null,
   };
@@ -215,8 +226,13 @@ export async function loadSheetAi(staff: SheetStaff, tab: AiTab) {
     const { data } = await supabase.from("vo_runs").select(RUN_COLUMNS).eq("organization_id", org).order("created_at", { ascending: false }).limit(100);
     const rows = (data ?? []) as RunDb[];
     const ids = rows.map((row) => row.id);
-    const linked = ids.length ? await supabase.from("vo_drafts").select("run_id, status, edited").in("run_id", ids) : null;
-    const byRun = new Map((linked?.data ?? []).map((row) => [row.run_id, { status: row.status as VoDraftRow["status"], edited: row.edited }]));
+    const docIds = rows.filter((row) => row.kind === "document_review").map((row) => row.id);
+    const [linked, readings] = await Promise.all([
+      ids.length ? supabase.from("vo_drafts").select("run_id, status, edited").in("run_id", ids) : null,
+      docIds.length ? supabase.from("vo_doc_drafts").select("run_id, status").in("run_id", docIds) : null,
+    ]);
+    const byRun = new Map<string, NonNullable<VoRunRow["draft"]>>((linked?.data ?? []).map((row) => [row.run_id, { status: row.status as VoDraftRow["status"], edited: row.edited }]));
+    for (const row of readings?.data ?? []) byRun.set(row.run_id, { status: row.status as NonNullable<VoRunRow["draft"]>["status"], edited: null });
     runs = rows.map((row) => runRow(row, byRun));
     nm = await names(supabase, org, rows.map((row) => row.matter_id), rows.map((row) => row.user_id));
   }

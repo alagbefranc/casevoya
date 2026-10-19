@@ -167,6 +167,8 @@ export type SheetQuery = {
   /** The Lead pipeline's Stage (a stage key) and Owner (a membership id, or "none") filters. */
   stage?: string;
   owner?: string;
+  /** A Vo draft or document reading to open (matter Messages and Documents tabs). */
+  vo?: string;
 };
 
 export function sheetVariant(page: string, query: SheetQuery): string {

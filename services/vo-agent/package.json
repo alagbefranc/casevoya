@@ -6,12 +6,13 @@
   "description": "Vo: Casevoya's drafting assistant on the Claude Agent SDK, in a Cloudflare Container. Not deployed.",
   "engines": { "node": ">=20" },
   "scripts": {
-    "bundle": "esbuild runtime/server.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/server.mjs --external:@anthropic-ai/claude-agent-sdk --external:@supabase/supabase-js --external:zod",
+    "bundle": "esbuild runtime/server.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/server.mjs --external:@anthropic-ai/claude-agent-sdk --external:@anthropic-ai/sdk --external:@supabase/supabase-js --external:zod",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "deploy:dry": "wrangler deploy --dry-run"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.302",
+    "@anthropic-ai/sdk": "0.131.0",
     "@supabase/supabase-js": "2.118.0",
     "zod": "4.6.7"
   },
