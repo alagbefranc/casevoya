@@ -10,6 +10,7 @@ import {
   expectDbError,
   type TestDb,
 } from "./helpers/postgres";
+import { firmDay } from "./helpers/firm-day";
 
 /**
  * Receipts for payments of invoices (CICC Code s. 33(3)): one per succeeded card payment (issued from
@@ -35,8 +36,8 @@ beforeEach(async () => {
 
 const hex = (length: number) => randomUUID().replaceAll("-", "").slice(0, length);
 const key = (prefix = "k") => `${prefix}-${randomUUID()}`;
-const today = () => new Date().toISOString().slice(0, 10);
-const inThreeDays = () => new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+const today = () => firmDay();
+const inThreeDays = () => firmDay(3);
 
 async function createUser(target: TestDb, label: string) {
   await asMaintenance(target);

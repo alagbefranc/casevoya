@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { renderEmail } from "@/modules/email/templates";
 import { asMaintenance, asServiceRole, asUser, createTestDb, type TestDb } from "./helpers/postgres";
+import { firmDay } from "./helpers/firm-day";
 
 let db: TestDb;
 
@@ -72,7 +73,7 @@ async function firm() {
 
 async function issue(f: Awaited<ReturnType<typeof firm>>) {
   await asUser(db, { userId: f.owner, aal: "aal2", orgId: f.orgId, totpAgeSeconds: 0 });
-  const due = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+  const due = firmDay(5);
   const id = (
     await db.query<{ id: string }>(`select public.create_invoice($1, 'Synthetic fee', 50000, 'CAD', $2::date, $3) as id`, [f.matterId, due, `inv-${randomUUID()}`])
   ).rows[0].id;

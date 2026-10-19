@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asAnon, asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { firmDay } from "./helpers/firm-day";
 
 /** Voids and credit notes on issued invoices (FIN-06, FIN-07). Synthetic people and Stripe ids only. */
 
@@ -26,8 +27,8 @@ const accountId = () => `acct_1Syn${token()}`;
 const intentId = () => `pi_3Syn${token()}`;
 const eventId = () => `evt_Syn${token(20)}`;
 const key = (prefix = "cn") => `${prefix}-${randomUUID()}`;
-const today = () => new Date().toISOString().slice(0, 10);
-const inThreeDays = () => new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+const today = () => firmDay();
+const inThreeDays = () => firmDay(3);
 
 async function createUser(label: string) {
   await asMaintenance(db);

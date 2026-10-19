@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asAnon, asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { firmDay } from "./helpers/firm-day";
 
 /** Client funds: the manual client-account ledger (FIN-03, FIN-09..11). Synthetic people only. */
 
@@ -23,10 +24,8 @@ function token(length = 12) {
 }
 
 const key = (prefix = "cf") => `${prefix}-${randomUUID()}`;
-// The database counts days in the firm's timezone (America/Toronto by default), so the tests do too.
-const torontoDay = (offsetDays = 0) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto" }).format(new Date(Date.now() + offsetDays * 86_400_000));
-const today = () => torontoDay();
-const inThreeDays = () => torontoDay(3);
+const today = () => firmDay();
+const inThreeDays = () => firmDay(3);
 
 async function createUser(label: string) {
   await asMaintenance(db);
