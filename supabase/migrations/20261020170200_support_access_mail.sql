@@ -2,11 +2,14 @@
 -- EM17 "Support access granted" when a firm owner approves, to every active firm owner's sign-in
 -- email. Platform mail: no matter, never critical, never for a sample row (a request has none).
 --
--- Additive only. Redefined, each copied from its latest definition in
--- 20261019215100_inbox_reply_emails.sql with only the marked support-access lines added:
---   public.claim_mail_events        the two event types join the mail list
---   public.prepare_email_delivery   maps them to the support_requested / support_granted templates
---                                   and resolves the owners as recipients
+-- Additive only. Redefined, each copied from its latest definition with only the marked
+-- support-access lines added:
+--   public.claim_mail_events        (from 20261019215100_inbox_reply_emails.sql) the two event
+--                                   types join the mail list
+--   public.prepare_email_delivery   (from 20261020150200_portal_cancel_mail_context.sql, which
+--                                   added the booking cancelled_by context) maps them to the
+--                                   support_requested / support_granted templates and resolves
+--                                   the owners as recipients
 -- Same signatures, same grants.
 
 create or replace function public.claim_mail_events(p_worker text, p_limit integer default 20)
@@ -425,6 +428,8 @@ begin
              booking.location_kind,
              booking.location_detail,
              booking.is_sample,
+             -- portal appointments: who cancelled (EM16c wording).
+             booking.cancelled_by,
              -- booking mail: a portal button only for an attendee whose person can sign in.
              (person.id is not null and person.user_id is not null) as portal,
              pref.email_notices is distinct from false as email_notices
@@ -465,6 +470,11 @@ begin
           and (not et.is_sample or rec.is_sample)
       ) then
         ctx := ctx || jsonb_build_object('booking_page', firm_slug);
+      end if;
+      -- portal appointments: EM16c says who cancelled (the client from their portal, or the firm).
+      if event.event_type = 'booking.cancelled' then
+        ctx := ctx || jsonb_build_object('cancelled_by',
+          case when coalesce(event.payload ->> 'cancelled_by', rec.cancelled_by::text) = 'client' then 'client' else 'staff' end);
       end if;
       send_ok := rec.email_notices and case event.event_type
         when 'booking.cancelled' then rec.status = 'cancelled'

@@ -374,9 +374,9 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:655f41dc335
 
 ## EM16c: Consultation cancelled
 
-Staff cancel an upcoming confirmed consultation (outbox booking.cancelled, template consultation_cancelled), to the attendee. Portal attendees get the portal button; others get the firm's booking page when it has a published one they can use, otherwise no button. Audience: client. [French preview](../email/previews/fr/EM16c.html)
+Staff cancel an upcoming confirmed consultation, or the attendee cancels it from their portal (outbox booking.cancelled, template consultation_cancelled; cancelled_by says which), to the attendee. Portal attendees get the portal button; others get the firm's booking page when it has a published one they can use, otherwise no button. Audience: client. [French preview](../email/previews/fr/EM16c.html)
 
-Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:618d3df7ded1…`
+Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:2742831211cb…`
 
 | Key | English | French draft | Notes for the reviewer |
 |---|---|---|---|
@@ -387,6 +387,9 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:618d3df7ded
 | `heading` | Your consultation was cancelled | Votre consultation a été annulée | Machine draft |
 | `body_when` | Your consultation on {date_time} ({time_zone_label}) was cancelled by {firm_name}. | Votre consultation du {date_time} ({time_zone_label}) a été annulée par {firm_name}. | Machine draft. Keep {date_time}, {firm_name}, {time_zone_label} |
 | `body` | Your consultation was cancelled by {firm_name}. | Votre consultation a été annulée par {firm_name}. | Machine draft. Keep {firm_name} |
+| `subject_self` | Your consultation with {firm_name} is cancelled | Votre consultation avec {firm_name} est annulée | Hand draft. Portal appointments (2026-10-19): the attendee cancelled from their portal. Hand draft, not reviewed. Keep {firm_name} |
+| `body_when_self` | You cancelled your consultation on {date_time} ({time_zone_label}) with {firm_name}. | Vous avez annulé votre consultation du {date_time} ({time_zone_label}) avec {firm_name}. | Hand draft. Portal appointments (2026-10-19): the attendee cancelled from their portal. Hand draft, not reviewed. Keep {date_time}, {firm_name}, {time_zone_label} |
+| `body_self` | You cancelled your consultation with {firm_name}. | Vous avez annulé votre consultation avec {firm_name}. | Hand draft. Portal appointments (2026-10-19): the attendee cancelled from their portal. Hand draft, not reviewed. Keep {firm_name} |
 | `contact_to_book` | To book another time, contact {firm_name}. | Pour prendre un autre rendez-vous, communiquez avec {firm_name}. | Machine draft. Keep {firm_name} |
 | `cta` | Book another time | Prendre un autre rendez-vous | Machine draft |
 

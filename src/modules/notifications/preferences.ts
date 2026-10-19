@@ -49,6 +49,7 @@ export const IN_APP_ROWS: readonly { kind: string; label: string; small: string 
   { kind: "document", label: "A client uploads a document", small: "Once the file check passes, on matters you can open" },
   { kind: "payment", label: "A card payment is received", small: "For the staff who handle that matter’s billing" },
   { kind: "booking", label: "A consultation is booked", small: "From the firm’s booking page, for scheduling staff" },
+  { kind: "booking_change", label: "A client moves or cancels a consultation", small: "From their portal, for the call’s host and the firm owner" },
   { kind: "deadline", label: "A deadline reminder comes due", small: "On matters you can open" },
   { kind: "support", label: "Casevoya support asks for access", small: "Firm owners only. Nothing opens until you approve" },
 ];

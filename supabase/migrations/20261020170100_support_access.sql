@@ -14,7 +14,7 @@
 -- definer, logged in support_access_uses and the audit trail). No RLS policy on matters,
 -- documents, document_versions, matter_participants or organizations is added for platform admins:
 -- app.support_access_active(org, matter, scope) exists for a future policy, and is not used by one.
--- Redefined: app.staff_notification_items (latest from 20261020101500) gains the 'support' kind, a
+-- Redefined: app.staff_notification_items (latest from 20261020150100) gains the 'support' kind, a
 -- pending request shown to the firm's owners. Auto-revoke: app.expire_support_access() every five
 -- minutes where pg_cron exists; every check is lazy on ends_at regardless.
 
@@ -1035,8 +1035,9 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- Sheet > Notifications: a waiting support request, shown to the firm's owners.
--- app.staff_notification_items copied from 20261020101500_notifications_firm_timezone.sql; only
--- the 'support' branch is new. Same signature, same grants.
+-- app.staff_notification_items copied from 20261020150100_portal_appointment_notifications.sql
+-- (which added the portal appointment branches); only the 'support' branch is new. Same
+-- signature, same grants.
 -- ---------------------------------------------------------------------------
 create or replace function app.staff_notification_items(p_org uuid, p_limit integer)
 returns table (
@@ -1157,6 +1158,58 @@ begin
       and event.occurred_at > since
       and booking.source = 'public'
       and app.can_read_scheduling(p_org)
+
+    union all
+    -- portal appointments: a client cancelled their consultation from the portal, for its host
+    -- and the firm owner, at the cancelled time in the firm's zone.
+    select event.id, 'booking_cancelled', event.occurred_at, booking.matter_id,
+           coalesce(person.display_name, attendee.display_name), booking.title,
+           to_char(coalesce((event.payload ->> 'starts_at')::timestamptz, booking.starts_at)
+                   at time zone coalesce(firm_zone, booking.host_time_zone), 'YYYY-MM-DD"T"HH24:MI'),
+           '/sheet/consultations',
+           false
+    from public.outbox_events event
+    join public.bookings booking
+      on booking.id::text = event.payload ->> 'booking_id'
+     and booking.organization_id = event.organization_id
+    left join public.persons person
+      on person.id = booking.person_id
+     and person.organization_id = booking.organization_id
+    left join public.booking_attendees attendee
+      on attendee.booking_id = booking.id
+     and attendee.organization_id = booking.organization_id
+     and attendee.role = 'primary'
+    where event.organization_id = p_org
+      and event.event_type = 'booking.cancelled_by_client'
+      and event.occurred_at > since
+      and app.can_read_scheduling(p_org)
+      and (booking.host_user_id = actor or app.has_org_role(p_org, array['firm_owner']::public.org_role[]))
+
+    union all
+    -- portal appointments: a client moved their consultation from the portal, for its host and
+    -- the firm owner, at the new time in the firm's zone.
+    select event.id, 'booking_rescheduled', event.occurred_at, booking.matter_id,
+           coalesce(person.display_name, attendee.display_name), booking.title,
+           to_char(coalesce((event.payload ->> 'starts_at')::timestamptz, booking.starts_at)
+                   at time zone coalesce(firm_zone, booking.host_time_zone), 'YYYY-MM-DD"T"HH24:MI'),
+           '/sheet/consultations',
+           false
+    from public.outbox_events event
+    join public.bookings booking
+      on booking.id::text = event.payload ->> 'booking_id'
+     and booking.organization_id = event.organization_id
+    left join public.persons person
+      on person.id = booking.person_id
+     and person.organization_id = booking.organization_id
+    left join public.booking_attendees attendee
+      on attendee.booking_id = booking.id
+     and attendee.organization_id = booking.organization_id
+     and attendee.role = 'primary'
+    where event.organization_id = p_org
+      and event.event_type = 'booking.rescheduled_by_client'
+      and event.occurred_at > since
+      and app.can_read_scheduling(p_org)
+      and (booking.host_user_id = actor or app.has_org_role(p_org, array['firm_owner']::public.org_role[]))
 
     union all
     -- A deadline reminder came due.

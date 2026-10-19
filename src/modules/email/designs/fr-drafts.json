@@ -773,7 +773,7 @@
       "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
       "promptVersion": "fr-ca-2026-10-18.3",
       "draftedOn": "2026-10-18",
-      "sourceHash": "sha256:618d3df7ded1a46250a31733d87272f2c25edca6ad66ff7dbba79bc06bdfcdd3",
+      "sourceHash": "sha256:2742831211cb63d6dfa45af09b1cb044ed04f4a3dec2611cdb41d1db177103b4",
       "strings": {
         "subject": {
           "en": "{firm_name} cancelled your consultation",
@@ -809,6 +809,24 @@
           "en": "Your consultation was cancelled by {firm_name}.",
           "fr": "Votre consultation a été annulée par {firm_name}.",
           "origin": "machine"
+        },
+        "subject_self": {
+          "en": "Your consultation with {firm_name} is cancelled",
+          "fr": "Votre consultation avec {firm_name} est annulée",
+          "origin": "hand",
+          "note": "Portal appointments (2026-10-19): the attendee cancelled from their portal. Hand draft, not reviewed."
+        },
+        "body_when_self": {
+          "en": "You cancelled your consultation on {date_time} ({time_zone_label}) with {firm_name}.",
+          "fr": "Vous avez annulé votre consultation du {date_time} ({time_zone_label}) avec {firm_name}.",
+          "origin": "hand",
+          "note": "Portal appointments (2026-10-19): the attendee cancelled from their portal. Hand draft, not reviewed."
+        },
+        "body_self": {
+          "en": "You cancelled your consultation with {firm_name}.",
+          "fr": "Vous avez annulé votre consultation avec {firm_name}.",
+          "origin": "hand",
+          "note": "Portal appointments (2026-10-19): the attendee cancelled from their portal. Hand draft, not reviewed."
         },
         "contact_to_book": {
           "en": "To book another time, contact {firm_name}.",
