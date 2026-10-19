@@ -15,6 +15,8 @@ export function documentError(message: string): string {
   if (/checksum/i.test(message)) return "The file could not be checked. Upload it again.";
   if (/stored object was not found/i.test(message)) return "The file did not finish uploading. Try again.";
   if (/expired/i.test(message)) return "That upload authorization expired. Start again.";
+  if (/sample mode/i.test(message)) return "This firm is in sample mode. Only sample matters accept new work.";
+  if (/needs a person on this matter/i.test(message)) return "Choose someone who is on this matter.";
   if (/published rule/i.test(message)) return "Choose a published rule version, or leave the rule blank.";
   if (/replacement must be a new version/i.test(message)) return "Send a new version of the same document.";
   if (/French reason/i.test(message)) return "Add the French reason (3 to 2000 characters), or leave it empty.";

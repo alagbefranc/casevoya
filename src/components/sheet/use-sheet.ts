@@ -57,6 +57,7 @@ import {
   runVoid,
 } from "./corrections-acts";
 import { openDocReview, reopenDocReview, runDocFile, runDocReview } from "./documents-acts";
+import { restoreDocRequest, runDocRequest } from "./doc-request-act";
 import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
 import { runInboxCompose, runInboxReply } from "./inbox-reply-acts";
 import { bindGovControls } from "./gov-acts";
@@ -610,6 +611,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(docSubmit, () => runDocReview(docSubmit, router));
         return;
       }
+      // The matter page's Request a document: Send request goes to public.create_document_request.
+      const docRequest = target.closest<HTMLElement>("[data-doc-request]");
+      if (docRequest && root.contains(docRequest)) {
+        event.preventDefault();
+        busyRun(docRequest, () => runDocRequest(docRequest, router));
+        return;
+      }
       const docFile = target.closest<HTMLElement>("[data-doc-file]");
       if (docFile && root.contains(docFile)) {
         event.preventDefault();
@@ -906,6 +914,7 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     const dialogParam = params.get("dlg");
     const dialog = dialogId(dialogParam);
     if (dialog) window.setTimeout(() => openDialog(dialog), 300);
+    if (dialogParam === "request") restoreDocRequest(root);
     if (dialogParam === "invite") window.setTimeout(() => reopenPortalInvite(root, params.get("pid")), 300);
     const staffInvite = root.querySelector<HTMLDialogElement>("#dlgS");
     if (staffInvite && staffInvite.querySelector("[data-org]")) {
