@@ -175,23 +175,22 @@ export const setupStepInputSchema = z.strictObject({
 });
 
 /**
- * Real client invitations stay locked until the firm is verified, a manual
- * good-standing licence is on file, the trial has not ended, and every sample
- * proof is recorded. Staff invitations are a different path.
+ * Real client invitations (decision 2026-10-19): a declared licence on the firm owner that is not
+ * revoked, suspended, inactive or not entitled is enough. No practice steps and no wait for a
+ * register check. A restricted firm and an ended trial still block. Same order as
+ * app.real_client_invite_blockers. Staff invitations are a different path.
  */
 export function realClientInviteBlockers(input: {
   verificationStatus: string | null;
-  hasVerifiedLicence: boolean;
-  completedSampleSteps: readonly string[];
+  /** The firm owner's licence: none on file, one that is blocked, or one in good standing or awaiting the list check. */
+  ownerLicence: "missing" | "blocked" | "ok";
   subscriptionStatus?: string | null;
 }): string[] {
   if (input.verificationStatus == null) return ["firm_not_found"];
   const blockers: string[] = [];
-  if (input.verificationStatus !== "verified") blockers.push("firm_unverified");
-  if (!input.hasVerifiedLicence) blockers.push("licence_not_verified");
+  if (input.verificationStatus === "restricted") blockers.push("firm_restricted");
+  if (input.ownerLicence === "missing") blockers.push("owner_licence_missing");
+  else if (input.ownerLicence === "blocked") blockers.push("owner_licence_blocked");
   if (input.subscriptionStatus === "trial_ended") blockers.push("trial_ended");
-  for (const step of SAMPLE_PROOF_STEPS) {
-    if (!input.completedSampleSteps.includes(step)) blockers.push(`sample_step_missing:${step}`);
-  }
   return blockers;
 }

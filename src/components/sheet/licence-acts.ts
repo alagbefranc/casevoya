@@ -62,7 +62,7 @@ export async function runLicenceAdd(button: HTMLElement, router: Router) {
   const input = el(dialog, "adN");
   if (input) input.value = "";
   dialog.close();
-  toast2(button.dataset.toast || "Licence added", { kind: "ok", sub: "A reviewer checks it by hand against the CICC public register." });
+  toast2(button.dataset.toast || "Licence added", { kind: "ok", sub: "Its number is checked against the CICC register list." });
   router.refresh();
 }
 

@@ -520,7 +520,7 @@ describe("manual register checks", () => {
 });
 
 describe("real client invites and trial", () => {
-  it("unlocks only after verification, a good-standing check, and six sample proofs", async () => {
+  it("unlocks once the owner's licence is declared: no register check and no practice steps; an ended trial still blocks", async () => {
     const owner = await createUser(email("owner"));
     const consultant = await createUser(email("consultant"));
     const admin = await createUser(email("admin"));
@@ -579,37 +579,33 @@ describe("real client invites and trial", () => {
       `select public.evaluate_real_client_invites($1) as result`,
       [orgId],
     );
-    expect(locked.rows[0].result.unlocked).toBe(false);
-    expect(locked.rows[0].result.blockers).toEqual(
-      expect.arrayContaining(["firm_unverified", "licence_not_verified", "sample_step_missing:export"]),
-    );
+    expect(locked.rows[0].result).toEqual({ unlocked: false, blockers: ["owner_licence_missing"] });
 
+    // A consultant's checked licence is not the owner's (decision 2026-10-19).
     const credentialId = await declareLicence(consultant, orgId, membershipId, "SYNTH-RISIA-1", "RISIA");
     await recordCheck(owner, orgId, credentialId);
     await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
-    const sample = await db.query<{ result: { id: string } }>(
-      `select public.create_practice_matter('Sample activation matter', true) as result`,
-    );
-    const matterId = sample.rows[0].result.id;
-    for (const step of ["intake", "agreement", "upload", "reminder", "invoice"]) {
-      await db.query(`select public.complete_sample_proof($1::public.sample_proof_step, $2)`, [step, matterId]);
-    }
-    const missingExport = await db.query<{ result: { unlocked: boolean; blockers: string[] } }>(
+    const consultantOnly = await db.query<{ result: { unlocked: boolean; blockers: string[] } }>(
       `select public.evaluate_real_client_invites($1) as result`,
       [orgId],
     );
-    expect(missingExport.rows[0].result.unlocked).toBe(false);
-    expect(missingExport.rows[0].result.blockers).toEqual(["sample_step_missing:export"]);
-    await expectDbError(
-      () => db.query(`select public.set_sample_mode(false)`),
-      /sample mode stays on/,
-    );
-    await db.query(`select public.complete_sample_proof('export', $1)`, [matterId]);
+    expect(consultantOnly.rows[0].result.blockers).toEqual(["owner_licence_missing"]);
+
+    // The owner's own declared licence is enough: no register check and no practice steps.
+    await asMaintenance(db);
+    const ownerMembership = (
+      await db.query<{ id: string }>(`select id from public.memberships where organization_id = $1 and user_id = $2`, [orgId, owner])
+    ).rows[0].id;
+    await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    await db.query(`select public.add_consultant_licence($1, 'RCIC', 'SYNTH-OWNER-1')`, [ownerMembership]);
     const open = await db.query<{ result: { unlocked: boolean; blockers: string[] } }>(
       `select public.evaluate_real_client_invites($1) as result`,
       [orgId],
     );
     expect(open.rows[0].result).toEqual({ unlocked: true, blockers: [] });
+    await asMaintenance(db);
+    const proofs = await db.query(`select 1 from public.sample_proof_steps where organization_id = $1`, [orgId]);
+    expect(proofs.rows).toHaveLength(0);
     await asMaintenance(db);
     await db.query(
       `update public.organization_subscriptions set status = 'trial_ended' where organization_id = $1`,

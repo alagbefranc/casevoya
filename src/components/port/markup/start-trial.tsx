@@ -1,8 +1,23 @@
 "use client";
 
 import { toast2 } from "../kit";
+/** The licence fields added after "Firm name": the setup screen's "Licence number" and "Licence class", unchanged. */
+export const START_TRIAL_LICENCE_FIELDS = ["lno", "cl"] as const;
+
+/** Copy changed from the Designer capture on 2026-10-19 (firms start live). Text only. */
+export const START_TRIAL_COPY = {
+  /** Designer: "After we verify your firm and each consultant’s licence. Usually takes a few business days." */
+  pilot: "Invite real clients as soon as your firm is set up. Your licence number is checked against the CICC register list.",
+  /** Designer: "Real client invitations stay locked until verification is done." */
+  why: "Your firm starts live either way. The sample case stays available as an optional tour.",
+  /** Designer: "Explore Casevoya with fictional clients. Real client invitations open once your firm and licence are verified." */
+  poster: "Explore Casevoya with a fictional case. Real client invitations open once your CICC licence is on file.",
+} as const;
+
 /**
- * Converted from site/app-v2/auth/start-trial.html. Same DOM, classes and copy.
+ * Converted from site/app-v2/auth/start-trial.html. Same DOM, classes and copy, except: the
+ * licence number and class (from the setup screen's "Your licence") after "Firm name", because
+ * only licensed CICC consultants sign up, and the START_TRIAL_COPY lines (decision 2026-10-19).
  * `resume` is for an account that is already signed in but has no firm (its sign-up was
  * interrupted): step 0 then asks only for the firm name and goes straight to "How to start".
  */
@@ -16,6 +31,8 @@ export function StartTrialMarkup({ resume }: { resume?: { email: string } } = {}
 <form noValidate onSubmit={(event) => event.preventDefault()}>{resume ? null : (<><div className="fld" data-req="Enter your name"><label htmlFor="nm">Your name</label><input className="inp" id="nm" type="text" autoComplete="name" defaultValue="" placeholder="Your name" aria-describedby="nm-h nm-e" /><span className="emsg" id="nm-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter your name</span></span></div>
 <div className="fld" data-req="Enter a work email, like name@firm.ca"><label htmlFor="wem">Work email</label><span className="hint" id="wem-h">We’ll send a code to confirm it.</span><input className="inp" id="wem" type="email" autoComplete="email" defaultValue="" placeholder="name@firm.ca" aria-describedby="wem-h wem-e" /><span className="emsg" id="wem-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter a work email, like name@firm.ca</span></span></div></>)}
 <div className="fld" data-req="Enter your firm’s name"><label htmlFor="firm">Firm name</label><input className="inp" id="firm" type="text" autoComplete="organization" defaultValue="" placeholder="Your firm" aria-describedby="firm-h firm-e" /><span className="emsg" id="firm-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter your firm’s name</span></span></div>
+<div className="fld" data-req="Enter your licence number"><label htmlFor="lno">Licence number</label><span className="hint" id="lno-h">As shown on the public register</span><input className="inp" id="lno" type="text" autoComplete="" defaultValue="" placeholder="" aria-describedby="lno-h lno-e" /><span className="emsg" id="lno-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter your licence number</span></span></div>
+<div className="fld"><label htmlFor="cl">Licence class</label><span className="hint" id="cl-h">RCIC-IRB can also appear before the Immigration and Refugee Board</span><select className="sel" id="cl" aria-describedby="cl-h cl-e" defaultValue="RCIC-IRB"><option>RCIC</option><option>RCIC-IRB</option></select><span className="emsg" id="cl-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span></span></span></div>
 {resume ? null : (<div className="fld" data-req="Choose a password that meets all three rules" data-min="12"><label htmlFor="tpw">Password</label><div className="pw"><input className="inp" id="tpw" type="password" autoComplete="new-password" /><button type="button" className="eye" aria-label="Show password"></button></div><ul className="rules"><li data-r="len"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-check-circle" /></svg>At least 12 characters</li><li data-r="mix"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-check-circle" /></svg>Letters plus a number or symbol</li><li data-r="known"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-check-circle" /></svg>Not a common or leaked password</li></ul><span className="emsg" id="tpw-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Choose a password that meets all three rules</span></span></div>)}
 <label className="check" data-req="Agree to the Terms to continue"><input type="checkbox" id="tos" /><span>I agree to the <a href="/terms">Terms</a> and have read the <a href="/privacy">Privacy notice</a></span></label>
 <div style={{ "marginTop": "18px" }}>{resume ? <button className="btn p blk" data-go="2" type="submit"><span className="lab">Continue</span><span className="spin" aria-hidden="true"></span></button> : <button className="btn p blk" data-next="" type="submit"><span className="lab">Create account</span><span className="spin" aria-hidden="true"></span></button>}</div></form></section>
@@ -25,11 +42,11 @@ export function StartTrialMarkup({ resume }: { resume?: { email: string } } = {}
 <section data-step="2" data-title="How to start" data-vo="point"><span className="au-art" aria-hidden="true"><img src="/assets/generated/b2/sandbox-72@1x.webp" srcSet="/assets/generated/b2/sandbox-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span><div className="dots" aria-hidden="true"><i></i><i></i><i></i></div><h1>How do you want to start?</h1><p className="lead">You can switch later. Nothing you create is deleted when the trial ends.</p>
 <div role="radiogroup" aria-label="How to start">
 <button className="opt" role="radio" aria-checked="true" data-v="sample"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-sparkles" /></svg></span><span>Explore with sample data<small>A fictional firm with one sponsorship case. Try intake, an agreement, an upload, a reminder, an invoice and an export.</small></span></button>
-<button className="opt" role="radio" aria-checked="false" data-v="pilot"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-shield" /></svg></span><span>Pilot with real clients<small>After we verify your firm and each consultant’s licence. Usually takes a few business days.</small></span></button></div>
-<p className="why" style={{ "margin": "12px 0 18px" }}><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-lock" /></svg>Real client invitations stay locked until verification is done.</p>
+<button className="opt" role="radio" aria-checked="false" data-v="pilot"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-shield" /></svg></span><span>Pilot with real clients<small>{START_TRIAL_COPY.pilot}</small></span></button></div>
+<p className="why" style={{ "margin": "12px 0 18px" }}><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-lock" /></svg>{START_TRIAL_COPY.why}</p>
 <button className="btn p blk" data-href="/setup" data-novalidate=""><span className="lab">Set up my firm</span><span className="spin" aria-hidden="true"></span></button></section>
 </div><footer className="au-foot"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/help">Help centre</a><a href="/status">Service status</a><span className="sp"><a href="#" aria-current="true">English</a> · <a href="#" onClick={(event) => { event.preventDefault(); toast2("Fran\u00e7ais arrive bient\u00f4t", { sub: "The French version of these screens is being designed." }); }}>Français</a></span></footer></main>
-<div className="au-poster" aria-hidden="true"><p className="big">Fourteen days.<br />One sample case.</p><p className="cap">Explore Casevoya with fictional clients. Real client invitations open once your firm and licence are verified.</p><div className="au-chip"><span style={{ "width": "36px", "height": "36px", "borderRadius": "10px", "background": "var(--tint)", "display": "grid", "placeItems": "center", "color": "var(--blue)" }}><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-history" /></svg></span><span>When a trial ends, records stay<small>Export or subscribe. Nothing is deleted silently.</small></span></div></div></div>
+<div className="au-poster" aria-hidden="true"><p className="big">Fourteen days.<br />One sample case.</p><p className="cap">{START_TRIAL_COPY.poster}</p><div className="au-chip"><span style={{ "width": "36px", "height": "36px", "borderRadius": "10px", "background": "var(--tint)", "display": "grid", "placeItems": "center", "color": "var(--blue)" }}><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-history" /></svg></span><span>When a trial ends, records stay<small>Export or subscribe. Nothing is deleted silently.</small></span></div></div></div>
 
 
     </>

@@ -13,6 +13,8 @@ export {
   licenceStatusBlocks,
   licenceTypes,
   normalizeCollegeId,
+  SIGNUP_LICENCE_CLASSES,
+  signupLicence,
   registerLicenceStatuses,
   type CredentialStatus,
   type DeclareCredentialInput,
@@ -22,6 +24,8 @@ export {
   type LicenceType,
   type RegisterLicenceStatus,
   type RegisterObservation,
+  type SignupLicence,
+  type SignupLicenceClass,
 } from "./licence";
 export { intervalFromSetting, productIntervalSchema, type ProductInterval } from "./settings";
 export {

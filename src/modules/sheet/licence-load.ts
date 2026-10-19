@@ -19,7 +19,7 @@ import {
 type Client = Awaited<ReturnType<typeof createClient>>;
 
 const CREDENTIAL_COLUMNS =
-  "id, membership_id, licence_type, college_id, scope_note, status, proof_locator, source_url, register_status, entitlement_to_practise, discipline_restricted, discipline_restriction_detail, declared_at, checked_at, next_review_at, valid_until";
+  "id, membership_id, licence_type, college_id, scope_note, status, verification_method, proof_locator, source_url, register_status, entitlement_to_practise, discipline_restricted, discipline_restriction_detail, declared_at, checked_at, next_review_at, valid_until";
 
 /** Active and suspended staff with names, through public.firm_staff_directory. */
 export async function loadLicenceMembers(supabase: Client, org: string): Promise<LicenceMember[]> {
@@ -42,6 +42,7 @@ export async function loadLicenceCredentials(supabase: Client, org: string): Pro
     collegeId: row.college_id,
     scopeNote: row.scope_note,
     status: row.status,
+    verificationMethod: row.verification_method,
     proofLocator: row.proof_locator,
     sourceUrl: row.source_url,
     registerStatus: row.register_status,
@@ -96,7 +97,7 @@ export async function loadSheetLicence(staff: SheetStaff, tab: LicenceTab, now: 
   const page: LicencesData = {
     firmName: staff.organizationName,
     tab,
-    intro: licenceIntro(context),
+    intro: licenceIntro(),
     cards: licenceCards(members, credentials, logRows, context),
     log: licenceLog(logRows, staff.timezone),
   };
