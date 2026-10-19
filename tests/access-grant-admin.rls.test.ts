@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { firmDay } from "./helpers/firm-day";
 
 // 20261019204100_access_grant_admin.sql: the Access grants page. Firm owner only, step-up to
 // create or revoke, read-only explicit grants that always end, audited. Synthetic people only.
@@ -65,7 +66,7 @@ async function firm() {
   return { orgId, owner, consultant, sponsorLogin, matterId, applicant: id("Synthetic applicant"), sponsor: id("Synthetic sponsor"), cousin: id("Synthetic cousin") };
 }
 
-const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+const inDays = (days: number) => firmDay(days);
 
 async function grant(userId: string, orgId: string, f: Awaited<ReturnType<typeof firm>>, overrides: { grantee?: string; expires?: string; purpose?: string } = {}) {
   await as(userId, orgId);

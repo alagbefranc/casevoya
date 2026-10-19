@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asAnon, asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { firmDay } from "./helpers/firm-day";
 
 /** Client funds: the manual client-account ledger (FIN-03, FIN-09..11). Synthetic people only. */
 
@@ -23,8 +24,8 @@ function token(length = 12) {
 }
 
 const key = (prefix = "cf") => `${prefix}-${randomUUID()}`;
-const today = () => new Date().toISOString().slice(0, 10);
-const inThreeDays = () => new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+const today = () => firmDay();
+const inThreeDays = () => firmDay(3);
 
 async function createUser(label: string) {
   await asMaintenance(db);

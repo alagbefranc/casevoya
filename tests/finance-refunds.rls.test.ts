@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { firmDay } from "./helpers/firm-day";
 
 /** Refunds and disputes on card payments (FIN-13), test mode, with synthetic Stripe ids only. */
 
@@ -83,7 +84,7 @@ async function firm() {
   return { owner, finance, otherFinance, assistant, client, stranger, orgId, matterId, account };
 }
 
-const inThreeDays = () => new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+const inThreeDays = () => firmDay(3);
 
 async function issue(f: Firm, amount = 113_000) {
   await asUser(db, { userId: f.owner, aal: "aal2", orgId: f.orgId, totpAgeSeconds: 0 });

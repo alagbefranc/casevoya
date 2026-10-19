@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { firmDay } from "./helpers/firm-day";
 
 let db: TestDb;
 
@@ -98,7 +99,7 @@ async function firm() {
   return { owner, finance, client, stranger, orgId, matterId };
 }
 
-const tomorrow = () => new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+const tomorrow = () => firmDay(3);
 
 async function connect(orgId: string, owner: string, account = ACCOUNT) {
   await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
