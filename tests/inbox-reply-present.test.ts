@@ -25,7 +25,7 @@ describe("Inbox replies: presentation", () => {
   it("names each delivery state as queued, sent, failed or not sent", () => {
     expect(outboundStatus(undefined, false)).toEqual({ state: "queued", label: "Queued" });
     expect(outboundStatus("sending", false)).toEqual({ state: "queued", label: "Queued" });
-    expect(outboundStatus("queued", false)).toEqual({ state: "queued", label: "Queued" });
+    expect(outboundStatus("queued", false)).toEqual({ state: "sent", label: "Sent" });
     expect(outboundStatus("sent", false)).toEqual({ state: "sent", label: "Sent" });
     expect(outboundStatus("failed", false)).toEqual({ state: "failed", label: "Failed" });
     expect(outboundStatus("bounced", false)).toEqual({ state: "failed", label: "Failed: address bounced" });

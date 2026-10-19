@@ -139,6 +139,13 @@ export function clockLabel(iso: string, timeZone: string): string {
   return zoned(iso, safeZone(timeZone)).time;
 }
 
+/** The day and clock, "Tue 20 Oct, 02:33": for a moment that may fall today or tomorrow. */
+export function dayClockLabel(iso: string, timeZone: string): string {
+  const { date, time } = zoned(iso, safeZone(timeZone));
+  const d = new Date(`${date}T12:00:00Z`);
+  return `${WEEKDAY[d.getUTCDay()]} ${d.getUTCDate()} ${MONTH[d.getUTCMonth()]}, ${time}`;
+}
+
 /** A thread row's time: the clock today, else the short day. */
 export function listTime(iso: string, nowIso: string, timeZone: string): string {
   const label = dayLabel(iso, nowIso, timeZone);
@@ -193,7 +200,7 @@ export function audienceLine(input: {
 export function whatsappLine(thread: Pick<ChatThread, "whatsapp"> | null | undefined, timezone: string): string | null {
   const wa = thread?.whatsapp;
   if (!wa) return null;
-  if (wa.until) return `Your reply also goes to them on WhatsApp (window open until ${clockLabel(wa.until, timezone)}).`;
+  if (wa.until) return `Your reply also goes to them on WhatsApp (window open until ${dayClockLabel(wa.until, timezone)}).`;
   return "WhatsApp’s 24-hour reply window is closed: they get the usual email notice, and a WhatsApp notice to open the portal.";
 }
 

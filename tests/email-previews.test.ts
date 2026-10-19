@@ -116,9 +116,9 @@ const AUTH: { file: string; copy: EmailCopy }[] = [
     file: "confirm-signup.html",
     copy: {
       subject: "Verify your email",
-      preheader: "Confirm your email to finish setting up Casevoya.",
+      preheader: "Confirm your email to finish signing in to Casevoya.",
       heading: "Verify your email",
-      body: "Use code {{ .Token }} or the button below to confirm your email and finish setting up Casevoya. If this wasn’t you, ignore this email.",
+      body: "Use code {{ .Token }} or the button below to confirm your email and finish signing in to Casevoya. If this wasn’t you, ignore this email.",
       cta: { label: "Verify email", href: `${DEFAULT_EMAIL_ORIGIN}/__CONFIRMATION_URL__` },
       spot: "verify",
       brand: { kind: "platform" },

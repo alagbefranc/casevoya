@@ -370,6 +370,7 @@ describe("Settings > Integrations: WhatsApp row", () => {
     expect(whatsappLine(null, "America/Winnipeg")).toBeNull();
     expect(whatsappLine({ whatsapp: null }, "America/Winnipeg")).toBeNull();
     expect(whatsappLine({ whatsapp: { until: "2026-10-19T20:30:00Z" } }, "America/Winnipeg")).toMatch(/^Your reply also goes to them on WhatsApp \(window open until /);
+    expect(whatsappLine({ whatsapp: { until: "2026-10-20T06:33:00Z" } }, "America/Toronto")).toBe("Your reply also goes to them on WhatsApp (window open until Tue 20 Oct, 02:33).");
     expect(whatsappLine({ whatsapp: { until: null } }, "America/Winnipeg")).toMatch(/usual email notice/);
   });
 });

@@ -13,11 +13,14 @@ export type OutboundState = "queued" | "sent" | "failed" | "not_sent";
 
 /**
  * What a sent email's delivery row says, in words. No row yet means the mail worker has not
- * picked it up: queued. A sample matter's email is never sent (recorded as skipped).
+ * picked it up: queued. A row marked "queued" was accepted by the mail provider, which delivers
+ * it later and reports nothing back, so for the firm it is sent. A sample matter's email is never
+ * sent (recorded as skipped).
  */
 export function outboundStatus(deliveryStatus: string | null | undefined, sample: boolean): { state: OutboundState; label: string } {
   switch (deliveryStatus) {
     case "sent":
+    case "queued":
       return { state: "sent", label: "Sent" };
     case "bounced":
       return { state: "failed", label: "Failed: address bounced" };
