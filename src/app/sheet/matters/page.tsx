@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
-import { SheetLoader } from "@/components/sheet/sheet-loader";
 import { SheetBody, queryFrom } from "@/components/sheet/body";
 
 export const metadata: Metadata = {
@@ -9,11 +7,7 @@ export const metadata: Metadata = {
 };
 
 export default function MattersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  return (
-    <Suspense fallback={<SheetLoader />}>
-      <Body searchParams={searchParams} />
-    </Suspense>
-  );
+  return <Body searchParams={searchParams} />;
 }
 
 async function Body({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {

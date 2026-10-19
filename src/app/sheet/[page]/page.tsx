@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
-import { SheetLoader } from "@/components/sheet/sheet-loader";
 import { SheetBody, isSheetPage, queryFrom } from "@/components/sheet/body";
 
 export const metadata: Metadata = {
@@ -18,11 +16,7 @@ export default function SheetPage({
   params: Promise<{ page: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  return (
-    <Suspense fallback={<SheetLoader />}>
-      <Body params={params} searchParams={searchParams} />
-    </Suspense>
-  );
+  return <Body params={params} searchParams={searchParams} />;
 }
 
 async function Body({
