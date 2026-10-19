@@ -896,7 +896,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
   },
   "EX06-received": {
     id: "EX06-received",
-    name: "Document received (variant of EX06)",
+    name: "Document received",
     audience: "client",
     brand: "firm",
     trigger: "A document upload passes the file check (outbox document.uploaded, template document_receipt)",

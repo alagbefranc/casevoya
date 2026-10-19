@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { grantDialog, grantRow, grantsData, readGrantDate, type FirmGrant } from "@/modules/sheet/grants-present";
+import { grantDialog, grantDraftProblem, grantRow, grantsData, readGrantDate, type FirmGrant } from "@/modules/sheet/grants-present";
 
 const NOW = new Date("2026-10-18T15:00:00Z");
 const ZONE = "America/Toronto";
@@ -26,9 +26,15 @@ describe("Access grants page", () => {
       grantedBy: "Dana Lee",
       expires: { num: "28 Oct 2026" },
       state: { tone: "ok", label: "Active" },
+      // An active grant's row opens Revoke (#dlgGX).
+      attrs: { "data-grant-row": "g1", "data-grant-label": "Ben Ito can see CA-2026-0001, Ana Diaz’s records, read only.", tabIndex: "0", title: "Revoke this grant" },
     });
-    expect(grantRow({ ...GRANT, expiresAt: "2026-10-01T04:00:00Z" }, NOW, ZONE)).toMatchObject({ expires: "Expired 30 Sep", state: { tone: "gr", label: "Expired" } });
-    expect(grantRow({ ...GRANT, revokedAt: "2026-10-17T15:00:00Z" }, NOW, ZONE)).toMatchObject({ expires: "Revoked 17 Oct", state: { label: "Revoked" } });
+    const expired = grantRow({ ...GRANT, expiresAt: "2026-10-01T04:00:00Z" }, NOW, ZONE);
+    expect(expired).toMatchObject({ expires: "Expired 30 Sep", state: { tone: "gr", label: "Expired" } });
+    expect(expired.attrs).toBeUndefined();
+    const revoked = grantRow({ ...GRANT, revokedAt: "2026-10-17T15:00:00Z" }, NOW, ZONE);
+    expect(revoked).toMatchObject({ expires: "Revoked 17 Oct", state: { label: "Revoked" } });
+    expect(revoked.attrs).toBeUndefined();
     expect(grantRow({ ...GRANT, kind: "guardian", matterReference: null, expiresAt: null }, NOW, ZONE)).toMatchObject({
       canSee: { left: "Ana Diaz’s records", right: "as guardian" },
       expires: "While the child is a minor",
@@ -56,6 +62,22 @@ describe("Access grants page", () => {
     ]);
     expect(dialog.people).toEqual([{ label: "Ben Ito", personId: "p1" }]);
     expect(dialog.scopes).toEqual([{ label: { left: "Matter without a reference", right: "Ana Diaz’s records, read only" }, matterId: "m1", subjectId: "p2" }]);
+  });
+
+  it("checks the New grant form before any step-up: end date from today to a year ahead, and a reason", () => {
+    expect(grantDraftProblem("", "Cover", "2026-10-18")).toMatchObject({ field: "gE", title: "Enter an end date" });
+    expect(grantDraftProblem("17/10/2026", "Cover", "2026-10-18")).toMatchObject({ field: "gE", title: "Choose another end date" });
+    expect(grantDraftProblem("20/10/2027", "Cover", "2026-10-18")).toMatchObject({ field: "gE" });
+    expect(grantDraftProblem("28/10/2026", "  ", "2026-10-18")).toMatchObject({ field: "gR", title: "Give a reason" });
+    expect(grantDraftProblem("28/10/2026", "Cover while away", "2026-10-18")).toBeNull();
+    expect(grantDraftProblem("18/10/2026", "Cover", "2026-10-18")).toBeNull();
+    expect(grantDialog("org", [], "2026-10-18").today).toBe("2026-10-18");
+  });
+
+  it("says plainly that support access isn't offered, with no requirement code", () => {
+    const data = grantsData("support", [], [], NOW, ZONE);
+    expect(data.supportIntro).toContain("Support access isn’t offered");
+    expect(data.supportIntro).not.toMatch(/SEC-09|built yet/);
   });
 
   it("reads DD/MM/YYYY and refuses dates that don't exist", () => {

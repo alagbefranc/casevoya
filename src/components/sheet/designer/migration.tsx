@@ -383,7 +383,7 @@ function ErrorsTab({ data }: { data: MigrationData }) {
   const errors = data.errors;
   return (
     <>
-      <Head title={"Row errors"} copy={"Rows with problems aren’t imported. Fix them in your file or here."} />
+      <Head title={"Row errors"} copy={"Rows with problems aren’t imported. Fix them in your file and upload it again, or map their values on Map columns."} />
       {errors ? (
         <>
           <div className={errors.ok ? "alert ok rv" : "alert bad rv"} style={i(1)}>

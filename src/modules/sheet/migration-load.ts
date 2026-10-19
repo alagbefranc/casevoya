@@ -245,7 +245,8 @@ async function mapData(supabase: Client, staff: SheetStaff, batch: Batch, wire: 
   const optionsFor = (field: ValueField): [string, string][] => {
     const review: [string, string] = ["", "Needs review"];
     const none: [string, string] = ["none", "Not imported"];
-    if (field === "program") return [review, none, ...options.programs.map((option) => [option.value, option.label] as [string, string])];
+    // "none" for a program keeps the matter and leaves its program to choose later.
+    if (field === "program") return [review, ["none", "No program yet (choose it on the matter)"], ...options.programs.map((option) => [option.value, option.label] as [string, string])];
     if (field === "stage") return [review, none, ...Object.entries(STAGE_LABELS)];
     if (field === "consultant") return [review, ...options.consultants.map((option) => [option.value, option.label] as [string, string])];
     if (field === "case_manager") return [review, none, ...options.staff.map((option) => [option.value, option.label] as [string, string])];
@@ -288,10 +289,13 @@ async function mapData(supabase: Client, staff: SheetStaff, batch: Batch, wire: 
     if (field === "date_of_birth") check = saved ? `${orderLabel} order confirmed` : guess.certain ? `${orderLabel} order (from your dates)` : "Check the date order below";
     if (field === "reference") check = "Groups rows into one matter; kept on the import record";
     if (field === "stage") check = "Kept on the import record; matters start at engagement pending";
+    if (field === "name_extra") check = "Joined after the legal name with a space";
     if (field && (VALUE_FIELDS as readonly string[]).includes(field)) {
       const missing = unmapped.get(field as ValueField) ?? 0;
       if (missing) check = { tone: "chg", label: `${plural(missing, "value")} to map below` };
     }
+    // No published program template to map to: say so instead of offering only "no program".
+    if (field === "program" && options.programs.length === 0) check = { tone: "chg", label: "No program templates published yet: matters import without one" };
     return {
       column: column || `Column ${index + 1}`,
       sample: sampleOf(index),

@@ -6,13 +6,39 @@ import { licenceState } from "@/modules/sheet/licence-state";
 export function sampleSteps(matterId: string | null, firm: string, applicant: string, done: Set<string>): SampleStep[] {
   const matter = matterId ? `/sheet/matters/${matterId}` : "/sheet/matters";
   return [
-    { key: "intake", image: "intake", title: "Send an intake form", note: `${applicant} fills in her history`, href: `${matter}?tab=intake` },
+    { key: "intake", image: "intake", title: "Send an intake form", note: `${applicant} fills in her history`, href: "/sheet/intake-builder" },
     { key: "agreement", image: "agreement", title: "Send a service agreement", note: "Signing order: Priya, then Rafael", href: "/sheet/agreements" },
     { key: "upload", image: "upload", title: "Request and review an upload", note: "Marriage certificate", href: `${matter}?tab=documents` },
     { key: "reminder", image: "reminder", title: "Schedule a reminder", note: "Police certificate due in 14 days", href: "/sheet/automations" },
-    { key: "invoice", image: "invoice", title: "Issue an invoice", note: `From ${firm} to ${applicant}`, href: `${matter}?tab=billing` },
+    { key: "invoice", image: "invoice", title: "Issue an invoice", note: `From ${firm} to ${applicant}`, href: "/sheet/finance?dlg=invoice" },
     { key: "export", image: "export", title: "Export the file", note: "ZIP with the audit trail", href: "/sheet/exports" },
   ].map((step) => ({ ...step, done: done.has(step.key) }));
+}
+
+/** What actually happened on the sample matter, read from its records. */
+export type SampleFacts = {
+  intakeSent: boolean;
+  agreementSent: boolean;
+  uploadReviewed: boolean;
+  reminderScheduled: boolean;
+  invoiceIssued: boolean;
+  exportMade: boolean;
+};
+
+/**
+ * Each step is done when the sample matter's own records show it happened (an agreement sent,
+ * an invoice issued, a reminder scheduled, an export made, an upload reviewed, an intake form
+ * sent), or when the person recorded it by hand before this existed.
+ */
+export function doneSteps(facts: SampleFacts, recorded: Iterable<string>): Set<string> {
+  const done = new Set(recorded);
+  if (facts.intakeSent) done.add("intake");
+  if (facts.agreementSent) done.add("agreement");
+  if (facts.uploadReviewed) done.add("upload");
+  if (facts.reminderScheduled) done.add("reminder");
+  if (facts.invoiceIssued) done.add("invoice");
+  if (facts.exportMade) done.add("export");
+  return done;
 }
 
 /** How the licence check reads on the sample panel. */

@@ -34,6 +34,10 @@ export type IntakeBuilderData = {
   rows: IntakeRow[];
   settings: { label: string; toggles: { label: string; on: boolean }[] };
   vo: { draft: string; sources: string } | null;
+  /** Live only: why Publish is off (no draft to publish yet). */
+  publishDisabled?: string | null;
+  /** Live only: the Preview tab's fields, as a client sees them. */
+  preview?: { key: string; label: string; type: string; ui?: string; required: boolean; note: string | null }[];
   /** Present on a real page. */
   live?: {
     organizationId: string;
@@ -84,7 +88,11 @@ export function IntakeHeader({ data }: { data: IntakeBuilderData }) {
             <Icon name={"eye"} cls={"ic s"} />
             {"Preview"}
           </button>
-          <button className={"btn p sm"} data-intake-publish={data.live ? "1" : undefined}>
+          <button
+            className={"btn p sm"}
+            data-intake-publish={data.live ? "1" : undefined}
+            {...(data.publishDisabled ? { disabled: true, title: data.publishDisabled } : {})}
+          >
             {data.publishLabel}
           </button>
         </span>
@@ -126,8 +134,87 @@ function Row({ row }: { row: IntakeRow }) {
   );
 }
 
+/**
+ * Live only: the Preview tab shows the form as a client fills it in (disabled inputs, the
+ * Designer's `.fld` / `.inp` / `.ta` / `.sel` / `label.check` parts), not the builder again.
+ */
+function IntakePreview({ data, fields }: { data: IntakeBuilderData; fields: NonNullable<IntakeBuilderData["preview"]> }) {
+  return (
+    <>
+      <div className={"ph rv"} style={i(0)}>
+        <h1 className={"display"}>{"Preview"}</h1>
+        <p>{"What a client sees when they fill in this form. Nothing typed here is saved."}</p>
+      </div>
+      <section className={"panel rv"} style={i(1)}>
+        <h2>
+          <Icon name={"file"} />
+          <span>
+            <Pair left={data.section.left} right={data.section.right} />
+          </span>
+        </h2>
+        <div className={"fp-pad"}>
+          {fields.length === 0 ? <p className={"fp-note"}>{"No fields yet. Add one on the Build tab."}</p> : null}
+          {fields.map((field) => {
+            const id = `pv-${field.key}`;
+            const label = `${field.label}${field.required ? " *" : ""}`;
+            const hint = field.note ? (
+              <small className={"hint"} id={`${id}-h`}>
+                {field.note}
+              </small>
+            ) : null;
+            if (field.type === "declaration") {
+              return (
+                <div key={field.key} className={"fld"}>
+                  <label className={"check"}>
+                    <input type={"checkbox"} disabled />
+                    <span>{label}</span>
+                  </label>
+                  {hint}
+                </div>
+              );
+            }
+            return (
+              <div key={field.key} className={"fld"}>
+                <label htmlFor={id}>{label}</label>
+                {hint}
+                {field.type === "text" && field.ui === "long" ? (
+                  <textarea className={"ta"} id={id} disabled></textarea>
+                ) : field.type === "address" ? (
+                  <textarea className={"ta"} id={id} disabled placeholder={"Street, city, province or state, postal code, country"}></textarea>
+                ) : field.type === "date" ? (
+                  <input className={"inp"} id={id} type={"date"} disabled />
+                ) : field.type === "choice" ? (
+                  <select className={"sel"} id={id} disabled>
+                    <option>{"Choose…"}</option>
+                    <option>{"Yes"}</option>
+                    <option>{"No"}</option>
+                  </select>
+                ) : field.type === "country" ? (
+                  <select className={"sel"} id={id} disabled>
+                    <option>{"Choose a country…"}</option>
+                  </select>
+                ) : field.type === "file_request" ? (
+                  <input className={"inp"} id={id} type={"file"} disabled />
+                ) : field.type === "repeatable" ? (
+                  <button className={"btn s sm"} id={id} type={"button"} disabled>
+                    <Icon name={"plus"} cls={"ic s"} />
+                    {"Add a row"}
+                  </button>
+                ) : (
+                  <input className={"inp"} id={id} type={"text"} disabled />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    </>
+  );
+}
+
 export function SheetIntakeBuilder({ data }: { data: IntakeBuilderData }) {
   const live = data.live;
+  if (data.tab === "preview" && data.preview) return <IntakePreview data={data} fields={data.preview} />;
   return (
     <>
       <div className={"ph rv"} style={i(0)}>
@@ -210,6 +297,20 @@ export function IntakeSettings({ data }: { data: IntakeBuilderData }) {
           </div>
         ))}
       </div>
+      {data.live && data.tab === "build" && data.rows.length ? (
+        // Live only: reorder or remove the selected field (the draft autosaves).
+        <div className={"fp-row"} style={{ marginTop: "12px", gap: "6px", flexWrap: "wrap" }}>
+          <button className={"btn s sm"} type={"button"} data-intake-move={"up"}>
+            {"Move up"}
+          </button>
+          <button className={"btn s sm"} type={"button"} data-intake-move={"down"}>
+            {"Move down"}
+          </button>
+          <button className={"btn sm"} type={"button"} data-intake-delete={"1"} style={{ color: "var(--bad)" }}>
+            {"Delete field"}
+          </button>
+        </div>
+      ) : null}
       <h4>{"Provenance"}</h4>
       <p style={{ fontSize: "13px", color: "var(--t2)" }}>{"Each answer records who gave it and when. OCR answers stay tentative until staff confirm them."}</p>
       {data.vo ? <VoCard draft={data.vo.draft} sources={data.vo.sources} marginTop={"12px"} /> : null}

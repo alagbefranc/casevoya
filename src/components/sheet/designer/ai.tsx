@@ -507,7 +507,7 @@ function StatesTab({ data }: { data: AiStates }) {
 function RulesTab({ data }: { data: AiRules }) {
   return (
     <>
-      <Head title={"Human approval"} intro={"Vo and automations can prepare work, but people make the decisions that matter (AI-03, OPS-07)."} />
+      <Head title={"Human approval"} intro={"Vo and automations can prepare work, but people make the decisions that matter."} />
       <div className={"fp-g2 rv"} style={I(1)}>
         <div>
           <Panel icon={"user-check"} title={"Always needs a person"}>

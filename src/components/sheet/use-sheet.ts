@@ -80,7 +80,7 @@ import { wireLead, wirePipeline } from "./pipeline-acts";
 import { runNewTask, syncNewTask } from "./new-task-act";
 import { runReportExport } from "./report-acts";
 import { runExportAct } from "./export-acts";
-import { runMigrationAct } from "./migration-acts";
+import { runMigrationAct, syncMigrationCheck } from "./migration-acts";
 import { inviteFromEdit, openPersonEdit, runPersonEdit } from "./person-edit-act";
 import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-invite-act";
 import { policyDialogId, restorePolicyDraft, runPublishPolicy } from "./portal-policy-act";
@@ -88,6 +88,7 @@ import { POLICY_KINDS, policyKindForDialog } from "@/modules/portal-policies/def
 import { restoreStaffInvite, runStaffInvite, runStaffResend, runStaffRevoke } from "./staff-invite-act";
 import { openGrantRevoke, reopenGrantDialog, runGrantCreate, runGrantRevoke } from "./grants-acts";
 import { runAutomationSave } from "./automations-acts";
+import { signOutOtherSessions } from "@/modules/settings/firm-actions";
 import { mountIntakeBuilder } from "./intake-builder-acts";
 import { runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
 import { runVoDocAccept, runVoDocDiscard, runVoDocReject, runVoRead } from "./vo-doc-acts";
@@ -431,6 +432,27 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (go?.dataset.go && root.contains(go) && go.dataset.go.startsWith("/")) {
         event.preventDefault();
         router.push(go.dataset.go);
+        return;
+      }
+      // Settings > Security: sign the signed-in person out of every other session.
+      const sessions = target.closest<HTMLElement>("[data-sessions-revoke]");
+      if (sessions && root.contains(sessions)) {
+        event.preventDefault();
+        if (sessions.getAttribute("aria-busy") === "true") return;
+        sessions.setAttribute("aria-busy", "true");
+        void signOutOtherSessions({ organizationId: sessions.dataset.org ?? "" })
+          .then((result) => {
+            if ("error" in result) {
+              toast2(result.error, { kind: "bad", sub: "No session was ended." });
+              return;
+            }
+            toast2(result.count ? `Signed out of ${result.count} other ${result.count === 1 ? "session" : "sessions"}` : "No other sessions were open", {
+              kind: "ok",
+              sub: "This browser stays signed in. It’s in the audit trail.",
+            });
+            router.refresh();
+          })
+          .finally(() => sessions.removeAttribute("aria-busy"));
         return;
       }
       // Automations: Reminder settings' Save (the firm owner's reminder days and quiet hours).
@@ -1107,6 +1129,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     if (page === "lead") wireLead(root, router, ac.signal, openDialog);
     // ?dlg=compliance (back from step-up) reopens the privacy or complaints dialog with what was typed.
     if (dialogParam === "compliance") window.setTimeout(() => reopenComplianceDialog(root, openDialog), 300);
+    // Migration import > Map columns: a changed field updates its row's Check cell at once.
+    if (page === "migration") {
+      root.addEventListener("change", (event) => {
+        const select = (event.target as HTMLElement | null)?.closest?.<HTMLSelectElement>("select[data-mig-col]");
+        if (select) syncMigrationCheck(select);
+      }, listen);
+    }
     // Record a complaint / privacy request: linking a client record fills in the name when it's empty.
     for (const [dialogId, linkId, nameId] of [["dlgC", "cP", "cW"], ["dlgPR", "prP", "prN"]] as const) {
       const linkDialog = root.querySelector<HTMLDialogElement>(`dialog#${dialogId}`);

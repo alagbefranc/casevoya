@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { composioConfigured } from "@/modules/integrations/composio";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
-import { composioDialog, integrationsData, notificationPrefsData, type StaffConnection, type WhatsAppInput } from "@/modules/sheet/settings-integrations-present";
+import { composioDialog, integrationsData, whatsappDialog, notificationPrefsData, type StaffConnection, type WhatsAppInput } from "@/modules/sheet/settings-integrations-present";
 import { zernioConfigured } from "@/modules/whatsapp/env";
 import { displayPhone } from "@/modules/whatsapp/phone";
 import { createZernioClient } from "@/modules/whatsapp/zernio";
@@ -60,7 +60,7 @@ async function loadIntegrations(staff: SheetStaff) {
     whatsapp,
     timeZone: staff.timezone,
   };
-  return { integrations: integrationsData(input), dialog: composioDialog(input) };
+  return { integrations: integrationsData(input), dialog: composioDialog(input), whatsappDialog: whatsappDialog(input) };
 }
 
 /**
@@ -113,8 +113,8 @@ export async function loadSheetSettingsIntegrations(staff: SheetStaff, tab: Sett
   const chrome = await loadSheetChrome(staff, "/sheet/settings");
   const pills = [staff.organizationName];
   if (tab === "integrations") {
-    const { integrations, dialog } = await loadIntegrations(staff);
-    return { chrome, pills, tab, integrations, notifications: null, dialog };
+    const { integrations, dialog, whatsappDialog: waDialog } = await loadIntegrations(staff);
+    return { chrome, pills, tab, integrations, notifications: null, dialog, waDialog };
   }
-  return { chrome, pills, tab, integrations: null, notifications: await loadNotificationPrefs(staff), dialog: null };
+  return { chrome, pills, tab, integrations: null, notifications: await loadNotificationPrefs(staff), dialog: null, waDialog: null };
 }

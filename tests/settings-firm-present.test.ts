@@ -62,7 +62,7 @@ describe("Settings > Firm, Offices, Branding, Language and time", () => {
       "Continuity contact": "Continuity Person",
     });
     const withPlan = firmPage({ ...FIRM, succession_note: "Plan kept in the binder." });
-    expect(withPlan.rows.at(-1)?.value).toEqual({ parts: ["Continuity Person", "succession plan on file (ORG-06)"] });
+    expect(withPlan.rows.at(-1)?.value).toEqual({ parts: ["Continuity Person", "succession plan on file"] });
     expect(firmPage({ ...FIRM, continuity_contact_name: null }).rows.at(-1)?.value).toBe(NOT_SET);
     expect(jurisdictionValue([])).toBe(NOT_SET);
     expect(jurisdictionValue(["QC"])).toBe("Québec");
@@ -110,7 +110,7 @@ describe("Settings > Firm, Offices, Branding, Language and time", () => {
     const saved = brandingPage({ firmName: "Synthetic Firm", branding: { accent: "#0a4b93" }, logoUrl: "https://storage.example.test/signed", owner: true });
     expect(saved.figures[0].images).toEqual([{ src: "https://storage.example.test/signed", alt: "Synthetic Firm logo", height: 36 }]);
     expect(saved.colourTag).toBe("Firm colour #0A4B93");
-    expect(saved.replace).toEqual({ label: "Replace logo", dialog: "dlgBrand" });
+    expect(saved.replace).toEqual({ label: "Change logo or colour", dialog: "dlgBrand" });
     expect(JSON.stringify(saved)).not.toMatch(/Northline/);
   });
 

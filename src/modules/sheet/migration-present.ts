@@ -7,6 +7,7 @@ import { safeAccessError } from "@/lib/auth/step-up";
 
 export type MigrationField =
   | "name"
+  | "name_extra"
   | "email"
   | "date_of_birth"
   | "phone"
@@ -21,6 +22,8 @@ export type MigrationField =
 /** The Designer's "Casevoya field" words: entity, then field. */
 export const MIGRATION_FIELDS: { field: MigrationField; label: [string, string] }[] = [
   { field: "name", label: ["Person", "legal name"] },
+  // A second name column (last name after first name): joined to the legal name with a space.
+  { field: "name_extra", label: ["Person", "legal name, second part (joined after)"] },
   { field: "date_of_birth", label: ["Person", "date of birth"] },
   { field: "email", label: ["Person", "email"] },
   { field: "phone", label: ["Person", "phone"] },
@@ -47,7 +50,8 @@ export type MigrationMapping = {
 export type DateOrder = "dmy" | "mdy" | "ymd";
 
 const HINTS: Record<MigrationField, RegExp> = {
-  name: /^(full |legal |client |applicant |person )?name$|^client$|^applicant$|^person$/i,
+  name: /^(full |legal |client |applicant |person |first |given )?name$|^first ?name$|^given ?names?$|^client$|^applicant$|^person$/i,
+  name_extra: /^(last|family|sur) ?name$|^surname$/i,
   email: /e-?mail/i,
   date_of_birth: /^(dob|d\.o\.b\.?|date of birth|birth ?date|birthday|born)$/i,
   phone: /phone|mobile|cell|^tel/i,
@@ -64,7 +68,7 @@ const HINTS: Record<MigrationField, RegExp> = {
 export function suggestColumns(headers: readonly string[]): Partial<Record<MigrationField, number>> {
   const used = new Set<number>();
   const result: Partial<Record<MigrationField, number>> = {};
-  const order: MigrationField[] = ["email", "date_of_birth", "phone", "case_manager", "consultant", "reference", "title", "program", "stage", "role", "name"];
+  const order: MigrationField[] = ["email", "date_of_birth", "phone", "case_manager", "consultant", "reference", "title", "program", "stage", "role", "name_extra", "name"];
   for (const field of order) {
     const index = headers.findIndex((header, i) => !used.has(i) && HINTS[field].test(header.trim()));
     if (index >= 0) {
@@ -83,20 +87,25 @@ export function guessDateOrder(samples: readonly string[]): { order: DateOrder; 
   let dayFirst = false;
   let monthFirst = false;
   let iso = 0;
+  let other = 0;
   for (const sample of samples) {
     const value = sample.trim();
-    if (/^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$/.test(value)) {
+    if (!value) continue;
+    // ISO dates (year first, optionally with a time) are unambiguous: they never vote for an order.
+    if (/^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}([T ]\d{1,2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/.test(value)) {
       iso++;
       continue;
     }
     const match = /^(\d{1,2})[-/.](\d{1,2})[-/.]\d{4}$/.exec(value);
     if (!match) continue;
+    other++;
     if (Number(match[1]) > 12) dayFirst = true;
     if (Number(match[2]) > 12) monthFirst = true;
   }
   if (dayFirst && !monthFirst) return { order: "dmy", certain: true };
   if (monthFirst && !dayFirst) return { order: "mdy", certain: true };
-  if (iso && iso === samples.filter((sample) => sample.trim()).length) return { order: "ymd", certain: true };
+  // Only ISO dates in the column: year first, and nothing to confirm.
+  if (iso && other === 0) return { order: "ymd", certain: true };
   return { order: "dmy", certain: false };
 }
 

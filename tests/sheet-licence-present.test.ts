@@ -47,7 +47,8 @@ function credential(overrides: Partial<LicenceCredential>): LicenceCredential {
 describe("Licences page", () => {
   it("shows a declared licence as waiting, says truthfully what is locked, and never invents proof", () => {
     const [, card] = licenceCards([OWNER, CONSULTANT], [credential({})], [], CONTEXT);
-    expect(card.state).toEqual({ tone: "rev", label: "Waiting for check" });
+    // One status set everywhere (decision 2026-10-19): Verified, Needs review, Declared.
+    expect(card.state).toEqual({ tone: "rev", label: "Declared" });
     expect(card.rows.find((row) => row.label === "Until checked")?.value).toBe("Can work on files and invite real clients. The number is checked against the CICC register list.");
     expect(card.proof).toEqual({ kind: "none", text: "No proof file yet. The reviewer keeps their own register evidence with the check." });
     expect(card.footer.note?.text).toBe("The number is checked against the CICC register list");
@@ -83,9 +84,26 @@ describe("Licences page", () => {
     expect(cards[1].adverse).toBe(true);
     expect(cards[1].state).toEqual({ tone: "bad", label: "Suspended" });
     expect(cards[1].rows.find((row) => row.label === "Paused")).toBeTruthy();
-    expect(cards[0].state.label).toBe("No licence on file");
+    // The firm owner counts as licensed (decision 2026-10-19); a consultant still needs one on file.
+    expect(cards[0].state).toEqual({ tone: "gr", label: "Counts as licensed" });
     expect(cards[2].state).toEqual({ tone: "chg", label: "No licence on file" });
     expect(cards[3].state).toEqual({ tone: "gr", label: "No licence needed" });
+  });
+
+  it("reads Needs review when the CICC list check couldn't confirm a declared licence", () => {
+    const log = [{ at: "2026-10-17T13:40:00Z", kind: "check", result: "needs_review", credentialId: "c1", holderName: "Sam Park", collegeId: "R1234567", actorName: null, actorIsPlatform: true }];
+    const [, card] = licenceCards([OWNER, CONSULTANT], [credential({})], log, CONTEXT);
+    expect(card.state).toEqual({ tone: "chg", label: "Needs review" });
+  });
+
+  it("opens a proof only for the firm owner or the holder, through a signed link", () => {
+    const withProof = credential({ proofLocator: "licence-proofs/org/m-cons/x.pdf" });
+    const [, owner] = licenceCards([OWNER, CONSULTANT], [withProof], [], { ...CONTEXT, organizationId: "org-1" });
+    expect(owner.proof).toMatchObject({ kind: "file", href: "/api/firm/licence-proof/open?organizationId=org-1&credential=c1" });
+    const [, other] = licenceCards([OWNER, CONSULTANT], [withProof], [], { ...CONTEXT, organizationId: "org-1", viewerIsOwner: false });
+    expect(other.proof).not.toHaveProperty("href");
+    const [, holder] = licenceCards([OWNER, { ...CONSULTANT, isSelf: true }], [withProof], [], { ...CONTEXT, organizationId: "org-1", viewerIsOwner: false });
+    expect(holder.proof).toHaveProperty("href");
   });
 
   it("lets only the owner or the holder report a change", () => {

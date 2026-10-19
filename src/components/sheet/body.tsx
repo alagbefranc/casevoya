@@ -32,7 +32,7 @@ import { SettingsBillingHeader, SheetRetention, SheetSubscription } from "@/comp
 import { loadSheetRetention, loadSheetSubscription } from "@/modules/sheet/settings-billing-load";
 import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
 import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
-import { ComposioDialog, IntegrationsSettingsHeader, SheetIntegrations, SheetNotificationPrefs } from "@/components/sheet/designer/settings-integrations";
+import { ComposioDialog, IntegrationsSettingsHeader, SheetIntegrations, SheetNotificationPrefs, WhatsAppDialog } from "@/components/sheet/designer/settings-integrations";
 import { loadSheetSettingsIntegrations } from "@/modules/sheet/settings-integrations-load";
 import { NotificationsHeader, SheetNotifications } from "@/components/sheet/designer/notifications";
 import { loadSheetNotifications } from "@/modules/sheet/notifications-load";
@@ -373,7 +373,14 @@ export async function SheetBody({
           sidebar={loaded.chrome.sidebar}
           header={<IntegrationsSettingsHeader tab={loaded.tab} pills={loaded.pills} />}
           statusbar={loaded.chrome.statusbar}
-          after={loaded.dialog ? <ComposioDialog data={loaded.dialog} /> : undefined}
+          after={
+            loaded.dialog || loaded.waDialog ? (
+              <>
+                {loaded.dialog ? <ComposioDialog data={loaded.dialog} /> : null}
+                {loaded.waDialog ? <WhatsAppDialog data={loaded.waDialog} /> : null}
+              </>
+            ) : undefined
+          }
         >
           {loaded.integrations ? <SheetIntegrations data={loaded.integrations} /> : null}
           {loaded.notifications ? <SheetNotificationPrefs data={loaded.notifications} /> : null}

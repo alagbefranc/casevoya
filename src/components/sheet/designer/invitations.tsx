@@ -21,13 +21,13 @@ export type StaffRowAction =
 export type StaffRow = {
   person: SidebarPerson;
   name: string;
-  /** The line under the name (an email, or the Designer's "Applicant · NL-2026-0142"). */
-  email: string | { left: string; right: string };
+  /** The line under the name (an email, or the Designer's "Applicant · NL-2026-0142", optionally with a middle part). */
+  email: string | { left: string; middle?: string; right: string };
   /** "Case manager", or the Designer's two-part "Owner · Licensed consultant". */
   role: string | { left: string; right: string };
   state: MatterBadge;
-  /** "Two-step on", "Single use". */
-  note: string;
+  /** "Two-step on", "Single use", or the Designer's two-part "Own account · consent given". */
+  note: string | { left: string; right: string };
   action: StaffRowAction;
   /** Live only: a revoked invitation, shown greyed. */
   muted?: boolean;
@@ -131,6 +131,25 @@ export function StaffHeader({ firmName, tab = "staff", inviteGo }: { firmName: s
   );
 }
 
+/** The line under a name: a plain string, or the Designer's "Role · [middle ·] <num>reference</num>". */
+function Under({ line }: { line: StaffRow["email"] }) {
+  if (typeof line === "string") return <>{line}</>;
+  return (
+    <>
+      {`${line.left} `}
+      <span className={"sep"} aria-hidden={"true"}></span>
+      {line.middle ? (
+        <>
+          {` ${line.middle} `}
+          <span className={"sep"} aria-hidden={"true"}></span>
+        </>
+      ) : null}
+      {" "}
+      <span className={"num"}>{line.right}</span>
+    </>
+  );
+}
+
 function RowAction({ action }: { action: StaffRowAction }) {
   if (action.kind === "none") return null;
   const portal = action.kind !== "more" && action.portal ? { "data-portal": "1", "data-org": action.organizationId } : {};
@@ -162,23 +181,14 @@ function Row({ row }: { row: StaffRow }) {
       <div>
         <b>{row.name}</b>
         <small>
-          {typeof row.email === "string" ? (
-            row.email
-          ) : (
-            <>
-              {`${row.email.left} `}
-              <span className={"sep"} aria-hidden={"true"}></span>
-              {" "}
-              <span className={"num"}>{row.email.right}</span>
-            </>
-          )}
+          <Under line={row.email} />
         </small>
       </div>
       <span className={"ivc"}>{typeof row.role === "string" ? row.role : <Pair left={row.role.left} right={row.role.right} />}</span>
       <span className={"ivc"}>
         <Badge badge={row.state} />
       </span>
-      <small className={"ivx"}>{row.note}</small>
+      <small className={"ivx"}>{typeof row.note === "string" ? row.note : <Pair left={row.note.left} right={row.note.right} />}</small>
       <span className={"iva"}>
         <RowAction action={row.action} />
       </span>
@@ -267,22 +277,13 @@ function ClientRow({ row }: { row: StaffRow }) {
       <div>
         <b>{row.name}</b>
         <small>
-          {typeof row.email === "string" ? (
-            row.email
-          ) : (
-            <>
-              {`${row.email.left} `}
-              <span className={"sep"} aria-hidden={"true"}></span>
-              {" "}
-              <span className={"num"}>{row.email.right}</span>
-            </>
-          )}
+          <Under line={row.email} />
         </small>
       </div>
       <span className={"ivc"}>
         <Badge badge={row.state} />
       </span>
-      <small className={"ivx"}>{row.note}</small>
+      <small className={"ivx"}>{typeof row.note === "string" ? row.note : <Pair left={row.note.left} right={row.note.right} />}</small>
       <span className={"iva"}>
         <RowAction action={row.action} />
       </span>

@@ -18,6 +18,7 @@ import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder, t
 import { IntakeBuilderMarkup } from "@/components/sheet/markup/intake-builder";
 import { SheetTemplates, TemplatesHeader, type TemplatesData, type TemplatesTab } from "@/components/sheet/designer/templates";
 import { TemplatesMarkup } from "@/components/sheet/markup/templates";
+import { withoutRequirementCodes } from "./helpers/designer-copy";
 import { AutomationsHeader, AutomationsSettings, SheetAutomations, type AutomationsData, type AutomationsTab } from "@/components/sheet/designer/automations";
 import { AutomationsMarkup } from "@/components/sheet/markup/automations";
 
@@ -546,7 +547,7 @@ const DESIGNER_TEMPLATES: TemplatesData = {
 describe("Designer fidelity: Templates", () => {
   for (const [tab, variant] of [["program", "default"], ["messages", "tab-messages"], ["checklists", "tab-checklists"], ["sources", "tab-sources"], ["rule", "tab-rule"]] as [TemplatesTab, string][]) {
     it(`renders the Templates page (${tab} tab) exactly as the captured Designer markup`, () => {
-      const captured = clean(renderToStaticMarkup(createElement(TemplatesMarkup, { variant })));
+      const captured = withoutRequirementCodes(clean(renderToStaticMarkup(createElement(TemplatesMarkup, { variant }))));
       const data = { ...DESIGNER_TEMPLATES, tab };
       const live = frame("/sheet/templates", createElement(TemplatesHeader, { data }), createElement(SheetTemplates, { data }));
       same(live, captured);

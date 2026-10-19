@@ -47,7 +47,7 @@ export const ROLE_MATRIX: RoleMatrixData = {
     "“Own” means the person only sees records they’re part of. “Assigned only” means the person works only on matters they’re assigned to (PRD §5): licensed consultants on their assigned matters, case managers on assigned intake, documents, tasks and drafts, assistants on explicitly assigned work, and finance users on the billing side of their assigned matters, with no default access to restricted records. A case manager can’t release a submission. Earned-fee transfers need a second approver; a firm owner may approve their own request after confirming it’s them. Platform admins can’t see firm data.",
   notes: {
     lock: "Sign representation is limited to licensed consultants by regulation. You can’t grant it to other roles.",
-    shield: "Platform admins see firm configuration only. Casevoya support has no way to open a matter: support grants aren’t built yet, and there’s no hidden “log in as this firm” button.",
+    shield: "Platform admins see firm configuration only. Casevoya support can’t open a matter: support access isn’t offered, and there’s no hidden “log in as this firm” button.",
   },
   pills: [`${ROLES.length} roles`, "Changes are logged"],
 };

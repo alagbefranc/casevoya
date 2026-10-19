@@ -103,7 +103,7 @@ export function settingsHeader(tab: SettingsTab, firmName: string, plan: string 
 
 export function firmPage(firm: FirmRow): FirmData {
   const continuity = firm.continuity_contact_name?.trim();
-  const plan = firm.succession_note?.trim() ? "succession plan on file (ORG-06)" : null;
+  const plan = firm.succession_note?.trim() ? "succession plan on file" : null;
   return {
     firmName: firm.display_name,
     rows: [
@@ -126,7 +126,7 @@ export function firmFields(firm: FirmRow): FirmField[] {
     { id: "fmBE", key: "billing_contact_email", label: "Billing contact email", value: firm.billing_contact_email ?? "", type: "email", max: 320 },
     { id: "fmPN", key: "privacy_contact_name", label: "Privacy contact", value: firm.privacy_contact_name ?? "", max: 200 },
     { id: "fmPE", key: "privacy_contact_email", label: "Privacy contact email", value: firm.privacy_contact_email ?? "", type: "email", max: 320 },
-    { id: "fmCN", key: "continuity_contact_name", label: "Continuity contact", value: firm.continuity_contact_name ?? "", max: 200, hint: "Who looks after clients if you can’t (ORG-06). Leave empty for none." },
+    { id: "fmCN", key: "continuity_contact_name", label: "Continuity contact", value: firm.continuity_contact_name ?? "", max: 200, hint: "Who looks after clients if you can’t. Leave empty for none." },
     { id: "fmCE", key: "continuity_contact_email", label: "Continuity contact email", value: firm.continuity_contact_email ?? "", type: "email", max: 320 },
   ];
 }

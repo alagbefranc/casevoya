@@ -5,6 +5,7 @@ import { SheetFrame } from "@/components/sheet/designer/frame";
 import type { SidebarData } from "@/components/sheet/designer/sidebar";
 import { MigrationHeader, SheetMigration, type MigrationData, type MigrationTab } from "@/components/sheet/designer/migration";
 import { MigrationMarkup } from "@/components/sheet/markup/migration";
+import { withCopy } from "./helpers/designer-copy";
 
 /**
  * Compliance > Migration import (T044): the data-driven page must produce the same HTML as each
@@ -116,7 +117,12 @@ function render(tab: MigrationTab, data: MigrationData) {
 describe("Designer fidelity: Migration import", () => {
   for (const tab of ["map", "preview", "errors", "signoff"] as const) {
     it(`renders the ${tab} tab exactly as the captured Designer markup`, () => {
-      const captured = withoutPreloads(renderToStaticMarkup(createElement(MigrationMarkup, { variant: VARIANT[tab] })));
+      const raw = withoutPreloads(renderToStaticMarkup(createElement(MigrationMarkup, { variant: VARIANT[tab] })));
+      // Text-only change (2026-10-19 audit): the page has no in-page row edits, so it doesn't promise them.
+      const captured =
+        tab === "errors"
+          ? withCopy(raw, [["Fix them in your file or here.", "Fix them in your file and upload it again, or map their values on Map columns."]])
+          : raw;
       sameMarkup(render(tab, DESIGNER[tab]), captured);
     });
   }

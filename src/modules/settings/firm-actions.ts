@@ -89,6 +89,19 @@ export async function removeFirmOffice(input: { organizationId: string; officeId
   return error ? refused(error.message) : { ok: true };
 }
 
+/**
+ * Settings > Security: signs the signed-in person out of every other session (public.revoke_other_sessions,
+ * audited mfa.sessions_revoked). This session stays signed in. Another person's sessions end when the
+ * firm owner resets their two-step or suspends them (Team and seats).
+ */
+export async function signOutOtherSessions(input: { organizationId: string }): Promise<{ ok: true; count: number } | { error: string }> {
+  const session = await signedIn(input.organizationId);
+  if ("error" in session) return session;
+  const { data, error } = await session.supabase.rpc("revoke_other_sessions");
+  if (error) return { error: safeAccessError(error.message) };
+  return { ok: true, count: typeof data === "number" ? data : 0 };
+}
+
 /** The file is in the private logo bucket (written only by /api/firm/logo). */
 async function logoStored(key: string): Promise<boolean> {
   try {
