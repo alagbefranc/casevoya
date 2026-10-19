@@ -1,13 +1,13 @@
 import "server-only";
-import type { CalendarData, CalendarRbar, CalendarTab } from "@/components/sheet/designer/calendar";
+import type { CalendarData, CalendarNav, CalendarRbar, CalendarTab } from "@/components/sheet/designer/calendar";
 import type {
   BookDialogData,
   BookingTypeRow,
   CancelDialogData,
+  ConsultationRecordData,
   ConsultationsData,
   ConsultationsTab,
   HostPanel,
-  MonthCal,
   Option,
   RescheduleDialogData,
 } from "@/components/sheet/designer/consultations";
@@ -15,13 +15,14 @@ import type { HostOption } from "@/components/sheet/designer/scheduling-dialogs"
 import { appOrigin } from "@/lib/email/env";
 import { createClient } from "@/lib/supabase/server";
 import { loadSheetChrome, matterNames, memberNames, type SheetChrome } from "@/modules/sheet/chrome-load";
-import { monthGrid } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 import { parseAvailability, slotsFromAvailability } from "./availability";
-import { COMMON_ZONES, PRACTICE_NOTICE, locationShort, safeZone, shortWhen, slotLabel } from "./format";
+import { isUuid } from "@/lib/tenant/context";
+import { COMMON_ZONES, PRACTICE_NOTICE, locationLabel, locationShort, longWhen, safeZone, shortWhen, slotLabel } from "./format";
 import {
   BOOKING_PAGE_PILL,
+  bookingEventLabel,
   bookingPageState,
   bookingPagesInOrder,
   bookingTypeState,
@@ -31,6 +32,11 @@ import {
   deadlineNote,
   defaultWeekAnchor,
   mondayOf,
+  monthBox,
+  recordHref,
+  recordOutcome,
+  shiftMonth,
+  upcomingRows,
   type StaffBooking,
   type WeekItem,
 } from "./sheet-present";
@@ -44,7 +50,9 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 export type ConsultationsPage = {
   chrome: SheetChrome;
-  tab: ConsultationsTab;
+  tab: ConsultationsTab | "record";
+  /** The Consultation record tab (`?tab=record&id=<booking>`): a real booking's notes and outcome. */
+  record: ConsultationRecordData | null;
   pills: string[];
   book: Record<string, string> | null;
   page: ConsultationsData;
@@ -101,19 +109,6 @@ async function loadBookings(supabase: Client, org: string, from: number, to: num
   }));
 }
 
-function monthCal(zone: string, now: number, marked: number[]): MonthCal {
-  const today = utcToLocal(now, zone).date;
-  const [year, month, day] = today.split("-").map(Number);
-  const days = new Set(
-    marked
-      .map((ms) => utcToLocal(ms, zone).date)
-      .filter((date) => date.startsWith(today.slice(0, 7)))
-      .map((date) => Number(date.slice(8, 10))),
-  );
-  const grid = monthGrid(year, month, day, days);
-  return { month: grid.month, leading: grid.leading, days: grid.days };
-}
-
 async function staffMembers(supabase: Client, org: string) {
   const [{ data }, names] = await Promise.all([
     supabase.from("memberships").select("id, role, user_id").eq("organization_id", org).eq("status", "active"),
@@ -124,12 +119,116 @@ async function staffMembers(supabase: Client, org: string) {
     .map((row) => ({ membershipId: row.id, userId: row.user_id, role: row.role, name: names.get(row.id) ?? "Staff member" }));
 }
 
+type Member = Awaited<ReturnType<typeof staffMembers>>[number];
+
+/**
+ * The Consultation record tab: the firm's recent and coming consultations to choose from, and the
+ * chosen one's notes (the notes on the lead it belongs to), outcome, details and history. Read as
+ * the signed-in staff member (RLS decides). Nothing is invented: what isn't recorded says so.
+ */
+async function loadRecord(supabase: Client, staff: SheetStaff, query: SheetQuery, zone: string, now: number, members: Member[]): Promise<ConsultationRecordData> {
+  const org = staff.organizationId;
+  const list = await loadBookings(supabase, org, now - 90 * DAY, now + 120 * DAY, ["confirmed", "held", "cancelled", "no_show", "completed"]);
+  const chosen = query.id && isUuid(query.id) ? query.id : null;
+  const picker = [...list]
+    .sort((a, b) => b.startsAt.localeCompare(a.startsAt))
+    .map((b) => ({ label: `${shortWhen(Date.parse(b.startsAt), zone)} · ${b.attendee} · ${b.title}`, value: recordHref(b.id), selected: b.id === chosen }));
+  const empty = list.length
+    ? { title: "Choose a consultation", copy: "Pick one above to see its notes, outcome and details." }
+    : { title: "No consultations yet", copy: "Bookings from your booking page, and ones you make for clients, have a record here." };
+  if (!chosen) return { picker, record: null, empty };
+
+  const { data: booking } = await supabase
+    .from("bookings")
+    .select("id, title, starts_at, ends_at, status, host_name, location_kind, location_detail, source, person_id, matter_id, cancelled_at, cancelled_by, cancel_reason, outcome_at, attendee_time_zone, event_type_id, is_sample, version")
+    .eq("organization_id", org)
+    .eq("id", chosen)
+    .maybeSingle();
+  if (!booking) return { picker, record: null, empty: { title: "This consultation isn’t available", copy: "It may belong to another firm, or your role can’t open it. Choose another one above." } };
+  if (!picker.some((option) => option.selected)) {
+    picker.unshift({ label: `${shortWhen(Date.parse(booking.starts_at), zone)} · ${booking.title}`, value: recordHref(booking.id), selected: true });
+  }
+
+  const [attendee, type, events, link] = await Promise.all([
+    supabase.from("booking_attendees").select("display_name, time_zone").eq("organization_id", org).eq("booking_id", booking.id).eq("role", "primary").maybeSingle(),
+    supabase.from("booking_event_types").select("title").eq("organization_id", org).eq("id", booking.event_type_id).maybeSingle(),
+    supabase.from("booking_events").select("kind, actor, actor_user_id, created_at").eq("organization_id", org).eq("booking_id", booking.id).order("created_at", { ascending: false }).limit(30),
+    supabase.from("lead_booking_links").select("lead_id").eq("organization_id", org).eq("booking_id", booking.id).maybeSingle(),
+  ]);
+  const leadId = link.data?.lead_id ?? null;
+  const [lead, notes] = leadId
+    ? await Promise.all([
+        supabase.from("leads").select("id, display_name").eq("organization_id", org).eq("id", leadId).maybeSingle(),
+        supabase.from("lead_notes").select("body, created_at, created_by").eq("organization_id", org).eq("lead_id", leadId).order("created_at", { ascending: false }).limit(5),
+      ])
+    : [null, null];
+  const byUser = new Map(members.map((member) => [member.userId, member.name]));
+  const name = attendee.data?.display_name ?? "Client";
+  const start = Date.parse(booking.starts_at);
+  const outcome = recordOutcome(
+    { status: booking.status, startsAt: booking.starts_at, outcomeAt: booking.outcome_at, cancelledAt: booking.cancelled_at, cancelledBy: booking.cancelled_by, cancelReason: booking.cancel_reason },
+    zone,
+    now,
+  );
+  const actions = consultationRow(
+    { id: booking.id, title: booking.title, startsAt: booking.starts_at, endsAt: booking.ends_at, status: booking.status, hostName: booking.host_name, locationKind: booking.location_kind, version: booking.version, attendee: name },
+    zone,
+    now,
+  ).actions;
+  const clientZone = attendee.data?.time_zone ?? booking.attendee_time_zone;
+  const noteItems = (notes?.data ?? []).map((note) => ({
+    who: note.created_by ? byUser.get(note.created_by) ?? "Staff" : "The enquiry form",
+    when: shortWhen(Date.parse(note.created_at), zone),
+    body: note.body,
+  }));
+  const notesCopy = lead?.data
+    ? noteItems.length
+      ? `The latest notes on the lead ${lead.data.display_name}. Add notes there.`
+      : `No notes yet. Notes are kept on the lead ${lead.data.display_name}.`
+    : booking.matter_id
+      ? "This consultation is with an existing client. Keep notes on their matter."
+      : "No notes yet. Notes are kept on a lead: make this booking a lead from the Pipeline, or link it from a lead.";
+  const notesLink = lead?.data
+    ? { href: `/sheet/lead?id=${lead.data.id}`, label: "Open the lead" }
+    : booking.matter_id
+      ? { href: `/sheet/matters/${booking.matter_id}`, label: "Open the matter" }
+      : booking.source === "public" && !booking.person_id
+        ? { href: "/sheet/pipeline", label: "Open the pipeline" }
+        : null;
+  return {
+    picker,
+    empty,
+    record: {
+      attendee: name,
+      notes: { items: noteItems, copy: notesCopy, lead: notesLink },
+      outcome: { chip: outcome.chip, copy: `${outcome.copy} A summary for the client isn’t sent from here.`, actions },
+      details: [
+        { term: "Booking type", value: type.data?.title ?? booking.title },
+        { term: "When (your time)", value: shortWhen(start, zone) },
+        ...(clientZone && clientZone !== zone ? [{ term: "Client’s time", value: longWhen(start, clientZone) }] : []),
+        { term: "With", value: booking.host_name ?? "—" },
+        { term: "Where", value: locationLabel(booking.location_kind, booking.location_kind === "in_person" ? booking.location_detail : null) },
+        { term: "Booked", value: booking.source === "public" ? "On the booking page" : "By the firm" },
+        { term: "Lead", value: lead?.data ? lead.data.display_name : "Not linked" },
+        { term: "Agreement", value: "Not linked (consultation agreements aren’t linked to bookings yet)" },
+        { term: "Fee", value: "No fee" },
+        ...(booking.is_sample ? [{ term: "Record", value: "Sample (practice)" }] : []),
+      ],
+      history: (events.data ?? []).map((event) => ({
+        what: bookingEventLabel(event.kind),
+        who: event.actor === "staff" ? (event.actor_user_id ? byUser.get(event.actor_user_id) ?? "Staff" : "Staff") : event.actor === "client" ? "Client" : "Casevoya",
+        when: shortWhen(Date.parse(event.created_at), zone),
+      })),
+    },
+  };
+}
+
 export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuery): Promise<ConsultationsPage> {
   const org = staff.organizationId;
   const zone = safeZone(staff.timezone);
   const supabase = await createClient({ organizationId: org });
   const chrome = await loadSheetChrome(staff, "/sheet/consultations");
-  const tab: ConsultationsTab = query.tab === "availability" || query.tab === "booking" ? query.tab : "upcoming";
+  const tab: ConsultationsTab | "record" = query.tab === "availability" || query.tab === "booking" || query.tab === "record" ? query.tab : "upcoming";
   const now = Date.now();
   const owner = staff.role === "firm_owner";
   const { data: userData } = await supabase.auth.getClaims();
@@ -153,12 +252,10 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
   const hostsOf = (typeId: string) => hostRows.filter((row) => row.event_type_id === typeId).sort((a, b) => a.position - b.position).map((row) => row.membership_id);
   const myMembership = members.find((member) => member.userId === me) ?? null;
 
-  // Upcoming: what's ahead first, then the last two weeks (outcomes to record, no-shows).
-  const ahead = upcoming.filter((b) => Date.parse(b.startsAt) > now && b.status !== "cancelled");
-  const past = upcoming.filter((b) => Date.parse(b.startsAt) <= now).reverse();
-  const cancelledAhead = upcoming.filter((b) => Date.parse(b.startsAt) > now && b.status === "cancelled");
-  const rows = [...ahead, ...past, ...cancelledAhead].map((booking) => consultationRow(booking, zone, now));
-  const thisWeek = ahead.filter((b) => b.status === "confirmed" && Date.parse(b.startsAt) < now + 7 * DAY).length;
+  // Upcoming: what's ahead first, then the last two weeks (outcomes to record, no-shows). Cancelled
+  // bookings are left out (each one's record still shows on the Consultation record tab).
+  const rows = upcomingRows(upcoming, zone, now);
+  const thisWeek = upcoming.filter((b) => b.status === "confirmed" && Date.parse(b.startsAt) > now && Date.parse(b.startsAt) < now + 7 * DAY).length;
   // A published sample type is a practice page (only the firm's staff can open it). The share link
   // and preview use a real page when there is one, otherwise the practice page.
   const published = bookingPagesInOrder(types.filter((type) => type.is_published));
@@ -264,7 +361,24 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
           }),
         }
       : null,
+    archive: owner ? { "data-type-archive": type.id, "data-version": String(type.version), "data-org": org, "data-title": type.title } : null,
   }));
+
+  // Availability's month box: the month asked for (?month=), with its booked days marked.
+  const today = utcToLocal(now, zone).date;
+  const shownMonth = query.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(query.month) ? query.month : today.slice(0, 7);
+  const monthStart = localToUtc(`${shownMonth}-01`, "00:00", zone);
+  const monthEnd = localToUtc(`${shiftMonth(shownMonth, 1)}-01`, "00:00", zone);
+  const monthBooked = tab === "availability" ? await loadBookings(supabase, org, monthStart, monthEnd, ["confirmed", "completed", "no_show"]) : [];
+  const availabilityMonth = monthBox({
+    month: shownMonth,
+    today,
+    marked: monthBooked.map((b) => utcToLocal(Date.parse(b.startsAt), zone).date),
+    nav: (month) => `/sheet/consultations?tab=availability&month=${month}`,
+    day: (date) => `/sheet/calendar?week=${date}`,
+  });
+
+  const record = tab === "record" ? await loadRecord(supabase, staff, query, zone, now, members) : null;
 
   // Book for a client: people this staff member can see, with an email; sample people in sample mode.
   const people = await supabase.from("persons").select("id, display_name, email, is_sample").eq("organization_id", org).not("email", "is", null).order("display_name").limit(300);
@@ -281,14 +395,16 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
   return {
     chrome,
     tab,
+    record,
     pills: [`${thisWeek} this week`, BOOKING_PAGE_PILL[pageState]],
     book: {},
     page: {
-      tab,
+      tab: tab === "record" ? "upcoming" : tab,
       upcoming: { rows, empty: { title: "No consultations yet", copy: "Bookings from your booking page, and ones you make for clients, appear here." } },
       availability: {
         hosts: hostPanels,
-        calendar: monthCal(zone, now, upcoming.filter((b) => b.status === "confirmed").map((b) => Date.parse(b.startsAt))),
+        calendar: availabilityMonth,
+        calendarTitle: "Booked days",
         empty: {
           title: "No working hours yet",
           copy: "Set the hours you take consultations. Clients only see free times inside them.",
@@ -304,6 +420,7 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
               note: `${first.duration_min} minutes. Times are in your client’s timezone.`,
               chips,
               href: `/book/${firmSlug}/${first.slug}`,
+              chipHref: `/book/${firmSlug}/${first.slug}`,
             }
           : null,
         share: link ? { url: link, copy: link, embedNote: false, note: first?.is_sample ? PRACTICE_NOTICE.note : null } : null,
@@ -351,7 +468,21 @@ export type CalendarPage = {
   pills: string[];
   page: CalendarData;
   rbar: CalendarRbar;
+  /** The header's previous, this and next week buttons. */
+  nav: CalendarNav;
 };
+
+type DeadlineRow = { id: string; label: string; matter_id: string; due_on: string | null; due_at: string | null; verification: string };
+const DEADLINE_COLUMNS = "id, label, matter_id, due_on, due_at, verification";
+const WEEKDAY = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function uniqueDeadlines(...lists: (DeadlineRow[] | null | undefined)[]): DeadlineRow[] {
+  const seen = new Set<string>();
+  return lists
+    .flatMap((list) => list ?? [])
+    .filter((row) => (seen.has(row.id) ? false : (seen.add(row.id), true)))
+    .sort((a, b) => (a.due_at ?? `${a.due_on}T23:59:59Z`).localeCompare(b.due_at ?? `${b.due_on}T23:59:59Z`));
+}
 
 export async function loadSheetCalendar(staff: SheetStaff, query: SheetQuery): Promise<CalendarPage> {
   const org = staff.organizationId;
@@ -360,41 +491,60 @@ export async function loadSheetCalendar(staff: SheetStaff, query: SheetQuery): P
   const chrome = await loadSheetChrome(staff, "/sheet/calendar");
   const tab: CalendarTab = query.tab === "deadlines" ? "deadlines" : "week";
   const now = Date.now();
+  const nowIso = new Date(now).toISOString();
   const today = utcToLocal(now, zone).date;
-  const anchor = query.week && /^\d{4}-\d{2}-\d{2}$/.test(query.week) ? query.week : defaultWeekAnchor(today);
+  const realDay = (value: string | undefined): value is string => {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const ms = Date.parse(`${value}T12:00:00Z`);
+    return Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === value;
+  };
+  const anchor = realDay(query.week) ? query.week : defaultWeekAnchor(today);
   const monday = mondayOf(anchor);
-  const weekStart = Date.parse(`${addDays(monday, -1)}T00:00:00Z`);
-  const weekEnd = Date.parse(`${addDays(monday, 8)}T00:00:00Z`);
+  const sunday = addDays(monday, 6);
+  // The week in the firm's zone, from Monday 00:00 to the next Monday 00:00.
+  const weekStart = localToUtc(monday, "00:00", zone);
+  const weekEnd = localToUtc(addDays(monday, 7), "00:00", zone);
+  // The month box follows the week shown, unless its arrows chose another month (?month=).
+  const shownMonth = query.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(query.month) ? query.month : monday.slice(0, 7);
+  const monthFirst = `${shownMonth}-01`;
+  const nextMonthFirst = `${shiftMonth(shownMonth, 1)}-01`;
+  const monthStart = localToUtc(monthFirst, "00:00", zone);
+  const monthEnd = localToUtc(nextMonthFirst, "00:00", zone);
+  const deadlines = () => supabase.from("deadlines").select(DEADLINE_COLUMNS).eq("organization_id", org);
 
-  const [bookings, deadlinesResult, members, monthBookings] = await Promise.all([
+  const [bookings, weekDeadlines, upcomingDeadlines, members, monthBookings, monthDeadlines] = await Promise.all([
     tab === "week" ? loadBookings(supabase, org, weekStart, weekEnd, ["confirmed", "held", "completed", "no_show"]) : Promise.resolve([]),
     Promise.all([
-      supabase
-        .from("deadlines")
-        .select("id, label, matter_id, due_on, due_at, verification")
-        .eq("organization_id", org)
-        .gte("due_on", addDays(monday, -1))
-        .order("due_on", { ascending: true })
-        .limit(200),
-      supabase
-        .from("deadlines")
-        .select("id, label, matter_id, due_on, due_at, verification")
-        .eq("organization_id", org)
-        .gte("due_at", new Date(weekStart).toISOString())
-        .order("due_at", { ascending: true })
-        .limit(200),
+      deadlines().gte("due_on", monday).lte("due_on", sunday).order("due_on", { ascending: true }).limit(200),
+      deadlines().gte("due_at", new Date(weekStart).toISOString()).lt("due_at", new Date(weekEnd).toISOString()).order("due_at", { ascending: true }).limit(200),
+    ]),
+    // Upcoming deadlines don't depend on the week shown: tentative ones already past their date
+    // first (they still need confirming), then the next ones from today.
+    Promise.all([
+      deadlines().eq("verification", "tentative").lt("due_on", today).order("due_on", { ascending: false }).limit(10),
+      deadlines().eq("verification", "tentative").lt("due_at", nowIso).order("due_at", { ascending: false }).limit(10),
+      deadlines().gte("due_on", today).order("due_on", { ascending: true }).limit(10),
+      deadlines().gte("due_at", nowIso).order("due_at", { ascending: true }).limit(10),
     ]),
     staffMembers(supabase, org),
-    loadBookings(supabase, org, now - 31 * DAY, now + 62 * DAY, ["confirmed"]),
+    loadBookings(supabase, org, monthStart, monthEnd, ["confirmed", "completed", "no_show"]),
+    Promise.all([
+      deadlines().gte("due_on", monthFirst).lt("due_on", nextMonthFirst).limit(300),
+      deadlines().gte("due_at", new Date(monthStart).toISOString()).lt("due_at", new Date(monthEnd).toISOString()).limit(300),
+    ]),
   ]);
-  const seen = new Set<string>();
-  const deadlines = [...(deadlinesResult[0].data ?? []), ...(deadlinesResult[1].data ?? [])]
-    .filter((row) => (seen.has(row.id) ? false : (seen.add(row.id), true)))
-    .sort((a, b) => (a.due_at ?? `${a.due_on}T23:59:59Z`).localeCompare(b.due_at ?? `${b.due_on}T23:59:59Z`));
-  const names = await matterNames(supabase, org, deadlines.map((row) => row.matter_id));
+  const inWeek = uniqueDeadlines(weekDeadlines[0].data as DeadlineRow[] | null, weekDeadlines[1].data as DeadlineRow[] | null);
+  const overdue = uniqueDeadlines(upcomingDeadlines[0].data as DeadlineRow[] | null, upcomingDeadlines[1].data as DeadlineRow[] | null).filter((row) =>
+    row.due_at ? Date.parse(row.due_at) < now : (row.due_on as string) < today,
+  );
+  const ahead = uniqueDeadlines(upcomingDeadlines[2].data as DeadlineRow[] | null, upcomingDeadlines[3].data as DeadlineRow[] | null).filter((row) =>
+    row.due_at ? Date.parse(row.due_at) >= now : (row.due_on as string) >= today,
+  );
+  const sideDeadlines = [...overdue.slice(0, 3), ...ahead].slice(0, 5);
+  const names = await matterNames(supabase, org, [...inWeek, ...sideDeadlines].map((row) => row.matter_id));
 
-  const deadlineInstant = (row: { due_on: string | null; due_at: string | null }) =>
-    row.due_at ? Date.parse(row.due_at) : row.due_on ? Date.parse(`${row.due_on}T12:00:00Z`) : NaN;
+  const localDate = (row: DeadlineRow) => (row.due_at ? utcToLocal(Date.parse(row.due_at), zone).date : (row.due_on as string));
+  const matterHref = (row: DeadlineRow) => `/sheet/matters/${row.matter_id}?tab=tasks`;
   const items: WeekItem[] = [];
   for (const booking of bookings) {
     items.push({
@@ -404,17 +554,15 @@ export async function loadSheetCalendar(staff: SheetStaff, query: SheetQuery): P
         kind: "consultation",
         title: { left: booking.title, right: booking.attendee },
         note: { left: booking.hostName ?? "Host", right: locationShort(booking.locationKind) },
-        href: "/sheet/consultations",
+        href: recordHref(booking.id),
       },
     });
   }
-  for (const row of deadlines) {
-    const at = deadlineInstant(row);
-    if (!Number.isFinite(at)) continue;
-    const date = row.due_at ? utcToLocal(at, zone).date : (row.due_on as string);
-    if (date < monday || date > addDays(monday, 6)) continue;
+  for (const row of inWeek) {
+    const date = localDate(row);
+    if (date < monday || date > sunday) continue;
     const verified = row.verification === "confirmed";
-    const start = row.due_at ? at : localToUtc(date, "12:00", zone);
+    const start = row.due_at ? Date.parse(row.due_at) : localToUtc(date, "12:00", zone);
     items.push({
       start,
       end: start + 30 * 60_000,
@@ -423,50 +571,78 @@ export async function loadSheetCalendar(staff: SheetStaff, query: SheetQuery): P
         kind: verified ? "deadline" : "tentative",
         title: { left: `Deadline: ${row.label}`, right: names(row.matter_id) },
         note: deadlineNote(row.due_at, zone, verified),
-        href: `/sheet/matters/${row.matter_id}?tab=tasks`,
+        href: matterHref(row),
       },
     });
   }
-  // A date-only deadline is placed on its own date, in the first hour row.
-  const week = buildWeek(monday, today, items, zone);
+  // Date-only deadlines sit in the All day row; items that share an hour sit side by side.
+  const shown = tab === "week" ? items : items.filter((item) => item.block.kind !== "consultation");
+  const week = buildWeek(monday, today, shown, zone, { live: true });
 
-  const upcomingDeadlines = deadlines
-    .map((row) => ({ row, at: deadlineInstant(row) }))
-    .filter(({ row, at }) => Number.isFinite(at) && (row.due_at ? at >= now : (row.due_on as string) >= today))
-    .slice(0, 3)
-    .map(({ row, at }) => {
-      const date = row.due_at ? utcToLocal(at, zone).date : (row.due_on as string);
-      const verified = row.verification === "confirmed";
-      return {
-        date: `${["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][new Date(`${date}T12:00:00Z`).getUTCDay() || 7]} ${Number(date.slice(8))} ${MONTHS[Number(date.slice(5, 7)) - 1]}`,
-        title: row.label,
-        who: names(row.matter_id),
-        chip: date === today ? { tone: "bad", label: "Today" } : verified ? { tone: "ok", label: "Verified" } : { tone: "chg", label: "Tentative" },
-      };
-    });
+  const dateLabel = (date: string) => `${WEEKDAY[new Date(`${date}T12:00:00Z`).getUTCDay() || 7]} ${Number(date.slice(8))} ${MONTHS[Number(date.slice(5, 7)) - 1]}`;
+  const overdueIds = new Set(overdue.map((row) => row.id));
+  const upcoming = sideDeadlines.map((row) => {
+    const date = localDate(row);
+    const verified = row.verification === "confirmed";
+    return {
+      date: dateLabel(date),
+      title: row.label,
+      who: names(row.matter_id),
+      chip: overdueIds.has(row.id)
+        ? { tone: "bad", label: "Past, not confirmed" }
+        : date === today
+          ? { tone: "bad", label: "Today" }
+          : verified
+            ? { tone: "ok", label: "Verified" }
+            : { tone: "chg", label: "Tentative" },
+      href: matterHref(row),
+    };
+  });
 
   const marked = [
-    ...monthBookings.map((b) => Date.parse(b.startsAt)),
-    ...deadlines.map((row) => deadlineInstant(row)).filter(Number.isFinite),
+    ...monthBookings.map((b) => utcToLocal(Date.parse(b.startsAt), zone).date),
+    ...uniqueDeadlines(monthDeadlines[0].data as DeadlineRow[] | null, monthDeadlines[1].data as DeadlineRow[] | null).map(localDate),
   ];
+  const href = (params: Record<string, string>) => {
+    const search = new URLSearchParams(tab === "deadlines" ? { tab, ...params } : params);
+    return `/sheet/calendar?${search.toString()}`;
+  };
+  const thisMonday = mondayOf(defaultWeekAnchor(today));
   const [d, m, y] = [Number(monday.slice(8)), MONTHS[Number(monday.slice(5, 7)) - 1], monday.slice(0, 4)];
+  const empty =
+    tab === "deadlines" && !shown.length
+      ? { title: "No deadlines this week", copy: "Deadlines on your matters appear here; ones with a date but no time are in the All day row. Use the week buttons to look ahead." }
+      : null;
   return {
     chrome,
     tab,
     pills: [`Week of ${d} ${m} ${y}`, `Times in ${zone}`],
+    nav: {
+      prev: href({ week: addDays(monday, -7) }),
+      next: href({ week: addDays(monday, 7) }),
+      today: monday === thisMonday ? null : href({}),
+    },
     page: {
       tab,
       heading: {
-        title: anchor === today || mondayOf(today) === monday ? "This week" : `Week of ${d} ${m}`,
+        title: monday === thisMonday ? "This week" : `Week of ${d} ${m}`,
         copy: tab === "week" ? "Appointments and deadlines together. Each deadline shows whether it is verified." : "Deadlines on your matters this week, with whether each is verified.",
       },
-      week: tab === "week" ? week : buildWeek(monday, today, items.filter((item) => item.block.kind !== "consultation"), zone),
+      week,
+      empty,
       note: "Clients see consultation times in their own timezone. Open a deadline’s matter for its source and official timezone.",
     },
     rbar: {
-      calendar: monthCal(zone, now, marked),
-      deadlines: upcomingDeadlines,
+      calendar: monthBox({
+        month: shownMonth,
+        today,
+        marked,
+        nav: (month) => href({ week: monday, month }),
+        day: (date) => href({ week: date }),
+      }),
+      deadlines: upcoming,
       calendars: members.map((member) => ({ name: member.name, tool: "no calendar connected", logo: null, chip: { tone: "gr", label: "Not connected" } })),
+      live: { emptyTitle: "No upcoming deadlines", emptyCopy: "Deadlines recorded on a matter appear here, with whether each is verified." },
     },
   };
 }

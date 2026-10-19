@@ -75,7 +75,14 @@ export async function loadSheetChrome(staff: SheetStaff, active: string): Promis
       me: { ...staffPerson(staff.displayName), role: roleLabel(staff.role) },
       tiles: { documents: "/sheet/documents", invoices: "/sheet/finance" },
       newMatter: { href: "/sheet/matters?new=1" },
-      createBoard: { href: "/sheet/queue" },
+      // Saved boards aren't built (no table holds them), so Create board says so instead of
+      // pretending: the Team queue, Due this week and Awaiting my review are the boards there are.
+      createBoard: {
+        href: "#",
+        toast: "Saved boards aren’t available yet",
+        toastSub: "Use Team queue, Due this week and Awaiting my review. Their filters work on each page.",
+        disabled: "Saved boards aren’t available yet",
+      },
     },
     top: { firmName: staff.organizationName, pills: [`Your matters: ${matterCount.count ?? 0}`] },
     statusbar: {

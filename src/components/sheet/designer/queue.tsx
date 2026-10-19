@@ -31,12 +31,19 @@ export type QueueItem = {
   /** Filter tokens: overdue, unassigned, money, government. Live only. */
   flags?: string[];
   href?: string;
+  /** Live: a task (its id and version), which Reassign can give to another person. */
+  task?: { id: string; version: number } | null;
 };
 
 export type QueueData = {
   counts: { open: number; overdue: number; people: number };
   load: QueueLoad[];
   items: QueueItem[];
+  /**
+   * Live: Reassign. Tick tasks with their checkbox, choose a person, press Reassign. Only tasks
+   * move (reviews, deadlines and money follow the matter's consultant or the finance roles).
+   */
+  reassign?: { organizationId: string; people: { value: string; label: string }[] } | null;
 };
 
 const AMBER = "rgb(184, 110, 0)";
@@ -44,7 +51,7 @@ const BLUE = "rgb(0, 117, 222)";
 const i = (n: number) => ({ "--i": String(n) }) as CSSProperties;
 const SMALL: CSSProperties = { color: "var(--t2)", fontSize: "13px" };
 
-export function QueueHeader({ counts }: { counts: QueueData["counts"] }) {
+export function QueueHeader({ counts, filter }: { counts: QueueData["counts"]; filter?: Record<string, string> | null }) {
   return (
     <header className={"top"}>
       <button className={"crumb"}>
@@ -56,7 +63,7 @@ export function QueueHeader({ counts }: { counts: QueueData["counts"] }) {
       <span className={"pill"}>{`${counts.overdue} overdue`}</span>
       <span className={"pill"}>{`Workload is shared across ${counts.people} ${counts.people === 1 ? "person" : "people"}`}</span>
       <span className={"acts"}>
-        <button className={"btn s sm"}>
+        <button className={"btn s sm"} {...(filter ?? {})}>
           <Icon name={"filter"} cls={"ic s"} />
           {"Filter"}
         </button>
@@ -143,6 +150,26 @@ export function SheetQueue({ data }: { data: QueueData }) {
           </span>
         ))}
       </div>
+      {data.reassign && data.items.some((item) => item.task) ? (
+        <div className={"fp-row rv"} style={{ margin: "0 0 12px", alignItems: "center", gap: "8px", "--i": "2" } as CSSProperties} data-queue-bar={"1"}>
+          <label htmlFor={"qR"} style={SMALL}>
+            {"Reassign ticked tasks to"}
+          </label>
+          <select className={"sel"} id={"qR"} style={{ width: "auto", minWidth: "180px" }}>
+            {data.reassign.people.map((person) => (
+              <option key={person.value} value={person.value}>
+                {person.label}
+              </option>
+            ))}
+          </select>
+          <button className={"btn sm"} type={"button"} data-queue-reassign={data.reassign.organizationId}>
+            {"Reassign"}
+          </button>
+          <small style={SMALL} data-queue-picked={"1"} aria-live={"polite"}>
+            {"Tick tasks to choose them."}
+          </small>
+        </div>
+      ) : null}
       {data.items.length ? (
         <div id={"ql"} aria-label={"Review queue"} data-rb-list={"1"} tabIndex={0} role={"listbox"} className={"rv"} style={{ position: "relative", "--i": "3" } as CSSProperties}>
           <span className={"rb-ind"} aria-hidden={"true"}></span>
@@ -155,8 +182,17 @@ export function SheetQueue({ data }: { data: QueueData }) {
               role={"option"}
               data-f={item.flags?.join(" ") || undefined}
               data-href={item.href}
+              data-task={item.task?.id}
+              data-version={item.task ? String(item.task.version) : undefined}
             >
-              <span className={"ck"}></span>
+              <span
+                className={"ck"}
+                role={data.reassign ? "checkbox" : undefined}
+                aria-checked={data.reassign ? "false" : undefined}
+                aria-label={data.reassign ? (item.task ? `Choose ${item.title}` : `${item.title} can’t be reassigned here`) : undefined}
+                title={data.reassign && !item.task ? "Only tasks can be reassigned here. Reviews and deadlines follow the matter’s consultant." : undefined}
+                tabIndex={data.reassign ? 0 : undefined}
+              ></span>
               <div>
                 <b>{item.title}</b>
                 <small>
@@ -180,6 +216,16 @@ export function SheetQueue({ data }: { data: QueueData }) {
           <Empty art={"review-queue-empty"} title={"Nothing is waiting"} copy={"Open tasks, documents to review, deadlines to verify and money to approve appear here."} />
         </div>
       )}
+      {data.reassign && data.items.length ? (
+        <div className={"fp-fe panel"} hidden>
+          <Empty art={"filter-empty"} title={"Nothing matches"} copy={"No open work matches this search and filter."}>
+            <button className={"btn sm"} type={"button"}>
+              {"Clear search and filter"}
+            </button>
+          </Empty>
+        </div>
+      ) : null}
+
     </>
   );
 }

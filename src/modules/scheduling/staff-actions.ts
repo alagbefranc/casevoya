@@ -115,6 +115,21 @@ export async function saveBookingType(input: {
   return error ? bookingError(error.message) : { ok: true };
 }
 
+/** The firm owner archives a booking type (step-up): it is unpublished and leaves the lists. Bookings already made stay. */
+export async function archiveBookingType(input: { organizationId: string; eventTypeId: string; version: number | null }): Promise<Result> {
+  if (!isUuid(input.eventTypeId) || input.version == null || !Number.isInteger(input.version)) return { error: "Reload and try again." };
+  const supabase = await session(input.organizationId);
+  if (!supabase) return { error: "Sign in first." };
+  const { error } = await supabase.rpc("archive_booking_event_type", {
+    p_org: input.organizationId,
+    p_event_type_id: input.eventTypeId,
+    p_expected_version: input.version,
+  });
+  if (error && /already archived/.test(error.message)) return { error: "This booking type is already archived." };
+  if (error && /changed by someone else/.test(error.message)) return { error: "This booking type changed since you opened it. Reload and try again." };
+  return error ? bookingError(error.message) : { ok: true };
+}
+
 export async function bookForClient(input: {
   organizationId: string;
   eventTypeId: string;
