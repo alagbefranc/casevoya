@@ -57,3 +57,10 @@
 .btn.p[aria-busy="true"]::after,.btn.dk[aria-busy="true"]::after{border-color:rgba(255,255,255,.35);border-top-color:#fff}
 @keyframes cvBusy{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.btn[aria-busy="true"]::after{animation-duration:1.6s}}
+
+/* "(optional)" tags. The Designer's form pages mark optional fields with span.opt, and its sign-in
+   pages use .opt for the large option cards (auth.css). The prototype never loaded both on one page;
+   the app does, so a label's tag picked up the card's border and padding and looked like an input.
+   Inside a label the tag is inline text again, as on the Designer's form pages. */
+label .opt,.check .opt{display:inline;width:auto;padding:0;border:0;border-radius:0;background:none;transition:none;text-align:inherit}
+label .opt:hover{border-color:transparent}label .opt:active{transform:none}
