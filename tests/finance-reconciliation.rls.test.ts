@@ -24,8 +24,8 @@ function token(length = 12) {
 }
 
 const key = (prefix = "rec") => `${prefix}-${randomUUID()}`;
-// These functions count days with current_date (UTC), not the firm's timezone; see DECISIONS 2026-10-19.
-const day = (offset: number) => firmDay(offset, "UTC");
+// Days in the firm's timezone (America/Toronto, the default), as the database counts them.
+const day = (offset: number) => firmDay(offset);
 
 async function createUser(label: string) {
   await asMaintenance(db);
@@ -61,8 +61,6 @@ async function firm() {
   await member(orgId, assistant, "assistant", owner);
   await member(orgId, client, "client", owner);
   await asMaintenance(db);
-  // Dates in these tests are UTC days; the firm's day matches them whatever the hour.
-  await db.query(`update public.organizations set timezone = 'UTC' where id = $1`, [orgId]);
   const matterId = randomUUID();
   const otherMatter = randomUUID();
   await db.query(`insert into public.matters (id, organization_id, title, is_sample) values ($1, $2, 'Synthetic matter', true), ($3, $2, 'Other matter', true)`, [matterId, orgId, otherMatter]);
