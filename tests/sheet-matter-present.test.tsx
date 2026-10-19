@@ -162,7 +162,7 @@ const EMPTY_FIRM: MatterPageData = {
   people: { cards: [], relationships: [] },
   documents: { checklist: null, people: [], rows: [] },
   agreements: { rows: [], signing: null },
-  tasks: { deadline: null, tasks: [] },
+  tasks: { deadlines: [], tasks: [] },
   outcome: null,
   closure: { closed: false, retention: null },
 };

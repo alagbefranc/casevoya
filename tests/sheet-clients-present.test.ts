@@ -8,6 +8,7 @@ import {
   matterStateBadge,
   openTasksLabel,
   partyRoleLabel,
+  leadRow,
   personFacts,
   personHref,
   personParam,
@@ -69,8 +70,29 @@ describe("Clients page words", () => {
     expect(birthDateLabel("1984-03-09", "day")).toBe("1984-03-09");
     expect(birthDateLabel("1984-03-01", "month")).toBe("1984-03");
     expect(birthDateLabel("1984-01-01", "year")).toBe("1984");
-    expect(personFacts(null, null)).toEqual([{ fact: "Date of birth", value: { unknown: true }, source: "Not recorded", review: "—" }]);
+    expect(personFacts(null, null)[0]).toEqual({ fact: "Date of birth", value: { unknown: true }, source: "Not recorded", review: "—" });
     expect(personFacts("1984-03-09", "day")[0].value).toEqual({ num: "1984-03-09" });
+  });
+
+  it("shows the person's email and phone, and says plainly when none is on file", () => {
+    expect(personFacts(null, null, { email: "ana@example.test", phone: "+14165550100" }).slice(1)).toEqual([
+      { fact: "Email", value: { text: "ana@example.test" }, source: "Person record", review: "—" },
+      { fact: "Phone", value: { num: "+14165550100" }, source: "Person record", review: "—" },
+    ]);
+    expect(personFacts(null, null).slice(1).map((row) => row.value)).toEqual([{ unknown: true }, { unknown: true }]);
+  });
+
+  it("lists an open lead as a Lead row the Leads chip shows, opening the lead", () => {
+    expect(leadRow({ id: "l-1", display_name: "Sam Example", language: "English", is_sample: true })).toEqual({
+      href: "/sheet/lead?id=l-1",
+      flags: ["lead"],
+      person: { name: "Sam Example" },
+      role: "Lead",
+      matter: "Lead (sample)",
+      language: "English",
+      timezone: "—",
+      portal: "Not invited",
+    });
   });
 
   it("reads matter state, open tasks and relationships plainly", () => {

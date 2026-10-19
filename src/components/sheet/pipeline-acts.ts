@@ -97,11 +97,33 @@ function showError(card: HTMLElement, message: string) {
   window.setTimeout(() => line.remove(), 6000);
 }
 
+/** The board never moves a card into these columns; it says where to do it instead. */
+export const CLOSED_STAGE_MESSAGE: Record<string, string> = {
+  converted: "Use Convert to matter on the lead’s page to convert a lead.",
+  lost: "Close a lead as lost from the lead’s page, with a reason.",
+};
+
+/** The column an arrow moves a card to: back skips Converted (a lost lead goes back to an open stage). */
+export function arrowTarget<T extends { kind: string }>(columns: readonly T[], index: number, step: number): T | null {
+  if (index < 0) return null;
+  if (step > 0) return columns[index + 1] ?? null;
+  for (let at = index - 1; at >= 0; at--) if (columns[at].kind === "open") return columns[at];
+  return null;
+}
+
 async function moveCard(card: HTMLElement, target: HTMLElement, from: DOMRect, org: string, router: Router) {
   const origin = card.closest<HTMLElement>("section.col");
   const targetCards = target.querySelector<HTMLElement>(".cards");
   if (!origin || !targetCards || origin === target || card.getAttribute("aria-busy") === "true") {
     glide(card, from);
+    return;
+  }
+  // Converted and Lost each have their own action on the lead's page (with a matter or a reason).
+  const refusal = CLOSED_STAGE_MESSAGE[target.dataset.kind ?? ""];
+  if (refusal) {
+    glide(card, from);
+    showError(card, refusal);
+    toast2(refusal, { kind: "warn", sub: "The lead stayed where it was." });
     return;
   }
   const originNext = card.nextElementSibling;
@@ -273,11 +295,12 @@ export function wireBoard(root: HTMLElement, router: Router, signal: AbortSignal
       if (arrow && card) {
         event.preventDefault();
         event.stopPropagation();
-        const columns = [...pipe.querySelectorAll<HTMLElement>(":scope > section.col")];
-        const index = columns.indexOf(card.closest<HTMLElement>("section.col") as HTMLElement);
-        const next = columns[index + Number(arrow.dataset.mv)];
+        if (arrow.hasAttribute("disabled")) return;
+        const columns = [...pipe.querySelectorAll<HTMLElement>(":scope > section.col")].map((element) => ({ element, kind: element.dataset.kind ?? "open" }));
+        const index = columns.findIndex((column) => column.element === card.closest<HTMLElement>("section.col"));
+        const next = arrowTarget(columns, index, Number(arrow.dataset.mv));
         if (!next) return;
-        void moveCard(card, next, card.getBoundingClientRect(), pipe.dataset.org ?? "", router);
+        void moveCard(card, next.element, card.getBoundingClientRect(), pipe.dataset.org ?? "", router);
         return;
       }
       if (card && !suppressClick && card.dataset.href && !target.closest("button, a")) {
@@ -527,6 +550,13 @@ export function wirePipeline(root: HTMLElement, router: Router, signal: AbortSig
         input?.click();
         return;
       }
+      // Timeline: each item opens its lead.
+      const item = target.closest<HTMLElement>("#pvAlt li[data-href]");
+      if (item?.dataset.href && root.contains(item)) {
+        event.preventDefault();
+        router.push(item.dataset.href);
+        return;
+      }
       const button = target.closest<HTMLElement>("[data-lead-act]");
       if (!button || !root.contains(button)) return;
       event.preventDefault();
@@ -536,6 +566,41 @@ export function wirePipeline(root: HTMLElement, router: Router, signal: AbortSig
     },
     listen,
   );
+  root.addEventListener(
+    "keydown",
+    (event) => {
+      const item = (event.target as HTMLElement).closest?.<HTMLElement>("#pvAlt li[data-href]");
+      if (item?.dataset.href && event.target === item && event.key === "Enter") {
+        event.preventDefault();
+        router.push(item.dataset.href);
+      }
+    },
+    listen,
+  );
+
+  // New lead: Source follows the contact given (email only: Email; a phone: Phone) until someone
+  // chooses a source themselves.
+  const source = newLead?.querySelector<HTMLSelectElement>("#nlSrc");
+  if (newLead && source) {
+    source.addEventListener("change", () => (source.dataset.chosen = "1"), listen);
+    newLead.addEventListener(
+      "input",
+      (event) => {
+        const id = (event.target as HTMLElement).id;
+        if ((id !== "nlE" && id !== "nlP") || source.dataset.chosen === "1") return;
+        const suggested = suggestedSource(field(newLead, "nlE"), field(newLead, "nlP"));
+        if (suggested) source.value = suggested;
+      },
+      listen,
+    );
+  }
+}
+
+/** The New lead dialog's suggested Source: Email when only an email is given, Phone when a phone is. */
+export function suggestedSource(email: string, phone: string): "email" | "phone" | null {
+  if (phone.trim()) return "phone";
+  if (email.trim()) return "email";
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -590,10 +655,18 @@ async function runLeadAct(button: HTMLElement, router: Router) {
       result = await post("link-booking", { org: button.dataset.org, lead: button.dataset.lead, booking: field(page, "lbB") });
       done = { title: "Consultation linked", sub: "" };
       break;
+    case "reopen":
+      result = await post("move", { ...wire(button), stage: button.dataset.stage, reason: "Reopened from the lead" });
+      done = { title: "Lead reopened", sub: button.dataset.stageLabel ? `It’s back in ${button.dataset.stageLabel}.` : "" };
+      break;
     case "edit": {
       const box = dialog?.querySelector<HTMLInputElement>("#edM");
       const was = box?.dataset.marketingWas === "1";
       const now = box?.checked === true;
+      const replyBox = dialog?.querySelector<HTMLInputElement>("#edR");
+      const replyChanged = replyBox ? (replyBox.dataset.replyWas === "1") !== replyBox.checked : false;
+      const sourceSelect = dialog?.querySelector<HTMLSelectElement>("#edSrc");
+      const sourceChanged = sourceSelect && !sourceSelect.disabled && sourceSelect.value !== sourceSelect.dataset.sourceWas ? sourceSelect.value : null;
       result = await post("edit", {
         ...wire(button),
         name: field(dialog ?? page, "edN"),
@@ -609,6 +682,8 @@ async function runLeadAct(button: HTMLElement, router: Router) {
         fee: field(dialog ?? page, "edF"),
         tags: field(dialog ?? page, "edT"),
         marketing: was === now ? null : now,
+        reply: replyChanged && replyBox ? replyBox.checked : null,
+        source: sourceChanged,
       });
       done = { title: "Lead saved", sub: "" };
       break;
@@ -643,11 +718,11 @@ async function runLeadAct(button: HTMLElement, router: Router) {
 
 export function wireLead(root: HTMLElement, router: Router, signal: AbortSignal, open: (id: string) => void) {
   const listen = { signal };
-  const search = new URLSearchParams(window.location.search);
-  const conflict = root.querySelector<HTMLDialogElement>("dialog#dlgConf");
-  if (conflict && search.get("dlg") === "conflict") {
-    window.setTimeout(() => open("dlgConf"), 300);
-    conflict.addEventListener(
+  // Closing the Conflict check drops ?dlg=conflict (the search runs, audited, only while it is set).
+  const watch = (dialog: HTMLDialogElement) => {
+    if (dialog.dataset.watched === "1") return;
+    dialog.dataset.watched = "1";
+    dialog.addEventListener(
       "close",
       () => {
         const params = new URLSearchParams(window.location.search);
@@ -657,7 +732,44 @@ export function wireLead(root: HTMLElement, router: Router, signal: AbortSignal,
       },
       listen,
     );
+  };
+  const conflict = root.querySelector<HTMLDialogElement>("dialog#dlgConf");
+  if (conflict && new URLSearchParams(window.location.search).get("dlg") === "conflict") {
+    watch(conflict);
+    window.setTimeout(() => open("dlgConf"), 300);
   }
+  // Run conflict check: the search runs on the server, so ask for it and open the dialog the
+  // moment the page brings it back (no reload).
+  let waiting: MutationObserver | null = null;
+  signal.addEventListener("abort", () => waiting?.disconnect());
+  const openConflict = () => {
+    const ready = root.querySelector<HTMLDialogElement>("dialog#dlgConf");
+    if (ready) {
+      watch(ready);
+      open("dlgConf");
+      return;
+    }
+    waiting?.disconnect();
+    const observer = new MutationObserver(() => {
+      const dialog = root.querySelector<HTMLDialogElement>("dialog#dlgConf");
+      if (!dialog) return;
+      observer.disconnect();
+      waiting = null;
+      watch(dialog);
+      open("dlgConf");
+    });
+    waiting = observer;
+    observer.observe(root, { childList: true, subtree: true });
+    window.setTimeout(() => {
+      if (waiting !== observer) return;
+      observer.disconnect();
+      waiting = null;
+      toast2("The conflict check didn’t load", { kind: "warn", sub: "Reload the page and try again." });
+    }, 20_000);
+    const params = new URLSearchParams(window.location.search);
+    params.set("dlg", "conflict");
+    router.replace(`${window.location.pathname}?${params.toString()}`);
+  };
   root.addEventListener(
     "click",
     (event) => {
@@ -667,10 +779,7 @@ export function wireLead(root: HTMLElement, router: Router, signal: AbortSignal,
         event.preventDefault();
         const kind = opener.dataset.leadOpen ?? "";
         if (kind === "conflict") {
-          const params = new URLSearchParams(window.location.search);
-          params.set("dlg", "conflict");
-          if (root.querySelector("dialog#dlgConf")) open("dlgConf");
-          else router.replace(`${window.location.pathname}?${params.toString()}`);
+          openConflict();
           return;
         }
         if (OPENERS[kind]) open(OPENERS[kind]);

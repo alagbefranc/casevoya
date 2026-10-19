@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { DemoSheet } from "@/components/sheet/demo";
 import { CalendarHeader, CalendarRbarView, SheetCalendar } from "@/components/sheet/designer/calendar";
-import { BookDialog, CancelDialog, ConsultationsHeader, RescheduleDialog, SheetConsultations } from "@/components/sheet/designer/consultations";
+import { BookDialog, CancelDialog, ConsultationsHeader, RescheduleDialog, SheetConsultationRecord, SheetConsultations } from "@/components/sheet/designer/consultations";
 import { AvailabilityDialog, BookingTypeDialog } from "@/components/sheet/designer/scheduling-dialogs";
 import { AgreementsHeader, CountersignDialog, NewAgreementDialog, SheetAgreements, TemplateDialog } from "@/components/sheet/designer/agreements";
 import {
@@ -38,7 +38,7 @@ import { TeamDialogs } from "@/components/sheet/designer/settings-staff-admin";
 import { SettingsBillingHeader, SheetRetention, SheetSubscription } from "@/components/sheet/designer/settings-billing";
 import { loadSheetRetention, loadSheetSubscription } from "@/modules/sheet/settings-billing-load";
 import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
-import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
+import { SheetTasks, TaskEditDialog, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
 import { ComposioDialog, IntegrationsSettingsHeader, SheetIntegrations, SheetNotificationPrefs } from "@/components/sheet/designer/settings-integrations";
 import { loadSheetSettingsIntegrations } from "@/modules/sheet/settings-integrations-load";
 import { NotificationsHeader, SheetNotifications } from "@/components/sheet/designer/notifications";
@@ -139,7 +139,7 @@ export async function SheetBody({
   // The licence-suspended home: the Sheet home for a consultant whose own licence check recorded an
   // adverse result (ORG-05). The home shows it too, so the consultant can't miss it.
   if ((page === "index" || page === "licence-suspended") && (access.kind === "live" || access.kind === "sample")) {
-    const suspended = await loadSheetLicenceSuspended(access.staff);
+    const suspended = await loadSheetLicenceSuspended(access.staff, undefined, { month: query.month, path: sheetPath(page) });
     if (!suspended && page === "licence-suspended") redirect("/sheet/licence");
     if (suspended) {
       return (
@@ -157,7 +157,7 @@ export async function SheetBody({
     }
   }
   if (page === "index" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, rbar, home, missingPolicies } = await loadSheetHome(access.staff);
+    const { chrome, rbar, home, missingPolicies } = await loadSheetHome(access.staff, undefined, { month: query.month });
     // Until the firm publishes its portal terms and privacy notice, no invited client can join: say so here.
     const lead = missingPolicies.length ? <PolicyMissingAlert kinds={missingPolicies} style={{ marginBottom: "18px" }} /> : undefined;
     return (
@@ -169,7 +169,7 @@ export async function SheetBody({
     );
   }
   if (page === "sample-mode" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, rbar, home, sample } = await loadSheetSample(access.staff);
+    const { chrome, rbar, home, sample } = await loadSheetSample(access.staff, undefined, { month: query.month, path: "/sheet/sample-mode" });
     return (
       <SheetScreen page={page}>
         <style dangerouslySetInnerHTML={{ __html: SAMPLE_CASE_CSS }} />
@@ -198,7 +198,12 @@ export async function SheetBody({
           sidebar={chrome.sidebar}
           header={<TasksHeader tab={tasks.tab} counts={tasks.counts} />}
           statusbar={chrome.statusbar}
-          after={<TasksDialog data={tasks.dialog} />}
+          after={
+            <>
+              <TasksDialog data={tasks.dialog} />
+              {tasks.edit ? <TaskEditDialog data={tasks.edit} /> : null}
+            </>
+          }
         >
           <SheetTasks data={tasks} />
         </SheetFrame>
@@ -244,7 +249,7 @@ export async function SheetBody({
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={chrome.sidebar}
-          header={<ReportsHeader tab={reports.tab} pills={reports.pills} />}
+          header={<ReportsHeader tab={reports.tab} pills={reports.pills} pillTitles={reports.pillTitles} />}
           statusbar={chrome.statusbar}
           after={<ReportsExportDialog data={reports.dialog} />}
         >
@@ -274,7 +279,7 @@ export async function SheetBody({
     const { chrome, queue } = await loadSheetQueue(access.staff);
     return (
       <SheetScreen page={page}>
-        <SheetFrame sidebar={chrome.sidebar} header={<QueueHeader counts={queue.counts} />} statusbar={chrome.statusbar}>
+        <SheetFrame sidebar={chrome.sidebar} header={<QueueHeader counts={queue.counts} filter={{ "data-queue-filter": "1", "aria-controls": "ql", title: "Search and filter the queue" }} />} statusbar={chrome.statusbar}>
           <SheetQueue data={queue} />
         </SheetFrame>
       </SheetScreen>
@@ -682,9 +687,9 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
-  // Consultations: Upcoming, Availability and Booking page tabs (BUILD-SPEC §4). The Consultation
-  // record tab (notes and outcome summaries) is not built and keeps its old view.
-  if (page === "consultations" && query.tab !== "record" && (access.kind === "live" || access.kind === "sample")) {
+  // Consultations: Upcoming, Availability, Booking page and Consultation record tabs (BUILD-SPEC §4).
+  // The record tab shows a real booking's notes (on its lead), outcome and details.
+  if (page === "consultations" && (access.kind === "live" || access.kind === "sample")) {
     const loaded = await loadSheetConsultations(access.staff, query);
     return (
       <SheetScreen page={page}>
@@ -702,7 +707,7 @@ export async function SheetBody({
             </>
           }
         >
-          <SheetConsultations data={loaded.page} />
+          {loaded.record ? <SheetConsultationRecord data={loaded.record} /> : <SheetConsultations data={loaded.page} />}
         </SheetFrame>
       </SheetScreen>
     );
@@ -714,7 +719,7 @@ export async function SheetBody({
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={loaded.chrome.sidebar}
-          header={<CalendarHeader tab={loaded.tab} pills={loaded.pills} create={{ "data-nav": "/sheet/consultations?dlg=book" }} />}
+          header={<CalendarHeader tab={loaded.tab} pills={loaded.pills} create={{ "data-nav": "/sheet/consultations?dlg=book" }} nav={loaded.nav} />}
           aside={<CalendarRbarView data={loaded.rbar} />}
           statusbar={loaded.chrome.statusbar}
         >
@@ -834,6 +839,7 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     limit: one("limit"),
     person: one("person"),
     week: one("week"),
+    month: one("month"),
     thread: one("thread"),
     form: one("form"),
     field: one("field"),

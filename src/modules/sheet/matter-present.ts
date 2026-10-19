@@ -12,11 +12,19 @@ export function longDate(date: string): string {
   return `${day} ${SHORT_MONTHS[month - 1]} ${year}`;
 }
 
-/** "Fri 30 Oct" from a `YYYY-MM-DD` date. Calendar dates, so UTC noon avoids any shift. */
-export function weekdayDayMonth(date: string): string {
+/**
+ * "Fri 30 Oct" from a `YYYY-MM-DD` date, with the year ("Fri 30 Oct 2027") when `today` is given
+ * and falls in another year. Calendar dates, so UTC noon avoids any shift.
+ */
+export function weekdayDayMonth(date: string, today?: string): string {
   const [year, month, day] = date.split("-").map(Number);
   const weekday = new Date(Date.UTC(year, month - 1, day, 12)).getUTCDay();
-  return `${SHORT_DAYS[weekday]} ${day} ${SHORT_MONTHS[month - 1]}`;
+  return `${SHORT_DAYS[weekday]} ${day} ${SHORT_MONTHS[month - 1]}${today && today.slice(0, 4) !== date.slice(0, 4) ? ` ${year}` : ""}`;
+}
+
+/** "20 Nov", or "20 Nov 2027" when the date is not in `today`'s year. */
+export function dayMonthYear(date: string, today: string): string {
+  return today.slice(0, 4) === date.slice(0, 4) ? dayMonth(date) : longDate(date);
 }
 
 /** "17:00 ET" for an instant in a zone. */
@@ -107,16 +115,57 @@ export function documentState(input: DocumentInput, today: string): DocumentStat
   return { upload, review: { tone: "gr", label: "Requested" }, version: label, bucket: "outstanding" };
 }
 
-/** The next-deadline badge: the date, the time when one is set, and whether a consultant confirmed it. */
-export function deadlineBadge(deadline: { dueOn: string | null; dueAt: string | null; timezone: string; verification: string } | null): MatterBadge {
+/**
+ * The next-deadline badge: the date, the time when one is set, and whether a consultant confirmed it.
+ * `more` is how many other upcoming deadlines the matter has (", +2 more"); `today` adds the year
+ * to a date in another year.
+ */
+export function deadlineBadge(
+  deadline: { dueOn: string | null; dueAt: string | null; timezone: string; verification: string } | null,
+  more = 0,
+  today?: string,
+): MatterBadge {
   if (!deadline?.dueOn) return { tone: "unv", label: "Next deadline", detail: "—" };
   const time = deadline.dueAt ? `, ${clockTime(deadline.dueAt, deadline.timezone)}` : "";
   const confirmed = deadline.verification === "confirmed";
   return {
     tone: confirmed ? "ok" : "chg",
     label: "Next deadline",
-    detail: `${weekdayDayMonth(deadline.dueOn)}${time} (${confirmed ? "verified" : "unverified"})`,
+    detail: `${weekdayDayMonth(deadline.dueOn, today)}${time} (${confirmed ? "verified" : "unverified"})${more > 0 ? `, +${more} more` : ""}`,
   };
+}
+
+/**
+ * The stage moves the database accepts (app.matter_stage_transition_allowed, used by
+ * public.override_matter_stage): one step forward or back, a few documented returns, and
+ * reopening a closed matter.
+ */
+export const STAGE_TRANSITIONS: Readonly<Record<string, readonly string[]>> = {
+  engagement_pending: ["intake"],
+  intake: ["engagement_pending", "evidence_collection"],
+  evidence_collection: ["intake", "preparation"],
+  preparation: ["evidence_collection", "consultant_review"],
+  consultant_review: ["preparation", "client_confirmation"],
+  client_confirmation: ["consultant_review", "preparation", "ready_to_submit"],
+  ready_to_submit: ["client_confirmation", "submitted"],
+  submitted: ["ready_to_submit", "government_processing"],
+  government_processing: ["submitted", "decision_review"],
+  decision_review: ["government_processing", "post_decision"],
+  post_decision: ["decision_review", "closed"],
+  closed: ["post_decision", "engagement_pending"],
+};
+
+/** Indexes (in MATTER_STAGES order) of the stages a matter at `stage` can move to. */
+export function allowedStageIndexes(stage: string): number[] {
+  const next = STAGE_TRANSITIONS[stage] ?? [];
+  return (MATTER_STAGES as readonly string[]).flatMap((key, index) => (next.includes(key) ? [index] : []));
+}
+
+/** The stage picked when the dialog opens: the first allowed stage after the current one, else the nearest one before it. */
+export function defaultTargetStage(stage: string): number | null {
+  const current = stageIndex(stage);
+  const allowed = allowedStageIndexes(stage);
+  return allowed.find((index) => index > current) ?? allowed.filter((index) => index < current).at(-1) ?? null;
 }
 
 const PARTY_ROLE: Record<string, string> = {
@@ -194,10 +243,10 @@ export function taskRowBadge(status: string, dueOn: string | null, today: string
   return { tone: "gr", label: "Open" };
 }
 
-/** "due Today", "due 22 Oct" or nothing. */
+/** "due Today", "due 22 Oct", "due 22 Oct 2027" (another year) or nothing. */
 export function taskDue(dueOn: string | null, today: string): string | null {
   if (!dueOn) return null;
-  return dueOn === today ? "due Today" : `due ${dayMonth(dueOn)}`;
+  return dueOn === today ? "due Today" : `due ${dayMonthYear(dueOn, today)}`;
 }
 
 /** Firm activity on this matter as the Designer's recent events. Other actions are not shown. */

@@ -6,6 +6,8 @@ import { staffPerson } from "@/modules/sheet/avatar";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { readItems, unreadCount } from "@/modules/sheet/notifications-present";
 import { roleLabel } from "@/modules/sheet/present";
+import { FIRM_SETTINGS } from "@/modules/sheet/home-controls";
+import { voDraftsWaiting } from "@/modules/sheet/vo-present";
 import { loadSheetSetup } from "@/modules/sheet/setup-load";
 
 export type SheetChrome = { sidebar: SidebarData; top: TopBarData; statusbar: StatusbarData };
@@ -68,14 +70,16 @@ async function baseChrome(staff: SheetStaff, active: string): Promise<SheetChrom
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
   const count = { count: "exact" as const, head: true };
-  const [matterCount, recentMatters, openCount, unsorted, voDrafts, setup] = await Promise.all([
+  const [matterCount, recentMatters, openCount, unsorted, voDrafts, voReadings, setup] = await Promise.all([
     supabase.from("matters").select("id", count).eq("organization_id", org).neq("stage", "closed"),
     supabase.from("matters").select("id").eq("organization_id", org).order("updated_at", { ascending: false }).limit(2),
     supabase.from("tasks").select("id", count).eq("organization_id", org).in("status", [...OPEN_TASK]),
     // Email waiting in the Inbox's Email to triage tab.
     supabase.from("inbound_emails").select("id", count).eq("organization_id", org).eq("triage_state", "open"),
-    // Vo drafts waiting for a person on matters this staff member can read.
+    // What the Vo drafts page lists as waiting for a person, on matters this staff member can read:
+    // reply drafts and document readings (vo-load's loadSheetDrafts).
     supabase.from("vo_drafts").select("id", count).eq("organization_id", org).eq("status", "draft"),
+    supabase.from("vo_doc_drafts").select("id", count).eq("organization_id", org).eq("status", "draft"),
     // Sample mode: what is left before the firm can go live, for the Finish setup banner.
     loadSheetSetup(supabase, staff),
   ]);
@@ -85,14 +89,22 @@ async function baseChrome(staff: SheetStaff, active: string): Promise<SheetChrom
   return {
     sidebar: {
       active,
-      counts: { tasks: openCount.count ?? 0, inbox: unsorted.count ?? 0, drafts: voDrafts.count ?? 0 },
+      counts: { tasks: openCount.count ?? 0, inbox: unsorted.count ?? 0, drafts: voDraftsWaiting(voDrafts.count, voReadings.count) },
       pinned: pinned.map((id) => ({ href: `/sheet/matters/${id}`, name: name(id) })),
       me: { ...staffPerson(staff.displayName), role: roleLabel(staff.role) },
       tiles: { documents: "/sheet/documents", invoices: "/sheet/finance" },
       newMatter: { href: "/sheet/matters?new=1" },
-      createBoard: { href: "/sheet/queue" },
+      // Saved boards aren't built (no table holds them), so Create board says so instead of
+      // pretending: the Team queue, Due this week and Awaiting my review are the boards there are.
+      createBoard: {
+        href: "#",
+        toast: "Saved boards aren’t available yet",
+        toastSub: "Use Team queue, Due this week and Awaiting my review. Their filters work on each page.",
+        disabled: "Saved boards aren’t available yet",
+      },
     },
-    top: { firmName: staff.organizationName, pills: [`Your matters: ${matterCount.count ?? 0}`] },
+    // No workspace switcher exists (a staff session is in one firm), so the firm name opens Settings > Firm.
+    top: { firmName: staff.organizationName, pills: [`Your matters: ${matterCount.count ?? 0}`], firmHref: FIRM_SETTINGS },
     statusbar: {
       timezone: staff.timezone,
       sample: staff.sampleMode ? { label: "Sample mode", detail: "practice records are marked sample" } : null,

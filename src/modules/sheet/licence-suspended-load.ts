@@ -47,7 +47,7 @@ export async function blockedCredential(staff: SheetStaff) {
  * check recorded an adverse result, or null when their licence does not lock them. Read as the
  * signed-in staff member: the matters are the ones they can read and are consultant on.
  */
-export async function loadSheetLicenceSuspended(staff: SheetStaff, now: Date = new Date()) {
+export async function loadSheetLicenceSuspended(staff: SheetStaff, now: Date = new Date(), view: { month?: string; path?: string } = {}) {
   const credential = await blockedCredential(staff);
   if (!credential) return null;
   const supabase = await createClient({ organizationId: staff.organizationId });
@@ -55,7 +55,7 @@ export async function loadSheetLicenceSuspended(staff: SheetStaff, now: Date = n
   const today = isoDateInTimeZone(now, staff.timezone);
 
   const [loaded, responsible, parties, members, credentials] = await Promise.all([
-    loadSheetHome(staff, now),
+    loadSheetHome(staff, now, view),
     supabase.from("matters").select("id, reference").eq("organization_id", org).eq("responsible_consultant_membership_id", staff.membershipId).neq("stage", "closed").limit(READ),
     supabase.from("matter_participants").select("matter_id").eq("organization_id", org).eq("membership_id", staff.membershipId).eq("role", "consultant").limit(READ),
     loadLicenceMembers(supabase, org),
@@ -88,6 +88,6 @@ export async function loadSheetLicenceSuspended(staff: SheetStaff, now: Date = n
       .map((row) => ({ membershipId: row.membership_id, name: active.get(row.membership_id)?.name || "Consultant", licenceType: row.licence_type, checkedAt: row.checked_at })),
   };
   const suspended: SuspendedData = suspendedData(input);
-  const top: SuspendedTop = { firmName: loaded.chrome.top.firmName, pills: loaded.chrome.top.pills.filter((pill): pill is string => typeof pill === "string"), newTitle: SUSPENDED_NEW_TITLE };
+  const top: SuspendedTop = { firmName: loaded.chrome.top.firmName, firmHref: loaded.chrome.top.firmHref, pills: loaded.chrome.top.pills.filter((pill): pill is string => typeof pill === "string"), newTitle: SUSPENDED_NEW_TITLE };
   return { ...loaded, home: { ...loaded.home, summary: suspendedSummary() }, suspended, top };
 }

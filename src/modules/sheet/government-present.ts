@@ -32,7 +32,7 @@ import {
 } from "@/modules/government/present";
 import { staffPerson } from "@/modules/sheet/avatar";
 import { dayMonth } from "@/modules/sheet/home-present";
-import { firstName, longDate, taskDue } from "@/modules/sheet/matter-present";
+import { dayMonthYear, firstName, longDate, taskDue } from "@/modules/sheet/matter-present";
 import { isoDateInTimeZone, MATTER_OUTCOMES, outcomeLabel, stageLabel } from "@/modules/sheet/present";
 
 export type HandoffRow = {
@@ -270,9 +270,27 @@ export function buildSubmissions(records: GovernmentRecords, ctx: GovernmentCont
 
   const record = open?.status === "authorized" && canSubmit ? { "data-open": "dSubRec" } : null;
   const start = !current && canPrepare ? { "data-open": "dSubPrep" } : null;
-  const tab: MatterSubmissionsData = { package: pkg, start, records: records_, record, earlier };
+  // Why Record submission is not open yet, said on the disabled button.
+  const recordWhy = record
+    ? null
+    : !canSubmit
+      ? "An owner, consultant or case manager records the submission."
+      : open?.status === "awaiting_signoff"
+        ? "Opens once a licensed consultant signs off the package."
+        : current
+          ? null
+          : "Start a submission handoff first. A licensed consultant signs it off, then the submission is recorded.";
+  const tab: MatterSubmissionsData = { package: pkg, start, records: records_, record, recordWhy, earlier };
+  // The database lets a handoff start from Evidence collection; it says so when documents are still outstanding.
+  const outstanding = records.documents.open;
+  const warning =
+    outstanding > 0
+      ? `${outstanding} requested ${outstanding === 1 ? "document is" : "documents are"} not accepted yet. You can start the handoff, but the checklist stays open until ${outstanding === 1 ? "it is" : "they are"} accepted.`
+      : records.documents.total === 0
+        ? "No documents have been requested on this matter yet. Check the package is complete before starting."
+        : null;
   const dialogs: GovDialogsData = {
-    prepare: start ? { wire: wire("prepare", ctx), channels: [...SUBMISSION_CHANNEL_OPTIONS] } : null,
+    prepare: start ? { wire: wire("prepare", ctx), channels: [...SUBMISSION_CHANNEL_OPTIONS], warning } : null,
     submit:
       record && open
         ? { wire: wire("submit", ctx, { id: open.id, version: String(open.version) }), representatives: ctx.representatives, now: localInput(ctx.now, ctx.timezone) }
@@ -292,7 +310,7 @@ function letterRows(records: GovernmentRecords, ctx: GovernmentContext): GovLett
     const deadlines = records.deadlines.filter((link) => link.correspondence_id === letter.id && link.due_on);
     const parts = [`Received ${dayMonth(letter.received_on)} by ${channelLabel(letter.channel)}`, `recorded by ${firstName(ctx.userName(letter.created_by))}`];
     for (const link of deadlines) parts.push(`created the ${dayMonth(link.due_on as string)} deadline`);
-    if (letter.stated_deadline) parts.push(`letter says: ${letter.stated_deadline}`);
+    if (letter.stated_deadline) parts.push(`letter says: ${statedDeadline(letter.stated_deadline, ctx.today)}`);
     const urgent = letter.kind === "request" || letter.kind === "procedural_fairness" || letter.kind === "decision";
     return {
       dot: urgent ? "#0075DE" : "#2e9d5b",
@@ -303,8 +321,15 @@ function letterRows(records: GovernmentRecords, ctx: GovernmentContext): GovLett
         !letter.verified_at && hasEvidence && canVerify
           ? wire("verify-letter", ctx, { id: letter.id, version: String(letter.version) })
           : null,
+      // A letter recorded without its evidence: attach it, then it can be verified.
+      attach: !letter.verified_at && !hasEvidence && STAFF.has(ctx.role) ? wire("attach-letter", ctx, { id: letter.id, version: String(letter.version) }) : null,
     };
   });
+}
+
+/** A letter's stated deadline: a date the Sheet recorded ("20 Nov"), or the words as written on older letters. */
+export function statedDeadline(value: string, today: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? dayMonthYear(value, today) : value;
 }
 
 function decisionView(records: GovernmentRecords, ctx: GovernmentContext, decision: DecisionRow): DecisionView {
@@ -451,6 +476,7 @@ function letterTableRow(letter: LetterRow, ctx: GovernmentContext, item?: string
     verified: letter.verified_at ? `${ctx.memberName(letter.verified_by_membership_id)}, ${whenFull(letter.verified_at, ctx.timezone, ctx.today)}` : "Not verified by staff",
     lastChecked: whenFull(letter.created_at, ctx.timezone, ctx.today),
     verify: !letter.verified_at && hasEvidence && VERIFIERS.has(ctx.role) ? wire("verify-letter", ctx, { id: letter.id, version: String(letter.version) }) : null,
+    attach: !letter.verified_at && !hasEvidence && STAFF.has(ctx.role) ? wire("attach-letter", ctx, { id: letter.id, version: String(letter.version) }) : null,
   };
 }
 

@@ -33,6 +33,9 @@ import {
   marketingGranted,
   pipelineTab,
   preferredLabel,
+  reopenStage,
+  replyGranted,
+  STAFF_SOURCES,
   shortDay,
   sourceLabel,
   stamp,
@@ -192,6 +195,9 @@ export async function loadSheetPipeline(staff: SheetStaff, query: SheetQuery, no
     csv: {
       file: null,
       map: CSV_MAP,
+      mapLabel: "Columns found in your file",
+      mapNote:
+        "Columns are matched by their header names: Name, Email, Phone, Service interest, Source and Note. To read a column differently, rename it in your file and choose the file again.",
       submit: { label: "Import leads", data: { "data-lead-act": "import", "data-org": org } },
     },
     newLead: {
@@ -222,6 +228,8 @@ export type LeadPage = {
     edit: EditLeadDialogData | null;
     followUp: FollowUpDialogData;
     conflict: Record<string, string> | null;
+    /** A lost (or archived) lead's Reopen: back to the stage it was closed from, or Contacted. */
+    reopen: { label: string; data: Record<string, string> } | null;
   };
   /** The conflict search, run only when the Conflict check dialog is asked for (`?dlg=conflict`); it is audited. */
   conflictMatches: { label: string; detail: string }[] | null;
@@ -377,7 +385,9 @@ export async function loadSheetLead(staff: SheetStaff, leadId: string, options: 
     lead.conflict_result !== "clear"
       ? { title: "Run the conflict check first", copy: "A lead converts after a conflict check with no conflict is recorded." }
       : staff.sampleMode
-        ? { title: "This firm is in sample mode", copy: "Real client matters open once sample mode is turned off." }
+        ? { title: "This firm is in sample mode", copy: "The lead becomes a sample (practice) matter. Real client matters open once sample mode is turned off." }
+        : lead.is_sample
+          ? { title: "This is a sample lead", copy: "It becomes a sample (practice) matter, like the other sample records." }
         : matterDialog.consultants.length === 0
           ? { title: "A matter needs a licensed consultant", copy: "Invite a licensed consultant from Settings before converting." }
           : null;
@@ -389,6 +399,9 @@ export async function loadSheetLead(staff: SheetStaff, leadId: string, options: 
     convert: open ? {} : null,
     extra: null,
   };
+
+  const eventRows = (events.data ?? []) as EventRow[];
+  const reopenTo = kind === "lost" || kind === "archived" ? reopenStage(stageRows, eventRows, lead.stage_id) : null;
 
   const followUpRows = (followUps.data ?? []) as FollowUpRow[];
   const page: LeadData = {
@@ -419,7 +432,7 @@ export async function loadSheetLead(staff: SheetStaff, leadId: string, options: 
     header,
     page,
     conflict,
-    history: historyItems((events.data ?? []) as EventRow[], stageNames, directory.byUser, tz),
+    history: historyItems(eventRows, stageNames, directory.byUser, tz),
     enquiry,
     consultations: {
       rows: consultationRows,
@@ -476,9 +489,14 @@ export async function loadSheetLead(staff: SheetStaff, leadId: string, options: 
             },
             maxBirthDate: todayIso(),
             marketing: { granted: marketingGranted(consentRows), data: { "data-marketing-was": marketingGranted(consentRows) ? "1" : "0" } },
+            source: { value: lead.source, label: sourceLabel(lead.source), editable: STAFF_SOURCES.has(lead.source) },
+            reply: { granted: replyGranted(consentRows), data: { "data-reply-was": replyGranted(consentRows) ? "1" : "0" } },
           },
       followUp: { data: { "data-lead-act": "follow-up", ...wire }, owners, owner: myOwner },
       conflict: open ? { "data-lead-act": "conflict", ...wire } : null,
+      reopen: reopenTo
+        ? { label: reopenTo.label, data: { "data-lead-act": "reopen", ...wire, "data-stage": reopenTo.id, "data-stage-label": reopenTo.label } }
+        : null,
     },
     conflictMatches: conflictSearch && !conflictSearch.error ? conflictRows(conflictSearch.data, tz) : null,
     wire: { organizationId: org, leadId: lead.id, version: lead.version },

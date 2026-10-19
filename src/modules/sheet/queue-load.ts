@@ -9,6 +9,9 @@ import type { SheetStaff } from "@/modules/sheet/load";
 import { STAFF_ROLES, isoDateInTimeZone, roleLabel } from "@/modules/sheet/present";
 import { dueBadge, hours, orderQueue, queueItemId, ruleHours, waitingBadge, weekOf, type QueueEntry } from "@/modules/sheet/queue-present";
 
+/** Who reassign_task lets reassign an internal task (it checks again). */
+const REASSIGN_ROLES = new Set(["firm_owner", "licensed_consultant", "case_manager"]);
+
 /** Rows read per source. */
 const QUEUE_READ = 300;
 
@@ -31,7 +34,7 @@ export async function loadSheetQueue(staff: SheetStaff, now: Date = new Date()) 
     supabase.from("memberships").select("id, role").eq("organization_id", org).eq("status", "active").in("role", [...STAFF_ROLES]),
     supabase
       .from("tasks")
-      .select("id, matter_id, title, owner_membership_id, due_on")
+      .select("id, matter_id, title, owner_membership_id, due_on, version")
       .eq("organization_id", org)
       .eq("audience", "internal")
       .in("status", ["open", "blocked"])
@@ -114,6 +117,7 @@ export async function loadSheetQueue(staff: SheetStaff, now: Date = new Date()) 
       href: task.matter_id ? `/sheet/matters/${task.matter_id}?tab=tasks` : "/sheet/tasks",
       mine: task.owner_membership_id === staff.membershipId,
       sortOn: task.due_on,
+      task: { id: task.id, version: task.version },
     });
   }
   for (const version of versionRows) {
@@ -146,7 +150,8 @@ export async function loadSheetQueue(staff: SheetStaff, now: Date = new Date()) 
       owner: owner(consultant),
       due: { tone: due.tone, label: due.label },
       flags: flags(due.overdue && "overdue", !consultant && "unassigned", "government"),
-      href: `/sheet/matters/${deadline.matter_id}`,
+      // The matter's Tasks and deadlines tab, where the deadline's Confirm control is.
+      href: `/sheet/matters/${deadline.matter_id}?tab=tasks`,
       mine: Boolean(consultant && consultant === staff.membershipId),
       sortOn: dueOn,
     });
@@ -213,6 +218,15 @@ export async function loadSheetQueue(staff: SheetStaff, now: Date = new Date()) 
     counts: { open: items.length, overdue: items.filter((item) => item.flags?.includes("overdue")).length, people: staffList.length },
     load,
     items,
+    // Reassign (tasks only): reassign_task decides who may, with a recent step-up.
+    reassign: REASSIGN_ROLES.has(staff.role)
+      ? {
+          organizationId: org,
+          people: staffList
+            .map((row) => ({ value: row.id, label: members.get(row.id) || "Staff member" }))
+            .sort((a, b) => a.label.localeCompare(b.label)),
+        }
+      : null,
   };
   return { chrome, queue };
 }

@@ -552,6 +552,53 @@ describe("Designer fidelity", () => {
     expect(live).toBe(captured);
   });
 
+  it("wires the home's controls without changing the captured Designer markup", () => {
+    // Live only (home-controls, 2026-10-19): task rows carry `data-f` tokens; the Filter chip, the
+    // firm-name button, the calendar arrows and days carry `data-nav`; a hidden copy of the tasks
+    // empty panel follows the rows; each notification is wrapped in a link to its source. With
+    // those stripped, the page is exactly the capture.
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(IndexMarkup)));
+    const live = withoutPreloads(
+      renderToStaticMarkup(
+        createElement(SheetFrame, {
+          sidebar: DESIGNER_SIDEBAR,
+          top: { firmName: "Northline Immigration", pills: ["Updated 2 min ago", "Your matters: 18"], firmHref: "/sheet/settings" },
+          rbar: {
+            ...DESIGNER_RBAR,
+            nav: { prev: "/sheet?month=2026-09", next: "/sheet?month=2026-11" },
+            days: DESIGNER_RBAR.days.map((day) => ({ ...day, href: `/sheet/calendar?week=2026-10-${String(day.day).padStart(2, "0")}` })),
+            notifications: DESIGNER_RBAR.notifications.map((item) => ({ ...item, href: "/sheet/documents" })),
+          },
+          statusbar: {
+            timezone: "America/Toronto",
+            queue: { label: "Reminder queue healthy", detail: "0 retries" },
+            sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+          },
+        }, createElement(SheetHome, {
+          data: {
+            ...DESIGNER_HOME,
+            tasks: DESIGNER_HOME.tasks.map((task, index) => ({ ...task, f: index === 0 ? "mine today" : "" })),
+            bar: { filterHref: "/sheet/tasks" },
+          },
+        })),
+      ),
+    );
+    expect(live).toContain('<button class="crumb" data-nav="/sheet/settings">');
+    expect(live).toContain('<span class="fchip" data-nav="/sheet/tasks">');
+    expect(live).toContain('<a class="li" href="/sheet/matters/priya?tab=documents" data-f="mine today">');
+    expect(live).toContain('<svg class="ic s" aria-hidden="true" data-nav="/sheet?month=2026-09">');
+    expect(live).toContain('<span class="num t" data-nav="/sheet/calendar?week=2026-10-16">16</span>');
+    expect(live).toContain('<a href="/sheet/documents"><div class="nf">');
+    const empty = '<div class="panel" hidden="" data-filter-empty="1">';
+    expect(live).toContain(empty);
+    const stripped = live
+      .replace(/ data-nav="[^"]*"/g, "")
+      .replace(/ data-f="[^"]*"/g, "")
+      .replace(new RegExp(`${empty}[\\s\\S]*?</small></div></div>`), "")
+      .replace(/<a href="\/sheet\/documents">(<div class="nf">[\s\S]*?<\/small><\/div><\/div>)<\/a>/g, "$1");
+    expect(stripped).toBe(captured);
+  });
+
   it("renders the sidebar exactly as the captured Designer markup", () => {
     const captured = region(renderToStaticMarkup(createElement(IndexMarkup)), '<aside class="side"', "</aside>");
     const live = sidebar(region(renderToStaticMarkup(createElement(SheetSidebar, { data: DESIGNER_SIDEBAR })), '<aside class="side"', "</aside>"));
@@ -3041,8 +3088,18 @@ describe("Designer fidelity: Lead pipeline", () => {
       timeZone: "America/Toronto",
       now,
     });
-    const strip = (html: string) => html.replace(/ data-(org|stage-id|kind|version|href)="[^"]*"/g, "");
-    const real = strip(renderToStaticMarkup(createElement(SheetPipeline, { data: built.data })));
+    // Also documented live-only: a ‹ › button that can't move its card is disabled with a title
+    // (New's back, Converted's both, Lost's forward, the last column's forward).
+    const strip = (html: string) =>
+      html
+        .replace(/ data-(org|stage-id|kind|version|href)="[^"]*"/g, "")
+        .replace(/ disabled="" title="(Already in the first stage it can be in|It can’t move forward from this stage)"/g, "");
+    const rendered = renderToStaticMarkup(createElement(SheetPipeline, { data: built.data }));
+    // New: back disabled; Converted: both; Lost: forward (it goes back to an open stage).
+    expect(rendered.match(/disabled="" title="Already in the first stage it can be in"/g)?.length).toBe(
+      (built.data.columns[0].cards.length) + (built.data.columns[6].cards.length),
+    );
+    const real = strip(rendered);
     const designer = renderToStaticMarkup(
       createElement(SheetPipeline, {
         data: {

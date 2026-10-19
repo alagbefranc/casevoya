@@ -3,6 +3,7 @@
 import { toast2 } from "@/components/port/kit";
 import { createSheetTask } from "@/modules/tasks/actions";
 import { optionFits, readNewTask, taskAudience } from "@/modules/sheet/new-task";
+import { todayIso } from "@/modules/sheet/birth-date";
 
 type Router = { refresh: () => void };
 
@@ -47,6 +48,7 @@ export async function runNewTask(button: HTMLElement, router: Router) {
     owner: value(dialog, "tkO"),
     due: value(dialog, "tkD"),
     dependsOn: value(dialog, "tkP"),
+    today: todayIso(new Date(), button.dataset.tz),
   });
   if ("error" in read) {
     toast2(read.error, { kind: "warn", sub: "Nothing was saved." });

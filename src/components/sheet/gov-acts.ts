@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { completeDocumentUpload } from "@/modules/documents/actions";
 import {
   addExpiryReminder,
+  attachCorrespondenceEvidence,
   confirmDecision,
   prepareHandoff,
   recordCheck,
@@ -106,7 +107,8 @@ export async function recordLetter(scope: ParentNode, dialog: Element | null, re
     kind,
     channel,
     receivedOn,
-    statedDeadline: value(scope, "input[placeholder]"),
+    // The live dialog's "Deadline in the letter" is a date (#ltD); the Designer's was free text.
+    statedDeadline: scope.querySelector("#ltD") ? value(scope, "#ltD") : value(scope, "input[placeholder]"),
     evidenceVersionId,
   });
 }
@@ -118,6 +120,7 @@ const DONE: Record<string, [string, string]> = {
   receipt: ["Submission verified", "The receipt is the evidence for the Submitted stage."],
   "receipt-file": ["Submission verified", "The receipt is the evidence for the Submitted stage."],
   "verify-letter": ["Letter verified", "The matter’s government status follows the verified letter."],
+  "attach-letter": ["Evidence attached", "A staff member can now verify the letter against it."],
   status: ["Recorded", "It stays unverified until a staff member checks it against the evidence."],
   decision: ["Decision recorded", "A licensed consultant confirms the outcome before it counts."],
   confirm: ["Outcome confirmed", "Follow-up tasks were opened. Nothing in billing changed."],
@@ -207,6 +210,10 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
   let result: Result;
 
   if (act === "prepare") {
+    const hash = value(scope, "#spH");
+    if (hash && !/^[0-9a-f]{64}$/i.test(hash)) {
+      return void toast2("Check the package hash", { kind: "warn", sub: "It is the package’s sha256: 64 characters, 0–9 and a–f only. Leave it blank if you don’t have one." });
+    }
     result = await prepareHandoff({ ...ref, packageLabel: value(scope, "#spL"), packageSha256: value(scope, "#spH") || null, channel: value(scope, "#spC") });
   } else if (act === "signoff") {
     result = await signOffHandoff({ organizationId: ref.organizationId, handoffId: data.id ?? "", version });
@@ -250,6 +257,13 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
     result = await verifySubmission({ organizationId: ref.organizationId, handoffId: data.id ?? "", version, receiptVersionId: uploaded.versionId });
   } else if (act === "verify-letter") {
     result = await verifyCorrespondence({ organizationId: ref.organizationId, correspondenceId: data.id ?? "", version });
+  } else if (act === "attach-letter") {
+    // A letter recorded without its evidence: choose the file, store it on the matter, attach it.
+    const file = await chooseFile();
+    if (!file) return;
+    const uploaded = await uploadEvidence({ ...ref, file, purpose: "Government letter" });
+    if ("error" in uploaded) return void toast2(uploaded.error, { kind: "bad", sub: "Nothing was attached." });
+    result = await attachCorrespondenceEvidence({ organizationId: ref.organizationId, correspondenceId: data.id ?? "", version, evidenceVersionId: uploaded.versionId });
   } else if (act === "status") {
     const kind = value(scope, "select");
     if (kind === "check") {

@@ -57,10 +57,10 @@ export function zoneAbbr(timeZone: string, at: Date = new Date()): string {
   return name("short") || timeZone;
 }
 
-/** "Mon 19 Oct" from a `YYYY-MM-DD` date, or "Today". */
+/** "Mon 19 Oct" from a `YYYY-MM-DD` date ("Mon 18 Oct 2027" in another year), or "Today". */
 export function dayLabel(date: string, today: string): string {
   if (date === today) return "Today";
-  return `${weekdayDay(date)} ${dayMonth(date).split(" ")[1]}`;
+  return `${weekdayDay(date)} ${dayMonth(date).split(" ")[1]}${date.slice(0, 4) !== today.slice(0, 4) ? ` ${date.slice(0, 4)}` : ""}`;
 }
 
 function clock(at: Date, timeZone: string): string {
@@ -127,6 +127,52 @@ export function deadlineTime(
   const at = input.dueAt ? new Date(input.dueAt) : new Date();
   const right = input.timezone === firmZone ? "same zone" : `official time ${zoneAbbr(input.timezone, at)}`;
   return { left, right };
+}
+
+/** Staff roles the task controls are offered to (public.set_task_status and public.update_task accept them). */
+export const TASK_STAFF_ROLES: readonly string[] = ["firm_owner", "licensed_consultant", "case_manager", "assistant"];
+
+/**
+ * Whether the signed-in member may confirm a tentative deadline, as public.confirm_deadline decides:
+ * a legal or letter date needs a licensed member (an owner counts, decision 2026-10-19) and an
+ * official source or published rule; an internal target needs an owner, consultant or case manager.
+ * The database checks it again, with the step-up.
+ */
+export function deadlineConfirmable(
+  deadline: { kind: string; verification: string; sourceUrl: string | null; ruleVersionId: string | null },
+  role: string,
+  licensed: boolean,
+): { ok: true } | { ok: false; why: string | null } {
+  if (deadline.verification === "confirmed") return { ok: false, why: null };
+  if (deadline.kind === "internal") {
+    return ["firm_owner", "licensed_consultant", "case_manager"].includes(role)
+      ? { ok: true }
+      : { ok: false, why: "A firm owner, consultant or case manager confirms an internal target." };
+  }
+  if (!licensed) return { ok: false, why: "A licensed consultant or the firm owner confirms a legal or letter deadline." };
+  if (!deadline.sourceUrl && !deadline.ruleVersionId) {
+    return { ok: false, why: "It stays tentative until it cites its official source or a published rule." };
+  }
+  return { ok: true };
+}
+
+/** The Manage button's `data-*` on a task row (Tasks page and the matter's Tasks tab). */
+export function taskManageWire(task: {
+  id: string;
+  version: number;
+  title: string;
+  audience: string;
+  due_on: string | null;
+  owner_membership_id: string | null;
+}): Record<`data-${string}`, string> {
+  return {
+    "data-task-open": task.id,
+    "data-version": String(task.version),
+    "data-title": task.title,
+    "data-due": task.due_on ?? "",
+    "data-owner": task.owner_membership_id ?? "",
+    "data-audience": task.audience,
+  };
 }
 
 /** The first word of a name, the way the Designer labels a task owner ("Daniel"). */

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { newTaskError, dependencyError } from "@/modules/sheet/new-task";
+import { newTaskError, dependencyError, taskChangeError } from "@/modules/sheet/new-task";
 import { asMaintenance, asUser, createTestDb, type TestDb } from "./helpers/postgres";
 
 /**
@@ -194,5 +194,92 @@ describe("New task against create_task", () => {
 
     const message = await refusal(() => createTask({ matterId: real.id, audience: "internal", title: "Real work", ownerMembershipId: ctx.consultantMembership }));
     expect(newTaskError(message)).toMatch(/still in sample mode/);
+  });
+});
+
+describe("Task controls: edit (update_task), reassign and complete", () => {
+  async function version(id: string) {
+    await asMaintenance(db);
+    const row = await db.query<{ version: number; title: string; due_on: string | null; status: string; owner_membership_id: string | null }>(
+      `select version, title, due_on::text, status::text, owner_membership_id from public.tasks where id = $1`,
+      [id],
+    );
+    return row.rows[0];
+  }
+
+  it("edits an open task's title and due date, skips a save that changes nothing, and audits it", async () => {
+    const ctx = await firm();
+    const matter = await clientMatter(ctx);
+    await as(ctx.manager, ctx.orgId);
+    const id = await createTask({ matterId: matter.id, audience: "internal", title: "Draft cover letter", ownerMembershipId: ctx.managerMembership });
+    const before = await version(id);
+
+    await as(ctx.manager, ctx.orgId);
+    const same = await db.query<{ v: number }>(`select public.update_task($1, $2, 'Draft cover letter', null, null) as v`, [id, before.version]);
+    expect(same.rows[0].v).toBe(before.version);
+
+    await as(ctx.manager, ctx.orgId);
+    const due = "2099-01-15";
+    const changed = await db.query<{ v: number }>(`select public.update_task($1, $2, ' Draft the cover letter ', $3::date, null) as v`, [id, before.version, due]);
+    expect(changed.rows[0].v).toBe(before.version + 1);
+    expect(await version(id)).toMatchObject({ title: "Draft the cover letter", due_on: due });
+    const audit = await db.query(`select 1 from public.audit_log where object_id = $1 and action = 'task.updated'`, [id]);
+    expect(audit.rows.length).toBeGreaterThan(0);
+
+    // A due date in the past (the firm's today) and a stale version are refused, in the dialog's words.
+    await as(ctx.manager, ctx.orgId);
+    const past = await refusal(() => db.query(`select public.update_task($1, $2, 'Draft', '2001-01-01'::date, null)`, [id, before.version + 1]));
+    expect(taskChangeError(past)).toBe("The due date can’t be in the past.");
+    await as(ctx.manager, ctx.orgId);
+    const stale = await refusal(() => db.query(`select public.update_task($1, $2, 'Draft', null, null)`, [id, before.version]));
+    expect(taskChangeError(stale)).toMatch(/Someone changed this task/);
+  });
+
+  it("refuses a colleague who is not on the matter, and finance", async () => {
+    const ctx = await firm();
+    const matter = await clientMatter(ctx);
+    await as(ctx.manager, ctx.orgId);
+    const id = await createTask({ matterId: matter.id, audience: "internal", title: "Private work", ownerMembershipId: ctx.managerMembership });
+    const { version: v } = await version(id);
+    await as(ctx.colleague, ctx.orgId);
+    const outsider = await refusal(() => db.query(`select public.update_task($1, $2, 'Hijacked', null, null)`, [id, v]));
+    expect(taskChangeError(outsider)).toBe("Your role can’t change this task.");
+    expect((await version(id)).title).toBe("Private work");
+  });
+
+  it("reassigns with a recent step-up only, then completes the task and cancels its reminders", async () => {
+    const ctx = await firm();
+    const matter = await clientMatter(ctx);
+    await as(ctx.manager, ctx.orgId);
+    const id = await createTask({ matterId: matter.id, audience: "internal", title: "Check passport", ownerMembershipId: ctx.managerMembership });
+    let current = await version(id);
+
+    // Without a recent step-up the reassignment is refused with the step-up message.
+    await asUser(db, { userId: ctx.manager, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 3600 });
+    const stale = await refusal(() => db.query(`select public.reassign_task($1, $2, $3, null)`, [id, current.version, ctx.consultantMembership]));
+    expect(stale).toMatch(/step-up/);
+
+    await as(ctx.manager, ctx.orgId);
+    await db.query(`select public.reassign_task($1, $2, $3, null)`, [id, current.version, ctx.consultantMembership]);
+    current = await version(id);
+    expect(current.owner_membership_id).toBe(ctx.consultantMembership);
+
+    await as(ctx.manager, ctx.orgId);
+    await db.query(`select public.set_task_status($1, $2, 'done', null)`, [id, current.version]);
+    expect((await version(id)).status).toBe("done");
+
+    // A done task can't be edited.
+    await as(ctx.manager, ctx.orgId);
+    const closed = await refusal(() => db.query(`select public.update_task($1, $2, 'Again', null, null)`, [id, current.version + 1]));
+    expect(taskChangeError(closed)).toBe("Only an open task can be edited.");
+  });
+
+  it("is not callable by anon", async () => {
+    await asMaintenance(db);
+    const grants = await db.query<{ anon: boolean; authenticated: boolean }>(
+      `select has_function_privilege('anon', 'public.update_task(uuid, integer, text, date, public.task_priority)', 'execute') as anon,
+              has_function_privilege('authenticated', 'public.update_task(uuid, integer, text, date, public.task_priority)', 'execute') as authenticated`,
+    );
+    expect(grants.rows[0]).toEqual({ anon: false, authenticated: true });
   });
 });
