@@ -99,6 +99,12 @@ export type EmailContexts = {
   EX12: FirmContext & { consultantName?: string | null };
   EX13: FirmContext & { replyBy?: string | null };
   EX14: FirmContext & { respondBy?: string | null; handlerName?: string | null };
+  /**
+   * A staff member's own email from the Sheet Inbox (engineering-built at the owner's request,
+   * 2026-10-19; copy pending Francis). body: their words, verbatim; subject: "Re: …" on a reply;
+   * portal: the person has a portal login (only then a portal button).
+   */
+  EX15: FirmContext & { senderName?: string | null; body?: string | null; subject?: string | null; portal?: boolean };
 };
 
 export type TemplateId = keyof EmailContexts;
@@ -1099,7 +1105,62 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
       });
     },
   },
+  EX15: {
+    id: "EX15",
+    name: "Message from staff",
+    audience: "client",
+    brand: "firm",
+    trigger:
+      "Staff reply to a client's email or write a new one from the Sheet Inbox (send_matter_email; outbox matter_email.sent, template staff_message), to one person on the matter at their stored address. The staff member's text verbatim; Reply-To is the matter reply address. Never sent for a sample matter. Built at the owner's request 2026-10-19, copy pending Francis",
+    status: "wired",
+    ctaTarget: PATHS.portal,
+    mergeFields: ["firm_name", "sender_name", "body", "subject", "portal"],
+    sample: {
+      firmName: SYNTHETIC_FIRM,
+      senderName: "Sam Example",
+      body: "Thanks for the photos.\n\nCould you add the date and place for each one? A short note in your reply is enough.",
+      subject: "Re: Photos for the file",
+      portal: true,
+    },
+    build(context, origin) {
+      const firmName = firm(context);
+      const sender = name(context.senderName);
+      const words = staffText(context.body) || "(no text)";
+      const signOff = sender ? `${sender}\n${firmName}` : firmName;
+      const replyLine = context.portal
+        ? `Reply to this email to answer, or read it in your portal. Your reply goes to your file with ${firmName}.`
+        : `Reply to this email to answer. Your reply goes to your file with ${firmName}.`;
+      return copy({
+        subject: cleanText(context.subject ?? "", 200) || `Message from ${firmName}`,
+        preheader: `Reply to this email to answer ${firmName}.`,
+        heading: sender ? `A message from ${sender}` : `A message from ${firmName}`,
+        body: `${words}\n\n${signOff}\n\n${replyLine}`,
+        verbatim: true,
+        cta: context.portal ? cta("Open your portal", appLink(origin, PATHS.portal)) : null,
+        spot: "reminder",
+        brand: firmBrand(context),
+      });
+    },
+  },
 };
+
+/**
+ * A staff member's text as the email shows it: line breaks kept (at most one blank line in a
+ * row), every other control character and trailing space removed, at most 5000 characters.
+ */
+export function staffText(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, " ")
+    .split("\n")
+    .map((line) => line.replace(/\s+$/, ""))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, 5000)
+    .trim();
+}
 
 /** The client-invitation heading and paragraph, shared with the staff screen's preview. */
 export function clientInviteLines(firmName: string, inviterName?: string | null): { heading: string; invited: string; body: string } {

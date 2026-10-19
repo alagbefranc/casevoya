@@ -69,8 +69,11 @@ export type InboxData = {
 
 export type ComposeData = {
   to: [string, string][];
+  /** Live only: each To option's value (matter and person), in the same order as `to`. */
+  toValues?: string[];
   templates: string[];
-  send: { toast: string; kind: string; sub?: string };
+  /** The Designer's toast, or live: the Send button's attributes (use-sheet sends the email). */
+  send: { toast: string; kind: string; sub?: string } | { attrs: Attrs };
 };
 
 const UNDERLINE: Record<InboxTab, { left: string; width: string }> = {
@@ -551,7 +554,10 @@ export function SheetInbox({ data }: { data: InboxData }) {
   return <Conversations data={data.conv ?? { filters: ["All"], threads: [], view: null }} />;
 }
 
-/** The Designer's New message dialog. Live, Send says plainly that nothing is sent yet. */
+/**
+ * The Designer's New message dialog. Live, each To option carries its matter and person as its
+ * value, and Send carries `data-inbox-compose` (use-sheet sends the email) instead of the toast.
+ */
 export function ComposeDialog({ data }: { data: ComposeData }) {
   return (
     <dialog className={"dlg"} id={"dlgMsg"} aria-labelledby={"dlgMsgH"}>
@@ -566,7 +572,7 @@ export function ComposeDialog({ data }: { data: ComposeData }) {
           <label htmlFor={"nmT"}>{"To"}</label>
           <select className={"sel"} id={"nmT"}>
             {data.to.map(([name, matter], index) => (
-              <option key={index}>
+              <option key={index} value={data.toValues?.[index]}>
                 {`${name} `}
                 <Sep />
                 {` ${matter}`}
@@ -598,9 +604,15 @@ export function ComposeDialog({ data }: { data: ComposeData }) {
         <button className={"btn"} data-close={"dlgMsg"}>
           {"Cancel"}
         </button>
-        <button className={"btn p"} data-close={"dlgMsg"} data-toast={data.send.toast} data-toast-kind={data.send.kind} data-toast-sub={data.send.sub}>
-          {"Send"}
-        </button>
+        {"attrs" in data.send ? (
+          <button className={"btn p"} data-close={"dlgMsg"} {...data.send.attrs}>
+            {"Send"}
+          </button>
+        ) : (
+          <button className={"btn p"} data-close={"dlgMsg"} data-toast={data.send.toast} data-toast-kind={data.send.kind} data-toast-sub={data.send.sub}>
+            {"Send"}
+          </button>
+        )}
       </div>
     </dialog>
   );

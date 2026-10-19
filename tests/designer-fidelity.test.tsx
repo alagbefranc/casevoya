@@ -2389,6 +2389,52 @@ describe("Designer fidelity: Documents and Inbox", () => {
     expect(html).not.toContain("data-toast");
     expect(html).not.toMatch(/Northline|Priya|NL-2026/);
   });
+
+  // Inbox replies (live-only additions, no new markup): each New message "To" option carries its
+  // matter and person as `value`, and Send carries `data-inbox-compose` + `data-org` instead of the
+  // Designer's toast; the conversation's Send carries `data-inbox-reply` and the ids; a sent email
+  // is one more `.fp-mail` with "by email" and its status as meta parts.
+  it("keeps the New message dialog the Designer's once its live value and Send attributes are stripped", () => {
+    const org = "33333333-3333-4333-8333-333333333333";
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(InboxMarkup, { variant: "tab-conv" })));
+    const dialog = captured.slice(captured.indexOf('<dialog class="dlg" id="dlgMsg"'), captured.indexOf("</dialog>", captured.indexOf('id="dlgMsg"')) + "</dialog>".length);
+    expect(dialog.length).toBeGreaterThan(100);
+    const values = DESIGNER_COMPOSE.to.map((_, index) => `${"4".repeat(8)}-4444-4444-8444-44444444444${index}:${"5".repeat(8)}-5555-4555-8555-55555555555${index}`);
+    const live = renderToStaticMarkup(createElement(ComposeDialog, { data: { ...DESIGNER_COMPOSE, toValues: values, send: { attrs: { "data-inbox-compose": "1", "data-org": org } } } }));
+    expect(live).toContain(`<option value="${values[0]}">`);
+    expect(live).toContain(`<button class="btn p" data-close="dlgMsg" data-inbox-compose="1" data-org="${org}">Send</button>`);
+    const stripped = live
+      .replace(/ value="[^"]*"/g, "")
+      .replace(` data-inbox-compose="1" data-org="${org}"`, ' data-toast="Message sent" data-toast-kind="ok"');
+    sameMarkup(stripped, dialog);
+  });
+
+  it("shows a sent email in the Designer's thread markup, and wires Send by attributes, with no Designer toast", () => {
+    const view = DESIGNER_INBOX.conv!.view!;
+    const attrs = { "data-inbox-reply": "e1", "data-org": "o1", "data-matter": "m1", "data-person": "p1", "data-name": "Dana" };
+    const html = renderToStaticMarkup(
+      createElement(SheetInbox, {
+        data: {
+          tab: "conv",
+          conv: {
+            filters: ["All"],
+            threads: DESIGNER_INBOX.conv!.threads.slice(0, 1),
+            view: {
+              ...view,
+              vo: null,
+              mails: [view.mails[0], { meta: ["Sam", "today 09:12", "by email", "Sent"], body: "Synthetic: please add the dates.", files: null }],
+              reply: { ...view.reply, send: { label: "Send to Dana", attrs } },
+            },
+          },
+        },
+      }),
+    );
+    expect(html).toContain(
+      '<div class="fp-mail"><small style="color:var(--t2)">Sam <span class="sep" aria-hidden="true"></span> today 09:12 <span class="sep" aria-hidden="true"></span> by email <span class="sep" aria-hidden="true"></span> Sent</small><p style="margin-top:4px">Synthetic: please add the dates.</p></div>',
+    );
+    expect(html).toContain('<button class="btn p sm" data-inbox-reply="e1" data-org="o1" data-matter="m1" data-person="p1" data-name="Dana"><span class="lab">');
+    expect(html).not.toContain("data-run");
+  });
 });
 
 describe("Designer fidelity: Government status", () => {

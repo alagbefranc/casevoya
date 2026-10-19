@@ -34,6 +34,15 @@ const WIRED: Record<string, Record<string, unknown>> = {
   EX09: { template: "refund_started", firm: FIRM, invoice_id: INVOICE, invoice_number: "INV-0001" },
   EX10: { template: "refund_complete", firm: FIRM, invoice_id: INVOICE, invoice_number: "INV-0001" },
   EX07: { template: "message", firm: FIRM },
+  // Inbox replies: the text and subject come with the message; dispatch.ts puts them in the context.
+  EX15: {
+    template: "staff_message",
+    firm: FIRM,
+    sender: "Sam Example",
+    portal: true,
+    subject: "Re: Photos for the file",
+    body: "Thanks for the photos.\n\nCould you add the date and place for each one? A short note in your reply is enough.",
+  },
   // EM16a and EM16c show a visitor who booked on the public page (no portal login); EM16b a portal
   // client. tests/scheduling-portal-mail.test.tsx covers the other variant of each.
   EM16a: { template: "consultation_booked", firm: FIRM, starts_at: "2026-10-22T14:30:00Z", time_zone: "America/Vancouver", consultant_name: "Sam Example", portal: false, location_kind: "phone" },

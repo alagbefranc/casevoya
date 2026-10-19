@@ -7,6 +7,8 @@ export type OutboundEmail = {
   subject: string;
   html: string;
   text: string;
+  /** Threading headers only (In-Reply-To, References), from dispatch.threadingHeaders. */
+  headers?: Record<string, string>;
 };
 
 export type SendOutcome =
@@ -34,6 +36,7 @@ export function cloudflareSendBody(email: OutboundEmail): Record<string, unknown
     subject: email.subject,
     html: email.html,
     text: email.text,
+    ...(email.headers && Object.keys(email.headers).length ? { headers: email.headers } : {}),
   };
 }
 

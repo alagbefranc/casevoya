@@ -26,6 +26,8 @@ const TEMPLATE_LABEL: Record<string, string> = {
   consultation_booked: "Consultation booked",
   consultation_rescheduled: "Consultation moved",
   consultation_cancelled: "Consultation cancelled",
+  message: "New message notice",
+  staff_message: "Email from staff",
 };
 
 export function templateLabel(template: string): string {
