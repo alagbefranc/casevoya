@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { SheetLoader } from "@/components/sheet/sheet-loader";
 import { SheetBody, isSheetPage, queryFrom } from "@/components/sheet/body";
-import { QuietSheet } from "@/components/sheet/live";
-import { SheetScreen } from "@/components/sheet/screen";
 
 export const metadata: Metadata = {
   title: "Casevoya",
@@ -20,7 +19,7 @@ export default function SheetPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   return (
-    <Suspense fallback={<SheetScreen page="index"><QuietSheet title="Casevoya" copy="Your firm’s records load after sign-in." /></SheetScreen>}>
+    <Suspense fallback={<SheetLoader />}>
       <Body params={params} searchParams={searchParams} />
     </Suspense>
   );
