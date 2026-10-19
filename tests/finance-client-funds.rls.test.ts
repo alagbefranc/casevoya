@@ -23,8 +23,10 @@ function token(length = 12) {
 }
 
 const key = (prefix = "cf") => `${prefix}-${randomUUID()}`;
-const today = () => new Date().toISOString().slice(0, 10);
-const inThreeDays = () => new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+// The database counts days in the firm's timezone (America/Toronto by default), so the tests do too.
+const torontoDay = (offsetDays = 0) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto" }).format(new Date(Date.now() + offsetDays * 86_400_000));
+const today = () => torontoDay();
+const inThreeDays = () => torontoDay(3);
 
 async function createUser(label: string) {
   await asMaintenance(db);
