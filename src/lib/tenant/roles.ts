@@ -15,10 +15,10 @@ export function isStaffRole(role: OrgRole): boolean {
   return (STAFF_ROLES as readonly OrgRole[]).includes(role);
 }
 
-/** Mirrors app.licence_status_blocks() in the database. */
-const BLOCKING_LICENCE_STATUSES: ReadonlySet<string> = new Set(["revoked", "suspended", "inactive", "not_entitled"]);
+/** Roles app.membership_is_licensed() counts (decision 2026-10-19: owners are regulated consultants). */
+const LICENSED_ROLES: ReadonlySet<string> = new Set(["licensed_consultant", "firm_owner"]);
 
-/** The consultant_credentials columns that decide whether an owner's licence counts. */
+/** The consultant_credentials columns the Sheet reads for a member's licence. */
 export const LICENCE_FACT_COLUMNS = "status, discipline_revoked, discipline_suspended, register_status, entitlement_to_practise";
 
 export type LicenceFacts = {
@@ -30,18 +30,13 @@ export type LicenceFacts = {
 };
 
 /**
- * Mirrors app.membership_is_licensed() for an active membership: a licensed consultant, or a
- * firm owner whose own CICC credential is not revoked, suspended, inactive, or not entitled.
- * The database still decides every licensed action; this only chooses which controls to offer.
+ * Mirrors app.membership_is_licensed() for an active membership: a licensed consultant or a firm
+ * owner. Owners are regulated consultants and have every staff ability, regulated actions included
+ * (decision 2026-10-19). As for a licensed consultant, a blocked credential (revoked, suspended,
+ * inactive, not entitled) is still refused by the database's licence locks. The database decides
+ * every licensed action; this only chooses which controls to offer.
  */
-export function isLicensedMembership(role: string, credential: LicenceFacts | null | undefined): boolean {
-  if (role === "licensed_consultant") return true;
-  if (role !== "firm_owner" || !credential) return false;
-  return (
-    !BLOCKING_LICENCE_STATUSES.has(credential.status) &&
-    !credential.discipline_revoked &&
-    !credential.discipline_suspended &&
-    credential.register_status !== "inactive" &&
-    credential.entitlement_to_practise !== false
-  );
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept so callers that fetch the credential stay unchanged
+export function isLicensedMembership(role: string, _credential?: LicenceFacts | null): boolean {
+  return LICENSED_ROLES.has(role);
 }

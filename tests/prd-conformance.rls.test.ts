@@ -418,8 +418,10 @@ describe("matter stage transitions", () => {
 
     await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
     await expectDbError(
-      () => db.query(`select public.transition_matter_stage($1, 'submitted', $2, 'Owner cannot file')`, [matter, version]),
-      /licensed consultant/,
+      // The owner passes the licence gate (owners are regulated consultants, decision 2026-10-19);
+      // filing still needs the submission evidence.
+      () => db.query(`select public.transition_matter_stage($1, 'submitted', $2, 'Owner files')`, [matter, version]),
+      /evidence is missing/,
     );
 
     await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });

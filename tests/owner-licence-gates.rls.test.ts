@@ -3,9 +3,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { isLicensedMembership } from "@/lib/tenant/roles";
 import { asMaintenance, asUser, countOf, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 
-// A firm owner who holds a CICC licence passes every licence-gated rule a licensed consultant
-// passes (20261018100000_owner_licence_gates.sql). An owner without a credential, or with a
-// blocked one, does not. Licensed consultants still pass and assistants are still refused.
+// A firm owner passes every licence-gated rule a licensed consultant passes. Since
+// 20261019219000_owner_full_access.sql (decision 2026-10-19: owners are regulated consultants) that
+// holds with or without a credential on file, exactly as for a licensed consultant; a blocked
+// owner credential is still refused by the licence locks. Assistants are still refused.
 
 let db: TestDb;
 
@@ -209,7 +210,7 @@ async function isLicensed(membershipId: string) {
 }
 
 describe("app.membership_is_licensed", () => {
-  it("counts a licensed consultant and an owner with an unblocked credential, nobody else", async () => {
+  it("counts every active licensed consultant and firm owner, nobody else", async () => {
     const declared = await firm("declared");
     expect(await isLicensed(declared.ownerMembership)).toBe(true);
     expect(await isLicensed(declared.consultantMembership)).toBe(true);
@@ -219,15 +220,15 @@ describe("app.membership_is_licensed", () => {
     expect(await isLicensed(verified.ownerMembership)).toBe(true);
 
     const none = await firm("none");
-    expect(await isLicensed(none.ownerMembership)).toBe(false);
+    expect(await isLicensed(none.ownerMembership)).toBe(true);
 
+    // Like a licensed consultant, an owner stays licensed by role; a blocked credential is caught
+    // by the existing licence locks (see the blocked-owner cases below).
     const suspended = await firm("suspended");
-    expect(await isLicensed(suspended.ownerMembership)).toBe(false);
+    expect(await isLicensed(suspended.ownerMembership)).toBe(true);
     const revoked = await firm("revoked");
-    expect(await isLicensed(revoked.ownerMembership)).toBe(false);
+    expect(await isLicensed(revoked.ownerMembership)).toBe(true);
 
-    // A licensed consultant stays licensed by role; its blocked credential is still caught by the
-    // existing licence locks (see "keeps a blocked consultant locked" below).
     await asMaintenance(db);
     await db.query(`update public.memberships set status = 'suspended' where id = $1`, [declared.consultantMembership]);
     expect(await isLicensed(declared.consultantMembership)).toBe(false);
@@ -273,9 +274,9 @@ describe("new matter and responsible consultant", () => {
     );
   });
 
-  it("refuses an owner without a credential, and an owner whose licence is suspended or revoked", async () => {
+  it("lets an owner without a credential be the consultant; refuses an owner whose licence is suspended or revoked", async () => {
     const none = await firm("none");
-    expect((await openMatter(none.owner, none.orgId, none.ownerMembership)).ok).toBe(false);
+    expect((await openMatter(none.owner, none.orgId, none.ownerMembership)).ok).toBe(true);
     expect((await openMatter(none.owner, none.orgId, none.consultantMembership)).ok).toBe(true);
 
     for (const status of ["suspended", "revoked"] as const) {
@@ -296,7 +297,7 @@ describe("new matter and responsible consultant", () => {
 });
 
 describe("regulated matter actions", () => {
-  it("lets a licensed owner file and record an outcome; refuses unlicensed and blocked owners and assistants", async () => {
+  it("lets an owner file and record an outcome with or without a credential; refuses blocked owners and assistants", async () => {
     const ctx = await firm("declared");
     const created = await openMatter(ctx.owner, ctx.orgId, ctx.ownerMembership);
     const matterId = created.id as string;
@@ -352,62 +353,52 @@ describe("regulated matter actions", () => {
     ]);
     expect(outcome.rows[0].outcome).toBe("approved");
 
-    // An owner without a credential: the consultant prepares, the owner may not file or decide.
+    // An owner without a credential files and records the outcome, as a licensed consultant would.
     const none = await firm("none");
     const noneMatter = (await openMatter(none.consultant, none.orgId, none.consultantMembership)).id as string;
     const noneReady = await walkToReady(none.consultant, none.orgId, noneMatter);
     await as(none.owner, none.orgId);
-    await expectDbError(
-      () => db.query(`select public.override_matter_stage($1, 'submitted', $2, 'Owner cannot file')`, [noneMatter, noneReady.version]),
-      /denied|42501/,
-    );
-    await expectDbError(
-      () => db.query(`select public.transition_matter_stage($1, 'submitted', $2, 'Owner cannot file')`, [noneMatter, noneReady.version]),
-      /licensed consultant/,
-    );
-    await as(none.consultant, none.orgId);
-    const consultantFiled = await db.query<{ result: { ok: boolean } }>(
+    const ownerFiled = await db.query<{ result: { ok: boolean; permitted_role: string } }>(
       `select public.override_matter_stage($1, 'submitted', $2, 'Receipt not on file') as result`,
       [noneMatter, noneReady.version],
     );
-    expect(consultantFiled.rows[0].result.ok).toBe(true);
-    await as(none.consultant, none.orgId);
+    expect(ownerFiled.rows[0].result).toMatchObject({ ok: true, permitted_role: "licensed_consultant" });
+    await as(none.owner, none.orgId);
     await db.query(
       `insert into public.matter_stage_evidence (organization_id, matter_id, kind, summary)
        values ($1, $2, 'official_decision', 'Synthetic decision letter')`,
       [none.orgId, noneMatter],
     );
     current = await matterVersion(noneMatter);
-    await as(none.consultant, none.orgId);
+    await as(none.owner, none.orgId);
     await db.query(`select public.record_government_status($1, 'decision_evidence_on_file', $2, 'Letter on file')`, [
       noneMatter,
       current.version,
     ]);
     current = await matterVersion(noneMatter);
     await as(none.owner, none.orgId);
-    await expectDbError(
-      () => db.query(`select public.record_matter_outcome($1, 'approved', $2, 'Owner')`, [noneMatter, current.version]),
-      /denied/,
-    );
+    await db.query(`select public.record_matter_outcome($1, 'approved', $2, 'Owner')`, [noneMatter, current.version]);
 
-    // A suspended owner licence: refused at the same gates.
+    // A suspended owner licence: the licence lock refuses, as for a suspended consultant. The
+    // override reports (and audits) it as a licence block.
     const blocked = await firm("suspended");
     const blockedMatter = (await openMatter(blocked.consultant, blocked.orgId, blocked.consultantMembership)).id as string;
     const blockedReady = await walkToReady(blocked.consultant, blocked.orgId, blockedMatter);
     await as(blocked.owner, blocked.orgId);
-    await expectDbError(
-      () =>
-        db.query(`select public.override_matter_stage($1, 'submitted', $2, 'Suspended owner')`, [blockedMatter, blockedReady.version]),
-      /denied|42501/,
+    const blockedOverride = await db.query<{ result: { ok: boolean; blocked?: string } }>(
+      `select public.override_matter_stage($1, 'submitted', $2, 'Suspended owner') as result`,
+      [blockedMatter, blockedReady.version],
     );
+    expect(blockedOverride.rows[0].result).toMatchObject({ ok: false, blocked: "licence" });
+    await as(blocked.owner, blocked.orgId);
     await expectDbError(
       () =>
         db.query(`select public.transition_matter_stage($1, 'submitted', $2, 'Suspended owner')`, [blockedMatter, blockedReady.version]),
-      /licensed consultant/,
+      /licence blocks/,
     );
   });
 
-  it("lets a licensed owner confirm a legal date; refuses an unlicensed owner and an assistant", async () => {
+  it("lets an owner confirm a legal date with or without a credential; refuses a revoked owner and an assistant", async () => {
     for (const licence of ["declared", "none", "revoked"] as const) {
       const ctx = await firm(licence);
       const matterId = (await openMatter(ctx.consultant, ctx.orgId, ctx.consultantMembership)).id as string;
@@ -426,7 +417,7 @@ describe("regulated matter actions", () => {
       await as(ctx.owner, ctx.orgId);
       await expectDbError(
         () => db.query(`select public.confirm_deadline($1, 1)`, [deadlineId]),
-        licence === "declared" ? pastGate : /staff access denied/,
+        licence === "revoked" ? /licence blocks/ : pastGate,
       );
       await as(ctx.consultant, ctx.orgId);
       await expectDbError(() => db.query(`select public.confirm_deadline($1, 1)`, [deadlineId]), pastGate);
@@ -437,10 +428,9 @@ describe("regulated matter actions", () => {
 });
 
 describe("licensed publishing and approvals", () => {
-  it("lets a licensed owner publish intake, approve an agreement template, and approve a rule review", async () => {
-    for (const licence of ["declared", "none", "suspended"] as const) {
+  it("lets an owner publish intake, approve an agreement template, and approve a rule review with or without a credential", async () => {
+    for (const licence of ["declared", "none"] as const) {
       const ctx = await firm(licence);
-      const licensed = licence === "declared";
 
       // Intake publishing records the licensed reviewer membership.
       const publish = (userId: string) =>
@@ -456,17 +446,13 @@ describe("licensed publishing and approvals", () => {
             ],
           );
         })();
-      if (licensed) {
-        const template = await publish(ctx.owner);
-        await asMaintenance(db);
-        const row = await db.query<{ reviewer: string; status: string }>(
-          `select reviewer_membership_id as reviewer, status::text as status from public.intake_templates where id = $1`,
-          [template.rows[0].id],
-        );
-        expect(row.rows[0]).toEqual({ reviewer: ctx.ownerMembership, status: "published" });
-      } else {
-        await expectDbError(() => publish(ctx.owner), /staff access denied/);
-      }
+      const template = await publish(ctx.owner);
+      await asMaintenance(db);
+      const row = await db.query<{ reviewer: string; status: string }>(
+        `select reviewer_membership_id as reviewer, status::text as status from public.intake_templates where id = $1`,
+        [template.rows[0].id],
+      );
+      expect(row.rows[0]).toEqual({ reviewer: ctx.ownerMembership, status: "published" });
       await expectDbError(() => publish(ctx.assistant), /staff access denied/);
       expect((await publish(ctx.consultant)).rows[0].id).toBeTruthy();
 
@@ -479,21 +465,15 @@ describe("licensed publishing and approvals", () => {
       await as(ctx.assistant, ctx.orgId);
       await expectDbError(() => db.query(`select public.approve_agreement_template($1)`, [templateId]), /denied/);
       await as(ctx.owner, ctx.orgId);
-      if (licensed) {
-        await db.query(`select public.approve_agreement_template($1)`, [templateId]);
-        await asMaintenance(db);
-        const approved = await db.query<{ status: string; approved_by: string }>(
-          `select status::text as status, approved_by from public.agreement_templates where id = $1`,
-          [templateId],
-        );
-        expect(approved.rows[0]).toEqual({ status: "approved", approved_by: ctx.ownerMembership });
-      } else {
-        await expectDbError(() => db.query(`select public.approve_agreement_template($1)`, [templateId]), /staff access denied/);
-        await as(ctx.consultant, ctx.orgId);
-        await db.query(`select public.approve_agreement_template($1)`, [templateId]);
-      }
+      await db.query(`select public.approve_agreement_template($1)`, [templateId]);
+      await asMaintenance(db);
+      const approved = await db.query<{ status: string; approved_by: string }>(
+        `select status::text as status, approved_by from public.agreement_templates where id = $1`,
+        [templateId],
+      );
+      expect(approved.rows[0]).toEqual({ status: "approved", approved_by: ctx.ownerMembership });
 
-      // An approved professional review needs a licensed reviewer membership.
+      // An approved professional review needs a licensed reviewer membership; an owner is one.
       await as(ctx.owner, ctx.orgId);
       const definition = await db.query<{ id: string }>(
         `insert into public.rule_definitions (organization_id, stable_key, category, jurisdiction)
@@ -513,8 +493,7 @@ describe("licensed publishing and approvals", () => {
           [ctx.orgId, version.rows[0].id, membershipId],
         );
       await as(ctx.owner, ctx.orgId);
-      if (licensed) await review(ctx.ownerMembership);
-      else await expectDbError(() => review(ctx.ownerMembership), /licensed_consultant/);
+      await review(ctx.ownerMembership);
       await as(ctx.consultant, ctx.orgId);
       await review(ctx.consultantMembership);
     }
@@ -545,7 +524,8 @@ describe("reassigning consultant matters", () => {
         ]),
       /verified licence/,
     );
-    // An owner with no credential is neither a source nor a receiver.
+    // Client-facing authority moves only to a register-verified licence, for an owner as for a
+    // consultant; an owner with no credential is not a receiver, nor a source.
     const none = await firm("none");
     await as(none.owner, none.orgId);
     await expectDbError(
@@ -554,7 +534,7 @@ describe("reassigning consultant matters", () => {
           none.consultantMembership,
           none.ownerMembership,
         ]),
-      /reassignment denied/,
+      /verified licence/,
     );
     await expectDbError(
       () =>
@@ -570,7 +550,7 @@ describe("reassigning consultant matters", () => {
     const soloMatter = await openMatter(solo.owner, solo.orgId, solo.ownerMembership);
     expect(soloMatter.ok).toBe(true);
     await recordCheck(solo.owner, solo.orgId, solo.ownerCredential as string, { suspended: true });
-    expect(await isLicensed(solo.ownerMembership)).toBe(false);
+    expect(await isLicensed(solo.ownerMembership)).toBe(true);
     await as(solo.owner, solo.orgId);
     const handed = await db.query<{ moved: number }>(
       `select public.reassign_consultant_matters($1, $2, 'Owner licence is suspended') as moved`,
@@ -589,16 +569,12 @@ describe("isLicensedMembership (app side)", () => {
     entitlement_to_practise: null,
   };
 
-  it("mirrors app.membership_is_licensed for an active membership", () => {
+  it("mirrors app.membership_is_licensed for an active membership: licensed consultants and owners by role", () => {
     expect(isLicensedMembership("licensed_consultant", null)).toBe(true);
     expect(isLicensedMembership("firm_owner", clean)).toBe(true);
-    expect(isLicensedMembership("firm_owner", { ...clean, status: "verified", register_status: "active", entitlement_to_practise: true })).toBe(true);
-    expect(isLicensedMembership("firm_owner", null)).toBe(false);
-    expect(isLicensedMembership("firm_owner", { ...clean, status: "suspended" })).toBe(false);
-    expect(isLicensedMembership("firm_owner", { ...clean, status: "revoked" })).toBe(false);
-    expect(isLicensedMembership("firm_owner", { ...clean, discipline_suspended: true })).toBe(false);
-    expect(isLicensedMembership("firm_owner", { ...clean, register_status: "inactive" })).toBe(false);
-    expect(isLicensedMembership("firm_owner", { ...clean, entitlement_to_practise: false })).toBe(false);
+    expect(isLicensedMembership("firm_owner", null)).toBe(true);
+    // A blocked credential is refused by the database's licence locks, not by this check.
+    expect(isLicensedMembership("firm_owner", { ...clean, status: "suspended" })).toBe(true);
     expect(isLicensedMembership("assistant", clean)).toBe(false);
     expect(isLicensedMembership("case_manager", clean)).toBe(false);
   });

@@ -331,8 +331,9 @@ describe("the firm countersigns", () => {
   it("refuses an unlicensed or lapsed consultant as the countersigner", async () => {
     const ctx = await firm();
 
-    // A case manager, or an owner without a CICC licence, cannot be the consultant signer.
-    for (const membershipId of [ctx.managerMembership, ctx.ownerMembership]) {
+    // A case manager cannot be the consultant signer. (A firm owner can, with or without a CICC
+    // licence on file: owners are regulated consultants, decision 2026-10-19.)
+    for (const membershipId of [ctx.managerMembership]) {
       const agreementId = await ctx.draft();
       await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
       await expectDbError(
