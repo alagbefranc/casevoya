@@ -48,9 +48,10 @@ describe("Licences page", () => {
   it("shows a declared licence as waiting, says truthfully what is locked, and never invents proof", () => {
     const [, card] = licenceCards([OWNER, CONSULTANT], [credential({})], [], CONTEXT);
     expect(card.state).toEqual({ tone: "rev", label: "Waiting for check" });
-    expect(card.rows.find((row) => row.label === "Until checked")?.value).toBe("Can work on files. Your firm can’t invite real clients until one licence is checked.");
+    expect(card.rows.find((row) => row.label === "Until checked")?.value).toBe("Can work on files and invite real clients. The number is checked against the CICC register list.");
     expect(card.proof).toEqual({ kind: "none", text: "No proof file yet. The reviewer keeps their own register evidence with the check." });
-    expect(card.footer.note?.text).toBe("Usually checked within 1 business day");
+    expect(card.footer.note?.text).toBe("The number is checked against the CICC register list");
+    expect(JSON.stringify(card)).not.toMatch(/business day|by hand/);
     expect(card.source).toBeNull();
   });
 

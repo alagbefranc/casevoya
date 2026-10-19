@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { staffPerson } from "@/modules/sheet/avatar";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { roleLabel } from "@/modules/sheet/present";
+import { loadSheetSetup } from "@/modules/sheet/setup-load";
 
 export type SheetChrome = { sidebar: SidebarData; top: TopBarData; statusbar: StatusbarData };
 
@@ -52,7 +53,7 @@ export async function loadSheetChrome(staff: SheetStaff, active: string): Promis
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
   const count = { count: "exact" as const, head: true };
-  const [matterCount, recentMatters, openCount, unsorted, voDrafts] = await Promise.all([
+  const [matterCount, recentMatters, openCount, unsorted, voDrafts, setup] = await Promise.all([
     supabase.from("matters").select("id", count).eq("organization_id", org).neq("stage", "closed"),
     supabase.from("matters").select("id").eq("organization_id", org).order("updated_at", { ascending: false }).limit(2),
     supabase.from("tasks").select("id", count).eq("organization_id", org).in("status", [...OPEN_TASK]),
@@ -60,6 +61,8 @@ export async function loadSheetChrome(staff: SheetStaff, active: string): Promis
     supabase.from("inbound_emails").select("id", count).eq("organization_id", org).eq("triage_state", "open"),
     // Vo drafts waiting for a person on matters this staff member can read.
     supabase.from("vo_drafts").select("id", count).eq("organization_id", org).eq("status", "draft"),
+    // Sample mode: what is left before the firm can go live, for the Finish setup banner.
+    loadSheetSetup(supabase, staff),
   ]);
   const pinned = (recentMatters.data ?? []).map((row) => row.id);
   const name = await matterNames(supabase, org, pinned);
@@ -78,6 +81,7 @@ export async function loadSheetChrome(staff: SheetStaff, active: string): Promis
     statusbar: {
       timezone: staff.timezone,
       sample: staff.sampleMode ? { label: "Sample mode", detail: "practice records are marked sample" } : null,
+      setup: setup?.banner ?? null,
     },
   };
 }

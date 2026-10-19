@@ -1,8 +1,10 @@
 /**
  * Pure helpers for the Sheet's Licences page: the firm's staff and their CICC credentials in the
- * Designer's words. A licence check is a manual check of the CICC public register recorded by a
- * reviewer (RULES.md, decision 2026-10-17); nothing here contacts the register.
+ * Designer's words. A licence check is either a match against the CICC register list Casevoya
+ * imports from the College (decision 2026-10-19) or a manual check of the CICC public register
+ * recorded by a reviewer (RULES.md, decision 2026-10-17); nothing here contacts the register.
  */
+import { CICC_PUBLIC_REGISTER_URL } from "@/modules/firm-onboarding/licence";
 import type { LicenceCard, LicenceDialogsData, LicenceLogEntry, LicenceValue } from "@/components/sheet/designer/licence";
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import { staffPerson } from "@/modules/sheet/avatar";
@@ -33,6 +35,8 @@ export type LicenceCredential = {
   collegeId: string;
   scopeNote: string | null;
   status: string;
+  /** manual_public_register, cicc_list, or null before any check. */
+  verificationMethod?: string | null;
   proofLocator: string | null;
   sourceUrl: string | null;
   registerStatus: string | null;
@@ -61,7 +65,7 @@ export type LicenceContext = {
   now: Date;
   /** licence.recheck_interval in months, when it is a whole number of months. */
   recheckMonths: number | null;
-  /** licence.manual_check_target, "1 business day". */
+  /** licence.manual_check_target, "1 business day". No longer shown: the number is checked against the CICC list. */
   checkTarget: string | null;
   firmHasVerifiedLicence: boolean;
   viewerIsOwner: boolean;
@@ -71,6 +75,7 @@ const BLOCKED = new Set(["revoked", "suspended", "inactive", "not_entitled"]);
 
 const RESULT_LABEL: Record<string, string> = {
   verified: "confirmed active",
+  needs_review: "needs review",
   suspended: "suspended",
   revoked: "revoked",
   inactive: "inactive on the register",
@@ -122,11 +127,11 @@ function stateOf(credential: LicenceCredential): MatterBadge {
   return { tone: "rev", label: "Waiting for check" };
 }
 
-function untilChecked(context: LicenceContext): string {
-  return context.firmHasVerifiedLicence
-    ? "Can work on files. The check confirms good standing on the register."
-    : "Can work on files. Your firm can’t invite real clients until one licence is checked.";
-}
+/** What a licence on file allows before its check (decision 2026-10-19: a declared licence is enough). */
+export const UNTIL_CHECKED = "Can work on files and invite real clients. The number is checked against the CICC register list.";
+
+/** The footer note on a licence waiting for its check (was "Usually checked within 1 business day"). */
+export const CHECK_NOTE = "The number is checked against the CICC register list";
 
 function nextReview(credential: LicenceCredential, context: LicenceContext): LicenceValue | null {
   if (!credential.nextReviewAt) return null;
@@ -136,6 +141,20 @@ function nextReview(credential: LicenceCredential, context: LicenceContext): Lic
 }
 
 function sourceOf(credential: LicenceCredential, reviewer: string, context: LicenceContext): LicenceCard["source"] {
+  if (credential.checkedAt && credential.verificationMethod === "cicc_list") {
+    const imported = longDate(isoDateInTimeZone(new Date(credential.checkedAt), context.timeZone));
+    const register = credential.registerStatus === "active" ? "Active" : credential.registerStatus === "inactive" ? "Inactive" : "as listed";
+    return {
+      publisher: CICC,
+      url: CICC_PUBLIC_REGISTER_URL,
+      linkText: "CICC public register",
+      appliesTo: `Licence ${credential.collegeId}, class ${credential.scopeNote === "RCIC-IRB" ? "RCIC-IRB" : credential.licenceType}, status “${register}” on the CICC register list`,
+      version: `CICC register list imported ${imported}`,
+      checked: dateTimeLabel(credential.checkedAt, context.timeZone),
+      reviewer,
+      state: credential.status === "verified" ? { tone: "ok", label: "Checked" } : { tone: "bad", label: STATE_LABEL[credential.status] ?? "Checked" },
+    };
+  }
   if (!credential.checkedAt || !credential.sourceUrl) return null;
   const checked = dateTimeLabel(credential.checkedAt, context.timeZone);
   const register = credential.registerStatus === "active" ? "Active" : credential.registerStatus === "inactive" ? "Inactive" : "not recorded";
@@ -229,7 +248,7 @@ export function licenceCard(member: LicenceMember, credential: LicenceCredential
 
   if (credential.status === "declared" || !credential.checkedAt) {
     rows.push({ label: "Submitted", value: { num: dateTimeLabel(credential.declaredAt, context.timeZone) } });
-    rows.push({ label: "Until checked", value: untilChecked(context) });
+    rows.push({ label: "Until checked", value: UNTIL_CHECKED });
     return {
       ...base,
       sub,
@@ -238,7 +257,7 @@ export function licenceCard(member: LicenceMember, credential: LicenceCredential
       rows,
       proof: proofOf(credential, name, context),
       source: null,
-      footer: context.checkTarget ? { note: { icon: "clock", text: `Usually checked within ${context.checkTarget}` } } : {},
+      footer: { note: { icon: "clock", text: CHECK_NOTE } },
     };
   }
 
@@ -282,9 +301,8 @@ export function licenceCards(
     });
 }
 
-export function licenceIntro(context: LicenceContext): string {
-  const cadence = context.recheckMonths === 1 ? "We check again every month" : "We check again on a set schedule";
-  return `Each consultant’s licence is checked by hand against the CICC public register; Casevoya doesn’t connect to the register. Your firm can invite real clients once one licence is checked. ${cadence}, and whenever a change is reported.`;
+export function licenceIntro(): string {
+  return "Each consultant’s licence number is checked against the CICC register list, which Casevoya imports from the College; Casevoya doesn’t connect to the register. A licence on file is enough to invite real clients; a revoked or suspended licence pauses that. We check again each time a new list is imported, and whenever a change is reported.";
 }
 
 export function licenceLog(rows: readonly LicenceLogRow[], timeZone: string): LicenceLogEntry[] {

@@ -19,20 +19,24 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+type SetupLicence = { number: string; className: "RCIC" | "RCIC-IRB" };
+
 function SetupScreen({
   codes,
   firmName,
   logo,
   accent,
+  licence = null,
 }: {
   codes: string[];
   firmName: string;
   logo: FirmLogo | null;
   accent: string | null;
+  licence?: SetupLicence | null;
 }) {
   return (
     <PortScreen page="setup" variant="wzb">
-      <SetupMarkup jurisdictionCodes={codes} firmName={firmName} logo={logo} accent={accent} />
+      <SetupMarkup jurisdictionCodes={codes} firmName={firmName} logo={logo} accent={accent} licence={licence} />
     </PortScreen>
   );
 }
@@ -55,6 +59,7 @@ async function SavedSetup() {
   let firmName = "";
   let logo: FirmLogo | null = null;
   let accent: string | null = null;
+  let licence: SetupLicence | null = null;
   if (hasPublicSupabaseEnv()) {
     const supabase = await createClient();
     const { data: claims } = await supabase.auth.getClaims();
@@ -62,7 +67,7 @@ async function SavedSetup() {
     if (userId) {
       const { data: membership } = await supabase
         .from("memberships")
-        .select("organization_id")
+        .select("id, organization_id")
         .eq("user_id", userId)
         .eq("role", "firm_owner")
         .eq("status", "active")
@@ -80,10 +85,18 @@ async function SavedSetup() {
         if (org) logo = await savedLogo(org.branding, membership.organization_id);
         // Saving Branding sends the colour shown, so the saved one must be shown, not reset.
         if (org) accent = brandingAccent(org.branding);
+        // The licence declared at sign-up fills "Your licence".
+        const { data: credential } = await scoped
+          .from("consultant_credentials")
+          .select("college_id, licence_type, scope_note")
+          .eq("organization_id", membership.organization_id)
+          .eq("membership_id", membership.id)
+          .maybeSingle();
+        if (credential?.licence_type === "RCIC") licence = { number: credential.college_id, className: credential.scope_note === "RCIC-IRB" ? "RCIC-IRB" : "RCIC" };
       }
     }
   }
-  return <SetupScreen codes={codes} firmName={firmName} logo={logo} accent={accent} />;
+  return <SetupScreen codes={codes} firmName={firmName} logo={logo} accent={accent} licence={licence} />;
 }
 
 export default function SetupPage() {

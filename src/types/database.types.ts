@@ -766,6 +766,95 @@ export type Database = {
         }
         Relationships: []
       }
+      cicc_register_entries: {
+        Row: {
+          college_fields: Json
+          created_at: string
+          entitlement: string | null
+          first_name: string | null
+          full_name: string
+          id: string
+          import_id: string
+          last_name: string | null
+          licence_class: string | null
+          licence_number: string
+          licence_number_raw: string
+          status: string
+        }
+        Insert: {
+          college_fields?: Json
+          created_at?: string
+          entitlement?: string | null
+          first_name?: string | null
+          full_name: string
+          id?: string
+          import_id: string
+          last_name?: string | null
+          licence_class?: string | null
+          licence_number: string
+          licence_number_raw: string
+          status: string
+        }
+        Update: {
+          college_fields?: Json
+          created_at?: string
+          entitlement?: string | null
+          first_name?: string | null
+          full_name?: string
+          id?: string
+          import_id?: string
+          last_name?: string | null
+          licence_class?: string | null
+          licence_number?: string
+          licence_number_raw?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cicc_register_entries_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "cicc_register_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cicc_register_imports: {
+        Row: {
+          completed_at: string | null
+          file_locator: string | null
+          file_sha256: string | null
+          id: string
+          imported_at: string
+          imported_by: string
+          row_count: number
+          source_note: string
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          file_locator?: string | null
+          file_sha256?: string | null
+          id?: string
+          imported_at?: string
+          imported_by: string
+          row_count?: number
+          source_note: string
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          file_locator?: string | null
+          file_sha256?: string | null
+          id?: string
+          imported_at?: string
+          imported_by?: string
+          row_count?: number
+          source_note?: string
+          status?: string
+        }
+        Relationships: []
+      }
       client_account_reconciliations: {
         Row: {
           client_account_id: string
@@ -1610,66 +1699,86 @@ export type Database = {
       }
       credential_checks: {
         Row: {
+          cicc_entry_id: string | null
+          cicc_import_id: string | null
           created_at: string
           credential_id: string
-          discipline_restricted: boolean
+          discipline_restricted: boolean | null
           discipline_restriction_detail: string | null
-          discipline_revoked: boolean
-          discipline_suspended: boolean
-          entitlement_to_practise: boolean
+          discipline_revoked: boolean | null
+          discipline_suspended: boolean | null
+          entitlement_to_practise: boolean | null
           id: string
           method: string
           notes: string | null
           organization_id: string
-          proof_locator: string
-          register_status: Database["public"]["Enums"]["register_licence_status"]
+          proof_locator: string | null
+          register_status: Database["public"]["Enums"]["register_licence_status"] | null
           result: Database["public"]["Enums"]["licence_check_result"]
           retrieved_at: string
           reviewer_user_id: string
-          source_host: string
-          source_url: string
+          source_host: string | null
+          source_url: string | null
         }
         Insert: {
+          cicc_entry_id?: string | null
+          cicc_import_id?: string | null
           created_at?: string
           credential_id: string
-          discipline_restricted: boolean
+          discipline_restricted?: boolean | null
           discipline_restriction_detail?: string | null
-          discipline_revoked: boolean
-          discipline_suspended: boolean
-          entitlement_to_practise: boolean
+          discipline_revoked?: boolean | null
+          discipline_suspended?: boolean | null
+          entitlement_to_practise?: boolean | null
           id?: string
           method?: string
           notes?: string | null
           organization_id: string
-          proof_locator: string
-          register_status: Database["public"]["Enums"]["register_licence_status"]
+          proof_locator?: string | null
+          register_status?: Database["public"]["Enums"]["register_licence_status"] | null
           result: Database["public"]["Enums"]["licence_check_result"]
           retrieved_at: string
           reviewer_user_id: string
-          source_host: string
-          source_url: string
+          source_host?: string | null
+          source_url?: string | null
         }
         Update: {
+          cicc_entry_id?: string | null
+          cicc_import_id?: string | null
           created_at?: string
           credential_id?: string
-          discipline_restricted?: boolean
+          discipline_restricted?: boolean | null
           discipline_restriction_detail?: string | null
-          discipline_revoked?: boolean
-          discipline_suspended?: boolean
-          entitlement_to_practise?: boolean
+          discipline_revoked?: boolean | null
+          discipline_suspended?: boolean | null
+          entitlement_to_practise?: boolean | null
           id?: string
           method?: string
           notes?: string | null
           organization_id?: string
-          proof_locator?: string
-          register_status?: Database["public"]["Enums"]["register_licence_status"]
+          proof_locator?: string | null
+          register_status?: Database["public"]["Enums"]["register_licence_status"] | null
           result?: Database["public"]["Enums"]["licence_check_result"]
           retrieved_at?: string
           reviewer_user_id?: string
-          source_host?: string
-          source_url?: string
+          source_host?: string | null
+          source_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "credential_checks_cicc_entry_id_fkey"
+            columns: ["cicc_entry_id"]
+            isOneToOne: false
+            referencedRelation: "cicc_register_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credential_checks_cicc_import_id_fkey"
+            columns: ["cicc_import_id"]
+            isOneToOne: false
+            referencedRelation: "cicc_register_imports"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "credential_checks_credential_id_organization_id_fkey"
             columns: ["credential_id", "organization_id"]
@@ -9279,6 +9388,26 @@ export type Database = {
         }
         Returns: undefined
       }
+      check_licence_against_cicc_list: {
+        Args: { p_credential_id: string }
+        Returns: string
+      }
+      cicc_needs_review_credentials: {
+        Args: never
+        Returns: {
+          checked_at: string
+          check_id: string
+          college_id: string
+          credential_id: string
+          credential_status: Database["public"]["Enums"]["credential_status"]
+          firm_name: string
+          holder_name: string | null
+          import_id: string
+          licence_type: Database["public"]["Enums"]["licence_type"]
+          organization_id: string
+          reason: string | null
+        }[]
+      }
       claim_due_reminders: {
         Args: { p_as_of: string; p_limit: number }
         Returns: string[]
@@ -9526,6 +9655,51 @@ export type Database = {
         }
         Returns: string
       }
+      create_firm_with_licence: {
+        Args: {
+          college_id: string
+          display_name: string
+          legal_name: string
+          licence_class: string
+          licence_type: Database["public"]["Enums"]["licence_type"]
+          slug: string
+        }
+        Returns: {
+          age_of_majority_years: number
+          billing_contact_email: string | null
+          billing_contact_name: string | null
+          branding: Json
+          continuity_contact_email: string | null
+          continuity_contact_name: string | null
+          created_at: string
+          created_by: string | null
+          default_locale: string
+          display_name: string
+          dpa_accepted_at: string | null
+          dpa_version: string | null
+          id: string
+          jurisdiction_codes: string[]
+          legal_name: string
+          privacy_contact_email: string | null
+          privacy_contact_name: string | null
+          retention_policy: Json | null
+          sample_mode: boolean
+          slug: string
+          subscription_terms_accepted_at: string | null
+          subscription_terms_version: string | null
+          succession_note: string | null
+          timezone: string
+          updated_at: string
+          verification_status: Database["public"]["Enums"]["org_verification_status"]
+          version: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organizations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_organization: {
         Args: { display_name: string; legal_name: string; slug: string }
         Returns: {
@@ -9706,6 +9880,10 @@ export type Database = {
         Args: { p_email_id: string; p_matter_id: string; p_person_id: string }
         Returns: Json
       }
+      finish_cicc_register_import: {
+        Args: { p_import_id: string }
+        Returns: Json
+      }
       finish_email_delivery: {
         Args: {
           p_delivery_id: string
@@ -9788,6 +9966,10 @@ export type Database = {
       generate_recovery_codes: {
         Args: never
         Returns: string[]
+      }
+      import_cicc_register: {
+        Args: { p_import_id: string; p_rows: Json }
+        Returns: number
       }
       import_leads: {
         Args: {
@@ -10735,6 +10917,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_credential_proof: {
+        Args: { p_credential_id: string; p_proof_locator: string }
+        Returns: string
+      }
       set_credential_valid_until: {
         Args: { p_credential_id: string; p_valid_until: string | null }
         Returns: string
@@ -10893,6 +11079,15 @@ export type Database = {
           p_parsed_digest: string
           p_row_count: number
           p_source_sha256: string
+        }
+        Returns: string
+      }
+      start_cicc_register_import: {
+        Args: {
+          p_file_locator: string
+          p_file_sha256: string
+          p_imported_by?: string
+          p_source_note: string
         }
         Returns: string
       }
@@ -11321,7 +11516,7 @@ export type Database = {
         | "csv_import"
         | "other"
       lead_stage_kind: "open" | "converted" | "lost" | "archived"
-      licence_check_result: "verified" | "not_entitled" | "inactive" | "suspended" | "revoked"
+      licence_check_result: "verified" | "not_entitled" | "inactive" | "suspended" | "revoked" | "needs_review"
       licence_type: "RCIC" | "RISIA"
       matter_export_status: "building" | "ready" | "failed" | "cancelled"
       matter_outcome:
@@ -11730,7 +11925,7 @@ export const Constants = {
         "records_and_retention",
         "sample_case",
       ],
-      licence_check_result: ["verified", "not_entitled", "inactive", "suspended", "revoked"],
+      licence_check_result: ["verified", "not_entitled", "inactive", "suspended", "revoked", "needs_review"],
       licence_type: ["RCIC", "RISIA"],
       register_licence_status: ["active", "inactive"],
       sample_proof_step: ["intake", "agreement", "upload", "reminder", "invoice", "export"],

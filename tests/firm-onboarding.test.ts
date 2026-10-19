@@ -165,26 +165,19 @@ describe("setup steps", () => {
     expect(
       realClientInviteBlockers({
         verificationStatus: "verified",
-        hasVerifiedLicence: true,
-        completedSampleSteps: [...SAMPLE_PROOF_STEPS],
+        ownerLicence: "ok",
         subscriptionStatus: "trial_ended",
       }),
     ).toEqual(["trial_ended"]);
-    expect(
-      realClientInviteBlockers({
-        verificationStatus: "pending_review",
-        hasVerifiedLicence: false,
-        completedSampleSteps: ["intake"],
-      }),
-    ).toEqual([
-      "firm_unverified",
-      "licence_not_verified",
-      "sample_step_missing:agreement",
-      "sample_step_missing:upload",
-      "sample_step_missing:reminder",
-      "sample_step_missing:invoice",
-      "sample_step_missing:export",
+    // Firms start live (2026-10-19): a declared owner licence is enough, no practice steps.
+    expect(realClientInviteBlockers({ verificationStatus: "pending_review", ownerLicence: "ok" })).toEqual([]);
+    expect(realClientInviteBlockers({ verificationStatus: "unverified", ownerLicence: "missing" })).toEqual(["owner_licence_missing"]);
+    expect(realClientInviteBlockers({ verificationStatus: "restricted", ownerLicence: "blocked", subscriptionStatus: "trial_ended" })).toEqual([
+      "firm_restricted",
+      "owner_licence_blocked",
+      "trial_ended",
     ]);
+    expect(realClientInviteBlockers({ verificationStatus: null, ownerLicence: "ok" })).toEqual(["firm_not_found"]);
   });
 });
 

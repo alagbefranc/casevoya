@@ -262,9 +262,8 @@ describe("portal invitations", () => {
     const realInvite = await invite(consultant, orgId, realPerson, realMatter, "client", email("real"));
     expect(realInvite.ok).toBe(false);
     expect(realInvite.error).toBe("real_client_invitations_locked");
-    expect(realInvite.blockers).toEqual(
-      expect.arrayContaining(["firm_unverified", "licence_not_verified", "sample_step_missing:export"]),
-    );
+    // A firm made without the owner's licence (2026-10-19: a declared owner licence is enough).
+    expect(realInvite.blockers).toEqual(["owner_licence_missing"]);
   });
 
   it("refuses a minor login and records guardian authority only for a minor subject", async () => {
