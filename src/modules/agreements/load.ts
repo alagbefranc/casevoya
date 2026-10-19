@@ -31,6 +31,22 @@ export type PortalAgreement = {
   canAccept: boolean;
   needsStepUp: boolean;
   signers: AgreementSignerView[];
+  /** A quote's own fields: services, deliverables, fee structure, expiry, priced lines and instalments (cents). */
+  quote: QuoteView | null;
+};
+
+export type QuoteLine = { id: string; category: string; description: string; amountCents: number; sourceNote: string | null; enteredOn: string | null };
+export type QuoteInstalment = { id: string; label: string; amountCents: number; paidAs: string };
+export type QuoteView = {
+  services: string | null;
+  deliverables: string | null;
+  feeStructure: string | null;
+  expiresOn: string | null;
+  acceptedAt: string | null;
+  lines: QuoteLine[];
+  instalments: QuoteInstalment[];
+  /** Every line but government fees, in cents. */
+  totalCents: number;
 };
 
 export type PortalAgreements = {
@@ -50,6 +66,9 @@ type VersionRow = {
   currency: string;
   government_fee_note: string | null;
   content_sha256: string | null;
+  services: string | null;
+  deliverables: string | null;
+  fee_structure: string | null;
 };
 
 type EnvelopeRow = {
@@ -77,12 +96,12 @@ export async function loadPortalAgreements(viewer: PortalViewer): Promise<Portal
   const supabase = await createClient({ organizationId: viewer.organizationId });
   const { data: claims } = await supabase.auth.getClaims();
   const userId = claims?.claims?.sub;
-  const [{ data: agreements }, { data: versions }, { data: envelopes }, { data: signers }, { data: memberships }, { data: consent }] =
+  const [{ data: agreements }, { data: versions }, { data: envelopes }, { data: signers }, { data: memberships }, { data: consent }, { data: quoteLines }, { data: quoteInstalments }] =
     await Promise.all([
-      supabase.from("agreements").select("id, matter_id, title, kind, status, current_version_id").limit(40),
+      supabase.from("agreements").select("id, matter_id, title, kind, status, current_version_id, quote_expires_on, accepted_at").limit(40),
       supabase
         .from("agreement_versions")
-        .select("id, agreement_id, scope_summary, exclusions, refund_policy, comparison_note, fee_cents, currency, government_fee_note, content_sha256")
+        .select("id, agreement_id, scope_summary, exclusions, refund_policy, comparison_note, fee_cents, currency, government_fee_note, content_sha256, services, deliverables, fee_structure")
         .limit(80),
       supabase.from("signature_envelopes").select("id, agreement_id, version_id, status, sent_at").order("sent_at", { ascending: false }).limit(80),
       supabase
@@ -94,6 +113,9 @@ export async function loadPortalAgreements(viewer: PortalViewer): Promise<Portal
         ? supabase.from("memberships").select("id").eq("user_id", userId).eq("status", "active").limit(10)
         : Promise.resolve({ data: [] as { id: string }[] }),
       supabase.from("product_settings").select("value").eq("key", "agreements.esign_consent").maybeSingle(),
+      // A quote's priced lines and instalments (RLS: the quote's matter parties and the firm's staff).
+      supabase.from("quote_lines").select("id, agreement_version_id, position, category, description, amount_cents, source_note, entered_on").order("position").limit(400),
+      supabase.from("quote_instalments").select("id, agreement_version_id, position, label, amount_cents, paid_as").order("position").limit(200),
     ]);
 
   const versionById = new Map((versions ?? []).map((row) => [row.id, row as VersionRow]));
@@ -121,6 +143,28 @@ export async function loadPortalAgreements(viewer: PortalViewer): Promise<Portal
     const canSign = Boolean(
       current && ((personId && current.person_id === personId) || (current.membership_id && mine.has(current.membership_id))),
     );
+    const lines = version ? (quoteLines ?? []).filter((row) => row.agreement_version_id === version.id) : [];
+    const instalments = version ? (quoteInstalments ?? []).filter((row) => row.agreement_version_id === version.id) : [];
+    const quote: QuoteView | null =
+      agreement.kind === "quote"
+        ? {
+            services: version?.services ?? null,
+            deliverables: version?.deliverables ?? null,
+            feeStructure: version?.fee_structure ?? null,
+            expiresOn: agreement.quote_expires_on ?? null,
+            acceptedAt: agreement.accepted_at ?? null,
+            lines: lines.map((row) => ({
+              id: row.id,
+              category: row.category,
+              description: row.description,
+              amountCents: Math.trunc(Number(row.amount_cents)) || 0,
+              sourceNote: row.source_note,
+              enteredOn: row.entered_on,
+            })),
+            instalments: instalments.map((row) => ({ id: row.id, label: row.label, amountCents: Math.trunc(Number(row.amount_cents)) || 0, paidAs: row.paid_as })),
+            totalCents: lines.filter((row) => row.category !== "government_fee").reduce((sum, row) => sum + (Math.trunc(Number(row.amount_cents)) || 0), 0),
+          }
+        : null;
     cards.push({
       id: agreement.id,
       matterId: agreement.matter_id,
@@ -147,6 +191,7 @@ export async function loadPortalAgreements(viewer: PortalViewer): Promise<Portal
         order: row.signing_order,
         signedAt: row.signed_at,
       })),
+      quote,
     });
   }
 

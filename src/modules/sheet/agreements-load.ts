@@ -17,6 +17,8 @@ import type {
   EnvelopeStep,
   EnvelopeViewData,
 } from "@/components/sheet/designer/agreements-live";
+import type { CompareViewData } from "@/components/sheet/designer/agreements-compare";
+import type { AgreementsPickData, NewQuoteDialogData } from "@/components/sheet/designer/agreements-quote";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { isLicensedMembership, LICENCE_FACT_COLUMNS } from "@/lib/tenant/roles";
@@ -27,7 +29,6 @@ import {
   agreementFlags,
   agreementPdfHref,
   agreementsTab,
-  type AgreementsTabKey,
   AUTHORITY_NEEDED,
   authorityBadge,
   authorityStillNeeded,
@@ -43,6 +44,17 @@ import {
   signersFor,
   templateDefaults,
 } from "@/modules/sheet/agreements-present";
+import {
+  type AgreementsContext,
+  type EditorViewLoad,
+  loadCompareView,
+  loadEditorView,
+  loadQuoteView,
+  newQuoteDialogData,
+  pickList,
+  type QuoteViewLoad,
+} from "@/modules/sheet/agreements-views-load";
+import { agreementViewHref } from "@/modules/sheet/agreements-views-present";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import { dayMonth } from "@/modules/sheet/home-present";
 import { sentWhen } from "@/modules/sheet/inbox-present";
@@ -84,7 +96,7 @@ export async function loadSheetAgreements(staff: SheetStaff, query: SheetQuery =
       .eq("organization_id", org)
       .order("updated_at", { ascending: false })
       .limit(AGREEMENTS_READ),
-    supabase.from("agreement_templates").select("id, kind, name, status, version").eq("organization_id", org).order("created_at").limit(200),
+    supabase.from("agreement_templates").select("id, kind, name, status, version, approved_at").eq("organization_id", org).order("created_at").limit(200),
     supabase
       .from("matters")
       .select("id, reference, title, stage, is_sample, responsible_consultant_membership_id")
@@ -214,8 +226,9 @@ export async function loadSheetAgreements(staff: SheetStaff, query: SheetQuery =
       flags: agreementFlags(row.status, row.kind),
       client: { name: clientOf(row.matter_id) },
       matter: referenceOf(row.matter_id),
-      // The agreement's own view: its envelope, signers, events and signed copies.
-      record: { href: agreementEnvelopeHref(row.id), left: row.title, right: number ? `v${number}` : kindLabel(row.kind) },
+      // The agreement's own view: a quote in the Quote builder, an unsent draft in the Agreement
+      // editor, anything sent in Envelope (signers, events, signed copies).
+      record: { href: agreementViewHref(row, Boolean(envelope)), left: row.title, right: number ? `v${number}` : kindLabel(row.kind) },
       state: turn ? COUNTERSIGN_BADGE : agreementBadge(row.status, row.kind),
       signed: count ? `${count.signed} of ${count.total}` : "—",
       date,
@@ -294,7 +307,9 @@ export async function loadSheetAgreements(staff: SheetStaff, query: SheetQuery =
   };
 
   const signable = matterRows.filter((row) => signersFor(partiesOf.get(row.id) ?? [], personName).length > 0);
-  const header: AgreementsHeaderData = { records: rows.length, waiting: waiting.length, create: "New agreement", tab };
+  // The Designer's header button is New quote; on the Quote builder tab it opens the live New
+  // quote dialog, elsewhere the New agreement dialog (both are the Designer's #dlgNewQ).
+  const header: AgreementsHeaderData = { records: rows.length, waiting: waiting.length, create: tab === "quote" ? "New quote" : "New agreement", tab };
   const templateOptions = approved.map((row) => ({ value: row.id, left: `${row.name} · ${kindLabel(row.kind)}`, defaults: defaultsFor(row.id) }));
   const firstDefaults = templateOptions[0]?.defaults ?? templateDefaults(null);
   const currencies = [...new Set<string>([...AGREEMENT_CURRENCIES, ...templateOptions.map((option) => option.defaults.currency)])];
@@ -348,7 +363,44 @@ export async function loadSheetAgreements(staff: SheetStaff, query: SheetQuery =
     });
   }
   let envelope: { page: EnvelopeViewData; voidDialog: { organizationId: string; envelopeId: string; who: string } | null } | null = null;
-  let pending: AgreementsPendingData | null = PENDING[tab] ?? null;
+  let pending: AgreementsPendingData | null = null;
+  // Quote builder, Agreement editor and Compare versions: one agreement (`?view=<id>`), or the
+  // list to pick from. The Quote builder's New quote dialog needs a matter with an applicant.
+  const viewId = query.view && isUuid(query.view) ? query.view : null;
+  const views: AgreementsContext = {
+    clientOf,
+    referenceOf,
+    matterTitleOf: (matterId) => matterRef.get(matterId)?.title || "Matter",
+    templates: templateRows,
+    envelopeOf: (agreementId) => latest.get(agreementId),
+    canQuote: QUOTE_ROLES.has(role),
+    canEdit: SEND_ROLES.has(role),
+    today,
+  };
+  let quote: QuoteViewLoad | null = null;
+  let editor: EditorViewLoad | null = null;
+  let compare: { page: CompareViewData } | null = null;
+  let pick: AgreementsPickData | null = null;
+  let newQuote: NewQuoteDialogData | null = null;
+  if (tab === "quote" || tab === "editor" || tab === "compare") {
+    if (viewId) {
+      if (tab === "quote") quote = await loadQuoteView(supabase, staff, viewId, views);
+      else if (tab === "editor") editor = await loadEditorView(supabase, staff, viewId, views);
+      else compare = await loadCompareView(supabase, staff, viewId, views);
+    }
+    if (!quote && !editor && !compare) {
+      pick = pickList(
+        tab,
+        rows,
+        (agreementId) => {
+          const row = rows.find((candidate) => candidate.id === agreementId);
+          return row?.current_version_id ? versionNumber.get(row.current_version_id) : undefined;
+        },
+        views,
+      );
+    }
+    if (tab === "quote") newQuote = newQuoteDialogData(staff, dialog.matters.map((option) => ({ value: option.value ?? "", left: option.left })), views);
+  }
   if (tab === "envelope") {
     const agreementId = query.view && isUuid(query.view) ? query.view : null;
     envelope = agreementId
@@ -362,44 +414,15 @@ export async function loadSheetAgreements(staff: SheetStaff, query: SheetQuery =
       : null;
     if (!envelope) pending = ENVELOPE_PICK;
   }
-  return { chrome, header, page, dialog, templateDialog, countersign, tab, authority, envelope, pending };
+  return { chrome, header, page, dialog, templateDialog, countersign, tab, authority, envelope, pending, quote, editor, compare, pick, newQuote };
 }
 
 /** Who records representation authority (the database's app.record_representation_authority). */
 const AUTHORITY_ROLES = new Set(["firm_owner", "licensed_consultant"]);
-/** Who sends and voids agreements (send_agreement, void_agreement_envelope). */
+/** Who sends and voids agreements (send_agreement, void_agreement_envelope), and edits clauses. */
 const SEND_ROLES = new Set(["firm_owner", "licensed_consultant", "case_manager"]);
-
-/** Tabs Casevoya does not have a workflow for yet: honest panels inside the live shell. */
-const PENDING: Partial<Record<AgreementsTabKey, AgreementsPendingData>> = {
-  quote: {
-    title: "Quote builder",
-    intro: "Quotes for leads and clients, before a service agreement. An accepted quote is not a signed agreement.",
-    empty: {
-      title: "The quote builder isn’t built yet",
-      copy: "Casevoya doesn’t make quotes yet. An agreement’s fee and scope are set in New agreement, from an approved template.",
-    },
-    action: { label: "New agreement", dialog: "dlgNewQ" },
-  },
-  editor: {
-    title: "Agreement editor",
-    intro: "An agreement’s text comes from an approved template and is locked with its SHA-256 hash when it is sent.",
-    empty: {
-      title: "The agreement editor isn’t built yet",
-      copy: "To change the wording, add a new agreement template; a licensed consultant approves it before it can be sent.",
-    },
-    action: { label: "Agreement templates", dialog: "dlgTpl" },
-  },
-  compare: {
-    title: "Compare versions",
-    intro: "Side-by-side versions of one agreement, with what changed between them.",
-    empty: {
-      title: "Comparing versions isn’t built yet",
-      copy: "Each agreement’s own view shows its version, its hash and every signing event. Open one from All agreements.",
-    },
-    action: { label: "All agreements", href: "/sheet/agreements" },
-  },
-};
+/** Who builds, sends and converts quotes (app.require_licensed_staff: a licensed consultant, or the owner). */
+const QUOTE_ROLES = new Set(["firm_owner", "licensed_consultant"]);
 
 const ENVELOPE_PICK: AgreementsPendingData = {
   title: "Envelope",

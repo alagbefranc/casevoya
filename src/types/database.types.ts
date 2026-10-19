@@ -101,6 +101,45 @@ export type Database = {
           },
         ]
       }
+      agreement_clauses: {
+        Row: {
+          agreement_version_id: string
+          body: string
+          created_at: string
+          headed: boolean
+          id: string
+          mandatory: boolean
+          organization_id: string
+          position: number
+          source: Database["public"]["Enums"]["agreement_clause_source"]
+          title: string
+        }
+        Insert: {
+          agreement_version_id: string
+          body: string
+          created_at?: string
+          headed?: boolean
+          id?: string
+          mandatory?: boolean
+          organization_id: string
+          position: number
+          source?: Database["public"]["Enums"]["agreement_clause_source"]
+          title: string
+        }
+        Update: {
+          agreement_version_id?: string
+          body?: string
+          created_at?: string
+          headed?: boolean
+          id?: string
+          mandatory?: boolean
+          organization_id?: string
+          position?: number
+          source?: Database["public"]["Enums"]["agreement_clause_source"]
+          title?: string
+        }
+        Relationships: []
+      }
       agreement_templates: {
         Row: {
           approved_at: string | null
@@ -110,6 +149,7 @@ export type Database = {
           created_by: string | null
           id: string
           kind: Database["public"]["Enums"]["agreement_kind"]
+          mandatory_clauses: string[] | null
           name: string
           organization_id: string
           status: string
@@ -124,6 +164,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           kind: Database["public"]["Enums"]["agreement_kind"]
+          mandatory_clauses?: string[] | null
           name: string
           organization_id: string
           status?: string
@@ -138,6 +179,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           kind?: Database["public"]["Enums"]["agreement_kind"]
+          mandatory_clauses?: string[] | null
           name?: string
           organization_id?: string
           status?: string
@@ -149,60 +191,72 @@ export type Database = {
       agreement_versions: {
         Row: {
           agreement_id: string
+          body: string | null
           canonical_body: string
           comparison_note: string | null
           content_sha256: string | null
           created_at: string
           created_by: string | null
           currency: string
+          deliverables: string | null
           exclusions: string | null
           fee_cents: number | null
+          fee_structure: string | null
           government_fee_note: string | null
           id: string
           locked_at: string | null
           organization_id: string
           refund_policy: string | null
           scope_summary: string
+          services: string | null
           updated_at: string
           version: number
           version_number: number
         }
         Insert: {
           agreement_id: string
+          body?: string | null
           canonical_body: string
           comparison_note?: string | null
           content_sha256?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
+          deliverables?: string | null
           exclusions?: string | null
           fee_cents?: number | null
+          fee_structure?: string | null
           government_fee_note?: string | null
           id?: string
           locked_at?: string | null
           organization_id: string
           refund_policy?: string | null
           scope_summary: string
+          services?: string | null
           updated_at?: string
           version?: number
           version_number: number
         }
         Update: {
           agreement_id?: string
+          body?: string | null
           canonical_body?: string
           comparison_note?: string | null
           content_sha256?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
+          deliverables?: string | null
           exclusions?: string | null
           fee_cents?: number | null
+          fee_structure?: string | null
           government_fee_note?: string | null
           id?: string
           locked_at?: string | null
           organization_id?: string
           refund_policy?: string | null
           scope_summary?: string
+          services?: string | null
           updated_at?: string
           version?: number
           version_number?: number
@@ -211,6 +265,8 @@ export type Database = {
       }
       agreements: {
         Row: {
+          accepted_at: string | null
+          accepted_by: string | null
           created_at: string
           created_by: string | null
           current_version_id: string | null
@@ -227,6 +283,8 @@ export type Database = {
           version: number
         }
         Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
           created_at?: string
           created_by?: string | null
           current_version_id?: string | null
@@ -243,6 +301,8 @@ export type Database = {
           version?: number
         }
         Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
           created_at?: string
           created_by?: string | null
           current_version_id?: string | null
@@ -7216,6 +7276,90 @@ export type Database = {
         }
         Relationships: []
       }
+      quote_instalments: {
+        Row: {
+          agreement_version_id: string
+          amount_cents: number
+          created_at: string
+          id: string
+          is_sample: boolean
+          label: string
+          organization_id: string
+          paid_as: Database["public"]["Enums"]["quote_paid_as"]
+          position: number
+        }
+        Insert: {
+          agreement_version_id: string
+          amount_cents: number
+          created_at?: string
+          id?: string
+          is_sample?: boolean
+          label: string
+          organization_id: string
+          paid_as: Database["public"]["Enums"]["quote_paid_as"]
+          position: number
+        }
+        Update: {
+          agreement_version_id?: string
+          amount_cents?: number
+          created_at?: string
+          id?: string
+          is_sample?: boolean
+          label?: string
+          organization_id?: string
+          paid_as?: Database["public"]["Enums"]["quote_paid_as"]
+          position?: number
+        }
+        Relationships: []
+      }
+      quote_lines: {
+        Row: {
+          agreement_version_id: string
+          amount_cents: number
+          category: Database["public"]["Enums"]["quote_line_category"]
+          created_at: string
+          description: string
+          entered_by: string | null
+          entered_on: string | null
+          id: string
+          is_sample: boolean
+          organization_id: string
+          position: number
+          source_note: string | null
+          tax_rate_bps: number | null
+        }
+        Insert: {
+          agreement_version_id: string
+          amount_cents: number
+          category: Database["public"]["Enums"]["quote_line_category"]
+          created_at?: string
+          description: string
+          entered_by?: string | null
+          entered_on?: string | null
+          id?: string
+          is_sample?: boolean
+          organization_id: string
+          position: number
+          source_note?: string | null
+          tax_rate_bps?: number | null
+        }
+        Update: {
+          agreement_version_id?: string
+          amount_cents?: number
+          category?: Database["public"]["Enums"]["quote_line_category"]
+          created_at?: string
+          description?: string
+          entered_by?: string | null
+          entered_on?: string | null
+          id?: string
+          is_sample?: boolean
+          organization_id?: string
+          position?: number
+          source_note?: string | null
+          tax_rate_bps?: number | null
+        }
+        Relationships: []
+      }
       reminder_schedules: {
         Row: {
           created_at: string
@@ -9402,6 +9546,38 @@ export type Database = {
       accept_quote: {
         Args: { p_agreement_id: string }
         Returns: undefined
+      }
+      create_quote: {
+        Args: { p_matter_id: string; p_template_id: string | null; p_title: string | null }
+        Returns: string
+      }
+      edit_agreement_clause: {
+        Args: { p_agreement_id: string; p_body: string; p_clause_id: string }
+        Returns: string
+      }
+      quote_to_agreement: {
+        Args: { p_agreement_id: string; p_template_id: string }
+        Returns: string
+      }
+      save_quote: {
+        Args: {
+          p_agreement_id: string
+          p_deliverables: string | null
+          p_exclusions: string | null
+          p_fee_structure: string | null
+          p_government_fee_note: string | null
+          p_instalments: Json
+          p_lines: Json
+          p_quote_expires_on: string
+          p_refund_policy: string | null
+          p_scope: string
+          p_services: string | null
+        }
+        Returns: string
+      }
+      send_quote: {
+        Args: { p_agreement_id: string }
+        Returns: Json
       }
       access_grant_choices: {
         Args: { p_organization_id: string }
@@ -11705,6 +11881,9 @@ export type Database = {
         | "voided"
         | "superseded"
         | "accepted"
+      agreement_clause_source: "template" | "edited"
+      quote_line_category: "professional_fee" | "tax" | "disbursement" | "government_fee"
+      quote_paid_as: "advance" | "invoice_after_delivery"
       answer_date_kind: "exact" | "year_month" | "year"
       answer_presence: "provided" | "unknown" | "not_applicable" | "approximate"
       booking_actor: "client" | "staff" | "system"
@@ -12285,6 +12464,9 @@ export const Constants = {
         "superseded",
         "accepted",
       ],
+      agreement_clause_source: ["template", "edited"],
+      quote_line_category: ["professional_fee", "tax", "disbursement", "government_fee"],
+      quote_paid_as: ["advance", "invoice_after_delivery"],
       agreement_signer_role: ["client", "consultant", "sponsor", "dependant", "guardian", "firm"],
       agreement_signer_status: ["waiting", "current", "signed", "declined"],
       signature_event_kind: ["sent", "signed", "declined", "voided", "expired", "completed", "superseded", "replayed"],
