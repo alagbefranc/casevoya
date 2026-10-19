@@ -27,7 +27,10 @@ export type RowAction = {
 
 export type ConsultationRow = {
   when: string;
-  client: string;
+  /** Live: the client and the booking type ("Ana Ferreira · Initial consultation"). */
+  client: string | { left: string; right: string };
+  /** Live: the row opens this consultation's record. */
+  href?: string;
   with: { left: string; right: string };
   agreement: string;
   fee: string | Chip;
@@ -39,7 +42,16 @@ export type DlItem = { term: string; value: string | { left: string; right: stri
 
 export type HostPanel = { name: string; items: DlItem[]; edit?: Record<string, string> | null };
 
-export type MonthCal = { month: string; leading: number; days: CalendarDay[] };
+/**
+ * nav (live): where the month arrows go (each becomes a button); a day with `href` (live) opens
+ * that link. Without them the arrows and days are the Designer's static marks.
+ */
+export type MonthCal = {
+  month: string;
+  leading: number;
+  days: (CalendarDay & { href?: string; label?: string })[];
+  nav?: { prev: string; next: string; prevLabel: string; nextLabel: string } | null;
+};
 
 export type BookingPreview = {
   logo: string | null;
@@ -48,14 +60,18 @@ export type BookingPreview = {
   note: string;
   chips: string[];
   href: string;
+  /** Live: each time opens the booking page (the preview's times are for looking, not booking). */
+  chipHref?: string | null;
 };
 
-export type BookingTypeRow = { title: string; detail: string; state: Chip; edit?: Record<string, string> | null };
+/** archive (live): the owner archives the type (it is unpublished and leaves the list). */
+export type BookingTypeRow = { title: string; detail: string; state: Chip; edit?: Record<string, string> | null; archive?: Record<string, string> | null };
 
 export type ConsultationsData = {
   tab: ConsultationsTab;
   upcoming?: { rows: ConsultationRow[]; empty?: { title: string; copy: string } | null };
-  availability?: { hosts: HostPanel[]; calendar: MonthCal; empty?: { title: string; copy: string; action?: Record<string, string> | null } | null };
+  /** calendarTitle (live): the month box's heading; the Designer's says "This week". */
+  availability?: { hosts: HostPanel[]; calendar: MonthCal; calendarTitle?: string | null; empty?: { title: string; copy: string; action?: Record<string, string> | null } | null };
   booking?: {
     preview: BookingPreview | null;
     /** note: live only, the practice-page line in sample mode (absent on the Designer render). */
@@ -228,11 +244,11 @@ function Upcoming({ data }: { data: NonNullable<ConsultationsData["upcoming"]> }
             </thead>
             <tbody>
               {data.rows.map((row, index) => (
-                <tr key={index}>
+                <tr key={index} data-href={row.href} style={row.href ? { cursor: "pointer" } : undefined}>
                   <td>
                     <span className={"num"}>{row.when}</span>
                   </td>
-                  <td>{row.client}</td>
+                  <td>{typeof row.client === "string" ? row.client : <Pair left={row.client.left} right={row.client.right} />}</td>
                   <td>
                     <Pair left={row.with.left} right={row.with.right} />
                   </td>
@@ -289,8 +305,21 @@ export function MonthCalendar({ data }: { data: MonthCal }) {
       <h4 style={{ fontWeight: "500" }}>
         {`${data.month} `}
         <span style={{ color: "var(--t2)", display: "flex", gap: "6px" }}>
-          <Icon name={"chevron-left"} cls={"ic s"} />
-          <Icon name={"chevron-right"} cls={"ic s"} />
+          {data.nav ? (
+            <>
+              <button type={"button"} data-nav={data.nav.prev} aria-label={data.nav.prevLabel} title={data.nav.prevLabel} style={{ display: "inline-flex", color: "inherit" }}>
+                <Icon name={"chevron-left"} cls={"ic s"} />
+              </button>
+              <button type={"button"} data-nav={data.nav.next} aria-label={data.nav.nextLabel} title={data.nav.nextLabel} style={{ display: "inline-flex", color: "inherit" }}>
+                <Icon name={"chevron-right"} cls={"ic s"} />
+              </button>
+            </>
+          ) : (
+            <>
+              <Icon name={"chevron-left"} cls={"ic s"} />
+              <Icon name={"chevron-right"} cls={"ic s"} />
+            </>
+          )}
         </span>
       </h4>
       <div className={"cal"}>
@@ -301,7 +330,15 @@ export function MonthCalendar({ data }: { data: MonthCal }) {
           <span key={`blank-${index}`} className={"num"}></span>
         ))}
         {data.days.map((day) => (
-          <span key={day.day} className={["num", day.today ? "t" : "", day.marked ? "d" : ""].filter(Boolean).join(" ")}>
+          <span
+            key={day.day}
+            className={["num", day.today ? "t" : "", day.marked ? "d" : ""].filter(Boolean).join(" ")}
+            data-nav={day.href}
+            role={day.href ? "link" : undefined}
+            tabIndex={day.href ? 0 : undefined}
+            aria-label={day.href ? day.label : undefined}
+            style={day.href ? { cursor: "pointer" } : undefined}
+          >
             {String(day.day)}
           </span>
         ))}
@@ -361,7 +398,7 @@ function Availability({ data }: { data: NonNullable<ConsultationsData["availabil
           <section className={"panel"}>
             <h2>
               <Icon name={"calendar"} />
-              {"This week"}
+              {data.calendarTitle ?? "This week"}
             </h2>
             <div className={"fp-pad"}>
               <MonthCalendar data={data.calendar} />
@@ -389,7 +426,12 @@ function Booking({ data }: { data: NonNullable<ConsultationsData["booking"]> }) 
               </p>
               <div className={"fp-row"}>
                 {data.preview.chips.map((chip) => (
-                  <button key={chip} className={"fchip"}>
+                  <button
+                    key={chip}
+                    className={"fchip"}
+                    data-book-href={data.preview?.chipHref ?? undefined}
+                    title={data.preview?.chipHref ? "Opens the booking page, where this time can be booked" : undefined}
+                  >
                     {chip}
                   </button>
                 ))}
@@ -472,6 +514,12 @@ function Booking({ data }: { data: NonNullable<ConsultationsData["booking"]> }) 
                             {"Edit"}
                           </button>
                         ) : null}
+                        {row.archive ? (
+                          <button className={"btn sm"} type={"button"} style={{ marginLeft: "8px" }} {...row.archive}>
+                            {"Archive"}
+                          </button>
+                        ) : null}
+
                       </span>
                     </div>
                   ))
@@ -489,6 +537,158 @@ export function SheetConsultations({ data }: { data: ConsultationsData }) {
   if (data.tab === "availability" && data.availability) return <Availability data={data.availability} />;
   if (data.tab === "booking" && data.booking) return <Booking data={data.booking} />;
   return <Upcoming data={data.upcoming ?? { rows: [] }} />;
+}
+
+// ---------------------------------------------------------------------------
+// Consultation record (live): one real booking's notes, outcome and details, in the Designer's
+// record layout (heading, Notes and Outcome panels on the left, a details panel on the right).
+// ---------------------------------------------------------------------------
+
+export type ConsultationRecordData = {
+  /** Bookings to choose from; each option's value is the record's URL. */
+  picker: { label: string; value: string; selected: boolean }[];
+  record: {
+    attendee: string;
+    notes: { items: { who: string; when: string; body: string }[]; copy: string; lead: { href: string; label: string } | null };
+    outcome: { chip: Chip; copy: string; actions: RowAction[] };
+    details: DlItem[];
+    history: { what: string; who: string; when: string }[];
+  } | null;
+  empty: { title: string; copy: string };
+};
+
+export function SheetConsultationRecord({ data }: { data: ConsultationRecordData }) {
+  const record = data.record;
+  return (
+    <>
+      <div className={"ph rv"} style={i(0)}>
+        <div>
+          <h1 className={"display"}>
+            {record ? (
+              <>
+                {"Consultation record "}
+                <Sep />
+                {` ${record.attendee}`}
+              </>
+            ) : (
+              "Consultation record"
+            )}
+          </h1>
+          <p>{"Notes are staff-only. The outcome is what the firm recorded after the meeting."}</p>
+        </div>
+      </div>
+      {data.picker.length ? (
+        <div className={"fld rv"} style={{ maxWidth: "520px", "--i": "1" } as React.CSSProperties}>
+          <label htmlFor={"crB"}>{"Consultation"}</label>
+          <select className={"sel"} id={"crB"} data-nav-select={"1"} defaultValue={data.picker.find((option) => option.selected)?.value ?? ""}>
+            {record ? null : <option value={""}>{"Choose a consultation"}</option>}
+            {data.picker.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+      {record ? (
+        <div className={"fp-g2 rv"} style={i(2)}>
+          <div>
+            <section className={"panel"}>
+              <h2>
+                <Icon name={"note"} />
+                {"Notes (staff only)"}
+              </h2>
+              <div className={"fp-pad"}>
+                {record.notes.items.map((note, index) => (
+                  <div key={index} className={"fp-mail"}>
+                    <small style={{ color: "var(--t2)" }}>
+                      <Pair left={note.who} right={note.when} />
+                    </small>
+                    <p style={{ fontSize: "14.5px" }}>{note.body}</p>
+                  </div>
+                ))}
+                <p className={"fp-note"} style={{ margin: record.notes.items.length ? "10px 0 0" : "0" }}>
+                  {record.notes.copy}
+                </p>
+                {record.notes.lead ? (
+                  <div className={"fp-row"} style={{ marginTop: "10px" }}>
+                    <a className={"btn sm"} href={record.notes.lead.href}>
+                      {record.notes.lead.label}
+                    </a>
+                  </div>
+                ) : null}
+              </div>
+            </section>
+            <section className={"panel"}>
+              <h2>
+                <Icon name={"check-circle"} />
+                {"Outcome"}
+                <span className={"r"}>
+                  <ChipView chip={record.outcome.chip} />
+                </span>
+              </h2>
+              <div className={"fp-pad"}>
+                <p style={{ fontSize: "14.5px" }}>{record.outcome.copy}</p>
+                {record.outcome.actions.length ? (
+                  <div className={"fp-row"} style={{ marginTop: "10px" }}>
+                    {record.outcome.actions.map((action, n) => (
+                      <ActionButton key={`${action.label}-${n}`} action={action} />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          </div>
+          <div>
+            <section className={"panel"}>
+              <h2>
+                <Icon name={"file-check"} />
+                {"Booking, agreement and fee"}
+              </h2>
+              <div className={"fp-pad"}>
+                <dl className={"fp-dl"}>
+                  {record.details.map((item) => (
+                    <div key={item.term}>
+                      <dt>{item.term}</dt>
+                      <dd>
+                        <DlValue value={item.value} />
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </section>
+            {record.history.length ? (
+              <section className={"panel"}>
+                <h2>
+                  <Icon name={"history"} />
+                  {"History"}
+                </h2>
+                <div className={"fp-pad"}>
+                  <ol className={"fp-steps"}>
+                    {record.history.map((item, index) => (
+                      <li key={index} className={index === 0 ? "now" : ""}>
+                        <span className={"d"} aria-hidden={"true"}></span>
+                        <div>
+                          <b>{item.what}</b>
+                          <small>
+                            <Pair left={item.who} right={item.when} />
+                          </small>
+                        </div>
+                        {index === 0 ? <span className={"sr"}>{"latest"}</span> : null}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </section>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <EmptyPanel n={2} title={data.empty.title} copy={data.empty.copy} />
+      )}
+    </>
+  );
 }
 
 // ---------------------------------------------------------------------------

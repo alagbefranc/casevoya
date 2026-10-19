@@ -1,12 +1,13 @@
 import type { SidebarPerson } from "@/components/sheet/designer/sidebar";
 
-/** The Designer's consultant photo, shown for firm staff until profile pictures can be uploaded. */
-export const STAFF_AVATAR = "/assets/av-amara-consultant.png";
-
-/** A staff member as an `.av` person. Clients keep their initials: a stock face would misidentify them. */
+/**
+ * A staff member as an `.av` person: their own photo when one is stored, otherwise their initials
+ * in the same circle. Never a stock photo (the Designer's consultant photo would show a stranger's
+ * face for every staff member).
+ */
 export function staffPerson(
   name: string,
   avatarUrl?: string | null,
 ): SidebarPerson {
-  return { name, avatarUrl: avatarUrl || STAFF_AVATAR };
+  return { name, avatarUrl: avatarUrl || null };
 }

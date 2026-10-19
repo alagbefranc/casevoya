@@ -5,6 +5,7 @@ import { hasPublicSupabaseEnv, getPublicSupabaseEnv } from "@/lib/env";
 import { isGatedPath, signInLocation } from "@/lib/auth/redirect";
 import { isStaffArea, staffMfaRedirectPath } from "@/lib/auth/staff-session";
 import { REQUEST_ID_HEADER, resolveRequestId } from "@/lib/tenant/context";
+import { bookingPagePath, isBookablePublicEvent } from "@/modules/scheduling/public-api";
 
 function redirectKeepingSession(request: NextRequest, response: NextResponse, pathname: string, search: string) {
   const redirectUrl = request.nextUrl.clone();
@@ -61,6 +62,24 @@ export async function updateSession(request: NextRequest) {
   // Do not run code between createServerClient and getClaims().
   const { data } = await supabase.auth.getClaims();
   const signedIn = Boolean(data?.claims?.sub);
+
+  // A firm's public booking page that isn't published (or doesn't exist) answers 404 before the
+  // page streams (a streamed page can't change its status). The lookup runs as the visitor, so a
+  // practice page still opens for the firm's own staff. On a lookup error the page decides.
+  const booking = bookingPagePath(path);
+  if (booking) {
+    const found = booking.firm ? await supabase.rpc("booking_public_event", { p_firm_slug: booking.firm, p_event_slug: booking.event }) : { data: null, error: null };
+    if (!found.error && !isBookablePublicEvent(found.data)) {
+      const missing = request.nextUrl.clone();
+      missing.pathname = "/_booking/unavailable";
+      missing.search = "";
+      const rewrite = NextResponse.rewrite(missing, { status: 404 });
+      response.cookies.getAll().forEach((cookie) => rewrite.cookies.set(cookie));
+      rewrite.headers.set(REQUEST_ID_HEADER, requestId);
+      rewrite.headers.set("Cache-Control", "private, no-store");
+      return rewrite;
+    }
+  }
 
   if (
     path === "/mfa" ||

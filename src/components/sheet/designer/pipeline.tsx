@@ -37,6 +37,8 @@ export type LeadCard = {
   owner: SidebarPerson;
   fee: string;
   data?: Attrs;
+  /** Live: which ‹ › buttons can move this card (a disabled one says why in its title). */
+  moves?: { back: boolean; forward: boolean } | null;
 };
 
 export type PipelineColumn = {
@@ -48,6 +50,8 @@ export type PipelineColumn = {
   offset: string;
   cards: LeadCard[];
   data?: Attrs;
+  /** Live: hidden while the Stage filter shows another stage. */
+  hidden?: boolean;
 };
 
 export type PipelineRow = {
@@ -62,7 +66,8 @@ export type PipelineRow = {
   next: string;
 };
 
-export type TimelineItem = { when: string; who: string; what: string };
+/** href (live): the lead the item belongs to; the item opens it. */
+export type TimelineItem = { when: string; who: string; what: string; href?: string };
 
 export type PipelineData = {
   tab: PipelineTab;
@@ -210,10 +215,24 @@ function Card({ card }: { card: LeadCard }) {
         <Avatar person={card.owner} />
         <span className={"num"}>{card.fee}</span>
         <span className={"mv"}>
-          <button aria-label={"Move back"} data-mv={"-1"} data-wt={"1"} className={"k2-wt-t"}>
+          <button
+            aria-label={"Move back"}
+            data-mv={"-1"}
+            data-wt={"1"}
+            className={"k2-wt-t"}
+            disabled={card.moves && !card.moves.back ? true : undefined}
+            title={card.moves && !card.moves.back ? "Already in the first stage it can be in" : undefined}
+          >
             <Icon name={"chevron-left"} cls={"ic s"} />
           </button>
-          <button aria-label={"Move forward"} data-mv={"1"} data-wt={"1"} className={"k2-wt-t"}>
+          <button
+            aria-label={"Move forward"}
+            data-mv={"1"}
+            data-wt={"1"}
+            className={"k2-wt-t"}
+            disabled={card.moves && !card.moves.forward ? true : undefined}
+            title={card.moves && !card.moves.forward ? "It can’t move forward from this stage" : undefined}
+          >
             <Icon name={"chevron-right"} cls={"ic s"} />
           </button>
         </span>
@@ -224,7 +243,7 @@ function Card({ card }: { card: LeadCard }) {
 
 function Column({ column, index }: { column: PipelineColumn; index: number }) {
   return (
-    <section className={"col"} data-st={String(index)} {...(column.data ?? {})}>
+    <section className={"col"} data-st={String(index)} {...(column.data ?? {})} hidden={column.hidden || undefined}>
       <div className={"colh"}>
         <div>
           <b>{column.label}</b>
@@ -302,7 +321,13 @@ function Timeline({ items }: { items: TimelineItem[] }) {
       <div className={"fp-pad"}>
         <ol className={"fp-steps"}>
           {items.map((item, index) => (
-            <li key={index} className={index === 0 ? "now" : ""}>
+            <li
+              key={index}
+              className={index === 0 ? "now" : ""}
+              data-href={item.href}
+              tabIndex={item.href ? 0 : undefined}
+              style={item.href ? { cursor: "pointer" } : undefined}
+            >
               <span className={"d"} aria-hidden={"true"}></span>
               <div>
                 <b>{item.when}</b>
@@ -372,9 +397,12 @@ export function SheetPipeline({ data }: { data: PipelineData }) {
           <Alt data={data} />
         </div>
       )}
-      <p style={{ color: "var(--t2)", fontSize: "13px", marginTop: "10px", "--i": "2" } as React.CSSProperties} className={"rv"}>
-        {"Drag a card between stages, or use its arrow buttons. Converting a lead never merges people automatically; matches need your confirmation."}
-      </p>
+      {/* Live: the board's note only shows with the board (List and Timeline have no cards to drag). */}
+      {board || !data.board ? (
+        <p style={{ color: "var(--t2)", fontSize: "13px", marginTop: "10px", "--i": "2" } as React.CSSProperties} className={"rv"}>
+          {"Drag a card between stages, or use its arrow buttons. Converting a lead never merges people automatically; matches need your confirmation."}
+        </p>
+      ) : null}
     </>
   );
 }
@@ -393,6 +421,13 @@ export type CsvDialogData = {
   submit: { label: string; toast?: { title: string; sub: string } | null; data?: Attrs | null };
   /** Live: the file input the Choose button opens. */
   input?: ReactNode;
+  /**
+   * Live: the table's name. Columns are matched by their header names and can't be re-mapped
+   * here, so the live dialog says what it found instead of "Map lead columns".
+   */
+  mapLabel?: string | null;
+  /** Live: how columns are matched, under the table. */
+  mapNote?: string | null;
 };
 
 export function CsvDialog({ data }: { data: CsvDialogData }) {
@@ -423,9 +458,9 @@ export function CsvDialog({ data }: { data: CsvDialogData }) {
         ) : data.file === null ? (
           <h4 style={{ fontSize: "14px", fontWeight: "500", margin: "14px 0 6px" }} id={"csvName"} hidden></h4>
         ) : null}
-        <div className={"tw"} role={"region"} aria-label={"Map lead columns"} tabIndex={0}>
+        <div className={"tw"} role={"region"} aria-label={data.mapLabel ?? "Map lead columns"} tabIndex={0}>
           <table className={"t"}>
-            <caption className={"sr"}>{"Map lead columns"}</caption>
+            <caption className={"sr"}>{data.mapLabel ?? "Map lead columns"}</caption>
             <thead>
               <tr>
                 <th scope={"col"}>{"Your column"}</th>
@@ -444,6 +479,11 @@ export function CsvDialog({ data }: { data: CsvDialogData }) {
             </tbody>
           </table>
         </div>
+        {data.mapNote ? (
+          <p className={"fp-note"} style={{ marginTop: "8px" }}>
+            {data.mapNote}
+          </p>
+        ) : null}
         {data.duplicates ? (
           <div className={"alert warn"} style={{ marginTop: "10px" }}>
             <Icon name={"users"} />

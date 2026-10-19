@@ -9,7 +9,8 @@
  * connected calendar are listed without a provider logo.
  */
 import type { ReactNode } from "react";
-import { Icon, Pair } from "./frame";
+import { Empty, Icon, Pair } from "./frame";
+
 import { MonthCalendar, type MonthCal } from "./consultations";
 
 export type CalendarTab = "week" | "deadlines";
@@ -35,15 +36,22 @@ export type WeekBlock = {
   href?: string;
 };
 
+/**
+ * live: blocks open their record, clip their text, and share an hour cell side by side instead of
+ * overlapping; an `allDay` row (date-only deadlines) lists its blocks one under another.
+ */
 export type WeekGrid = {
   days: { label: string; today: boolean }[];
-  hours: { label: string; cells: WeekBlock[][] }[];
+  hours: { label: string; cells: WeekBlock[][]; allDay?: boolean }[];
+  live?: boolean;
 };
 
+/** live: one "Connected calendars" heading (the capture repeats it), and deadline cards open their matter. */
 export type CalendarRbar = {
   calendar: MonthCal;
-  deadlines: { date: string; title: string; who: string; chip: { tone: string; label: string } }[];
+  deadlines: { date: string; title: string; who: string; chip: { tone: string; label: string }; href?: string }[];
   calendars: { name: string; tool: string; logo: string | null; chip: { tone: string; label: string } }[];
+  live?: { emptyTitle: string; emptyCopy: string } | null;
 };
 
 export type CalendarData = {
@@ -51,14 +59,19 @@ export type CalendarData = {
   heading: { title: string; copy: string };
   week: WeekGrid;
   note: string;
+  /** Live: shown in place of the grid when the tab has nothing in the week (Deadlines tab). */
+  empty?: { title: string; copy: string } | null;
 };
+
+/** Live: the week shown and where the header's week buttons go. */
+export type CalendarNav = { prev: string; next: string; today: string | null };
 
 const UNDERLINE: Record<CalendarTab, { left: string; width: string }> = {
   week: { left: "0px", width: "33px" },
   deadlines: { left: "59px", width: "58px" },
 };
 
-export function CalendarHeader({ tab, pills, create }: { tab: CalendarTab; pills: string[]; create?: Record<string, string> | null }) {
+export function CalendarHeader({ tab, pills, create, nav }: { tab: CalendarTab; pills: string[]; create?: Record<string, string> | null; nav?: CalendarNav | null }) {
   return (
     <>
       <header className={"top"}>
@@ -73,6 +86,21 @@ export function CalendarHeader({ tab, pills, create }: { tab: CalendarTab; pills
           </span>
         ))}
         <span className={"acts"}>
+          {nav ? (
+            <>
+              <button className={"btn s sm"} type={"button"} data-nav={nav.prev} aria-label={"Previous week"} title={"Previous week"}>
+                <Icon name={"chevron-left"} cls={"ic s"} />
+              </button>
+              {nav.today ? (
+                <button className={"btn s sm"} type={"button"} data-nav={nav.today}>
+                  {"This week"}
+                </button>
+              ) : null}
+              <button className={"btn s sm"} type={"button"} data-nav={nav.next} aria-label={"Next week"} title={"Next week"}>
+                <Icon name={"chevron-right"} cls={"ic s"} />
+              </button>
+            </>
+          ) : null}
           <button className={"btn p sm"} {...(create ?? {})}>
             <Icon name={"plus"} cls={"ic s"} />
             {"New appointment"}
@@ -100,17 +128,36 @@ function Text({ value }: { value: string | { left: string; right: string } }) {
   return typeof value === "string" ? <>{value}</> : <Pair left={value.left} right={value.right} />;
 }
 
-function Block({ block, index }: { block: WeekBlock; index: number }) {
+/** Live placement: a cell's blocks share its width; an all-day block sits in the row's flow. */
+function liveBox(block: WeekBlock, index: number, count: number, allDay: boolean): React.CSSProperties {
+  if (allDay) return { position: "relative", margin: "4px", overflow: "hidden", cursor: block.href ? "pointer" : undefined };
+  const top = 4 + Math.round(((block.offsetMin ?? 0) / 60) * 64);
+  const share = 100 / Math.max(1, count);
+  return {
+    position: "absolute",
+    top: `${top}px`,
+    left: `calc(${share * index}% + 4px)`,
+    width: `calc(${share}% - 8px)`,
+    height: `${block.height}px`,
+    zIndex: String(1 + index),
+    overflow: "hidden",
+    cursor: block.href ? "pointer" : undefined,
+  };
+}
+
+const CLIP: React.CSSProperties = { display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+
+function Block({ block, index, live }: { block: WeekBlock; index: number; live?: { count: number; allDay: boolean } }) {
   const style = BLOCK_STYLE[block.kind];
   const top = 4 + Math.round(((block.offsetMin ?? 0) / 60) * 64);
   const inset = top === 4 && index === 0 ? "4px" : `${top}px 4px 4px ${4 + index * 10}px`;
+  const place: React.CSSProperties = live
+    ? liveBox(block, index, live.count, live.allDay)
+    : { position: "absolute", inset, height: `${block.height}px`, zIndex: String(1 + index) };
   return (
     <div
       style={{
-        position: "absolute",
-        inset,
-        height: `${block.height}px`,
-        zIndex: String(1 + index),
+        ...place,
         borderRadius: "8px",
         padding: "8px",
         fontSize: "13px",
@@ -118,12 +165,14 @@ function Block({ block, index }: { block: WeekBlock; index: number }) {
         borderLeft: style.border,
       }}
       data-href={block.href}
+      role={live && block.href ? "link" : undefined}
+      tabIndex={live && block.href ? 0 : undefined}
     >
-      <b style={{ fontWeight: "600" }}>
+      <b style={live ? { fontWeight: "600", ...CLIP } : { fontWeight: "600" }}>
         <Text value={block.title} />
       </b>
-      <br />
-      <small style={{ color: "var(--t2)", fontSize: "13px" }}>
+      {live ? null : <br />}
+      <small style={live ? { color: "var(--t2)", fontSize: "13px", ...CLIP } : { color: "var(--t2)", fontSize: "13px" }}>
         <Text value={block.note} />
       </small>
     </div>
@@ -146,7 +195,10 @@ function Week({ grid }: { grid: WeekGrid }) {
   );
   grid.hours.forEach((hour) => {
     cells.push(
-      <div key={`h-${hour.label}`} style={{ padding: "6px", fontSize: "13px", color: "var(--t2)", borderTop: "1px solid var(--line)", height: "64px" }}>
+      <div
+        key={`h-${hour.label}`}
+        style={{ padding: "6px", fontSize: "13px", color: "var(--t2)", borderTop: "1px solid var(--line)", ...(hour.allDay ? { minHeight: "64px" } : { height: "64px" }) }}
+      >
         {hour.label}
       </div>,
     );
@@ -154,7 +206,7 @@ function Week({ grid }: { grid: WeekGrid }) {
       cells.push(
         <div key={`c-${hour.label}-${column}`} style={CELL}>
           {blocks.map((block, index) => (
-            <Block key={index} block={block} index={index} />
+            <Block key={index} block={block} index={index} live={grid.live ? { count: blocks.length, allDay: Boolean(hour.allDay) } : undefined} />
           ))}
         </div>,
       ),
@@ -184,9 +236,15 @@ export function SheetCalendar({ data }: { data: CalendarData }) {
         <h1 className={"display"}>{data.heading.title}</h1>
         <p>{data.heading.copy}</p>
       </div>
-      <div className={"tw rv"} style={{ "--i": "1" } as React.CSSProperties}>
-        <Week grid={data.week} />
-      </div>
+      {data.empty ? (
+        <div className={"panel rv"} style={{ "--i": "1" } as React.CSSProperties}>
+          <Empty art={"calendar-link"} title={data.empty.title} copy={data.empty.copy} />
+        </div>
+      ) : (
+        <div className={"tw rv"} style={{ "--i": "1" } as React.CSSProperties}>
+          <Week grid={data.week} />
+        </div>
+      )}
       <p style={{ color: "var(--t2)", fontSize: "13px", marginTop: "12px", "--i": "2" } as React.CSSProperties} className={"rv"}>
         {data.note}
       </p>
@@ -202,13 +260,20 @@ export function CalendarRbarView({ data }: { data: CalendarRbar }) {
       {data.deadlines.length === 0 ? (
         <div className={"nf"}>
           <div>
-            {"No deadlines this month"}
-            <small>{"Deadlines recorded on a matter appear here with who verified them."}</small>
+            {data.live?.emptyTitle ?? "No deadlines this month"}
+            <small>{data.live?.emptyCopy ?? "Deadlines recorded on a matter appear here with who verified them."}</small>
           </div>
         </div>
       ) : (
         data.deadlines.map((item, index) => (
-          <div key={`${item.date}-${index}`} className={"card"} style={{ display: "grid", gridTemplateColumns: "76px 1fr", gap: "6px" }}>
+          <div
+            key={`${item.date}-${index}`}
+            className={"card"}
+            style={item.href ? { display: "grid", gridTemplateColumns: "76px 1fr", gap: "6px", cursor: "pointer" } : { display: "grid", gridTemplateColumns: "76px 1fr", gap: "6px" }}
+            data-href={item.href}
+            role={item.href ? "link" : undefined}
+            tabIndex={item.href ? 0 : undefined}
+          >
             <b className={"num"} style={{ color: "var(--blue)", fontWeight: "500" }}>
               {item.date}
             </b>
@@ -231,7 +296,7 @@ export function CalendarRbarView({ data }: { data: CalendarRbar }) {
           <Pair left={"Google Calendar"} right={"planned integration"} />
         </span>
       </div>
-      <h4>{"Connected calendars"}</h4>
+      {data.live ? null : <h4>{"Connected calendars"}</h4>}
       <div className={"rank"} style={{ fontSize: "13.5px" }}>
         {data.calendars.map((row, index) => (
           <div key={`${row.name}-${index}`} style={{ display: "flex", gap: "10px", alignItems: "center" }}>

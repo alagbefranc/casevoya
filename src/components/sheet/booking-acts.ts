@@ -2,6 +2,7 @@
 
 import { toast2 } from "@/components/port/kit";
 import {
+  archiveBookingType,
   bookForClient,
   cancelBooking,
   recordBookingOutcome,
@@ -248,11 +249,13 @@ type TypeDraft = {
   published: boolean;
 };
 
+// A new type starts with an empty name and link name (the placeholders show an example), so it
+// never repeats a type the firm already has.
 const NEW_TYPE: TypeDraft = {
   id: null,
   version: null,
-  title: "Initial consultation",
-  slug: "initial-consultation",
+  title: "",
+  slug: "",
   description: "",
   duration: 30,
   step: null,
@@ -302,7 +305,55 @@ export function openBookingType(opener: HTMLElement, root: HTMLElement, open: Op
   });
   const publish = el(dialog, "etPub");
   if (publish) publish.checked = draft.published;
+  // A new type's link name follows its name until someone edits the link name.
+  const slug = el(dialog, "etS");
+  if (slug) slug.dataset.auto = draft.id ? "" : "1";
+  if (dialog.dataset.slugWired !== "1") {
+    dialog.dataset.slugWired = "1";
+    dialog.addEventListener("input", (event) => {
+      const input = event.target as HTMLInputElement;
+      const link = el(dialog, "etS");
+      if (!link) return;
+      if (input.id === "etS") link.dataset.auto = "";
+      else if (input.id === "etT" && link.dataset.auto === "1") link.value = slugFor(input.value);
+    });
+  }
   open("dlgType");
+}
+
+/** "Initial consultation (French)" → "initial-consultation-french". */
+export function slugFor(title: string): string {
+  return title
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64)
+    .replace(/-+$/g, "");
+}
+
+/** Archive a booking type: the first press asks to confirm, the second archives it. */
+export async function runArchiveType(button: HTMLElement, router: Router) {
+  if (button.dataset.confirm !== "1") {
+    button.dataset.confirm = "1";
+    const label = button.textContent;
+    button.textContent = "Confirm archive";
+    window.setTimeout(() => {
+      if (button.dataset.confirm !== "1") return;
+      delete button.dataset.confirm;
+      button.textContent = label;
+    }, 5000);
+    toast2(`Archive ${button.dataset.title ?? "this booking type"}?`, { kind: "warn", sub: "It is unpublished and leaves this list. Bookings already made stay. Press Confirm archive." });
+    return;
+  }
+  delete button.dataset.confirm;
+  const result = await archiveBookingType({
+    organizationId: button.dataset.org ?? "",
+    eventTypeId: button.dataset.typeArchive ?? "",
+    version: button.dataset.version ? Number(button.dataset.version) : null,
+  });
+  done(result, { title: "Booking type archived", sub: "It’s no longer offered. Bookings already made stay." }, null, router);
 }
 
 export async function runBookingType(button: HTMLElement, router: Router) {

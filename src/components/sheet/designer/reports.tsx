@@ -42,6 +42,8 @@ export type ReportsOutcomes = {
   definition?: string;
   /** Firm work time (opened to submitted), kept apart from government processing. Live only. */
   firm?: { rows: FirmTimeRow[]; definition: string } | null;
+  /** Live: the heading's line, in plain words (no requirement codes). */
+  intro?: string | null;
 };
 
 export type ReportsScheduled = { rows: { report: string; every: string; recipients: string; format: string; next: string }[] };
@@ -53,13 +55,16 @@ export type ReportsExportDialog = {
   note: string;
   toastSub: string;
   /** The live download: its route and the attributes use-sheet reads. Absent in the capture. */
-  wire?: { href: string; disabled?: boolean } | null;
+  wire?: { href: string; disabled?: boolean; reason?: string | null } | null;
+
 };
 
 export type ReportsData = {
   tab: ReportsTab;
   range: ReportRange;
   pills: [string, string];
+  /** Live: each pill's title (what the period and the scope mean). */
+  pillTitles?: [string | null, string | null] | null;
   /** Where each range chip goes. Absent in the capture. */
   rangeNav?: Record<ReportRange, string> | null;
   ops?: ReportsOps | null;
@@ -83,7 +88,8 @@ const UNDERLINE: Record<ReportsTab, CSSProperties> = {
 const i = (n: number) => ({ "--i": String(n) }) as CSSProperties;
 const R: CSSProperties = { textAlign: "right" };
 
-export function ReportsHeader({ tab, pills }: { tab: ReportsTab; pills: [string, string] }) {
+/** pillTitles (live): what each pill means, as its title (the scope pill is a fact, not a filter). */
+export function ReportsHeader({ tab, pills, pillTitles }: { tab: ReportsTab; pills: [string, string]; pillTitles?: [string | null, string | null] | null }) {
   const tabs: [ReportsTab, string][] = [
     ["ops", "Operations"],
     ["money", "Money"],
@@ -105,8 +111,12 @@ export function ReportsHeader({ tab, pills }: { tab: ReportsTab; pills: [string,
           <Icon name={"reports"} cls={"ic s"} />
           {"Reports"}
         </button>
-        <span className={"pill"}>{pills[0]}</span>
-        <span className={"pill"}>{pills[1]}</span>
+        <span className={"pill"} title={pillTitles?.[0] ?? undefined}>
+          {pills[0]}
+        </span>
+        <span className={"pill"} title={pillTitles?.[1] ?? undefined}>
+          {pills[1]}
+        </span>
         <span className={"acts"}>
           <button className={"btn p sm"} data-dlg={"dlgExp"} data-fpd={"1"}>
             <Icon name={"download"} cls={"ic s"} />
@@ -443,7 +453,7 @@ function Outcomes({ data, outcomes }: { data: ReportsData; outcomes: ReportsOutc
       <div className={"ph rv"} style={i(0)}>
         <div>
           <h1 className={"display"}>{"Processing and outcomes"}</h1>
-          <p>{"Descriptive history only. These numbers describe past files; they aren’t anyone’s chance of success (REP-02)."}</p>
+          <p>{outcomes?.intro ?? "Descriptive history only. These numbers describe past files; they aren’t anyone’s chance of success (REP-02)."}</p>
         </div>
       </div>
       <div className={"alert info rv"} style={i(1)}>
@@ -661,6 +671,7 @@ export function ReportsExportDialog({ data }: { data: ReportsExportDialog }) {
           data-toast-kind={data.wire ? undefined : "ok"}
           data-report-export={data.wire ? data.wire.href : undefined}
           disabled={data.wire?.disabled || undefined}
+          title={data.wire?.disabled ? data.wire.reason ?? undefined : undefined}
         >
           {"Export"}
         </button>
