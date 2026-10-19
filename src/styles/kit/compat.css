@@ -40,6 +40,11 @@
   #dlgNew .g2 .fld:has(#nmT),#dlgNew .g2 .fld:has(#nmC){order:2}
 }
 
+/* Search palette: it fits the window and the list scrolls inside it. */
+.palette{display:flex;flex-direction:column;max-height:min(560px,calc(100dvh - 14vh - 32px))}
+.palette input{flex:none}
+.palette ul{margin:0;padding:6px 0;overflow-y:auto;overscroll-behavior:contain;min-height:0}
+.palette li{cursor:pointer}
 /* The sidebar still scrolls (wheel, trackpad, touch, keyboard) but shows no scrollbar. */
 .side{scrollbar-width:none;-ms-overflow-style:none}
 .side::-webkit-scrollbar{display:none}
