@@ -508,6 +508,15 @@ export async function joinStaffInvite(input: {
     return fail("Use the email address this invitation was sent to.");
   }
   let { data: claims } = await supabase.auth.getClaims();
+  // Opened on a device still signed in as someone else (often the owner who sent it, testing
+  // on their own phone): end that session here so the invited person gets their own account,
+  // instead of trying to accept it for the wrong person.
+  const invitedEmail = (row.email ?? input.email).trim().toLowerCase();
+  const signedInEmail = typeof claims?.claims?.email === "string" ? claims.claims.email.toLowerCase() : "";
+  if (claims?.claims?.sub && signedInEmail !== invitedEmail) {
+    await supabase.auth.signOut({ scope: "local" });
+    claims = null;
+  }
   if (!claims?.claims?.sub) {
     const signedUp = await supabase.auth.signUp({
       email: row.email ?? input.email.trim(),
