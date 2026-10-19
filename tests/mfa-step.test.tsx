@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { mfaActiveStep } from "@/app/mfa/page";
+import { mfaActiveStep } from "@/lib/auth/mfa-step";
 import { AcceptClientMarkup } from "@/components/port/markup/accept-client";
 import { AcceptFamilyMarkup } from "@/components/port/markup/accept-family";
 import { AcceptSponsorMarkup } from "@/components/port/markup/accept-sponsor";
