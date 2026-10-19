@@ -943,6 +943,14 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     };
     root.addEventListener("pointerdown", press, listen);
     root.addEventListener("keydown", press, listen);
+    // An active grant's row (tabindex 0) opens Revoke with Enter or Space, like a click.
+    root.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const row = (event.target as HTMLElement).closest?.<HTMLElement>("[data-grant-row]");
+      if (!row || row !== event.target || !root.querySelector("dialog#dlgGX")) return;
+      event.preventDefault();
+      openGrantRevoke(row, root, openDialog);
+    }, listen);
     for (const type of ["pointerup", "pointerout", "pointercancel", "keyup"]) root.addEventListener(type, release, listen);
 
     root.querySelectorAll<HTMLInputElement>('.bar input').forEach((input) => {
