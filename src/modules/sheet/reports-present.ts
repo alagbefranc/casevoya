@@ -8,6 +8,8 @@
 import type { ReportBar, ReportRange, ReportsTab, OutcomeRow, FirmTimeRow } from "@/components/sheet/designer/reports";
 import { programLabel } from "@/modules/sheet/matters-present";
 import { plusDays, stageLabel } from "@/modules/sheet/present";
+import { safeZone } from "@/modules/scheduling/format";
+import { localToUtc } from "@/modules/scheduling/slots";
 
 export const REPORT_TABS: readonly ReportsTab[] = ["ops", "money", "outcomes", "scheduled"];
 
@@ -78,14 +80,16 @@ export function leadFunnel(bookings: BookingInput[], rescheduled: Set<string>, e
   const withMatter = booked.filter((row) => row.matterId);
   const engagedRows = withMatter.filter((row) => row.matterId && engaged.has(row.matterId));
   const bars: ReportBar[] = [
-    { label: "Consultations booked", count: booked.length, tone: "" },
+    // Only consultations that have started count here (completed and no-show can't happen yet
+    // for the others), so the label says so.
+    { label: "Booked for dates so far", count: booked.length, tone: "" },
     { label: "Consultation completed", count: completed.length, tone: "" },
     { label: "Matter opened", count: withMatter.length, tone: "" },
     { label: "Engaged", count: engagedRows.length, tone: "" },
   ];
   const note = booked.length
     ? `${engagedRows.length} of ${booked.length} consultations led to an engaged matter (${percent(engagedRows.length, booked.length)}%).`
-    : "No consultations were booked in this period.";
+    : "No booked consultation has started in this period yet. Upcoming ones are on the Consultations page.";
   return {
     bars,
     note,
@@ -223,12 +227,24 @@ export function monthsBetween(from: string, to: string): string[] {
   return out;
 }
 
-/** "August", "October to date" for the current month, "December 2025" outside the current year. */
-export function monthLabel(month: string, today: string): string {
+/**
+ * "August", "October to date" for the current month, "December 2025" outside the current year.
+ * With the range's first day (`from`), a first month that starts part-way says so: "July from 19 Jul".
+ */
+export function monthLabel(month: string, today: string, from?: string): string {
   const [y, m] = month.split("-").map(Number);
   const name = MONTHS[m - 1];
-  if (month === today.slice(0, 7)) return `${name} to date`;
-  return String(y) === today.slice(0, 4) ? name : `${name} ${y}`;
+  const partial = from && from.slice(0, 7) === month && from.slice(8, 10) !== "01" ? ` from ${Number(from.slice(8, 10))} ${SHORT[m - 1]}` : "";
+  if (month === today.slice(0, 7)) return partial ? `${name}${partial} to date` : `${name} to date`;
+  return `${String(y) === today.slice(0, 4) ? name : `${name} ${y}`}${partial}`;
+}
+
+/**
+ * The instant a firm-local date starts (its midnight in the firm's timezone), as ISO. Periods
+ * start here, not at UTC midnight: "from 1 Oct" in Toronto starts at 04:00 UTC.
+ */
+export function localMidnightIso(date: string, timeZone: string): string {
+  return new Date(localToUtc(date, "00:00", safeZone(timeZone))).toISOString();
 }
 
 // ---------- Processing and outcomes ----------
@@ -299,7 +315,7 @@ export function outcomesNote(hidden: OutcomeRow[], total: number): string {
 
 export const DEFINITIONS = {
   leads:
-    "Definition: consultations that start in the period and were booked (confirmed, completed, no-show or cancelled; unpaid holds and expired holds are left out). Matter opened: the booking is linked to a matter. Engaged: that matter’s engagement is recorded as engaged.",
+    "Definition: booked consultations that started in the period, up to now (confirmed, completed, no-show or cancelled; unpaid holds and expired holds are left out; upcoming ones are not counted yet). Matter opened: the booking is linked to a matter. Engaged: that matter’s engagement is recorded as engaged.",
   ageing:
     "Definition: matters not closed, by current stage. Days in stage count from the latest move into that stage (or from opening, if it never moved), to now.",
   workload:
@@ -307,11 +323,11 @@ export const DEFINITIONS = {
   documents:
     "Definition: open document requests. Expired: the request’s expiry date has passed. Otherwise by the latest upload’s review state: none yet, pending review, or rejected (changes requested).",
   attendance:
-    "Definition: booked consultations that start in the period. Attended: marked completed. Rescheduled: moved at least once. No-show: marked no-show.",
+    "Definition: booked consultations that started in the period, up to now. Attended: marked completed. Rescheduled: moved at least once. No-show: marked no-show.",
   receivables:
     "Definition: issued and partly paid CAD invoices with an amount still owed (total less paid and credited), by days past the due date, as of today.",
   months:
-    "Definition: invoiced counts CAD invoices by issue date, not voided. Collected counts card payments that succeeded and approved transfers from client funds, by the day they settled. Refunds are not deducted.",
+    "Definition: only the days inside the period, in the firm’s timezone. Invoiced counts CAD invoices by issue date, not voided. Collected counts card payments that succeeded and approved transfers from client funds, by the day they settled. Refunds are not deducted.",
   balances:
     "Definition: per client, held is verified deposits less approved transfers and refunds in the client-account ledger. Pending is deposits waiting for verification. This is the firm’s bookkeeping, not a bank statement.",
   recon: "Definition: signed client-account reconciliations that recorded exceptions, plus reconciliations still waiting for review.",

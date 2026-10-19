@@ -40,6 +40,7 @@ import {
   openAvailability,
   openBooking,
   openBookingType,
+  runArchiveType,
   runAvailability,
   runBookingSubmit,
   runBookingType,
@@ -77,6 +78,8 @@ import { runMatterAct } from "./matter-acts";
 import { runNewMatter } from "./new-matter-act";
 import { markAllNotificationsRead, openNotification } from "./notification-acts";
 import { wireLead, wirePipeline } from "./pipeline-acts";
+import { closeCrumbMenu, toggleCrumbMenu } from "./crumb-menu";
+import { runQueueReassign, syncQueuePicked } from "./queue-acts";
 import { runNewTask, syncNewTask } from "./new-task-act";
 import { runReportExport } from "./report-acts";
 import { runExportAct } from "./export-acts";
@@ -766,6 +769,42 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(setting, run);
         return;
       }
+      // The header's section crumb (the one with the ▾ mark): a small menu of that section's pages.
+      const crumb = target.closest<HTMLElement>("header.top .crumb");
+      if (crumb && root.contains(crumb) && crumb.querySelector(".ic.dd")) {
+        event.preventDefault();
+        toggleCrumbMenu(root, crumb, (href) => router.push(href));
+        return;
+      }
+      if (!target.closest(".k2-crumb-m")) closeCrumbMenu(root);
+      // Consultations: Archive a booking type (asks once, then archives).
+      const archiveType = target.closest<HTMLElement>("[data-type-archive]");
+      if (archiveType && root.contains(archiveType)) {
+        event.preventDefault();
+        busyRun(archiveType, () => runArchiveType(archiveType, router));
+        return;
+      }
+      // Booking page preview: a time opens the booking page, where it can be booked.
+      const bookHref = target.closest<HTMLElement>("[data-book-href]");
+      if (bookHref?.dataset.bookHref?.startsWith("/book/") && root.contains(bookHref)) {
+        event.preventDefault();
+        window.location.assign(bookHref.dataset.bookHref);
+        return;
+      }
+      // Team queue: Filter goes to the search and chips; Reassign gives the ticked tasks to a person.
+      if (target.closest("[data-queue-filter]")) {
+        event.preventDefault();
+        const search = root.querySelector<HTMLInputElement>("#content > .bar input");
+        search?.scrollIntoView({ block: "center", behavior: "smooth" });
+        search?.focus();
+        return;
+      }
+      const reassign = target.closest<HTMLElement>("[data-queue-reassign]");
+      if (reassign && root.contains(reassign)) {
+        event.preventDefault();
+        busyRun(reassign, () => runQueueReassign(root, reassign, router));
+        return;
+      }
       const nav = target.closest<HTMLElement>("[data-nav]");
       if (nav?.dataset.nav?.startsWith("/sheet/") && root.contains(nav)) {
         event.preventDefault();
@@ -811,6 +850,7 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         check.setAttribute("aria-checked", String(check.classList.contains("on")));
         check.closest("li")?.classList.toggle("on", check.classList.contains("on"));
         check.closest("tr")?.classList.toggle("sel", check.classList.contains("on"));
+        if (check.closest("#ql")) syncQueuePicked(root);
       }
       const tab = target.closest<HTMLElement>("[data-goto-tab]");
       if (tab?.dataset.gotoTab) {
@@ -865,10 +905,34 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
           applyFilters();
         }
       }
-      const row = target.closest<HTMLElement>("tr[data-href], #ql .li[data-href]");
+      const row = target.closest<HTMLElement>("tr[data-href], #ql .li[data-href], .wk [data-href], #rbar [data-href]");
       if (row?.dataset.href && root.contains(row) && !target.closest("a, button, .ck")) {
         router.push(row.dataset.href);
       }
+    }, listen);
+
+    // Keyboard: Enter on a link-like element (a calendar block or day, a deadline card, a queue
+    // checkbox's Space) does what a click does.
+    root.addEventListener("keydown", (event) => {
+      const target = event.target as HTMLElement;
+      if (event.key === "Escape") closeCrumbMenu(root);
+      if (target.getAttribute?.("role") === "checkbox" && target.classList.contains("ck") && (event.key === " " || event.key === "Enter")) {
+        event.preventDefault();
+        target.click();
+        return;
+      }
+      if (event.key !== "Enter" || target.getAttribute?.("role") !== "link") return;
+      const href = target.dataset.nav || target.dataset.href;
+      if (href?.startsWith("/sheet/")) {
+        event.preventDefault();
+        router.push(href);
+      }
+    }, listen);
+
+    // A select that names pages (the Consultation record's chooser) goes to the chosen one.
+    root.addEventListener("change", (event) => {
+      const select = (event.target as HTMLElement).closest?.<HTMLSelectElement>("select[data-nav-select]");
+      if (select?.value.startsWith("/sheet/")) router.push(select.value);
     }, listen);
 
     // The Intake form builder: select, rename, switches, add fields, autosave and publish.
@@ -921,9 +985,11 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       }
       const apply = () => {
         const q = input.value.trim().toLowerCase();
-        root.querySelectorAll<HTMLElement>(".t tbody tr").forEach((row) => {
+        root.querySelectorAll<HTMLElement>(".t tbody tr:not([data-none])").forEach((row) => {
           row.hidden = Boolean(q) && !row.textContent.toLowerCase().includes(q);
         });
+        // A table the search empties says so, instead of showing only its headings.
+        root.querySelectorAll<HTMLTableSectionElement>(".t tbody").forEach((body) => markNoMatches(body, input.value.trim()));
       };
       const preset = new URLSearchParams(window.location.search).get("q");
       if (preset && !input.value) input.value = preset;
@@ -1119,6 +1185,28 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     const state = new URLSearchParams(window.location.search).get("state");
     if (state) applyState(root, page, state);
   });
+}
+
+/** A table body whose rows the search hid all of gets one "No rows match" row; it goes when rows show again. */
+export function markNoMatches(body: HTMLTableSectionElement, query: string) {
+  const rows = [...body.querySelectorAll<HTMLTableRowElement>(":scope > tr:not([data-none])")];
+  const none = rows.length > 0 && rows.every((row) => row.hidden);
+  let note = body.querySelector<HTMLTableRowElement>(":scope > tr[data-none]");
+  if (!none) {
+    note?.remove();
+    return;
+  }
+  if (!note) {
+    note = document.createElement("tr");
+    note.setAttribute("data-none", "1");
+    const cell = document.createElement("td");
+    cell.colSpan = Math.max(1, body.closest("table")?.querySelectorAll("thead th").length ?? 1);
+    cell.style.color = "var(--t2)";
+    note.append(cell);
+    body.append(note);
+  }
+  const cell = note.cells[0];
+  if (cell) cell.textContent = `No rows match “${query}”. Clear the search to see them all.`;
 }
 
 function armFuse(button: HTMLElement) {

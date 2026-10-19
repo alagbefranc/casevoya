@@ -59,6 +59,10 @@ const SCHEMAS = {
     fee: text(20),
     tags: text(600),
     marketing: z.boolean().optional().nullable(),
+    /** A staff-recorded source, when it changed. */
+    source: z.enum(["phone", "email", "referral", "event", "walk_in", "other"]).optional().nullable(),
+    /** The reply consent, when the answer changed. */
+    reply: z.boolean().optional().nullable(),
   }),
   "link-booking": z.object({ org: uuid, lead: uuid, booking: uuid }),
   "from-booking": z.object({ org: uuid, booking: uuid }),
@@ -226,11 +230,21 @@ export async function runLeadAction(action: LeadAction, body: unknown): Promise<
         p_tags: tags,
       });
       if (error) return refused(error.message);
+      let saved = typeof data === "number" ? data : null;
+      if (v.source && saved != null) {
+        const source = await supabase.rpc("set_lead_source", { p_org: v.org, p_lead: v.lead, p_expected_version: saved, p_source: v.source });
+        if (source.error) return { error: `Details saved, but the source was not: ${leadError(source.error.message)}` };
+        saved = typeof source.data === "number" ? source.data : saved;
+      }
+      if (typeof v.reply === "boolean") {
+        const consent = await supabase.rpc("record_lead_consent", { p_org: v.org, p_lead: v.lead, p_purpose: "enquiry_reply", p_granted: v.reply });
+        if (consent.error) return { error: `Details saved, but the reply consent was not: ${leadError(consent.error.message)}` };
+      }
       if (typeof v.marketing === "boolean") {
         const consent = await supabase.rpc("record_lead_consent", { p_org: v.org, p_lead: v.lead, p_purpose: "marketing", p_granted: v.marketing });
         if (consent.error) return { error: `Details saved, but the marketing answer was not: ${leadError(consent.error.message)}` };
       }
-      return { ok: true, version: typeof data === "number" ? data : null };
+      return { ok: true, version: saved };
     }
     case "link-booking": {
       const v = SCHEMAS["link-booking"].parse(body);

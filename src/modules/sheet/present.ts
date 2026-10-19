@@ -157,7 +157,7 @@ export type SheetQuery = {
   person?: string;
   /** The Calendar page's week: any date in it, YYYY-MM-DD. */
   week?: string;
-  /** The home's right-column calendar month, YYYY-MM. */
+  /** A month box's month, YYYY-MM: the home right column, Consultations > Availability, Calendar. */
   month?: string;
   /** The open conversation on a matter's Messages tab. */
   thread?: string;

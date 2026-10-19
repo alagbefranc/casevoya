@@ -14,6 +14,7 @@ import {
   RANGE_LABEL,
   freshness,
   leadFunnel,
+  localMidnightIso,
   monthLabel,
   monthsBetween,
   outcomesNote,
@@ -38,6 +39,8 @@ export type ReportContext = {
   staff: SheetStaff;
   today: string;
   from: string;
+  /** The period's first instant: midnight of `from` in the firm's timezone. */
+  fromIso: string;
   nowIso: string;
   /** Leave sample records out unless the firm is exploring in sample mode. */
   live: boolean;
@@ -64,7 +67,7 @@ function rows<T>(result: { data: T[] | null } | null, cap: Capped): T[] {
 }
 
 export async function loadOps(ctx: ReportContext, cap: Capped): Promise<ReportsOps> {
-  const { supabase, staff, today, from, nowIso, live } = ctx;
+  const { supabase, staff, today, fromIso, nowIso, live } = ctx;
   const org = staff.organizationId;
   let mattersQuery = supabase
     .from("matters")
@@ -77,7 +80,7 @@ export async function loadOps(ctx: ReportContext, cap: Capped): Promise<ReportsO
     .from("bookings")
     .select("id, status, matter_id")
     .eq("organization_id", org)
-    .gte("starts_at", `${from}T00:00:00Z`)
+    .gte("starts_at", fromIso)
     .lte("starts_at", nowIso)
     .limit(REPORT_READ);
   if (live) bookingsQuery = bookingsQuery.eq("is_sample", false);
@@ -174,7 +177,7 @@ export async function loadOps(ctx: ReportContext, cap: Capped): Promise<ReportsO
 }
 
 export async function loadMoney(ctx: ReportContext, cap: Capped): Promise<ReportsMoney> {
-  const { supabase, staff, today, from, live } = ctx;
+  const { supabase, staff, today, from, fromIso, live } = ctx;
   const org = staff.organizationId;
   const sampleFilter = <Q extends { eq: (column: string, value: boolean) => Q }>(query: Q) => (live ? query.eq("is_sample", false) : query);
 
@@ -187,7 +190,7 @@ export async function loadMoney(ctx: ReportContext, cap: Capped): Promise<Report
         .from("invoices")
         .select("amount_cents, currency, issued_on, status")
         .eq("organization_id", org)
-        .gte("issued_on", `${from.slice(0, 7)}-01`)
+        .gte("issued_on", from)
         .lte("issued_on", today)
         .not("status", "in", "(draft,voided)")
         .limit(REPORT_READ),
@@ -197,7 +200,7 @@ export async function loadMoney(ctx: ReportContext, cap: Capped): Promise<Report
       .select("amount_received_cents, currency, succeeded_at, invoice_id")
       .eq("organization_id", org)
       .eq("status", "succeeded")
-      .gte("succeeded_at", `${from.slice(0, 7)}-01T00:00:00Z`)
+      .gte("succeeded_at", fromIso)
       .limit(REPORT_READ),
     sampleFilter(
       supabase
@@ -206,7 +209,7 @@ export async function loadMoney(ctx: ReportContext, cap: Capped): Promise<Report
         .eq("organization_id", org)
         .eq("kind", "transfer")
         .eq("status", "approved")
-        .gte("approved_at", `${from.slice(0, 7)}-01T00:00:00Z`)
+        .gte("approved_at", fromIso)
         .limit(REPORT_READ),
     ),
     sampleFilter(supabase.from("client_fund_entries").select("ledger_id, kind, status, direction, amount_cents").eq("organization_id", org).limit(REPORT_READ)),
@@ -253,7 +256,7 @@ export async function loadMoney(ctx: ReportContext, cap: Capped): Promise<Report
     const funds = rows(transfers, cap)
       .filter((row) => row.currency.toUpperCase() === "CAD" && row.approved_at && localMonth(row.approved_at) === month)
       .reduce((sum, row) => sum + row.amount_cents, 0);
-    return { month: monthLabel(month, today), invoiced: formatAmount(invoiced, "CAD"), collected: formatAmount(card + funds, "CAD") };
+    return { month: monthLabel(month, today, from), invoiced: formatAmount(invoiced, "CAD"), collected: formatAmount(card + funds, "CAD") };
   });
 
   // Client-account balances, per client across their ledgers.
@@ -369,7 +372,7 @@ export async function loadReportTab(staff: SheetStaff, tab: ReportsTab, range: R
   const local = localNow(staff.timezone, now);
   const today = isoDate(local.year, local.month, local.day);
   const from = rangeStart(range, today);
-  const ctx: ReportContext = { supabase, staff, today, from, nowIso: now.toISOString(), live: !staff.sampleMode };
+  const ctx: ReportContext = { supabase, staff, today, from, fromIso: localMidnightIso(from, staff.timezone), nowIso: now.toISOString(), live: !staff.sampleMode };
   const cap: Capped = { capped: false };
   const allowed = canSeeTab(staff.role, tab);
   const [ops, money, outcomes] = await Promise.all([
@@ -402,14 +405,27 @@ export async function loadSheetReports(staff: SheetStaff, query: SheetQuery, now
   const [chrome, loaded] = await Promise.all([loadSheetChrome(staff, "/sheet/reports"), loadReportTab(staff, tab, range, now)]);
   const nav = (key: ReportRange) => `/sheet/reports?tab=${tab}&view=${key}`;
   const exportHref = `/api/reports/export?tab=${tab}&range=${range}`;
+  // Export can't run on Scheduled (there is nothing scheduled to export) or on a tab the role
+  // can't see: the dialog says why instead of offering a dead button.
+  const exportBlocked = !loaded.allowed
+    ? "Your role can’t see this report, so there is nothing to export from it."
+    : tab === "scheduled"
+      ? "Scheduled reports aren’t set up yet, so there is nothing to export here. Export from Operations, Money or Processing and outcomes."
+      : null;
   const reports: ReportsData = {
     tab,
     range,
     pills: [rangeLabel(loaded.from, loaded.today), loaded.scope],
+    pillTitles: [
+      `The period, in the firm’s timezone (${staff.timezone}), from midnight on its first day.`,
+      staff.role === "firm_owner" ? "Every office is included. Reports can’t be narrowed to one office yet." : "Only the matters your role can open are counted.",
+    ],
     rangeNav: { "90d": nav("90d"), month: nav("month"), year: nav("year") },
     ops: loaded.ops,
     money: loaded.money,
-    outcomes: loaded.outcomes,
+    outcomes: loaded.outcomes
+      ? { ...loaded.outcomes, intro: "Descriptive history only. These numbers describe past files; they aren’t anyone’s chance of success." }
+      : null,
     scheduled: { rows: [] },
     denied: loaded.allowed ? null : DENIED[tab as keyof typeof DENIED] ?? null,
     freshness: loaded.freshness,
@@ -417,10 +433,11 @@ export async function loadSheetReports(staff: SheetStaff, query: SheetQuery, now
       filters: [RANGE_LABEL[range], loaded.scope.toLowerCase(), "all owners"],
       timezone: staff.timezone,
       currency: "CAD",
-      note: "The file downloads to this device. Its first lines record the filters, when it was made, who made it and who can see this report.",
+      note: exportBlocked ?? "The file downloads to this device. Its first lines record the filters, when it was made, who made it and who can see this report.",
       toastSub: "Downloaded to this device.",
       // Nothing to export from a tab the role can't see, or from Scheduled (no schedules yet).
-      wire: loaded.allowed && tab !== "scheduled" ? { href: exportHref } : { href: "", disabled: true },
+      wire: exportBlocked ? { href: "", disabled: true, reason: exportBlocked } : { href: exportHref },
+
     },
   };
   return { chrome, reports };
