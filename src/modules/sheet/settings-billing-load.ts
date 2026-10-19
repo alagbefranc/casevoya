@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import {
-  readUsage,
+  readFirmSubscription,
   retentionPage,
   subscriptionPage,
   subscriptionPill,
@@ -16,7 +16,7 @@ type Client = Awaited<ReturnType<typeof createClient>>;
 
 /** The firm's subscription row (any staff member with MFA may read it). */
 async function loadSubscription(supabase: Client, org: string): Promise<SubscriptionRow | null> {
-  const { data } = await supabase.from("organization_subscriptions").select("status, trial_started_at, trial_ends_at").eq("organization_id", org).maybeSingle();
+  const { data } = await supabase.from("organization_subscriptions").select("status, trial_started_at, trial_ends_at, plan").eq("organization_id", org).maybeSingle();
   return data ?? null;
 }
 
@@ -30,16 +30,17 @@ async function profileNames(supabase: Client, ids: (string | null | undefined)[]
 
 /**
  * Settings > Subscription: the stored subscription state and, for the firm owner and finance,
- * real usage counts from public.firm_subscription_usage. Read as the signed-in staff member.
+ * the plan, prices, allowances, real usage and Casevoya's invoices from public.firm_subscription
+ * (which also moves the state clock). Read as the signed-in staff member.
  */
 export async function loadSheetSubscription(staff: SheetStaff): Promise<{ chrome: Awaited<ReturnType<typeof loadSheetChrome>>; pill: string; page: SubscriptionData }> {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
-  const [chrome, subscription, usage] = await Promise.all([
-    loadSheetChrome(staff, "/sheet/settings"),
-    loadSubscription(supabase, org),
-    staff.role === "firm_owner" || staff.role === "finance_user" ? supabase.rpc("firm_subscription_usage", { p_organization_id: org }) : null,
-  ]);
+  const canSee = staff.role === "firm_owner" || staff.role === "finance_user";
+  const [chrome, firm] = await Promise.all([loadSheetChrome(staff, "/sheet/settings"), canSee ? supabase.rpc("firm_subscription", { p_organization_id: org }) : null]);
+  const detail = firm && !firm.error ? readFirmSubscription(firm.data) : null;
+  // After the clock moved the state, read the row again so the pill and the State row agree.
+  const subscription = await loadSubscription(supabase, org);
   const now = new Date();
   return {
     chrome,
@@ -47,9 +48,12 @@ export async function loadSheetSubscription(staff: SheetStaff): Promise<{ chrome
     page: subscriptionPage({
       firmName: staff.organizationName,
       subscription,
-      usage: usage && !usage.error ? readUsage(usage.data) : null,
+      usage: detail?.usage ?? null,
       timeZone: staff.timezone,
       now,
+      detail,
+      canManage: staff.role === "firm_owner",
+      organizationId: org,
     }),
   };
 }

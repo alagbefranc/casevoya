@@ -117,8 +117,11 @@ describe("Agreements: every tab is the firm's own", () => {
     expect(html).toContain(`href="/api/agreements/${ENVELOPE}/pdf?organizationId=${ORG}"`);
     expect(html).toContain('<ol class="fp-steps"><li class="done">');
     expect(html).not.toMatch(SAMPLE_PEOPLE);
-    const pending = renderToStaticMarkup(createElement(SheetAgreementsPending, { data: { title: "Quote builder", intro: "Quotes.", empty: { title: "The quote builder isn’t built yet", copy: "Not yet." }, action: null } }));
-    expect(pending).toContain("isn’t built yet");
+    // The Envelope tab without an agreement keeps the honest pick panel; the Quote builder,
+    // Agreement editor and Compare versions tabs are live (designer-fidelity-agreements.test.tsx).
+    const pending = renderToStaticMarkup(createElement(SheetAgreementsPending, { data: { title: "Envelope", intro: "One agreement’s signers.", empty: { title: "Choose an agreement", copy: "Open one from All agreements." }, action: null } }));
+    expect(pending).toContain("Choose an agreement");
+    expect(pending).not.toContain("isn’t built yet");
     expect(pending).not.toMatch(SAMPLE_PEOPLE);
   });
 

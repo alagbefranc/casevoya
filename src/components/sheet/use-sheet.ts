@@ -20,6 +20,7 @@ import {
   runNewAgreement,
   runNewTemplate,
 } from "./agreement-acts";
+import { editQuoteTable, reopenQuoteDialogs, runClauseSave, runQuoteConvert, runQuoteNew, runQuoteSave, runQuoteSend } from "./quote-acts";
 import { openRefund, reopenInvoiceDialog, reopenRefundDialog, runNewInvoice, runRefund } from "./finance-acts";
 import {
   openFunds,
@@ -102,6 +103,7 @@ import { mountIntakeBuilder } from "./intake-builder-acts";
 import { runVoAccept, runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
 import { runVoDocAccept, runVoDocDiscard, runVoDocReject, runVoRead } from "./vo-doc-acts";
 import { mountRetentionSlider, runRetentionSave } from "./retention-act";
+import { mountSubscription, runSubscriptionAct } from "./subscription-act";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
 import {
   mountIntegrations,
@@ -344,6 +346,32 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
             ? runAgreementVoid(agreementAct, router)
             : runAuthoritySave(agreementAct, router);
         void run.finally(() => agreementAct.removeAttribute("aria-busy"));
+        return;
+      }
+      // The Quote builder and Agreement editor tabs: New quote, Save quote, Send quote, Turn into
+      // agreement and a clause's Save, each keyed by `data-agreement-act`; the Edit quote dialog's
+      // Add a line / Remove rows.
+      if (editQuoteTable(target)) {
+        event.preventDefault();
+        return;
+      }
+      const quoteAct = target.closest<HTMLElement>("[data-agreement-act]");
+      if (quoteAct && root.contains(quoteAct)) {
+        event.preventDefault();
+        if (quoteAct.getAttribute("aria-busy") === "true" || quoteAct.hasAttribute("disabled")) return;
+        quoteAct.setAttribute("aria-busy", "true");
+        const act = quoteAct.dataset.agreementAct;
+        const run =
+          act === "quote-save"
+            ? runQuoteSave(quoteAct, router)
+            : act === "quote-send"
+              ? runQuoteSend(quoteAct, router)
+              : act === "quote-new"
+                ? runQuoteNew(quoteAct, router)
+                : act === "quote-convert"
+                  ? runQuoteConvert(quoteAct, router)
+                  : runClauseSave(quoteAct, router);
+        void run.finally(() => quoteAct.removeAttribute("aria-busy"));
         return;
       }
       // The Finance page's New invoice.
@@ -659,6 +687,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (retentionSave && root.contains(retentionSave)) {
         event.preventDefault();
         busyRun(retentionSave, () => runRetentionSave(retentionSave, router));
+        return;
+      }
+      // Settings > Subscription (firm owner): Choose a plan, Continue to payment, Manage billing.
+      const subscriptionAct = target.closest<HTMLElement>("[data-subscription-act]");
+      if (subscriptionAct && root.contains(subscriptionAct)) {
+        event.preventDefault();
+        busyRun(subscriptionAct, () => runSubscriptionAct(subscriptionAct, openDialog));
         return;
       }
       const bookingSubmit = target.closest<HTMLElement>("[data-booking-submit]");
@@ -1143,6 +1178,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     }
     // Settings > Retention: the firm owner's slider moves (firm setup's own k2Slider).
     if (page === "settings") mountRetentionSlider(root);
+    // Settings > Subscription: the plan dialog's total, ?checkout= toasts, ?dlg=plan after step-up.
+    if (page === "settings" && window.location.search.includes("tab=billing")) mountSubscription(root, router, openDialog);
     // ?dlg=terms|privacy (coming back from step-up) reopens that publish dialog with what was typed.
     const policyKind = policyKindForDialog(dialogParam);
     for (const kind of POLICY_KINDS) {
@@ -1193,6 +1230,22 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       }
     }
 
+    // ?dlg=quote-edit|quote-new|quote-convert|clause (back from step-up) reopens the Quote builder
+    // and Agreement editor dialogs with what was typed; closing one drops the flag.
+    if (root.querySelector("[data-agreement-act]")) {
+      window.setTimeout(() => reopenQuoteDialogs(root, openDialog), 300);
+      for (const live of root.querySelectorAll<HTMLDialogElement>("dialog")) {
+        if (!live.querySelector("[data-agreement-act]")) continue;
+        live.addEventListener("close", () => {
+          const search = new URLSearchParams(window.location.search);
+          if (!search.has("dlg") || root.querySelector("dialog[open]")) return;
+          search.delete("dlg");
+          search.delete("clause");
+          const query = search.toString();
+          router.replace(`${window.location.pathname}${query ? `?${query}` : ""}`);
+        }, listen);
+      }
+    }
     // ?dlg=invoice opens the live New invoice dialog: empty from the home's Issue invoice, or with
     // what was typed when coming back from step-up. Closing it drops the flag.
     const invoiceDialog = root.querySelector<HTMLDialogElement>("dialog#dlgInv");

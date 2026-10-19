@@ -268,6 +268,24 @@ A sent version stores SHA-256 of its canonical text and cannot be edited. A fee 
 
 `agreements.envelope_days` is 14 and `agreements.esign_consent` is version `esign-consent-2026-10-17`. Both have `pending_confirmation` true.
 
+### Quote builder, Agreement editor and Compare versions (repository only, `20261020140000`–`20261020140100`)
+
+Not applied on the live project. `20261020140000` adds the enums `quote_line_category` (professional_fee, tax, disbursement, government_fee), `quote_paid_as` (advance, invoice_after_delivery) and `agreement_clause_source` (template, edited) in their own migration. `20261020140100` adds:
+
+| Table | Holds | Who reads it |
+|---|---|---|
+| `quote_lines` | One priced line of a quote version: position, category, description, `amount_cents`, optional `tax_rate_bps`, and for a government fee the dated reference typed by staff (`source_note`, `entered_by`, `entered_on`; a check refuses a government fee without them). `is_sample` follows the matter. | Whoever may read the agreement (`app.can_read_agreement`): the firm's staff on the matter, and the quote's client. |
+| `quote_instalments` | When each part is paid: position, label ("On signing" or a milestone), `amount_cents`, `paid_as`. They add up to the total to the firm (every line but government fees). | As above. |
+| `agreement_clauses` | One version's text split into clauses: position, title, body, `mandatory`, `headed` (false for a Preamble or a text without titles), `source` (template or edited). Rebuilt whenever the version's text changes. | As above. |
+
+Columns added: `agreement_versions.body` (the text alone; null for versions made before this migration), `services`, `deliverables`, `fee_structure` (quote fields); `agreement_templates.mandatory_clauses text[]`; `agreements.accepted_at`, `accepted_by`. Product setting `agreements.quote_days` = 30 (`pending_confirmation`).
+
+Rows of a locked version never change (`app.guard_version_children` on insert, update and delete); there is no insert, update or delete grant. Clause convention (`app.split_agreement_clauses`): a line starting `## ` is a clause title; `## !` marks it mandatory; text before the first title is the "Preamble"; a text with no titles is one clause, "Agreement text". `app.store_agreement_clauses` marks a clause mandatory when the template's `mandatory_clauses` names its title, and `edited` when its wording differs from the template's clause of the same title.
+
+Functions (security definer, `search_path = ''`, revoked from public and anon; public wrappers are security invoker): `public.create_quote(matter, title, template)` (licensed membership with step-up, `app.require_licensed_staff`; expiry = `app.quote_default_expiry` = firm today + `agreements.quote_days`), `public.save_quote(agreement, scope, services, exclusions, deliverables, fee_structure, refund_policy, expires_on, government_fee_note, lines jsonb, instalments jsonb)` (validates and totals in cents; in place while unlocked, else version N+1 "Quote revised" and back to draft; refuses an accepted quote; audited `agreement.quote_saved` / `quote_revised`), `public.send_quote(agreement)` (`app.send_agreement` for a quote: hash, lock, status sent, no envelope, no email; audited `agreement.quote_sent`), `public.quote_to_agreement(quote, service template)` (a service draft with the quote's terms; audited `agreement.created_from_quote`), `public.edit_agreement_clause(agreement, clause, body)` (owner, licensed consultant or case manager with step-up; refuses mandatory clauses and executed or accepted agreements; rebuilds the text and calls `app.revise_agreement`, so an open envelope is superseded). Redefined from their latest definitions: `app.create_agreement` and `app.revise_agreement` (store `body` and rebuild clauses), `app.accept_quote` (records `accepted_at`, `accepted_by`).
+
+Tested in `tests/agreements-quote-editor.rls.test.ts`.
+
 ## Email (repository only, `20261017200000`–`20261017200200`)
 
 Not applied on the live project. Do not run `pnpm db:types` or `supabase db push` for them. Do not deploy the Worker from CI.
@@ -328,6 +346,30 @@ Functions (security definer, `search_path = ''`, revoked from public and anon):
 
 Tested in `tests/whatsapp-zernio.rls.test.ts` (tenant isolation, consent required, owner-only connect and disconnect with step-up, clients changing only their own choice, the worker, inbound filing and triage, delivery status, the reply window).
 
+## SaaS subscription billing (repository only, `20261020160000`–`20261020160100`)
+
+T042; PRD §3 pricing, ADM-02, SEC-10, FIN-01. Prices live in `product_settings` (`subscription.plans`: CAD cents per month, seats, matters, proposed `storage_gb`, `extra_seat_monthly_cents`, `annual_months`; `subscription.grace`: `past_due_days` 7, `export_window_days` 90; `subscription.stripe_prices`: cached Stripe Price ids per mode by lookup key). Stripe is TEST mode on the platform account; the Prices exist already (lookup keys `casevoya_<solo|practice|firm>_<month|year>`, `casevoya_seat_<month|year>`) and the app never creates one.
+
+| Migration | What changes |
+| --- | --- |
+| `20261020160000_subscription_billing_enums.sql` | `subscription_status` gains `past_due`, `restricted`, `archived`. New enums `subscription_plan` (solo, practice, firm, enterprise) and `billing_interval` (month, year). |
+| `20261020160100_subscription_billing.sql` | The three `product_settings` rows above. `organization_subscriptions` gains `plan`, `billing_interval`, `extra_seats`, `stripe_customer_id`, `stripe_subscription_id` (both unique when set), `current_period_end`, `cancel_at`, `cancelled_at`, `past_due_since`, `restricted_at`, `archived_at`, `latest_invoice_status`, `latest_invoice_url`, `last_webhook_event_id`. New tables and functions below. Redefines, each copied from its latest definition: `app.create_staff_invitation` (from `20261017200100`): refuses when new work is paused, and beyond the seat allowance (active staff plus open staff invitations, not counting an earlier invitation to the same person) with the limit named; `public.create_engaged_matter` (from `20261017170000`): for a real matter only, refuses when new work is paused and beyond the active-matter allowance (matters not closed, sample matters never counted); `app.real_client_invite_blockers` (from `20261019221100`): adds `subscription_restricted` after `trial_ended` (restricted, cancelled, archived, or past due beyond the grace). |
+
+| Table | What it holds | Who reads (RLS) |
+| --- | --- | --- |
+| `subscription_events` | Checkout requests and every applied Stripe billing event: kind, `stripe_event_id` (unique), a redacted payload (ids, status, amounts, dates; never a card or address), `occurred_at`. | The firm owner and finance, their own firm. Only functions write. |
+| `subscription_invoices` | Casevoya's invoices to the firm from Stripe: `stripe_invoice_id` (unique), number, status, amounts in cents, currency, period, Stripe's hosted URL and PDF. | The firm owner and finance, their own firm. Only functions write. |
+
+Functions (security definer, `search_path = ''`, revoked from public and anon):
+
+* `public.subscription_plan_catalog()`: any signed-in user. `app.subscription_plan_catalog()`, `app.subscription_grace_days(key)`.
+* `app.sync_subscription_state(org)`: trial → trial_ended (through `app.sync_trial_status`), past_due past the grace → restricted (`restricted_at`), cancelled past the export window → archived (`archived_at`); audited (`subscription.restricted`, `subscription.archived` with `records_deleted: false`). State only.
+* `app.subscription_entitlements(org)` → `{status, plan, basis (plan | trial | enterprise | none), seats, matters, storage_gb, extra_seats, new_work_blocked}`; enforced only once a plan is chosen: a trial, an ended trial or no plan has null limits (decision 2026-10-19), as does enterprise. `public.subscription_entitlements(org)`: the firm's staff at staff MFA (Team and seats shows "N of M").
+* `public.firm_subscription(org)`: firm owner or finance: the synced state (no Stripe id), entitlements, `firm_subscription_usage`, the catalog, the grace days and the last 24 invoices.
+* `public.subscription_checkout_allowed(org, plan, interval, extra_seats)`: firm owner with a recent step-up; refuses enterprise, a bad seat count, a plan without a price, and a firm whose live Stripe subscription should change in the portal; records the intent (`subscription_events` `checkout.requested`, audit `subscription.checkout_requested`) with an idempotency key and returns the firm name, billing email, existing customer id and catalog for the server action. `public.record_subscription_customer(org, cus_id)`: owner step-up, sets the Stripe customer once. `public.subscription_portal_allowed(org)`: owner step-up, audited `subscription.portal_opened`.
+* `public.apply_stripe_subscription_event(event jsonb)`: service role only (the billing webhook `/api/stripe/billing`). Dedupes through `webhook_inbox` as provider `stripe_billing`; finds the firm by `organization_id` (Stripe metadata `casevoya_organization_id`) or by `stripe_customer_id`; ignores live mode and unknown firms. `checkout.session.completed` → active with the plan; `customer.subscription.created/updated` → active / past_due (sets `past_due_since` once) / cancelled, with plan, interval, extra seats, period end and `cancel_at`; `customer.subscription.deleted` → cancelled (`cancelled_at`); `invoice.paid` upserts the invoice and returns past_due or restricted to active; `invoice.payment_failed` upserts the invoice and moves active to past_due. Audited `subscription.webhook_applied` with the status before and after. `public.cache_subscription_stripe_prices(mode, prices)`: service role, merges resolved Price ids into `subscription.stripe_prices`.
+
+Tested in `tests/subscription-billing.rls.test.ts` (catalog, entitlements, tenant isolation of events and invoices, owner-only checkout and portal intents with step-up, service-role-only webhook with dedupe, the past due → restricted → paid cycle, cancellation and archiving, seat and matter refusals), `tests/subscription-webhook.test.ts` (signature, redaction, Checkout and portal with fake Stripe) and `tests/subscription-catalog.test.ts` (the lookup-key amounts match the catalog).
 ## Support access (repository only, `20261020170000`–`20261020170200`)
 
 SEC-04, SEC-09, ADM-04; branch `support-access-grants`; the admin-portal contract is in `docs/integrations/support-access.md`.

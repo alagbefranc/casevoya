@@ -37,8 +37,15 @@ async function loadOffboardFacts(supabase: Client, org: string, membershipId: st
 }
 
 async function loadHeader(supabase: Client, staff: SheetStaff, tab: SettingsHeaderData["tab"]): Promise<SettingsHeaderData> {
-  const subscription = await supabase.from("organization_subscriptions").select("status").eq("organization_id", staff.organizationId).maybeSingle();
-  return { firmName: staff.organizationName, plan: planPill(subscription.data?.status), tab };
+  const subscription = await supabase.from("organization_subscriptions").select("status, plan").eq("organization_id", staff.organizationId).maybeSingle();
+  return { firmName: staff.organizationName, plan: planPill(subscription.data?.status, subscription.data?.plan), tab };
+}
+
+/** The plan's staff-seat allowance for "N of M seats" (public.subscription_entitlements, any staff); null when unknown or unlimited. */
+async function loadSeatAllowance(supabase: Client, org: string): Promise<number | null> {
+  const result = await supabase.rpc("subscription_entitlements", { p_organization_id: org });
+  const seats = result.error || !result.data || typeof result.data !== "object" || Array.isArray(result.data) ? null : (result.data as { seats?: unknown }).seats;
+  return typeof seats === "number" && Number.isInteger(seats) && seats > 0 ? seats : null;
 }
 
 /**
@@ -51,7 +58,7 @@ export async function loadSheetSettingsTeam(staff: SheetStaff, now: Date = new D
   const org = staff.organizationId;
   const owner = staff.role === "firm_owner";
   const since = new Date(now.getTime() - EXPIRED_SHOWN_DAYS * 86_400_000).toISOString();
-  const [chrome, header, members, security, invites, firm] = await Promise.all([
+  const [chrome, header, members, security, invites, firm, seatAllowance] = await Promise.all([
     loadSheetChrome(staff, "/sheet/settings"),
     loadHeader(supabase, staff, "team"),
     loadMembers(supabase, org),
@@ -66,6 +73,7 @@ export async function loadSheetSettingsTeam(staff: SheetStaff, now: Date = new D
       .order("created_at", { ascending: false })
       .limit(READ),
     supabase.from("organizations").select("continuity_contact_name, continuity_contact_email, succession_note").eq("id", org).maybeSingle(),
+    loadSeatAllowance(supabase, org),
   ]);
   const others = members.filter((member) => member.membershipId !== staff.membershipId);
   const pending: PendingInvitation[] = (invites.data ?? []).map((row) => ({
@@ -88,6 +96,7 @@ export async function loadSheetSettingsTeam(staff: SheetStaff, now: Date = new D
     continuity,
     canInvite: owner,
     canManage: manage,
+    seatAllowance,
     now,
     timeZone: staff.timezone,
   });

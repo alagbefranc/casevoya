@@ -27,11 +27,17 @@ export type ContinuityFacts = {
   succession: string | null;
 };
 
-/** "Plan: Trial". No plan name is stored, so an active subscription shows no plan pill. */
-export function planPill(status: string | null | undefined): string | null {
+const PLAN_PILL: Record<string, string> = { solo: "Solo", practice: "Practice", firm: "Firm", enterprise: "Enterprise" };
+
+/** "Plan: Practice" once a plan is chosen (organization_subscriptions.plan); before that, the state. */
+export function planPill(status: string | null | undefined, plan?: string | null): string | null {
+  if (plan && PLAN_PILL[plan] && (status === "active" || status === "past_due" || status === "restricted")) return `Plan: ${PLAN_PILL[plan]}`;
   if (status === "trial") return "Plan: Trial";
   if (status === "trial_ended") return "Plan: Trial ended";
+  if (status === "past_due") return "Plan: Past due";
+  if (status === "restricted") return "Plan: Restricted";
   if (status === "cancelled") return "Plan: Cancelled";
+  if (status === "archived") return "Plan: Archived";
   return null;
 }
 
@@ -79,13 +85,13 @@ function plural(n: number, one: string, many: string) {
 }
 
 /**
- * "4 staff seats in use, 1 invitation waiting. Clients and family don’t use a seat." No seat
- * allowance is stored for any plan, so none is claimed.
+ * "4 of 6 staff seats in use, 1 invitation waiting. Clients and family don’t use a seat." The
+ * allowance comes from the plan (public.subscription_entitlements); null means none is claimed.
  */
-export function teamSummary(members: readonly DirectoryMember[], openInvites: number): string {
+export function teamSummary(members: readonly DirectoryMember[], openInvites: number, seatAllowance: number | null = null): string {
   const active = members.filter((member) => member.status === "active").length;
   const suspended = members.length - active;
-  const parts = [`${plural(active, "staff seat", "staff seats")} in use`];
+  const parts = [seatAllowance === null ? `${plural(active, "staff seat", "staff seats")} in use` : `${active} of ${seatAllowance} staff seats in use`];
   if (suspended) parts.push(`${suspended} suspended`);
   if (openInvites) parts.push(`${plural(openInvites, "invitation", "invitations")} waiting`);
   return `${parts.join(", ")}. Clients and family don’t use a seat.`;
@@ -117,6 +123,8 @@ export function teamData(input: {
   canInvite: boolean;
   /** A firm owner with someone else on the team: Offboard someone, and Change role or access. */
   canManage?: boolean;
+  /** The plan's staff-seat allowance (plan seats plus extra seats); null when no limit is known. */
+  seatAllowance?: number | null;
   now: Date;
   timeZone: string;
 }): TeamData {
@@ -125,7 +133,7 @@ export function teamData(input: {
   const invites = orderedInvitations(input.invites, input.now);
   const open = invites.filter((invite) => new Date(invite.expiresAt).getTime() > input.now.getTime()).length;
   return {
-    summary: teamSummary(input.members, open),
+    summary: teamSummary(input.members, open, input.seatAllowance ?? null),
     rows: [
       ...input.members.map((member) => memberTeamRow(member, security.get(member.membershipId))),
       ...invites.map((invite) => invitationTeamRow(invite, input.now, input.timeZone)),

@@ -160,8 +160,8 @@ import {
 import { ComposioDialog } from "@/components/sheet/designer/settings-integrations";
 import { composioDialog, integrationsData, notificationPrefsData } from "@/modules/sheet/settings-integrations-present";
 import { SettingsMarkup } from "@/components/sheet/markup/settings";
-import { SettingsBillingHeader, SheetRetention, SheetSubscription, type RetentionData, type SettingsBillingTab, type SubscriptionData } from "@/components/sheet/designer/settings-billing";
-import { retentionPage, subscriptionPage, subscriptionPill } from "@/modules/sheet/settings-billing-present";
+import { PlanDialog, SettingsBillingHeader, SheetRetention, SheetSubscription, type RetentionData, type SettingsBillingTab, type SubscriptionData } from "@/components/sheet/designer/settings-billing";
+import { readFirmSubscription, retentionPage, subscriptionPage, subscriptionPill } from "@/modules/sheet/settings-billing-present";
 import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam, type SecurityData, type TeamData } from "@/components/sheet/designer/settings";
 import { securityData, teamData } from "@/modules/sheet/settings-present";
 import { OffboardDialog, type OffboardDialogData } from "@/components/sheet/designer/settings-staff-admin";
@@ -3925,11 +3925,73 @@ describe("Designer fidelity: Settings, Subscription and Retention", () => {
     expect(html).toContain("What Walk Test Immigration pays Casevoya.");
     expect(html).toContain("<dt>State</dt><dd>Trial since 10 Oct 2026, ends 24 Oct 2026</dd>");
     expect(html).toContain("<dt>Seats</dt><dd>2 in use, 1 invited. No seat limit is set.</dd>");
-    expect(html).toContain("<dt>Active matters</dt><dd>3 (3 sample). No limit is set.</dd>");
+    expect(html).toContain("<dt>Active matters</dt><dd>0 in use (3 sample, not counted). No limit is set.</dd>");
     expect(html).toContain("<dt>Vo runs this month</dt><dd>4 since 1 Oct</dd>");
-    expect(html).not.toMatch(/Northline|Lena|Practice|\$|CAD|\b(129|299|599)\b|90 days/);
+    expect(html).not.toMatch(/Northline|Lena|Practice|\$|CAD|\b(129|299|599)\b|data-subscription-act|dlgPlan/);
     // The live-only note is the Designer's .fp-note with its info icon.
-    expect(html).toMatch(/<p class="fp-note rv" style="--i:2"><svg class="ic s" aria-hidden="true"><use href="[^"]*#i-info"><\/use><\/svg> Casevoya sets plans and prices/);
+    expect(html).toMatch(/<p class="fp-note rv" style="--i:2"><svg class="ic s" aria-hidden="true"><use href="[^"]*#i-info"><\/use><\/svg> Plans, prices and invoices are shown to the firm owner and finance/);
+  });
+
+  it("gives the firm owner the live-only buttons, invoice links and plan dialog, built from Designer parts and stripped back to the capture", () => {
+    const now = new Date("2026-10-19T15:00:00Z");
+    const detail = readFirmSubscription({
+      subscription: {
+        status: "active", plan: "practice", billing_interval: "month", extra_seats: 1, trial_started_at: "2026-09-01T12:00:00Z", trial_ends_at: "2026-09-15T12:00:00Z",
+        current_period_end: "2026-11-19T15:00:00Z", cancel_at: null, cancelled_at: null, past_due_since: null, restricted_at: null, archived_at: null,
+        latest_invoice_status: "paid", latest_invoice_url: "https://invoice.stripe.com/i/synthetic", has_billing_account: true, has_stripe_subscription: true,
+      },
+      entitlements: { status: "active", plan: "practice", basis: "plan", seats: 7, matters: 500, storage_gb: 100, extra_seats: 1, new_work_blocked: false },
+      usage: { seats_active: 6, seats_invited: 0, active_matters: 12, sample_matters: 0, storage_bytes: 6.2 * 1024 ** 3, vo_runs_month: 1, emails_month: 2, month_start: "2026-10-01" },
+      catalog: { currency: "CAD", annual_months: 10, extra_seat_monthly_cents: 2500, solo: { monthly_cents: 12900, seats: 2, matters: 100, storage_gb: 25 }, practice: { monthly_cents: 29900, seats: 6, matters: 500, storage_gb: 100 }, firm: { monthly_cents: 59900, seats: 15, matters: 1500, storage_gb: 250 } },
+      grace: { past_due_days: 7, export_window_days: 90 },
+      invoices: [{ id: "i1", number: "CV-0007", status: "paid", amount_due_cents: 32400, amount_paid_cents: 32400, currency: "cad", period_start: null, period_end: null, hosted_invoice_url: "https://invoice.stripe.com/i/synthetic", pdf_url: null, created_at: "2026-10-19T15:00:00Z" }],
+    });
+    const subscription = { status: "active", trial_started_at: null, trial_ends_at: null, plan: "practice" };
+    const data = subscriptionPage({ firmName: "Walk Test Immigration", subscription, usage: null, timeZone: "America/Toronto", now, detail, canManage: true, organizationId: "00000000-0000-4000-8000-000000000001" });
+    expect(subscriptionPill(subscription, now)).toBe("Plan: Practice");
+    const html = renderToStaticMarkup(createElement(SheetSubscription, { data }));
+    // The Designer's rows, filled from the catalog and the entitlements.
+    expect(html).toContain("<dt>Plan</dt><dd>Practice · CAD 299/month, plus 1 extra seat</dd>");
+    expect(html).toContain("<dt>State</dt><dd>Active, renews on 19 Nov 2026</dd>");
+    expect(html).toContain("<dt>Seats</dt><dd>6 of 7 (6 plan + 1 extra)</dd>");
+    expect(html).toContain("<dt>Active matters</dt><dd>12 of 500</dd>");
+    expect(html).toContain("<dt>Storage</dt><dd>6.2 of 100 GB</dd>");
+    // Live-only: the invoice line with its Download link inside the Designer's dd.
+    expect(html).toContain('<dt>Invoices from Casevoya</dt><dd>CV-0007 · 19 Oct 2026 · CAD 324 · Paid <a href="https://invoice.stripe.com/i/synthetic" target="_blank" rel="noreferrer">Download</a></dd>');
+    // Live-only: the owner's .fp-row of Designer .btn buttons under the dl; a live subscription changes in the portal.
+    expect(html).toContain(
+      '<div class="fp-row" style="margin-top:12px"><button class="btn p sm" data-subscription-act="portal" data-org="00000000-0000-4000-8000-000000000001">Change plan</button><button class="btn sm" data-subscription-act="portal" data-org="00000000-0000-4000-8000-000000000001">Manage billing</button><button class="btn sm" data-subscription-act="portal" data-org="00000000-0000-4000-8000-000000000001">Cancel at period end</button></div>',
+    );
+    expect(data.dialog).toBeNull();
+    // With the live-only row stripped, the panel closes exactly as the capture does.
+    expect(html.replace(/<div class="fp-row"[\s\S]*?<\/div>/, "")).toMatch(/<\/dl><\/div><\/section><p class="fp-note rv" style="--i:2">/);
+
+    // A trial firm's owner gets Choose a plan and the dialog (#dlgPlan) from the Designer's dialog parts.
+    const trial = subscriptionPage({
+      firmName: "Walk Test Immigration",
+      subscription: { status: "trial", trial_started_at: "2026-10-10T15:00:00Z", trial_ends_at: "2026-10-24T15:00:00Z", plan: null },
+      usage: null,
+      timeZone: "America/Toronto",
+      now,
+      detail: readFirmSubscription({
+        subscription: { status: "trial", plan: null, billing_interval: null, extra_seats: 0, trial_started_at: "2026-10-10T15:00:00Z", trial_ends_at: "2026-10-24T15:00:00Z", has_billing_account: false, has_stripe_subscription: false },
+        entitlements: { status: "trial", plan: null, basis: "trial", seats: 2, matters: 100, storage_gb: 25, extra_seats: 0, new_work_blocked: false },
+        usage: null,
+        catalog: detail!.catalog && { currency: "CAD", annual_months: 10, extra_seat_monthly_cents: 2500, solo: { monthly_cents: 12900, seats: 2, matters: 100, storage_gb: 25 }, practice: { monthly_cents: 29900, seats: 6, matters: 500, storage_gb: 100 }, firm: { monthly_cents: 59900, seats: 15, matters: 1500, storage_gb: 250 } },
+        grace: { past_due_days: 7, export_window_days: 90 },
+        invoices: [],
+      }),
+      canManage: true,
+      organizationId: "00000000-0000-4000-8000-000000000001",
+    });
+    expect(trial.buttons).toEqual([{ label: "Choose a plan", act: "plan", primary: true, organizationId: "00000000-0000-4000-8000-000000000001" }]);
+    const dialog = renderToStaticMarkup(createElement(PlanDialog, { data: trial.dialog! }));
+    expect(dialog).toMatch(/^<dialog class="dlg" id="dlgPlan" aria-labelledby="dlgPlanH" data-org="[^"]+" data-currency="CAD" data-annual-months="10" data-seat-cents="2500"><div class="dh"><h2 id="dlgPlanH">Choose a plan<\/h2><button class="x" aria-label="Close" data-close="dlgPlan">/);
+    expect(dialog).toContain('<div class="seg" id="plI" role="group" aria-label="Billing interval"><button type="button" data-interval="month" aria-pressed="true">Monthly</button><button type="button" data-interval="year" aria-pressed="false">Annual (10 months)</button></div>');
+    expect(dialog).toContain('<option value="practice" data-month="29900" data-year="299000" data-allowances="6 staff seats · 500 active matters · 100 GB" selected="">Practice · CAD 299/month or CAD 2,990/year</option>');
+    expect(dialog).toContain('<option value="enterprise" data-allowances="Arranged with Casevoya: no limits set here">Enterprise (contact Casevoya)</option>');
+    expect(dialog).toContain('<input class="inp" id="plX" type="number" inputMode="numeric" min="0" max="500" step="1" value="0"/>');
+    expect(dialog).toContain('<button class="btn p" data-subscription-act="checkout" data-org="00000000-0000-4000-8000-000000000001">Continue to payment</button></div></dialog>');
   });
 
   it("wires the owner's Save by data attributes, and states no statutory period", () => {
