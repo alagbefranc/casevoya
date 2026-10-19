@@ -9,6 +9,7 @@ import {
   normalizeName,
   readDateInput,
   reviewFlags,
+  sameAnswer,
   type AnswerVersion,
 } from "@/modules/intake/present";
 import { draftAnswer, intakeCards, reviewRows } from "@/components/portal/intake-live";
@@ -233,3 +234,14 @@ describe("portal cards, tasks and notifications", () => {
     expect(intakeError("an approximate date needs a note and is not stored as a full date")).toBe("Add at least the year, even a rough one.");
   });
 });
+
+describe("a correction must change the answer", () => {
+  it("compares presence and value, ignoring key order", () => {
+    const saved = { presence: "approximate" as const, value: { year: 1990, month: 3 } };
+    expect(sameAnswer({ presence: "approximate", value: { month: 3, year: 1990 } }, saved)).toBe(true);
+    expect(sameAnswer({ presence: "approximate", value: { month: 4, year: 1990 } }, saved)).toBe(false);
+    expect(sameAnswer({ presence: "unknown", value: {} }, saved)).toBe(false);
+    expect(sameAnswer({ presence: "provided", value: { text: "A" } }, undefined)).toBe(false);
+  });
+});
+

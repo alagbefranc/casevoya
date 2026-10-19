@@ -22,6 +22,7 @@ import {
   questionCount,
   readDateInput,
   readEntries,
+  sameAnswer,
   visibleFields,
   type AnswerVersion,
   type HistoryEntry,
@@ -1373,6 +1374,10 @@ export function CorrectionFlow({ viewer, form, initialField }: { viewer: PortalV
         }
         if ("error" in read) {
           setError(read.error);
+          return;
+        }
+        if (sameAnswer(read, latest.get(field.key)?.latest)) {
+          setError("That’s the same as the answer you sent. Change it, or go back and describe the problem.");
           return;
         }
       }

@@ -264,6 +264,11 @@ describe("Intake delivery: corrections and review", () => {
       )
     ).rows[0].made;
     expect(made.reference).toBe("CR-0001");
+    // A correction must change the answer: the same value again is refused (key order ignored).
+    await expectDbError(
+      () => db.query(`select public.request_intake_correction($1, 'full_name', 'provided', '{"text":"Synthetic Applicant-Corrected"}'::jsonb, 'Again', null, null)`, [sent.response_id]),
+      /same as the answer you sent/,
+    );
     const other = (
       await db.query<{ made: { reference: string; answer_id: string | null } }>(`select public.request_intake_correction($1, null, null, null, null, 'My travel dates are wrong', null) as made`, [sent.response_id])
     ).rows[0].made;
