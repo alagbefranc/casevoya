@@ -5,6 +5,7 @@ import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import { grantDialog, grantsData, type FirmGrant, type GrantChoice } from "@/modules/sheet/grants-present";
 import { loadLicenceMembers } from "@/modules/sheet/licence-load";
 import type { SheetStaff } from "@/modules/sheet/load";
+import { isoDateInTimeZone } from "@/modules/sheet/present";
 
 /**
  * The Designer's Access grants page, read as the signed-in staff member. The grant list and the
@@ -40,6 +41,6 @@ export async function loadSheetGrants(staff: SheetStaff, tab: GrantsTab, now: Da
     matterReference: row.matter_reference,
   }));
   const page: GrantsData = grantsData(tab, rows, members, now, staff.timezone);
-  const dialog: GrantDialogData = grantDialog(org, options);
+  const dialog: GrantDialogData = grantDialog(org, options, isoDateInTimeZone(now, staff.timezone));
   return { chrome, page, dialog };
 }

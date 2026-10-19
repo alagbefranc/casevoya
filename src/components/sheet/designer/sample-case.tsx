@@ -57,7 +57,7 @@ export type GoLiveData = {
     added: boolean;
     /** It is revoked, suspended, inactive or not entitled, so it keeps invitations locked. */
     blocked: boolean;
-    /** Where the latest check stands in the panel's words ("waiting for review"); null without a licence. */
+    /** Where the latest check stands in the panel's words ("declared", "needs review", "verified"); null without a licence. */
     status: string | null;
   };
   trialEnded: boolean;

@@ -66,7 +66,7 @@ Subjects and preheaders must not reveal a program, document name, amount or deci
 | EX04 | Dependant invite | machine_draft | — | — | No (not_approved) |
 | EX05 | Document needs another look | machine_draft | — | — | No (not_approved) |
 | EX06 | Document accepted | machine_draft | — | — | No (not_approved) |
-| EX06-received | Document received (variant of EX06) | machine_draft | — | — | No (not_approved) |
+| EX06-received | Document received | machine_draft | — | — | No (not_approved) |
 | EX07 | New message | machine_draft | — | — | No (not_approved) |
 | EX08 | Payment failed | machine_draft | — | — | No (not_approved) |
 | EX09 | Refund started | machine_draft | — | — | No (not_approved) |
@@ -540,7 +540,7 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:b555b167919
 | `body` | {firm_name} accepted one of your documents for your file. Accepted means accepted by {firm_name}, not by the government. | {firm_name} a accepté l’un de vos documents pour votre dossier. Accepté signifie accepté par {firm_name}, et non par le gouvernement. | Machine draft. Keep {firm_name} |
 | `cta` | Open your portal | Ouvrir votre portail | Machine draft. Same English as another template; same French reused. |
 
-## EX06-received: Document received (variant of EX06)
+## EX06-received: Document received
 
 A document upload passes the file check (outbox document.uploaded, template document_receipt). Audience: client. [French preview](../email/previews/fr/EX06-received.html)
 

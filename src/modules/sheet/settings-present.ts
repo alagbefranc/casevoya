@@ -154,6 +154,8 @@ export function securityData(input: {
   /** Two-step resets and ended sessions in the audit trail, last 30 days. Null when not readable. */
   events: number | null;
   timeZone: string;
+  /** Live: adds "Sign out my other sessions" for the signed-in person. */
+  organizationId?: string;
 }): SecurityData {
   const security = input.security;
   const known = security && security.length === input.members && security.every((row) => row.secondFactor || row.passkeys !== null);
@@ -172,7 +174,7 @@ export function securityData(input: {
     },
     {
       title: "Support access grant",
-      detail: "Casevoya support can’t open your client files. Support grants aren’t built yet",
+      detail: "Casevoya support can’t open your client files. Support access isn’t offered, so there’s nothing to approve",
       badge: { tone: "gr", label: "None active" },
     },
     {
@@ -187,8 +189,16 @@ export function securityData(input: {
     const last = lastActive(security, input.timeZone);
     rows.push({
       title: "Signed-in sessions",
-      detail: last ? `Open sessions across your team · last activity ${last}` : "Open sessions across your team",
+      detail: `${last ? `Open sessions across your team · last activity ${last}` : "Open sessions across your team"}. A team member’s sessions end when you reset their two-step or suspend them in Team and seats`,
       badge: { tone: "gr", label: plural(open, "session", "sessions") },
+    });
+  }
+  if (input.organizationId) {
+    rows.push({
+      title: "Your other sessions",
+      detail: "Sign out of Casevoya everywhere except this browser, for example a lost laptop or a shared computer",
+      badge: { tone: "gr", label: "This browser stays signed in" },
+      action: { label: "Sign out my other sessions", attrs: { "data-sessions-revoke": "1", "data-org": input.organizationId } },
     });
   }
   if (input.owner && input.events !== null) {

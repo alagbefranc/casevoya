@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { pdfBytes } from "@/modules/agreements/pdf";
 import { buildExportPackage, EXPORT_LIMITS, type ExportExcluded, type ExportFile, type ExportRecordSet } from "./package";
 
 type UserClient = Awaited<ReturnType<typeof createClient>>;
@@ -31,6 +32,37 @@ function fileName(path: string): string {
   return path.split("/").pop() || "file";
 }
 
+async function storedBytes(service: ServiceClient, bucket: string, key: string): Promise<Uint8Array | null> {
+  const downloaded = await service.storage.from(bucket).download(key);
+  if (downloaded.error || !downloaded.data) return null;
+  return new Uint8Array(await downloaded.data.arrayBuffer());
+}
+
+/**
+ * Executed agreements and completion certificates are sealed in the database: app.store_sealed_pdf
+ * registers a storage object row for their document version but the bytes live only in
+ * signature_envelopes.sealed_pdf / certificate_pdf. Reading them from the bucket always fails, so
+ * the export reads those versions' bytes from the envelope instead (service role; the requester
+ * already read the version row under RLS). Keyed by document version id.
+ */
+export async function sealedPdfBytes(service: ServiceClient, org: string, versionIds: string[]): Promise<Map<string, Uint8Array>> {
+  const found = new Map<string, Uint8Array>();
+  if (!versionIds.length) return found;
+  const list = versionIds.join(",");
+  const envelopes = await service
+    .from("signature_envelopes")
+    .select("sealed_document_version_id, certificate_document_version_id, sealed_pdf, certificate_pdf")
+    .eq("organization_id", org)
+    .or(`sealed_document_version_id.in.(${list}),certificate_document_version_id.in.(${list})`);
+  for (const row of envelopes.data ?? []) {
+    const sealed = pdfBytes(row.sealed_pdf);
+    if (row.sealed_document_version_id && sealed) found.set(row.sealed_document_version_id, sealed);
+    const certificate = pdfBytes(row.certificate_pdf);
+    if (row.certificate_document_version_id && certificate) found.set(row.certificate_document_version_id, certificate);
+  }
+  return found;
+}
+
 /**
  * Collects a matter's records and documents as the requesting staff member, packages them, stores
  * the ZIP privately with the service role, and marks the job ready. Progress is written between
@@ -45,7 +77,7 @@ export async function buildMatterExport(input: {
   firm: string;
   requester: string;
   timezone: string;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+}): Promise<{ ok: true; excluded: number } | { ok: false; error: string }> {
   const { supabase, service, organizationId: org, exportId, matterId } = input;
   const progress = (stage: string, value: number) => service.rpc("service_matter_export_progress", { p_export_id: exportId, p_stage: stage, p_progress: value });
   try {
@@ -87,6 +119,7 @@ export async function buildMatterExport(input: {
     let total = 0;
     const purposeOf = new Map((documents?.data ?? []).map((row) => [row.id, row.purpose]));
     const clean = [...(versions?.data ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const sealed = await sealedPdfBytes(service, org, clean.map((version) => version.id));
     for (const version of clean) {
       const path = `documents/${(purposeOf.get(version.document_id) ?? "document").slice(0, 60)}/v${version.version_number}-${fileName(version.original_filename)}`;
       if (version.upload_state !== "clean") {
@@ -98,12 +131,11 @@ export async function buildMatterExport(input: {
         excluded.push({ path, source: "public.document_versions", sourceId: version.id, reason: "Not included: over this export's size limit. Download it from the matter." });
         continue;
       }
-      const downloaded = await service.storage.from(version.storage_bucket).download(version.storage_key);
-      if (downloaded.error || !downloaded.data) {
+      const bytes = sealed.get(version.id) ?? (await storedBytes(service, version.storage_bucket, version.storage_key));
+      if (!bytes) {
         excluded.push({ path, source: "public.document_versions", sourceId: version.id, reason: "Not included: the stored file could not be read." });
         continue;
       }
-      const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
       total += bytes.length;
       files.push({ path, bytes, source: "public.document_versions", sourceId: version.id, storedSha256: version.checksum_sha256, mediaType: version.detected_media_type });
     }
@@ -158,7 +190,7 @@ export async function buildMatterExport(input: {
       await service.storage.from(EXPORT_BUCKET).remove([key]);
       return { ok: false, error: "The export was cancelled." };
     }
-    return { ok: true };
+    return { ok: true, excluded: excluded.length };
   } catch {
     await service.rpc("service_fail_matter_export", { p_export_id: exportId, p_reason: "The export could not be built. Nothing was kept." });
     return { ok: false, error: "The export could not be built. Nothing was kept." };

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loadSheetChrome, matterNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
-import { byteSize, exportState, jobSteps } from "@/modules/sheet/exports-present";
+import { byteSize, excludedWarning, exportState, jobSteps } from "@/modules/sheet/exports-present";
 
 const EXPORT_ROLES = new Set(["firm_owner", "licensed_consultant", "case_manager"]);
 const MATTERS_OFFERED = 200;
@@ -40,7 +40,7 @@ export async function loadSheetExports(staff: SheetStaff, query: SheetQuery, now
     loadSheetChrome(staff, "/sheet/exports"),
     supabase
       .from("matter_exports")
-      .select("id, matter_id, status, stage, progress, requested_by, requested_at, file_count, byte_size, ready_at, expires_at, failure_reason, last_downloaded_at")
+      .select("id, matter_id, status, stage, progress, requested_by, requested_at, file_count, byte_size, ready_at, expires_at, failure_reason, last_downloaded_at, excluded")
       .eq("organization_id", org)
       .order("requested_at", { ascending: false })
       .limit(HISTORY),
@@ -65,6 +65,7 @@ export async function loadSheetExports(staff: SheetStaff, query: SheetQuery, now
   const open = (row: (typeof jobRows)[number]) => row.status === "ready" && row.expires_at !== null && Date.parse(row.expires_at) > now.getTime();
   const mayDownload = (row: (typeof jobRows)[number]) => open(row) && (row.requested_by === userId || isOwner);
 
+  const excludedOf = (row: (typeof jobRows)[number]) => (Array.isArray(row.excluded) ? (row.excluded as { path?: unknown; reason?: unknown }[]) : []);
   const rows: ExportRow[] = jobRows.map((row) => ({
     key: row.id,
     started: stamp(row.requested_at, staff.timezone),
@@ -79,6 +80,7 @@ export async function loadSheetExports(staff: SheetStaff, query: SheetQuery, now
         lastDownloadedOn: row.last_downloaded_at ? stamp(row.last_downloaded_at, staff.timezone, false) : null,
         failureReason: row.failure_reason,
         expiresLabel: row.expires_at ? stamp(row.expires_at, staff.timezone) : null,
+        excludedCount: excludedOf(row).length,
       },
       now,
     ),
@@ -106,12 +108,16 @@ export async function loadSheetExports(staff: SheetStaff, query: SheetQuery, now
       }
     : null;
 
+  const latestReady = jobRows.find((row) => row.status === "ready");
+  const warning = latestReady ? excludedWarning(ref(latestReady.matter_id), excludedOf(latestReady)) : null;
+
   const chosenMatter = chosen ? matterRows.find((row) => row.id === chosen) : undefined;
   const exports: ExportsData = {
     header: { newAttrs: { "data-export-act": "new" } },
     job,
     rows,
     note: EXPORT_NOTE,
+    warning,
     dialog: {
       matters: chosenMatter
         ? null

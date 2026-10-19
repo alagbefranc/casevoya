@@ -45,6 +45,14 @@ function finish(result: FirmSettingsResult, dialog: HTMLDialogElement, fields: R
   router.refresh();
 }
 
+/** Empties the Add an office dialog back to how the page drew it. */
+export function clearNewOffice(dialog: ParentNode) {
+  dialog.querySelectorAll<HTMLInputElement>("input[name]").forEach((input) => {
+    if (input.type === "checkbox") input.checked = input.defaultChecked;
+    else if (input.type !== "file") input.value = input.defaultValue;
+  });
+}
+
 /** Uploads a chosen logo through /api/firm/logo and returns its locator, or an error. */
 async function uploadLogo(file: File): Promise<{ locator: string } | { error: string }> {
   try {
@@ -71,10 +79,28 @@ export async function runFirmSave(button: HTMLElement, router: Router) {
     return finish(result, dialog, fields, { title: "Firm details saved", sub: "The change is in the audit log." }, router);
   }
   if (kind === "office") {
+    const adding = !button.dataset.office;
     const result = await saveFirmOffice({ organizationId, officeId: button.dataset.office || null, fields });
-    return finish(result, dialog, fields, { title: button.dataset.office ? "Office saved" : "Office added", sub: "The change is in the audit log." }, router);
+    // Add an office starts empty next time, so saving again can't add the same office twice.
+    if (adding && !("error" in result)) clearNewOffice(dialog);
+    return finish(result, dialog, fields, { title: adding ? "Office added" : "Office saved", sub: "The change is in the audit log." }, router);
   }
   if (kind === "office-remove") {
+    // Removing needs a second click within a few seconds: nothing is removed on the first.
+    if (button.dataset.armed !== "1") {
+      button.dataset.armed = "1";
+      button.dataset.label = button.textContent ?? "";
+      button.textContent = "Click again to remove";
+      toast2("Remove this office?", { kind: "warn", sub: "Click Remove again to confirm. Staff and matters aren’t changed." });
+      window.setTimeout(() => {
+        if (button.dataset.armed !== "1") return;
+        delete button.dataset.armed;
+        button.textContent = button.dataset.label ?? "Remove office";
+      }, 5000);
+      return;
+    }
+    delete button.dataset.armed;
+    button.textContent = button.dataset.label ?? "Remove office";
     const result = await removeFirmOffice({ organizationId, officeId: button.dataset.office ?? "" });
     return finish(result, dialog, fields, { title: "Office removed", sub: "The change is in the audit log." }, router);
   }

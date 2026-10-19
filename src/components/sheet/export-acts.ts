@@ -37,6 +37,7 @@ export async function runExportAct(button: HTMLElement, root: HTMLElement, route
     if (field) field.hidden = act !== "new";
     const code = dialog.querySelector<HTMLInputElement>("#xC");
     if (code) code.value = "";
+    if (confirm) confirm.textContent = act === "new" ? "Confirm and export" : "Confirm and download";
     if (!dialog.open) dialog.showModal();
     code?.focus();
     return;
@@ -78,14 +79,27 @@ export async function runExportAct(button: HTMLElement, root: HTMLElement, route
     toast2("Choose a matter", { kind: "warn", sub: "Pick the client file to export." });
     return;
   }
+  // Check the code before saying anything has started.
+  if (confirm) confirm.setAttribute("aria-busy", "true");
+  const verified = await post("/api/exports", { organizationId: org, matterId, code, verifyOnly: true });
+  confirm?.removeAttribute("aria-busy");
+  if (!verified.ok) {
+    toast2("Export not started", { kind: "warn", sub: errorOf(verified.data) });
+    return;
+  }
   dialog.close();
-  toast2("Export started", { kind: "ok", sub: "We’ll notify you when it’s ready." });
+  toast2("Export started", { kind: "ok", sub: "Stay on this page; it updates as each step finishes." });
   const refresh = window.setTimeout(() => router.refresh(), 1500);
-  const result = await post("/api/exports", { organizationId: org, matterId, code, key: crypto.randomUUID() });
+  const result = await post("/api/exports", { organizationId: org, matterId, key: crypto.randomUUID() });
   window.clearTimeout(refresh);
   router.refresh();
   if (!result.ok) {
     toast2("Export didn’t finish", { kind: "warn", sub: errorOf(result.data) });
+    return;
+  }
+  const left = typeof result.data.excluded === "number" ? result.data.excluded : 0;
+  if (left > 0) {
+    toast2("Export ready, but incomplete", { kind: "warn", sub: `${left} ${left === 1 ? "file was" : "files were"} left out. See the note on this page.` });
     return;
   }
   toast2("Export ready", { kind: "ok", sub: "Download it from this page within 24 hours." });

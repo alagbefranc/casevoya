@@ -225,6 +225,7 @@ export function ComplaintsDialogs({ data }: { data: ComplaintsDialogsData }) {
       {data.record ? <ComplaintDialog data={data.record} /> : null}
       {data.step ? (
         <Dialog
+          key={`${data.step.complaintId}-${data.step.step}`}
           id={COMPLAINT_DIALOG.step}
           title={data.step.title}
           fields={[

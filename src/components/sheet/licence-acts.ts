@@ -50,8 +50,15 @@ export async function runLicenceAdd(button: HTMLElement, router: Router) {
   if (!dialog) return;
   const option = el<HTMLSelectElement>(dialog, "adP")?.selectedOptions[0];
   if (!option || option.textContent?.trim() === INVITE_SOMEONE) {
+    // A new person is invited as a licensed consultant; the regulator and number typed here ride
+    // along so the invite dialog says which licence they'll add when they join.
+    const params = new URLSearchParams({ dlg: "invite", role: "licensed_consultant" });
+    const regulator = el<HTMLSelectElement>(dialog, "adR")?.value ?? "";
+    const collegeId = (el(dialog, "adN")?.value ?? "").trim();
+    if (regulator) params.set("regulator", regulator);
+    if (collegeId) params.set("college", collegeId.slice(0, 40));
     dialog.close();
-    router.push("/sheet/invitations?dlg=invite");
+    router.push(`/sheet/invitations?${params.toString()}`);
     return;
   }
   const regulator = el<HTMLSelectElement>(dialog, "adR")?.value ?? "";

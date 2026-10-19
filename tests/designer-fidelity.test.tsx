@@ -27,7 +27,7 @@ import { GoLiveSwitch } from "@/components/sheet/designer/go-live-switch";
 import { SetupBanner } from "@/components/sheet/designer/setup-banner";
 import { SheetTasks, TasksDialog, TasksHeader, type TasksData, type TasksTab } from "@/components/sheet/designer/tasks";
 import { TasksMarkup } from "@/components/sheet/markup/tasks";
-import { SheetStaffTab, StaffAfter, StaffHeader, type StaffData, type StaffInviteDialogData } from "@/components/sheet/designer/invitations";
+import { INVITATIONS_CSS, SheetClientsTab, SheetStaffTab, StaffAfter, StaffHeader, type StaffData, type StaffInviteDialogData, type StaffRow } from "@/components/sheet/designer/invitations";
 import { InvitationsMarkup } from "@/components/sheet/markup/invitations";
 import { ClientsHeader, DuplicateDialog, SheetClients, type ClientsData, type ClientsTab } from "@/components/sheet/designer/clients";
 import { ClientsMarkup } from "@/components/sheet/markup/clients";
@@ -167,6 +167,7 @@ import { securityData, teamData } from "@/modules/sheet/settings-present";
 import { OffboardDialog, type OffboardDialogData } from "@/components/sheet/designer/settings-staff-admin";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
+import { withoutRequirementCodes } from "./helpers/designer-copy";
 
 /**
  * The sample-case panel's copy changed on 2026-10-19 (the six steps are an optional tour and a
@@ -893,6 +894,51 @@ describe("Designer fidelity", () => {
       console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
     }
     expect(live).toBe(captured);
+  });
+
+  it("renders the People and invitations Clients and family tab exactly as the captured Designer markup", () => {
+    // Live, the Designer's Preview links (sample screens) are left out, and the tab has no dialogs
+    // of its own: portal invitations are sent from a matter's people.
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(InvitationsMarkup, { variant: "tab-clients" })))
+      .replace(/<dialog class="dlg" id="dlgS"[\s\S]*?<\/dialog>/, "")
+      .replace(/<dialog class="dlg" id="dlgC"[\s\S]*?<\/dialog>/, "")
+      .replace(/<a class="btn sm s" href="\/sheet\/accept-[a-z]+">Preview<\/a>/g, "");
+    const hold = { kind: "revoke" } as const;
+    const rows: StaffRow[] = [
+      { person: { name: "Priya Sharma", avatarUrl: "/assets/av-priya-applicant.png" }, name: "Priya Sharma", email: { left: "Applicant", right: "NL-2026-0142" }, role: "", state: { tone: "ok", label: "Accepted" }, note: { left: "Own account", right: "consent given" }, action: { kind: "more" } },
+      { person: { name: "Rafael Sharma", avatarUrl: "/assets/av-rafael-sponsor.png" }, name: "Rafael Sharma", email: { left: "Sponsor", right: "NL-2026-0142" }, role: "", state: { tone: "unv", label: "Opened", detail: "not finished" }, note: "Sees only shared items", action: hold },
+      { person: { name: "Olena Sharma", avatarUrl: "/assets/av-olena-dependant.png" }, name: "Olena Sharma", email: { left: "Adult dependant (19)", right: "NL-2026-0142" }, role: "", state: { tone: "rev", label: "Sent", detail: "expires 23 Oct" }, note: "Gives her own consent", action: hold },
+      { person: { name: "Mei Chen" }, name: "Mei Chen", email: { left: "Employer contact", right: "NL-2026-0131" }, role: "", state: { tone: "bad", label: "Email bounced" }, note: "Check the address", action: { kind: "resend" } },
+      { person: { name: "Tomás Duarte", avatarUrl: "/assets/av-tomas-client.png" }, name: "Tomás Duarte", email: { left: "Guardian of Mateo (9) and Sara (16)", right: "NL-2026-0150" }, role: "", state: { tone: "ok", label: "Accepted" }, note: "Acts for both until 18", action: { kind: "more" } },
+      { person: { name: "Harjit Sandhu" }, name: "Harjit Sandhu", email: { left: "Employer contact", middle: "Maple Ridge Foods", right: "NL-2026-0136" }, role: "", state: { tone: "rev", label: "Sent", detail: "expires 23 Oct" }, note: "Employer tasks only", action: hold },
+      { person: { name: "Lucie Gagnon" }, name: "Lucie Gagnon", email: { left: "External translator", right: "NL-2026-0142" }, role: "", state: { tone: "rev", label: "Sent", detail: "expires 23 Oct" }, note: { left: "2 documents", right: "ends 31 Oct" }, action: hold },
+    ];
+    const live = withoutPreloads(
+      renderToStaticMarkup(
+        createElement(SheetFrame, {
+          sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/invitations" },
+          header: createElement(StaffHeader, { firmName: DESIGNER_STAFF.firmName, tab: "clients" }),
+          statusbar: {
+            timezone: "America/Toronto",
+            queue: { label: "Reminder queue healthy", detail: "0 retries" },
+            sample: { label: "Demo data", detail: "fictional firm “Northline Immigration”" },
+          },
+          after: createElement("style", { dangerouslySetInnerHTML: { __html: INVITATIONS_CSS } }),
+        }, createElement(SheetClientsTab, { rows })),
+      ),
+    );
+    if (live !== captured) {
+      let i = 0;
+      while (i < live.length && live[i] === captured[i]) i++;
+      console.log("DIFF@" + i + "\nEXP " + captured.slice(i - 160, i + 200) + "\nGOT " + live.slice(i - 160, i + 200));
+    }
+    expect(live).toBe(captured);
+    // Live: revoke and resend carry the invitation and the portal flag; More can lead somewhere.
+    const wired = renderToStaticMarkup(
+      createElement(SheetClientsTab, { rows: [{ ...rows[1], action: { kind: "revoke", invitationId: "i1", portal: true, organizationId: "org" } }] }),
+    );
+    expect(wired).toContain('data-hold="Invitation revoked" aria-label="Press and hold to revoke" data-invitation="i1" data-portal="1" data-org="org"');
+    expect(renderToStaticMarkup(createElement(SheetClientsTab, { rows: [] }))).toContain("No portal invitations yet");
   });
 
   it("wires the real Staff tab without changing anything but data attributes", () => {
@@ -3401,8 +3447,9 @@ describe("Designer fidelity: Settings, Firm, Offices, Branding and Language and 
   ];
   for (const [tab, variant, body] of cases) {
     it(`renders Settings (${variant}) exactly as the captured Designer markup`, () => {
-      const captured = upToDialogs(withoutPreloads(renderToStaticMarkup(createElement(SettingsMarkup, { variant }))));
-      const live = upToDialogs(page(tab, body));
+      const captured = withoutRequirementCodes(upToDialogs(withoutPreloads(renderToStaticMarkup(createElement(SettingsMarkup, { variant })))));
+      // The Designer's sample values (test-only) carry the capture's requirement codes too.
+      const live = withoutRequirementCodes(upToDialogs(page(tab, body)));
       if (live !== captured) {
         let i = 0;
         while (i < live.length && live[i] === captured[i]) i++;
@@ -3615,12 +3662,21 @@ describe("Designer fidelity: Settings, Team and seats and Security", () => {
     const html = renderToStaticMarkup(createElement(SheetSettingsSecurity, { data: owner }));
     expect(html).toContain("Required for every staff account · 1 of 2 set up");
     expect(html).toContain("No idle timeout yet");
-    expect(html).toContain("Support grants aren’t built yet");
+    expect(html).toContain("Support access isn’t offered");
+    expect(html).not.toContain("aren’t built yet");
     expect(html).toContain('<span class="bd gr"><i></i>2 sessions</span>');
+    // Honest about whose sessions can end where.
+    expect(html).toContain("A team member’s sessions end when you reset their two-step or suspend them in Team and seats");
     expect(html).not.toMatch(/30 min|60 minutes/);
     // Live-only rows reuse the Designer's own row: no class beyond the captured Security tab's.
     const classes = new Set([...html.matchAll(/class="([^"]*)"/g)].map((match) => match[1]));
     expect([...classes].sort()).toEqual(["bd gr", "bd ok", "display", "li rv", "ph rv", "r"]);
+
+    // With the firm, everyone gets "Sign out my other sessions" (public.revoke_other_sessions), a Designer `.btn s sm`.
+    const mine = renderToStaticMarkup(
+      createElement(SheetSettingsSecurity, { data: securityData({ owner: false, members: 3, security: null, events: null, timeZone: "America/Toronto", organizationId: "org-1" }) }),
+    );
+    expect(mine).toContain('<button class="btn s sm" style="background:#fff" data-sessions-revoke="1" data-org="org-1">Sign out my other sessions</button>');
 
     const staff = renderToStaticMarkup(
       createElement(SheetSettingsSecurity, { data: securityData({ owner: false, members: 3, security: null, events: null, timeZone: "America/Toronto" }) }),

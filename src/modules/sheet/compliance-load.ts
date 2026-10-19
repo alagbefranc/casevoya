@@ -129,7 +129,7 @@ export async function loadSheetPrivacy(
 }
 
 const COMPLAINT_COLUMNS =
-  "id, reference, complainant_name, matter_id, category, channel, issue, received_on, ack_due_on, response_due_on, assignee_membership_id, acknowledged_on, reviewed_at, reviewed_by, evidence_note, response_sent_on, response_note, resolved_on, resolution";
+  "id, reference, complainant_name, matter_id, category, channel, issue, received_on, ack_due_on, response_due_on, assignee_membership_id, acknowledged_on, ack_note, reviewed_at, reviewed_by, evidence_note, response_sent_on, response_note, resolved_on, resolution";
 
 /**
  * Compliance > Complaints for a firm. Only the firm owner and the staff the owner designated

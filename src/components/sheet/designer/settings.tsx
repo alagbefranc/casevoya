@@ -235,7 +235,8 @@ export function SheetSettingsTeam({ data }: { data: TeamData }) {
   );
 }
 
-export type SecurityRow = { title: string; detail: string; badge: MatterBadge };
+/** `action` (live only): a button after the badge, e.g. "Sign out my other sessions". */
+export type SecurityRow = { title: string; detail: string; badge: MatterBadge; action?: { label: string; attrs: Record<string, string> } };
 
 export type SecurityData = { intro: string; rows: SecurityRow[] };
 
@@ -254,6 +255,11 @@ export function SheetSettingsSecurity({ data }: { data: SecurityData }) {
           </div>
           <span className={"r"}>
             <Badge badge={row.badge} />
+            {row.action ? (
+              <button className={"btn s sm"} style={{ background: "#fff" }} {...row.action.attrs}>
+                {row.action.label}
+              </button>
+            ) : null}
           </span>
         </div>
       ))}

@@ -419,7 +419,7 @@ export async function setQuietHours(input: {
   return { ok: true as const };
 }
 
-export async function setFirmReminderOffsets(input: { organizationId: string; days: number[]; code: string }) {
+export async function setFirmReminderOffsets(input: { organizationId: string; days: number[]; code: string | null }) {
   const session = await clientFor(input.organizationId, input.code);
   if ("error" in session) return { error: session.error };
   const { error } = await session.supabase.rpc("set_firm_reminder_offsets", { p_days: input.days });

@@ -223,12 +223,34 @@ export type ComposioDialogData = {
 
 export const COMPOSIO_DIALOG = "dlgComposio";
 
-export function ComposioDialog({ data }: { data: ComposioDialogData }) {
+/** The same disclosure for WhatsApp Connect: Zernio, then Meta's sign-up (live only). */
+export function WhatsAppDialog({ data }: { data: ComposioDialogData }) {
   return (
-    <dialog className={"dlg wide"} id={COMPOSIO_DIALOG} aria-labelledby={`${COMPOSIO_DIALOG}H`}>
+    <ComposioDialog
+      data={data}
+      id={"dlgWhatsApp"}
+      title={"Connect WhatsApp through Zernio and Meta"}
+      accept={{ label: "Accept and continue to Meta", attrs: { "data-wa-connect": "1", "data-org": data.organizationId } }}
+    />
+  );
+}
+
+export function ComposioDialog({
+  data,
+  id = COMPOSIO_DIALOG,
+  title = "Turn on connected accounts",
+  accept,
+}: {
+  data: ComposioDialogData;
+  id?: string;
+  title?: string;
+  accept?: { label: string; attrs: Attrs };
+}) {
+  return (
+    <dialog className={"dlg wide"} id={id} aria-labelledby={`${id}H`}>
       <div className={"dh"}>
-        <h2 id={`${COMPOSIO_DIALOG}H`}>{"Turn on connected accounts"}</h2>
-        <button className={"x"} aria-label={"Close"} data-close={COMPOSIO_DIALOG}>
+        <h2 id={`${id}H`}>{title}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={id}>
           <Icon name={"close"} cls={"ic s"} />
         </button>
       </div>
@@ -254,12 +276,18 @@ export function ComposioDialog({ data }: { data: ComposioDialogData }) {
         </p>
       </div>
       <div className={"df"}>
-        <button className={"btn"} data-close={COMPOSIO_DIALOG}>
+        <button className={"btn"} data-close={id}>
           {"Cancel"}
         </button>
-        <button className={"btn p"} data-composio-enable={"1"} data-org={data.organizationId}>
-          {"Accept and turn on"}
-        </button>
+        {accept ? (
+          <button className={"btn p"} {...accept.attrs}>
+            {accept.label}
+          </button>
+        ) : (
+          <button className={"btn p"} data-composio-enable={"1"} data-org={data.organizationId}>
+            {"Accept and turn on"}
+          </button>
+        )}
       </div>
     </dialog>
   );

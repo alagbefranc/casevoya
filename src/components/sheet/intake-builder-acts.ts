@@ -2,7 +2,7 @@
 
 import { toast2 } from "@/components/port/kit";
 import { publishIntakeDraft, saveIntakeDraft } from "@/modules/intake/builder-actions";
-import { fieldLabel, fieldToggles, newField, readSchema, relabel, toggleField, type IntakeField } from "@/modules/sheet/intake-builder-present";
+import { fieldLabel, fieldToggles, moveField, newField, readSchema, relabel, removeField, toggleField, type IntakeField } from "@/modules/sheet/intake-builder-present";
 
 type Router = { refresh: () => void };
 
@@ -146,6 +146,49 @@ export function mountIntakeBuilder(root: HTMLElement, router: Router, signal: Ab
         state.fields = state.fields.map((item, at) => (at === position ? toggleField(item, index) : item));
         showSettings();
         later();
+        return;
+      }
+      const move = target.closest<HTMLElement>("#rbar [data-intake-move]");
+      if (move) {
+        event.preventDefault();
+        fresh();
+        if (!state.selected) return;
+        const moved = moveField(state.fields, state.selected, move.dataset.intakeMove === "up" ? "up" : "down");
+        if (!moved) {
+          toast2("That field can’t move there", { kind: "warn", sub: "It is already at the end, or a conditional question would come before the one it depends on." });
+          return;
+        }
+        // Saved straight away; the page redraws the list in its new order (React owns those rows).
+        state.fields = moved;
+        void save();
+        return;
+      }
+      const remove = target.closest<HTMLElement>("#rbar [data-intake-delete]");
+      if (remove) {
+        event.preventDefault();
+        fresh();
+        if (!state.selected) return;
+        // Deleting asks for a second click; earlier published versions keep the field.
+        if (remove.dataset.armed !== state.selected) {
+          remove.dataset.armed = state.selected;
+          remove.textContent = "Click again to delete";
+          window.setTimeout(() => {
+            delete remove.dataset.armed;
+            remove.textContent = "Delete field";
+          }, 5000);
+          return;
+        }
+        delete remove.dataset.armed;
+        remove.textContent = "Delete field";
+        const removed = removeField(state.fields, state.selected);
+        if ("error" in removed) {
+          toast2(removed.error, { kind: "warn", sub: "Nothing was deleted." });
+          return;
+        }
+        state.fields = removed.fields;
+        select(state.fields[0]?.key ?? null);
+        toast2("Field deleted from the draft", { kind: "ok", sub: "Published versions keep it. Publish to make the change." });
+        void save();
         return;
       }
       const publish = target.closest<HTMLElement>("[data-intake-publish]");

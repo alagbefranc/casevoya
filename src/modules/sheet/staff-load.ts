@@ -5,13 +5,16 @@ import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import {
   EXPIRED_SHOWN_DAYS,
+  STAFF_INVITE_OFFICE_HINT,
   STAFF_INVITE_OFFICES,
   STAFF_INVITE_ROLES,
   emailPlaceholder,
   inviteExpiry,
+  portalInvitationRows,
   staffRows,
   type DirectoryMember,
   type PendingInvitation,
+  type PortalInvitation,
 } from "@/modules/sheet/staff-present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
@@ -76,10 +79,11 @@ export async function loadSheetStaffTab(staff: SheetStaff, now: Date = new Date(
     loadMembers(supabase, org),
     supabase
       .from("invitations")
-      .select("id, email, role, expires_at, created_at")
+      .select("id, email, role, expires_at, created_at, revoked_at")
       .eq("organization_id", org)
       .is("consumed_at", null)
-      .is("revoked_at", null)
+      // Open, recently expired, and recently revoked (shown greyed, for the record).
+      .or(`revoked_at.is.null,revoked_at.gte.${since}`)
       .gte("expires_at", since)
       .order("created_at", { ascending: false })
       .limit(READ),
@@ -92,6 +96,7 @@ export async function loadSheetStaffTab(staff: SheetStaff, now: Date = new Date(
     role: row.role,
     expiresAt: row.expires_at,
     createdAt: row.created_at,
+    revokedAt: row.revoked_at,
   }));
   const ownEmail = typeof claims.data?.claims?.email === "string" ? claims.data.claims.email : null;
 
@@ -104,7 +109,58 @@ export async function loadSheetStaffTab(staff: SheetStaff, now: Date = new Date(
     placeholder: emailPlaceholder(ownEmail),
     roles: STAFF_INVITE_ROLES.map(([label]) => label),
     offices: STAFF_INVITE_OFFICES,
+    officeHint: STAFF_INVITE_OFFICE_HINT,
     expires: inviteExpiry(now, staff.timezone),
   };
   return { chrome, page, dialog };
+}
+
+/**
+ * The Clients and family tab: the firm's client portal invitations, read as the signed-in staff
+ * member (RLS: the firm owner sees all; consultants and case managers those on their matters or
+ * that they sent). Names and matter references come from the rows they can read.
+ */
+export async function loadSheetClientsTab(staff: SheetStaff, now: Date = new Date()) {
+  const supabase = await createClient({ organizationId: staff.organizationId });
+  const org = staff.organizationId;
+  const [chrome, invites] = await Promise.all([
+    loadSheetChrome(staff, "/sheet/invitations"),
+    supabase
+      .from("portal_invitations")
+      .select("id, person_id, matter_id, role, email, expires_at, created_at, opened_at, consumed_at, revoked_at, declined_at")
+      .eq("organization_id", org)
+      .order("created_at", { ascending: false })
+      .limit(READ),
+  ]);
+  const rows = invites.data ?? [];
+  const personIds = [...new Set(rows.map((row) => row.person_id))];
+  const matterIds = [...new Set(rows.map((row) => row.matter_id))];
+  const [persons, matters] = await Promise.all([
+    personIds.length ? supabase.from("persons").select("id, display_name").eq("organization_id", org).in("id", personIds) : null,
+    matterIds.length ? supabase.from("matters").select("id, reference").eq("organization_id", org).in("id", matterIds) : null,
+  ]);
+  const personName = new Map((persons?.data ?? []).map((row) => [row.id, row.display_name as string | null]));
+  const reference = new Map((matters?.data ?? []).map((row) => [row.id, row.reference as string | null]));
+  // One row per person, matter and role: the latest invitation (a resend replaces the one before).
+  const seen = new Set<string>();
+  const latest: PortalInvitation[] = [];
+  for (const row of rows) {
+    const key = `${row.person_id}|${row.matter_id}|${row.role}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    latest.push({
+      id: row.id,
+      personName: personName.get(row.person_id) ?? null,
+      email: row.email,
+      role: row.role,
+      matterReference: reference.get(row.matter_id) ?? null,
+      expiresAt: row.expires_at,
+      createdAt: row.created_at,
+      openedAt: row.opened_at,
+      consumedAt: row.consumed_at,
+      revokedAt: row.revoked_at,
+      declinedAt: row.declined_at,
+    });
+  }
+  return { chrome, firmName: staff.organizationName, rows: portalInvitationRows(latest, org, now, staff.timezone) };
 }

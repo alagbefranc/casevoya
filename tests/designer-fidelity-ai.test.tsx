@@ -7,6 +7,7 @@ import { DraftsHeader, DraftsRbar, SheetDrafts, type DraftsData } from "@/compon
 import { AiHeader, SheetAi, type AiData, type AiTab } from "@/components/sheet/designer/ai";
 import { DraftsMarkup } from "@/components/sheet/markup/drafts";
 import { AiMarkup } from "@/components/sheet/markup/ai";
+import { withoutRequirementCodes } from "./helpers/designer-copy";
 
 /**
  * Vo drafts and Vo and AI: the data-driven components must produce the same HTML as the captured
@@ -292,7 +293,7 @@ const VARIANT: Record<AiTab, string> = {
 describe("Designer fidelity: Vo and AI", () => {
   for (const tab of Object.keys(VARIANT) as AiTab[]) {
     it(`renders the ${tab} tab exactly as the captured Designer markup`, () => {
-      const captured = withoutPreloads(renderToStaticMarkup(createElement(AiMarkup, { variant: VARIANT[tab] })));
+      const captured = withoutRequirementCodes(withoutPreloads(renderToStaticMarkup(createElement(AiMarkup, { variant: VARIANT[tab] }))));
       const data: AiData = { ...DESIGNER_AI, tab };
       const live = withoutPreloads(
         renderToStaticMarkup(
@@ -302,8 +303,11 @@ describe("Designer fidelity: Vo and AI", () => {
             createElement(SheetAi, { data }),
           ),
         ),
-      );
-      sameMarkup(live, captured);
+      )
+        // Live only: the run log's "No runs match" panel, shown by the filter when nothing matches.
+        .replace(/<div class="fp-fe rv" hidden="" style="--i:2">[\s\S]*?<\/b><small>Try another filter or clear the search\.<\/small><\/div><\/div>/, "");
+      // The Designer's sample values (test-only) carry the capture's requirement codes too.
+      sameMarkup(withoutRequirementCodes(live), captured);
     });
   }
 });

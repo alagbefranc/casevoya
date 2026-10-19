@@ -159,7 +159,33 @@ function whatsappRow(input: IntegrationsInput): IntegrationRow {
   if (!input.isOwner) {
     return { ...base, state, action: { label: "Connect", attrs: { disabled: true, title: "Only the firm owner can connect WhatsApp" } } };
   }
-  return { ...base, state, action: { label: "Connect", attrs: { "data-wa-connect": "1", "data-org": org } } };
+  // Connect first explains where the person is going (Zernio, then Meta) and asks them to accept.
+  return { ...base, state, action: { label: "Connect", attrs: { "data-dlg": WHATSAPP_DIALOG } } };
+}
+
+export const WHATSAPP_DIALOG = "dlgWhatsApp";
+
+/** Meta's own rules for business messaging on WhatsApp, linked from the consent step. */
+export const WHATSAPP_SOURCE = { label: "WhatsApp Business Messaging Policy (Meta)", href: "https://business.whatsapp.com/policy" };
+
+/**
+ * The firm owner's consent step before WhatsApp Connect: what happens next (Zernio, then Meta's
+ * sign-up) and what passes through each, in the same parts as the Composio disclosure.
+ */
+export function whatsappDialog(input: Pick<IntegrationsInput, "organizationId" | "isOwner" | "whatsapp">): ComposioDialogData | null {
+  const wa = input.whatsapp;
+  if (!input.isOwner || !wa?.configured || wa.status === "connected") return null;
+  return {
+    organizationId: input.organizationId,
+    lead: "Connect sends you to Zernio, the messaging service Casevoya uses for WhatsApp, which opens Meta’s (Facebook’s) WhatsApp Business sign-up. You sign in to Meta there and choose your firm’s number.",
+    points: [
+      { title: "Zernio carries the messages", detail: "Notices and replies on WhatsApp pass through Zernio, on behalf of your firm. Casevoya keeps the account id and each message’s delivery state." },
+      { title: "Meta runs WhatsApp", detail: "Your firm’s WhatsApp Business account is with Meta (WhatsApp), under Meta’s terms and its business messaging policy." },
+      { title: "Only clients who agree get WhatsApp", detail: "Each client chooses WhatsApp in their own contact choices. Email notices keep working either way." },
+      { title: "You can disconnect at any time", detail: "Nothing more goes out on WhatsApp after you disconnect. Clients’ choices are kept for when you reconnect." },
+    ],
+    source: WHATSAPP_SOURCE,
+  };
 }
 
 function stripeRow(input: IntegrationsInput): IntegrationRow {
@@ -209,7 +235,7 @@ function composioSwitch(input: IntegrationsInput): IntegrationRow {
 export function integrationsData(input: IntegrationsInput): IntegrationsData {
   const inbound = input.firmSlug ? `receives at ${input.firmSlug}@${input.inboundDomain}` : "receives at your firm’s address once it has one";
   return {
-    title: "Settings",
+    title: "Integrations",
     intro:
       "Casevoya’s own email and calendar work for everyone without any connection. Connecting a personal Gmail, Outlook or Google Calendar is optional and goes through Composio. Integrations marked planned aren’t available yet.",
     lead: [
@@ -335,7 +361,7 @@ export function notificationPrefsData(input: NotificationPrefsInput): Notificati
           },
           {
             label: "Marketing to clients",
-            small: "Casevoya sends clients no marketing. It would need separate, recorded consent (OPS-05)",
+            small: "Casevoya sends clients no marketing. It would need separate, recorded consent",
             control: { kind: "badge", badge: { tone: "gr", label: "Off" } },
           },
           quietRow,

@@ -296,6 +296,7 @@ export function PrivacyDialogs({ data }: { data: PrivacyDialogsData }) {
       ) : null}
       {data.step ? (
         <Dialog
+          key={`${data.step.requestId}-${data.step.step}`}
           id={PRIVACY_DIALOG.step}
           title={data.step.title}
           fields={[{ kind: "area", id: "psN", label: data.step.label, max: 2000 }]}
@@ -318,6 +319,7 @@ export function PrivacyDialogs({ data }: { data: PrivacyDialogsData }) {
       ) : null}
       {data.close ? (
         <Dialog
+          key={data.close.requestId}
           id={PRIVACY_DIALOG.close}
           title={`Close ${data.close.reference}`}
           fields={[

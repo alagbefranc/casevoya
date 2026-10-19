@@ -338,17 +338,23 @@ export function aiSettings(viewer: VoViewer, settings: VoSettings): AiSettings {
   if (!settings.saved) notes.push(viewer.sampleMode ? "Vo is on because this firm is in sample mode, for sample records only. A real firm starts with Vo off." : "Vo is off until the firm owner turns it on.");
   if (!viewer.agentReady) notes.push("Vo isn’t configured on this server yet, so it shows as unavailable.");
   if (!viewer.isOwner) notes.push("Only the firm owner can change these switches.");
+  // With Vo off for the whole firm nothing below it runs: those switches show off and can't be used.
+  const off = settings.enabled ? undefined : "Vo is off for the whole firm. Turn it on first.";
+  const sub = (item: AiSwitch): AiSwitch => (off ? { ...item, on: false, disabled: off } : item);
+  if (off) notes.push("The switches below take effect only when Vo is on for the firm; they keep their saved choice.");
   return {
-    intro: "Turn Vo off for the whole firm, for one capability or for a sensitive kind of document. Switched off, every workflow still works by hand (AI-01, AI-06).",
+    intro: "Turn Vo off for the whole firm, for one capability or for a sensitive kind of document. Switched off, every workflow still works by hand.",
     firm: [
       aiSwitch("swVoFirm", `Vo for ${viewer.firmName}`, settings.enabled, a("enabled"), "Drafts only. People accept, edit or reject everything."),
-      aiSwitch("swVoClassify", "Document classification", settings.doc_classification, a("doc_classification")),
-      aiSwitch("swVoOcr", "OCR normalisation (names, dates, numbers)", settings.ocr_normalisation, a("ocr_normalisation")),
-      aiSwitch("swVoMissing", "Missing-field detection", settings.missing_fields, a("missing_fields")),
-      aiSwitch("swVoFlags", "Inconsistency flags (not fraud findings)", settings.inconsistency_flags, a("inconsistency_flags")),
-      aiSwitch("swVoSummaries", "Matter summaries for staff", settings.staff_answers, a("staff_answers")),
-      aiSwitch("swVoReplies", "Administrative reply drafts", settings.reply_drafts, a("reply_drafts")),
-      aiSwitch("swVoLetters", "First drafts of letters from approved facts", false, a(null)),
+      ...[
+        aiSwitch("swVoClassify", "Document classification", settings.doc_classification, a("doc_classification")),
+        aiSwitch("swVoOcr", "OCR normalisation (names, dates, numbers)", settings.ocr_normalisation, a("ocr_normalisation")),
+        aiSwitch("swVoMissing", "Missing-field detection", settings.missing_fields, a("missing_fields")),
+        aiSwitch("swVoFlags", "Inconsistency flags (not fraud findings)", settings.inconsistency_flags, a("inconsistency_flags")),
+        aiSwitch("swVoSummaries", "Matter summaries for staff", settings.staff_answers, a("staff_answers")),
+        aiSwitch("swVoReplies", "Administrative reply drafts", settings.reply_drafts, a("reply_drafts")),
+        aiSwitch("swVoLetters", "First drafts of letters from approved facts", false, a(null)),
+      ].map(sub),
     ],
     categories: [
       aiSwitch("swVoIdentity", "Identity documents", settings.read_identity, a("read_identity"), "Passports, birth certificates", "Vo may read Identity documents"),
@@ -358,12 +364,12 @@ export function aiSettings(viewer: VoViewer, settings: VoSettings): AiSettings {
       aiSwitch("swVoCriminal", "Criminal history", settings.read_criminal, a("read_criminal"), "Police certificates, court records", "Vo may read Criminal history"),
       aiSwitch("swVoNarratives", "Narratives and letters", settings.read_narratives, a("read_narratives"), "Personal statements", "Vo may read Narratives and letters"),
       aiSwitch("swVoMessages", "Client messages", settings.read_client_messages, a("read_client_messages"), "Portal messages", "Vo may read Client messages"),
-    ],
+    ].map(sub),
     dataUse: [
       { term: "Training on your files", value: "Never by Casevoya. The AI vendor’s terms are in review (pending)" },
       { term: "Vendor retention", value: "Pending the AI vendor review (Anthropic, Cloudflare)" },
       { term: "What Vo can read", value: "Only the matter and conversation you’re working in, with your own access" },
-      { term: "Documents’ own instructions", value: "Ignored. Text inside an upload or a message can’t change Vo’s rules (AI-05)" },
+      { term: "Documents’ own instructions", value: "Ignored. Text inside an upload or a message can’t change Vo’s rules" },
     ],
     note: notes.length ? notes.join(" ") : null,
   };
@@ -404,6 +410,7 @@ export function aiRunRows(runs: VoRunRow[], names: VoNames, viewer: VoViewer): A
     return {
       when: dayTime(run.createdAt, viewer.timeZone),
       matter: names.reference(run.matterId),
+      ...(run.matterId ? { matterHref: `/sheet/matters/${run.matterId}` } : {}),
       task: `${TASK_LABEL[run.kind]}${run.kind === "ask" ? "" : ` for ${names.matter(run.matterId)}`}`,
       model: { left: run.model ?? "—", right: `${run.tools.length} tool ${run.tools.length === 1 ? "call" : "calls"}` },
       prompt: run.promptVersion ?? "—",
@@ -422,43 +429,115 @@ export function aiRunRows(runs: VoRunRow[], names: VoNames, viewer: VoViewer): A
   });
 }
 
-export function aiAudit(drafts: VoDraftRow[], names: VoNames, viewer: VoViewer): AiAudit {
-  return {
-    rows: drafts.map((row) => ({
+/** A Vo document reading (vo_doc_drafts) for the Draft audit. */
+export type VoReadingAuditRow = {
+  id: string;
+  matterId: string | null;
+  title: string;
+  status: string;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  /** How many of its proposals were accepted and rejected, when it was reviewed. */
+  accepted?: number;
+  rejected?: number;
+};
+
+/**
+ * Every Vo draft (message drafts and document readings), newest first, with what happened to it
+ * and who decided. Each row opens the draft where it lives: a reply draft on the matter's
+ * Messages tab, a reading on its Documents tab.
+ */
+export function aiAudit(drafts: VoDraftRow[], names: VoNames, viewer: VoViewer, readings: readonly VoReadingAuditRow[] = []): AiAudit {
+  const draftRows = drafts.map((row) => ({
+    at: row.createdAt,
+    row: {
       draft: row.title,
       matter: names.reference(row.matterId),
       result:
         row.status === "draft"
-          ? { tone: "rev", label: "Waiting" }
+          ? ({ tone: "rev", label: "Waiting" } as MatterBadge)
           : row.status === "discarded"
-            ? { tone: "bad", label: "Rejected" }
-            : { tone: "ok", label: row.edited ? "Edited" : "Accepted" },
+            ? ({ tone: "bad", label: "Rejected" } as MatterBadge)
+            : ({ tone: "ok", label: row.edited ? "Edited" : "Accepted" } as MatterBadge),
       by: row.status === "draft" ? "—" : names.person(row.reviewedBy),
       when: row.reviewedAt ? shortDay(row.reviewedAt, viewer.timeZone) : "—",
       change: row.status === "draft" ? "—" : row.status === "discarded" ? "Not sent" : row.edited ? "Edited before sending" : "None",
-    })),
-    empty: drafts.length ? null : { title: "No drafts yet", copy: "Every Vo draft appears here with what happened to it and who decided." },
+      ...(row.matterId ? { href: `/sheet/matters/${row.matterId}?tab=messages&vo=${row.id}` } : {}),
+    },
+  }));
+  const readingRows = readings.map((row) => ({
+    at: row.createdAt,
+    row: {
+      draft: row.title,
+      matter: row.matterId ? names.reference(row.matterId) : "—",
+      result:
+        row.status === "draft"
+          ? ({ tone: "rev", label: "Waiting" } as MatterBadge)
+          : row.status === "discarded" || row.status === "rejected"
+            ? ({ tone: "bad", label: "Rejected" } as MatterBadge)
+            : ({ tone: "ok", label: "Reviewed", detail: "each proposal decided" } as MatterBadge),
+      by: row.status === "draft" ? "—" : names.person(row.reviewedBy),
+      when: row.reviewedAt ? shortDay(row.reviewedAt, viewer.timeZone) : "—",
+      change:
+        row.status === "draft"
+          ? "—"
+          : row.accepted !== undefined && row.rejected !== undefined
+            ? { left: `${row.accepted} accepted`, right: `${row.rejected} rejected` }
+            : row.status === "discarded" || row.status === "rejected"
+              ? "Nothing applied"
+              : "Proposals decided",
+      ...(row.matterId ? { href: `/sheet/matters/${row.matterId}?tab=documents&vo=${row.id}` } : {}),
+    },
+  }));
+  const rows = [...draftRows, ...readingRows].sort((a, b) => b.at.localeCompare(a.at)).map((item) => item.row);
+  return {
+    rows,
+    empty: rows.length ? null : { title: "No drafts yet", copy: "Every Vo draft and document reading appears here with what happened to it and who decided." },
   };
 }
 
-export type ApprovedSourceRow = { title: string | null; publisher: string; reviewStatus: string; changeState: string; nextReviewAt: string | null; canonicalUrl: string };
+export type ApprovedSourceRow = {
+  title: string | null;
+  publisher: string;
+  reviewStatus: string;
+  changeState: string;
+  nextReviewAt: string | null;
+  canonicalUrl: string;
+  /** When the page was last fetched, and what that fetch found (source_observation). */
+  lastCheckedAt?: string | null;
+  lastResult?: string | null;
+};
+
+const CHECK_OK = new Set(["success", "unchanged", "changed", "partial"]);
 
 export function aiSources(rows: ApprovedSourceRow[], viewer: VoViewer): AiSources {
   const now = Date.now();
   return {
-    intro: "The approved, jurisdiction-specific sources Vo may point to. Vo can’t read their content, so it never quotes a rule: a question that needs one goes to a consultant (AI-04).",
+    intro: "The approved, jurisdiction-specific sources Vo may point to. Vo can’t read their content, so it never quotes a rule: a question that needs one goes to a consultant.",
     rows: rows.map((row) => {
       const overdue = row.nextReviewAt ? Date.parse(row.nextReviewAt) < now : false;
+      // A source that was fetched but isn't professionally reviewed yet says when it was checked
+      // and what the check found, instead of "Not checked".
+      const checked = row.lastCheckedAt ? shortDay(row.lastCheckedAt, viewer.timeZone) : null;
+      const fetched: MatterBadge | null = checked
+        ? row.lastResult && !CHECK_OK.has(row.lastResult)
+          ? { tone: "bad", label: "Check failed", detail: checked }
+          : { tone: "unv", label: "Checked", detail: `${checked}, not reviewed yet` }
+        : null;
       const state: MatterBadge =
         row.reviewStatus === "verified" && !overdue && row.changeState !== "change_detected"
-          ? { tone: "ok", label: "Approved" }
+          ? { tone: "ok", label: "Approved", ...(checked ? { detail: `checked ${checked}` } : {}) }
           : row.reviewStatus === "review_due" || overdue || row.changeState === "change_detected"
             ? { tone: "chg", label: "Stale", detail: "Vo won’t cite" }
             : row.reviewStatus === "in_review" || row.reviewStatus === "evidence_captured"
               ? { tone: "rev", label: "In review" }
-              : { tone: "gr", label: row.reviewStatus === "suspended" ? "Suspended" : "Not checked" };
+              : row.reviewStatus === "suspended"
+                ? { tone: "gr", label: "Suspended" }
+                : (fetched ?? { tone: "gr", label: "Not checked" });
       return {
         source: row.title ?? row.canonicalUrl,
+        ...(/^https:\/\//i.test(row.canonicalUrl) ? { href: row.canonicalUrl } : {}),
         publisher: row.publisher,
         effective: "—",
         review: row.nextReviewAt ? (overdue ? { left: shortDay(row.nextReviewAt, viewer.timeZone), right: "overdue" } : shortDay(row.nextReviewAt, viewer.timeZone)) : "—",
@@ -478,7 +557,7 @@ export function aiStates(viewer: VoViewer): AiStates {
       quote: "“This asks for advice or a rule I have no approved source for, so I haven’t drafted it. Please answer it yourself.”",
       badge: { tone: "chg", label: "Left for a consultant" },
       tag: { left: "Run logged", right: "no draft saved" },
-      note: "Vo doesn’t guess, and it doesn’t show a made-up figure as a placeholder (SRC-09).",
+      note: "Vo doesn’t guess, and it doesn’t show a made-up figure as a placeholder.",
     },
     cite: {
       quote: "Every draft lists the records Vo read for it: the client’s messages, open document requests, tasks, deadlines and the matter.",
@@ -521,6 +600,7 @@ export function aiPage(input: {
   drafts: VoDraftRow[];
   sources: ApprovedSourceRow[];
   names: VoNames;
+  readings?: readonly VoReadingAuditRow[];
 }): AiData {
   const { tab, viewer, settings, names } = input;
   return {
@@ -530,7 +610,7 @@ export function aiPage(input: {
     runs:
       tab === "runs"
         ? {
-            intro: "Every Vo run, with its model, prompt version, how many records it read, the tools it called and who reviewed it. Protected like the case file (AI-02).",
+            intro: "Every Vo run, with its model, prompt version, how many records it read, the tools it called and who reviewed it. Protected like the case file.",
             chips: ["All", "Accepted", "Edited", "Rejected", "Abstained"],
             rows: aiRunRows(input.runs, names, viewer),
             note: "Prompts and answers aren’t kept in the log; identity numbers are removed before Vo reads a record.",
@@ -540,6 +620,6 @@ export function aiPage(input: {
     sources: tab === "sources" ? aiSources(input.sources, viewer) : undefined,
     states: tab === "states" ? aiStates(viewer) : undefined,
     rules: tab === "rules" ? AI_RULES : undefined,
-    audit: tab === "audit" ? aiAudit(input.drafts, names, viewer) : undefined,
+    audit: tab === "audit" ? aiAudit(input.drafts, names, viewer, input.readings ?? []) : undefined,
   };
 }

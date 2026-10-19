@@ -112,6 +112,36 @@ async function commit(button: HTMLElement, router: Router) {
   router.refresh();
 }
 
+/** What a mapping change does to its row's Check cell, until Continue re-checks the whole file. */
+export function pendingCheck(field: string): string {
+  if (!field) return "Not imported";
+  if (field === "name_extra") return "Joined after the legal name with a space";
+  if (field === "date_of_birth") return "Check the date order below";
+  return "Checked when you choose Continue";
+}
+
+/** Map columns: a changed field updates its row's Check column at once. */
+export function syncMigrationCheck(select: HTMLSelectElement) {
+  const cell = select.closest("tr")?.lastElementChild as HTMLElement | null | undefined;
+  if (!cell) return;
+  const text = pendingCheck(select.value);
+  // A plain-text cell is React's own text content and can be replaced; a badge stays in place
+  // (React owns it), hidden, with the new words beside it.
+  const own = [...cell.children].filter((child) => !(child as HTMLElement).dataset.pending);
+  if (own.length === 0) {
+    cell.textContent = text;
+    return;
+  }
+  for (const child of own) (child as HTMLElement).hidden = true;
+  let note = cell.querySelector<HTMLElement>("[data-pending]");
+  if (!note) {
+    note = document.createElement("span");
+    note.dataset.pending = "1";
+    cell.append(note);
+  }
+  note.textContent = text;
+}
+
 /** Migration import: upload, map and preview, duplicate decisions, sign-off, rollback, discard. */
 export async function runMigrationAct(button: HTMLElement, root: HTMLElement, router: Router): Promise<void> {
   const act = button.dataset.migAct;
@@ -150,7 +180,12 @@ export async function runMigrationAct(button: HTMLElement, root: HTMLElement, ro
     return;
   }
 
-  if (act === "commit") return commit(button, router);
+  if (act === "commit") {
+    // Signing off creates real matters and people: it asks first, like Roll back and Discard.
+    const summary = [...root.querySelectorAll<HTMLElement>(".fp-dl dt")].map((term) => `${term.textContent}: ${term.nextElementSibling?.textContent ?? ""}`).slice(0, 3).join("\n");
+    if (!window.confirm(`Sign off and import these records?${summary ? `\n\n${summary}` : ""}\n\nThe import creates the matters and people above. You can roll it back while no one has changed them.`)) return;
+    return commit(button, router);
+  }
 
   if (act === "rollback") {
     if (!window.confirm("Roll back this import? Every matter and person it created is removed. Records someone changed since stop the rollback.")) return;

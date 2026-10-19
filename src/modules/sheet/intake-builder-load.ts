@@ -45,6 +45,8 @@ export async function loadSheetIntakeBuilder(staff: SheetStaff, tab: IntakeTab, 
     rows: page.rows,
     settings: page.settings,
     vo: null,
+    publishDisabled: page.publishDisabled,
+    preview: page.preview,
     live: { organizationId: org, ...page.live },
   };
   return { chrome, data };

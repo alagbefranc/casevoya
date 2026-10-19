@@ -86,11 +86,13 @@ export function fieldRow(field: IntakeField, locale = "en-CA"): FieldRow {
   const conditional = Boolean(field.show_when);
   const badge: FieldBadge | null = conditional
     ? { tone: "blue", label: "Conditional" }
-    : field.allow_unknown === true
-      ? { tone: "gr", label: "Unknown allowed" }
-      : field.allow_not_applicable === true
-        ? { tone: "gr", label: "N/A allowed" }
-        : null;
+    : field.section_key === SHARED_SECTION
+      ? { tone: "gr", label: "Sponsor sees it" }
+      : field.allow_unknown === true
+        ? { tone: "gr", label: "Unknown allowed" }
+        : field.allow_not_applicable === true
+          ? { tone: "gr", label: "N/A allowed" }
+          : null;
   return {
     key: field.key,
     label: fieldLabel(field, locale),
@@ -140,7 +142,8 @@ export function newField(label: string, fields: readonly IntakeField[], locale =
     key: nextKey(fields),
     type: kind.type,
     labels: { [locale]: "New question" },
-    required: false,
+    // A declaration is something the person must confirm, so it starts required.
+    required: kind.type === "declaration",
     allow_unknown: false,
     allow_not_applicable: false,
   };
@@ -152,6 +155,47 @@ export function newField(label: string, fields: readonly IntakeField[], locale =
 
 export function relabel(field: IntakeField, label: string, locale = "en-CA"): IntakeField {
   return { ...field, labels: { ...field.labels, [locale]: label.slice(0, 300) } };
+}
+
+/**
+ * Moves a field one place up or down. A conditional field never moves above the field it depends
+ * on (it would show before its question): such a move is refused (returns null).
+ */
+export function moveField(fields: readonly IntakeField[], key: string, direction: "up" | "down"): IntakeField[] | null {
+  const at = fields.findIndex((field) => field.key === key);
+  const to = direction === "up" ? at - 1 : at + 1;
+  if (at < 0 || to < 0 || to >= fields.length) return null;
+  const next = [...fields];
+  [next[at], next[to]] = [next[to], next[at]];
+  const position = new Map(next.map((field, index) => [field.key, index]));
+  for (const field of next) {
+    const parent = field.show_when?.field;
+    if (parent && position.has(parent) && (position.get(parent) ?? 0) > (position.get(field.key) ?? 0)) return null;
+  }
+  return next;
+}
+
+/** Removes a field from the draft. A field another field depends on can't be removed first. */
+export function removeField(fields: readonly IntakeField[], key: string): { fields: IntakeField[] } | { error: string } {
+  if (!fields.some((field) => field.key === key)) return { error: "Choose a field first." };
+  if (fields.length === 1) return { error: "A form keeps at least one field. Add another before deleting this one." };
+  const dependent = fields.find((field) => field.show_when?.field === key);
+  if (dependent) return { error: `“${fieldLabel(dependent)}” shows only after this one. Remove or change it first.` };
+  return { fields: fields.filter((field) => field.key !== key) };
+}
+
+export type PreviewField = { key: string; label: string; type: string; ui?: string; required: boolean; note: string | null };
+
+/** What a client sees for each field, in order, for the Preview tab. */
+export function previewFields(fields: readonly IntakeField[], locale = "en-CA"): PreviewField[] {
+  return fields.map((field) => {
+    const notes: string[] = [];
+    if (field.show_when) notes.push(`Shown only if the answer above is “${equalsText(field.show_when.equals)}”`);
+    if (allowsUnknown(field) && field.allow_unknown === true) notes.push("“Unknown” is accepted");
+    if (allowsNotApplicable(field) && field.allow_not_applicable === true) notes.push("“Not applicable” is accepted");
+    if (field.section_key === SHARED_SECTION) notes.push("The sponsor sees this answer");
+    return { key: field.key, label: fieldLabel(field, locale), type: field.type, ui: field.ui, required: Boolean(field.required), note: notes.length ? notes.join(". ") : null };
+  });
 }
 
 export type TemplateRow = {
@@ -174,6 +218,9 @@ export type BuilderPage = {
   rows: (FieldRow & { selected: boolean })[];
   settings: { label: string; toggles: { label: string; on: boolean }[] };
   live: { stableKey: string; title: string; templateId: string | null; version: number | null; status: "draft" | "published" | "new"; schema: string };
+  /** Publish has nothing to publish until a change starts a draft. */
+  publishDisabled: string | null;
+  preview: PreviewField[];
 };
 
 const DEFAULT_KEY = "intake_form";
@@ -232,6 +279,8 @@ export function builderPage(templates: readonly TemplateRow[], usage: ReadonlyMa
       status: draft ? "draft" : current ? "published" : "new",
       schema: JSON.stringify({ fields }),
     },
+    publishDisabled: draft ? null : current ? "Nothing new to publish: change a field to start the next version." : "Add a field first.",
+    preview: previewFields(fields),
   };
 }
 

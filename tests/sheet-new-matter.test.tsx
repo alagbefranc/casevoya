@@ -31,7 +31,7 @@ describe("new matter options", () => {
     );
     expect(options).toEqual([
       { value: AMARA, label: "Amara Osei" },
-      { value: GRACE, label: "Grace Lin (licence check pending: can’t sign yet)" },
+      { value: GRACE, label: "Grace Lin (licence declared)" },
       { value: "x", label: "Sam Roe (licence blocks new matters)" },
     ]);
   });

@@ -11,20 +11,26 @@ import { Empty, Icon, Pair } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
 
 export type StaffRowAction =
-  | { kind: "more" }
-  | { kind: "revoke"; invitationId?: string }
-  | { kind: "resend"; invitationId?: string };
+  /** Live: `go` is where "More" leads (Settings › Team and seats, to change role or access). */
+  | { kind: "more"; go?: string; title?: string }
+  | { kind: "revoke"; invitationId?: string; portal?: boolean; organizationId?: string }
+  | { kind: "resend"; invitationId?: string; portal?: boolean; organizationId?: string }
+  /** Live only: a revoked invitation kept on the list for the record; nothing to do. */
+  | { kind: "none" };
 
 export type StaffRow = {
   person: SidebarPerson;
   name: string;
-  email: string;
+  /** The line under the name (an email, or the Designer's "Applicant · NL-2026-0142", optionally with a middle part). */
+  email: string | { left: string; middle?: string; right: string };
   /** "Case manager", or the Designer's two-part "Owner · Licensed consultant". */
   role: string | { left: string; right: string };
   state: MatterBadge;
-  /** "Two-step on", "Single use". */
-  note: string;
+  /** "Two-step on", "Single use", or the Designer's two-part "Own account · consent given". */
+  note: string | { left: string; right: string };
   action: StaffRowAction;
+  /** Live only: a revoked invitation, shown greyed. */
+  muted?: boolean;
 };
 
 export type StaffData = { firmName: string; rows: StaffRow[] };
@@ -37,6 +43,8 @@ export type StaffInviteDialogData = {
   /** Role labels in the Designer's order. */
   roles: string[];
   offices: string[];
+  /** Live only: why the Office field has one choice (staff access is firm-wide). */
+  officeHint?: string;
   /** "24 Oct": when an invitation sent now expires. */
   expires: string;
 };
@@ -49,8 +57,44 @@ function i(n: number) {
   return { "--i": String(n) } as React.CSSProperties;
 }
 
-/** The page's top bar and its Staff / Clients and family tabs, Staff selected. */
-export function StaffHeader({ firmName }: { firmName: string }) {
+/** The page's top bar and its Staff / Clients and family tabs. */
+export function StaffHeader({ firmName, tab = "staff", inviteGo }: { firmName: string; tab?: "staff" | "clients"; inviteGo?: string }) {
+  if (tab === "clients") {
+    return (
+      <>
+        <header className={"top"}>
+          <button className={"crumb"}>
+            <Icon name={"settings"} cls={"ic s"} />
+            {"Settings"}
+            <Icon name={"sort"} cls={"ic dd"} />
+          </button>
+          <span className={"cs"} aria-hidden={"true"}>
+            {"/"}
+          </span>
+          <button className={"crumb"}>
+            <Icon name={"user-plus"} cls={"ic s"} />
+            {"People and invitations"}
+          </button>
+          <span className={"pill"}>{firmName}</span>
+          <span className={"acts"}>
+            <button className={"btn p sm"} id={"invB"} data-go={inviteGo} title={inviteGo ? "Portal invitations are sent from a matter’s people" : undefined}>
+              <Icon name={"user-plus"} cls={"ic s"} />
+              <span>{"Invite to portal"}</span>
+            </button>
+          </span>
+        </header>
+        <div className={"tabs"} role={"tablist"}>
+          <button role={"tab"} data-t={"staff"}>
+            {"Staff"}
+          </button>
+          <button role={"tab"} data-t={"clients"} className={"on"}>
+            {"Clients and family"}
+          </button>
+          <i className={"ul"} style={{ left: "54px", width: "107px" }}></i>
+        </div>
+      </>
+    );
+  }
   return (
     <>
       <header className={"top"}>
@@ -87,23 +131,44 @@ export function StaffHeader({ firmName }: { firmName: string }) {
   );
 }
 
+/** The line under a name: a plain string, or the Designer's "Role · [middle ·] <num>reference</num>". */
+function Under({ line }: { line: StaffRow["email"] }) {
+  if (typeof line === "string") return <>{line}</>;
+  return (
+    <>
+      {`${line.left} `}
+      <span className={"sep"} aria-hidden={"true"}></span>
+      {line.middle ? (
+        <>
+          {` ${line.middle} `}
+          <span className={"sep"} aria-hidden={"true"}></span>
+        </>
+      ) : null}
+      {" "}
+      <span className={"num"}>{line.right}</span>
+    </>
+  );
+}
+
 function RowAction({ action }: { action: StaffRowAction }) {
+  if (action.kind === "none") return null;
+  const portal = action.kind !== "more" && action.portal ? { "data-portal": "1", "data-org": action.organizationId } : {};
   if (action.kind === "revoke") {
     return (
-      <button className={"btn sm"} data-hold={"Invitation revoked"} aria-label={"Press and hold to revoke"} data-invitation={action.invitationId}>
+      <button className={"btn sm"} data-hold={"Invitation revoked"} aria-label={"Press and hold to revoke"} data-invitation={action.invitationId} {...portal}>
         {"Hold to revoke"}
       </button>
     );
   }
   if (action.kind === "resend") {
     return (
-      <button className={"btn sm"} data-t={"Invitation sent again"} data-invitation={action.invitationId}>
+      <button className={"btn sm"} data-t={"Invitation sent again"} data-invitation={action.invitationId} {...portal}>
         {"Resend"}
       </button>
     );
   }
   return (
-    <button className={"btn sm s"} aria-label={"More"}>
+    <button className={"btn sm s"} aria-label={"More"} data-go={action.go} title={action.title}>
       <Icon name={"more"} cls={"ic s"} />
     </button>
   );
@@ -111,17 +176,19 @@ function RowAction({ action }: { action: StaffRowAction }) {
 
 function Row({ row }: { row: StaffRow }) {
   return (
-    <div className={"ivr"}>
+    <div className={"ivr"} style={row.muted ? { opacity: 0.55 } : undefined}>
       <Avatar person={row.person} />
       <div>
         <b>{row.name}</b>
-        <small>{row.email}</small>
+        <small>
+          <Under line={row.email} />
+        </small>
       </div>
       <span className={"ivc"}>{typeof row.role === "string" ? row.role : <Pair left={row.role.left} right={row.role.right} />}</span>
       <span className={"ivc"}>
         <Badge badge={row.state} />
       </span>
-      <small className={"ivx"}>{row.note}</small>
+      <small className={"ivx"}>{typeof row.note === "string" ? row.note : <Pair left={row.note.left} right={row.note.right} />}</small>
       <span className={"iva"}>
         <RowAction action={row.action} />
       </span>
@@ -167,6 +234,63 @@ export function SheetStaffTab({ data }: { data: StaffData }) {
   );
 }
 
+/**
+ * The Designer's Clients and family tab (`markup/invitations.tsx`, variant "tab-clients"): the
+ * firm's client portal invitations with their state, and Hold to revoke / Resend. Live, the
+ * Designer's Preview links (sample screens) are left out.
+ */
+export function SheetClientsTab({ rows }: { rows: StaffRow[] }) {
+  return (
+    <>
+      <div className={"ph v rv"} style={i(0)}>
+        <span className={"art"} style={{ "--a": "52px" } as React.CSSProperties} aria-hidden={"true"}>
+          <img
+            src={"/assets/generated/b2/family-tags-160@1x.webp"}
+            srcSet={"/assets/generated/b2/family-tags-160@2x.webp 2x"}
+            width={52}
+            height={52}
+            alt={""}
+            loading={"lazy"}
+            decoding={"async"}
+          />
+        </span>
+        <div>
+          <h1 className={"display"}>{"Clients and family"}</h1>
+          <p>{"Each person gets their own invitation and account. Adults give their own consent. Paying an invoice never gives access to someone else’s records."}</p>
+        </div>
+      </div>
+      <div className={"panel iv c rv"} data-rb-list={"1"} style={i(1)}>
+        {rows.length === 0 ? (
+          <Empty art={"family-tags"} title={"No portal invitations yet"} copy={"Invite a client or family member from their matter. Each invitation and its state appear here."} />
+        ) : (
+          rows.map((row, index) => <ClientRow key={index} row={row} />)
+        )}
+      </div>
+    </>
+  );
+}
+
+function ClientRow({ row }: { row: StaffRow }) {
+  return (
+    <div className={"ivr"} style={row.muted ? { opacity: 0.55 } : undefined}>
+      <Avatar person={row.person} />
+      <div>
+        <b>{row.name}</b>
+        <small>
+          <Under line={row.email} />
+        </small>
+      </div>
+      <span className={"ivc"}>
+        <Badge badge={row.state} />
+      </span>
+      <small className={"ivx"}>{typeof row.note === "string" ? row.note : <Pair left={row.note.left} right={row.note.right} />}</small>
+      <span className={"iva"}>
+        <RowAction action={row.action} />
+      </span>
+    </div>
+  );
+}
+
 /** The Designer's Invite staff dialog. It sits after the frame, beside the scrim. */
 export function StaffInviteDialog({ data }: { data: StaffInviteDialogData }) {
   return (
@@ -198,6 +322,7 @@ export function StaffInviteDialog({ data }: { data: StaffInviteDialogData }) {
               <option key={label}>{label}</option>
             ))}
           </select>
+          {data.officeHint ? <span className={"hint"}>{data.officeHint}</span> : null}
         </div>
         <p className={"why"}>
           <Icon name={"clock"} cls={"ic s"} />

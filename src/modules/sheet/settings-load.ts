@@ -130,6 +130,7 @@ export async function loadSheetSettingsSecurity(staff: SheetStaff, now: Date = n
     security,
     events: events && !events.error ? (events.count ?? 0) : null,
     timeZone: staff.timezone,
+    organizationId: org,
   });
   return { chrome, header, page };
 }

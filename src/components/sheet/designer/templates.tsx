@@ -14,8 +14,9 @@ export type TemplatesTab = "program" | "messages" | "checklists" | "sources" | "
 
 type Text = string | { left: string; right: string };
 
-export type ProgramRow = { template: string; jurisdiction: Text; version: string; state: MatterBadge; source: Text; reviewer: string; effective: string; pinned: Text };
-export type MessageRow = { template: string; channel: Text; usedBy: string; languages: Text; state: MatterBadge };
+/** `href` (live only): the row opens its detail (an agreement template) or preview (an email design). */
+export type ProgramRow = { template: string; jurisdiction: Text; version: string; state: MatterBadge; source: Text; reviewer: string; effective: string; pinned: Text; href?: string };
+export type MessageRow = { template: string; channel: Text; usedBy: string; languages: Text; state: MatterBadge; href?: string };
 export type ChecklistCard = { title: Text; note: Text; tag: string };
 export type SourceKpi = { label: string; value: string; count?: number; note: string; warn?: boolean; href: string };
 export type SourceRow = { rule: string; href?: string; jurisdiction: Text; state: MatterBadge; effective: string; reviewer: string; lastChecked: string; nextReview: Text | { num: Text }; affected: string };
@@ -36,6 +37,8 @@ export type TemplatesData = {
   pills: string[];
   reviewCount: number;
   newTemplateHref?: string;
+  /** Live: the button's honest label ("New agreement template": it can only make those). */
+  newTemplateLabel?: string;
   program: { rows: ProgramRow[]; note: string };
   messages: { rows: MessageRow[] };
   checklists: { cards: ChecklistCard[] };
@@ -89,7 +92,7 @@ export function TemplatesHeader({ data }: { data: TemplatesData }) {
             data-nav={data.newTemplateHref}
           >
             <Icon name={"plus"} cls={"ic s"} />
-            {"New template"}
+            {data.newTemplateLabel ?? "New template"}
           </button>
         </span>
       </header>
@@ -138,7 +141,7 @@ function Program({ data }: { data: TemplatesData }) {
         <Art name={"templates-empty"} />
         <div>
           <h1 className={"display"}>{"Program templates"}</h1>
-          <p>{"Each matter pins the template version it started with. A new release never changes an existing file or package (ADM-03, PREP-04)."}</p>
+          <p>{"Each matter pins the template version it started with. A new release never changes an existing file or package."}</p>
         </div>
       </div>
       {data.program.rows.length === 0 ? (
@@ -162,7 +165,7 @@ function Program({ data }: { data: TemplatesData }) {
             </thead>
             <tbody>
               {data.program.rows.map((row, index) => (
-                <tr key={index}>
+                <tr key={index} data-href={row.href}>
                   <td>{row.template}</td>
                   <td>
                     <Show text={row.jurisdiction} />
@@ -198,7 +201,7 @@ function Messages({ data }: { data: TemplatesData }) {
       <div className={"ph rv"} style={i(0)}>
         <div>
           <h1 className={"display"}>{"Message templates"}</h1>
-          <p>{"Approved administrative templates that automations and staff can send. Notification versions carry minimal content and a portal link only (OPS-05)."}</p>
+          <p>{"Approved administrative templates that automations and staff can send. Notification versions carry minimal content and a portal link only."}</p>
         </div>
       </div>
       <div className={"tw rv"} role={"region"} aria-label={"Message templates"} tabIndex={0} style={i(1)}>
@@ -215,7 +218,7 @@ function Messages({ data }: { data: TemplatesData }) {
           </thead>
           <tbody>
             {data.messages.rows.map((row, index) => (
-              <tr key={index}>
+              <tr key={index} data-href={row.href}>
                 <td>{row.template}</td>
                 <td>
                   <Show text={row.channel} />
@@ -242,7 +245,7 @@ function Checklists({ data }: { data: TemplatesData }) {
       <div className={"ph rv"} style={i(0)}>
         <div>
           <h1 className={"display"}>{"Checklist templates"}</h1>
-          <p>{"Per-person and per-matter checklists generated from the program template and the intake answers (DOC-01)."}</p>
+          <p>{"Per-person and per-matter checklists generated from the program template and the intake answers."}</p>
         </div>
       </div>
       {data.checklists.cards.length === 0 ? (

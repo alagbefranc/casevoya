@@ -10,6 +10,7 @@ import type { MatterBadge } from "@/components/sheet/designer/matters";
 import { staffPerson } from "@/modules/sheet/avatar";
 import { dayMonth, zoneCity } from "@/modules/sheet/home-present";
 import { longDate } from "@/modules/sheet/matter-present";
+import { LICENCE_STATE_LABEL, licenceState } from "@/modules/sheet/licence-state";
 import { isoDateInTimeZone, roleLabel } from "@/modules/sheet/present";
 
 export const CICC = "College of Immigration and Citizenship Consultants";
@@ -69,6 +70,8 @@ export type LicenceContext = {
   checkTarget: string | null;
   firmHasVerifiedLicence: boolean;
   viewerIsOwner: boolean;
+  /** Live: lets the proof card open the file (/api/firm/licence-proof/open). */
+  organizationId?: string;
 };
 
 const BLOCKED = new Set(["revoked", "suspended", "inactive", "not_entitled"]);
@@ -121,10 +124,19 @@ function classValue(credential: LicenceCredential): LicenceValue {
   return credential.licenceType;
 }
 
-function stateOf(credential: LicenceCredential): MatterBadge {
-  if (credential.status === "verified") return { tone: "ok", label: "Verified" };
-  if (BLOCKED.has(credential.status)) return { tone: "bad", label: STATE_LABEL[credential.status] ?? "Check result" };
-  return { tone: "rev", label: "Waiting for check" };
+/** The result of the credential's latest check, from the review log. */
+function latestResult(credential: LicenceCredential, log: readonly LicenceLogRow[]): string | null {
+  const check = log.filter((row) => row.kind === "check" && row.credentialId === credential.id).sort((a, b) => b.at.localeCompare(a.at))[0];
+  return check?.result ?? null;
+}
+
+/** The licence badge, in the one status set used on every page (licence-state.ts). */
+function stateOf(credential: LicenceCredential, log: readonly LicenceLogRow[]): MatterBadge {
+  const state = licenceState({ status: credential.status, latestResult: latestResult(credential, log) });
+  if (state === "verified") return { tone: "ok", label: LICENCE_STATE_LABEL.verified };
+  if (state === "blocked") return { tone: "bad", label: STATE_LABEL[credential.status] ?? "Check result" };
+  if (state === "needs_review") return { tone: "chg", label: LICENCE_STATE_LABEL.needs_review };
+  return { tone: "rev", label: LICENCE_STATE_LABEL.declared };
 }
 
 /** What a licence on file allows before its check (decision 2026-10-19: a declared licence is enough). */
@@ -171,7 +183,7 @@ function sourceOf(credential: LicenceCredential, reviewer: string, context: Lice
   };
 }
 
-function proofOf(credential: LicenceCredential, holder: string, context: LicenceContext): LicenceCard["proof"] {
+function proofOf(credential: LicenceCredential, holder: string, context: LicenceContext, mayOpen = false): LicenceCard["proof"] {
   if (!credential.proofLocator) {
     return { kind: "none", text: "No proof file yet. The reviewer keeps their own register evidence with the check." };
   }
@@ -181,13 +193,16 @@ function proofOf(credential: LicenceCredential, holder: string, context: Licence
       ? { tone: "ok", label: "Accepted" }
       : BLOCKED.has(credential.status)
         ? { tone: "bad", label: "Adverse result" }
-        : { tone: "rev", label: "Being reviewed" };
+        : { tone: "rev", label: "Not checked yet" };
   return {
     kind: "file",
     name: credential.checkedAt ? "Register check proof" : "Licence proof",
     meta: ["Licence proof", first(holder)],
     date: dayMonth(isoDateInTimeZone(new Date(when), context.timeZone)),
     states: [{ tone: "unv", label: "Uploaded" }, review],
+    ...(mayOpen && context.organizationId
+      ? { href: `/api/firm/licence-proof/open?organizationId=${encodeURIComponent(context.organizationId)}&credential=${encodeURIComponent(credential.id)}` }
+      : {}),
   };
 }
 
@@ -209,11 +224,12 @@ export function licenceCard(member: LicenceMember, credential: LicenceCredential
         ...base,
         sub: owner ? "Owner" : "Licensed consultant",
         art: null,
-        state: owner ? { tone: "gr", label: "No licence on file" } : { tone: "chg", label: "No licence on file" },
+        // The firm owner counts as licensed (decision 2026-10-19); a consultant still needs one on file.
+        state: owner ? { tone: "gr", label: "Counts as licensed" } : { tone: "chg", label: "No licence on file" },
         rows: [
           {
             label: "Role",
-            value: owner ? { left: "Owner", right: "add your licence if you practise" } : { left: "Licensed consultant", right: "add their licence so it can be checked" },
+            value: owner ? { left: "Owner", right: "add your licence number so it can be checked" } : { left: "Licensed consultant", right: "add their licence so it can be checked" },
           },
         ],
         proof: { kind: "none", text: "Not added yet." },
@@ -233,7 +249,7 @@ export function licenceCard(member: LicenceMember, credential: LicenceCredential
     };
   }
 
-  const state = stateOf(credential);
+  const state = stateOf(credential, log);
   const blocked = BLOCKED.has(credential.status);
   const sub = owner ? { left: "Owner", right: "Licensed consultant" } : "Licensed consultant";
   const rows: LicenceCard["rows"] = [
@@ -255,7 +271,7 @@ export function licenceCard(member: LicenceMember, credential: LicenceCredential
       art: "licence-pending",
       state,
       rows,
-      proof: proofOf(credential, name, context),
+      proof: proofOf(credential, name, context, context.viewerIsOwner || member.isSelf),
       source: null,
       footer: { note: { icon: "clock", text: CHECK_NOTE } },
     };
@@ -276,7 +292,7 @@ export function licenceCard(member: LicenceMember, credential: LicenceCredential
     state,
     adverse: blocked,
     rows,
-    proof: proofOf(credential, name, context),
+    proof: proofOf(credential, name, context, context.viewerIsOwner || member.isSelf),
     source: sourceOf(credential, reviewer, context),
     footer: report !== undefined ? { report, note: lock } : { note: lock },
   };

@@ -6,13 +6,16 @@
  * export, Cancel, a ready job's Download and a ready history row (use-sheet runs them against
  * /api/exports); the dialog's Matter field (the Designer's own `.fld`/`.sel`) when no matter is
  * chosen yet; an empty state when nothing has been exported; and the contents note in words that
- * match what an export holds.
+ * match what an export holds; a warning above the job (and an "Incomplete" state on the row)
+ * whenever an export left files out.
  */
 import type { CSSProperties } from "react";
 import { Empty, Icon, Sep } from "./frame";
 
 export type ExportJobStep = { label: string; state: "done" | "now" | "todo"; time: string };
-export type ExportState = { tone: "blue" | "ok" | "bad" | "gr"; label: string; detail?: string };
+export type ExportState = { tone: "blue" | "ok" | "bad" | "gr" | "chg"; label: string; detail?: string };
+/** Live only: the latest ready export left files out. */
+export type ExportWarning = { title: string; copy: string; items: string[] };
 
 export type ExportJob = {
   title: [string, string, string];
@@ -50,6 +53,8 @@ export type ExportsData = {
   rows: ExportRow[];
   note: string;
   dialog: ExportsDialogData;
+  /** Live only: shown above the job when the latest export is incomplete. */
+  warning?: ExportWarning | null;
 };
 
 const i = (n: number) => ({ "--i": String(n) }) as CSSProperties;
@@ -168,6 +173,20 @@ export function SheetExports({ data }: { data: ExportsData }) {
           <p>{"A full copy of a client’s file, with the audit trail. Starting one asks you to confirm it’s you."}</p>
         </div>
       </div>
+      {data.warning ? (
+        <div className={"alert warn rv"} role={"status"} style={i(1)} data-export-warning={"1"}>
+          <Icon name={"info"} />
+          <div>
+            <b>{data.warning.title}</b>
+            {data.warning.copy}
+            <ul style={{ margin: "6px 0 0", paddingLeft: "18px" }}>
+              {data.warning.items.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : null}
       {data.job ? <Job job={data.job} /> : null}
       {data.rows.length ? (
         <div className={"tw rv"} role={"region"} aria-label={"Export history"} tabIndex={0} style={i(2)}>

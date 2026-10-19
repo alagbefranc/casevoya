@@ -282,7 +282,7 @@ describe("All matters: saved views, chips, search", () => {
     );
     expect(options).toEqual([
       { value: "a", label: "Walk Tester" },
-      { value: "b", label: "Pat Lee (licence check pending: can’t sign yet)" },
+      { value: "b", label: "Pat Lee (licence declared)" },
     ]);
   });
 });

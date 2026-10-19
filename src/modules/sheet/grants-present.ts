@@ -51,11 +51,22 @@ export function grantRow(grant: FirmGrant, now: Date, timeZone: string): GrantRo
     expires = grant.expiresAt ? { num: longDate(lastDay(grant.expiresAt)) } : grant.kind === "guardian" ? "While the child is a minor" : "Until revoked";
     state = { tone: "ok", label: "Active" };
   }
-  return { who: grant.granteeName, canSee, why: grant.purpose, grantedBy: grant.grantedByName || "The firm", expires, state };
+  const scope = typeof canSee === "string" ? canSee : `${canSee.left}, ${canSee.right}`;
+  return {
+    who: grant.granteeName,
+    canSee,
+    why: grant.purpose,
+    grantedBy: grant.grantedByName || "The firm",
+    expires,
+    state,
+    attrs: grantActive(grant, now)
+      ? { "data-grant-row": grant.id, "data-grant-label": `${grant.granteeName} can see ${scope}.`, tabIndex: "0", title: "Revoke this grant" }
+      : undefined,
+  };
 }
 
 export const SUPPORT_INTRO =
-  "Casevoya support can’t see your client files. Support grants (SEC-09) aren’t built yet, so there’s nothing to approve and no way for support to open a matter.";
+  "Casevoya support can’t see your client files. Support access isn’t offered: support can’t ask to open a matter, so there’s nothing to approve here.";
 
 export const LIMITS_INTRO =
   "Casevoya doesn’t narrow a role to an office or team yet. Everyone works firm-wide within their role and the matters they’re assigned to.";
@@ -84,9 +95,29 @@ export function grantsData(tab: GrantsTab, grants: readonly FirmGrant[], staff: 
   };
 }
 
-export function grantDialog(organizationId: string, choices: readonly GrantChoice[]): GrantDialogData {
+/**
+ * The New access grant form's own checks, run in the page before anything is sent, so an empty or
+ * wrong form is answered in place instead of after a step-up. The database checks again.
+ */
+export function grantDraftProblem(
+  expires: string,
+  reason: string,
+  todayIso: string,
+): { field: "gE" | "gR"; title: string; sub: string } | null {
+  const end = readGrantDate(expires);
+  if (!end) return { field: "gE", title: "Enter an end date", sub: "Use DD/MM/YYYY. Grants never last forever." };
+  const today = Date.parse(`${todayIso}T00:00:00Z`);
+  const chosen = Date.parse(`${end}T00:00:00Z`);
+  if (chosen < today || chosen > today + 366 * 86_400_000) return { field: "gE", title: "Choose another end date", sub: "From today up to a year ahead." };
+  const length = reason.trim().length;
+  if (length < 3 || length > 500) return { field: "gR", title: "Give a reason", sub: "At least 3 characters. It is kept in the audit trail." };
+  return null;
+}
+
+export function grantDialog(organizationId: string, choices: readonly GrantChoice[], today?: string): GrantDialogData {
   return {
     organizationId,
+    today,
     people: choices.filter((row) => row.choice === "grantee").map((row) => ({ label: row.personName, personId: row.personId })),
     scopes: choices
       .filter((row) => row.choice === "scope" && row.matterId)

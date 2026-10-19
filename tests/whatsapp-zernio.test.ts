@@ -353,7 +353,8 @@ describe("Settings > Integrations: WhatsApp row", () => {
   });
 
   it("gives Connect and Disconnect to the firm owner only", () => {
-    expect(wa({}).action).toEqual({ label: "Connect", attrs: { "data-wa-connect": "1", "data-org": ORG } });
+    // Connect opens the consent step first (Zernio, then Meta); its Accept carries data-wa-connect.
+    expect(wa({}).action).toEqual({ label: "Connect", attrs: { "data-dlg": "dlgWhatsApp" } });
     expect(wa({}, false).action?.attrs).toEqual({ disabled: true, title: "Only the firm owner can connect WhatsApp" });
     expect(wa({ status: "pending" }).state).toEqual({ tone: "chg", label: "Pending", detail: "finish with Meta" });
     const connected = wa({ status: "connected", phone: "+1 431 275 3986", live: { status: "CONNECTED", quality: "GREEN" } });
