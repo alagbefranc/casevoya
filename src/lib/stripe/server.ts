@@ -22,5 +22,11 @@ export function stripeWebhookSecret(): string | null {
   return secret.ok ? secret.key : null;
 }
 
+/** The platform-account (Casevoya subscription) event destination's signing secret: /api/stripe/billing. */
+export function stripeBillingWebhookSecret(): string | null {
+  const secret = checkWebhookSecret(process.env.STRIPE_BILLING_WEBHOOK_SECRET);
+  return secret.ok ? secret.key : null;
+}
+
 /** Web Crypto (SubtleCrypto) signature checks: Workers cannot run Node's synchronous HMAC. */
 export const stripeCrypto = Stripe.createSubtleCryptoProvider();

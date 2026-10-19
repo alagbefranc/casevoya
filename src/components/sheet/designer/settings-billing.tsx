@@ -26,12 +26,35 @@ const UNDERLINE: Record<SettingsBillingTab, { left: string; width: string }> = {
 
 export type SettingsBillingAlert = { tone: "warn" | "info"; icon: string; title: string; body: string };
 
+/** One Casevoya invoice line: "CV-0007 · 19 Oct 2026 · CAD 349 · Paid" with Stripe's hosted page or PDF. */
+export type SubscriptionInvoiceRow = { text: string; href: string | null };
+
+/** A live-only button under the Plan rows (firm owner): opens the plan dialog, or the Billing Portal. */
+export type SubscriptionButton = { label: string; act: "plan" | "portal"; primary: boolean; organizationId: string };
+
+export type PlanDialogData = {
+  organizationId: string;
+  currency: string;
+  annualMonths: number;
+  extraSeatMonthlyCents: number | null;
+  plans: { value: string; label: string; monthlyCents: number | null; yearlyCents: number | null; allowances: string }[];
+  selected: string;
+  interval: "month" | "year";
+  extraSeats: number;
+};
+
 export type SubscriptionData = {
   /** "What {payer} pays Casevoya." */
   payer: string;
   rows: [string, string][];
   alert: SettingsBillingAlert | null;
   note: string | null;
+  /** Live-only: Casevoya's invoices, listed in the "Invoices from Casevoya" row. */
+  invoices?: SubscriptionInvoiceRow[];
+  /** Live-only, firm owner: the `.fp-row` of buttons under the rows. */
+  buttons?: SubscriptionButton[];
+  /** Live-only, firm owner: the Choose a plan dialog (#dlgPlan), rendered after the frame. */
+  dialog?: PlanDialogData | null;
 };
 
 /** A definition whose parts the Designer separates with its thin `.sep`. */
@@ -89,7 +112,32 @@ function Alert({ alert, index }: { alert: SettingsBillingAlert; index: number })
   );
 }
 
+const INVOICES_ROW = "Invoices from Casevoya";
+
+/** The invoice lines inside the "Invoices from Casevoya" dd, each with its Download link, separated by the Designer's `.sep`. */
+function InvoiceLines({ invoices }: { invoices: SubscriptionInvoiceRow[] }) {
+  return (
+    <>
+      {invoices.map((inv, index) => (
+        <Fragment key={index}>
+          {index > 0 ? <Sep /> : null}
+          {`${index > 0 ? " " : ""}${inv.text} `}
+          {inv.href ? (
+            <a href={inv.href} target={"_blank"} rel={"noreferrer"}>
+              {"Download"}
+            </a>
+          ) : (
+            "No file yet"
+          )}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
 export function SheetSubscription({ data }: { data: SubscriptionData }) {
+  const invoices = data.invoices ?? [];
+  const buttons = data.buttons ?? [];
   return (
     <>
       <div className={"ph rv"} style={i(0)}>
@@ -109,10 +157,19 @@ export function SheetSubscription({ data }: { data: SubscriptionData }) {
             {data.rows.map(([term, value]) => (
               <div key={term}>
                 <dt>{term}</dt>
-                <dd>{value}</dd>
+                <dd>{term === INVOICES_ROW && invoices.length ? <InvoiceLines invoices={invoices} /> : value}</dd>
               </div>
             ))}
           </dl>
+          {buttons.length ? (
+            <div className={"fp-row"} style={{ marginTop: "12px" }}>
+              {buttons.map((button) => (
+                <button key={button.label} className={button.primary ? "btn p sm" : "btn sm"} data-subscription-act={button.act} data-org={button.organizationId}>
+                  {button.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       </section>
       {data.note ? (
@@ -122,6 +179,91 @@ export function SheetSubscription({ data }: { data: SubscriptionData }) {
         </p>
       ) : null}
     </>
+  );
+}
+
+function cents(value: number | null, currency: string, per: string): string {
+  if (value === null) return "no price set";
+  const whole = value % 100 === 0;
+  return `${currency} ${(value / 100).toLocaleString("en-CA", { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 })}/${per}`;
+}
+
+/**
+ * Choose a plan (#dlgPlan): a live addition from the Designer's dialog parts (`.dlg`, `.dh`, `.db`,
+ * `.fld`, `.sel`, `.inp`, `.seg`, `.why`, `.df`). The catalog rides on data attributes so the
+ * browser recomputes the total; the server checks it all again.
+ */
+export function PlanDialog({ data }: { data: PlanDialogData }) {
+  return (
+    <dialog
+      className={"dlg"}
+      id={"dlgPlan"}
+      aria-labelledby={"dlgPlanH"}
+      data-org={data.organizationId}
+      data-currency={data.currency}
+      data-annual-months={String(data.annualMonths)}
+      data-seat-cents={data.extraSeatMonthlyCents === null ? undefined : String(data.extraSeatMonthlyCents)}
+    >
+      <div className={"dh"}>
+        <h2 id={"dlgPlanH"}>{"Choose a plan"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={"dlgPlan"}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <div className={"fld"}>
+          <label htmlFor={"plI"}>{"Billing"}</label>
+          <div className={"seg"} id={"plI"} role={"group"} aria-label={"Billing interval"}>
+            <button type={"button"} data-interval={"month"} aria-pressed={data.interval === "month" ? "true" : "false"}>
+              {"Monthly"}
+            </button>
+            <button type={"button"} data-interval={"year"} aria-pressed={data.interval === "year" ? "true" : "false"}>
+              {`Annual (${data.annualMonths} months)`}
+            </button>
+          </div>
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"plS"}>{"Plan"}</label>
+          <select className={"sel"} id={"plS"} defaultValue={data.selected}>
+            {data.plans.map((plan) => (
+              <option
+                key={plan.value}
+                value={plan.value}
+                data-month={plan.monthlyCents === null ? undefined : String(plan.monthlyCents)}
+                data-year={plan.yearlyCents === null ? undefined : String(plan.yearlyCents)}
+                data-allowances={plan.allowances}
+              >
+                {plan.monthlyCents === null ? plan.label : `${plan.label} · ${cents(plan.monthlyCents, data.currency, "month")} or ${cents(plan.yearlyCents, data.currency, "year")}`}
+              </option>
+            ))}
+          </select>
+          <span className={"hint"} id={"plA"}>
+            {data.plans.find((plan) => plan.value === data.selected)?.allowances ?? ""}
+          </span>
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"plX"}>{"Extra seats"}</label>
+          <input className={"inp"} id={"plX"} type={"number"} inputMode={"numeric"} min={0} max={500} step={1} defaultValue={String(data.extraSeats)} />
+          <span className={"hint"}>
+            {data.extraSeatMonthlyCents === null ? "No extra-seat price is set." : `${cents(data.extraSeatMonthlyCents, data.currency, "month")} each, on top of the plan’s seats.`}
+          </span>
+        </div>
+        <p className={"why"}>
+          <Icon name={"shield"} cls={"ic s"} />
+          {"Total "}
+          <b id={"plT"}>{""}</b>
+          {". Continuing asks you to confirm it’s you, then opens Stripe’s secure checkout (test mode during the pilot). Casevoya never sees your card."}
+        </p>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={"dlgPlan"}>
+          {"Cancel"}
+        </button>
+        <button className={"btn p"} data-subscription-act={"checkout"} data-org={data.organizationId}>
+          {"Continue to payment"}
+        </button>
+      </div>
+    </dialog>
   );
 }
 

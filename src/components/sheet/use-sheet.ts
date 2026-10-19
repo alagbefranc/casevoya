@@ -103,6 +103,7 @@ import { mountIntakeBuilder } from "./intake-builder-acts";
 import { runVoAccept, runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
 import { runVoDocAccept, runVoDocDiscard, runVoDocReject, runVoRead } from "./vo-doc-acts";
 import { mountRetentionSlider, runRetentionSave } from "./retention-act";
+import { mountSubscription, runSubscriptionAct } from "./subscription-act";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
 import {
   mountIntegrations,
@@ -678,6 +679,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(retentionSave, () => runRetentionSave(retentionSave, router));
         return;
       }
+      // Settings > Subscription (firm owner): Choose a plan, Continue to payment, Manage billing.
+      const subscriptionAct = target.closest<HTMLElement>("[data-subscription-act]");
+      if (subscriptionAct && root.contains(subscriptionAct)) {
+        event.preventDefault();
+        busyRun(subscriptionAct, () => runSubscriptionAct(subscriptionAct, openDialog));
+        return;
+      }
       const bookingSubmit = target.closest<HTMLElement>("[data-booking-submit]");
       if (bookingSubmit && root.contains(bookingSubmit)) {
         event.preventDefault();
@@ -1160,6 +1168,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     }
     // Settings > Retention: the firm owner's slider moves (firm setup's own k2Slider).
     if (page === "settings") mountRetentionSlider(root);
+    // Settings > Subscription: the plan dialog's total, ?checkout= toasts, ?dlg=plan after step-up.
+    if (page === "settings" && window.location.search.includes("tab=billing")) mountSubscription(root, router, openDialog);
     // ?dlg=terms|privacy (coming back from step-up) reopens that publish dialog with what was typed.
     const policyKind = policyKindForDialog(dialogParam);
     for (const kind of POLICY_KINDS) {

@@ -73,12 +73,17 @@ export function inviteBlockers(rows: SetupRows): string[] {
   if (!owners.length) blockers.push("owner_licence_missing");
   else if (owners.some(credentialBlocks)) blockers.push("owner_licence_blocked");
   if (rows.subscriptionStatus === "trial_ended") blockers.push("trial_ended");
+  if (SUBSCRIPTION_RESTRICTED.has(rows.subscriptionStatus ?? "")) blockers.push("subscription_restricted");
   return blockers;
 }
+
+/** Subscription states that pause new work (app.subscription_entitlements new_work_blocked). */
+export const SUBSCRIPTION_RESTRICTED = new Set(["restricted", "cancelled", "archived"]);
 
 export const LICENCE_ADDED = "Add your CICC licence";
 export const LICENCE_BLOCKED = "Your CICC licence needs attention";
 export const TRIAL_ENDED = "Your trial has ended: choose a plan";
+export const SUBSCRIPTION_PAUSED = "Your subscription is paused: choose a plan";
 
 export type GoLiveStep = { key: string; label: string; href: string };
 
@@ -90,6 +95,7 @@ export function blockerStep(blocker: string): GoLiveStep {
   if (blocker === "owner_licence_missing") return { key: "licence_added", label: LICENCE_ADDED, href: "/sheet/licence" };
   if (blocker === "owner_licence_blocked" || blocker === "firm_restricted") return { key: "licence_blocked", label: LICENCE_BLOCKED, href: "/sheet/licence" };
   if (blocker === "trial_ended") return { key: "trial", label: TRIAL_ENDED, href: "/sheet/settings?tab=billing" };
+  if (blocker === "subscription_restricted") return { key: "subscription", label: SUBSCRIPTION_PAUSED, href: "/sheet/settings?tab=billing" };
   return { key: blocker, label: "Firm setup isn’t finished", href: "/sheet/sample-mode" };
 }
 
