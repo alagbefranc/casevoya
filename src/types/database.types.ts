@@ -9115,6 +9115,14 @@ export type Database = {
         }
         Returns: number
       }
+      change_staff_role: {
+        Args: {
+          p_membership_id: string
+          p_organization_id: string
+          p_role: Database["public"]["Enums"]["org_role"]
+        }
+        Returns: undefined
+      }
       claim_due_reminders: {
         Args: { p_as_of: string; p_limit: number }
         Returns: string[]
@@ -9788,6 +9796,14 @@ export type Database = {
       note_migration_commit_failure: {
         Args: { p_batch: string; p_org: string; p_reason: string }
         Returns: undefined
+      }
+      offboard_staff_member: {
+        Args: {
+          p_membership_id: string
+          p_organization_id: string
+          p_receiver_membership_id: string
+        }
+        Returns: Json
       }
       open_intake_response: {
         Args: { p_matter_id: string; p_person_id: string; p_template_id: string }
@@ -10575,6 +10591,15 @@ export type Database = {
         Args: { p_bytes: number }
         Returns: number
       }
+      set_firm_continuity: {
+        Args: {
+          p_email: string
+          p_name: string
+          p_organization_id: string
+          p_succession_note: string
+        }
+        Returns: undefined
+      }
       set_firm_reminder_offsets: {
         Args: { p_days: number[] }
         Returns: undefined
@@ -10616,6 +10641,14 @@ export type Database = {
       set_sample_mode: {
         Args: { p_enabled: boolean }
         Returns: undefined
+      }
+      set_staff_suspended: {
+        Args: {
+          p_membership_id: string
+          p_organization_id: string
+          p_suspended: boolean
+        }
+        Returns: number
       }
       set_task_status: {
         Args: {
@@ -10681,6 +10714,10 @@ export type Database = {
       }
       staff_notifications: {
         Args: { p_limit?: number; p_organization_id: string }
+        Returns: Json
+      }
+      staff_offboarding_preview: {
+        Args: { p_membership_id: string; p_organization_id: string }
         Returns: Json
       }
       staff_record_booking_outcome: {

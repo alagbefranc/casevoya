@@ -100,6 +100,7 @@ import {
   runQuietHours,
 } from "./settings-integrations-acts";
 import { reopenFirmDialog, runFirmSave } from "./settings-firm-acts";
+import { bindOffboardHold, mountMember, mountOffboard, reopenStaffAdmin, runContinuitySave, runMemberAct } from "./settings-staff-admin-acts";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
 const NEW_MATTER = "/sheet/matters?new=1";
@@ -382,6 +383,16 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (firmSave.getAttribute("aria-busy") === "true") return;
         firmSave.setAttribute("aria-busy", "true");
         void runFirmSave(firmSave, router).finally(() => firmSave.removeAttribute("aria-busy"));
+        return;
+      }
+      // Settings > Team and seats: Change role or access (role, suspend) and the continuity contact.
+      const staffAdmin = target.closest<HTMLElement>("[data-member-act], [data-continuity-save]");
+      if (staffAdmin && root.contains(staffAdmin)) {
+        event.preventDefault();
+        if (staffAdmin.getAttribute("aria-busy") === "true") return;
+        staffAdmin.setAttribute("aria-busy", "true");
+        const run = staffAdmin.hasAttribute("data-member-act") ? runMemberAct(staffAdmin, router) : runContinuitySave(staffAdmin, router);
+        void run.finally(() => staffAdmin.removeAttribute("aria-busy"));
         return;
       }
       // Licences: Add a licence and Report a change; the licence-suspended home's Reassign work.
@@ -811,6 +822,19 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     mountIntakeBuilder(root, router, ac.signal);
     // Back from a Composio Connect Link on Settings > Integrations.
     if (page === "settings") mountIntegrations(root, router);
+    // Settings > Team and seats: the Offboard dialog's hold and previews, Change role or access, and
+    // ?dlg=dlgOff|dlgMem|dlgCont (back from step-up); closing one of them drops ?dlg.
+    if (page === "settings" && root.querySelector("#dlgOff [data-offboard], #dlgMem, [data-continuity-save]")) {
+      bindOffboardHold(root, router, ac.signal);
+      mountOffboard(root, ac.signal);
+      mountMember(root, ac.signal);
+      window.setTimeout(() => reopenStaffAdmin(root, openDialog), 300);
+      root.querySelectorAll<HTMLDialogElement>("dialog#dlgOff, dialog#dlgMem, dialog#dlgCont").forEach((dialog) => {
+        dialog.addEventListener("close", () => {
+          if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
+        }, listen);
+      });
+    }
 
     // "Hold to revoke" on a pending staff invitation: held for HOLD_MS, then revoked.
     let hold: number | undefined;
