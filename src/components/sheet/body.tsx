@@ -118,6 +118,8 @@ export async function SheetBody({
   matterId?: string;
 }) {
   if (!isSheetPage(page)) notFound();
+  // The Designer's gallery of example states (fictional data) is a design reference, not a firm page.
+  if (page === "states") notFound();
   const tone = PUBLIC.has(page) ? "public" : "sheet";
   const access = await loadSheetAccess();
   if (!PUBLIC.has(page) && access.kind === "signed-out") redirect(signInLocation(sheetPath(page, matterId)));

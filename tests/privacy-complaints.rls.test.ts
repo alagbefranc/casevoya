@@ -20,8 +20,8 @@ beforeEach(async () => {
 });
 
 const key = (prefix = "k") => `${prefix}-${randomUUID()}`;
-// These functions count days with current_date (UTC), not the firm's timezone; see DECISIONS 2026-10-19.
-const day = (offset: number) => firmDay(offset, "UTC");
+// Days in the firm's timezone (America/Toronto, the default), as the database counts them.
+const day = (offset: number) => firmDay(offset);
 
 async function createUser(label: string) {
   await asMaintenance(db);
@@ -60,7 +60,6 @@ async function firm() {
   const unassignedMembership = await member(orgId, unassigned, "case_manager", owner);
   const assistantMembership = await member(orgId, assistant, "assistant", owner);
   await asMaintenance(db);
-  await db.query(`update public.organizations set timezone = 'UTC' where id = $1`, [orgId]);
   const matterId = randomUUID();
   await db.query(`insert into public.matters (id, organization_id, title, is_sample) values ($1, $2, 'Synthetic matter', true)`, [matterId, orgId]);
   const person = await db.query<{ id: string }>(`insert into public.persons (organization_id, display_name, is_sample) values ($1, 'Synthetic client', true) returning id`, [orgId]);

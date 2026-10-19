@@ -34,7 +34,7 @@ const NAV: { group: string; items: [string, string][] }[] = [
   { group: "Work", items: [["/sheet", "Home"], ["/sheet/matters", "All matters"], ["/sheet/clients", "Clients"], ["/sheet/tasks", "Tasks"], ["/sheet/government", "Government status"], ["/sheet/queue", "Team queue"]] },
   { group: "Records", items: [["/sheet/inbox", "Inbox"], ["/sheet/documents", "Documents"], ["/sheet/agreements", "Agreements"], ["/sheet/finance", "Finance"]] },
   { group: "Practice", items: [["/sheet/calendar", "Calendar"], ["/sheet/pipeline", "Pipeline"], ["/sheet/consultations", "Consultations"], ["/sheet/reports", "Reports"], ["/sheet/templates", "Templates"], ["/sheet/intake-builder", "Intake forms"], ["/sheet/invitations", "People and invitations"], ["/sheet/licence", "Licences"], ["/sheet/roles", "Roles"], ["/sheet/grants", "Access grants"], ["/sheet/settings", "Settings"], ["/sheet/sample-mode", "Sample mode"]] },
-  { group: "Compliance", items: [["/sheet/complaints", "Complaints"], ["/sheet/privacy", "Privacy requests"], ["/sheet/exports", "Exports"], ["/sheet/migration", "Migration"], ["/sheet/drafts", "Vo drafts"], ["/sheet/ai", "Vo and AI"], ["/sheet/states", "System states"]] },
+  { group: "Compliance", items: [["/sheet/complaints", "Complaints"], ["/sheet/privacy", "Privacy requests"], ["/sheet/exports", "Exports"], ["/sheet/migration", "Migration"], ["/sheet/drafts", "Vo drafts"], ["/sheet/ai", "Vo and AI"]] },
 ];
 
 function personName(bundle: SheetBundle, id: string | null): string {

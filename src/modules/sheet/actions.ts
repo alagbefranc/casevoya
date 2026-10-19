@@ -294,8 +294,8 @@ export async function savePersonDetails(input: {
   const changesBirth = dateOfBirth !== null && dateOfBirth !== current.date_of_birth;
   if (changesBirth && current.user_id && !current.is_minor) {
     // A minor cannot hold their own portal login (PRD §5); the database refuses minors at invitation and acceptance.
-    const { data: firm } = await supabase.from("organizations").select("age_of_majority_years").eq("id", org).maybeSingle();
-    if (minorOn(dateOfBirth, firm?.age_of_majority_years ?? 19, today)) {
+    const { data: firm } = await supabase.from("organizations").select("age_of_majority_years, timezone").eq("id", org).maybeSingle();
+    if (minorOn(dateOfBirth, firm?.age_of_majority_years ?? 19, todayIso(new Date(), firm?.timezone))) {
       return { error: "That date makes them a minor, and they hold their own portal login. A minor can’t hold one, so nothing was saved." };
     }
   }
