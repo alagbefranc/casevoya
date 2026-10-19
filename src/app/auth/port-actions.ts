@@ -18,6 +18,7 @@ import {
   firmSetupPayloadSchema,
   jurisdictionCodesFromFields,
   normalizeCollegeId,
+  signupLicence,
 } from "@/modules/firm-onboarding";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -64,8 +65,10 @@ function fromRpc(error: { message: string }): PortResult {
     return fail("Enter a “Valid until” date that hasn’t passed.");
   }
   if (/college id is not usable/i.test(error.message)) {
-    return fail("Enter the College ID using letters, digits, or hyphens.");
+    return fail("Enter your licence number as it appears on the public register, using letters, digits or hyphens.");
   }
+  if (/licence class/i.test(error.message)) return fail("Choose your licence class.");
+  if (/already has a licence on file/i.test(error.message)) return fail("Your licence is already on file.");
   if (/add the main office/i.test(error.message)) return fail("Add the main office before completing firm details.");
   if (/choose at least one jurisdiction/i.test(error.message)) return fail("Choose at least one place you practise.");
   return fail(safeAccessError(error.message));
@@ -257,7 +260,19 @@ async function ownsFirm(supabase: Awaited<ReturnType<typeof createClient>>): Pro
   return Boolean(data?.length);
 }
 
-export async function createTrialFirm(input: { firmName: string; sampleMode: boolean }): Promise<PortResult | null> {
+/**
+ * Creates the trial firm with the owner's CICC licence (decision 2026-10-19: only licensed
+ * consultants sign up, and firms start live). public.create_firm_with_licence makes the firm, the
+ * owner's membership and the declared licence together, with sample mode off. The sample case
+ * stays an optional tour; `sampleMode` (the "How do you want to start?" choice) no longer changes
+ * the firm.
+ */
+export async function createTrialFirm(input: {
+  firmName: string;
+  sampleMode: boolean;
+  licenceNumber?: string;
+  licenceClass?: string;
+}): Promise<PortResult | null> {
   if (!hasPublicSupabaseEnv()) return nullResult();
   const name = input.firmName.trim().slice(0, 200);
   if (!name) return fail("Enter your firm’s name.");
@@ -267,22 +282,28 @@ export async function createTrialFirm(input: { firmName: string; sampleMode: boo
   if (!ctx.assured) return { ok: true, href: "/mfa?step=2&next=/setup" };
   // One trial firm per sign-up: a second click, a stale tab or /setup's resume must not make another.
   if (await ownsFirm(supabase)) return { ok: true, href: "/setup" };
+  // A sign-up started before the licence was asked for: the start-trial screen asks for it now.
+  if (!input.licenceNumber?.trim()) return { ok: true, href: "/start-trial" };
+  const licence = signupLicence(input.licenceNumber, input.licenceClass ?? "");
+  if (!licence.ok) return fail(licence.message);
   const slug = firmSlug(name);
-  const { data, error } = await supabase.rpc("create_organization", {
+  const { data, error } = await supabase.rpc("create_firm_with_licence", {
     legal_name: name,
     display_name: name,
     slug,
+    licence_type: licence.licenceType,
+    college_id: licence.collegeId,
+    licence_class: licence.licenceClass,
   });
   if (error) {
-    if (/mfa|aal2/i.test(error.message)) return { ok: true, href: "/mfa?step=2&next=/setup" };
+    if (/mfa|aal2|two-step/i.test(error.message)) return { ok: true, href: "/mfa?step=2&next=/setup" };
     if (/duplicate|already/i.test(error.message)) return { ok: true, href: "/setup" };
+    if (/college id|licence class/i.test(error.message)) return fromRpc(error);
     return fail("The firm could not be created.");
   }
   if (!data?.id) return fail("The firm could not be created.");
   await syncClaimedFirmSlug(data.slug || slug);
   const workspace = await createClient({ organizationId: data.id });
-  const { error: modeError } = await workspace.rpc("set_sample_mode", { p_enabled: input.sampleMode });
-  if (modeError) return fromRpc(modeError);
   const { error: trialError } = await workspace.rpc("sync_trial_status");
   if (trialError) return fromRpc(trialError);
   return { ok: true, href: "/setup" };
@@ -313,14 +334,30 @@ export async function saveSetupStep(
     if (officeError) return fromRpc(officeError);
   }
 
-  if (step === "licence" && text(fields, "lno")) {
-    // The owner's own licence, with the proof file they uploaded on this step (see /api/firm/licence-proof).
-    if (!text(fields, "rg").includes("CICC")) return fail("Casevoya records CICC licences.");
-    const collegeId = normalizeCollegeId(text(fields, "lno")) ?? text(fields, "lno");
+  if (step === "licence") {
+    // The owner's licence was declared at sign-up; a firm made before that declares it here. The
+    // proof file is optional (decision 2026-10-19); when given it must be the one uploaded on this
+    // step (see /api/firm/licence-proof).
+    const typed = text(fields, "lno");
+    if (typed && !text(fields, "rg").includes("CICC")) return fail("Casevoya records CICC licences.");
+    const { data: existing } = await supabase
+      .from("consultant_credentials")
+      .select("id, college_id")
+      .eq("organization_id", organizationId)
+      .eq("membership_id", workspace.membershipId)
+      .limit(1);
+    const onFile = existing?.[0] ?? null;
+    if (!onFile && !typed) return fail("Enter your licence number.");
+    const collegeId = typed ? (normalizeCollegeId(typed) ?? typed) : "";
+    if (onFile && typed && collegeId.toUpperCase() !== onFile.college_id) {
+      return fail(`Your licence ${onFile.college_id} is on file. To change it, use “Report a change” on Licences.`);
+    }
     const locator = text(fields, "lproof");
-    const proofKey = ownLicenceProofKey(locator, organizationId, workspace.membershipId);
-    if (!proofKey) return fail("Upload your licence proof to continue.");
-    if (!(await privateFileStored(LICENCE_PROOF_BUCKET, proofKey))) return fail("Your licence proof wasn’t found. Upload it again.");
+    if (locator) {
+      const proofKey = ownLicenceProofKey(locator, organizationId, workspace.membershipId);
+      if (!proofKey) return fail("Upload your licence proof again.");
+      if (!(await privateFileStored(LICENCE_PROOF_BUCKET, proofKey))) return fail("Your licence proof wasn’t found. Upload it again.");
+    }
     // "Valid until" (#ex) is optional; when given it must be a real date that hasn't passed.
     const validUntil = text(fields, "ex");
     if (validUntil && !isIsoDate(validUntil)) return fail("Enter the “Valid until” date as a full date.");
@@ -329,15 +366,8 @@ export async function saveSetupStep(
       const { data: firmZone } = await supabase.from("organizations").select("timezone").eq("id", organizationId).maybeSingle();
       if (validUntil < todayIso(new Date(), firmZone?.timezone)) return fail("Enter a “Valid until” date that hasn’t passed.");
     }
-    const { data: existing } = await supabase
-      .from("consultant_credentials")
-      .select("id")
-      .eq("organization_id", organizationId)
-      .eq("membership_id", workspace.membershipId)
-      .eq("college_id", collegeId.toUpperCase())
-      .limit(1);
-    let credentialId = existing?.[0]?.id ?? null;
-    if (!credentialId) {
+    let credentialId = onFile?.id ?? null;
+    if (!credentialId && locator) {
       const { data: declaredId, error: declared } = await supabase.rpc("declare_consultant_credential", {
         p_membership_id: workspace.membershipId,
         p_licence_type: "RCIC",
@@ -347,6 +377,17 @@ export async function saveSetupStep(
       });
       if (declared) return fromRpc(declared);
       credentialId = declaredId ?? null;
+    } else if (!credentialId) {
+      const { data: addedId, error: added } = await supabase.rpc("add_consultant_licence", {
+        p_membership_id: workspace.membershipId,
+        p_licence_type: "RCIC",
+        p_college_id: collegeId,
+      });
+      if (added) return fromRpc(added);
+      credentialId = addedId ?? null;
+    } else if (locator) {
+      const { error: proofError } = await supabase.rpc("set_credential_proof", { p_credential_id: credentialId, p_proof_locator: locator });
+      if (proofError) return fromRpc(proofError);
     }
     // Stored separately so declare_consultant_credential keeps its signature.
     if (validUntil && credentialId) {
@@ -417,14 +458,10 @@ export async function saveSetupStep(
       p_organization_id: organizationId,
     });
     if (gateError) return fromRpc(gateError);
-    if (typeof fields.sample_mode === "boolean") {
-      const { error: modeError } = await supabase.rpc("set_sample_mode", { p_enabled: fields.sample_mode });
-      if (modeError) return fromRpc(modeError);
-    }
-    // The sample case the trial promised, as real sample rows (once per firm).
-    const { error: sampleError } = await supabase.rpc("ensure_sample_case");
-    if (sampleError) return fromRpc(sampleError);
-    return { ok: true, href: "/sheet/sample-mode" };
+    // Sample mode is no longer set here: firms start live (2026-10-19). Someone who chose
+    // "Explore with sample data" goes to the optional tour (its page makes the sample case).
+    if (fields.tour === true) return { ok: true, href: "/sheet/sample-mode" };
+    return { ok: true, href: "/sheet" };
   }
   return { ok: true };
 }

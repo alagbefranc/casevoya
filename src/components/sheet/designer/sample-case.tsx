@@ -23,17 +23,40 @@ export type SampleCaseData = {
   licence: { holder: string; status: string } | null;
   /** Live addition: the go-live checklist and Switch to live. Absent for a live firm. */
   live?: GoLiveData | null;
+  /**
+   * The firm is live (firms start live since 2026-10-19) and is taking the optional tour: the
+   * footer says real client invitations are open instead of locked. Same DOM and classes.
+   */
+  firmLive?: boolean;
 };
 
 /**
- * Live addition (no Designer screen; approved by Francis 2026-10-19). The two licence steps (and
- * an ended trial) that also keep real client invitations locked, as more of the Designer's
- * `.smp-i` step tiles in a second `.smp-g` row, and the firm owner's Switch to live.
+ * Copy changed from the Designer capture (decision 2026-10-19: the six steps are an optional tour
+ * and a declared licence is enough to invite real clients). Text only; the DOM is the capture's.
+ */
+export const SAMPLE_COPY = {
+  /** Designer: "When they’re done and your licence check passes, you can invite real clients." */
+  lead: "Optional practice on fictional records. Real client invitations need only your CICC licence on file and the firm switched to live.",
+  leadLive: "Optional practice on fictional records. Your firm is live, so you can invite real clients any time.",
+  /** Designer: "N sample steps left". */
+  left: (left: number) => `${left} practice ${left === 1 ? "step" : "steps"} left, optional `,
+  /** Designer: "Opens after verification". */
+  why: "Opens when the firm switches to live",
+  whyLive: "Your firm is live",
+  lockedLive: "Real client invitations are open",
+} as const;
+
+/**
+ * Live addition (no Designer screen; approved by Francis 2026-10-19). What keeps a sample-mode
+ * firm's real client invitations locked (the owner's CICC licence, and an ended trial), as more of
+ * the Designer's `.smp-i` step tiles in a second `.smp-g` row, and the firm owner's Switch to live.
  */
 export type GoLiveData = {
   licence: {
+    /** The firm owner's licence is on file. */
     added: boolean;
-    verified: boolean;
+    /** It is revoked, suspended, inactive or not entitled, so it keeps invitations locked. */
+    blocked: boolean;
     /** Where the latest check stands in the panel's words ("waiting for review"); null without a licence. */
     status: string | null;
   };
@@ -74,22 +97,21 @@ function GoLiveTile({ art, title, note, href, go, done }: { art: string; title: 
 /** The go-live steps row, placed under the six sample steps. */
 export function GoLiveSteps({ data }: { data: GoLiveData }) {
   const { licence } = data;
-  const verifiedNote = licence.verified
-    ? "Checked by hand on the CICC public register"
-    : licence.added
-      ? `Licence check: ${licence.status ?? "not recorded yet"}`
-      : "Record the check from the CICC public register once your licence is added";
+  const note = !licence.added
+    ? "Your licence number from the CICC register"
+    : licence.blocked
+      ? `Licence check: ${licence.status ?? "needs attention"}`
+      : "On file. The number is checked against the CICC register list.";
   return (
     <div className={"smp-g"} data-golive={"steps"}>
       <GoLiveTile
-        art={"licence-card"}
-        title={"Add your CICC licence"}
-        note={licence.added ? "Your licence is on file" : "Your college ID from the CICC public register"}
+        art={licence.blocked ? "licence-paused" : "licence-card"}
+        title={licence.blocked ? "Your CICC licence needs attention" : "Add your CICC licence"}
+        note={note}
         href={"/sheet/licence"}
-        go={"Add it"}
-        done={licence.added}
+        go={licence.blocked ? "Review it" : "Add it"}
+        done={licence.added && !licence.blocked}
       />
-      <GoLiveTile art={"licence-pending"} title={"Licence verified against the CICC register"} note={verifiedNote} href={"/sheet/licence"} go={"Check it"} done={licence.verified} />
       {data.trialEnded ? (
         <GoLiveTile art={"invoice-plain"} title={"Your trial has ended"} note={"Choose a plan to keep going"} href={"/sheet/settings?tab=billing"} go={"Choose a plan"} done={false} />
       ) : null}
@@ -177,7 +199,7 @@ export function SampleCasePanel({ data }: { data: SampleCaseData }) {
             {"Sample data"}
           </span>
           <h2 id={"smpH"}>{`Try the six key steps on ${data.applicant}’s sample case`}</h2>
-          <p>{"When they’re done and your licence check passes, you can invite real clients."}</p>
+          <p>{data.firmLive ? SAMPLE_COPY.leadLive : SAMPLE_COPY.lead}</p>
         </div>
         <div className={"smp-n"}>
           <Counter value={done} />
@@ -199,8 +221,8 @@ export function SampleCasePanel({ data }: { data: SampleCaseData }) {
             <img src={"/assets/generated/b2/sandbox-160@1x.webp"} srcSet={"/assets/generated/b2/sandbox-160@2x.webp 2x"} width={36} height={36} alt={""} loading={"lazy"} decoding={"async"} />
           </span>
           <div>
-            <b>{"Real client invitations are locked"}</b>
-            {`${left} sample ${left === 1 ? "step" : "steps"} left `}
+            <b>{data.firmLive ? SAMPLE_COPY.lockedLive : "Real client invitations are locked"}</b>
+            {SAMPLE_COPY.left(left)}
             <Sep />
             {data.licence ? (
               <>
@@ -220,13 +242,20 @@ export function SampleCasePanel({ data }: { data: SampleCaseData }) {
           </div>
         </div>
         <div>
-          <button className={"btn p"} aria-disabled={"true"} aria-describedby={"whyInv"}>
-            <Icon name={"user-plus"} cls={"ic s"} />
-            {"Invite a real client"}
-          </button>
+          {data.firmLive ? (
+            <a className={"btn p"} href={"/sheet/invitations?tab=clients"} aria-describedby={"whyInv"}>
+              <Icon name={"user-plus"} cls={"ic s"} />
+              {"Invite a real client"}
+            </a>
+          ) : (
+            <button className={"btn p"} aria-disabled={"true"} aria-describedby={"whyInv"}>
+              <Icon name={"user-plus"} cls={"ic s"} />
+              {"Invite a real client"}
+            </button>
+          )}
           <p className={"why"} id={"whyInv"}>
-            <Icon name={"lock"} cls={"ic s"} />
-            {"Opens after verification"}
+            <Icon name={data.firmLive ? "check-circle" : "lock"} cls={"ic s"} />
+            {data.firmLive ? SAMPLE_COPY.whyLive : SAMPLE_COPY.why}
           </p>
         </div>
         {data.live ? <GoLiveSwitch data={data.live} /> : null}

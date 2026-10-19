@@ -10,19 +10,19 @@ export type SheetSetup = { state: SetupState; banner: SetupBannerData };
 
 /**
  * Where a sample-mode firm stands on going live, read as the signed-in staff member (every
- * staff role can read these rows). Null for a live firm.
+ * staff role can read these rows). Null for a live firm. Firms start live since 2026-10-19; this
+ * is for firms that signed up in sample mode before that.
  */
 export async function loadSheetSetup(supabase: Client, staff: SheetStaff): Promise<SheetSetup | null> {
   if (!staff.sampleMode) return null;
   const org = staff.organizationId;
-  const [firm, credentials, subscription, proofs, jar] = await Promise.all([
+  const [firm, credentials, subscription, jar] = await Promise.all([
     supabase.from("organizations").select("verification_status").eq("id", org).maybeSingle(),
     supabase
       .from("consultant_credentials")
       .select("status, verification_method, register_status, entitlement_to_practise, discipline_suspended, discipline_revoked, membership_id")
       .eq("organization_id", org),
     supabase.from("organization_subscriptions").select("status").eq("organization_id", org).maybeSingle(),
-    supabase.from("sample_proof_steps").select("step").eq("organization_id", org),
     cookies(),
   ]);
   const holderIds = [...new Set((credentials.data ?? []).map((row) => row.membership_id))];
@@ -42,7 +42,6 @@ export async function loadSheetSetup(supabase: Client, staff: SheetStaff): Promi
       holderStatus: holder.get(row.membership_id)?.status ?? null,
     })),
     subscriptionStatus: subscription.data?.status ?? null,
-    proofs: (proofs.data ?? []).map((row) => row.step as string),
   });
   return {
     state,

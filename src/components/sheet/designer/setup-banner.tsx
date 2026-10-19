@@ -2,7 +2,8 @@
 
 /**
  * Live addition (no Designer screen; approved by Francis 2026-10-19): the Finish setup banner a
- * sample-mode firm sees on every staff Sheet page. Built only from the Designer's `.alert warn`
+ * sample-mode firm sees on every staff Sheet page. Firms start live since 2026-10-19, so only a
+ * firm that signed up in sample mode before that (or turned it back on) sees it. Built only from the Designer's `.alert warn`
  * with its `.acts` buttons (as on Finance > Payments' "1 bank payment to verify"); no new
  * classes, no animation. It cannot be dismissed: "Hide details" only shortens it to its first
  * line for this browser session (a session cookie), and the Finish setup link stays.
@@ -31,7 +32,7 @@ export function SetupBanner({ data }: { data: SetupBannerData }) {
       <div>
         <b>{`${data.firmName} is in sample mode`}</b>
         <span id={"setupMore"} hidden={collapsed}>
-          {"Practice data only: everyone here is fictional, and real clients can’t be invited until setup is finished. "}
+          {"Practice data only: everyone here is fictional, and real clients can’t be invited until the firm owner switches to live. "}
           {data.progress}
         </span>
       </div>

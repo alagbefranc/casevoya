@@ -27,6 +27,8 @@ export const licenceCheckResults = [
   "inactive",
   "suspended",
   "revoked",
+  // A CICC list check that could not confirm the licence (2026-10-19). Changes no status.
+  "needs_review",
 ] as const;
 export const credentialStatuses = [
   "declared",
@@ -96,6 +98,28 @@ export function deriveLicenceCheck(observation: RegisterObservation): DerivedLic
 export function normalizeCollegeId(raw: string): string | null {
   const collegeId = raw.trim().toUpperCase();
   return COLLEGE_ID_PATTERN.test(collegeId) ? collegeId : null;
+}
+
+/** The setup screen's "Licence class" choices, used again at sign-up. RCIC-IRB is an RCIC licence. */
+export const SIGNUP_LICENCE_CLASSES = ["RCIC", "RCIC-IRB"] as const;
+export type SignupLicenceClass = (typeof SIGNUP_LICENCE_CLASSES)[number];
+
+export type SignupLicence =
+  | { ok: true; collegeId: string; licenceType: "RCIC"; licenceClass: SignupLicenceClass }
+  | { ok: false; message: string };
+
+/**
+ * The licence number and class a firm owner gives at sign-up (decision 2026-10-19: only licensed
+ * CICC consultants sign up). The number is stored as typed, uppercased, within the College ID
+ * storage limit; it is compared with the CICC register list after normalizing.
+ */
+export function signupLicence(rawNumber: string, rawClass: string): SignupLicence {
+  if (!rawNumber.trim()) return { ok: false, message: "Enter your licence number" };
+  const collegeId = normalizeCollegeId(rawNumber);
+  if (!collegeId) return { ok: false, message: "Enter your licence number as it appears on the public register, using letters, digits or hyphens." };
+  const licenceClass = SIGNUP_LICENCE_CLASSES.find((value) => value === rawClass.trim());
+  if (!licenceClass) return { ok: false, message: "Choose your licence class." };
+  return { ok: true, collegeId, licenceType: "RCIC", licenceClass };
 }
 
 const proofLocator = z.string().trim().min(1).max(500);

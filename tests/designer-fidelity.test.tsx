@@ -22,7 +22,7 @@ import { IndexMarkup } from "@/components/sheet/markup/index";
 import { MatterMarkup } from "@/components/sheet/markup/matter";
 import { MattersMarkup } from "@/components/sheet/markup/matters";
 import { SampleModeMarkup } from "@/components/sheet/markup/sample-mode";
-import { GoLiveSteps, SampleCasePanel, type GoLiveData, type SampleCaseData } from "@/components/sheet/designer/sample-case";
+import { GoLiveSteps, SAMPLE_COPY, SampleCasePanel, type GoLiveData, type SampleCaseData } from "@/components/sheet/designer/sample-case";
 import { GoLiveSwitch } from "@/components/sheet/designer/go-live-switch";
 import { SetupBanner } from "@/components/sheet/designer/setup-banner";
 import { SheetTasks, TasksDialog, TasksHeader, type TasksData, type TasksTab } from "@/components/sheet/designer/tasks";
@@ -167,6 +167,24 @@ import { securityData, teamData } from "@/modules/sheet/settings-present";
 import { OffboardDialog, type OffboardDialogData } from "@/components/sheet/designer/settings-staff-admin";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
+
+/**
+ * The sample-case panel's copy changed on 2026-10-19 (the six steps are an optional tour and a
+ * declared licence is enough to invite real clients): text only, same DOM and classes. The capture
+ * is compared with those three strings swapped in.
+ */
+function withSampleCopy(captured: string): string {
+  const swaps: [string, string][] = [
+    ["When they’re done and your licence check passes, you can invite real clients.", SAMPLE_COPY.lead],
+    ["4 sample steps left ", SAMPLE_COPY.left(4)],
+    ["Opens after verification", SAMPLE_COPY.why],
+  ];
+  return swaps.reduce((html, [from, to]) => {
+    expect(html).toContain(from);
+    return html.replace(from, to);
+  }, captured);
+}
+
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }), switchToLive: async () => ({ ok: true }) }));
 
 /**
@@ -648,7 +666,7 @@ describe("Designer fidelity", () => {
     expect(stripped).toBe(captured);
   });
 
-  it("renders the sample-mode content exactly as the captured Designer markup", () => {
+  it("renders the sample-mode content exactly as the captured Designer markup (with the 2026-10-19 copy)", () => {
     const sample: SampleCaseData = {
       applicant: "Priya",
       steps: [
@@ -662,7 +680,7 @@ describe("Designer fidelity", () => {
       licence: { holder: "Amara Osei", status: "waiting for review" },
     };
     const content = (html: string) => region(html, '<div id="content">', '<aside id="rbar"');
-    const captured = withoutPreloads(content(renderToStaticMarkup(createElement(SampleModeMarkup))));
+    const captured = withSampleCopy(withoutPreloads(content(renderToStaticMarkup(createElement(SampleModeMarkup)))));
     const live = withoutPreloads(
       content(
         renderToStaticMarkup(
@@ -707,14 +725,14 @@ describe("Designer fidelity", () => {
       licence: { holder: "Amara Osei", status: "waiting for review" },
     };
     const golive: GoLiveData = {
-      licence: { added: true, verified: false, status: "waiting for review" },
-      trialEnded: false,
-      remaining: ["Licence verified against the CICC register", "Practice step: request and review an upload"],
+      licence: { added: false, blocked: false, status: null },
+      trialEnded: true,
+      remaining: ["Add your CICC licence", "Your trial has ended: choose a plan"],
       owner: true,
     };
-    const banner = { firmName: "Northline Immigration", progress: "4 of 8 done. Still to do: get it verified against the CICC register, 4 practice steps.", collapsed: false };
+    const banner = { firmName: "Northline Immigration", progress: "Still to do: add your CICC licence, choose a plan (your trial has ended).", collapsed: false };
     const content = (html: string) => region(html, '<div id="content">', '<aside id="rbar"');
-    const captured = withoutPreloads(content(renderToStaticMarkup(createElement(SampleModeMarkup))));
+    const captured = withSampleCopy(withoutPreloads(content(renderToStaticMarkup(createElement(SampleModeMarkup)))));
     const live = withoutPreloads(
       content(
         renderToStaticMarkup(

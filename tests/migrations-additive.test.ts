@@ -13,7 +13,7 @@ describe("migrations", () => {
     expect(findTablesMissingRls()).toEqual([]);
   });
 
-  it("still rejects drop table, delete, and create or replace view", () => {
+  it("still rejects drop table, drop column, delete, and create or replace view", () => {
     const hits = findDestructiveStatements(
       path.resolve(import.meta.dirname, "fixtures/destructive-migration.sql"),
     );
@@ -22,6 +22,9 @@ describe("migrations", () => {
     expect(text).toMatch(/create or replace view/i);
     expect(text).toMatch(/delete from public\.example/i);
     expect(text).not.toMatch(/drop constraint/i);
+    // Relaxing NOT NULL keeps every row; dropping a column does not.
+    expect(text).not.toMatch(/drop not null/i);
+    expect(text).toMatch(/drop column gone/i);
     expect(text).not.toMatch(/only_inside_function/i);
   });
 });

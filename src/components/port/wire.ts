@@ -33,6 +33,9 @@ import type { PortEvent, PortResult } from "./use-port";
 
 type Ctx = Awaited<ReturnType<typeof getAuthContext>>;
 
+/** What the start-trial screen keeps until the firm is created (after email and two-step). */
+type PendingTrial = { firmName?: string; sampleMode?: boolean; licenceNumber?: string; licenceClass?: string };
+
 function val(root: ParentNode, id: string) {
   return (root.querySelector<HTMLInputElement | HTMLTextAreaElement>(`#${id}`)?.value ?? "").trim();
 }
@@ -189,9 +192,9 @@ export function usePortActions(page: string, token?: string) {
         if (page === "setup" && event.step === 0 && session.assured) {
           const raw = sessionStorage.getItem("cv-trial");
           if (raw) {
-            let pending: { firmName?: string; sampleMode?: boolean } = {};
+            let pending: PendingTrial = {};
             try {
-              pending = JSON.parse(raw) as { firmName?: string; sampleMode?: boolean };
+              pending = JSON.parse(raw) as PendingTrial;
             } catch {
               sessionStorage.removeItem("cv-trial");
             }
@@ -199,6 +202,8 @@ export function usePortActions(page: string, token?: string) {
               const created = await createTrialFirm({
                 firmName: pending.firmName,
                 sampleMode: Boolean(pending.sampleMode),
+                licenceNumber: pending.licenceNumber,
+                licenceClass: pending.licenceClass,
               });
               if (created?.ok && created.href === "/setup") sessionStorage.removeItem("cv-trial");
               if (created && created.ok === false) return created;
@@ -351,8 +356,16 @@ export function usePortActions(page: string, token?: string) {
       }
       if (page === "start-trial" && el.dataset.href === "/setup") {
         const mode = event.root.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.dataset.v;
-        const pending = { firmName: val(event.root, "firm"), sampleMode: mode !== "pilot" };
+        const pending: Required<PendingTrial> = {
+          firmName: val(event.root, "firm"),
+          sampleMode: mode !== "pilot",
+          // The setup screen's licence number and class, asked for at sign-up (2026-10-19).
+          licenceNumber: val(event.root, "lno"),
+          licenceClass: event.root.querySelector<HTMLSelectElement>("#cl")?.value ?? "",
+        };
         sessionStorage.setItem("cv-trial", JSON.stringify(pending));
+        // "Explore with sample data" opens the optional tour when setup is done.
+        sessionStorage.setItem("cv-tour", pending.sampleMode ? "1" : "0");
         const created = await createTrialFirm(pending);
         // Created now (already fully signed in): /setup must not create it again from storage.
         if (created?.ok && created.href === "/setup") sessionStorage.removeItem("cv-trial");
@@ -384,15 +397,7 @@ export function usePortActions(page: string, token?: string) {
         if (brand) fields.brand = brand.trim();
         const years = document.querySelector("#retS .v")?.textContent;
         if (years) fields.retention_years = years;
-        const pending = sessionStorage.getItem("cv-trial");
-        if (pending) {
-          try {
-            const trial = JSON.parse(pending) as { sampleMode?: boolean };
-            fields.sample_mode = trial.sampleMode !== false;
-          } catch {
-            sessionStorage.removeItem("cv-trial");
-          }
-        }
+        fields.tour = sessionStorage.getItem("cv-tour") === "1";
         return saveSetupStep(event.step, fields);
       }
       if ((page === "accept-client" || page === "accept-family" || page === "accept-sponsor") && token && el.hasAttribute("data-next")) {

@@ -26,7 +26,7 @@ export async function loadSheetSample(staff: SheetStaff, now: Date = new Date())
       .order("declared_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    // Sample mode only: the go-live checklist (licence added, licence verified, an ended trial).
+    // Sample mode only: the go-live checklist (the owner's licence on file and not blocked, an ended trial).
     loadSheetSetup(supabase, staff),
   ]);
   const matterId = typeof ensured.data === "string" ? ensured.data : null;
@@ -48,7 +48,7 @@ export async function loadSheetSample(staff: SheetStaff, now: Date = new Date())
       ? {
           licence: {
             added: setup.state.hasCredential,
-            verified: !setup.state.remaining.some((step) => step.key === "licence_verified"),
+            blocked: setup.state.hasCredential && !setup.state.licenceOk,
             status: credential.data ? licenceCheckWords(credential.data.status) : null,
           },
           trialEnded: setup.state.trialEnded,
@@ -56,6 +56,8 @@ export async function loadSheetSample(staff: SheetStaff, now: Date = new Date())
           owner: staff.role === "firm_owner",
         }
       : null,
+    // A live firm taking the optional tour: its invitations are open.
+    firmLive: !staff.sampleMode,
   };
 
   const days = subscription.data?.status === "trial" ? trialDaysLeft(subscription.data.trial_ends_at, now) : null;
@@ -70,7 +72,9 @@ export async function loadSheetSample(staff: SheetStaff, now: Date = new Date())
     home: {
       ...base.home,
       greeting: `Welcome to ${staff.organizationName}, ${firstName}.`,
-      summary: "You’re exploring with sample data. Everyone here is fictional, so nothing you send reaches a real person.",
+      summary: staff.sampleMode
+        ? "You’re exploring with sample data. Everyone here is fictional, so nothing you send reaches a real person."
+        : "This is the optional practice tour. The sample case is fictional, so nothing you send from it reaches a real person.",
     },
     sample,
   };

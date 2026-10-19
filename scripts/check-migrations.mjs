@@ -26,8 +26,9 @@ function stripDollarBodies(sql) {
 }
 
 // Dropping a table, column, or function, deleting rows, and replacing views are
-// forbidden. Replacing a function body and dropping a constraint are allowed:
-// a later migration may change a helper or a uniqueness rule without deleting data.
+// forbidden. Replacing a function body and dropping a constraint (including a NOT NULL
+// constraint: `alter column ... drop not null`) are allowed: a later migration may change a
+// helper or relax a rule without deleting data.
 const DESTRUCTIVE = [
   /\bdrop\s+(table|schema|function|view|policy|trigger|index|type|extension|column|role|materialized)\b/i,
   /\btruncate\b/i,
@@ -44,7 +45,7 @@ export function findDestructiveStatements(file) {
       if (re.test(statement)) hits.push(statement.trim().slice(0, 120));
     }
     if (/\balter\s+table\b/i.test(statement) && /\bdrop\b/i.test(statement)) {
-      const drops = statement.match(/\bdrop\s+(?!constraint\b)\w+/gi) ?? [];
+      const drops = statement.match(/\bdrop\s+(?!constraint\b|not\s+null\b)\w+/gi) ?? [];
       if (drops.length) hits.push(statement.trim().slice(0, 120));
     }
     if (/\bcreate\s+or\s+replace\b/i.test(statement) && !/\bcreate\s+or\s+replace\s+function\b/i.test(statement)) {
