@@ -91,7 +91,8 @@ export function teamSummary(members: readonly DirectoryMember[], openInvites: nu
   return `${parts.join(", ")}. Clients and family don’t use a seat.`;
 }
 
-export function continuityData(facts: ContinuityFacts): ContinuityData {
+/** `canEdit`: a firm owner, who changes it through the Continuity contact dialog (#dlgCont). */
+export function continuityData(facts: ContinuityFacts, canEdit = false): ContinuityData {
   const contact = facts.name && facts.email ? [facts.name, facts.email] : facts.name || facts.email || "Not named yet";
   return {
     intro:
@@ -100,7 +101,10 @@ export function continuityData(facts: ContinuityFacts): ContinuityData {
       { label: "Continuity contact", value: contact },
       { label: "Succession note", value: facts.succession?.trim() || "None recorded" },
     ],
-    note: "Changing the continuity contact here isn’t built yet.",
+    ...(canEdit ? { actions: { change: { dialog: "dlgCont" } } } : {}),
+    note: canEdit
+      ? "Changing it asks you to confirm it’s you, and the change is logged. Clients aren’t notified."
+      : "Only a firm owner can change the continuity contact.",
   };
 }
 
@@ -111,6 +115,8 @@ export function teamData(input: {
   invites: readonly PendingInvitation[];
   continuity: ContinuityFacts;
   canInvite: boolean;
+  /** A firm owner with someone else on the team: Offboard someone, and Change role or access. */
+  canManage?: boolean;
   now: Date;
   timeZone: string;
 }): TeamData {
@@ -125,7 +131,8 @@ export function teamData(input: {
       ...invites.map((invite) => invitationTeamRow(invite, input.now, input.timeZone)),
     ],
     invite: input.canInvite,
-    continuity: continuityData(input.continuity),
+    ...(input.canManage ? { offboard: true, manage: true } : {}),
+    continuity: continuityData(input.continuity, input.canInvite),
   };
 }
 

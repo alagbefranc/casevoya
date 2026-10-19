@@ -1,9 +1,11 @@
 import "server-only";
 import type { SecurityData, SettingsHeaderData, TeamData } from "@/components/sheet/designer/settings";
+import type { ContinuityDialogData, MemberDialogData, OffboardDialogData } from "@/components/sheet/designer/settings-staff-admin";
 import { createClient } from "@/lib/supabase/server";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { planPill, securityData, SIGN_IN_EVENT_ACTIONS, teamData, type MemberSecurity } from "@/modules/sheet/settings-present";
+import { continuityDialog, memberDialog, offboardDialog, parseOffboardFacts, type OffboardFacts } from "@/modules/sheet/settings-staff-admin-present";
 import { loadMembers } from "@/modules/sheet/staff-load";
 import { EXPIRED_SHOWN_DAYS, type PendingInvitation } from "@/modules/sheet/staff-present";
 
@@ -24,6 +26,13 @@ async function loadSecurity(supabase: Client, org: string, owner: boolean): Prom
     activeSessions: row.active_sessions,
     lastActiveAt: row.last_active_at,
   }));
+}
+
+/** What offboarding the first person would move (public.staff_offboarding_preview, firm owner). */
+async function loadOffboardFacts(supabase: Client, org: string, membershipId: string | undefined): Promise<OffboardFacts | null> {
+  if (!membershipId) return null;
+  const result = await supabase.rpc("staff_offboarding_preview", { p_organization_id: org, p_membership_id: membershipId });
+  return result.error ? null : parseOffboardFacts(result.data);
 }
 
 async function loadHeader(supabase: Client, staff: SheetStaff, tab: SettingsHeaderData["tab"]): Promise<SettingsHeaderData> {
@@ -57,6 +66,7 @@ export async function loadSheetSettingsTeam(staff: SheetStaff, now: Date = new D
       .limit(READ),
     supabase.from("organizations").select("continuity_contact_name, continuity_contact_email, succession_note").eq("id", org).maybeSingle(),
   ]);
+  const others = members.filter((member) => member.membershipId !== staff.membershipId);
   const pending: PendingInvitation[] = (invites.data ?? []).map((row) => ({
     id: row.id,
     email: row.email,
@@ -64,20 +74,34 @@ export async function loadSheetSettingsTeam(staff: SheetStaff, now: Date = new D
     expiresAt: row.expires_at,
     createdAt: row.created_at,
   }));
+  const continuity = {
+    name: firm.data?.continuity_contact_name ?? null,
+    email: firm.data?.continuity_contact_email ?? null,
+    succession: firm.data?.succession_note ?? null,
+  };
+  const manage = owner && others.length > 0;
   const page: TeamData = teamData({
     members,
     security: security ?? [],
     invites: pending,
-    continuity: {
-      name: firm.data?.continuity_contact_name ?? null,
-      email: firm.data?.continuity_contact_email ?? null,
-      succession: firm.data?.succession_note ?? null,
-    },
+    continuity,
     canInvite: owner,
+    canManage: manage,
     now,
     timeZone: staff.timezone,
   });
-  return { chrome, header, page };
+  // The owner's dialogs: the Designer's Offboard (#dlgOff), Change role or access, Continuity contact.
+  let dialogs: { offboard: OffboardDialogData | null; member: MemberDialogData | null; continuity: ContinuityDialogData | null } | null = null;
+  if (owner) {
+    const facts = manage ? await loadOffboardFacts(supabase, org, others[0]?.membershipId) : null;
+    const input = { organizationId: org, members, selfMembershipId: staff.membershipId };
+    dialogs = {
+      offboard: manage ? offboardDialog({ ...input, facts }) : null,
+      member: manage ? memberDialog(input) : null,
+      continuity: continuityDialog(org, continuity),
+    };
+  }
+  return { chrome, header, page, dialogs };
 }
 
 /** Settings > Security: the firm's sign-in posture, with team-wide counts for a firm owner. */

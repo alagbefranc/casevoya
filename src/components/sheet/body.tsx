@@ -27,6 +27,7 @@ import { SettingsFirmAfter, SettingsFirmHeader, SheetSettingsBranding, SheetSett
 import { loadSheetSettingsFirm } from "@/modules/sheet/settings-firm-load";
 import { settingsTab } from "@/modules/sheet/settings-firm-present";
 import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam } from "@/components/sheet/designer/settings";
+import { TeamDialogs } from "@/components/sheet/designer/settings-staff-admin";
 import { SettingsBillingHeader, SheetRetention, SheetSubscription } from "@/components/sheet/designer/settings-billing";
 import { loadSheetRetention, loadSheetSubscription } from "@/modules/sheet/settings-billing-load";
 import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
@@ -386,13 +387,17 @@ export async function SheetBody({
   }
   // Settings > Team and seats and Security: the firm's team, invitations, continuity contact and sign-in posture.
   if (page === "settings" && (query.tab === "team" || query.tab === "security") && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, header, content } =
+    const { chrome, header, content, after } =
       query.tab === "team"
-        ? await loadSheetSettingsTeam(access.staff).then((loaded) => ({ ...loaded, content: <SheetSettingsTeam data={loaded.page} /> }))
-        : await loadSheetSettingsSecurity(access.staff).then((loaded) => ({ ...loaded, content: <SheetSettingsSecurity data={loaded.page} /> }));
+        ? await loadSheetSettingsTeam(access.staff).then((loaded) => ({
+            ...loaded,
+            content: <SheetSettingsTeam data={loaded.page} />,
+            after: loaded.dialogs ? <TeamDialogs {...loaded.dialogs} /> : null,
+          }))
+        : await loadSheetSettingsSecurity(access.staff).then((loaded) => ({ ...loaded, content: <SheetSettingsSecurity data={loaded.page} />, after: null }));
     return (
       <SheetScreen page={page}>
-        <SheetFrame sidebar={chrome.sidebar} header={<SettingsHeader data={header} />} statusbar={chrome.statusbar}>
+        <SheetFrame sidebar={chrome.sidebar} header={<SettingsHeader data={header} />} statusbar={chrome.statusbar} after={after}>
           {content}
         </SheetFrame>
       </SheetScreen>

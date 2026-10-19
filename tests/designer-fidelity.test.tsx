@@ -160,6 +160,7 @@ import { SettingsBillingHeader, SheetRetention, SheetSubscription, type Retentio
 import { retentionPage, subscriptionPage, subscriptionPill } from "@/modules/sheet/settings-billing-present";
 import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam, type SecurityData, type TeamData } from "@/components/sheet/designer/settings";
 import { securityData, teamData } from "@/modules/sheet/settings-present";
+import { OffboardDialog, type OffboardDialogData } from "@/components/sheet/designer/settings-staff-admin";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {}, replace() {} }) }));
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }) }));
@@ -3227,7 +3228,7 @@ const DESIGNER_SETTINGS_TEAM: TeamData = {
     { name: "M. Leblanc", role: "External collaborator", office: "—", twoStep: { text: "Email code" }, seat: ["Free", "expires 28 Oct"] },
   ],
   invite: true,
-  designerOffboard: true,
+  offboard: true,
   continuity: {
     intro:
       "If Amara can’t practise (illness, suspension or death), this licensed consultant can take over client files after the firm confirms it. Clients see the handover notice in their portal. They are never moved without their agreement.",
@@ -3237,7 +3238,7 @@ const DESIGNER_SETTINGS_TEAM: TeamData = {
       { label: "Who can trigger it", value: "Amara Osei, or two of Grace Lin, Daniel Ruiz and Lena Park together" },
       { label: "Last confirmed", value: ["2 Sep 2026", "review due 2 Mar 2027"] },
     ],
-    designerActions: { change: "Change saved as a draft · Amara approves it with two-step sign-in", preview: "Client notice preview" },
+    actions: { change: { toast: "Change saved as a draft · Amara approves it with two-step sign-in" }, preview: "Client notice preview" },
     note: "Required by the CICC Code of Professional Conduct for licensees who practise alone or lead a firm. Policy wording to confirm with Francis.",
   },
 };
@@ -3252,10 +3253,31 @@ const DESIGNER_SETTINGS_SECURITY: SecurityData = {
   ],
 };
 
-/** The Designer's Offboard dialog (#dlgOff): offboarding is not built, so no live page renders it. */
+/** The Designer's Offboard dialog (#dlgOff). The capture carries it on every Settings tab; only Team and seats renders it. */
 const DLG_OFF = /<dialog class="dlg wide" id="dlgOff"[\s\S]*?<\/dialog>/;
 
-function settingsPage(tab: "team" | "security", content: ReturnType<typeof createElement>) {
+/** The Designer's own Offboard dialog content, rendered by the live OffboardDialog. */
+const DESIGNER_OFFBOARD: OffboardDialogData = {
+  title: "Offboard Grace Lin",
+  intro: "Work moves first, client authority is reviewed, then access closes. Nothing is deleted; Grace’s history stays in the audit trail.",
+  people: [{ label: ["Grace Lin", "Licensed consultant"] }, { label: ["Daniel Ruiz", "Case manager"] }],
+  receivers: [{ label: "Amara Osei" }, { label: "Daniel Ruiz" }],
+  items: [
+    { done: true, aria: "Will move", title: "3 open tasks", detail: "Review employment letter (Okafor), Call notes (Mensah), Prepare IMM 5406 (Sharma) → Amara Osei" },
+    { done: true, aria: "Will move", title: "1 verified deadline", detail: ["Biometrics, Ferreira", "4 Nov", "source: IRCC letter, 12 Oct", "owner changes, the date and its source do not"] },
+    {
+      done: false,
+      aria: "Needs a decision",
+      title: "2 matters where Grace is the authorised representative",
+      detail: "Okafor and Ferreira. A new IMM 5476 is needed before Amara can act; the clients are asked to sign it in their portal. Until then the matters stay with Grace’s name on file.",
+    },
+    { done: true, aria: "Will close", title: "Access closes last", detail: "2 sessions (Chrome, iPhone), 1 calendar connection and 0 active shares end when the steps above are done." },
+  ],
+  note: "Clients are told who now handles their file. Grace keeps no copies; her seat frees up at the end of the billing period.",
+  hold: { toast: "Offboarding started", toastSub: "3 tasks and 1 deadline moved to Amara. 2 authority forms sent to clients. Access closes when they’re signed." },
+};
+
+function settingsPage(tab: "team" | "security", content: ReturnType<typeof createElement>, after?: ReturnType<typeof createElement>) {
   return withoutPreloads(
     renderToStaticMarkup(
       createElement(
@@ -3264,6 +3286,7 @@ function settingsPage(tab: "team" | "security", content: ReturnType<typeof creat
           sidebar: { ...DESIGNER_SIDEBAR, active: "/sheet/settings" },
           header: createElement(SettingsHeader, { data: { firmName: "Northline Immigration", plan: "Plan: Practice (fictional)", tab } }),
           statusbar: SETTINGS_STATUSBAR,
+          after,
         },
         content,
       ),
@@ -3281,10 +3304,13 @@ function expectSame(live: string, captured: string) {
 }
 
 describe("Designer fidelity: Settings, Team and seats and Security", () => {
-  it("renders the Team and seats tab exactly as the captured Designer markup (without the unbuilt Offboard dialog)", () => {
-    const captured = withoutPreloads(renderToStaticMarkup(createElement(SettingsMarkup, { variant: "tab-team" }))).replace(DLG_OFF, "");
-    expect(captured).not.toContain('id="dlgOff"');
-    expectSame(settingsPage("team", createElement(SheetSettingsTeam, { data: DESIGNER_SETTINGS_TEAM })), captured);
+  it("renders the Team and seats tab exactly as the captured Designer markup, with its Offboard dialog", () => {
+    const captured = withoutPreloads(renderToStaticMarkup(createElement(SettingsMarkup, { variant: "tab-team" })));
+    expect(captured).toContain('id="dlgOff"');
+    expectSame(
+      settingsPage("team", createElement(SheetSettingsTeam, { data: DESIGNER_SETTINGS_TEAM }), createElement(OffboardDialog, { data: DESIGNER_OFFBOARD })),
+      captured,
+    );
   });
 
   it("renders the Security tab exactly as the captured Designer markup (without the unbuilt Offboard dialog)", () => {

@@ -3,10 +3,12 @@
  * "tab-team" and "tab-security"), rendered from the firm's records. Same DOM, classes and order,
  * and the Designer's own Settings tab strip.
  *
- * Not ported (the parts render only when the data asks for them, which the live loaders never do):
- * the Designer's "Offboard someone" button and its #dlgOff dialog (moving tasks, deadlines and
- * client authority before access closes is not built), and the continuity contact's "Change" and
- * "Preview the client notice" buttons (no writer and no client notice exist). See DECISIONS.
+ * For a firm owner the Team tab shows the Designer's "Offboard someone" button (its #dlgOff dialog
+ * is `OffboardDialog` in `settings-staff-admin.tsx`) and the continuity contact's "Change continuity
+ * contact" button, which opens a dialog instead of the Designer's prototype toast. Live-only
+ * additions, stripped by the fidelity test: the "Change role or access" button after "Offboard
+ * someone", and `data-dlg` on "Change continuity contact" in place of its toast. "Preview the client
+ * notice" is not shown: no approved client notice design exists. See DECISIONS.
  */
 import { Icon, Sep } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
@@ -37,7 +39,7 @@ const UNDERLINE: Record<SettingsTab, { left: string; width: string }> = {
 /** "Grace Lin · RCIC R709876 · this firm": parts joined by the Designer's separator. */
 export type Parts = string | readonly string[];
 
-function PartsText({ value }: { value: Parts }) {
+export function PartsText({ value }: { value: Parts }) {
   if (typeof value === "string") return <>{value}</>;
   const last = value.length - 1;
   return (
@@ -99,8 +101,11 @@ export type TeamRow = {
 export type ContinuityData = {
   intro: string;
   pairs: { label: string; value: Parts }[];
-  /** The Designer's prototype buttons. Never set live: nothing saves a change or sends a notice. */
-  designerActions?: { change: string; preview: string };
+  /**
+   * "Change continuity contact": the Designer's prototype toast, or (live, firm owner) the dialog it
+   * opens. "Preview the client notice" only with the Designer's toast: no client notice exists.
+   */
+  actions?: { change: { toast: string } | { dialog: string }; preview?: string };
   note: string;
 };
 
@@ -109,8 +114,10 @@ export type TeamData = {
   rows: TeamRow[];
   /** A firm owner invites from People and invitations (public.create_staff_invitation). */
   invite: boolean;
-  /** The Designer's Offboard button. Never set live: offboarding is not built. */
-  designerOffboard?: boolean;
+  /** The Designer's "Offboard someone" (#dlgOff). A firm owner, with someone to offboard. */
+  offboard?: boolean;
+  /** Live only: "Change role or access" (#dlgMem). A firm owner, with someone else on the team. */
+  manage?: boolean;
   continuity: ContinuityData;
 };
 
@@ -165,16 +172,21 @@ export function SheetSettingsTeam({ data }: { data: TeamData }) {
           </tbody>
         </table>
       </div>
-      {data.invite || data.designerOffboard ? (
+      {data.invite || data.offboard || data.manage ? (
         <div className={"fp-row rv"} style={{ marginTop: "12px", ...i(2) }}>
           {data.invite ? (
             <a className={"btn p sm"} href={"/sheet/invitations"}>
               {"Invite staff"}
             </a>
           ) : null}
-          {data.designerOffboard ? (
+          {data.offboard ? (
             <button className={"btn sm"} data-dlg={"dlgOff"} data-fpd={"1"}>
               {"Offboard someone"}
+            </button>
+          ) : null}
+          {data.manage ? (
+            <button className={"btn sm"} data-dlg={"dlgMem"}>
+              {"Change role or access"}
             </button>
           ) : null}
         </div>
@@ -194,15 +206,23 @@ export function SheetSettingsTeam({ data }: { data: TeamData }) {
               </b>,
             ])}
           </div>
-          {continuity.designerActions ? (
+          {continuity.actions ? (
             <div className={"fp-row"} style={{ marginTop: "14px" }}>
-              <button className={"btn sm"} data-toast={continuity.designerActions.change} data-sub={""} data-fpb={"1"}>
-                {"Change continuity contact"}
-              </button>
-              <button className={"btn sm"} data-toast={continuity.designerActions.preview} data-sub={""} data-fpb={"1"}>
-                <Icon name={"eye"} cls={"ic s"} />
-                {"Preview the client notice"}
-              </button>
+              {"toast" in continuity.actions.change ? (
+                <button className={"btn sm"} data-toast={continuity.actions.change.toast} data-sub={""} data-fpb={"1"}>
+                  {"Change continuity contact"}
+                </button>
+              ) : (
+                <button className={"btn sm"} data-dlg={continuity.actions.change.dialog} data-fpb={"1"}>
+                  {"Change continuity contact"}
+                </button>
+              )}
+              {continuity.actions.preview ? (
+                <button className={"btn sm"} data-toast={continuity.actions.preview} data-sub={""} data-fpb={"1"}>
+                  <Icon name={"eye"} cls={"ic s"} />
+                  {"Preview the client notice"}
+                </button>
+              ) : null}
             </div>
           ) : null}
           <p className={"fp-note"} style={{ marginTop: "12px" }}>
