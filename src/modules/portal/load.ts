@@ -46,6 +46,8 @@ export type PortalPrefs = {
   smsNotices: boolean;
   deadlineReminders: boolean;
   locale: "en-CA" | "fr-CA";
+  /** WhatsApp notices chosen, with consent on record (person_whatsapp_contacts). */
+  whatsapp?: boolean;
 };
 
 export type PortalViewer = {
@@ -126,17 +128,18 @@ export async function loadPortalAccess(): Promise<PortalAccess> {
 
   let prefs: PortalPrefs | null = null;
   if (person) {
-    const { data } = await scoped
-      .from("person_contact_preferences")
-      .select("email_notices, sms_notices, deadline_reminders, locale")
-      .eq("person_id", person.id)
-      .maybeSingle();
+    const [{ data }, { data: wa }] = await Promise.all([
+      scoped.from("person_contact_preferences").select("email_notices, sms_notices, deadline_reminders, locale").eq("person_id", person.id).maybeSingle(),
+      scoped.from("person_whatsapp_contacts").select("channel, consent_at, withdrawn_at").eq("person_id", person.id).maybeSingle(),
+    ]);
+    const whatsapp = Boolean(wa && wa.channel !== "email" && wa.consent_at && !wa.withdrawn_at);
     if (data) {
       prefs = {
         emailNotices: data.email_notices,
         smsNotices: data.sms_notices,
         deadlineReminders: data.deadline_reminders,
         locale: data.locale === "fr-CA" ? "fr-CA" : "en-CA",
+        whatsapp,
       };
     }
   }

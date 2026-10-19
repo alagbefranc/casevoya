@@ -15,6 +15,7 @@ import {
   type ChatDocument,
   type ChatMessage,
   type ChatThread,
+  whatsappLine,
 } from "@/modules/messages/present";
 // HOOK(i18n/translate): "Draft in French". Null until src/modules/i18n/translate.ts lands; see the module.
 import { draftTranslation } from "@/modules/messages/translation-hook";
@@ -574,6 +575,7 @@ export function ChatView({ data }: { data: ChatData }) {
                     <span>
                       Visible to: <b>{audience.visible}</b>
                       {audience.hidden ? `. ${audience.hidden}.` : "."}
+                      {data.mode === "staff" && whatsappLine(thread, data.timezone) ? ` ${whatsappLine(thread, data.timezone)}` : null}
                     </span>
                   ) : (
                     <span>Choose who can read it before you write.</span>
@@ -848,6 +850,7 @@ function Bubble({
           ) : null}
           <span className="cv-foot">
             <time dateTime={message.createdAt}>{clockLabel(message.createdAt, data.timezone)}</time>
+            {message.channel === "whatsapp" ? <span>· WhatsApp</span> : null}
             {status ? <span>· {status}</span> : null}
           </span>
         </div>
