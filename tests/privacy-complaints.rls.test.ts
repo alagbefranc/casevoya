@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { firmDay } from "./helpers/firm-day";
 
 /** Privacy requests (SEC-05, SEC-06) and the complaints register (ADM-05). Synthetic data only. */
 
@@ -19,7 +20,8 @@ beforeEach(async () => {
 });
 
 const key = (prefix = "k") => `${prefix}-${randomUUID()}`;
-const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+// These functions count days with current_date (UTC), not the firm's timezone; see DECISIONS 2026-10-19.
+const day = (offset: number) => firmDay(offset, "UTC");
 
 async function createUser(label: string) {
   await asMaintenance(db);
