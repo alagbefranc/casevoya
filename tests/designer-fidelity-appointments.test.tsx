@@ -7,6 +7,12 @@ import type { PortalViewer } from "@/modules/portal/load";
 import type { PortalAppointments } from "@/modules/scheduling/portal-load";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => undefined }) }));
+// The Designer's client is in Kolkata and the capture says "IST". Node names that zone "IST" or
+// "GMT+5:30" depending on its ICU data, so the short zone name is pinned here, not left to the runner.
+vi.mock("@/modules/scheduling/format", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/modules/scheduling/format")>();
+  return { ...real, zoneAbbr: (ms: number, tz: string) => (tz === "Asia/Kolkata" ? "IST" : real.zoneAbbr(ms, tz)) };
+});
 
 /**
  * Designer fidelity: the portal Appointments page's "Coming up" card with its Join video call /
