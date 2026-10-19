@@ -57,10 +57,11 @@ describe("Settings > Integrations", () => {
       expect(item.unlink ?? null, name).toBeNull();
       expect(item.action?.attrs?.disabled, name).toBe(true);
     }
-    for (const name of ["Xero", "WhatsApp"]) {
-      expect(row(data.rows, name).state?.label).toBe("Later");
-      expect(row(data.rows, name).bell ?? null).toBeNull();
-    }
+    expect(row(data.rows, "Xero").state?.label).toBe("Later");
+    expect(row(data.rows, "Xero").bell ?? null).toBeNull();
+    // WhatsApp is live through Zernio (tests/whatsapp-zernio.test.ts); without it on the server it's not available.
+    expect(row(data.rows, "WhatsApp").state).toEqual({ tone: "gr", label: "Not available" });
+    expect(row(data.rows, "WhatsApp").bell ?? null).toBeNull();
   });
 
   it("says plainly when Composio isn't configured, and offers no working Connect", () => {

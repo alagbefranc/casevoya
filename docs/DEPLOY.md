@@ -21,6 +21,8 @@ Do not commit secrets. Copy the names below into the host environment. Account i
 | `STRIPE_TEST_SECRET_KEY` | Stripe **test-mode** secret key (`sk_test_…`, or a restricted `rk_test_…` with Connect accounts (v2), Account Sessions and PaymentIntents write). Creates the firm's connected account, Account Sessions and PaymentIntents. A live key is refused: payments then show as not configured. |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret (`whsec_…`) of the test-mode Connect event destination that posts to `/api/stripe/webhook`. Applying events also needs `SUPABASE_SECRET_KEY`. |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe **test-mode** publishable key (`pk_test_…`). Public; Next.js inlines it at build time, so set it in the build environment (or `.env.production`). Without it the Payments pages say card payments aren't configured. |
+| `ZERNIO_API_KEY` | Zernio API key for WhatsApp (docs/integrations/whatsapp-zernio.md). Without it WhatsApp shows "Not available" and `POST /api/whatsapp/dispatch` answers 503. The dispatcher reuses `EMAIL_DISPATCH_SECRET` as its bearer. |
+| `ZERNIO_WEBHOOK_SECRET` | Secret registered with Zernio for `POST /api/zernio/webhook` (hex HMAC-SHA256 of the raw body in `X-Zernio-Signature`). |
 | `STRIPE_CONNECT_DASHBOARD` | Optional. `none` (default: the firm uses Connect embedded components in Casevoya only) or `full` (the firm also gets the Stripe Dashboard), for new connected accounts. Not a secret. |
 
 ### Stripe (test mode only)

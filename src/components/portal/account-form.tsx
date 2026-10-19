@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { saveMyContactPreferences } from "@/modules/portal-invitations/actions";
+import { setMyWhatsAppNotices } from "@/modules/whatsapp/actions";
 import type { PortalPrefs } from "@/modules/portal/load";
 
 export function AccountForm({
@@ -19,7 +20,7 @@ export function AccountForm({
 }) {
   const [message, setMessage] = useState("");
   const [pending, start] = useTransition();
-  const saved = prefs ?? { emailNotices: true, smsNotices: false, deadlineReminders: true, locale: "en-CA" as const };
+  const saved: PortalPrefs = prefs ?? { emailNotices: true, smsNotices: false, deadlineReminders: true, locale: "en-CA", whatsapp: false };
 
   return (
     <form
@@ -29,6 +30,16 @@ export function AccountForm({
         const locale = form.querySelector<HTMLButtonElement>('[data-locale][aria-pressed="true"]')?.dataset.locale;
         const on = (id: string) => form.querySelector<HTMLButtonElement>(`#${id}`)?.getAttribute("aria-checked") === "true";
         start(async () => {
+          // WhatsApp first: choosing it records consent (and WhatsApp only turns routine email off);
+          // the email switch below is saved last, so the client's own choice there wins.
+          const whatsapp = on("pref-wa");
+          if (whatsapp || saved.whatsapp) {
+            const wa = await setMyWhatsAppNotices({ organizationId, channel: whatsapp ? (on("pref-email") ? "both" : "whatsapp") : "email" });
+            if ("error" in wa) {
+              setMessage(wa.error);
+              return;
+            }
+          }
           const result = await saveMyContactPreferences({
             organizationId,
             emailNotices: on("pref-email"),
@@ -63,6 +74,12 @@ export function AccountForm({
         <h2>What your firm may send you</h2>
         <div className="pad">
           <Pref id="pref-email" label="Email notices" detail="Requests, deadlines and invoices." on={saved.emailNotices} />
+          <Pref
+            id="pref-wa"
+            label="WhatsApp notices"
+            detail={phone ? `To ${phone}. Only that you have something new in your portal, never details of your file. Turn it off any time.` : "Add a mobile number before choosing WhatsApp."}
+            on={saved.whatsapp === true}
+          />
           <Pref id="pref-sms" label="Text message reminders" detail={phone ? `To ${phone}. Never document details.` : "Add a phone number before choosing texts."} on={saved.smsNotices} />
           <Pref id="pref-deadlines" label="Deadline reminders" detail="A reminder before something is due." on={saved.deadlineReminders} />
           <button className="btn p" type="submit" disabled={pending} style={{ marginTop: 12 }}>{pending ? "Saving" : "Save choices"}</button>

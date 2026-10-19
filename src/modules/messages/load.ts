@@ -35,8 +35,9 @@ type Raw = {
     thread_id: string;
     body: string;
     created_at: string;
-    author_user_id: string;
+    author_user_id: string | null;
     author_kind: string;
+    channel?: string;
     author_name: string;
     requires_ack: boolean;
   }[];
@@ -60,7 +61,7 @@ async function readRaw(supabase: Client, org: string, matterId: string | null): 
     supabase.from("message_thread_people").select("thread_id, person_id").eq("organization_id", org).in("thread_id", ids),
     supabase
       .from("matter_messages")
-      .select("id, thread_id, body, created_at, author_user_id, author_kind, author_name, requires_ack")
+      .select("id, thread_id, body, created_at, author_user_id, author_kind, author_name, requires_ack, channel")
       .eq("organization_id", org)
       .in("thread_id", ids)
       .order("created_at", { ascending: false })
@@ -150,7 +151,7 @@ function assemble(input: {
 
   const messages: ChatMessage[] = raw.messages.map((row) => {
     const receipts = receiptsOf.get(row.id) ?? [];
-    const mine = row.author_user_id === me;
+    const mine = row.author_user_id !== null && row.author_user_id === me;
     const own = receipts.find((receipt) => receipt.user_id === me);
     const others = receipts.filter((receipt) => receipt.user_id !== row.author_user_id);
     const ackers = others.filter((receipt) => receipt.acknowledged_at && receipt.person_id);
@@ -171,6 +172,7 @@ function assemble(input: {
           : [],
       unread: !mine && !own,
       attachments: attachmentsOf.get(row.id) ?? [],
+      channel: row.channel === "whatsapp" ? "whatsapp" : "portal",
     };
   });
 
@@ -261,6 +263,33 @@ export async function loadPortalMessages(viewer: PortalViewer, threadId?: string
   };
 }
 
+/**
+ * For staff: which of these people chose WhatsApp with consent, and when each one's 24-hour window
+ * closes (24 hours after their last WhatsApp message). RLS limits both to people on matters the
+ * staff member reads.
+ */
+async function whatsappWindows(supabase: Client, org: string, personIds: string[]) {
+  if (!personIds.length) return { optedIn: new Set<string>(), until: new Map<string, string>() };
+  const [contacts, inbound] = await Promise.all([
+    supabase.from("person_whatsapp_contacts").select("person_id, channel, consent_at, withdrawn_at").eq("organization_id", org).in("person_id", personIds),
+    supabase
+      .from("whatsapp_inbound_messages")
+      .select("person_id, sent_at, received_at")
+      .eq("organization_id", org)
+      .in("person_id", personIds)
+      .order("received_at", { ascending: false })
+      .limit(200),
+  ]);
+  const optedIn = new Set((contacts.data ?? []).filter((row) => row.channel !== "email" && row.consent_at && !row.withdrawn_at).map((row) => row.person_id));
+  const until = new Map<string, string>();
+  for (const row of inbound.data ?? []) {
+    if (!row.person_id || until.has(row.person_id)) continue;
+    const at = row.sent_at && row.sent_at < row.received_at ? row.sent_at : row.received_at;
+    until.set(row.person_id, new Date(new Date(at).getTime() + 24 * 3600 * 1000).toISOString());
+  }
+  return { optedIn, until };
+}
+
 /** The matter workspace's Messages tab for staff: threads, audience options and documents. Staff notes stay separate. */
 export async function loadMatterMessages(staff: SheetStaff, matterId: string, threadId?: string | null): Promise<ChatData> {
   const org = staff.organizationId;
@@ -294,6 +323,14 @@ export async function loadMatterMessages(staff: SheetStaff, matterId: string, th
     docs,
     documentHref: (id) => (id ? `/sheet/matters/${id}?tab=documents` : null),
   });
+  // WhatsApp (staff view): who on each thread chose WhatsApp, and until when a reply can go there.
+  const whatsapp = await whatsappWindows(supabase, org, personIds);
+  for (const thread of threads) {
+    const chosen = thread.audienceIds.filter((id) => whatsapp.optedIn.has(id));
+    if (!chosen.length) continue;
+    const until = chosen.map((id) => whatsapp.until.get(id) ?? null).filter((value): value is string => Boolean(value)).sort()[0] ?? null;
+    thread.whatsapp = { until: until && until > new Date().toISOString() ? until : null };
+  }
   const audienceOptions: ChatAudienceOption[] = persons
     .map((row) => ({ personId: row.id, name: row.display_name, role: roleOf.get(row.id) ?? "Person", email: Boolean(row.email) }))
     .sort((a, b) => a.name.localeCompare(b.name));

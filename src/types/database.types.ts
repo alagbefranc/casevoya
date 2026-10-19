@@ -4929,8 +4929,9 @@ export type Database = {
           author_membership_id: string | null
           author_name: string
           author_person_id: string | null
-          author_user_id: string
+          author_user_id: string | null
           body: string
+          channel: Database["public"]["Enums"]["message_channel"]
           client_key: string | null
           created_at: string
           id: string
@@ -4944,8 +4945,9 @@ export type Database = {
           author_membership_id?: string | null
           author_name: string
           author_person_id?: string | null
-          author_user_id: string
+          author_user_id?: string | null
           body: string
+          channel?: Database["public"]["Enums"]["message_channel"]
           client_key?: string | null
           created_at?: string
           id?: string
@@ -4959,8 +4961,9 @@ export type Database = {
           author_membership_id?: string | null
           author_name?: string
           author_person_id?: string | null
-          author_user_id?: string
+          author_user_id?: string | null
           body?: string
+          channel?: Database["public"]["Enums"]["message_channel"]
           client_key?: string | null
           created_at?: string
           id?: string
@@ -9119,6 +9122,273 @@ export type Database = {
           },
         ]
       }
+      firm_whatsapp_accounts: {
+        Row: {
+          connected_at: string | null
+          connected_by: string | null
+          created_at: string
+          disconnected_at: string | null
+          disconnected_by: string | null
+          display_phone: string | null
+          is_sandbox: boolean
+          organization_id: string
+          status: Database["public"]["Enums"]["whatsapp_account_status"]
+          updated_at: string
+          version: number
+          zernio_account_id: string | null
+          zernio_profile_id: string | null
+        }
+        Insert: {
+          connected_at?: string | null
+          connected_by?: string | null
+          created_at?: string
+          disconnected_at?: string | null
+          disconnected_by?: string | null
+          display_phone?: string | null
+          is_sandbox?: boolean
+          organization_id: string
+          status?: Database["public"]["Enums"]["whatsapp_account_status"]
+          updated_at?: string
+          version?: number
+          zernio_account_id?: string | null
+          zernio_profile_id?: string | null
+        }
+        Update: {
+          connected_at?: string | null
+          connected_by?: string | null
+          created_at?: string
+          disconnected_at?: string | null
+          disconnected_by?: string | null
+          display_phone?: string | null
+          is_sandbox?: boolean
+          organization_id?: string
+          status?: Database["public"]["Enums"]["whatsapp_account_status"]
+          updated_at?: string
+          version?: number
+          zernio_account_id?: string | null
+          zernio_profile_id?: string | null
+        }
+        Relationships: []
+      }
+      person_whatsapp_contacts: {
+        Row: {
+          channel: Database["public"]["Enums"]["whatsapp_notice_channel"]
+          consent_at: string | null
+          consent_recorded_by: string | null
+          consent_source: Database["public"]["Enums"]["whatsapp_consent_source"] | null
+          created_at: string
+          organization_id: string
+          person_id: string
+          phone_e164: string
+          updated_at: string
+          version: number
+          withdrawn_at: string | null
+          withdrawn_by: string | null
+        }
+        Insert: {
+          channel?: Database["public"]["Enums"]["whatsapp_notice_channel"]
+          consent_at?: string | null
+          consent_recorded_by?: string | null
+          consent_source?: Database["public"]["Enums"]["whatsapp_consent_source"] | null
+          created_at?: string
+          organization_id: string
+          person_id: string
+          phone_e164: string
+          updated_at?: string
+          version?: number
+          withdrawn_at?: string | null
+          withdrawn_by?: string | null
+        }
+        Update: {
+          channel?: Database["public"]["Enums"]["whatsapp_notice_channel"]
+          consent_at?: string | null
+          consent_recorded_by?: string | null
+          consent_source?: Database["public"]["Enums"]["whatsapp_consent_source"] | null
+          created_at?: string
+          organization_id?: string
+          person_id?: string
+          phone_e164?: string
+          updated_at?: string
+          version?: number
+          withdrawn_at?: string | null
+          withdrawn_by?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_consent_events: {
+        Row: {
+          action: string
+          channel: Database["public"]["Enums"]["whatsapp_notice_channel"]
+          id: string
+          organization_id: string
+          person_id: string
+          phone_e164: string
+          recorded_at: string
+          recorded_by: string
+          source: Database["public"]["Enums"]["whatsapp_consent_source"]
+        }
+        Insert: {
+          action: string
+          channel: Database["public"]["Enums"]["whatsapp_notice_channel"]
+          id?: string
+          organization_id: string
+          person_id: string
+          phone_e164: string
+          recorded_at?: string
+          recorded_by: string
+          source: Database["public"]["Enums"]["whatsapp_consent_source"]
+        }
+        Update: {
+          action?: string
+          channel?: Database["public"]["Enums"]["whatsapp_notice_channel"]
+          id?: string
+          organization_id?: string
+          person_id?: string
+          phone_e164?: string
+          recorded_at?: string
+          recorded_by?: string
+          source?: Database["public"]["Enums"]["whatsapp_consent_source"]
+        }
+        Relationships: []
+      }
+      whatsapp_deliveries: {
+        Row: {
+          attempt_count: number
+          conversation_id: string | null
+          created_at: string
+          created_by: string | null
+          delivered_at: string | null
+          email_delivery_id: string | null
+          failed_at: string | null
+          id: string
+          kind: string
+          last_error: string | null
+          matter_id: string | null
+          matter_message_id: string | null
+          organization_id: string
+          outbox_event_id: string
+          person_id: string
+          phone_e164: string | null
+          provider_message_id: string | null
+          read_at: string | null
+          sent_at: string | null
+          status: Database["public"]["Enums"]["whatsapp_delivery_status"]
+          template_name: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          attempt_count?: number
+          conversation_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string | null
+          email_delivery_id?: string | null
+          failed_at?: string | null
+          id?: string
+          kind: string
+          last_error?: string | null
+          matter_id?: string | null
+          matter_message_id?: string | null
+          organization_id: string
+          outbox_event_id: string
+          person_id: string
+          phone_e164?: string | null
+          provider_message_id?: string | null
+          read_at?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["whatsapp_delivery_status"]
+          template_name?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          attempt_count?: number
+          conversation_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string | null
+          email_delivery_id?: string | null
+          failed_at?: string | null
+          id?: string
+          kind?: string
+          last_error?: string | null
+          matter_id?: string | null
+          matter_message_id?: string | null
+          organization_id?: string
+          outbox_event_id?: string
+          person_id?: string
+          phone_e164?: string | null
+          provider_message_id?: string | null
+          read_at?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["whatsapp_delivery_status"]
+          template_name?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      whatsapp_inbound_messages: {
+        Row: {
+          body: string | null
+          conversation_id: string | null
+          has_attachments: boolean
+          id: string
+          matter_id: string | null
+          matter_message_id: string | null
+          organization_id: string
+          person_id: string | null
+          platform_message_id: string
+          reason: string | null
+          received_at: string
+          sender_bsuid: string | null
+          sender_name: string | null
+          sender_phone_e164: string | null
+          sent_at: string | null
+          triage_state: string
+          zernio_event_id: string
+        }
+        Insert: {
+          body?: string | null
+          conversation_id?: string | null
+          has_attachments?: boolean
+          id?: string
+          matter_id?: string | null
+          matter_message_id?: string | null
+          organization_id: string
+          person_id?: string | null
+          platform_message_id: string
+          reason?: string | null
+          received_at?: string
+          sender_bsuid?: string | null
+          sender_name?: string | null
+          sender_phone_e164?: string | null
+          sent_at?: string | null
+          triage_state: string
+          zernio_event_id: string
+        }
+        Update: {
+          body?: string | null
+          conversation_id?: string | null
+          has_attachments?: boolean
+          id?: string
+          matter_id?: string | null
+          matter_message_id?: string | null
+          organization_id?: string
+          person_id?: string | null
+          platform_message_id?: string
+          reason?: string | null
+          received_at?: string
+          sender_bsuid?: string | null
+          sender_name?: string | null
+          sender_phone_e164?: string | null
+          sent_at?: string | null
+          triage_state?: string
+          zernio_event_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -9411,6 +9681,69 @@ export type Database = {
       claim_due_reminders: {
         Args: { p_as_of: string; p_limit: number }
         Returns: string[]
+      }
+      claim_whatsapp_events: {
+        Args: { p_limit?: number; p_worker: string }
+        Returns: Json
+      }
+      connect_firm_whatsapp: {
+        Args: { p_account_id: string; p_display_phone?: string; p_organization_id: string; p_sandbox?: boolean }
+        Returns: undefined
+      }
+      disconnect_firm_whatsapp: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      finish_whatsapp_delivery: {
+        Args: {
+          p_conversation_id?: string
+          p_delivery_id: string
+          p_error?: string
+          p_outcome: string
+          p_provider_message_id?: string
+          p_worker: string
+        }
+        Returns: undefined
+      }
+      prepare_whatsapp_delivery: {
+        Args: { p_event_id: string; p_worker: string }
+        Returns: Json
+      }
+      receive_whatsapp_message: {
+        Args: {
+          p_account_id: string
+          p_bsuid: string
+          p_conversation_id: string
+          p_event_id: string
+          p_has_attachments: boolean
+          p_phone: string
+          p_platform_message_id: string
+          p_sender_name: string
+          p_sent_at: string
+          p_text: string
+        }
+        Returns: Json
+      }
+      record_whatsapp_status: {
+        Args: { p_account_id: string; p_at?: string; p_error?: string; p_provider_message_id: string; p_status: string }
+        Returns: boolean
+      }
+      save_firm_zernio_profile: {
+        Args: { p_organization_id: string; p_profile_id: string }
+        Returns: undefined
+      }
+      set_my_whatsapp_notices: {
+        Args: { p_channel: Database["public"]["Enums"]["whatsapp_notice_channel"]; p_organization_id: string }
+        Returns: Json
+      }
+      set_person_whatsapp: {
+        Args: {
+          p_channel: Database["public"]["Enums"]["whatsapp_notice_channel"]
+          p_organization_id: string
+          p_person_id: string
+          p_phone: string
+        }
+        Returns: Json
       }
       claim_mail_events: {
         Args: { p_limit?: number; p_worker: string }
@@ -11301,6 +11634,11 @@ export type Database = {
       }
     }
     Enums: {
+      message_channel: "portal" | "whatsapp"
+      whatsapp_account_status: "pending" | "connected" | "disconnected"
+      whatsapp_consent_source: "portal" | "staff"
+      whatsapp_delivery_status: "sending" | "sent" | "delivered" | "read" | "failed" | "skipped"
+      whatsapp_notice_channel: "email" | "whatsapp" | "both"
       access_grant_kind: "explicit" | "guardian"
       agreement_kind: "quote" | "consultation" | "service" | "amendment" | "consent"
       agreement_signer_role: "client" | "consultant" | "sponsor" | "dependant" | "guardian" | "firm"
@@ -11830,6 +12168,11 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      message_channel: ["portal", "whatsapp"],
+      whatsapp_account_status: ["pending", "connected", "disconnected"],
+      whatsapp_consent_source: ["portal", "staff"],
+      whatsapp_delivery_status: ["sending", "sent", "delivered", "read", "failed", "skipped"],
+      whatsapp_notice_channel: ["email", "whatsapp", "both"],
       booking_actor: ["client", "staff", "system"],
       booking_location_kind: ["video", "phone", "in_person", "meeting_link"],
       booking_status: ["held", "pending_payment", "confirmed", "cancelled", "expired", "no_show", "completed"],
