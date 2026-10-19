@@ -103,7 +103,7 @@ export async function createClientMatter(input: {
   sponsorDateOfBirth?: string | null;
   consultantMembershipId: string;
   rulePackVersionId: string | null;
-}): Promise<{ id: string; reference: string | null } | { error: string }> {
+}): Promise<{ id: string; reference: string | null; isSample: boolean } | { error: string }> {
   const read = readNewMatter({
     applicantName: input.applicantName,
     applicantEmail: input.applicantEmail,
@@ -134,7 +134,8 @@ export async function createClientMatter(input: {
   if (result.ok !== true || typeof result.id !== "string" || !isUuid(result.id)) {
     return { error: result.blocked === "licence" ? newMatterError("licence blocks") : "The matter was not created." };
   }
-  return { id: result.id, reference: typeof result.reference === "string" ? result.reference : null };
+  // A sample-mode firm's new matter is a sample record (decision 2026-10-19).
+  return { id: result.id, reference: typeof result.reference === "string" ? result.reference : null, isSample: result.is_sample === true };
 }
 
 export async function overrideMatterStage(input: {

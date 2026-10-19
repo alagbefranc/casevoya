@@ -40,6 +40,9 @@ export async function runNewMatter(button: HTMLElement, router: Router) {
     toast2(result.error, { kind: "bad", sub: "Nothing was saved." });
     return;
   }
-  toast2(result.reference ? `Matter ${result.reference} created` : "Matter created", { kind: "ok", sub: "Stage: Engagement pending." });
+  toast2(result.reference ? `Matter ${result.reference} created` : "Matter created", {
+    kind: "ok",
+    sub: result.isSample ? "Saved as a sample (practice) matter while the firm is in sample mode. Stage: Engagement pending." : "Stage: Engagement pending.",
+  });
   router.push(`/sheet/matters/${result.id}`);
 }

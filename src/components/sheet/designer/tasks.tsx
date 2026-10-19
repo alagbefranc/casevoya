@@ -24,7 +24,12 @@ export type InternalTaskRow = {
   dependsOn: string;
   /** A chip, or plain words ("Open"). */
   state: TaskChip | string;
+  /** Live only: Manage opens the Task dialog (edit, reassign, mark done). */
+  manage?: TaskWire | null;
 };
+
+/** `data-*` a live control carries to the Sheet's task and deadline acts. */
+export type TaskWire = Record<`data-${string}`, string>;
 
 export type ClientTaskRow = {
   href?: string;
@@ -35,6 +40,8 @@ export type ClientTaskRow = {
   /** Reminder offsets in days, largest first, or none. */
   reminders: { offsets: number[]; quietHours: boolean } | null;
   state: TaskChip;
+  /** Live only: Manage opens the Task dialog (edit, mark done). */
+  manage?: TaskWire | null;
 };
 
 export type DeadlineRow = {
@@ -45,6 +52,10 @@ export type DeadlineRow = {
   local: { left: string; right: string };
   verifiedBy: string;
   state: TaskChip;
+  /** Live only: "Confirm" beside "Tentative, confirm", for someone the database lets confirm it. */
+  confirm?: TaskWire | null;
+  /** Live only: why it can't be confirmed here (the chip's title). */
+  confirmWhy?: string | null;
 };
 
 export type TasksDialogData = {
@@ -66,6 +77,8 @@ export type TasksData = {
   client?: { rows: ClientTaskRow[] };
   deadlines?: { rows: DeadlineRow[] };
   dialog: TasksDialogData;
+  /** Live only: the Task dialog the rows' Manage buttons open. */
+  edit?: TaskEditDialogData | null;
 };
 
 const UNDERLINE: Record<TasksTab, { left: string; width: string }> = {
@@ -241,7 +254,10 @@ function Internal({ data }: { data: NonNullable<TasksData["internal"]> }) {
                       <Chip chip={row.priority} />
                     </td>
                     <td>{row.dependsOn}</td>
-                    <td>{typeof row.state === "string" ? row.state : <Chip chip={row.state} />}</td>
+                    <td>
+                      {typeof row.state === "string" ? row.state : <Chip chip={row.state} />}
+                      {row.manage ? <Manage title={row.title} wire={row.manage} /> : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -317,6 +333,7 @@ function Client({ data }: { data: NonNullable<TasksData["client"]> }) {
                   </td>
                   <td>
                     <Chip chip={row.state} />
+                    {row.manage ? <Manage title={row.title} wire={row.manage} /> : null}
                   </td>
                 </tr>
               ))}
@@ -325,6 +342,15 @@ function Client({ data }: { data: NonNullable<TasksData["client"]> }) {
         </div>
       )}
     </>
+  );
+}
+
+/** Live only: a row's Manage button, in the State cell (the Designer's `.btn s sm` with the more icon). */
+function Manage({ title, wire }: { title: string; wire: TaskWire }) {
+  return (
+    <button className={"btn s sm"} aria-label={`Manage ${title}`} style={{ marginLeft: "8px" }} {...wire}>
+      <Icon name={"more"} cls={"ic s"} />
+    </button>
   );
 }
 
@@ -363,8 +389,13 @@ function Deadlines({ data }: { data: NonNullable<TasksData["deadlines"]> }) {
                     <Pair left={row.local.left} right={row.local.right} />
                   </td>
                   <td>{row.verifiedBy}</td>
-                  <td>
+                  <td {...(row.confirmWhy && !row.confirm ? { title: row.confirmWhy } : {})}>
                     <Chip chip={row.state} />
+                    {row.confirm ? (
+                      <button className={"btn s sm"} style={{ marginLeft: "8px" }} {...row.confirm}>
+                        {"Confirm"}
+                      </button>
+                    ) : null}
                   </td>
                 </tr>
               ))}
@@ -391,6 +422,74 @@ function DialogOption({ option }: { option: TaskDialogOption }) {
 }
 
 const optionKey = (option: TaskDialogOption, index: number) => `${option.matter ?? ""}:${option.value ?? index}`;
+
+/** The Task dialog: the firm's active staff (internal owners) and what Save needs. */
+export type TaskEditDialogData = {
+  organizationId: string;
+  /** The firm's timezone: the due date is a calendar date there. */
+  timezone: string;
+  /** The firm's today (`YYYY-MM-DD`), the earliest new due date offered. */
+  today: string;
+  owners: { value: string; label: string }[];
+};
+
+/**
+ * Live only: one task's controls (title, due date, owner, Mark done). The Designer has no task
+ * dialog, so this is its New task dialog (`#dlgTask`: `.fld` / `.inp` / `.sel`, `.df` footer).
+ * The opener (`data-task-open`) fills it; Save and Mark done are saved in work-acts.
+ */
+export function TaskEditDialog({ data }: { data: TaskEditDialogData }) {
+  return (
+    <dialog className={"dlg"} id={"dTask"} aria-labelledby={"dTaskH"} data-org={data.organizationId} data-tz={data.timezone}>
+      <div className={"dh"}>
+        <h2 id={"dTaskH"}>{"Task"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={"dTask"}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <div className={"fld"}>
+          <label htmlFor={"teT"}>{"Task"}</label>
+          <input className={"inp"} id={"teT"} type={"text"} autoComplete={"off"} />
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"teD"}>{"Due"}</label>
+          <small className={"hint"} id={"teD-h"}>
+            {"Optional. A new due date can’t be in the past."}
+          </small>
+          <input className={"inp"} id={"teD"} type={"date"} min={data.today} aria-describedby={"teD-h"} />
+        </div>
+        <div className={"fld"} id={"teOF"}>
+          <label htmlFor={"teO"}>{"Owner"}</label>
+          <small className={"hint"} id={"teO-h"}>
+            {"Reassigning keeps the task’s history and tells the new owner. It asks you to confirm with your authenticator."}
+          </small>
+          <select className={"sel"} id={"teO"} aria-describedby={"teO-h"}>
+            {data.owners.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className={"hint"} id={"teC"} hidden>
+          {"A client task stays with the client it was asked of."}
+        </p>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={"dTask"}>
+          {"Cancel"}
+        </button>
+        <button className={"btn s"} data-task-done={"dialog"}>
+          {"Mark done"}
+        </button>
+        <button className={"btn p"} data-task-save={"1"}>
+          {"Save"}
+        </button>
+      </div>
+    </dialog>
+  );
+}
 
 /**
  * The Designer's "New task" dialog. It sits after the frame, beside the scrim. With `wire`

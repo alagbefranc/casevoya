@@ -385,7 +385,9 @@ export async function loadSheetLead(staff: SheetStaff, leadId: string, options: 
     lead.conflict_result !== "clear"
       ? { title: "Run the conflict check first", copy: "A lead converts after a conflict check with no conflict is recorded." }
       : staff.sampleMode
-        ? { title: "This firm is in sample mode", copy: "Real client matters open once sample mode is turned off." }
+        ? { title: "This firm is in sample mode", copy: "The lead becomes a sample (practice) matter. Real client matters open once sample mode is turned off." }
+        : lead.is_sample
+          ? { title: "This is a sample lead", copy: "It becomes a sample (practice) matter, like the other sample records." }
         : matterDialog.consultants.length === 0
           ? { title: "A matter needs a licensed consultant", copy: "Invite a licensed consultant from Settings before converting." }
           : null;

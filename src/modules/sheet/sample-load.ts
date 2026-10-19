@@ -43,11 +43,11 @@ async function sampleFacts(supabase: Client, org: string, matterId: string | nul
  * The sample-mode page: the home page plus the firm's real sample case and the sample proofs it
  * has recorded. The sample case is created on first visit for firms set up before it existed.
  */
-export async function loadSheetSample(staff: SheetStaff, now: Date = new Date()) {
+export async function loadSheetSample(staff: SheetStaff, now: Date = new Date(), view: { month?: string; path?: string } = {}) {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
   const [base, ensured, proofs, subscription, credential, setup] = await Promise.all([
-    loadSheetHome(staff, now),
+    loadSheetHome(staff, now, view),
     supabase.rpc("ensure_sample_case"),
     supabase.from("sample_proof_steps").select("step").eq("organization_id", org),
     supabase.from("organization_subscriptions").select("status, trial_ends_at").eq("organization_id", org).maybeSingle(),

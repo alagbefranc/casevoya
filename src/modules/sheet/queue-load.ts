@@ -150,7 +150,8 @@ export async function loadSheetQueue(staff: SheetStaff, now: Date = new Date()) 
       owner: owner(consultant),
       due: { tone: due.tone, label: due.label },
       flags: flags(due.overdue && "overdue", !consultant && "unassigned", "government"),
-      href: `/sheet/matters/${deadline.matter_id}`,
+      // The matter's Tasks and deadlines tab, where the deadline's Confirm control is.
+      href: `/sheet/matters/${deadline.matter_id}?tab=tasks`,
       mine: Boolean(consultant && consultant === staff.membershipId),
       sortOn: dueOn,
     });

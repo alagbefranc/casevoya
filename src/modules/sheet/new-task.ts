@@ -125,6 +125,8 @@ export function readNewTask(fields: {
   owner?: string | null;
   due?: string | null;
   dependsOn?: string | null;
+  /** The firm's today (`YYYY-MM-DD`). Given, a due date before it is refused. */
+  today?: string | null;
 }): { input: NewTaskInput } | { error: string } {
   const parsed = schema.safeParse({
     matterId: clean(fields.matter),
@@ -138,6 +140,7 @@ export function readNewTask(fields: {
   const { matterId, title, audience, owner, due, dependsOn } = parsed.data;
   const dueOn = due ? dueDate(due) : null;
   if (due && !dueOn) return { error: "Enter the due date as DD/MM/YYYY." };
+  if (dueOn && fields.today && dueOn < fields.today) return { error: "The due date can’t be in the past." };
   return {
     input: {
       matterId,
@@ -163,6 +166,31 @@ export function newTaskError(message: string): string {
   if (/task title/i.test(message)) return "Add what the task is.";
   if (/timezone/i.test(message)) return "The firm’s timezone isn’t usable. Check it in Settings.";
   return safeAccessError(message);
+}
+
+/** User-facing copy for a refused task change (complete, edit, reassign). Never passes a database message through. */
+export function taskChangeError(message: string): string {
+  if (/open dependency/i.test(message)) return "It waits on another task that is still open. Finish that one first.";
+  if (/version conflict/i.test(message)) return "Someone changed this task since you opened it. Reload and try again.";
+  if (/only an open task/i.test(message)) return "Only an open task can be edited.";
+  if (/cannot be in the past/i.test(message)) return "The due date can’t be in the past.";
+  if (/task title/i.test(message)) return "Add what the task is.";
+  if (/active staff owner/i.test(message)) return "Choose an active staff member as the owner.";
+  if (/person on this matter/i.test(message)) return "A client task stays with a person on this matter.";
+  if (/blocker note/i.test(message)) return "Say what is blocking it.";
+  if (/denied|staff access/i.test(message)) return "Your role can’t change this task.";
+  return safeAccessError(message);
+}
+
+/** What the Task dialog saves, or the first thing to fix. The database checks all of it again. */
+export function readTaskEdit(fields: { title?: string | null; due?: string | null }): { title: string; dueOn: string | null } | { error: string } {
+  const title = clean(fields.title);
+  if (!title) return { error: "Add what the task is." };
+  if (title.length > 200) return { error: "A task title can be up to 200 characters." };
+  const due = clean(fields.due);
+  const dueOn = due ? dueDate(due) : null;
+  if (due && !dueOn) return { error: "Enter the due date as DD/MM/YYYY." };
+  return { title, dueOn };
 }
 
 /** Why a dependency was not added after the task was saved. */

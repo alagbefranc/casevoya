@@ -31,7 +31,7 @@ import { TeamDialogs } from "@/components/sheet/designer/settings-staff-admin";
 import { SettingsBillingHeader, SheetRetention, SheetSubscription } from "@/components/sheet/designer/settings-billing";
 import { loadSheetRetention, loadSheetSubscription } from "@/modules/sheet/settings-billing-load";
 import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
-import { SheetTasks, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
+import { SheetTasks, TaskEditDialog, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
 import { ComposioDialog, IntegrationsSettingsHeader, SheetIntegrations, SheetNotificationPrefs, WhatsAppDialog } from "@/components/sheet/designer/settings-integrations";
 import { loadSheetSettingsIntegrations } from "@/modules/sheet/settings-integrations-load";
 import { NotificationsHeader, SheetNotifications } from "@/components/sheet/designer/notifications";
@@ -132,7 +132,7 @@ export async function SheetBody({
   // The licence-suspended home: the Sheet home for a consultant whose own licence check recorded an
   // adverse result (ORG-05). The home shows it too, so the consultant can't miss it.
   if ((page === "index" || page === "licence-suspended") && (access.kind === "live" || access.kind === "sample")) {
-    const suspended = await loadSheetLicenceSuspended(access.staff);
+    const suspended = await loadSheetLicenceSuspended(access.staff, undefined, { month: query.month, path: sheetPath(page) });
     if (!suspended && page === "licence-suspended") redirect("/sheet/licence");
     if (suspended) {
       return (
@@ -150,7 +150,7 @@ export async function SheetBody({
     }
   }
   if (page === "index" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, rbar, home, missingPolicies } = await loadSheetHome(access.staff);
+    const { chrome, rbar, home, missingPolicies } = await loadSheetHome(access.staff, undefined, { month: query.month });
     // Until the firm publishes its portal terms and privacy notice, no invited client can join: say so here.
     const lead = missingPolicies.length ? <PolicyMissingAlert kinds={missingPolicies} style={{ marginBottom: "18px" }} /> : undefined;
     return (
@@ -162,7 +162,7 @@ export async function SheetBody({
     );
   }
   if (page === "sample-mode" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, rbar, home, sample } = await loadSheetSample(access.staff);
+    const { chrome, rbar, home, sample } = await loadSheetSample(access.staff, undefined, { month: query.month, path: "/sheet/sample-mode" });
     return (
       <SheetScreen page={page}>
         <style dangerouslySetInnerHTML={{ __html: SAMPLE_CASE_CSS }} />
@@ -191,7 +191,12 @@ export async function SheetBody({
           sidebar={chrome.sidebar}
           header={<TasksHeader tab={tasks.tab} counts={tasks.counts} />}
           statusbar={chrome.statusbar}
-          after={<TasksDialog data={tasks.dialog} />}
+          after={
+            <>
+              <TasksDialog data={tasks.dialog} />
+              {tasks.edit ? <TaskEditDialog data={tasks.edit} /> : null}
+            </>
+          }
         >
           <SheetTasks data={tasks} />
         </SheetFrame>

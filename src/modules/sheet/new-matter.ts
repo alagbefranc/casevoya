@@ -32,17 +32,22 @@ export type NewMatterInput = {
 
 const BLOCKING = new Set(["revoked", "suspended", "inactive", "not_entitled"]);
 
-/** Active licensed consultants, with the Designer's licence note when their check is not done. */
+/**
+ * Active licensed consultants and firm owners, with the Designer's licence note when a
+ * consultant's check is not done. A firm owner counts as licensed (decision 2026-10-19: the
+ * database lets an owner sign and be responsible), so an owner carries no "pending" note; a
+ * licence on file that blocks new matters is still named, for an owner too.
+ */
 export function consultantOptions(
-  members: readonly { id: string; name: string }[],
+  members: readonly { id: string; name: string; role?: string }[],
   credentialStatus: ReadonlyMap<string, string>,
 ): NewMatterOption[] {
   return members.map((member) => {
     const status = credentialStatus.get(member.id);
     // One set of licence words (decision 2026-10-19): a declared licence is enough to work and sign;
     // only a blocked one locks new matters. A firm owner without a credential counts as licensed.
-    if (!status || status === "verified") return { value: member.id, label: member.name };
-    if (BLOCKING.has(status)) return { value: member.id, label: `${member.name} (licence blocks new matters)` };
+    if (status && BLOCKING.has(status)) return { value: member.id, label: `${member.name} (licence blocks new matters)` };
+    if (!status || status === "verified" || member.role === "firm_owner") return { value: member.id, label: member.name };
     return { value: member.id, label: `${member.name} (licence declared)` };
   });
 }

@@ -103,6 +103,8 @@ export function readDeadline(fields: {
   evidence?: string | null;
   sourceUrl?: string | null;
   retrievedOn?: string | null;
+  /** The firm's today (`YYYY-MM-DD`). Given, a due date before it is refused. */
+  today?: string | null;
 }): { input: NewDeadlineInput } | { error: string } {
   const kind = DEADLINE_KINDS.find((option) => option.value === clean(fields.kind))?.value;
   const label = clean(fields.label);
@@ -116,6 +118,7 @@ export function readDeadline(fields: {
   if (!label) return { error: "Say what is due." };
   if (label.length > 200) return { error: "Keep what is due to 200 characters." };
   if (!realDate(dueOn)) return { error: "Pick the due date." };
+  if (fields.today && realDate(fields.today) && dueOn < fields.today) return { error: "The due date can’t be in the past." };
   if (dueTime && !TIME.test(dueTime)) return { error: "Enter the due time as HH:MM, or leave it blank." };
   if (!timezone) return { error: "Enter the official timezone, like America/Toronto." };
   const dueAt = dueTime ? zonedInstant(dueOn, dueTime, timezone) : null;

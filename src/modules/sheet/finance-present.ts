@@ -5,6 +5,20 @@ import { isInvoiceCurrency, normalizeCurrency, parseAmount } from "@/modules/fin
 
 export const INVOICE_DIALOG = "invoice";
 
+/** How long a New invoice draft saved before a step-up may refill the dialog. */
+export const INVOICE_DRAFT_MS = 30 * 60_000;
+
+/**
+ * Whether `?dlg=invoice` opens New invoice, and with the saved draft or empty. A plain link (the
+ * home's Issue invoice) opens it empty; a draft saved for a step-up refills it only while fresh, so
+ * an abandoned step-up never fills a later, unrelated invoice.
+ */
+export function invoiceDialogOpening(search: string, draft: Record<string, unknown> | null, now: number): { open: boolean; draft: Record<string, unknown> | null } {
+  if (new URLSearchParams(search).get("dlg") !== INVOICE_DIALOG) return { open: false, draft: null };
+  const at = draft && typeof draft.at === "number" ? draft.at : null;
+  return { open: true, draft: at !== null && now - at >= 0 && now - at <= INVOICE_DRAFT_MS ? draft : null };
+}
+
 export type InvoiceTone = "blue" | "ok" | "unv" | "chg" | "bad" | "rev" | "gr";
 
 export const REFUND_DIALOG = "refund";

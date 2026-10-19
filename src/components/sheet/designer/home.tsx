@@ -16,6 +16,8 @@ export type HomeTask = {
   when: string;
   badge: TaskBadge;
   owner: SidebarPerson;
+  /** Live only: the row's filter tokens (`mine`, `today`, `overdue`) for the task bar. */
+  f?: string;
 };
 
 export type HomeData = {
@@ -26,6 +28,11 @@ export type HomeData = {
   needs: { href: string; count: number; label: string }[];
   byDeadline: (SidebarPerson & { href: string; date: string })[];
   tasks: HomeTask[];
+  /**
+   * Live only: the task bar is wired. The Filter chip goes to the Tasks page (`data-nav`), and a
+   * hidden copy of the empty state shows when no row matches the search and chips.
+   */
+  bar?: { filterHref: string } | null;
 };
 
 /** Semicircle radius 80. Each segment is its share of the arc less a 4px gap, offset by the segments before it. */
@@ -194,23 +201,17 @@ export function SheetHome({ data, lead, before, reveal }: { data: HomeData; lead
         <input placeholder={"Search today’s tasks"} aria-label={"Search today’s tasks"} />
         <span className={"fchip on"}>{"Mine"}</span>
         <span className={"fchip"}>{"Today"}</span>
-        <span className={"fchip"}>
+        <span className={"fchip"} data-nav={data.bar?.filterHref}>
           <Icon name={"filter"} cls={"ic s"} />
           {"Filter"}
         </span>
       </div>
       <div id={"tasks"} className={"rv"} style={{ "--i": order.tasks } as React.CSSProperties}>
         {data.tasks.length === 0 ? (
-          <div className={"panel"}>
-            <Empty
-              art={"portal-caught-up"}
-              title={"Nothing needs you today"}
-              copy={"Due tasks, documents to review and unsigned agreements appear here as they come in."}
-            />
-          </div>
+          <TasksEmpty />
         ) : (
           data.tasks.map((task) => (
-            <a key={`${task.href}-${task.title}`} className={"li"} href={task.href}>
+            <a key={`${task.href}-${task.title}`} className={"li"} href={task.href} data-f={task.f}>
               <span className={"ck"} data-toggle-on={"1"}></span>
               <div>
                 <b>{task.title}</b>
@@ -228,7 +229,21 @@ export function SheetHome({ data, lead, before, reveal }: { data: HomeData; lead
             </a>
           ))
         )}
+        {data.bar && data.tasks.length > 0 ? <TasksEmpty filtered /> : null}
       </div>
     </>
+  );
+}
+
+/** The Designer's empty tasks panel. `filtered`: the hidden copy the task bar shows when no row matches. */
+function TasksEmpty({ filtered }: { filtered?: boolean }) {
+  return (
+    <div className={"panel"} hidden={filtered || undefined} data-filter-empty={filtered ? "1" : undefined}>
+      <Empty
+        art={"portal-caught-up"}
+        title={"Nothing needs you today"}
+        copy={"Due tasks, documents to review and unsigned agreements appear here as they come in."}
+      />
+    </div>
   );
 }

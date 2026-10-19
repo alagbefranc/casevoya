@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast2 } from "@/components/port/kit";
 import { dialogId, withoutDialog } from "@/modules/sheet/matter-wire";
 import { withoutNew } from "@/modules/sheet/new-matter";
+import { HOME_TASK_SHOWN, filterHidden, nextHomeChip, withoutParam } from "@/modules/sheet/home-controls";
 import { sheetStateCopy } from "@/modules/sheet/present";
 import { INVITE_DIALOG } from "@/modules/sheet/staff-present";
 import {
@@ -75,6 +76,7 @@ import {
   runRedaction,
 } from "./compliance-acts";
 import { runMatterAct } from "./matter-acts";
+import { bindWorkControls, wireMattersList } from "./work-acts";
 import { runNewMatter } from "./new-matter-act";
 import { markAllNotificationsRead, openNotification } from "./notification-acts";
 import { wireLead, wirePipeline } from "./pipeline-acts";
@@ -187,9 +189,13 @@ const FILTER_TOKEN: Record<string, string> = {
   Edited: "edited",
   Rejected: "rejected",
   Abstained: "abstained",
+  // The home's task bar (Mine is above).
+  Today: "today",
 };
 /** Pages whose `.fp-bar` chips and search filter real rows by their `data-f` tokens. */
 const FILTER_PAGES = new Set(["tasks", "clients", "agreements", "finance", "documents", "queue", "ai"]);
+/** The home and its sample-mode and licence-suspended forms: the task bar filters `#tasks` rows. */
+const HOME_PAGES = new Set(["index", "sample-mode", "licence-suspended"]);
 
 export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
   const router = useRouter();
@@ -213,6 +219,10 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     scrim?.addEventListener("click", shut, listen);
     // Government status, Submissions and Decisions (T036 to T039): `data-gov` controls and file picks.
     bindGovControls(root, router, listen);
+    // Task ticks and the Task dialog, Confirm on a deadline, Change stage's label, checklist person chips.
+    bindWorkControls(root, router, listen);
+    // The Matters list: search and Mine together, its counts and no-match panel, Select all.
+    if (page === "matters") wireMattersList(root, listen);
 
     root.querySelectorAll<HTMLButtonElement>(".grp>button").forEach((button) => {
       button.addEventListener("click", () => {
@@ -251,22 +261,36 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     // page's (All, Applicants, Sponsors, Dependants, Leads), with search, narrow the real rows by
     // their `data-f` tokens and text, and keep "N of M shown" true where the page has it.
     // The Team queue's bar is the Designer's plain `.bar`, and its rows are the `#ql` list items.
-    const filters = FILTER_PAGES.has(page) ? root.querySelector<HTMLElement>(page === "queue" ? "#content > .bar" : ".fp-bar") : null;
+    // The home's bar is the Designer's plain `.bar` too; its rows are the `#tasks` links, at most
+    // HOME_TASK_SHOWN at once, and its hidden empty panel shows when none match.
+    const home = HOME_PAGES.has(page) && Boolean(root.querySelector("#tasks > [data-filter-empty]"));
+    const filters = home
+      ? root.querySelector<HTMLElement>("#content > .bar")
+      : FILTER_PAGES.has(page)
+        ? root.querySelector<HTMLElement>(page === "queue" ? "#content > .bar" : ".fp-bar")
+        : null;
     const applyFilters = () => {
       if (!filters) return;
-      const q = (filters.querySelector("input")?.value ?? "").trim().toLowerCase();
       const token = FILTER_TOKEN[filters.querySelector(".fchip.on")?.textContent?.trim() ?? ""] ?? "";
-      const rows = [...root.querySelectorAll<HTMLElement>(page === "queue" ? "#ql .li" : ".t tbody tr")];
-      let shown = 0;
-      for (const row of rows) {
-        const flags = (row.dataset.f ?? "").split(" ");
-        const hide = (Boolean(q) && !row.textContent.toLowerCase().includes(q)) || (Boolean(token) && !flags.includes(token));
-        row.hidden = hide;
-        if (!hide) shown++;
+      const rows = [...root.querySelectorAll<HTMLElement>(home ? "#tasks > a.li" : page === "queue" ? "#ql .li" : ".t tbody tr")];
+      const { hidden, shown } = filterHidden(
+        rows.map((row) => ({ text: row.textContent, flags: row.dataset.f ?? "" })),
+        filters.querySelector("input")?.value ?? "",
+        token,
+        home ? HOME_TASK_SHOWN : Infinity,
+      );
+      rows.forEach((row, index) => {
+        row.hidden = hidden[index];
+        // `.li` sets its own display, which outranks the hidden attribute.
+        row.style.display = hidden[index] ? "none" : "";
+      });
+      const none = shown === 0 && rows.length > 0;
+      if (home) {
+        root.querySelector<HTMLElement>("#tasks > [data-filter-empty]")?.toggleAttribute("hidden", !none);
+        return;
       }
       const count = root.querySelector<HTMLElement>("#content > p.sr");
       if (count) count.textContent = `${shown} of ${rows.length} shown`;
-      const none = shown === 0 && rows.length > 0;
       root.querySelector<HTMLElement>("#content > .tw")?.toggleAttribute("hidden", none);
       root.querySelector<HTMLElement>("#content > .fp-fe")?.toggleAttribute("hidden", !none);
     };
@@ -920,9 +944,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         const chip = target.closest<HTMLElement>(".fchip");
         if (chip && filters.contains(chip)) {
           event.preventDefault();
+          // The home has no All chip: clicking the chip that is on turns it off (every open firm task).
+          const label = (item: Element | null) => item?.textContent?.trim() ?? null;
+          const next = home ? nextHomeChip(label(filters.querySelector(".fchip.on")), label(chip) ?? "") : label(chip);
           filters.querySelectorAll<HTMLElement>(".fchip").forEach((item) => {
-            item.classList.toggle("on", item === chip);
-            item.setAttribute("aria-pressed", String(item === chip));
+            const on = item === chip && next !== null;
+            item.classList.toggle("on", on);
+            item.setAttribute("aria-pressed", String(on));
           });
           applyFilters();
         }
@@ -1018,6 +1046,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     for (const type of ["pointerup", "pointerout", "pointercancel", "keyup"]) root.addEventListener(type, release, listen);
 
     root.querySelectorAll<HTMLInputElement>('.bar input').forEach((input) => {
+      // The Matters list's search is combined with its Mine switch in wireMattersList.
+      if (page === "matters" && root.querySelector("[data-matters-showing]")) return;
       if (filters?.contains(input)) {
         const preset = new URLSearchParams(window.location.search).get("q");
         if (preset && !input.value) input.value = preset;
@@ -1113,8 +1143,16 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       }
     }
 
-    // ?dlg=invoice (back from step-up) reopens the live New invoice dialog with what was typed.
-    if (root.querySelector("dialog#dlgInv [data-new-invoice]")) window.setTimeout(() => reopenInvoiceDialog(root, openDialog), 300);
+    // ?dlg=invoice opens the live New invoice dialog: empty from the home's Issue invoice, or with
+    // what was typed when coming back from step-up. Closing it drops the flag.
+    const invoiceDialog = root.querySelector<HTMLDialogElement>("dialog#dlgInv");
+    if (invoiceDialog?.querySelector("[data-new-invoice]")) {
+      window.setTimeout(() => reopenInvoiceDialog(root, openDialog), 300);
+      invoiceDialog.addEventListener("close", () => {
+        const search = window.location.search;
+        if (new URLSearchParams(search).get("dlg") === "invoice" && !root.querySelector("dialog[open]")) router.replace(withoutParam(window.location.pathname, search, "dlg"));
+      }, listen);
+    }
     // ?dlg=credit|recon (back from step-up) reopens the credit note, void or reconciliation dialog with what was typed.
     if (root.querySelector(CORRECTIONS_SUBMIT)) window.setTimeout(() => reopenCorrectionsDialog(root, openDialog), 300);
     // ?dlg=refund (back from step-up) reopens Refund for the same payment with what was typed.
@@ -1196,6 +1234,11 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       syncBookTimes(bookDialog);
       bookDialog.addEventListener("change", () => syncBookTimes(bookDialog), listen);
       if (dialogParam === "book") window.setTimeout(() => openDialog("dlgBook"), 300);
+      // From the home's Book consultation too; closing it drops the flag.
+      bookDialog.addEventListener("close", () => {
+        const search = window.location.search;
+        if (new URLSearchParams(search).get("dlg") === "book" && !root.querySelector("dialog[open]")) router.replace(withoutParam(window.location.pathname, search, "dlg"));
+      }, listen);
     }
 
     // Leads: the pipeline board, filters, New lead and CSV import; the lead page's actions.

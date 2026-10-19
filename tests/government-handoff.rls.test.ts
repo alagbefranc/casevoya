@@ -466,3 +466,39 @@ describe("T038 and T039 decisions", () => {
     expect(row.rows[0]).toEqual({ title: "Renewal review: Synthetic permit expires 2028-03-12", due_on: "2028-01-12" });
   });
 });
+
+describe("attach evidence to a letter recorded without it (public.attach_correspondence_evidence)", () => {
+  it("lets staff on the matter attach it once, then verify; refuses outsiders, a second attach and an empty one", async () => {
+    const ctx = await firm();
+    await stale(ctx.manager, ctx.orgId);
+    const created = await db.query<{ id: string }>(
+      `select public.record_government_correspondence($1, 'status_update', null, 'other', null, $2::date, null, null, null, null, null, null) as id`,
+      [ctx.matterId, firmDay()],
+    );
+    const id = created.rows[0].id;
+    await fresh(ctx.manager, ctx.orgId);
+    await expectDbError(() => db.query(`select public.verify_government_correspondence($1, 1)`, [id]), /attach it first/);
+
+    await stale(ctx.outsider, ctx.orgId);
+    await expectDbError(() => db.query(`select public.attach_correspondence_evidence($1, 1, null, 'Synthetic portal screenshot')`, [id]), /denied/);
+    await stale(ctx.manager, ctx.orgId);
+    await expectDbError(() => db.query(`select public.attach_correspondence_evidence($1, 1, null, '  ')`, [id]), /attach the letter file/);
+    await expectDbError(() => db.query(`select public.attach_correspondence_evidence($1, 1, $2, null)`, [id, randomUUID()]), /stored file on this matter/);
+
+    const attached = await db.query<{ v: number }>(`select public.attach_correspondence_evidence($1, 1, null, 'Synthetic portal screenshot') as v`, [id]);
+    expect(attached.rows[0].v).toBe(2);
+    await expectDbError(() => db.query(`select public.attach_correspondence_evidence($1, 2, null, 'Another')`, [id]), /already has its evidence/);
+    await asMaintenance(db);
+    const audit = await db.query(`select 1 from public.audit_log where object_id = $1 and action = 'government.correspondence_evidence_attached'`, [id]);
+    expect(audit.rows).toHaveLength(1);
+
+    await fresh(ctx.manager, ctx.orgId);
+    await db.query(`select public.verify_government_correspondence($1, 2)`, [id]);
+    await asMaintenance(db);
+    const row = await db.query<{ evidence_locator: string; verified: boolean }>(
+      `select evidence_locator, verified_at is not null as verified from public.government_correspondence where id = $1`,
+      [id],
+    );
+    expect(row.rows[0]).toEqual({ evidence_locator: "Synthetic portal screenshot", verified: true });
+  });
+});

@@ -30,6 +30,7 @@ import { loadNewMatterDialog } from "@/modules/sheet/matters-load";
 import { MATTERS_READ } from "@/modules/sheet/matters-present";
 import type { SheetQuery } from "@/modules/sheet/present";
 import { firstName } from "@/modules/sheet/tasks-present";
+import { leadRow } from "@/modules/sheet/clients-present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -114,7 +115,7 @@ async function loadPerson(
   return {
     name: person.display_name,
     summary: personSummary(roles, references),
-    facts: personFacts(person.date_of_birth, person.birth_date_precision),
+    facts: personFacts(person.date_of_birth, person.birth_date_precision, { email: person.email, phone: person.contact_phone }),
     // The firm keeps no per-fact history to show yet, so the panel is left out.
     superseded: null,
     relationships: {
@@ -190,7 +191,7 @@ export async function loadSheetClients(staff: SheetStaff, query: SheetQuery, now
   const asked = personParam(query.person);
   const count = { count: "exact" as const, head: true };
 
-  const [chrome, persons, peopleCount, participants, matters, invites, households, householdMembers, newMatter] = await Promise.all([
+  const [chrome, persons, peopleCount, participants, matters, invites, households, householdMembers, newMatter, leads] = await Promise.all([
     loadSheetChrome(staff, "/sheet/clients"),
     supabase.from("persons").select(PERSON_COLUMNS).eq("organization_id", org).order("display_name").order("id").limit(CLIENTS_READ),
     supabase.from("persons").select("id", count).eq("organization_id", org),
@@ -200,6 +201,15 @@ export async function loadSheetClients(staff: SheetStaff, query: SheetQuery, now
     supabase.from("households").select("id, name").eq("organization_id", org).order("name").limit(500),
     supabase.from("household_members").select("household_id, person_id").eq("organization_id", org).limit(LINKS_READ),
     loadNewMatterDialog(supabase, staff),
+    // Open leads (not converted, not lost): the People tab's "Leads" chip lists them.
+    supabase
+      .from("leads")
+      .select("id, display_name, language, is_sample")
+      .eq("organization_id", org)
+      .is("converted_at", null)
+      .is("lost_at", null)
+      .order("display_name")
+      .limit(CLIENTS_READ),
   ]);
 
   const list = persons.data ?? [];
@@ -230,6 +240,8 @@ export async function loadSheetClients(staff: SheetStaff, query: SheetQuery, now
       portal: portalOf(row),
     };
   });
+  // A lead is someone the firm hasn't opened a matter for yet; the row opens the lead.
+  for (const lead of leads.data ?? []) rows.push(leadRow(lead));
 
   // The person tab shows the person asked for, or the first person listed. One the viewer
   // cannot read is not swapped for someone else.
