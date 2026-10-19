@@ -203,8 +203,8 @@ type Client = Awaited<ReturnType<typeof createClient>>;
 
 /**
  * The New matter dialog's options: who can be responsible, and which program templates are
- * published. A firm owner counts when their own licence does (isLicensedMembership, like the
- * database). Matters and Clients both open this dialog.
+ * published. A firm owner always counts, like a licensed consultant (isLicensedMembership, like the
+ * database; decision 2026-10-19). Matters and Clients both open this dialog.
  */
 export async function loadNewMatterDialog(supabase: Client, staff: SheetStaff): Promise<NewMatterDialogData> {
   const org = staff.organizationId;

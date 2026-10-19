@@ -692,7 +692,7 @@ describe("real client invites and trial", () => {
     await expectDbError(() => db.query(`select public.ensure_sample_case()`), /sample case denied/);
   });
 
-  it("makes a licensed owner the sample matter's responsible consultant, and not an unlicensed one", async () => {
+  it("makes the owner the sample matter's responsible consultant, with or without a licence on file", async () => {
     const owner = await createUser(`owner-${randomUUID().slice(0, 8)}@example.test`);
     const orgId = await createOrg(owner);
     await asMaintenance(db);
@@ -703,7 +703,8 @@ describe("real client invites and trial", () => {
       )
     ).rows[0].id;
 
-    // Without a licence on file the owner is not licensed: the sample matter keeps no consultant.
+    // Owners are regulated consultants (decision 2026-10-19): without a licence on file the owner
+    // is already the sample matter's consultant.
     await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
     const matterId = (await db.query<{ id: string }>(`select public.ensure_sample_case() as id`)).rows[0].id;
     await asMaintenance(db);
@@ -711,9 +712,9 @@ describe("real client invites and trial", () => {
       `select responsible_consultant_membership_id as consultant from public.matters where id = $1`,
       [matterId],
     );
-    expect(before.rows[0].consultant).toBeNull();
+    expect(before.rows[0].consultant).toBe(ownerMembership);
 
-    // Once the owner declares a licence, opening the sample case again assigns them.
+    // Declaring a licence later and opening the sample case again changes nothing.
     await declareLicence(owner, orgId, ownerMembership, "R700101");
     await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
     await db.query(`select public.ensure_sample_case()`);
