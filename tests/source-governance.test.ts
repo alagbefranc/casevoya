@@ -444,16 +444,14 @@ describe("source governance access and versions", () => {
       [versionId, snapshotId],
     );
 
-    await expectDbError(
-      () =>
-        db.query(
-          `insert into public.professional_reviews (
-             organization_id, rule_version_id, reviewer_membership_id, decision,
-             decided_at, rule_content_revision
-           ) values ($1, $2, $3, 'approved', '2026-10-16T15:00:00Z', 1)`,
-          [orgId, versionId, ownerMembership],
-        ),
-      /licensed_consultant/,
+    // A firm owner is a regulated consultant (decision 2026-10-19): their approved review is accepted
+    // without a credential on file, as a licensed consultant's is.
+    await db.query(
+      `insert into public.professional_reviews (
+         organization_id, rule_version_id, reviewer_membership_id, decision,
+         decided_at, rule_content_revision
+       ) values ($1, $2, $3, 'approved', '2026-10-16T15:00:00Z', 1)`,
+      [orgId, versionId, ownerMembership],
     );
 
     await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });

@@ -87,6 +87,7 @@ In the repository, not yet applied to the live project (do not edit the file in 
 | 20261019000000 | agreement_pdf_layout | The last signature completes the envelope without building a PDF; the app server renders the laid-out sealed PDF and certificate (pdf-lib) and `attach_sealed_agreement` (service_role only) stores them once, hashing them itself. `agreement_seal_source` (service_role only) returns the immutable render input. `sealed_renderer` column; the guard also freezes the hashes, renderer and storage keys. Earlier sealed bytes are untouched. |
 | 20261019216000 | firm_today | `app.firm_today(org)`: the firm's date today in `organizations.timezone` (America/Toronto when unset or invalid), `app.firm_local_date(org, statement_timestamp())`. Security definer, `search_path = ''`, stable; revoked from public and anon, executable by authenticated (security-invoker `create_client_matter` calls it) and service_role. DECISIONS 2026-10-19. |
 | 20261019216100 | firm_today_rules | Latest definitions copied verbatim with only "today" changed from `current_date` (or UTC in `accept_quote`) to `app.firm_today(<firm>)`: `app.person_is_minor`, `app.sync_person_birth`, `app.open_intake_response`, `app.request_version_satisfies`, `app.accept_quote`, `app.set_credential_valid_until`, `public.create_client_matter` (9-argument), `public.update_lead`, `public.add_lead_follow_up` (keeps its one-day grace), `app.sign_off_submission_handoff`, `app.gov_finish_verification`, `app.record_government_correspondence`, `app.record_decision` (date check and refusal-review due date), `app.migration_evaluate`. Grants, revokes and comments repeated unchanged. Tested in `tests/firm-today.rls.test.ts`. |
+| 20261019219000 | owner_full_access | firm_owner has every staff ability, including regulated actions (decision 2026-10-19). Latest definitions copied with one change each: `app.can_read_person`, `app.can_write_person`, `app.can_read_person_section`, `app.can_read_intake_answer` and `public.record_person_section` add `firm_owner` to the creator path (rows the caller created); `app.membership_is_licensed` counts every active `licensed_consultant` or `firm_owner` (blocked credentials stay refused by the licence locks); `public.change_staff_role` treats a move to `firm_owner` as keeping a licensed role; `public.firm_staff_directory` reads `is_licensed` from the new `app.membership_holds_licence` (the previous rule: a licensed consultant, or an owner with an unblocked credential; display only). No table, policy, enum or RLS change. |
 
 `src/types/database.types.ts` includes the live schema through `20261017113202`, extended in this branch for the unapplied migrations above. Do not run `pnpm db:types` until those migrations are applied; a live regeneration would drop the extension.
 
@@ -142,8 +143,10 @@ Break-glass is a 60-minute read of one person, with a recent step-up, and it is 
 `finance_user` does not read person rows. An assigned finance user, and a firm owner in the
 active workspace, can read a billing projection (matter id, title, stage, applicant display name)
 and call `issue_invoice` at aal2. `approve_earned_fee_transfer` also needs a recent step-up.
-A household, payer, or sponsor link does not reveal another adult. A firm owner is not
-automatically a licensed consultant. Platform admin is intentionally **not** an org role.
+A household, payer, or sponsor link does not reveal another adult. Platform admin is intentionally **not** an org role.
+Since `20261019219000` a firm owner has every staff ability, regulated actions included
+(`app.membership_is_licensed` counts every active owner, like every licensed consultant), and the
+"rows I created" path for people, section records and intake answers.
 
 ## Helpers (schema `app`, not exposed by the Data API, `search_path = ''`)
 

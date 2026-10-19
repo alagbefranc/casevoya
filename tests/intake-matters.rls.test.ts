@@ -389,9 +389,10 @@ describe("matter lifecycle", () => {
 
     const ready = await version();
     expect(ready.stage).toBe("ready_to_submit");
-    await asUser(db, { userId: ctx.owner, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    // A case manager may not file; the firm owner may (owners are regulated consultants).
+    await asUser(db, { userId: ctx.manager, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
     await expectDbError(
-      () => db.query(`select public.override_matter_stage($1, 'submitted', $2, 'Owner cannot file')`, [matterId, ready.version]),
+      () => db.query(`select public.override_matter_stage($1, 'submitted', $2, 'Manager cannot file')`, [matterId, ready.version]),
       /denied|42501/,
     );
 
