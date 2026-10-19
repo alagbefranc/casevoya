@@ -9,6 +9,7 @@ import {
   aiPage,
   draftsHeader,
   draftsPage,
+  draftStale,
   effectiveSettings,
   type ApprovedSourceRow,
   type VoDraftRow,
@@ -181,6 +182,17 @@ export async function loadSheetDrafts(staff: SheetStaff) {
   const runIds = waitingRows.map((row) => row.run_id);
   const latencies = runIds.length ? await supabase.from("vo_runs").select("id, latency_ms").in("id", runIds) : null;
   const latency = new Map((latencies?.data ?? []).map((row) => [row.id, row.latency_ms]));
+  // Out of date: a newer message in the conversation, or the matter changed, after the draft.
+  const threadIds = [...new Set(waitingRows.map((row) => row.thread_id))];
+  const draftMatterIds = [...new Set(waitingRows.map((row) => row.matter_id))];
+  const [threadRows, matterRows, weekReadings] = await Promise.all([
+    threadIds.length ? supabase.from("message_threads").select("id, last_message_at").eq("organization_id", org).in("id", threadIds) : null,
+    draftMatterIds.length ? supabase.from("matters").select("id, updated_at").eq("organization_id", org).in("id", draftMatterIds) : null,
+    supabase.from("vo_doc_drafts").select("status").eq("organization_id", org).gte("created_at", weekAgo).limit(500),
+  ]);
+  const threadAt = new Map((threadRows?.data ?? []).map((row) => [row.id, row.last_message_at]));
+  const matterAt = new Map((matterRows?.data ?? []).map((row) => [row.id, row.updated_at]));
+  const stale = (row: DraftDb) => draftStale(row.created_at, { threadLastMessageAt: threadAt.get(row.thread_id), matterUpdatedAt: matterAt.get(row.matter_id) });
   const runningRow = ((running.data ?? []) as RunDb[])[0] ?? null;
   const abstainedRow = ((abstained.data ?? []) as RunDb[])[0] ?? null;
   const nm = await names(
@@ -198,12 +210,13 @@ export async function loadSheetDrafts(staff: SheetStaff) {
   const data = draftsPage({
     viewer: base.viewer,
     settings: base.settings,
-    waiting: waitingRows.map((row) => draftRow(row, latency)),
+    waiting: waitingRows.map((row) => ({ ...draftRow(row, latency), stale: stale(row) })),
     week: ((week.data ?? []) as DraftDb[]).map((row) => draftRow(row, latency)),
     running: runningRow ? runRow(runningRow, empty) : null,
     abstained: abstainedRow ? runRow(abstainedRow, empty) : null,
     names: nm,
     readings,
+    weekReadings: weekReadings.data ?? [],
   });
   return {
     chrome,

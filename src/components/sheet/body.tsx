@@ -4,6 +4,13 @@ import { CalendarHeader, CalendarRbarView, SheetCalendar } from "@/components/sh
 import { BookDialog, CancelDialog, ConsultationsHeader, RescheduleDialog, SheetConsultations } from "@/components/sheet/designer/consultations";
 import { AvailabilityDialog, BookingTypeDialog } from "@/components/sheet/designer/scheduling-dialogs";
 import { AgreementsHeader, CountersignDialog, NewAgreementDialog, SheetAgreements, TemplateDialog } from "@/components/sheet/designer/agreements";
+import {
+  AuthorityDialog,
+  SheetAgreementEnvelope,
+  SheetAgreementsAuthority,
+  SheetAgreementsPending,
+  VoidEnvelopeDialog,
+} from "@/components/sheet/designer/agreements-live";
 import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet/designer/clients";
 import { CreditNoteDialog, FinanceHeader, NewInvoiceDialog, RefundDialog, SheetFinance, SheetFinancePayments, SheetFinanceRefunds } from "@/components/sheet/designer/finance";
 import { CreditReviewDialog, SheetFinanceInvoice, VoidDialog } from "@/components/sheet/designer/invoice";
@@ -581,12 +588,14 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
-  // Agreements, All agreements tab. The other tabs (quote builder, editor, envelope, compare,
-  // representation authority) are not ported yet and keep their old view.
-  if (page === "agreements" && (!query.tab || query.tab === "list") && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, header, page: agreements, dialog, templateDialog, countersign } = await loadSheetAgreements(access.staff);
+  // Agreements: All agreements, one agreement's own view (Envelope, `?tab=envelope&view=<id>`),
+  // Representation authority, and honest "not built yet" panels for Quote builder, Agreement
+  // editor and Compare versions. Always this firm's live shell, never the Designer's sample firm.
+  if (page === "agreements" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadSheetAgreements(access.staff, query);
+    const { chrome, header, dialog, templateDialog, countersign } = loaded;
     return (
-      <SheetScreen page={page}>
+      <SheetScreen key={`agreements-${loaded.tab}`} page={page}>
         <SheetFrame
           sidebar={chrome.sidebar}
           header={<AgreementsHeader data={header} />}
@@ -598,10 +607,20 @@ export async function SheetBody({
               {countersign.map((sign) => (
                 <CountersignDialog key={sign.envelopeId} data={sign} />
               ))}
+              {loaded.authority ? <AuthorityDialog data={loaded.authority.dialog} /> : null}
+              {loaded.envelope?.voidDialog ? <VoidEnvelopeDialog data={loaded.envelope.voidDialog} /> : null}
             </>
           }
         >
-          <SheetAgreements data={agreements} />
+          {loaded.authority ? (
+            <SheetAgreementsAuthority data={loaded.authority.page} />
+          ) : loaded.envelope ? (
+            <SheetAgreementEnvelope data={loaded.envelope.page} />
+          ) : loaded.pending ? (
+            <SheetAgreementsPending data={loaded.pending} />
+          ) : (
+            <SheetAgreements data={loaded.page} />
+          )}
         </SheetFrame>
       </SheetScreen>
     );

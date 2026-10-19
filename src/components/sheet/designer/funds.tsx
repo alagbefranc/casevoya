@@ -248,7 +248,7 @@ export type RecordPaymentDialogData = {
   };
 };
 
-const PAY_INTRO = "It stays “Pending verification” until it matches the bank statement (FIN-09).";
+const PAY_INTRO = "It stays “Pending verification” until it matches the bank statement.";
 
 export function RecordPaymentDialog({ data }: { data: RecordPaymentDialogData }) {
   const live = data.live;

@@ -23,9 +23,8 @@ export async function runVoRead(button: HTMLElement, router: Router) {
       return;
     }
     if ("draftId" in result && result.draftId && result.matterId) {
-      dialog?.close();
-      toast2(result.error, { kind: "warn", sub: "" });
-      router.push(readingHref({ matterId: result.matterId, id: result.draftId }));
+      // The review dialog stays open: what was typed in it isn't lost. The reading waits on the matter.
+      toast2(result.error, { kind: "warn", sub: "Its proposals are on the matter’s Documents tab. Your review here isn’t saved until you press Save review." });
       return;
     }
     toast2(result.error, { kind: "bad", sub: "Nothing was changed." });
@@ -35,9 +34,17 @@ export async function runVoRead(button: HTMLElement, router: Router) {
     toast2("Vo couldn’t read this file", { kind: "warn", sub: "It looks blank or unreadable. Review it yourself; the run is logged." });
     return;
   }
-  dialog?.close();
-  toast2("Vo read the document", { kind: "ok", sub: "Its proposals wait on the matter’s Documents tab. Nothing changes until you accept." });
-  router.push(readingHref({ matterId: result.matterId, id: result.draftId }));
+  // Outside a review dialog (a matter's Documents tab) go straight to the proposals. In the review
+  // dialog, stay: leaving would drop the decision and reason being typed, without a warning.
+  if (!dialog) {
+    toast2("Vo read the document", { kind: "ok", sub: "Its proposals wait on the matter’s Documents tab. Nothing changes until you accept." });
+    router.push(readingHref({ matterId: result.matterId, id: result.draftId }));
+    return;
+  }
+  toast2("Vo read the document", {
+    kind: "ok",
+    sub: "Its proposals wait on the matter’s Documents tab and in Vo drafts. Nothing changes until you accept. Your review here isn’t saved until you press Save review.",
+  });
 }
 
 type Row = { id: string; value: string | null; checked: boolean };

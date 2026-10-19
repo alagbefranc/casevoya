@@ -6,6 +6,7 @@ import type { AiAudit, AiData, AiRunRow, AiRules, AiSettings, AiSources, AiState
 import type { Attrs, DraftCard, DraftsData, DraftsHeaderData, DraftSwitch } from "@/components/sheet/designer/drafts";
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import type { VoSettingKey, VoSwitchKey } from "@/modules/vo/errors";
+import { MATTER_STAGES, stageLabel } from "@/modules/sheet/present";
 
 export type VoSettingsRow = {
   enabled: boolean;
@@ -73,6 +74,8 @@ export type VoDraftRow = {
   reviewedAt: string | null;
   reviewedBy: string | null;
   latencyMs: number | null;
+  /** The matter or its conversation changed after Vo drafted this (see draftStale). */
+  stale?: boolean;
 };
 
 export type VoRunRow = {
@@ -144,18 +147,44 @@ export function draftsHeader(viewer: VoViewer, settings: VoSettings, waiting: nu
   };
 }
 
+/**
+ * Raw matter stage keys ("evidence_collection") in Vo's words, as people read them ("Evidence
+ * collection"). Only whole known keys change.
+ */
+export function humaniseStages(text: string): string {
+  return text.replace(new RegExp(`\\b(${MATTER_STAGES.join("|")})\\b`, "g"), (key) => stageLabel(key));
+}
+
+/**
+ * Whether a reply draft is out of date: the conversation got a newer message, or the matter
+ * changed, after Vo drafted it. Accepting it as written would answer an older state.
+ */
+export function draftStale(draftCreatedAt: string, changes: { threadLastMessageAt?: string | null; matterUpdatedAt?: string | null }): boolean {
+  const at = Date.parse(draftCreatedAt);
+  if (Number.isNaN(at)) return false;
+  return [changes.threadLastMessageAt, changes.matterUpdatedAt].some((value) => Boolean(value) && Date.parse(value as string) > at);
+}
+
+/** Accept on a reply draft: send it as written, unless it needs a person first (and why). */
+function acceptAttrs(row: VoDraftRow, viewer: VoViewer): Attrs {
+  if (row.needsRule) return { disabled: true, title: "It needs a sourced rule. Open it with Edit and replace the placeholder first." };
+  if (row.stale) return { disabled: true, title: "Out of date: the matter changed after Vo drafted it. Open it with Edit and check it first." };
+  return { "data-vo-accept": row.id, "data-org": viewer.organizationId, title: "Send this draft to the client as written" };
+}
+
 function draftCard(row: VoDraftRow, names: VoNames, viewer: VoViewer): DraftCard {
   const sources = row.sources.map((source) => source.label);
   const meta = ["Drafted by Vo", "needs your review", KIND_LABEL[row.kind]];
   if (row.needsRule) meta.push("needs a sourced rule");
+  if (row.stale) meta.push("out of date: the matter changed since");
   if (row.isSample) meta.push("sample");
   const open = `/sheet/matters/${row.matterId}?tab=messages&thread=${row.threadId}&vo=${row.id}`;
   return {
     id: row.id,
     meta,
-    title: row.title,
+    title: humaniseStages(row.title),
     sub: { left: names.matter(row.matterId), right: names.reference(row.matterId) },
-    body: `“${row.body}”`,
+    body: `“${humaniseStages(row.body)}”`,
     timeline: {
       id: `tl${row.id.replace(/-/g, "").slice(0, 8)}`,
       summary: `${sources.join(", ").toLowerCase()} · run logged · ${seconds(row.latencyMs)}`,
@@ -164,7 +193,8 @@ function draftCard(row: VoDraftRow, names: VoNames, viewer: VoViewer): DraftCard
       clock: "",
       items: [...sources, "Run logged"],
     },
-    accept: { "data-nav": open },
+    // Accept sends the draft as written; Edit opens it in the conversation's composer first.
+    accept: acceptAttrs(row, viewer),
     edit: { "data-nav": open },
     reject: { "data-vo-discard": row.id, "data-org": viewer.organizationId },
   };
@@ -201,9 +231,9 @@ export function readingCard(row: VoReadingRow, names: VoNames, viewer: VoViewer)
   return {
     id: row.id,
     meta,
-    title: row.title,
+    title: humaniseStages(row.title),
     sub: { left: names.matter(row.matterId), right: names.reference(row.matterId) },
-    body: `“${row.body}”`,
+    body: `“${humaniseStages(row.body)}”`,
     timeline: {
       id: `tl${row.id.replace(/-/g, "").slice(0, 8)}`,
       summary: `${sources.join(", ").toLowerCase()} · run logged · ${seconds(row.latencyMs)}`,
@@ -212,7 +242,8 @@ export function readingCard(row: VoReadingRow, names: VoNames, viewer: VoViewer)
       clock: "",
       items: [...sources, `${row.waiting} ${row.waiting === 1 ? "proposal" : "proposals"} to decide`, "Run logged"],
     },
-    accept: { "data-nav": open },
+    // A reading has one decision per proposal, made on the matter's review panel (Edit opens it).
+    accept: { disabled: true, title: "Accept each proposal on the matter’s Documents tab: choose Edit to open them" },
     edit: { "data-nav": open },
     reject: { "data-vo-doc-discard": row.id, "data-org": viewer.organizationId },
   };
@@ -228,6 +259,8 @@ export function draftsPage(input: {
   names: VoNames;
   /** Document readings waiting for review, shown with the drafts (newest first). */
   readings?: VoReadingRow[];
+  /** Document readings made in the last 7 days, for This week. */
+  weekReadings?: { status: string }[];
 }): DraftsData {
   const { viewer, settings, names } = input;
   const readings = input.readings ?? [];
@@ -241,9 +274,13 @@ export function draftsPage(input: {
     { id: "swVoReplies", label: "Administrative replies", on: settings.reply_drafts, attrs: switchAttrs(viewer, "reply_drafts") },
     { id: "swVoLetters", label: "First drafts of letters from approved facts", on: false, attrs: switchAttrs(viewer, null) },
   ];
-  const accepted = input.week.filter((row) => row.status === "sent" && !row.edited).length;
+  // This week counts what the drafts page lists: reply drafts and document readings (the same two
+  // kinds as the "waiting" count). A reading is accepted once each proposal is decided.
+  const weekReadings = input.weekReadings ?? [];
+  const accepted = input.week.filter((row) => row.status === "sent" && !row.edited).length + weekReadings.filter((row) => row.status === "reviewed").length;
   const edited = input.week.filter((row) => row.status === "sent" && row.edited).length;
-  const rejected = input.week.filter((row) => row.status === "discarded").length;
+  const rejected = input.week.filter((row) => row.status === "discarded").length + weekReadings.filter((row) => row.status === "discarded").length;
+  const weekTotal = input.week.length + weekReadings.length;
   return {
     heading,
     intro: "Vo prepares drafts from your firm’s own records. Nothing is sent, signed or changed until a person accepts it.",
@@ -277,7 +314,7 @@ export function draftsPage(input: {
       : null,
     lock: "Vo can’t sign, submit, send, move money, change bank details, give legal advice or record a decision. Those always need a person with the right role.",
     switches,
-    week: [`${input.week.length} ${input.week.length === 1 ? "draft" : "drafts"}`, `${accepted} accepted`, `${edited} edited`, `${rejected} rejected`],
+    week: [`${weekTotal} ${weekTotal === 1 ? "draft" : "drafts"}`, `${accepted} accepted`, `${edited} edited`, `${rejected} rejected`],
     weekNote: "Every run records the model, the prompt version, the records it read and who reviewed it.",
   };
 }

@@ -50,7 +50,7 @@ import {
 } from "@/modules/sheet/matter-present";
 import { governmentBadge, programLabel } from "@/modules/sheet/matters-present";
 import {
-  agreementsHref,
+  agreementEnvelopeHref,
   COUNTERSIGN_BADGE,
   countersignDialogData,
   countersignDialogId,
@@ -399,8 +399,8 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       parties: people.length ? people.map((signer) => firstName(signer.display_name)).join(", ") : "—",
       signatures: people.length ? `${signedCount} of ${people.length}` : "—",
       state: turn ? COUNTERSIGN_BADGE : agreementState(row.status),
-      // The All agreements list, searched for this matter: the agreement with its state and signatures.
-      href: turn && envelope ? countersignHref(envelope.id) : agreementsHref(matter.reference),
+      // The agreement's own view: its envelope, signers, events and the signed PDF.
+      href: turn && envelope ? countersignHref(envelope.id) : agreementEnvelopeHref(row.id),
       action: turn ? "Countersign" : envelope && row.status !== "completed" ? "Track envelope" : "Open",
       ...(turn && envelope ? { dialog: countersignDialogId(envelope.id) } : {}),
     };

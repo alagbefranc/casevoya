@@ -49,6 +49,38 @@ export function invoiceState(
   }
 }
 
+/** Who an invoice is billed to: the matter's applicants, never the matter's title. */
+export function billedTo(parties: readonly { role: string; persons: { display_name: string } | null }[]): string {
+  const names = parties
+    .filter((party) => party.role === "applicant")
+    .map((party) => party.persons?.display_name)
+    .filter((name): name is string => Boolean(name));
+  return names.join(", ") || "Client";
+}
+
+/** The invoice's last line: what is still due and by when, or why nothing is. */
+export function balanceLine(status: string, dueCents: number, dueOn: string): string {
+  if (status === "voided") return "Voided, nothing due";
+  if (dueCents > 0) return `Balance due ${dueOn}`;
+  if (status === "credited") return "Credited, nothing due";
+  if (status === "refunded") return "Refunded, nothing due";
+  return "Paid, nothing due";
+}
+
+/**
+ * "Received by card": card payments Stripe confirmed (`invoice_payments` succeeded), net of their
+ * refunds, in one currency. Money paid from the client account is not a card payment.
+ */
+export function cardReceived(
+  payments: readonly { status: string; currency: string; amount_received_cents: number; refunded_cents: number; invoice_id: string }[],
+  currency = "CAD",
+): { netCents: number; refundedCents: number; payments: number } {
+  const settled = payments.filter((row) => row.status === "succeeded" && row.currency === currency && row.amount_received_cents > 0);
+  const received = settled.reduce((sum, row) => sum + row.amount_received_cents, 0);
+  const refunded = settled.reduce((sum, row) => sum + Math.min(row.refunded_cents, row.amount_received_cents), 0);
+  return { netCents: received - refunded, refundedCents: refunded, payments: settled.length };
+}
+
 /**
  * The Payments tab's state badge for a card payment (`invoice_payment_status`). Only verified
  * Stripe events move a payment, so the badge says what Stripe confirmed. `requires_payment`

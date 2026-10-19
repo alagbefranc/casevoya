@@ -185,6 +185,32 @@ function withSampleCopy(captured: string): string {
   }, captured);
 }
 
+/**
+ * Records pages' copy changed on 2026-10-19 (production audit): internal requirement codes such as
+ * "(AGR-04)" and "(FIN-09)" are not shown to people, and Delivery problems no longer promises a
+ * follow-up task for every failed notice. Text only, same DOM and classes: the capture is compared
+ * with these strings swapped in (only those the page carries).
+ */
+const RECORDS_COPY: [string, string][] = [
+  [" (AGR-04).", "."],
+  [" (FIN-07).", "."],
+  [" (FIN-08).", "."],
+  [" (FIN-09).", "."],
+  [" (FIN-10, FIN-11).", "."],
+  [" (FIN-12).", "."],
+  [" (FIN-13).", "."],
+  [" (DOC-07).", "."],
+  [" Filing an email doesn’t give its sender access to a case (OPS-06).", " Filing an email doesn’t give its sender access to a case."],
+  [
+    "When a critical notice doesn’t arrive, Casevoya records it and gives someone a follow-up task (OPS-06, scenario 19).",
+    "Notices that bounced, weren’t sent or failed. When a critical notice on a matter bounces, Casevoya opens a follow-up task for the firm owner; follow up the others yourself.",
+  ],
+];
+
+function withRecordsCopy(captured: string): string {
+  return RECORDS_COPY.reduce((html, [from, to]) => html.split(from).join(to), captured);
+}
+
 vi.mock("@/modules/sheet/sample-actions", () => ({ recordSampleStep: async () => ({ ok: true }), switchToLive: async () => ({ ok: true }) }));
 
 /**
@@ -902,7 +928,7 @@ describe("Designer fidelity", () => {
   it("renders the Agreements page (All agreements) and its New quote dialog exactly as the captured Designer markup", () => {
     // The capture also carries the Void envelope (#dlgVoid) and Record representation authority
     // (#dlgAuth) dialogs. Their tabs are not ported, so the All agreements tab renders without them.
-    const captured = withoutPreloads(renderToStaticMarkup(createElement(AgreementsMarkup)))
+    const captured = withRecordsCopy(withoutPreloads(renderToStaticMarkup(createElement(AgreementsMarkup))))
       .replace(/<dialog class="dlg" id="dlgVoid"[\s\S]*?<\/dialog>/, "")
       .replace(/<dialog class="dlg" id="dlgAuth"[\s\S]*?<\/dialog>/, "");
     expect(captured).toContain('id="dlgNewQ"');
@@ -1124,7 +1150,7 @@ describe("Designer fidelity: Finance", () => {
     // The capture also carries Record a bank payment (#dlgPay), Verify (#dlgVer) and Transfer (#dlgTr):
     // they live on the Client funds tab, so the Invoices tab renders without them. The credit note
     // dialog (#dlgCN) is ported.
-    let captured = withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup)));
+    let captured = withRecordsCopy(withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup))));
     for (const id of ["dlgPay", "dlgVer", "dlgTr"]) {
       captured = captured.replace(new RegExp(`<dialog class="dlg" id="${id}"[\\s\\S]*?</dialog>`), "");
       expect(captured).not.toContain(`id="${id}"`);
@@ -1389,7 +1415,7 @@ describe("Designer fidelity: Finance", () => {
 });
 
 const DESIGNER_FUNDS: FundsData = {
-  intro: "Advances held in Northline’s client account, per client and per matter. They’re a liability, not revenue, until an approved earned-fee transfer (FIN-10, FIN-11).",
+  intro: "Advances held in Northline’s client account, per client and per matter. They’re a liability, not revenue, until an approved earned-fee transfer.",
   kpis: [
     { href: "#", label: "Client account balance", value: { money: "CAD 1,500.00" }, note: { left: "Bank ••• 4410", right: "1 client" } },
     { href: "#", label: "Pending verification", value: { money: "CAD 1,808.00" }, note: { left: "Kofi Mensah", right: "not available yet" }, tone: "warn" },
@@ -1481,7 +1507,7 @@ function designerDialogs() {
 describe("Designer fidelity: Finance, Client funds", () => {
   it("renders the Client funds tab and its payment, verify and transfer dialogs exactly as the captured Designer markup", () => {
     // Every dialog in the capture is ported, the credit note (#dlgCN) included.
-    const captured = withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup, { variant: "tab-funds" })));
+    const captured = withRecordsCopy(withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup, { variant: "tab-funds" }))));
     for (const id of ["dlgPay", "dlgVer", "dlgTr", "dlgCN", "dlgInv"]) expect(captured).toContain(`id="${id}"`);
     const live = withoutPreloads(
       renderToStaticMarkup(
@@ -1976,7 +2002,7 @@ function sameMarkup(live: string, captured: string) {
 const DESIGNER_RECON: ReconData = {
   period: "October 2026",
   intro:
-    "Monthly three-way check: the adjusted bank balance, the control ledger and the total of all client ledgers must agree. Your accountant validates the chart of accounts before live use (FIN-12).",
+    "Monthly three-way check: the adjusted bank balance, the control ledger and the total of all client ledgers must agree. Your accountant validates the chart of accounts before live use.",
   pending: {
     cards: [
       { title: "Adjusted bank balance", value: "CAD 3,308.00", note: "Statement to 16 Oct, bank ••• 4410" },
@@ -2029,7 +2055,7 @@ const DESIGNER_INVOICE: InvoiceViewData = {
     { date: "—", source: "Proposed transfer from Priya’s client account", evidence: ["Milestone 1", "needs 2 approvers"], amount: "300.00", state: { tone: "chg", label: "Pending approval" } },
   ],
   allocationsEmpty: "",
-  allocationsNote: "A successful checkout page isn’t proof of payment. Only the verified processor event or a reconciled bank line counts (FIN-08).",
+  allocationsNote: "A successful checkout page isn’t proof of payment. Only the verified processor event or a reconciled bank line counts.",
   creditNotes: null,
   creditBalance: null,
   preview: {
@@ -2057,12 +2083,12 @@ const DESIGNER_INVOICE: InvoiceViewData = {
 
 describe("Designer fidelity: Finance, Reconciliation and the single invoice", () => {
   it("renders the Reconciliation tab and every dialog exactly as the captured Designer markup", () => {
-    const captured = withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup, { variant: "tab-recon" })));
+    const captured = withRecordsCopy(withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup, { variant: "tab-recon" }))));
     sameMarkup(financePage("recon", createElement(SheetFinanceRecon, { data: DESIGNER_RECON })), captured);
   });
 
   it("renders the single-invoice tab and every dialog exactly as the captured Designer markup", () => {
-    const captured = withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup, { variant: "tab-invoice" })));
+    const captured = withRecordsCopy(withoutPreloads(renderToStaticMarkup(createElement(FinanceMarkup, { variant: "tab-invoice" }))));
     sameMarkup(financePage("invoice", createElement(SheetFinanceInvoice, { data: DESIGNER_INVOICE })), captured);
   });
 
@@ -2417,7 +2443,7 @@ const DESIGNER_INBOX: InboxData = {
 describe("Designer fidelity: Documents and Inbox", () => {
   for (const tab of ["review", "all", "custody"] as DocumentsTab[]) {
     it(`renders the Documents page (${tab} tab) exactly as the captured Designer markup`, () => {
-      const captured = withoutPreloads(renderToStaticMarkup(createElement(DocumentsMarkup, { variant: `tab-${tab}` })));
+      const captured = withRecordsCopy(withoutPreloads(renderToStaticMarkup(createElement(DocumentsMarkup, { variant: `tab-${tab}` }))));
       const data = { ...DESIGNER_DOCUMENTS, tab };
       const live = withoutPreloads(
         renderToStaticMarkup(
@@ -2434,7 +2460,7 @@ describe("Designer fidelity: Documents and Inbox", () => {
 
   for (const tab of ["conv", "triage", "bounced", "notes"] as InboxTab[]) {
     it(`renders the Inbox page (${tab} tab) and its New message dialog exactly as the captured Designer markup`, () => {
-      const captured = withoutPreloads(renderToStaticMarkup(createElement(InboxMarkup, { variant: `tab-${tab}` })));
+      const captured = withRecordsCopy(withoutPreloads(renderToStaticMarkup(createElement(InboxMarkup, { variant: `tab-${tab}` }))));
       const live = withoutPreloads(
         renderToStaticMarkup(
           createElement(SheetFrame, {

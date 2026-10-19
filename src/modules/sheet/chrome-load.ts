@@ -4,6 +4,7 @@ import type { SidebarData } from "@/components/sheet/designer/sidebar";
 import { createClient } from "@/lib/supabase/server";
 import { staffPerson } from "@/modules/sheet/avatar";
 import type { SheetStaff } from "@/modules/sheet/load";
+import { readItems, unreadCount } from "@/modules/sheet/notifications-present";
 import { roleLabel } from "@/modules/sheet/present";
 import { loadSheetSetup } from "@/modules/sheet/setup-load";
 
@@ -50,6 +51,20 @@ export async function memberNames(supabase: Client, org: string): Promise<Map<st
  * member. Features without a backend yet (leads, finance exceptions) show no count; Vo drafts count those waiting.
  */
 export async function loadSheetChrome(staff: SheetStaff, active: string): Promise<SheetChrome> {
+  const [chrome, notifications] = await Promise.all([baseChrome(staff, active), unreadNotifications(staff)]);
+  // The sidebar's Notifications badge on every page, not only on Notifications.
+  chrome.sidebar.counts = { ...chrome.sidebar.counts, notifications };
+  return chrome;
+}
+
+/** Unread in-app notifications for the signed-in staff member (public.staff_notifications); 0 when it can't be read. */
+async function unreadNotifications(staff: SheetStaff): Promise<number> {
+  const supabase = await createClient({ organizationId: staff.organizationId });
+  const read = await supabase.rpc("staff_notifications", { p_organization_id: staff.organizationId, p_limit: 100 });
+  return read.error ? 0 : unreadCount(readItems(read.data));
+}
+
+async function baseChrome(staff: SheetStaff, active: string): Promise<SheetChrome> {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
   const count = { count: "exact" as const, head: true };

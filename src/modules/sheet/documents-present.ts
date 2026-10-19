@@ -144,6 +144,26 @@ export function cardStates(version: VersionFacts | null, today: string): DocChip
   });
 }
 
+/** Whether All documents offers Open on a card: the current version passed the file check and the firm accepted it. */
+export function cardOpenable(version: Pick<VersionFacts, "uploadState" | "reviewState"> & { scanResult?: string | null }): boolean {
+  return version.uploadState === "clean" && version.reviewState === "accepted";
+}
+
+/**
+ * Whether an open request is already answered by an upload on the page: the upload was attached to
+ * it (the request's `document_id`), or it is the same person's document with the same purpose on
+ * the same matter. The request stays open in the database until a person accepts the upload; the
+ * page shows the upload once, not the upload and the request.
+ */
+export function requestAnswered(
+  request: { document_id: string | null; person_id: string; matter_id: string; purpose: string },
+  shown: readonly { id: string; person_id: string; purpose: string; matterId: string | undefined }[],
+): boolean {
+  if (request.document_id && shown.some((doc) => doc.id === request.document_id)) return true;
+  const purpose = request.purpose.trim().toLowerCase();
+  return shown.some((doc) => doc.person_id === request.person_id && doc.matterId === request.matter_id && doc.purpose.trim().toLowerCase() === purpose);
+}
+
 /** "Today 08:41" for today in the firm's zone, otherwise "16 Oct". */
 export function whenLabel(iso: string, timeZone: string, today: string): string {
   const date = new Date(iso);

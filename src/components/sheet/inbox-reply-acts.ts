@@ -2,7 +2,8 @@
 
 import { toast2 } from "@/components/port/kit";
 import { sendInboxEmail } from "@/modules/inbox/inbox-reply-actions";
-import { parseComposeValue, sentToast } from "@/modules/sheet/inbox-reply-present";
+import { addStaffNote, sendMessage } from "@/modules/messages/actions";
+import { messageSentToast, parseComposeValue, sentToast } from "@/modules/sheet/inbox-reply-present";
 
 type Router = { refresh: () => void };
 
@@ -43,6 +44,62 @@ export async function runInboxReply(button: HTMLElement, root: HTMLElement, rout
   delete field.dataset.sendKey;
   const done = sentToast(data.name || "the client", result.sample);
   toast2(done.title, { kind: done.kind, sub: done.sub });
+  router.refresh();
+}
+
+/**
+ * A conversation whose latest message came through the portal or WhatsApp: "Send to …" replies in
+ * that matter thread (a staff message the client reads in their portal), with "Ask … to
+ * acknowledge" when ticked. The database decides who may write and to whom.
+ */
+export async function runInboxMessage(button: HTMLElement, root: HTMLElement, router: Router) {
+  const data = button.dataset;
+  const field = root.querySelector<HTMLTextAreaElement>("#rp");
+  const body = field?.value ?? "";
+  if (!field || !body.trim()) {
+    toast2("Write a reply first", { kind: "warn", sub: "Nothing was sent." });
+    field?.focus();
+    return;
+  }
+  const ack = Boolean(root.querySelector<HTMLInputElement>("#rpAck")?.checked);
+  const result = await sendMessage({
+    organizationId: data.org ?? "",
+    matterId: data.matter ?? "",
+    threadId: data.inboxMessage ?? "",
+    body,
+    requiresAck: ack,
+    clientKey: keyFor(field),
+  });
+  if ("error" in result) {
+    toast2(result.error, { kind: "bad", sub: "Nothing was sent. Your text is still in the box." });
+    return;
+  }
+  field.value = "";
+  delete field.dataset.sendKey;
+  const ackBox = root.querySelector<HTMLInputElement>("#rpAck");
+  if (ackBox) ackBox.checked = false;
+  const done = messageSentToast(data.name || "the client", ack);
+  toast2(done.title, { kind: done.kind, sub: done.sub });
+  router.refresh();
+}
+
+/** "Staff-only note": the reply box's text, kept on the matter for staff only. Never shown to the client or mailed. */
+export async function runInboxNote(button: HTMLElement, root: HTMLElement, router: Router) {
+  const field = root.querySelector<HTMLTextAreaElement>("#rp");
+  const body = field?.value ?? "";
+  if (!field || !body.trim()) {
+    toast2("Write the note in the reply box first", { kind: "warn", sub: "Nothing was saved." });
+    field?.focus();
+    return;
+  }
+  const result = await addStaffNote({ organizationId: button.dataset.org ?? "", matterId: button.dataset.inboxNote ?? "", body });
+  if ("error" in result) {
+    toast2(result.error, { kind: "bad", sub: "Nothing was saved. Your text is still in the box." });
+    return;
+  }
+  field.value = "";
+  delete field.dataset.sendKey;
+  toast2("Staff-only note saved", { kind: "ok", sub: "It is on the matter’s notes. The client never sees it." });
   router.refresh();
 }
 

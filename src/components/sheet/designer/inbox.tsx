@@ -24,6 +24,8 @@ export type ThreadItem = {
   /** Matter reference, then the latest message. */
   line: [string, string];
   when: string;
+  /** Live only: the channel chip tokens (portal, email, whatsapp), as `data-f`. */
+  flags?: string[];
 };
 
 export type ThreadMail = { meta: string[]; body: string; files?: [string, string] | null };
@@ -38,6 +40,8 @@ export type ThreadView = {
     send: { label: string; attrs: Attrs };
     note: Attrs;
     acknowledge: string;
+    /** Live only: the acknowledgement checkbox's attributes (its id when it applies, or disabled with why). */
+    ackAttrs?: Attrs;
   };
 };
 
@@ -57,7 +61,8 @@ export type AnnouncementCard = { title: string; audience: Text2; when: Text2 };
 
 export type InboxData = {
   tab: InboxTab;
-  conv?: { filters: string[]; threads: ThreadItem[]; view: ThreadView | null };
+  /** `filterEmpty` (live only): a hidden "Nothing matches" line in the list for the chips and search. */
+  conv?: { filters: string[]; threads: ThreadItem[]; view: ThreadView | null; filterEmpty?: boolean };
   triage?: {
     copy: string;
     sources: { logo: string | null; parts: [string, string] }[];
@@ -302,8 +307,8 @@ function Thread({ view }: { view: ThreadView }) {
           <button className={"btn sm"} {...view.reply.note}>
             {"Staff-only note"}
           </button>
-          <label className={"check"}>
-            <input type={"checkbox"} />
+          <label className={"check"} title={typeof view.reply.ackAttrs?.title === "string" ? view.reply.ackAttrs.title : undefined}>
+            <input type={"checkbox"} {...view.reply.ackAttrs} />
             <span>{view.reply.acknowledge}</span>
           </label>
         </div>
@@ -326,7 +331,12 @@ function Conversations({ data }: { data: NonNullable<InboxData["conv"]> }) {
         ))}
       </div>
       {data.threads.length === 0 || !data.view ? (
-        <EmptyPanel n={2} art={"inbox-empty"} title={"No conversations yet"} copy={"Email from a client, once it is filed to their matter, appears here as a conversation."} />
+        <EmptyPanel
+          n={2}
+          art={"inbox-empty"}
+          title={"No conversations yet"}
+          copy={"Portal and WhatsApp messages on a matter, and email from a client once it is filed to their matter, appear here as conversations."}
+        />
       ) : (
         <div className={"fp-g2 rv"} style={i(2)}>
           <div className={"panel"} id={"cvL"}>
@@ -336,6 +346,7 @@ function Conversations({ data }: { data: NonNullable<InboxData["conv"]> }) {
                 className={thread.selected ? "li sel" : "li"}
                 href={thread.href}
                 data-i={String(index)}
+                data-f={thread.flags?.length ? thread.flags.join(" ") : undefined}
                 style={{ background: thread.selected ? "var(--tint)" : "#fff", ...LI_STYLE }}
               >
                 <Avatar person={thread.person} />
@@ -358,6 +369,11 @@ function Conversations({ data }: { data: NonNullable<InboxData["conv"]> }) {
                 </span>
               </a>
             ))}
+            {data.filterEmpty ? (
+              <div className={"fp-fe"} hidden>
+                <Empty art={"filter-empty"} title={"Nothing matches"} copy={"Try another filter or clear the search."} />
+              </div>
+            ) : null}
           </div>
           <div>
             <Thread view={data.view} />
@@ -467,7 +483,7 @@ function Triage({ data }: { data: NonNullable<InboxData["triage"]> }) {
 function Bounced({ data }: { data: NonNullable<InboxData["bounced"]> }) {
   return (
     <>
-      <Heading title={"Delivery problems"} copy={"When a critical notice doesn’t arrive, Casevoya records it and gives someone a follow-up task (OPS-06, scenario 19)."} />
+      <Heading title={"Delivery problems"} copy={"Notices that bounced, weren’t sent or failed. When a critical notice on a matter bounces, Casevoya opens a follow-up task for the firm owner; follow up the others yourself."} />
       {data.alert ? (
         <div className={"alert bad rv"} role={"alert"} style={i(1)}>
           <Icon name={"mail"} />
@@ -580,14 +596,17 @@ export function ComposeDialog({ data }: { data: ComposeData }) {
             ))}
           </select>
         </div>
-        <div className={"fld"}>
-          <label htmlFor={"nmTp"}>{"Start from a template"}</label>
-          <select className={"sel"} id={"nmTp"}>
-            {data.templates.map((label) => (
-              <option key={label}>{label}</option>
-            ))}
-          </select>
-        </div>
+        {/* Live, with no approved message templates, the template choice is not shown. */}
+        {data.templates.length ? (
+          <div className={"fld"}>
+            <label htmlFor={"nmTp"}>{"Start from a template"}</label>
+            <select className={"sel"} id={"nmTp"}>
+              {data.templates.map((label) => (
+                <option key={label}>{label}</option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         <div className={"fld"}>
           <label htmlFor={"nmB"}>{"Message"}</label>
           <textarea className={"ta"} id={"nmB"}></textarea>

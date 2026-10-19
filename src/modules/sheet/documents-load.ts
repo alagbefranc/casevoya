@@ -3,6 +3,7 @@ import type { CustodyRow, DocCard, DocumentReviewDialogData, DocumentsData, Revi
 import { createClient } from "@/lib/supabase/server";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import {
+  cardOpenable,
   cardStates,
   currentVersions,
   documentsTab,
@@ -10,6 +11,7 @@ import {
   firstName,
   queueEntry,
   REVIEW_ROLES,
+  requestAnswered,
   versionTitle,
   whenLabel,
   type VersionFacts,
@@ -44,7 +46,7 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
     supabase.from("documents").select("id, person_id, purpose").eq("organization_id", org).order("updated_at", { ascending: false }).limit(READ),
     supabase.from("document_matter_refs").select("document_id, matter_id, created_at").eq("organization_id", org).is("removed_at", null).limit(READ),
     tab === "all"
-      ? supabase.from("document_requests").select("id, matter_id, person_id, purpose, due_on, created_at").eq("organization_id", org).eq("status", "open").order("created_at", { ascending: false }).limit(READ)
+      ? supabase.from("document_requests").select("id, matter_id, person_id, document_id, purpose, due_on, created_at").eq("organization_id", org).eq("status", "open").order("created_at", { ascending: false }).limit(READ)
       : null,
   ]);
 
@@ -142,23 +144,28 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
     firmName: staff.organizationName,
   };
 
-  if (tab === "review") data.review = { rows: queue };
+  if (tab === "review") data.review = { rows: queue, filterEmpty: true };
 
   if (tab === "all") {
     const cards: DocCard[] = [];
-    const answered = new Set<string>();
+    const shown: { id: string; person_id: string; purpose: string; matterId: string | undefined }[] = [];
     for (const [documentId, version] of [...current.entries()].sort((a, b) => b[1].createdAt.localeCompare(a[1].createdAt))) {
       const doc = documents.get(documentId);
       if (!doc) continue;
-      answered.add(documentId);
+      shown.push({ id: doc.id, person_id: doc.person_id, purpose: doc.purpose, matterId: matterOf.get(doc.id) });
       cards.push({
         title: doc.purpose,
         thumb: { icon: fileIcon(version.declaredMediaType) },
         meta: { parts: [matterName(matterOf.get(doc.id)), firstName(nameOf(doc.person_id))], version: `v${version.versionNumber}`, when: whenLabel(version.createdAt, staff.timezone, today) },
         states: cardStates(version as VersionFacts, today),
+        // An accepted, clean file opens through a short-lived signed link after a fresh access check.
+        ...(cardOpenable(version) ? { open: { "data-doc-open": version.id, "data-org": org } } : {}),
       });
     }
     for (const request of requests) {
+      // An upload made for this request (or the same person's same document on the same matter)
+      // is already a card: the request isn't shown a second time while it waits for review.
+      if (requestAnswered(request, shown)) continue;
       cards.push({
         title: request.purpose,
         thumb: { icon: "file" },

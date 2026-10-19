@@ -4,7 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { loadSheetChrome, memberNames } from "@/modules/sheet/chrome-load";
 import {
   attachment,
+  DELIVERY_PROBLEM_STATUSES,
   deliveryProblem,
+  deliveryProblemsPill,
+  deliveryProblemsSince,
   deliveryState,
   inboxTab,
   listWhen,
@@ -18,17 +21,31 @@ import {
   templateLabel,
   type Candidate,
 } from "@/modules/sheet/inbox-present";
-import { composeSendAttrs, composeValue, outboundMail, outboundStatus, replySendAttrs } from "@/modules/sheet/inbox-reply-present";
+import {
+  canEmail,
+  composeSendAttrs,
+  composeValue,
+  conversationChannels,
+  messageMail,
+  messageSendAttrs,
+  noteAttrs,
+  outboundMail,
+  outboundStatus,
+  replySendAttrs,
+  type MessageChannel,
+} from "@/modules/sheet/inbox-reply-present";
 import type { SheetStaff } from "@/modules/sheet/load";
-import { isoDateInTimeZone, plusDays, type SheetQuery } from "@/modules/sheet/present";
+import { isoDateInTimeZone, type SheetQuery } from "@/modules/sheet/present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
 const READ = 100;
-const RECENT_DAYS = 60;
 const DEFAULT_INBOUND_DOMAIN = "docs.casevoya.ca";
 
-const NOTE_SEND = { "data-toast": "Staff-only notes aren’t saved here yet", "data-toast-kind": "warn", "data-toast-sub": "Nothing was saved." };
+const NOTE_NO_MATTER = { "data-toast": "This conversation isn’t on a matter", "data-toast-kind": "warn", "data-toast-sub": "A staff-only note is kept on a matter. Nothing was saved." };
+
+/** The conversation list's filter chips. */
+const CONVERSATION_FILTERS = ["All", "Portal", "Email", "WhatsApp"];
 
 function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] || name;
@@ -120,7 +137,7 @@ async function loadTriage(supabase: Client, staff: SheetStaff): Promise<NonNulla
 
   const domain = (process.env.INBOUND_EMAIL_DOMAIN || DEFAULT_INBOUND_DOMAIN).trim().toLowerCase();
   return {
-    copy: "Email sent to your firm’s address or a matter’s reply address, when Casevoya can’t tell which client sent it. Filing an email doesn’t give its sender access to a case (OPS-06).",
+    copy: "Email sent to your firm’s address or a matter’s reply address, when Casevoya can’t tell which client sent it. Filing an email doesn’t give its sender access to a case.",
     sources: firm.data?.slug ? [{ logo: null, parts: [`${firm.data.slug}@${domain}`, "firm address and matter reply addresses"] }] : [],
     rows: table,
   };
@@ -166,21 +183,57 @@ async function loadConversations(supabase: Client, staff: SheetStaff, query: She
     .not("person_id", "is", null)
     .order("created_at", { ascending: false })
     .limit(READ * 2);
-  // Email staff wrote from here (matter_outbound_emails: staff who can read the matter only).
-  const sentRows = await supabase
-    .from("matter_outbound_emails")
-    .select("id, matter_id, person_id, author_name, body, is_sample, outbox_event_id, created_at")
-    .eq("organization_id", org)
-    .order("created_at", { ascending: false })
-    .limit(READ * 2);
+  // Email staff wrote from here (matter_outbound_emails: staff who can read the matter only), and
+  // the matters' secure messages (portal and WhatsApp, matter_messages: staff who read the matter).
+  const [sentRows, messageRows] = await Promise.all([
+    supabase
+      .from("matter_outbound_emails")
+      .select("id, matter_id, person_id, author_name, body, is_sample, outbox_event_id, created_at")
+      .eq("organization_id", org)
+      .order("created_at", { ascending: false })
+      .limit(READ * 2),
+    supabase
+      .from("matter_messages")
+      .select("id, thread_id, matter_id, author_kind, author_person_id, author_name, body, requires_ack, channel, created_at")
+      .eq("organization_id", org)
+      .order("created_at", { ascending: false })
+      .limit(READ * 2),
+  ]);
+  const messages = messageRows.data ?? [];
+  const threadIds = [...new Set(messages.map((row) => row.thread_id))];
+  const audience = threadIds.length
+    ? await supabase.from("message_thread_people").select("thread_id, person_id").eq("organization_id", org).in("thread_id", threadIds)
+    : null;
+  const peopleOf = new Map<string, string[]>();
+  for (const row of audience?.data ?? []) peopleOf.set(row.thread_id, [...(peopleOf.get(row.thread_id) ?? []), row.person_id]);
   type Item =
     | { kind: "in"; id: string; matter_id: string | null; person_id: string; created_at: string; subject: string | null; text: string | null }
-    | { kind: "out"; id: string; matter_id: string; person_id: string; created_at: string; author: string; text: string; sample: boolean; event: string };
+    | { kind: "out"; id: string; matter_id: string; person_id: string; created_at: string; author: string; text: string; sample: boolean; event: string }
+    | { kind: "msg"; id: string; matter_id: string; person_id: string; created_at: string; author: string; text: string; channel: MessageChannel; thread: string; ack: boolean };
+  // A message belongs to the conversation of every person its thread is addressed to.
+  const messageItems: Item[] = messages.flatMap((row) => {
+    const people = peopleOf.get(row.thread_id) ?? (row.author_person_id ? [row.author_person_id] : []);
+    return people.map(
+      (personId): Item => ({
+        kind: "msg",
+        id: row.id,
+        matter_id: row.matter_id,
+        person_id: personId,
+        created_at: row.created_at,
+        author: row.author_name,
+        text: row.body,
+        channel: row.channel === "whatsapp" ? "whatsapp" : "portal",
+        thread: row.thread_id,
+        ack: row.requires_ack,
+      }),
+    );
+  });
   const rows: Item[] = [
+    ...messageItems,
     ...(emails.data ?? []).flatMap((row): Item[] =>
       row.person_id ? [{ kind: "in", id: row.id, matter_id: row.matter_id, person_id: row.person_id, created_at: row.created_at, subject: row.subject, text: row.text_body }] : [],
     ),
-    ...(sentRows.data ?? []).map(
+    ...(sentRows?.data ?? []).map(
       (row): Item => ({
         kind: "out",
         id: row.id,
@@ -213,7 +266,8 @@ async function loadConversations(supabase: Client, staff: SheetStaff, query: She
   const keys = [...threads.keys()];
   const selected = query.view && threads.has(query.view) ? query.view : keys[0];
   const items: ThreadItem[] = keys.map((personId) => {
-    const latest = threads.get(personId)![0];
+    const list = threads.get(personId)!;
+    const latest = list[0];
     return {
       href: `/sheet/inbox?tab=conv&view=${personId}`,
       selected: personId === selected,
@@ -221,10 +275,12 @@ async function loadConversations(supabase: Client, staff: SheetStaff, query: She
       unread: false,
       line: [latest.matter_id ? labels.get(latest.matter_id) ?? "Matter" : "No matter", snippet(latest.kind === "in" ? latest.subject : null, latest.text)],
       when: listWhen(latest.created_at, staff.timezone, today),
+      // The filter chips: which channels this conversation has.
+      flags: conversationChannels(list.map((item) => (item.kind === "msg" ? item.channel : "email"))),
     };
   });
 
-  if (!selected) return { filters: ["All"], threads: items, view: null };
+  if (!selected) return { filters: CONVERSATION_FILTERS, threads: items, view: null, filterEmpty: true };
   const all = [...threads.get(selected)!].slice(0, 20).reverse();
   const mails = all.filter((mail) => mail.kind === "in");
   const sent = all.filter((mail) => mail.kind === "out");
@@ -249,6 +305,7 @@ async function loadConversations(supabase: Client, staff: SheetStaff, query: She
   const role = partyRoleLabel((parties?.data ?? []).find((party) => party.person_id === selected && party.matter_id === latestMatter)?.role);
   const threadMails: ThreadMail[] = all.map((mail) => {
     const when = mailWhen(mail.created_at, staff.timezone, today);
+    if (mail.kind === "msg") return messageMail({ author: mail.author, when, body: mail.text, channel: mail.channel, ack: mail.ack });
     if (mail.kind === "out") {
       return outboundMail({ author: mail.author, when, body: mail.text, status: outboundStatus(deliveryOf.get(mail.event), mail.sample).label });
     }
@@ -260,21 +317,29 @@ async function loadConversations(supabase: Client, staff: SheetStaff, query: She
       files: total ? [plural(total, "file"), count!.waiting ? "some still in Email to triage" : "filed to documents"] : null,
     };
   });
-  // Send writes to this person on the latest mail's matter; it is a reply (threaded, "Re:") to
-  // their latest filed email on that matter, when there is one.
+  // Send answers on the channel of the latest message: a portal or WhatsApp message goes back to
+  // that matter thread (a staff message; WhatsApp replies go out while the client's window is
+  // open); otherwise an email to this person on the latest mail's matter, a reply (threaded, "Re:")
+  // to their latest filed email on that matter when there is one.
+  const latestItem = all[all.length - 1];
   const replyTo = [...mails].reverse().find((mail) => mail.matter_id === latestMatter)?.id ?? null;
-  const send = latestMatter
-    ? replySendAttrs({
-        organizationId: org,
-        matterId: latestMatter,
-        personId: selected,
-        name: personName,
-        hasEmail: Boolean(emailOf.get(selected)),
-        replyToEmailId: replyTo,
-      })
-    : { "data-toast": "This email isn’t on a matter", "data-toast-kind": "warn", "data-toast-sub": "Nothing was sent." };
+  const portal = latestItem.kind === "msg" ? latestItem : null;
+  const send = portal
+    ? messageSendAttrs({ organizationId: org, matterId: portal.matter_id, threadId: portal.thread, name: personName })
+    : latestMatter
+      ? replySendAttrs({
+          organizationId: org,
+          matterId: latestMatter,
+          personId: selected,
+          name: personName,
+          hasEmail: Boolean(emailOf.get(selected)),
+          replyToEmailId: replyTo,
+        })
+      : { "data-toast": "This email isn’t on a matter", "data-toast-kind": "warn", "data-toast-sub": "Nothing was sent." };
+  const note = latestMatter ? noteAttrs(org, latestMatter) : NOTE_NO_MATTER;
   return {
-    filters: ["All"],
+    filters: CONVERSATION_FILTERS,
+    filterEmpty: true,
     threads: items,
     view: {
       title: [personName, latestMatter ? labels.get(latestMatter) ?? "Matter" : "No matter"],
@@ -285,21 +350,26 @@ async function loadConversations(supabase: Client, staff: SheetStaff, query: She
         title: `Audience: ${personName}${role ? ` (${role.toLowerCase()})` : ""} and ${staff.organizationName} staff on this file`,
         copy: "Other people’s private records can’t be attached to this message.",
       },
-      reply: { send: { label: `Send to ${first}`, attrs: send }, note: NOTE_SEND, acknowledge: `Ask ${first} to acknowledge` },
+      reply: {
+        send: { label: `Send to ${first}`, attrs: send },
+        note,
+        acknowledge: `Ask ${first} to acknowledge`,
+        // Acknowledgement is a portal message's (requires_ack); an email can't carry it.
+        ackAttrs: portal ? { id: "rpAck" } : { disabled: "disabled", title: "Only a portal message can ask for an acknowledgement. This reply goes by email." },
+      },
     },
   };
 }
 
 async function loadBounced(supabase: Client, staff: SheetStaff, now: Date): Promise<NonNullable<InboxData["bounced"]>> {
   const org = staff.organizationId;
-  const since = new Date(now.getTime() - RECENT_DAYS * 86_400_000).toISOString();
   const [deliveries, tasks, members] = await Promise.all([
     supabase
       .from("email_deliveries")
       .select("id, recipient_email, template, status, critical, matter_id, attempt_count, created_at")
       .eq("organization_id", org)
-      .in("status", ["bounced", "suppressed", "failed"])
-      .gte("created_at", since)
+      .in("status", [...DELIVERY_PROBLEM_STATUSES])
+      .gte("created_at", deliveryProblemsSince(now))
       .order("created_at", { ascending: false })
       .limit(READ),
     supabase.from("tasks").select("id, matter_id, owner_membership_id").eq("organization_id", org).eq("task_key", "email_delivery_failure").in("status", ["open", "blocked"]).limit(1),
@@ -341,12 +411,23 @@ async function loadCompose(supabase: Client, staff: SheetStaff): Promise<Compose
   const org = staff.organizationId;
   const matters = await supabase.from("matters").select("id, reference, title").eq("organization_id", org).neq("stage", "closed").order("updated_at", { ascending: false }).limit(30);
   const label = new Map((matters.data ?? []).map((row) => [row.id, row.reference || row.title]));
-  // Only people with an email address can be written to; the database checks it again on send.
-  const people = (await participants(supabase, org, [...label.keys()])).filter((person) => Boolean(person.email)).slice(0, 60);
+  const everyone = await participants(supabase, org, [...label.keys()]);
+  const personIds = [...new Set(everyone.map((person) => person.personId))];
+  const addresses = [...new Set(everyone.map((person) => person.email?.trim().toLowerCase()).filter((email): email is string => Boolean(email)))];
+  const [prefs, suppressions] = await Promise.all([
+    personIds.length ? supabase.from("person_contact_preferences").select("person_id, email_notices").eq("organization_id", org).in("person_id", personIds) : null,
+    addresses.length ? supabase.from("email_suppressions").select("recipient_email").eq("organization_id", org).in("recipient_email", addresses) : null,
+  ]);
+  const emailOff = new Set((prefs?.data ?? []).filter((row) => row.email_notices === false).map((row) => row.person_id));
+  const suppressed = new Set((suppressions?.data ?? []).map((row) => row.recipient_email.toLowerCase()));
+  // Only people email can reach are offered: an address on file, email not turned off, not on the
+  // do-not-send list. The database checks it all again on send.
+  const people = everyone.filter((person) => canEmail({ email: person.email, emailOff: emailOff.has(person.personId) }, suppressed)).slice(0, 60);
   return {
     to: people.map((person) => [person.name, label.get(person.matterId) ?? "Matter"]),
     toValues: people.map((person) => composeValue(person.matterId, person.personId)),
-    templates: ["None"],
+    // No approved message templates exist yet, so the template choice is not shown.
+    templates: [],
     send: { attrs: composeSendAttrs(org) },
   };
 }
@@ -358,19 +439,18 @@ export async function loadSheetInbox(staff: SheetStaff, query: SheetQuery, now: 
   const today = isoDateInTimeZone(now, staff.timezone);
   const tab = inboxTab(query.tab);
   const count = { count: "exact" as const, head: true };
-  const since = `${plusDays(today, -30)}T00:00:00Z`;
 
-  const [chrome, triageCount, bouncedCount, compose, conv, triage, bounced] = await Promise.all([
+  const [chrome, triageCount, problemCount, compose, conv, triage, bounced] = await Promise.all([
     loadSheetChrome(staff, "/sheet/inbox"),
     supabase.from("inbound_emails").select("id", count).eq("organization_id", org).eq("triage_state", "open"),
-    supabase.from("email_deliveries").select("id", count).eq("organization_id", org).eq("status", "bounced").gte("created_at", since),
+    // The same rows as the Delivery problems tab (deliveryProblemsSince): one definition.
+    supabase.from("email_deliveries").select("id", count).eq("organization_id", org).in("status", [...DELIVERY_PROBLEM_STATUSES]).gte("created_at", deliveryProblemsSince(now)),
     loadCompose(supabase, staff),
     tab === "conv" ? loadConversations(supabase, staff, query, today) : undefined,
     tab === "triage" ? loadTriage(supabase, staff) : undefined,
     tab === "bounced" ? loadBounced(supabase, staff, now) : undefined,
   ]);
-  const bouncedN = bouncedCount.count ?? 0;
-  const pills = [`${triageCount.count ?? 0} to triage`, `${bouncedN} bounced notice${bouncedN === 1 ? "" : "s"}`];
+  const pills = [`${triageCount.count ?? 0} to triage`, deliveryProblemsPill(problemCount.count ?? 0)];
   const inbox: InboxData = { tab, conv, triage, bounced, notes: tab === "notes" ? { cards: [] } : undefined };
   return { chrome, pills, inbox, compose };
 }
