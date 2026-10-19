@@ -68,10 +68,7 @@ export function DocRequestDialog({ data }: { data: DocRequestDialogData }) {
             <input className={"inp"} id={"drqW"} maxLength={200} placeholder={"For example: Passport, all pages"} autoComplete={"off"} />
           </div>
           <div className={"fld"}>
-            <label htmlFor={"drqD"}>
-              {"Due on"}
-              <span className={"opt"}>{"(optional)"}</span>
-            </label>
+            <label htmlFor={"drqD"}>{"Due on (optional)"}</label>
             <input className={"inp"} id={"drqD"} type={"date"} min={data.today} />
           </div>
           <div className={"fld"}>
@@ -85,6 +82,16 @@ export function DocRequestDialog({ data }: { data: DocRequestDialogData }) {
             </select>
           </div>
           <div className={"fld"}>
+            <label htmlFor={"drqE"}>{"What to tell the client"}</label>
+            <textarea className={"ta"} id={"drqE"} maxLength={2000} placeholder={"In plain words: what the file should show, and why it’s needed."}></textarea>
+            <span className={"hint"}>{"Shown in their portal with the request. The email only says a document was asked for."}</span>
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"drqR"}>{"Review criteria (optional)"}</label>
+            <textarea className={"ta"} id={"drqR"} maxLength={2000} placeholder={"For example: every page, readable, not expired"}></textarea>
+            <span className={"hint"}>{"Only the firm sees these."}</span>
+          </div>
+          <div className={"fld"}>
             <label htmlFor={"drqA"}>{"Who may see it"}</label>
             <select className={"sel"} id={"drqA"} defaultValue={"subject"}>
               {DOC_REQUEST_AUDIENCES.map((option) => (
@@ -95,27 +102,15 @@ export function DocRequestDialog({ data }: { data: DocRequestDialogData }) {
             </select>
             <span className={"hint"}>{"Others on the matter see it only when it’s ordinary. Firm staff only hides it from the portal."}</span>
           </div>
-        </div>
-        <div className={"fld"}>
-          <label htmlFor={"drqE"}>{"What to tell the client"}</label>
-          <textarea className={"ta"} id={"drqE"} maxLength={2000} placeholder={"In plain words: what the file should show, and why it’s needed."}></textarea>
-          <span className={"hint"}>{"Shown in their portal with the request. The email only says a document was asked for."}</span>
-        </div>
-        <fieldset className={"fld"}>
-          <legend>{"Accepted formats"}</legend>
-          {DOC_REQUEST_FORMATS.map((format) => (
-            <label key={format.value} className={"check"}>
-              <input type={"checkbox"} name={"drqF"} value={format.value} defaultChecked={format.on} />
-              <span>{format.label}</span>
-            </label>
-          ))}
-        </fieldset>
-        <div className={"fld"}>
-          <label htmlFor={"drqR"}>
-            {"Review criteria"}
-            <span className={"opt"}>{"(optional)"}</span>
-          </label>
-          <textarea className={"ta"} id={"drqR"} maxLength={2000} placeholder={"For example: every page, readable, not expired"}></textarea>
+          <fieldset className={"fld"}>
+            <legend>{"Accepted formats"}</legend>
+            {DOC_REQUEST_FORMATS.map((format) => (
+              <label key={format.value} className={"check"}>
+                <input type={"checkbox"} name={"drqF"} value={format.value} defaultChecked={format.on} />
+                <span>{format.label}</span>
+              </label>
+            ))}
+          </fieldset>
         </div>
         <p className={"lock"} style={{ fontSize: "13.5px", marginTop: "10px" }}>
           <Icon name={"file-check"} cls={"ic s"} />
