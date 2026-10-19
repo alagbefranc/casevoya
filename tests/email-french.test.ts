@@ -83,6 +83,8 @@ const VARIANTS: { [K in Catalogued]: EmailContexts[K][] } = {
   ],
   EM16c: [
     { firmName: FIRM, startsAt: "2026-10-27T14:30:00Z", timeZone: "America/Toronto", portal: true },
+    { firmName: FIRM, startsAt: "2026-10-27T14:30:00Z", timeZone: "America/Toronto", portal: true, cancelledBy: "client" },
+    { firmName: FIRM, portal: false, cancelledBy: "client" },
     { firmName: FIRM, startsAt: "2026-10-27T14:30:00Z", timeZone: "America/Toronto", portal: false, bookingPage: "maple-example" },
     { firmName: FIRM, portal: false, bookingPage: "../evil" },
     { firmName: FIRM, portal: false },

@@ -163,6 +163,8 @@ function contextFor(design: Wired, context: Context, firm: string): EmailContext
         timeZone: textOf(context.time_zone) || null,
         portal: context.portal === true,
         bookingPage: textOf(context.booking_page) || null,
+        // Portal appointments: the attendee cancelled from their portal; anything else is the firm.
+        cancelledBy: textOf(context.cancelled_by) === "client" ? "client" : "staff",
       };
     case "EM08-staff":
     case "EM09":

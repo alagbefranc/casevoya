@@ -78,8 +78,11 @@ export type EmailContexts = {
     address?: string | null;
   };
   EM16b: FirmContext & { startsAt?: string | null; timeZone?: string | null; portal?: boolean };
-  /** bookingPage: the firm's slug when it has a booking page this attendee can use (no portal). */
-  EM16c: FirmContext & { startsAt?: string | null; timeZone?: string | null; portal?: boolean; bookingPage?: string | null };
+  /**
+   * bookingPage: the firm's slug when it has a booking page this attendee can use (no portal).
+   * cancelledBy: "client" when the attendee cancelled from their portal; otherwise the firm did.
+   */
+  EM16c: FirmContext & { startsAt?: string | null; timeZone?: string | null; portal?: boolean; bookingPage?: string | null; cancelledBy?: "client" | "staff" | null };
   EM17: FirmContext & { approverName?: string | null; minutes?: number | null; endsAt?: string | null; timeZone?: string | null };
   EM18a: FirmContext;
   EM18b: FirmContext & { daysPastDue?: number | null };
@@ -635,26 +638,34 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
     audience: "client",
     brand: "firm",
     trigger:
-      "Staff cancel an upcoming confirmed consultation (outbox booking.cancelled, template consultation_cancelled), to the attendee. Portal attendees get the portal button; others get the firm's booking page when it has a published one they can use, otherwise no button",
+      "Staff cancel an upcoming confirmed consultation, or the attendee cancels it from their portal (outbox booking.cancelled, template consultation_cancelled; cancelled_by says which), to the attendee. Portal attendees get the portal button; others get the firm's booking page when it has a published one they can use, otherwise no button",
     status: "wired",
     ctaTarget: PATHS.portalAppointments,
-    mergeFields: ["firm_name", "starts_at", "time_zone", "portal", "booking_page"],
+    mergeFields: ["firm_name", "starts_at", "time_zone", "portal", "booking_page", "cancelled_by"],
     sample: { firmName: SYNTHETIC_FIRM, startsAt: "2026-10-27T14:30:00Z", timeZone: "America/Toronto", portal: true },
     build(context, origin) {
       const firmName = firm(context);
       const when = dateTimeIn(context.startsAt, context.timeZone);
-      const which = when ? `Your consultation on ${when} (${zoneLabel(context.timeZone)})` : "Your consultation";
+      // Who cancelled: the attendee from their portal, or the firm.
+      const self = context.cancelledBy === "client";
+      const which = when
+        ? self
+          ? `You cancelled your consultation on ${when} (${zoneLabel(context.timeZone)}) with ${firmName}.`
+          : `Your consultation on ${when} (${zoneLabel(context.timeZone)}) was cancelled by ${firmName}.`
+        : self
+          ? `You cancelled your consultation with ${firmName}.`
+          : `Your consultation was cancelled by ${firmName}.`;
       const page = context.portal ? null : bookingPageHref(origin, context.bookingPage);
       const href = context.portal ? appLink(origin, PATHS.portalAppointments) : page;
       return copy({
-        subject: `${firmName} cancelled your consultation`,
+        subject: self ? `Your consultation with ${firmName} is cancelled` : `${firmName} cancelled your consultation`,
         preheader: context.portal
           ? "You can book another time in your portal."
           : page
             ? "You can book another time online."
             : "To book another time, contact the firm.",
         heading: "Your consultation was cancelled",
-        body: `${which} was cancelled by ${firmName}.${href ? "" : ` To book another time, contact ${firmName}.`}`,
+        body: `${which}${href ? "" : ` To book another time, contact ${firmName}.`}`,
         cta: href ? cta("Book another time", href) : null,
         spot: "reminder",
         brand: firmBrand(context),

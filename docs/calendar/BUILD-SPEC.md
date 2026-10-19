@@ -466,7 +466,13 @@ normalises to `booking_fee.succeeded` / `booking_fee.failed`. `record_stripe_eve
 3. Public slots and hold API, the free booking path, the `/book/[firm]/[event]` UI, `booking_confirmed` mail and
    ICS.
 4. Staff settings (types, availability, overrides), calendar, consultations.
-5. Manage flow: OTP, reschedule, cancel, reminder templates and cron.
+5. Manage flow: OTP, reschedule, cancel, reminder templates and cron. **Status 2026-10-19 (branch
+   `portal-appointment-actions`):** the portal part is built: a signed-in client moves or cancels their own
+   upcoming consultation from Appointments (`portal_reschedule_booking`, `portal_cancel_booking`,
+   `portal_booking_availability`; minimum notice and booking window enforced for clients, late cancellations
+   recorded), EM16b/EM16c to the client (EM16c says who cancelled), in-app notices to the host and owner, and
+   "Join video call" as the firm's stored meeting link from 10 minutes before the call. Not built: the OTP
+   "Manage your booking" link for bookers without a portal, reminder templates and cron.
 6. Paid consultations: PR #19 webhook branch, hold expiry cron, Payment Element, receipt, refunds.
 7. LiveKit video: token + admit routes, room lifecycle hooks, `/call/[ref]` UI (PreJoin, lobby, grid, screen share,
    chat), webhook route. Start on LiveKit Cloud Build; self-host switch is config only.
