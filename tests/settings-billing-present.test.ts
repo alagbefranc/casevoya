@@ -99,8 +99,14 @@ describe("Settings > Subscription", () => {
     expect(data.dialog).toBeNull();
     expect(data.note).toContain("Prices are in CAD and set by Casevoya");
     // A catalog with no prices shows no amount at all, and the dialog says "No price set".
-    const bare = subscriptionPage({ firmName: "Synthetic Firm", subscription: { status: "trial", trial_started_at: null, trial_ends_at: null }, usage: null, timeZone: ZONE, now: NOW, detail: detail({ subscription: { status: "trial", plan: null, has_billing_account: false, has_stripe_subscription: false }, entitlements: { status: "trial", plan: null, basis: "trial" }, catalog: {} }), canManage: true, organizationId: "org" });
-    expect(bare.rows[0]).toEqual(["Plan", "None chosen yet. Your trial has Solo allowances."]);
+    const bare = subscriptionPage({ firmName: "Synthetic Firm", subscription: { status: "trial", trial_started_at: null, trial_ends_at: null }, usage: null, timeZone: ZONE, now: NOW, detail: detail({ subscription: { status: "trial", plan: null, has_billing_account: false, has_stripe_subscription: false }, entitlements: { status: "trial", plan: null, basis: "trial", seats: null, matters: null, storage_gb: null }, catalog: {} }), canManage: true, organizationId: "org" });
+    expect(bare.rows.slice(0, 5)).toEqual([
+      ["Plan", "None chosen yet. No seat or matter limits apply during the trial."],
+      ["State", "Trial, no end date set"],
+      ["Seats", "2 in use. No seat limit until you choose a plan."],
+      ["Active matters", "3 in use (1 sample, not counted). No limit until you choose a plan."],
+      ["Storage", "No documents stored yet. No allowance until you choose a plan."],
+    ]);
     expect(JSON.stringify(bare.rows)).not.toMatch(/CAD|\b(129|299|599)\b/);
     expect(bare.dialog?.plans.map((plan) => plan.allowances)).toEqual(["No price set", "No price set", "No price set", "Arranged with Casevoya: no limits set here"]);
     expect(planTotalText(null, "solo", "month", 0)).toBe("No price set");

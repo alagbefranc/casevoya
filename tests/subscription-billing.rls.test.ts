@@ -192,7 +192,7 @@ async function newMatter(ctx: Awaited<ReturnType<typeof firm>>, sample = false):
 }
 
 describe("plan catalog and entitlements", () => {
-  it("serves the configured plans to any signed-in user, never to anon, and gives a trial Solo allowances", async () => {
+  it("serves the configured plans to any signed-in user, never to anon, and limits nothing during a trial", async () => {
     const ctx = await firm();
     await as(ctx.assistant, ctx.orgId);
     const catalog = await db.query<{ catalog: Row }>(`select public.subscription_plan_catalog() as catalog`);
@@ -209,7 +209,7 @@ describe("plan catalog and entitlements", () => {
 
     await as(ctx.assistant, ctx.orgId);
     const ent = await db.query<{ ent: Row }>(`select public.subscription_entitlements($1) as ent`, [ctx.orgId]);
-    expect(ent.rows[0].ent).toEqual({ status: "trial", plan: null, basis: "trial", seats: 2, matters: 100, storage_gb: 25, extra_seats: 0, new_work_blocked: false });
+    expect(ent.rows[0].ent).toEqual({ status: "trial", plan: null, basis: "trial", seats: null, matters: null, storage_gb: null, extra_seats: 0, new_work_blocked: false });
     // Another firm's staff cannot read this firm's allowances.
     const other = await firm();
     await as(other.assistant, other.orgId);
@@ -223,7 +223,7 @@ describe("plan catalog and entitlements", () => {
       const page = await db.query<{ page: Row }>(`select public.firm_subscription($1) as page`, [ctx.orgId]);
       const data = page.rows[0].page as { subscription: Row; entitlements: Row; usage: Row; catalog: Row; invoices: unknown[]; grace: Row };
       expect(data.subscription).toMatchObject({ status: "trial", plan: null, has_billing_account: false, has_stripe_subscription: false });
-      expect(data.entitlements).toMatchObject({ basis: "trial", seats: 2 });
+      expect(data.entitlements).toMatchObject({ basis: "trial", seats: null, matters: null });
       expect(data.usage).toMatchObject({ seats_active: 4, active_matters: 0 });
       expect(data.catalog).toMatchObject({ currency: "CAD" });
       expect(data.invoices).toEqual([]);
@@ -449,10 +449,25 @@ describe("Stripe billing events", () => {
 });
 
 describe("entitlements where work is created", () => {
-  it("refuses a staff invitation beyond the seat allowance, naming the limit; a plan with extra seats lifts it", async () => {
+  it("limits nothing during a trial or an ended trial: a third staff member and many matters are fine", async () => {
+    const ctx = await firm();
+    // The firm already has four staff; a trial may invite more and open matters freely.
+    await invite(ctx.owner, ctx.orgId, "fifth@example.test");
+    await invite(ctx.owner, ctx.orgId, "sixth@example.test");
+    for (let n = 0; n < 3; n += 1) expect((await newMatter(ctx)).ok).toBe(true);
+    await setSubscription(ctx.orgId, `status = 'trial_ended'`);
+    await invite(ctx.owner, ctx.orgId, "seventh@example.test");
+    expect((await newMatter(ctx)).ok).toBe(true);
+    await as(ctx.owner, ctx.orgId);
+    const ent = await db.query<{ ent: Row }>(`select public.subscription_entitlements($1) as ent`, [ctx.orgId]);
+    expect(ent.rows[0].ent).toMatchObject({ status: "trial_ended", basis: "trial", seats: null, matters: null, new_work_blocked: false });
+  });
+
+  it("refuses a staff invitation beyond the chosen plan's seat allowance, naming the limit; extra seats lift it", async () => {
     const owner = await createUser(email("owner"));
     const orgId = await createOrg(owner);
-    // Trial: Solo allowances, 2 seats. The owner holds one.
+    // Solo: 2 seats. The owner holds one.
+    await applyEvent(subscriptionEvent(orgId, "customer.subscription.created", { plan: "solo", extra_seats: 0 }));
     await invite(owner, orgId, "first@example.test");
     await expectDbError(() => invite(owner, orgId, "second@example.test"), /seat allowance reached: 2 of 2 staff seats are in use; add a seat in Settings > Subscription/);
     // Inviting the same person again replaces the open invitation and takes no extra seat.
@@ -463,7 +478,7 @@ describe("entitlements where work is created", () => {
     await invite(owner, orgId, "second@example.test");
     await expectDbError(() => invite(owner, orgId, "third@example.test"), /seat allowance reached/);
     // Solo (2 seats) plus one extra seat: three in all.
-    await applyEvent(subscriptionEvent(orgId, "customer.subscription.created", { plan: "solo", extra_seats: 1 }));
+    await applyEvent(subscriptionEvent(orgId, "customer.subscription.updated", { plan: "solo", extra_seats: 1 }));
     await as(owner, orgId);
     const ent = await db.query<{ ent: Row }>(`select public.subscription_entitlements($1) as ent`, [orgId]);
     expect(ent.rows[0].ent).toMatchObject({ plan: "solo", seats: 3, extra_seats: 1 });
@@ -474,8 +489,9 @@ describe("entitlements where work is created", () => {
     await invite(owner, orgId, "fourth@example.test");
   });
 
-  it("refuses a real matter beyond the active-matter allowance; sample matters never count; a bigger plan lifts it", async () => {
+  it("refuses a real matter beyond the chosen plan's active-matter allowance; sample matters never count; a bigger plan lifts it", async () => {
     const ctx = await firm();
+    await applyEvent(subscriptionEvent(ctx.orgId, "customer.subscription.created", { plan: "solo", extra_seats: 0 }));
     await asMaintenance(db);
     await db.query(`update public.product_settings set value = jsonb_set(value, '{solo,matters}', '1'::jsonb) where key = 'subscription.plans'`);
     try {
@@ -487,7 +503,7 @@ describe("entitlements where work is created", () => {
       // Sample matters are still fine.
       expect((await newMatter(ctx, true)).ok).toBe(true);
       // Practice raises the allowance.
-      await applyEvent(subscriptionEvent(ctx.orgId, "customer.subscription.created", { plan: "practice" }));
+      await applyEvent(subscriptionEvent(ctx.orgId, "customer.subscription.updated", { plan: "practice" }));
       expect((await newMatter(ctx)).ok).toBe(true);
     } finally {
       await asMaintenance(db);

@@ -33,7 +33,7 @@ insert into public.product_settings (key, value, description, pending_confirmati
   (
     'subscription.plans',
     '{"currency":"CAD","annual_months":10,"extra_seat_monthly_cents":2500,"solo":{"monthly_cents":12900,"seats":2,"matters":100,"storage_gb":25},"practice":{"monthly_cents":29900,"seats":6,"matters":500,"storage_gb":100},"firm":{"monthly_cents":59900,"seats":15,"matters":1500,"storage_gb":250}}'::jsonb,
-    'Plan prices in CAD cents per month (annual = annual_months × monthly), staff seats and active-matter allowances, confirmed by Francis 2026-10-19. storage_gb is a proposed allowance pending costing. Enterprise has no price: contact Casevoya. A trial gets Solo allowances.',
+    'Plan prices in CAD cents per month (annual = annual_months × monthly), staff seats and active-matter allowances, confirmed by Francis 2026-10-19. storage_gb is a proposed allowance pending costing. Enterprise has no price: contact Casevoya. Allowances apply only once a plan is chosen; a trial has none.',
     true
   ),
   (
@@ -304,10 +304,12 @@ revoke all on function app.sync_subscription_state(uuid) from public, anon;
 grant execute on function app.sync_subscription_state(uuid) to authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
--- Entitlements (ADM-02): what the firm's state allows. Null = no limit (enterprise).
--- A trial, an ended trial and a firm with no plan get Solo allowances. new_work_blocked is true
--- in restricted, cancelled and archived: new staff invites, real matters and real client invites
--- wait for a plan; reads and exports never do.
+-- Entitlements (ADM-02): what the firm's state allows. Null = no limit. Allowances are ENFORCED
+-- only once a plan is chosen (decision 2026-10-19, pending Francis): a trial, an ended trial and a
+-- firm with no plan have no seat, matter or storage limit (basis 'trial'; the trial_ended rules on
+-- real client invites stay). Enterprise has no limits either. new_work_blocked is true in
+-- restricted, cancelled and archived: new staff invites, real matters and real client invites wait
+-- for a plan; reads and exports never do.
 -- ---------------------------------------------------------------------------
 create function app.subscription_entitlements(p_org uuid)
 returns jsonb
@@ -340,26 +342,29 @@ begin
     basis := 'plan';
     plan_key := sub.plan::text;
   else
-    basis := 'trial';
-    plan_key := 'solo';
+    -- No plan yet: nothing is limited until one is chosen.
+    return jsonb_build_object(
+      'status', status, 'plan', null, 'basis', 'trial', 'seats', null, 'matters', null, 'storage_gb', null,
+      'extra_seats', 0, 'new_work_blocked', status in ('restricted', 'cancelled', 'archived')
+    );
   end if;
   seats := (catalog -> plan_key ->> 'seats')::integer;
   matters := (catalog -> plan_key ->> 'matters')::integer;
   storage := (catalog -> plan_key ->> 'storage_gb')::integer;
   return jsonb_build_object(
     'status', status,
-    'plan', case when basis = 'plan' then sub.plan::text else null end,
+    'plan', sub.plan::text,
     'basis', basis,
-    'seats', case when seats is null then null else seats + case when basis = 'plan' then sub.extra_seats else 0 end end,
+    'seats', case when seats is null then null else seats + sub.extra_seats end,
     'matters', matters,
     'storage_gb', storage,
-    'extra_seats', case when basis = 'plan' then sub.extra_seats else 0 end,
+    'extra_seats', sub.extra_seats,
     'new_work_blocked', status in ('restricted', 'cancelled', 'archived')
   );
 end;
 $$;
 comment on function app.subscription_entitlements(uuid) is
-  'Seats (plan seats + extra seats), active-matter and storage allowances for the firm''s current state; null means no limit. Trial and no plan: Solo allowances. new_work_blocked in restricted, cancelled, archived.';
+  'Seats (plan seats + extra seats), active-matter and storage allowances for the firm''s current state; null means no limit. Enforced only once a plan is chosen: a trial or an ended trial has no limits. new_work_blocked in restricted, cancelled, archived.';
 revoke all on function app.subscription_entitlements(uuid) from public, anon;
 grant execute on function app.subscription_entitlements(uuid) to authenticated, service_role;
 

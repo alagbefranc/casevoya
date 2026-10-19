@@ -343,9 +343,10 @@ export function subscriptionPage(input: {
   let planText: string;
   if (ent?.basis === "plan" && ent.plan) planText = planLabel(catalog, ent.plan, sub?.billing_interval ?? null, sub?.extra_seats ?? 0);
   else if (ent?.basis === "enterprise") planText = planLabel(catalog, "enterprise", null);
-  else if (ent?.basis === "trial" && state === "trial") planText = "None chosen yet. Your trial has Solo allowances.";
-  else if (ent?.basis === "trial") planText = "None chosen yet. Solo allowances apply until you choose one.";
+  else if (ent?.basis === "trial" && state === "trial") planText = "None chosen yet. No seat or matter limits apply during the trial.";
+  else if (ent?.basis === "trial") planText = "None chosen yet. Limits apply once you choose a plan.";
   else planText = "None chosen yet.";
+  const trialLimit = ent?.basis === "trial" ? " until you choose a plan." : "";
 
   const rows: [string, string][] = [
     ["Plan", planText],
@@ -360,15 +361,15 @@ export function subscriptionPage(input: {
     const sample = usage.sample_matters ? ` (${usage.sample_matters} sample, not counted)` : "";
     const storage = ent?.storage_gb ?? null;
     rows.push(
-      ["Seats", ofLimit(usage.seats_active, seatsLimit, `${extra}${invited}`, "No seat limit is set.")],
-      ["Active matters", ofLimit(realMatters, ent ? ent.matters : null, sample, "No limit is set.")],
+      ["Seats", ofLimit(usage.seats_active, seatsLimit, `${extra}${invited}`, trialLimit ? `No seat limit${trialLimit}` : "No seat limit is set.")],
+      ["Active matters", ofLimit(realMatters, ent ? ent.matters : null, sample, trialLimit ? `No limit${trialLimit}` : "No limit is set.")],
       [
         "Storage",
         storage !== null
           ? `${usage.storage_bytes ? (usage.storage_bytes / 1024 ** 3).toFixed(1) : "0"} of ${storage} GB`
           : usage.storage_bytes
-            ? `${storageSize(usage.storage_bytes)} of documents. No allowance is set.`
-            : "No documents stored yet. No allowance is set.",
+            ? `${storageSize(usage.storage_bytes)} of documents. No allowance${trialLimit || " is set."}`
+            : `No documents stored yet. No allowance${trialLimit || " is set."}`,
       ],
       ["Vo runs this month", `${usage.vo_runs_month} ${since}`],
       ["Emails sent this month", `${usage.emails_month} ${since}`],
