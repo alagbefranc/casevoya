@@ -137,6 +137,10 @@ export function ChatView({ data }: { data: ChatData }) {
   // The Vo draft now in the composer (staff only): Send sends the reviewed text of that draft.
   const [voDraft, setVoDraft] = useState<string | null>(null);
   const [voBusy, setVoBusy] = useState(false);
+  // The records Vo cited for the draft now in the composer (labels only).
+  const [voSources, setVoSources] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const voMenu = useRef<HTMLDetailsElement>(null);
   useFit(root, view);
 
   const thread = data.threads.find((row) => row.id === selected) ?? null;
@@ -232,6 +236,7 @@ export function ChatView({ data }: { data: ChatData }) {
     // A Vo draft belongs to its own conversation.
     if (voDraft) {
       setVoDraft(null);
+      setVoSources([]);
       setText("");
     }
     const url = new URL(window.location.href);
@@ -290,6 +295,7 @@ export function ChatView({ data }: { data: ChatData }) {
     };
     setPending((list) => [...list, row]);
     setVoDraft(null);
+    setVoSources([]);
     setText("");
     setDocs([]);
     setCritical(false);
@@ -331,20 +337,31 @@ export function ChatView({ data }: { data: ChatData }) {
 
   const askVo = async (kind: "message_reply" | "document_request") => {
     if (!thread || voBusy) return;
+    if (voMenu.current) voMenu.current.open = false;
     setVoBusy(true);
     setNotice(null);
     const result = await draftWithVo({ organizationId: data.organizationId, threadId: thread.id, kind });
     setVoBusy(false);
     if ("error" in result) return setNotice(result.error);
-    if ("abstained" in result) return setNotice("Vo didn’t draft this one: it needs a consultant (advice, eligibility or a rule without an approved source). Please answer it yourself.");
+    if ("abstained" in result) return showInfo("Vo didn’t draft this one: it needs a consultant (advice, eligibility or a rule without an approved source). Please answer it yourself.");
     setVoDraft(result.draftId);
+    setVoSources(result.sources.map((source) => source.label));
     setText(result.text);
-    if (result.needsRule) setNotice("Vo’s draft is in the box. Replace “[needs a sourced rule]” with a checked, sourced fact, or remove it, then review and send.");
-    else showInfo(`Vo’s draft is in the box. Review and edit it before you send. Sources: ${result.sources.map((source) => source.label).join(", ")}.`);
+    if (result.needsRule) setNotice("Replace “[needs a sourced rule]” with a checked, sourced fact, or remove it, then review and send.");
     requestAnimationFrame(() => {
       grow();
       input.current?.focus();
     });
+  };
+
+  // A machine draft in French for the sender to review and edit; only the text they send is stored.
+  const translate = async () => {
+    const draft = draftTranslation;
+    if (!draft || !text.trim()) return;
+    const result = await draft(text, "fr-CA");
+    if ("error" in result) return setNotice(result.error);
+    setText(result.text);
+    requestAnimationFrame(grow);
   };
 
   const acknowledge = async (message: ChatMessage) => {
@@ -364,6 +381,10 @@ export function ChatView({ data }: { data: ChatData }) {
     window.location.assign(result.url);
   };
 
+  const needle = query.trim().toLowerCase();
+  const shownThreads = needle
+    ? data.threads.filter((row) => `${row.title} ${row.preview} ${row.matterTitle}`.toLowerCase().includes(needle))
+    : data.threads;
   const sendingHere = live.filter((row) => row.threadId === (thread?.id ?? NEW));
   const busy = sendingHere.some((row) => row.state === "sending");
   const attachTo = thread ? thread.audienceIds : audiencePeople ?? [];
@@ -394,6 +415,13 @@ export function ChatView({ data }: { data: ChatData }) {
             </button>
           ) : null}
         </div>
+        {data.threads.length > 3 ? (
+          <label className="cv-search">
+            <Icon name="search" />
+            <span className="cv-sr">Search conversations</span>
+            <input type="search" value={query} placeholder="Search" onChange={(event) => setQuery(event.target.value)} />
+          </label>
+        ) : null}
         <div className="cv-threads">
           {data.threads.length === 0 ? (
             <p className="cv-none">
@@ -405,7 +433,7 @@ export function ChatView({ data }: { data: ChatData }) {
             </p>
           ) : (
             <ul style={{ listStyle: "none" }}>
-              {data.threads.map((row) => (
+              {shownThreads.map((row) => (
                 <li key={row.id}>
                   <ThreadRow row={row} data={data} current={row.id === selected} unread={readThreads.includes(row.id) ? 0 : row.unread} onOpen={() => open(row.id)} />
                 </li>
@@ -520,59 +548,81 @@ export function ChatView({ data }: { data: ChatData }) {
                   </select>
                 </label>
               ) : null}
-              {composing && data.mode === "staff" ? (
-                <fieldset className="cv-pick">
-                  <legend className="cv-sr">Who can read it</legend>
-                  {data.audienceOptions.map((option) => (
-                    <label key={option.personId}>
-                      <input
-                        type="checkbox"
-                        checked={people.includes(option.personId)}
-                        onChange={(event) =>
-                          setPeople((list) => (event.target.checked ? [...list, option.personId] : list.filter((id) => id !== option.personId)))
-                        }
-                      />
-                      {option.name}
-                      <span style={{ color: "var(--t2)" }}>{option.role}</span>
-                    </label>
-                  ))}
-                </fieldset>
-              ) : null}
-              <p className="cv-aud" id="cv-aud">
-                <Icon name="eye" />
-                {audience ? (
-                  <span>
-                    Visible to: <b>{audience.visible}</b>
-                    {audience.hidden ? `. ${audience.hidden}.` : "."}
-                  </span>
-                ) : (
-                  <span>Choose who can read it before you write.</span>
-                )}
-              </p>
-              {docs.length ? (
-                <div className="cv-sel">
-                  {docs.map((id) => (
-                    <span key={id} className="cv-chip">
-                      <Icon name="paperclip" />
-                      {docName.get(id) ?? "Document"}
-                      <button type="button" aria-label={`Remove ${docName.get(id) ?? "document"}`} onClick={() => setDocs((list) => list.filter((doc) => doc !== id))}>
-                        <Icon name="close" />
-                      </button>
+              <div className={`cv-box${voDraft ? " vo" : ""}`}>
+                {composing && data.mode === "staff" ? (
+                  <fieldset className="cv-pick">
+                    <legend className="cv-sr">Who can read it</legend>
+                    <span className="cv-to" aria-hidden="true">To</span>
+                    {data.audienceOptions.map((option) => (
+                      <label key={option.personId}>
+                        <input
+                          type="checkbox"
+                          checked={people.includes(option.personId)}
+                          onChange={(event) =>
+                            setPeople((list) => (event.target.checked ? [...list, option.personId] : list.filter((id) => id !== option.personId)))
+                          }
+                        />
+                        {option.name}
+                        <span className="cv-role">{option.role}</span>
+                      </label>
+                    ))}
+                  </fieldset>
+                ) : null}
+                <p className="cv-aud" id="cv-aud">
+                  <Icon name="eye" />
+                  {audience ? (
+                    <span>
+                      Visible to: <b>{audience.visible}</b>
+                      {audience.hidden ? `. ${audience.hidden}.` : "."}
                     </span>
-                  ))}
-                </div>
-              ) : null}
-              <div className="cv-row2">
-                <button
-                  type="button"
-                  className="cv-ib"
-                  aria-label="Attach a document"
-                  disabled={!data.documents.length}
-                  title={data.documents.length ? "Attach a document" : "No documents to attach yet"}
-                  onClick={() => attach.current?.showModal()}
-                >
-                  <Icon name="paperclip" />
-                </button>
+                  ) : (
+                    <span>Choose who can read it before you write.</span>
+                  )}
+                </p>
+                {voDraft ? (
+                  <div className="cv-vo" role="status">
+                    <span className="cv-vo-t">
+                      <Icon name="sparkles" />
+                      Vo draft. Review and edit before you send.
+                    </span>
+                    {voSources.length ? (
+                      <details className="cv-src">
+                        <summary>{voSources.length === 1 ? "1 source" : `${voSources.length} sources`}</summary>
+                        <ul>
+                          {voSources.map((label) => (
+                            <li key={label}>{label}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="cv-retry"
+                      onClick={() => {
+                        setVoDraft(null);
+                        setVoSources([]);
+                        setText("");
+                        setNotice(null);
+                        requestAnimationFrame(grow);
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                ) : null}
+                {docs.length ? (
+                  <div className="cv-sel">
+                    {docs.map((id) => (
+                      <span key={id} className="cv-chip">
+                        <Icon name="paperclip" />
+                        {docName.get(id) ?? "Document"}
+                        <button type="button" aria-label={`Remove ${docName.get(id) ?? "document"}`} onClick={() => setDocs((list) => list.filter((doc) => doc !== id))}>
+                          <Icon name="close" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
                 <label className="cv-sr" htmlFor="cv-input">Message</label>
                 <textarea
                   id="cv-input"
@@ -589,45 +639,63 @@ export function ChatView({ data }: { data: ChatData }) {
                   }}
                   onKeyDown={onKey}
                 />
-                <button type="button" className="btn p cv-send" onClick={send} disabled={!text.trim() || busy}>
-                  {busy ? "Sending…" : "Send"}
-                </button>
-              </div>
-              {data.mode === "staff" || draftTranslation ? (
-                <div className="cv-opts">
+                <div className="cv-tools">
+                  <button
+                    type="button"
+                    className="cv-ib"
+                    aria-label="Attach a document"
+                    disabled={!data.documents.length}
+                    title={data.documents.length ? "Attach a document" : "No documents to attach yet"}
+                    onClick={() => attach.current?.showModal()}
+                  >
+                    <Icon name="paperclip" />
+                  </button>
                   {data.mode === "staff" ? (
-                    <label>
+                    <label className="cv-tg" title="Critical instruction: ask them to acknowledge it">
                       <input type="checkbox" checked={critical} onChange={(event) => setCritical(event.target.checked)} />
-                      Critical instruction: ask them to acknowledge it
+                      <Icon name="alert" />
+                      <span aria-hidden="true">Critical</span>
+                      <span className="cv-sr">Critical instruction: ask them to acknowledge it</span>
                     </label>
                   ) : null}
-                  {/* HOOK(i18n/translate): render a "Draft in French" button here when draftTranslation is set. */}
+                  {/* HOOK(i18n/translate): shown once draftTranslation is set (src/modules/messages/translation-hook.ts). */}
+                  {draftTranslation ? (
+                    <button type="button" className="cv-tg" disabled={!text.trim()} onClick={() => void translate()}>
+                      <span>Draft in French</span>
+                    </button>
+                  ) : null}
                   {data.mode === "staff" && data.vo?.enabled && thread ? (
-                    <>
-                      <button
-                        type="button"
-                        className="btn sm"
-                        onClick={() => void askVo("message_reply")}
-                        disabled={voBusy || !data.vo.available}
-                        title={data.vo.available ? "Vo drafts a reply for you to review. Nothing is sent." : "Vo is unavailable right now. Write it yourself."}
+                    <details ref={voMenu} className="cv-menu">
+                      <summary
+                        className={`cv-vob${voBusy ? " busy" : ""}`}
+                        aria-disabled={voBusy || !data.vo.available ? "true" : undefined}
+                        title={data.vo.available ? "Vo drafts for you to review. Nothing is sent." : "Vo is unavailable right now. Write it yourself."}
+                        onClick={(event) => {
+                          if (voBusy || !data.vo?.available) event.preventDefault();
+                        }}
                       >
                         <Icon name="sparkles" />
-                        {voBusy ? "Vo is drafting…" : "Draft with Vo"}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn sm"
-                        onClick={() => void askVo("document_request")}
-                        disabled={voBusy || !data.vo.available}
-                        title={data.vo.available ? "Vo explains the open document requests. Nothing is sent." : "Vo is unavailable right now. Write it yourself."}
-                      >
-                        {"Explain requests with Vo"}
-                      </button>
-                      {voDraft ? <span>Vo draft: review before sending</span> : null}
-                    </>
+                        {voBusy ? "Vo is drafting…" : "Vo"}
+                        <Icon name="chevron-down" />
+                      </summary>
+                      <div className="cv-pop" role="menu">
+                        <button type="button" role="menuitem" onClick={() => void askVo("message_reply")}>
+                          <b>Draft with Vo</b>
+                          <small>A reply to the client’s latest message</small>
+                        </button>
+                        <button type="button" role="menuitem" onClick={() => void askVo("document_request")}>
+                          <b>Explain requests with Vo</b>
+                          <small>The open document requests, in plain words</small>
+                        </button>
+                      </div>
+                    </details>
                   ) : null}
+                  <span className="cv-hint" aria-hidden="true">Enter to send · Shift+Enter for a new line</span>
+                  <button type="button" className="btn p cv-send" onClick={send} disabled={!text.trim() || busy}>
+                    {busy ? "Sending…" : "Send"}
+                  </button>
                 </div>
-              ) : null}
+              </div>
             </div>
           </>
         )}
@@ -679,13 +747,15 @@ function ThreadRow({ row, data, current, unread, onOpen }: { row: ChatThread; da
     <button type="button" className={`cv-tr${unread ? " un" : ""}`} aria-current={current ? "true" : undefined} onClick={onOpen}>
       <span className={`cv-av${data.mode === "portal" ? " st" : ""}`} aria-hidden="true">{initialOf(row.title)}</span>
       <span className="cv-tm">
-        <b>{row.title}</b>
-        <small>{row.preview || row.matterTitle}</small>
+        <span className="cv-l1">
+          <b>{row.title}</b>
+          <time dateTime={row.lastAt}>{listTime(row.lastAt, data.now, data.timezone)}</time>
+        </span>
+        <span className="cv-l2">
+          <small>{row.preview || row.matterTitle}</small>
+          {unread ? <span className="cv-badge" aria-label={`${unread} unread`}>{unread}</span> : null}
+        </span>
         {data.mode === "portal" && data.matters.length > 1 ? <small>{row.matterTitle}</small> : null}
-      </span>
-      <span className="cv-meta">
-        <time dateTime={row.lastAt}>{listTime(row.lastAt, data.now, data.timezone)}</time>
-        {unread ? <span className="cv-badge" aria-label={`${unread} unread`}>{unread}</span> : null}
       </span>
     </button>
   );
