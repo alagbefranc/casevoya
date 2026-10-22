@@ -3,7 +3,7 @@ import type { NotificationsData } from "@/components/sheet/designer/notification
 import { createClient } from "@/lib/supabase/server";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
-import { matterLabel, notificationGroups, notificationsTab, readItems, unreadCount } from "@/modules/sheet/notifications-present";
+import { NOTIFICATION_READ_LIMIT, matterLabel, notificationGroups, notificationsTab, readItems, unreadCount } from "@/modules/sheet/notifications-present";
 import type { SheetQuery } from "@/modules/sheet/present";
 
 /**
@@ -15,7 +15,7 @@ export async function loadSheetNotifications(staff: SheetStaff, query: SheetQuer
   const supabase = await createClient({ organizationId: staff.organizationId });
   const [chrome, read] = await Promise.all([
     loadSheetChrome(staff, "/sheet/notifications"),
-    supabase.rpc("staff_notifications", { p_organization_id: staff.organizationId, p_limit: 100 }),
+    supabase.rpc("staff_notifications", { p_organization_id: staff.organizationId, p_limit: NOTIFICATION_READ_LIMIT }),
   ]);
   const items = readItems(read.error ? [] : read.data);
   const ids = [...new Set(items.map((item) => item.matter_id).filter((id): id is string => Boolean(id)))];
@@ -26,6 +26,8 @@ export async function loadSheetNotifications(staff: SheetStaff, query: SheetQuer
   const data: NotificationsData = {
     tab,
     unread: unreadCount(items),
+    // Only the newest rows are read: past that, the count is "at least".
+    more: items.length >= NOTIFICATION_READ_LIMIT,
     groups: notificationGroups({ items, tab, now: now.toISOString(), timezone: staff.timezone, matterName: name }),
     organizationId: staff.organizationId,
   };

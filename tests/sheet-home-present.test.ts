@@ -69,3 +69,11 @@ describe("home presentation", () => {
     expect(percent(23, 130)).toBe("18%");
   });
 });
+
+describe("home: an unusable firm timezone", () => {
+  it("falls back to the firm default (America/Toronto) instead of breaking Home", () => {
+    const at = new Date("2026-10-17T03:30:00Z");
+    expect(localNow("Not/AZone", at)).toEqual(localNow("America/Toronto", at));
+    expect(localNow("", at)).toEqual(localNow("America/Toronto", at));
+  });
+});

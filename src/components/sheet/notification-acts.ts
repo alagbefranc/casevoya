@@ -9,7 +9,11 @@ type Router = { push: (href: string) => void; refresh: () => void };
 export async function openNotification(row: HTMLElement, organizationId: string, router: Router) {
   const id = row.dataset.notif ?? "";
   const href = row.dataset.nav ?? "";
-  if (id && organizationId) await markNotificationsRead({ organizationId, ids: [id] });
+  if (id && organizationId) {
+    const result = await markNotificationsRead({ organizationId, ids: [id] }).catch(() => ({ error: "That couldn’t be marked read." }));
+    // Still open what it is about; say it stays unread.
+    if ("error" in result) toast2("It stays unread for now", { kind: "warn", sub: result.error });
+  }
   if (href.startsWith("/sheet/")) router.push(href);
   else router.refresh();
 }

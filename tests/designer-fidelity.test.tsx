@@ -2430,7 +2430,11 @@ describe("Designer fidelity: Notifications", () => {
     const header = renderToStaticMarkup(createElement(NotificationsHeader, { data }));
     expect(header).toContain('<button class="btn s sm" id="mar" data-org="00000000-0000-4000-8000-000000000001">Mark all read</button>');
     expect(header).toContain('<span class="pill">1 unread</span>');
+    // More rows than were read: the count is a floor.
+    expect(renderToStaticMarkup(createElement(NotificationsHeader, { data: { ...data, unread: 200, more: true } }))).toContain('<span class="pill">200+ unread</span>');
     const view = renderToStaticMarkup(createElement(SheetNotifications, { data }));
+    // Live: "Settings" goes to Settings › Notifications.
+    expect(view).toContain('Choose what reaches you by email in <a class="tl" href="/sheet/settings?tab=notifications">Settings</a>.');
     expect(view).toContain('<div class="li nfr rv" style="--i:2" data-notif="n1" data-nav="/sheet/matters/m1?tab=messages&amp;thread=t1"><span class="av" aria-hidden="true">SC</span>');
     // Stripping the live attributes leaves the Designer's row.
     expect(view.replace(/ data-(notif|nav)="[^"]*"/g, "")).toContain('<div class="li nfr rv" style="--i:2"><span class="av"');
