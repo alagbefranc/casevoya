@@ -361,7 +361,14 @@ export function usePort(
               toast2(result.message, { kind: "bad" });
               return;
             }
-            toast2("New code sent", { kind: "ok", sub: "Check the newest email. Older codes stop working." });
+            // The screen moved on instead of sending a code (the email was confirmed already).
+            if (result?.ok && result.message) {
+              button.removeAttribute("aria-disabled");
+              toast2(result.message, { kind: "ok" });
+              return;
+            }
+            // Supabase answers success without sending when the email is already confirmed, so don't promise a code.
+            toast2("If you haven’t confirmed yet, a new code is on its way", { kind: "ok", sub: "Check the newest email. Older codes stop working." });
             left = 30;
             tick();
           });
@@ -508,6 +515,15 @@ export function usePort(
         void navigator.clipboard?.writeText(secret);
       }
       if (label.trim() === "Print") window.print();
+    }, listen);
+
+    // A screen's own code can move the steps on (`#<step>`) or leave the page (a path), e.g. the
+    // portal code step once the email was confirmed through the link instead of the code.
+    root.addEventListener("port-go", (event) => {
+      const to = (event as CustomEvent<unknown>).detail;
+      if (typeof to !== "string" || stopped) return;
+      if (to.startsWith("#")) go(Number(to.slice(1)));
+      else if (to.startsWith("/") && !to.startsWith("//")) location.href = to;
     }, listen);
 
     root.dataset.ready = "1";

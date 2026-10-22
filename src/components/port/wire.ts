@@ -13,6 +13,7 @@ import {
   createTrialFirm,
   enrollAuthenticator,
   confirmPortalInvite,
+  continuePortalInvite,
   getAuthContext,
   issueRecoveryCodes,
   joinPortalInvite,
@@ -29,6 +30,7 @@ import {
   verifyEmailCode,
   verifyTotpCode,
 } from "@/app/auth/port-actions";
+import { toast2 } from "./kit";
 import type { PortEvent, PortResult } from "./use-port";
 
 type Ctx = Awaited<ReturnType<typeof getAuthContext>>;
@@ -148,6 +150,76 @@ function bindPortalSignIn(root: HTMLElement) {
   });
 }
 
+/** The password typed on the portal sign-in step (still in the hidden field on the code step). Not trimmed. */
+function portalPassword(root: ParentNode) {
+  return root.querySelector<HTMLInputElement>("#ppw")?.value ?? "";
+}
+
+/**
+ * Leaves the code step once the invitation was accepted without the code (the email was confirmed
+ * through its link): the Done step on accept-client, the portal elsewhere (use-port's `port-go`).
+ */
+function leaveCodeStep(root: HTMLElement, page: string, firstRequest: { purpose: string } | null | undefined) {
+  if (page === "accept-client") {
+    showFirstRequest(root, firstRequest);
+    const then = root.querySelector<HTMLElement>('[data-signin="code"] .otp')?.dataset.then || "#4";
+    root.dispatchEvent(new CustomEvent("port-go", { detail: then }));
+    return;
+  }
+  root.dispatchEvent(new CustomEvent("port-go", { detail: "/portal" }));
+}
+
+/**
+ * While the code step is up, notices a session started by the email's link in another tab of
+ * this browser (/auth/confirm sets the auth cookies, which every tab shares) and moves on, so the
+ * person isn't left waiting for a code they'll never type. Checks every few seconds and when the
+ * tab comes back into focus; only reads the local session (no request) until there is one.
+ */
+function watchForLinkSession(root: HTMLElement, invitedEmail: string | undefined, onSession: () => Promise<"done" | "stop" | "retry">) {
+  if (root.dataset.linkWatch === "1") return;
+  root.dataset.linkWatch = "1";
+  const supabase = createClient();
+  let busy = false;
+  // A session that the server still can't use (e.g. accepting failed) is tried a few times, not forever.
+  let tries = 0;
+  const stop = () => {
+    window.clearInterval(timer);
+    window.removeEventListener("focus", check);
+    document.removeEventListener("visibilitychange", check);
+    delete root.dataset.linkWatch;
+  };
+  async function check() {
+    if (!root.isConnected || signInPart(root) !== "code") {
+      stop();
+      return;
+    }
+    if (busy || document.visibilityState === "hidden") return;
+    busy = true;
+    try {
+      const { data } = await supabase.auth.getSession();
+      const email = data.session?.user?.email?.trim().toLowerCase();
+      if (!email || (invitedEmail && email !== invitedEmail)) return;
+      tries += 1;
+      const outcome = await onSession();
+      if (outcome === "retry" && tries >= 3) {
+        // The quiet tries showed nothing; say once that it needs the person now.
+        toast2("We couldn’t finish signing you in", {
+          kind: "bad",
+          sub: "Enter the six-digit code, or choose “I used the email link” to try again.",
+        });
+      }
+      if (outcome !== "retry" || tries >= 3) stop();
+    } catch {
+      // A failed check is tried again on the next tick.
+    } finally {
+      busy = false;
+    }
+  }
+  const timer = window.setInterval(() => void check(), 4000);
+  window.addEventListener("focus", check);
+  document.addEventListener("visibilitychange", check);
+}
+
 /** The Done step's first task: the person's real first open request, or nothing. */
 function showFirstRequest(root: ParentNode, request: { purpose: string } | null | undefined) {
   const card = root.querySelector<HTMLElement>("[data-first-request]");
@@ -170,6 +242,85 @@ export function usePortActions(page: string, token?: string) {
     async (event: PortEvent): Promise<PortResult> => {
       if (!ctx.current) ctx.current = await getAuthContext();
       const session = ctx.current;
+
+      /**
+       * Whether this invitation was already accepted by the person signed in here. The email's
+       * link opens a second tab of the accept screen, and the first tab's watcher (or the other
+       * tab) can accept before this one does; the invitation is then used, but they're in. Re-reads
+       * the invitation and the session. The invited email is known only while the invitation was
+       * open (the preview drops it after); when it is, the session must be that email.
+       */
+      const acceptedHere = async (): Promise<boolean> => {
+        if (!token) return false;
+        const known = invite.current?.invitee?.email?.trim().toLowerCase();
+        const opened = await previewPortalInvitation(token);
+        if ("error" in opened || asPreview(opened.preview)?.status !== "consumed") return false;
+        ctx.current = await getAuthContext();
+        const email = ctx.current.email?.trim().toLowerCase();
+        return ctx.current.signedIn && Boolean(email) && (!known || email === known);
+      };
+
+      /**
+       * The code step's way on when the email was confirmed through its link (see
+       * continuePortalInvite). `quiet`: the watcher found a session; nothing is shown on failure.
+       */
+      const continueFromLink = async (root: HTMLElement, quiet: boolean): Promise<"done" | "stop" | "retry"> => {
+        if (!token) return "stop";
+        if (!invite.current) {
+          const opened = await previewPortalInvitation(token);
+          if ("error" in opened) {
+            if (!quiet) toast2(opened.error ?? "This invitation could not be opened.", { kind: "bad" });
+            return "retry";
+          }
+          invite.current = asPreview(opened.preview);
+        }
+        const preview = invite.current;
+        if (!preview || preview.status !== "open") {
+          if (await acceptedHere()) {
+            leaveCodeStep(root, page, null);
+            return "done";
+          }
+          if (!quiet) toast2("This invitation can no longer be used.", { kind: "bad" });
+          return "stop";
+        }
+        const draft = portalAcceptPayload(root, preview, page);
+        if ("error" in draft) {
+          if (!quiet) toast2(draft.error, { kind: "bad" });
+          return "stop";
+        }
+        const joined = await continuePortalInvite({ token, password: quiet ? "" : portalPassword(root), payload: draft });
+        if (!joined || joined.ok === false) {
+          if (await acceptedHere()) {
+            leaveCodeStep(root, page, null);
+            return "done";
+          }
+          if (!quiet) toast2(joined?.message ?? "That didn’t work. Try again.", { kind: "bad" });
+          // A session for someone else won't become the invitee's by waiting.
+          return joined?.reason === "elsewhere" ? "stop" : "retry";
+        }
+        ctx.current = null;
+        leaveCodeStep(root, page, "firstRequest" in joined ? joined.firstRequest : null);
+        return "done";
+      };
+
+      const bindLinkConfirmed = (root: HTMLElement) => {
+        const link = root.querySelector<HTMLElement>("[data-link-confirmed]");
+        if (!link || link.dataset.bound === "1") return;
+        link.dataset.bound = "1";
+        link.addEventListener("click", (click) => {
+          click.preventDefault();
+          if (link.getAttribute("aria-disabled") === "true") return;
+          link.setAttribute("aria-disabled", "true");
+          void continueFromLink(root, false).finally(() => link.removeAttribute("aria-disabled"));
+        });
+      };
+
+      const showCodeStep = (root: HTMLElement) => {
+        showSignIn(root, "code");
+        bindLinkConfirmed(root);
+        const invited = invite.current?.invitee?.email?.trim().toLowerCase();
+        watchForLinkSession(root, invited, () => continueFromLink(root, true));
+      };
 
       if (event.type === "step") {
         if (page === "mfa" && event.step === 2 && !enrolled.current) {
@@ -224,11 +375,14 @@ export function usePortActions(page: string, token?: string) {
             heading.textContent = `Hi ${first}, welcome to your portal`;
           }
           if (preview?.status && preview.status !== "open") {
+            // Opened from the email's link after the other tab accepted: they're in already.
+            if (await acceptedHere()) event.root.dispatchEvent(new CustomEvent("port-go", { detail: "/portal" }));
             return { ok: false, message: "This invitation can no longer be used." };
           }
         }
         if (PORTAL_ACCEPT.has(page) && token) {
           bindPortalSignIn(event.root);
+          bindLinkConfirmed(event.root);
           if (event.step === portalSignInStep(page) && signInPart(event.root) !== "code") {
             if (!invite.current) {
               const opened = await previewPortalInvitation(token);
@@ -264,8 +418,19 @@ export function usePortActions(page: string, token?: string) {
 
       if (event.type === "resend") {
         if (PORTAL_ACCEPT.has(page) && token && session.configured) {
-          const sent = await resendPortalInviteCode(token);
+          const preview = invite.current;
+          const draft = preview && preview.status === "open" ? portalAcceptPayload(event.root, preview, page) : null;
+          const sent = await resendPortalInviteCode(token, {
+            password: portalPassword(event.root),
+            payload: draft && !("error" in draft) ? draft : undefined,
+          });
           if (sent && sent.ok === false) return sent;
+          if (sent && !sent.confirm) {
+            // Already confirmed through the email's link: signed in and accepted instead.
+            ctx.current = null;
+            leaveCodeStep(event.root, page, sent.firstRequest);
+            return { ok: true, message: "Your email is already confirmed. You’re in." };
+          }
           return sent ? { ok: true } : null;
         }
         return null;
@@ -280,11 +445,17 @@ export function usePortActions(page: string, token?: string) {
             invite.current = asPreview(opened.preview);
           }
           const preview = invite.current;
-          if (!preview || preview.status !== "open") return { ok: false, message: "This invitation can no longer be used." };
+          if (!preview || preview.status !== "open") {
+            if (await acceptedHere()) return { ok: true, href: "/portal" };
+            return { ok: false, message: "This invitation can no longer be used." };
+          }
           const draft = portalAcceptPayload(event.root, preview, page);
           if ("error" in draft) return { ok: false, message: draft.error };
-          const confirmed = await confirmPortalInvite({ token, code: event.code, payload: draft });
-          if (!confirmed || confirmed.ok === false) return confirmed;
+          const confirmed = await confirmPortalInvite({ token, code: event.code, payload: draft, password: portalPassword(event.root) });
+          if (!confirmed || confirmed.ok === false) {
+            if (await acceptedHere()) return { ok: true, href: "/portal" };
+            return confirmed;
+          }
           ctx.current = null;
           if (page === "accept-client") {
             showFirstRequest(event.root, "firstRequest" in confirmed ? confirmed.firstRequest : null);
@@ -407,11 +578,18 @@ export function usePortActions(page: string, token?: string) {
           invite.current = asPreview(opened.preview);
         }
         const preview = invite.current;
-        if (!preview || preview.status !== "open") return { ok: false, message: "This invitation can no longer be used." };
+        if (!preview || preview.status !== "open") {
+          if (await acceptedHere()) return { ok: true, href: "/portal" };
+          return { ok: false, message: "This invitation can no longer be used." };
+        }
         const draft = portalAcceptPayload(event.root, preview, page);
         if ("error" in draft) return { ok: false, message: draft.error };
         const saved = await savePortalInvitationDraft(token, { ...draft, step: event.step });
-        if ("error" in saved) return { ok: false, message: saved.error ?? "That draft could not be saved." };
+        if ("error" in saved) {
+          // The other tab may have accepted since this one read the invitation.
+          if (await acceptedHere()) return { ok: true, href: "/portal" };
+          return { ok: false, message: saved.error ?? "That draft could not be saved." };
+        }
         const finishing =
           (page === "accept-client" && event.step === 3) ||
           (page === "accept-family" && event.step === 3) ||
@@ -421,9 +599,18 @@ export function usePortActions(page: string, token?: string) {
         if (part === "passkey") {
           return { ok: false, message: "Passkeys are coming to Casevoya. Choose “Create a password” for now." };
         }
-        if (part === "code") return { ok: false, message: "Enter the six-digit code we emailed you." };
         let firstRequest: { purpose: string } | null = null;
-        if (part === "none" && session.signedIn) {
+        if (part === "code") {
+          // Continue on the code step: maybe the email was confirmed through its link.
+          const joined = await continuePortalInvite({ token, password: portalPassword(event.root), payload: draft });
+          if (!joined || joined.ok === false) {
+            if (await acceptedHere()) return { ok: true, href: "/portal" };
+            // The specific reason (wrong password, another account, still unconfirmed with both ways on).
+            return { ok: false, message: joined?.message ?? "Enter the six-digit code we emailed you, or use the link in that email, then choose “I used the email link”." };
+          }
+          firstRequest = "firstRequest" in joined ? joined.firstRequest : null;
+          ctx.current = null;
+        } else if (part === "none" && session.signedIn) {
           const accepted = await acceptPortalInvitation(token, draft);
           if ("error" in accepted) return { ok: false, message: accepted.error ?? "That invitation could not be accepted." };
         } else {
@@ -439,7 +626,7 @@ export function usePortActions(page: string, token?: string) {
           if (!joined) return null;
           if (joined.ok === false) return joined;
           if (joined.confirm) {
-            showSignIn(event.root, "code");
+            showCodeStep(event.root);
             event.root.querySelector<HTMLInputElement>('[data-signin="code"] .otp input')?.focus();
             return { ok: true, stay: true, message: "Check your email for a six-digit code." };
           }

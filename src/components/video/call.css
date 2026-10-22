@@ -151,3 +151,20 @@
     animation: none !important;
   }
 }
+
+/* A camera or microphone that didn't start: the person is in the call with it off. */
+.cv-call-device {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.cv-call-device .btn {
+  flex: none;
+}

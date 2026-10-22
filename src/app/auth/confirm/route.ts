@@ -3,6 +3,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { safeNext } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/server";
 
+/** An invitation screen the confirmation link was sent from. */
+function isInvitationReturn(next: string): boolean {
+  return next.startsWith("/invite/") || /^\/accept\/(client|family|sponsor)\?token=/.test(next);
+}
+
 // Exchanges the email link token for a session (Supabase Auth PKCE / token_hash flow).
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -21,8 +26,9 @@ export async function GET(request: NextRequest) {
     if (!error) return NextResponse.redirect(new URL(next, request.url));
   }
   // A sign-up link opened on another device or browser confirms the email but can't start a
-  // session there (no PKCE verifier). An invitee goes back to the invitation, where signing in
-  // with the password they chose finishes joining; anyone else signs in as usual.
-  if (next.startsWith("/invite/")) return NextResponse.redirect(new URL(next, request.url));
+  // session there (no PKCE verifier). An invitee goes back to the invitation (staff: /invite/…,
+  // portal: /accept/<role>?token=…), where signing in with the password they chose finishes
+  // joining; anyone else signs in as usual.
+  if (isInvitationReturn(next)) return NextResponse.redirect(new URL(next, request.url));
   return NextResponse.redirect(new URL("/sign-in?error=link_invalid", request.url));
 }
