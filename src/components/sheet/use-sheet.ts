@@ -1477,8 +1477,7 @@ const returnFocus = new WeakMap<HTMLElement, Element>();
 function openPalette(root: HTMLElement, go: (href: string) => void, group: HTMLElement | null = null) {
   const scope = group ? (group.querySelector(":scope > button span")?.textContent?.trim() ?? "group") : "all";
   const places = () => {
-    const seen = new Set<string>();
-    const entries: { href: string; label: string }[] = [];
+    const entries: { href: string; label: string; aliases: string[] }[] = [];
     // Menu items first, then the shortcut tiles, so a place keeps its menu name and link
     // (the Documents tile opens one matter's documents; the Invoices tile is Finance).
     const links = group
@@ -1488,12 +1487,15 @@ function openPalette(root: HTMLElement, go: (href: string) => void, group: HTMLE
       const href = link.getAttribute("href");
       if (!href || href === "#") continue;
       const label = paletteLabel(link);
-      // The sidebar repeats some places (a tile and a menu item): list each once.
+      // The sidebar repeats some places (a tile and a menu item): list each once, and keep the
+      // other name as something to search by (the Invoices tile finds Finance).
       const key = label.toLowerCase();
-      if (seen.has(key) || seen.has(href)) continue;
-      seen.add(key);
-      seen.add(href);
-      entries.push({ href, label });
+      const same = entries.find((entry) => entry.href === href || entry.label.toLowerCase() === key);
+      if (same) {
+        if (same.label.toLowerCase() !== key && !same.aliases.includes(label)) same.aliases.push(label);
+        continue;
+      }
+      entries.push({ href, label, aliases: [] });
     }
     return entries;
   };
@@ -1561,11 +1563,15 @@ function openPalette(root: HTMLElement, go: (href: string) => void, group: HTMLE
     scrim.addEventListener("click", (event) => {
       if (event.target === scrim) close();
     });
-    // Escape closes from anywhere in the palette, not only the input.
+    // Escape closes from anywhere in the palette, not only the input. Tab stays inside it (it is
+    // modal; the input is its one stop, and the arrow keys move through the list).
     scrim.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
         close();
+      } else if (event.key === "Tab") {
+        event.preventDefault();
+        input.focus();
       }
     });
     list.addEventListener("click", (event) => open((event.target as HTMLElement).closest<HTMLElement>("li") ?? undefined));
@@ -1576,7 +1582,8 @@ function openPalette(root: HTMLElement, go: (href: string) => void, group: HTMLE
     input.addEventListener("input", () => {
       const q = input.value.trim().toLowerCase();
       list.querySelectorAll<HTMLElement>("li").forEach((item) => {
-        item.hidden = Boolean(q) && !item.textContent.toLowerCase().includes(q);
+        const names = `${item.textContent} ${item.dataset.aliases ?? ""}`.toLowerCase();
+        item.hidden = Boolean(q) && !names.includes(q);
       });
       const shown = visible();
       none.hidden = shown.length > 0;
@@ -1606,6 +1613,7 @@ function openPalette(root: HTMLElement, go: (href: string) => void, group: HTMLE
         item.setAttribute("role", "option");
         item.setAttribute("aria-selected", "false");
         item.dataset.u = entry.href;
+        if (entry.aliases.length) item.dataset.aliases = entry.aliases.join(" ");
         item.textContent = entry.label;
         return item;
       }),
