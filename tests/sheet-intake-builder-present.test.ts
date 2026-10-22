@@ -46,7 +46,8 @@ describe("Intake form builder", () => {
       title: "About you v2",
       pills: [{ left: "Draft", right: "autosaved 2 min ago" }, "Used by 0 matters"],
       publishLabel: "Publish v2",
-      settings: { label: "Date of birth" },
+      // Keyed by the field so an autosave doesn't rebuild the label box mid-typing.
+      settings: { key: "dob", label: "Date of birth" },
       live: { templateId: "t2", version: 5, status: "draft" },
     });
     const none = builderPage([], new Map(), {}, NOW);

@@ -5,6 +5,7 @@ import {
   bookingPagesInOrder,
   bookingTypeState,
   buildWeek,
+  calendarConnections,
   consultationRow,
   daysSummary,
   deadlineNote,
@@ -129,5 +130,32 @@ describe("scheduling: booking page tab in sample mode", () => {
     expect(bookingTypeState(real)).toEqual({ tone: "ok", label: "Published" });
     expect(bookingTypeState({ is_published: false, is_sample: true })).toEqual({ tone: "gr", label: "Sample" });
     expect(bookingTypeState({ is_published: false, is_sample: false })).toEqual({ tone: "gr", label: "Not published" });
+  });
+});
+
+describe("scheduling: connected calendars on the Calendar page", () => {
+  const members = [
+    { membershipId: "m-owner", name: "Kim Owner" },
+    { membershipId: "m-cm", name: "Lee Case" },
+    { membershipId: "m-new", name: "Ana New" },
+  ];
+  const connections = [
+    { membership_id: "m-owner", toolkit: "googlecalendar", status: "active" },
+    { membership_id: "m-cm", toolkit: "googlecalendar", status: "pending" },
+    { membership_id: "m-new", toolkit: "gmail", status: "active" },
+  ];
+
+  it("shows each member's real Google Calendar connection to the firm owner", () => {
+    expect(calendarConnections(members, connections, { membershipId: "m-owner", owner: true }).map((row) => [row.name, row.chip.label, row.logo !== null])).toEqual([
+      ["Kim Owner", "Connected", true],
+      ["Lee Case", "Finishing setup", true],
+      ["Ana New", "Not connected", false],
+    ]);
+  });
+
+  it("shows anyone else only their own row (RLS hides other people's connections)", () => {
+    expect(calendarConnections(members, connections, { membershipId: "m-cm", owner: false })).toEqual([
+      { name: "Lee Case", tool: "Google Calendar", logo: "/assets/logos/googlecalendar.svg", chip: { tone: "chg", label: "Finishing setup" } },
+    ]);
   });
 });

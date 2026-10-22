@@ -16,6 +16,8 @@ type State = {
   selected: string | null;
   timer: number | undefined;
   saving: Promise<void> | null;
+  /** A change made while a save was on its way: saved right after it, with the version it returns. */
+  again: boolean;
   stale: boolean;
 };
 
@@ -40,6 +42,7 @@ function read(qs: HTMLElement): State {
     selected: qs.querySelector<HTMLElement>(".qq.on")?.dataset.key ?? fields[0]?.key ?? null,
     timer: undefined,
     saving: null,
+    again: false,
     stale: false,
   };
 }
@@ -76,10 +79,16 @@ export function mountIntakeBuilder(root: HTMLElement, router: Router, signal: Ab
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
   };
 
-  const save = async () => {
+  const save = async (): Promise<void> => {
     window.clearTimeout(state.timer);
     state.timer = undefined;
     if (state.fields.length === 0) return;
+    // One save at a time. Two quick changes would otherwise both send the same version and the
+    // second would come back as a conflict, dropping that change.
+    if (state.saving) {
+      state.again = true;
+      return state.saving;
+    }
     const run = (async () => {
       const result = await saveIntakeDraft({ organizationId: state.org, stableKey: state.key, title: state.title, schema: { fields: state.fields }, templateId: state.id, version: state.version });
       if ("error" in result) {
@@ -95,6 +104,10 @@ export function mountIntakeBuilder(root: HTMLElement, router: Router, signal: Ab
     state.saving = run;
     await run;
     state.saving = null;
+    if (state.again) {
+      state.again = false;
+      if (!state.stale) await save();
+    }
   };
 
   const later = () => {
@@ -198,7 +211,7 @@ export function mountIntakeBuilder(root: HTMLElement, router: Router, signal: Ab
         publish.setAttribute("aria-busy", "true");
         void (async () => {
           if (state.timer) await save();
-          if (state.saving) await state.saving;
+          while (state.saving) await state.saving;
           if (!state.id || state.version === null) {
             toast2("Nothing new to publish", { kind: "warn", sub: "Change a field first: your edit starts the next version as a draft." });
             return;

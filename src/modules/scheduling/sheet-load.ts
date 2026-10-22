@@ -29,6 +29,7 @@ import {
   bookingPagesInOrder,
   bookingTypeState,
   buildWeek,
+  calendarConnections,
   consultationRow,
   daysSummary,
   deadlineNote,
@@ -532,7 +533,7 @@ export async function loadSheetCalendar(staff: SheetStaff, query: SheetQuery): P
   const monthEnd = localToUtc(nextMonthFirst, "00:00", zone);
   const deadlines = () => supabase.from("deadlines").select(DEADLINE_COLUMNS).eq("organization_id", org);
 
-  const [bookings, weekDeadlines, upcomingDeadlines, members, monthBookings, monthDeadlines] = await Promise.all([
+  const [bookings, weekDeadlines, upcomingDeadlines, members, monthBookings, monthDeadlines, connections] = await Promise.all([
     tab === "week" ? loadBookings(supabase, org, weekStart, weekEnd, ["confirmed", "held", "completed", "no_show"]) : Promise.resolve([]),
     Promise.all([
       deadlines().gte("due_on", monday).lte("due_on", sunday).order("due_on", { ascending: true }).limit(200),
@@ -552,6 +553,7 @@ export async function loadSheetCalendar(staff: SheetStaff, query: SheetQuery): P
       deadlines().gte("due_on", monthFirst).lt("due_on", nextMonthFirst).limit(300),
       deadlines().gte("due_at", new Date(monthStart).toISOString()).lt("due_at", new Date(monthEnd).toISOString()).limit(300),
     ]),
+    supabase.from("staff_connections").select("membership_id, toolkit, status").eq("organization_id", org).eq("toolkit", "googlecalendar"),
   ]);
   const inWeek = uniqueDeadlines(weekDeadlines[0].data as DeadlineRow[] | null, weekDeadlines[1].data as DeadlineRow[] | null);
   const overdue = uniqueDeadlines(upcomingDeadlines[0].data as DeadlineRow[] | null, upcomingDeadlines[1].data as DeadlineRow[] | null).filter((row) =>
@@ -661,7 +663,7 @@ export async function loadSheetCalendar(staff: SheetStaff, query: SheetQuery): P
         day: (date) => href({ week: date }),
       }),
       deadlines: upcoming,
-      calendars: members.map((member) => ({ name: member.name, tool: "no calendar connected", logo: null, chip: { tone: "gr", label: "Not connected" } })),
+      calendars: calendarConnections(members, connections.data ?? [], { membershipId: staff.membershipId, owner: staff.role === "firm_owner" }),
       live: { emptyTitle: "No upcoming deadlines", emptyCopy: "Deadlines recorded on a matter appear here, with whether each is verified." },
     },
   };

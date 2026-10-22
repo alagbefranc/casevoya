@@ -33,7 +33,8 @@ export type IntakeBuilderData = {
   section: { left: string; right: string };
   palette: { label: string; type?: string }[];
   rows: IntakeRow[];
-  settings: { label: string; toggles: { label: string; on: boolean }[] };
+  /** key (live): the selected field's key. */
+  settings: { key?: string; label: string; toggles: { label: string; on: boolean }[] };
   vo: { draft: string; sources: string } | null;
   /** Live only: why Publish is off (no draft to publish yet). */
   publishDisabled?: string | null;
@@ -290,7 +291,8 @@ export function IntakeSettings({ data }: { data: IntakeBuilderData }) {
       <h4>{"Field settings"}</h4>
       <label style={{ fontSize: "14px", fontWeight: "500" }}>
         {"Label"}
-        <input key={data.settings.label} defaultValue={data.settings.label} style={LABEL_INPUT} />
+        {/* Keyed by the field, not its saved label: an autosave mid-typing must not rebuild the box under the cursor. */}
+        <input key={data.settings.key ?? data.settings.label} defaultValue={data.settings.label} style={LABEL_INPUT} />
       </label>
       <div className={"rank"} style={{ marginTop: "12px", fontSize: "14px" }}>
         {data.settings.toggles.map((toggle) => (
