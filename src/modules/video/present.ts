@@ -7,9 +7,27 @@
 export const CALL_OPENS_BEFORE_MS = 15 * 60_000;
 export const CALL_CLOSES_AFTER_MS = 30 * 60_000;
 
+/** A booking reference (bookings.public_ref): 26 base32 characters. */
+export const CALL_REF = /^[a-z2-7]{26}$/;
+
+const ROOM_NAME = /^cv-[0-9a-f]{32}$/;
+
+/** A LiveKit room name as the database makes it (app.video_room_name). */
+export function isRoomName(value: unknown): value is string {
+  return typeof value === "string" && ROOM_NAME.test(value);
+}
+
+/** The room name of a booking, the same as app.video_room_name: 'cv-' + the id without dashes. */
+export function roomNameFor(bookingId: string): string {
+  return `cv-${bookingId.replaceAll("-", "").toLowerCase()}`;
+}
+
+/** The join buttons' toast before the window opens. */
+export const CALL_WAIT_TOAST = "The call opens 15 minutes before the start";
+
 export type JoinView = {
   state: "open" | "early" | "closed" | "unavailable";
-  reason: "cancelled" | "not_confirmed" | "not_video" | null;
+  reason: "cancelled" | "not_confirmed" | "not_video" | "ended" | null;
   role: "host" | "client";
   title: string;
   startsAt: string;
@@ -41,13 +59,13 @@ export function parseJoinView(raw: unknown): JoinView | null {
   const opensAt = str(row.opens_at);
   const closesAt = str(row.closes_at);
   if (!title || !startsAt || !endsAt || !opensAt || !closesAt) return null;
-  const reason = row.reason === "cancelled" || row.reason === "not_confirmed" || row.reason === "not_video" ? row.reason : null;
+  const reason = row.reason === "cancelled" || row.reason === "not_confirmed" || row.reason === "not_video" || row.reason === "ended" ? row.reason : null;
   const roomName = str(row.room_name);
   const identity = str(row.identity);
   const name = str(row.name);
   const ttl = typeof row.ttl_seconds === "number" && Number.isFinite(row.ttl_seconds) ? Math.floor(row.ttl_seconds) : null;
   const grant =
-    state === "open" && roomName && /^cv-[0-9a-f]{32}$/.test(roomName) && identity && name && ttl
+    state === "open" && isRoomName(roomName) && identity && name && ttl
       ? { roomName, roomCreated: row.room_created === true, identity, name, admitted: row.admitted === true, ttlSeconds: ttl }
       : null;
   return {
@@ -76,6 +94,7 @@ export function callNotice(view: Pick<JoinView, "state" | "reason" | "firmName">
     case "closed":
       return { title: "This call has ended", copy: `To talk again, book another time or message ${view.firmName}.` };
     default:
+      if (view.reason === "ended") return { title: "The call was ended", copy: `Your host ended the call for everyone. If they start it again, reload this page to join. You can also message ${view.firmName}.` };
       if (view.reason === "cancelled") return { title: "This consultation was cancelled", copy: `To book another time, message ${view.firmName}.` };
       if (view.reason === "not_video") return { title: "This isn’t a Casevoya video call", copy: `${view.firmName} meets you another way for this consultation. Check your booking.` };
       return { title: "This call isn’t confirmed", copy: `Check the booking with ${view.firmName}.` };

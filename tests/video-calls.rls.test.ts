@@ -264,8 +264,23 @@ describe("video calls: ending and webhooks", () => {
     expect((await db.query<{ r: { room_name: string } }>(`select public.video_end($1, $2) as r`, [ctx.orgId, booking.public_ref])).rows[0].r.room_name).toBe(`cv-${booking.id.replaceAll("-", "")}`);
     await asMaintenance(db);
     expect((await db.query<{ status: string }>(`select status from public.video_sessions where booking_id = $1`, [booking.id])).rows[0].status).toBe("ended");
-    // Joining again inside the window creates the room again (with its limits).
+    // Ended for everyone: the client gets no token, not even a preview of an open call.
+    expect(await join(client(ctx.client.id, ctx.orgId), ctx.orgId, booking.public_ref)).toMatchObject({ state: "unavailable", reason: "ended" });
+    expect(await join(client(ctx.client.id, ctx.orgId), ctx.orgId, booking.public_ref, false)).toMatchObject({ state: "unavailable", reason: "ended" });
+    await asMaintenance(db);
+    expect((await db.query(`select 1 from public.video_participants where identity = $1`, [`client:${ctx.client.id}`])).rows).toHaveLength(0);
+    // The host restarts it inside the window (the room is created again, with its limits); then the client can join.
     expect(await join(staff(ctx.host.id, ctx.orgId), ctx.orgId, booking.public_ref)).toMatchObject({ state: "open", room_created: false });
+    expect(await join(client(ctx.client.id, ctx.orgId), ctx.orgId, booking.public_ref)).toMatchObject({ state: "open", role: "client", admitted: false });
+  });
+
+  it("a room that closes on its own (everyone left) is not an end: the client can rejoin", async () => {
+    const ctx = await firm();
+    const booking = await book(ctx);
+    const host = await join(staff(ctx.host.id, ctx.orgId), ctx.orgId, booking.public_ref);
+    await asServiceRole(db);
+    await db.query(`select public.apply_livekit_event($1::jsonb)`, [JSON.stringify({ id: `EV_${booking.id}`, event: "room_finished", room: { name: host.room_name } })]);
+    expect(await join(client(ctx.client.id, ctx.orgId), ctx.orgId, booking.public_ref)).toMatchObject({ state: "open", role: "client" });
   });
 
   it("LiveKit events move the room and the participants once each; unknown rooms are ignored", async () => {

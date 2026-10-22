@@ -15,7 +15,7 @@ import {
 } from "@livekit/components-react";
 import type { RemoteParticipant } from "livekit-client";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { callNotice, type JoinView } from "@/modules/video/present";
 
 type Back = { href: string; label: string };
@@ -40,6 +40,17 @@ function when(view: Pick<JoinView, "startsAt" | "endsAt">): string {
   const time = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
   const zone = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" }).formatToParts(start).find((part) => part.type === "timeZoneName")?.value ?? "";
   return `${day}, ${time.format(start)}–${time.format(end)} ${zone}`.trim();
+}
+
+const noSubscribe = () => () => undefined;
+
+/**
+ * True in the browser, false on the server and during hydration. The call time is formatted in the
+ * viewer's own zone, which the server (UTC on Workers) doesn't know, so it is shown only once
+ * hydrated, never as server text that would mismatch.
+ */
+function useInBrowser(): boolean {
+  return useSyncExternalStore(noSubscribe, () => true, () => false);
 }
 
 async function post<T>(url: string, body: Record<string, unknown>): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
@@ -76,6 +87,7 @@ export function CallScreen(props: Props) {
 
 function Call({ organizationId, callRef, view, back }: Extract<Props, { kind: "call" }>) {
   const router = useRouter();
+  const inBrowser = useInBrowser();
   const [step, setStep] = useState<Step>({ name: "prejoin" });
   const notice = callNotice(view);
 
@@ -113,7 +125,7 @@ function Call({ organizationId, callRef, view, back }: Extract<Props, { kind: "c
           <small>{view.firmName}</small>
           <h1>{view.title}</h1>
           <p>
-            {when(view)}
+            {inBrowser ? when(view) : "\u00a0"}
             {view.hostName ? ` · with ${view.hostName}` : ""}
             {view.isSample ? " · Sample (practice)" : ""}
           </p>

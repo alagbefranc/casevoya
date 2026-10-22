@@ -49,6 +49,11 @@ describe("join tokens", () => {
     const forged = Buffer.from(JSON.stringify({ sub: "y", iss: config.apiKey, exp: 9999999999 })).toString("base64url");
     expect(await verifyLiveKitJwt(config, `${h}.${forged}.${s}`, now)).toBeNull();
     expect(await verifyLiveKitJwt(config, `${h}.${p}`, now)).toBeNull();
+    // A header or payload that is valid JSON but not an object is refused, never thrown on.
+    const b64 = (value: string) => Buffer.from(value).toString("base64url");
+    expect(await verifyLiveKitJwt(config, `${b64("null")}.${b64("{}")}.${s}`, now)).toBeNull();
+    expect(await verifyLiveKitJwt(config, `${h}.${b64("null")}.${s}`, now)).toBeNull();
+    expect(await verifyLiveKitWebhook(config, "{}", `${b64("null")}.${b64("{}")}.x`, now)).toBe(false);
   });
 
   it("a token minted by the official SDK verifies with ours", async () => {
