@@ -175,6 +175,18 @@ describe("Intake delivery: sending a form", () => {
     await expectDbError(() => send(f.manager, f.orgId, other.matterId, other.applicantPerson, other.templateId), /denied/);
   });
 
+  it("a deleted form can't be sent again, but a request already sent keeps working to submission", async () => {
+    const f = await firm();
+    const sent = await send(f.manager, f.orgId, f.matterId, f.applicantPerson, f.templateId);
+    await staff(f.consultant, f.orgId, true);
+    await db.query(`select public.withdraw_intake_form('background')`);
+    await expectDbError(() => send(f.manager, f.orgId, f.matterId, f.sponsorPerson, f.templateId), /published intake form/);
+    await fill(f, sent.response_id);
+    await asMaintenance(db);
+    const response = await db.query<{ status: string }>(`select status::text from public.intake_responses where id = $1`, [sent.response_id]);
+    expect(response.rows[0].status).toBe("submitted");
+  });
+
   it("refuses a real matter while the firm is in sample mode, and sends on a real firm's real matter", async () => {
     const real = await firm({ sample: false });
     const sent = await send(real.manager, real.orgId, real.matterId, real.applicantPerson, real.templateId);
