@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({
   rpcCalls: [] as { name: string; args: Record<string, unknown> }[],
   rpc: {} as Record<string, { data: unknown; error: null | { message: string } }>,
   env: {} as Record<string, unknown>,
+  rows: {} as Record<string, unknown>,
   fetches: [] as { url: string; init: RequestInit }[],
   reply: { result: "drafted", draftId: "44444444-4444-4444-8444-444444444444", text: "Hi, Tuesday works.", needsRule: false, sources: [{ kind: "message", id: "m", label: "Client message 17 Oct" }] } as Record<string, unknown>,
 }));
@@ -26,10 +27,10 @@ vi.mock("@/lib/supabase/server", () => ({
       getClaims: async () => ({ data: { claims: { sub: "55555555-5555-4555-8555-555555555555" } } }),
       getSession: async () => ({ data: { session: { access_token: "user-token-abcdefghijklmnopqrstuvwxyz" } } }),
     },
-    from: () => {
+    from: (table: string) => {
       const chain: Record<string, unknown> = {};
       for (const key of ["select", "eq", "order", "limit"]) chain[key] = () => chain;
-      chain.maybeSingle = async () => ({ data: { id: "66666666-6666-4666-8666-666666666666" } });
+      chain.maybeSingle = async () => ({ data: table in state.rows ? state.rows[table] : { id: "66666666-6666-4666-8666-666666666666" } });
       return chain;
     },
     rpc: async (name: string, args: Record<string, unknown>) => {
@@ -45,7 +46,7 @@ vi.mock("@opennextjs/cloudflare", () => ({
 const { guardVoOutput } = await import("@/modules/vo/guard");
 const { signVoRequest, verifyVoRequest, parseVoTaskRequest } = await import("@/modules/vo/sign");
 const { callVoAgent } = await import("@/modules/vo/agent-client");
-const { draftWithVo, sendVoDraft, askVo } = await import("@/modules/vo/actions");
+const { acceptVoDraft, draftWithVo, sendVoDraft, askVo } = await import("@/modules/vo/actions");
 const present = await import("@/modules/sheet/vo-present");
 const { voSystemPrompt, dataBlock } = await import("@/modules/vo/prompt");
 
@@ -55,6 +56,7 @@ beforeEach(() => {
   state.rpcCalls = [];
   state.rpc = { begin_vo_run: { data: { ok: true, run_id: RUN, matter_id: MATTER }, error: null } };
   state.fetches = [];
+  state.rows = {};
   state.env = {
     VO_AGENT_SECRET: SECRET,
     VO_AGENT: {
@@ -168,6 +170,23 @@ describe("Vo actions", () => {
     expect(state.rpcCalls[0]).toEqual({ name: "send_vo_draft", args: { p_draft_id: DRAFT, p_body: "Edited by a person.", p_client_key: "abcdefgh123" } });
     state.rpc.send_vo_draft = { data: null, error: { message: "replace the [needs a sourced rule] placeholder before sending" } };
     expect(await sendVoDraft({ organizationId: ORG, draftId: DRAFT, body: "x [needs a sourced rule]" })).toEqual({ error: expect.stringContaining("Replace") });
+  });
+
+  it("Accept refuses a draft the conversation or matter moved past, even when called directly", async () => {
+    state.rpc.send_vo_draft = { data: { message_id: RUN, thread_id: THREAD }, error: null };
+    state.rows.vo_drafts = { body: "Hi, Tuesday works.", status: "draft", created_at: "2026-10-22T10:00:00Z", thread_id: THREAD, matter_id: MATTER };
+    state.rows.message_threads = { last_message_at: "2026-10-22T09:59:00Z" };
+    state.rows.matters = { updated_at: "2026-10-22T09:00:00Z" };
+    expect(await acceptVoDraft({ organizationId: ORG, draftId: DRAFT })).toEqual({ ok: true, messageId: RUN, threadId: THREAD });
+    expect(state.rpcCalls[0]).toMatchObject({ name: "send_vo_draft", args: { p_draft_id: DRAFT, p_body: "Hi, Tuesday works." } });
+
+    state.rpcCalls = [];
+    state.rows.message_threads = { last_message_at: "2026-10-22T10:05:00Z" };
+    expect(await acceptVoDraft({ organizationId: ORG, draftId: DRAFT })).toEqual({ error: expect.stringContaining("changed after Vo drafted") });
+    state.rows.message_threads = { last_message_at: "2026-10-22T09:59:00Z" };
+    state.rows.matters = { updated_at: "2026-10-22T10:01:00Z" };
+    expect(await acceptVoDraft({ organizationId: ORG, draftId: DRAFT })).toEqual({ error: expect.stringContaining("changed after Vo drafted") });
+    expect(state.rpcCalls).toHaveLength(0);
   });
 
   it("closes the run when the service is unreachable", async () => {

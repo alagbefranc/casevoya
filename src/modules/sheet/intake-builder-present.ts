@@ -216,7 +216,8 @@ export type BuilderPage = {
   publishLabel: string;
   section: { left: string; right: string };
   rows: (FieldRow & { selected: boolean })[];
-  settings: { label: string; toggles: { label: string; on: boolean }[] };
+  /** `key`: the selected field, so the label box is rebuilt only when another field is chosen. */
+  settings: { key: string; label: string; toggles: { label: string; on: boolean }[] };
   live: { stableKey: string; title: string; templateId: string | null; version: number | null; status: "draft" | "published" | "new"; schema: string };
   /** Publish has nothing to publish until a change starts a draft. */
   publishDisabled: string | null;
@@ -270,7 +271,7 @@ export function builderPage(templates: readonly TemplateRow[], usage: ReadonlyMa
     publishLabel: `Publish v${draft ? draft.versionNumber : nextVersion}`,
     section: { left: current?.title ?? DEFAULT_TITLE, right: `${fields.length} field${fields.length === 1 ? "" : "s"}` },
     rows: fields.map((field) => ({ ...fieldRow(field), selected: field.key === selectedKey })),
-    settings: selected ? { label: fieldLabel(selected), toggles: fieldToggles(selected) } : { label: "", toggles: fieldToggles({ key: "", type: "text", labels: {} }).map((toggle) => ({ ...toggle, on: false })) },
+    settings: selected ? { key: selected.key, label: fieldLabel(selected), toggles: fieldToggles(selected) } : { key: "", label: "", toggles: fieldToggles({ key: "", type: "text", labels: {} }).map((toggle) => ({ ...toggle, on: false })) },
     live: {
       stableKey: key ?? DEFAULT_KEY,
       title: current?.title ?? DEFAULT_TITLE,

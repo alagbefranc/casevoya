@@ -288,3 +288,30 @@ export function bookingTypeState(type: { is_published: boolean; is_sample: boole
   if (type.is_published) return type.is_sample ? { tone: "chg", label: "Practice page" } : { tone: "ok", label: "Published" };
   return type.is_sample ? { tone: "gr", label: "Sample" } : { tone: "gr", label: "Not published" };
 }
+
+export type CalendarConnectionRow = { name: string; tool: string; logo: string | null; chip: Chip };
+
+/**
+ * Connected calendars on the Calendar page: each staff member's Google Calendar busy-time
+ * connection (`staff_connections`, toolkit googlecalendar). RLS shows a firm owner every row and
+ * anyone else only their own, so a non-owner sees only themselves rather than a guess for others.
+ */
+export function calendarConnections(
+  members: { membershipId: string; name: string }[],
+  connections: { membership_id: string; toolkit: string; status: string }[],
+  viewer: { membershipId: string; owner: boolean },
+): CalendarConnectionRow[] {
+  const google = new Map(connections.filter((row) => row.toolkit === "googlecalendar").map((row) => [row.membership_id, row.status]));
+  return members
+    .filter((member) => viewer.owner || member.membershipId === viewer.membershipId)
+    .map((member) => {
+      const status = google.get(member.membershipId);
+      if (status === "active") {
+        return { name: member.name, tool: "Google Calendar · busy times", logo: "/assets/logos/googlecalendar.svg", chip: { tone: "ok", label: "Connected" } };
+      }
+      if (status === "pending") {
+        return { name: member.name, tool: "Google Calendar", logo: "/assets/logos/googlecalendar.svg", chip: { tone: "chg", label: "Finishing setup" } };
+      }
+      return { name: member.name, tool: "no calendar connected", logo: null, chip: { tone: "gr", label: "Not connected" } };
+    });
+}

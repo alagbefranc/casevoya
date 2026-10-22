@@ -47,6 +47,7 @@ const MESSAGES: Record<string, string> = {
   no_requests: "There are no open document requests for the people in this conversation.",
   placeholder: "Replace “[needs a sourced rule]” with a checked, sourced fact (or remove it) before sending.",
   reviewed: "Someone already sent or rejected this draft.",
+  stale: "The matter changed after Vo drafted this. Open it with Edit and check it before sending.",
   empty: "Vo couldn’t produce a usable draft. Write it yourself, or try again.",
   failed: "Vo couldn’t finish. Nothing was sent. Write it yourself, or try again.",
   // Document reading.

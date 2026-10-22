@@ -269,6 +269,10 @@ describe("Calendar", () => {
     );
     expect(rbar.match(/Connected calendars/g)).toHaveLength(1);
     expect(rbar).toContain('data-href="/sheet/matters/m1?tab=tasks" role="link"');
+    // Live: no "planned" Google card (the rows say who is connected) and Casevoya video is built in.
+    expect(rbar).not.toContain("planned integration");
+    expect(rbar).toContain("Casevoya video");
+    expect(rbar).toContain("Built in");
   });
 });
 

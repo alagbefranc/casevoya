@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { messageError } from "@/modules/messages/present";
 import { callVoAgent, voAgentConfigured } from "./agent-client";
+import { draftStale } from "@/modules/sheet/vo-present";
 import { MAX_DRAFT_CHARS } from "./guard";
 import { voError, voSettingChanges, type VoSwitchKey } from "./errors";
 import type { VoSourceRef, VoTask, VoTaskRequest } from "./sign";
@@ -154,9 +155,22 @@ export async function sendVoDraft(input: {
 export async function acceptVoDraft(input: { organizationId: string; draftId: string }): Promise<Result<{ messageId: string; threadId: string }>> {
   if (!isUuid(input.organizationId) || !isUuid(input.draftId)) return { error: "Choose a draft." };
   const supabase = await createClient({ organizationId: input.organizationId });
-  const { data } = await supabase.from("vo_drafts").select("body, status").eq("organization_id", input.organizationId).eq("id", input.draftId).maybeSingle();
+  const { data } = await supabase
+    .from("vo_drafts")
+    .select("body, status, created_at, thread_id, matter_id")
+    .eq("organization_id", input.organizationId)
+    .eq("id", input.draftId)
+    .maybeSingle();
   if (!data) return { error: voError("denied") };
   if (data.status !== "draft") return { error: voError("reviewed") };
+  // The page disables Accept on an out-of-date draft; the same check here, so a direct call can't skip it.
+  const [thread, matter] = await Promise.all([
+    supabase.from("message_threads").select("last_message_at").eq("organization_id", input.organizationId).eq("id", data.thread_id).maybeSingle(),
+    supabase.from("matters").select("updated_at").eq("organization_id", input.organizationId).eq("id", data.matter_id).maybeSingle(),
+  ]);
+  if (draftStale(data.created_at, { threadLastMessageAt: thread.data?.last_message_at, matterUpdatedAt: matter.data?.updated_at })) {
+    return { error: voError("stale") };
+  }
   return sendVoDraft({ organizationId: input.organizationId, draftId: input.draftId, body: data.body, clientKey: `vo-accept-${input.draftId.replaceAll("-", "")}` });
 }
 

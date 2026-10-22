@@ -290,12 +290,15 @@ export function CalendarRbarView({ data }: { data: CalendarRbar }) {
         ))
       )}
       <h4>{"Connected calendars"}</h4>
-      <div className={"card"} style={{ display: "flex", gap: "10px", alignItems: "center", background: "transparent", boxShadow: "inset 0 0 0 1px #d9d5d0" }}>
-        <img src={"/assets/logos/googlecalendar.svg"} alt={""} className={"logo"} />
-        <span>
-          <Pair left={"Google Calendar"} right={"planned integration"} />
-        </span>
-      </div>
+      {/* live: the rows below say who has Google Calendar connected; the capture's "planned" card is not shown. */}
+      {data.live ? null : (
+        <div className={"card"} style={{ display: "flex", gap: "10px", alignItems: "center", background: "transparent", boxShadow: "inset 0 0 0 1px #d9d5d0" }}>
+          <img src={"/assets/logos/googlecalendar.svg"} alt={""} className={"logo"} />
+          <span>
+            <Pair left={"Google Calendar"} right={"planned integration"} />
+          </span>
+        </div>
+      )}
       {data.live ? null : <h4>{"Connected calendars"}</h4>}
       <div className={"rank"} style={{ fontSize: "13.5px" }}>
         {data.calendars.map((row, index) => (
@@ -315,6 +318,21 @@ export function CalendarRbarView({ data }: { data: CalendarRbar }) {
       </div>
       <h4 style={{ marginTop: "18px" }}>{"Meeting links"}</h4>
       <div className={"rank"} style={{ fontSize: "13.5px" }}>
+        {/* live: Casevoya's own video calls are built in (/call/<ref>); the others are still planned. */}
+        {data.live ? (
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <svg className={"ic"} aria-hidden={"true"} width={20} height={20}>
+              <use href={"/assets/icons-coreui/sprite.svg#i-video"} />
+            </svg>
+            {"Casevoya video"}
+            <span className={"r"}>
+              <span className={"bd ok"}>
+                <i></i>
+                {"Built in"}
+              </span>
+            </span>
+          </div>
+        ) : null}
         {(
           [
             ["/assets/logos/integrations/googlemeet-color.png", "Google Meet"],
