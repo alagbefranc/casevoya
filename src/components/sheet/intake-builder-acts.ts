@@ -2,6 +2,7 @@
 
 import { toast2 } from "@/components/port/kit";
 import { publishIntakeDraft, saveIntakeDraft } from "@/modules/intake/builder-actions";
+import { saveQueue } from "@/modules/sheet/save-queue";
 import { fieldLabel, fieldToggles, moveField, newField, readSchema, relabel, removeField, toggleField, type IntakeField } from "@/modules/sheet/intake-builder-present";
 
 type Router = { refresh: () => void };
@@ -15,9 +16,6 @@ type State = {
   fields: IntakeField[];
   selected: string | null;
   timer: number | undefined;
-  saving: Promise<void> | null;
-  /** A change made while a save was on its way: saved right after it, with the version it returns. */
-  again: boolean;
   stale: boolean;
 };
 
@@ -41,8 +39,6 @@ function read(qs: HTMLElement): State {
     fields,
     selected: qs.querySelector<HTMLElement>(".qq.on")?.dataset.key ?? fields[0]?.key ?? null,
     timer: undefined,
-    saving: null,
-    again: false,
     stale: false,
   };
 }
@@ -53,7 +49,7 @@ export function mountIntakeBuilder(root: HTMLElement, router: Router, signal: Ab
   if (!qs) return;
   let state = read(qs);
   const fresh = () => {
-    if (state.stale && !state.timer && !state.saving) state = { ...read(qs), stale: false };
+    if (state.stale && !state.timer && !queue.busy) state = { ...read(qs), stale: false };
     return state;
   };
   const listen = { signal };
@@ -79,35 +75,38 @@ export function mountIntakeBuilder(root: HTMLElement, router: Router, signal: Ab
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
   };
 
-  const save = async (): Promise<void> => {
-    window.clearTimeout(state.timer);
-    state.timer = undefined;
-    if (state.fields.length === 0) return;
-    // One save at a time. Two quick changes would otherwise both send the same version and the
-    // second would come back as a conflict, dropping that change.
-    if (state.saving) {
-      state.again = true;
-      return state.saving;
-    }
-    const run = (async () => {
+  // Edits whose save request failed outright: Publish sends them first.
+  let unsaved = false;
+  // One save at a time (see saveQueue): two quick changes would otherwise both send the same
+  // version and the second would come back as a conflict, dropping that change.
+  const queue = saveQueue(
+    async () => {
+      if (state.fields.length === 0) return true;
       const result = await saveIntakeDraft({ organizationId: state.org, stableKey: state.key, title: state.title, schema: { fields: state.fields }, templateId: state.id, version: state.version });
       if ("error" in result) {
         toast2(result.error, { kind: result.conflict ? "warn" : "bad", sub: result.conflict ? "Your last change wasn’t saved." : "Nothing was saved." });
         state.stale = true;
         router.refresh();
-        return;
+        return false;
       }
       state.id = result.id ?? state.id;
       state.version = result.version ?? state.version;
+      unsaved = false;
       router.refresh();
-    })();
-    state.saving = run;
-    await run;
-    state.saving = null;
-    if (state.again) {
-      state.again = false;
-      if (!state.stale) await save();
-    }
+      return true;
+    },
+    // The request itself failed (offline, a server error, a deploy in between). The edits stay
+    // on the page; the next change or Publish sends them again.
+    () => {
+      unsaved = true;
+      toast2("Nothing was saved", { kind: "bad", sub: "Check your connection, then change a field or publish to try again." });
+    },
+  );
+
+  const save = () => {
+    window.clearTimeout(state.timer);
+    state.timer = undefined;
+    return queue.save();
   };
 
   const later = () => {
@@ -210,8 +209,8 @@ export function mountIntakeBuilder(root: HTMLElement, router: Router, signal: Ab
         if (publish.getAttribute("aria-busy") === "true") return;
         publish.setAttribute("aria-busy", "true");
         void (async () => {
-          if (state.timer) await save();
-          while (state.saving) await state.saving;
+          if (state.timer || unsaved) void save();
+          if (!(await queue.settled())) return;
           if (!state.id || state.version === null) {
             toast2("Nothing new to publish", { kind: "warn", sub: "Change a field first: your edit starts the next version as a draft." });
             return;
@@ -234,7 +233,9 @@ export function mountIntakeBuilder(root: HTMLElement, router: Router, signal: Ab
           state.stale = true;
           toast2(`${publish.textContent?.replace(/^Publish/, "Published") || "Published"}`, { kind: "ok", sub: "In effect today. Matters already using an earlier version keep it." });
           router.refresh();
-        })().finally(() => publish.removeAttribute("aria-busy"));
+        })()
+          .catch(() => toast2("Nothing was published", { kind: "bad", sub: "Check your connection and try again. The draft is unchanged." }))
+          .finally(() => publish.removeAttribute("aria-busy"));
       }
     },
     listen,
