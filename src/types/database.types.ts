@@ -12544,6 +12544,10 @@ export type Database = {
         Args: { p_expected_version: number; p_reason: string; p_request_id: string }
         Returns: number
       }
+      withdraw_intake_form: {
+        Args: { p_stable_key: string }
+        Returns: Json
+      }
       withdraw_section_share: {
         Args: { p_share_id: string }
         Returns: undefined

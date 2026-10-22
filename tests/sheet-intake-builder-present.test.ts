@@ -50,6 +50,18 @@ describe("Intake form builder", () => {
       settings: { key: "dob", label: "Date of birth" },
       live: { templateId: "t2", version: 5, status: "draft" },
     });
+    // Delete form leaves only superseded versions: the builder starts again empty, numbering on.
+    const deleted = builderPage([row({ status: "superseded" })], new Map([["about_you", 2]]), {}, NOW);
+    expect(deleted).toMatchObject({
+      title: "Intake form",
+      pills: [{ left: "New form", right: "add a field to start" }, "Used by 2 matters"],
+      publishLabel: "Publish v2",
+      rows: [],
+      deletable: false,
+      live: { templateId: null, version: null, status: "new", stableKey: "about_you", schema: JSON.stringify({ fields: [] }) },
+    });
+    expect(published.deletable).toBe(true);
+    expect(draft.deletable).toBe(true);
     const none = builderPage([], new Map(), {}, NOW);
     expect(none).toMatchObject({ title: "Intake form", rows: [], publishLabel: "Publish v1", live: { status: "new", stableKey: "intake_form" } });
   });

@@ -46,6 +46,7 @@ export async function loadSheetIntakeBuilder(staff: SheetStaff, tab: IntakeTab, 
     settings: page.settings,
     vo: null,
     publishDisabled: page.publishDisabled,
+    deletable: page.deletable,
     preview: page.preview,
     live: { organizationId: org, ...page.live },
   };

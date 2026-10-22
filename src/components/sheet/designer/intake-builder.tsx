@@ -38,6 +38,8 @@ export type IntakeBuilderData = {
   vo: { draft: string; sources: string } | null;
   /** Live only: why Publish is off (no draft to publish yet). */
   publishDisabled?: string | null;
+  /** Live only: "Delete form" is offered (there is a published or draft version). */
+  deletable?: boolean;
   /** Live only: the Preview tab's fields, as a client sees them. */
   preview?: { key: string; label: string; type: string; ui?: string; required: boolean; note: string | null }[];
   /** Present on a real page. */
@@ -88,6 +90,12 @@ export function IntakeHeader({ data, share }: { data: IntakeBuilderData; share?:
         )}
         <span className={"acts"}>
           {share ? <ShareEnquiryButton /> : null}
+          {data.live && data.deletable ? (
+            <button className={"btn s sm"} data-intake-withdraw={"1"} title={"Matters that already use this form keep their copy. It can’t be sent again."}>
+              <Icon name={"trash"} cls={"ic s"} />
+              {"Delete form"}
+            </button>
+          ) : null}
           <button className={"btn s sm"} data-goto-tab={data.live ? "preview" : undefined}>
             <Icon name={"eye"} cls={"ic s"} />
             {"Preview"}

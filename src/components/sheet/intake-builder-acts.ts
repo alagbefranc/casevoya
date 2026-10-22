@@ -1,7 +1,7 @@
 "use client";
 
 import { toast2 } from "@/components/port/kit";
-import { publishIntakeDraft, saveIntakeDraft } from "@/modules/intake/builder-actions";
+import { publishIntakeDraft, saveIntakeDraft, withdrawIntakeForm } from "@/modules/intake/builder-actions";
 import { saveQueue } from "@/modules/sheet/save-queue";
 import { fieldLabel, fieldToggles, moveField, newField, readSchema, relabel, removeField, toggleField, type IntakeField } from "@/modules/sheet/intake-builder-present";
 
@@ -203,6 +203,53 @@ export function mountIntakeBuilder(root: HTMLElement, router: Router, signal: Ab
         void save();
         return;
       }
+      const withdraw = target.closest<HTMLElement>("[data-intake-withdraw]");
+      if (withdraw) {
+        event.preventDefault();
+        if (withdraw.getAttribute("aria-busy") === "true") return;
+        const label = withdraw.lastChild;
+        const setLabel = (text: string) => {
+          if (label?.nodeType === Node.TEXT_NODE) label.nodeValue = text;
+        };
+        // Asks for a second click, like deleting a field.
+        if (withdraw.dataset.armed !== "1") {
+          withdraw.dataset.armed = "1";
+          setLabel("Click again to delete the form");
+          window.setTimeout(() => {
+            delete withdraw.dataset.armed;
+            setLabel("Delete form");
+          }, 5000);
+          return;
+        }
+        delete withdraw.dataset.armed;
+        setLabel("Delete form");
+        withdraw.setAttribute("aria-busy", "true");
+        void (async () => {
+          window.clearTimeout(state.timer);
+          state.timer = undefined;
+          await queue.settled();
+          const result = await withdrawIntakeForm({ organizationId: state.org, stableKey: state.key });
+          if ("error" in result) {
+            if (result.stepUp) {
+              toast2("Confirm it’s you", { kind: "warn", sub: "Then delete the form again." });
+              const next = `${window.location.pathname}${window.location.search}`;
+              window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`), 900);
+              return;
+            }
+            toast2(result.error, { kind: "bad", sub: "The form is unchanged." });
+            if (result.conflict) state.stale = true;
+            router.refresh();
+            return;
+          }
+          state.stale = true;
+          unsaved = false;
+          toast2("Form deleted", { kind: "ok", sub: "It can’t be sent again. Matters that already use it keep their copy." });
+          router.refresh();
+        })()
+          .catch(() => toast2("Nothing was deleted", { kind: "bad", sub: "Check your connection and try again." }))
+          .finally(() => withdraw.removeAttribute("aria-busy"));
+        return;
+      }
       const publish = target.closest<HTMLElement>("[data-intake-publish]");
       if (publish) {
         event.preventDefault();
@@ -252,6 +299,10 @@ export function mountIntakeBuilder(root: HTMLElement, router: Router, signal: Ab
       const value = (input as HTMLInputElement).value;
       if (!value.trim()) return;
       state.fields = state.fields.map((item, at) => (at === position ? relabel(item, value.trim()) : item));
+      // The question list shows the new label as it is typed, not only after the autosave. The
+      // text node React rendered is updated in place, so React keeps owning it.
+      const shown = qs.querySelector<HTMLElement>(`.qq[data-key="${CSS.escape(state.selected ?? "")}"] b`)?.firstChild;
+      if (shown?.nodeType === Node.TEXT_NODE) shown.nodeValue = value.trim();
       later();
     },
     listen,

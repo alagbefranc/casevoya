@@ -122,6 +122,44 @@ describe("Intake form builder", () => {
     expect(usage.rows).toEqual([]);
   });
 
+  it("Delete form: licensed staff with a step-up only; supersedes the published version, removes the draft, and the form starts again empty", async () => {
+    const f = await firm();
+    const v1 = await save(f.manager, f.orgId, "practice", schema(field("a")));
+    await as(f.consultant, f.orgId);
+    await db.query(`select public.publish_intake_draft($1, $2)`, [v1.id, v1.version]);
+    // A draft of the next version is open when the form is deleted.
+    await save(f.manager, f.orgId, "practice", schema(field("a"), field("b")));
+
+    const withdraw = () => db.query<{ result: { withdrawn_version_number: number; drafts_removed: number } }>(`select public.withdraw_intake_form('practice') as result`);
+    await as(f.manager, f.orgId);
+    await expectDbError(withdraw, /denied/);
+    await as(f.assistant, f.orgId);
+    await expectDbError(withdraw, /denied/);
+    await as(f.consultant, f.orgId, false);
+    await expectDbError(withdraw, /step-up/);
+    await as(f.consultant, f.orgId);
+    expect((await withdraw()).rows[0].result).toEqual({ withdrawn_version_number: 1, drafts_removed: 1 });
+    expect(await rows(f.orgId, "practice")).toEqual([{ version_number: 1, status: "superseded", fields: 1 }]);
+    await as(f.consultant, f.orgId);
+    await expectDbError(withdraw, /already deleted/);
+    await as(f.consultant, f.orgId);
+    await expectDbError(() => db.query(`select public.withdraw_intake_form('nothing_here')`), /denied/);
+
+    await asMaintenance(db);
+    const audit = await db.query<{ context: Record<string, unknown> }>(`select context from public.audit_log where organization_id = $1 and action = 'intake_template.withdrawn'`, [f.orgId]);
+    expect(audit.rows.map((row) => row.context)).toEqual([{ stable_key: "practice", published_version_number: 1, drafts_removed: 1 }]);
+
+    // Building it again starts the next version, from what the builder sends (an empty form plus new fields).
+    const again = await save(f.manager, f.orgId, "practice", schema(field("fresh")));
+    expect(await rows(f.orgId, "practice")).toEqual([
+      { version_number: 1, status: "superseded", fields: 1 },
+      { version_number: 2, status: "draft", fields: 1 },
+    ]);
+    await as(f.consultant, f.orgId);
+    await db.query(`select public.publish_intake_draft($1, $2)`, [again.id, again.version]);
+    expect((await rows(f.orgId, "practice")).map((row) => row.status)).toEqual(["superseded", "published"]);
+  });
+
   it("refuses an Unknown answer where the form says unknown isn't allowed, and keeps older forms as they were", async () => {
     const f = await firm();
     const draft = await save(f.manager, f.orgId, "strict", schema(field("name", { allow_unknown: false, allow_not_applicable: false }), field("nickname")));

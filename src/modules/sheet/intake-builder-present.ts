@@ -221,6 +221,8 @@ export type BuilderPage = {
   live: { stableKey: string; title: string; templateId: string | null; version: number | null; status: "draft" | "published" | "new"; schema: string };
   /** Publish has nothing to publish until a change starts a draft. */
   publishDisabled: string | null;
+  /** "Delete form" (withdraw_intake_form): there is a published or draft version to withdraw. */
+  deletable: boolean;
   preview: PreviewField[];
 };
 
@@ -252,7 +254,9 @@ export function builderPage(templates: readonly TemplateRow[], usage: ReadonlyMa
   const versions = templates.filter((row) => row.stableKey === key).sort((a, b) => b.versionNumber - a.versionNumber);
   const draft = versions.find((row) => row.status === "draft") ?? null;
   const published = versions.find((row) => row.status === "published") ?? null;
-  const current = draft ?? published ?? versions[0] ?? null;
+  // A form left with neither (Delete form, public.withdraw_intake_form) starts again empty; its
+  // sent versions are kept for the matters that use them.
+  const current = draft ?? published ?? null;
   const fields = readSchema(current?.schema).fields;
   const selectedKey = fields.some((field) => field.key === choice.field) ? choice.field : fields[0]?.key;
   const selected = fields.find((field) => field.key === selectedKey) ?? null;
@@ -262,9 +266,7 @@ export function builderPage(templates: readonly TemplateRow[], usage: ReadonlyMa
     ? { left: "Draft", right: since(draft.updatedAt, now) }
     : published
       ? { left: "Published", right: published.effectiveOn ? `in effect from ${dayMonthOf(published.effectiveOn)}` : "in effect" }
-      : current
-        ? { left: "Superseded", right: "edit to start a new draft" }
-        : { left: "New form", right: "add a field to start" };
+      : { left: "New form", right: "add a field to start" };
   return {
     title: current ? `${current.title} v${current.versionNumber}` : DEFAULT_TITLE,
     pills: [state, `Used by ${used} matter${used === 1 ? "" : "s"}`],
@@ -281,6 +283,7 @@ export function builderPage(templates: readonly TemplateRow[], usage: ReadonlyMa
       schema: JSON.stringify({ fields }),
     },
     publishDisabled: draft ? null : current ? "Nothing new to publish: change a field to start the next version." : "Add a field first.",
+    deletable: Boolean(current),
     preview: previewFields(fields),
   };
 }

@@ -9,7 +9,8 @@ import type { Json } from "@/types/database.types";
 /**
  * The Intake form builder. Each call acts as the signed-in user: public.save_intake_draft (firm
  * owner, licensed consultant or case manager at aal2) and public.publish_intake_draft (licensed,
- * recent step-up) decide. A published version is never changed.
+ * recent step-up) and public.withdraw_intake_form (the same as publishing) decide. A published
+ * version is never changed.
  */
 export type BuilderResult = { ok: true; id?: string; version?: number } | { error: string; stepUp?: boolean; conflict?: boolean };
 
@@ -18,7 +19,8 @@ function refused(message: string): { error: string; stepUp?: boolean; conflict?:
   if (/conflict/i.test(message)) return { error: "This form changed somewhere else. The latest version is shown now.", conflict: true };
   if (/never changed/i.test(message)) return { error: "A published version can’t change. Your edit starts a new draft.", conflict: true };
   if (/schema is not usable/i.test(message)) return { error: "Each field needs a label, and the form needs at least one field." };
-  if (/licensed consultant|staff access denied/i.test(message)) return { error: "Only a licensed consultant can publish a form." };
+  if (/already deleted/i.test(message)) return { error: "This form was already deleted.", conflict: true };
+  if (/licensed consultant|staff access denied/i.test(message)) return { error: "Only a licensed consultant can publish or delete a form." };
   if (/denied/i.test(message)) return { error: "You can’t change intake forms." };
   return { error: safeAccessError(message) };
 }
@@ -59,5 +61,17 @@ export async function publishIntakeDraft(input: { organizationId: string; templa
   const supabase = await signedIn(input.organizationId);
   if (!supabase) return { error: "Sign in first." };
   const { error } = await supabase.rpc("publish_intake_draft", { p_template_id: input.templateId, p_expected_version: input.version });
+  return error ? refused(error.message) : { ok: true };
+}
+
+/**
+ * Delete form: the form's published version can no longer be sent and its draft is removed.
+ * Matters that already use a version keep it.
+ */
+export async function withdrawIntakeForm(input: { organizationId: string; stableKey: string }): Promise<BuilderResult> {
+  if (!/^[a-z][a-z0-9_]{1,80}$/.test(input.stableKey)) return { error: "Choose a form." };
+  const supabase = await signedIn(input.organizationId);
+  if (!supabase) return { error: "Sign in first." };
+  const { error } = await supabase.rpc("withdraw_intake_form", { p_stable_key: input.stableKey });
   return error ? refused(error.message) : { ok: true };
 }
