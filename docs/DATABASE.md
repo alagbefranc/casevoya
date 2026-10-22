@@ -414,7 +414,7 @@ LiveKit rooms for bookings whose location is a Casevoya video call (BUILD-SPEC Â
 * `video_token_issues`: rate-limit counter (10 joins a minute per person and room). No API access.
 * `public.video_join(org, ref, issue)`: the caller's view of the call (`open`, `early`, `closed`, `unavailable` with a reason) and, with `issue`, the grant the app server signs into a LiveKit token. Hosts: the booking's host or an active firm owner with staff MFA; clients: the booking's own person (`app.portal_booking_caller_ok`). Window: 15 minutes before the start to 30 minutes after the end.
 * `public.video_room_created`, `public.video_admit` (host only), `public.video_end` (host only): authenticated; each audited.
-* `20261022110000_video_end_for_everyone` (repository only, not applied live yet): `video_sessions.ended_by_host_at`. A host's End for everyone stamps it, and while it is set a client gets `unavailable` / `ended` and no token; a host joining again clears it. A room LiveKit closes on its own (everyone left) is not an end.
+* `20261022110000_video_end_for_everyone` (applied live 2026-10-22): `video_sessions.ended_by_host_at`. A host's End for everyone stamps it, and while it is set a client gets `unavailable` / `ended` and no token; a host joining again clears it. A room LiveKit closes on its own (everyone left) is not an end.
 * `public.apply_livekit_event(event)`: service role only; deduped through `webhook_inbox` (provider `livekit`); unknown rooms and other event kinds are recorded as ignored.
 
 ## Known gaps (next tasks)
