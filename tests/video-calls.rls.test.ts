@@ -269,8 +269,10 @@ describe("video calls: ending and webhooks", () => {
     expect(await join(client(ctx.client.id, ctx.orgId), ctx.orgId, booking.public_ref, false)).toMatchObject({ state: "unavailable", reason: "ended" });
     await asMaintenance(db);
     expect((await db.query(`select 1 from public.video_participants where identity = $1`, [`client:${ctx.client.id}`])).rows).toHaveLength(0);
-    // The host restarts it inside the window (the room is created again, with its limits); then the client can join.
-    expect(await join(staff(ctx.host.id, ctx.orgId), ctx.orgId, booking.public_ref)).toMatchObject({ state: "open", room_created: false });
+    // When the call's room was first created is kept after the end (the app re-creates the room on every join).
+    expect((await db.query<{ room_created_at: Date | null }>(`select room_created_at from public.video_sessions where booking_id = $1`, [booking.id])).rows[0].room_created_at).not.toBeNull();
+    // The host restarts it inside the window; then the client can join.
+    expect(await join(staff(ctx.host.id, ctx.orgId), ctx.orgId, booking.public_ref)).toMatchObject({ state: "open", room_created: true });
     expect(await join(client(ctx.client.id, ctx.orgId), ctx.orgId, booking.public_ref)).toMatchObject({ state: "open", role: "client", admitted: false });
   });
 
@@ -299,13 +301,27 @@ describe("video calls: ending and webhooks", () => {
     expect(await apply({ id: "EV_3", event: "participant_left", room: { name: host.room_name }, participant: { identity: `client:${ctx.client.id}` }, createdAt: at + 60 })).toBe("applied");
     expect(await apply({ id: "EV_4", event: "room_finished", room: { name: host.room_name }, createdAt: at + 90 })).toBe("applied");
     expect(await apply({ id: "EV_5", event: "room_started", room: { name: "cv-00000000000000000000000000000000" }, createdAt: at })).toBe("ignored");
-    expect(await apply({ id: "EV_6", event: "track_published", room: { name: host.room_name }, createdAt: at })).toBe("ignored");
+    expect(
+      await apply({
+        id: "EV_6",
+        event: "track_published",
+        room: { name: host.room_name },
+        participant: { identity: `client:${ctx.client.id}` },
+        track: { sid: "TR_synthetic", type: "VIDEO", source: "CAMERA", muted: true, width: 1280, height: 720, mimeType: "video/VP8" },
+        createdAt: at,
+      }),
+    ).toBe("ignored");
 
     await asMaintenance(db);
-    const session = (await db.query<{ status: string; started_at: Date; ended_at: Date }>(`select status, started_at, ended_at from public.video_sessions where booking_id = $1`, [booking.id])).rows[0];
+    const session = (await db.query<{ status: string; started_at: Date; ended_at: Date; room_created_at: Date | null }>(`select status, started_at, ended_at, room_created_at from public.video_sessions where booking_id = $1`, [booking.id])).rows[0];
     expect(session.status).toBe("ended");
     expect(session.started_at.getTime()).toBe(at * 1000);
     expect(session.ended_at.getTime()).toBe((at + 90) * 1000);
+    // room_started's time is kept after room_finished (prod 2026-10-22: it was cleared, so every ended call showed NULL).
+    expect(session.room_created_at?.getTime()).toBe(at * 1000);
+    // A track event keeps what the track was (no track id), for diagnosing a black tile.
+    const track = (await db.query<{ payload: { track?: Record<string, unknown> } }>(`select payload from public.webhook_inbox where provider = 'livekit' and event_id = 'EV_6'`)).rows[0].payload.track;
+    expect(track).toEqual({ source: "CAMERA", type: "VIDEO", muted: true, width: 1280, height: 720, mime_type: "video/VP8" });
     const part = (await db.query<{ first_joined_at: Date; last_left_at: Date }>(`select first_joined_at, last_left_at from public.video_participants where identity = $1`, [`client:${ctx.client.id}`])).rows[0];
     expect(part.first_joined_at.getTime()).toBe((at + 5) * 1000);
     expect(part.last_left_at.getTime()).toBe((at + 60) * 1000);

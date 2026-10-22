@@ -5,6 +5,9 @@
  * accept screens. wire.ts shows the part that applies (`data-signin`); hidden parts are
  * skipped by the kit's validation.
  *
+ * "I used the email link" (`data-link-confirmed`, wire.ts) is the way on for someone who clicked
+ * the email's button instead of typing the code: they are signed in and the invitation accepted.
+ *
  * `then` is where the code step goes once the code is accepted: the Done step ("#4") on
  * accept-client, or the portal itself on screens without a Done step.
  */
@@ -20,7 +23,7 @@ export function PortalSignInFields({ email, then }: { email: string; then: strin
       </div>
       <div data-signin="code" hidden>
         <div className="mail-card" style={{ "maxWidth": "520px" }}><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-mail" /></svg><div>We sent a six-digit code to <b style={{ "fontWeight": "500" }}>{email || "the invited email"}</b><small>Enter it to confirm your email. Check spam if it isn’t there in a minute.</small></div></div>
-        <fieldset className="fld" style={{ "border": "0" }}><legend className="sr">Six-digit code</legend><div className="otp" data-then={then}><input inputMode="numeric" autoComplete="one-time-code" maxLength={1} aria-label="Digit 1 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 2 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 3 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 4 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 5 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 6 of 6" /></div><span className="otp-msg" role="status" aria-live="polite"></span></fieldset><div className="otp-meta"><a href="#" data-resend="30">Send a new code</a></div>
+        <fieldset className="fld" style={{ "border": "0" }}><legend className="sr">Six-digit code</legend><div className="otp" data-then={then}><input inputMode="numeric" autoComplete="one-time-code" maxLength={1} aria-label="Digit 1 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 2 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 3 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 4 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 5 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 6 of 6" /></div><span className="otp-msg" role="status" aria-live="polite"></span></fieldset><div className="otp-meta"><a href="#" data-resend="30">Send a new code</a><a href="#" data-link-confirmed="">I used the email link</a></div>
       </div>
     </>
   );

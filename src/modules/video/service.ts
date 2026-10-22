@@ -48,7 +48,7 @@ export type JoinGrant = {
   admitted: boolean;
 };
 
-/** A join token for the signed-in person, inside the window. Creates the LiveKit room the first time. */
+/** A join token for the signed-in person, inside the window. Makes sure the LiveKit room exists first. */
 export async function joinCall(organizationId: string, ref: string): Promise<{ view: JoinView; grant: JoinGrant | null; configured: boolean } | VideoFailure> {
   const config = liveKitConfig();
   const supabase = await session(organizationId);
@@ -63,15 +63,18 @@ export async function joinCall(organizationId: string, ref: string): Promise<{ v
   const view = parseJoinView(data);
   if (!view) return { error: "Something went wrong. Try again.", status: 500 };
   if (view.state !== "open" || !view.grant) return { view, grant: null, configured: true };
+  // CreateRoom on every join (it is idempotent: an existing room is answered as it is). The room
+  // may have closed on its own since the last join (everyone left, or nobody came), and a room
+  // LiveKit creates implicitly on join wouldn't have ROOM_OPTIONS. The token is only signed once
+  // the room exists, so the first join never races its creation.
   const api = roomService(config);
-  if (!view.grant.roomCreated) {
-    try {
-      await api.createRoom(view.grant.roomName, { ...ROOM_OPTIONS });
-    } catch {
-      return { error: "The video service didn’t answer. Try again in a moment.", status: 502 };
-    }
-    await supabase.rpc("video_room_created", { p_org: organizationId, p_ref: ref });
+  try {
+    await api.createRoom(view.grant.roomName, { ...ROOM_OPTIONS });
+  } catch {
+    return { error: "The video service didn’t answer. Try again in a moment.", status: 502 };
   }
+  // Records when the call's first room was created (kept once set).
+  if (!view.grant.roomCreated) await supabase.rpc("video_room_created", { p_org: organizationId, p_ref: ref });
   const token = await participantToken(config, {
     identity: view.grant.identity,
     name: view.grant.name,

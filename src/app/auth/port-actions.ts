@@ -26,6 +26,9 @@ import { DPA_AVAILABLE, DPA_VERSION } from "@/modules/firm-onboarding/legal";
 import { LICENCE_PROOF_BUCKET, ownLicenceProofKey } from "@/modules/firm-onboarding/licence-proof";
 import { FIRM_LOGO_BUCKET, ownFirmLogoKey } from "@/modules/firm-onboarding/firm-logo";
 import { todayIso } from "@/modules/sheet/birth-date";
+import { acceptPath } from "@/modules/sheet/portal-invite";
+import { appOrigin } from "@/lib/email/env";
+import { isPortalInviteRole, type PortalInviteRole } from "@/modules/portal-invitations/types";
 
 export type PortResult =
   | { ok: true; href?: string; codes?: string[] }
@@ -558,7 +561,8 @@ export async function joinStaffInvite(input: {
   if (!claims?.claims?.sub) {
     // The confirmation link brings them back to this invitation, not to the app home (where
     // someone with no firm yet is offered a new firm of their own).
-    const origin = (await headers()).get("origin") ?? "";
+    // No Origin header would make the link relative, and Supabase would send it to the Site URL.
+    const origin = (await headers()).get("origin") || appOrigin();
     const signedUp = await supabase.auth.signUp({
       email: row.email ?? input.email.trim(),
       password: input.password,
@@ -593,7 +597,7 @@ export type PortalJoinResult =
   | { ok: true; confirm?: false; firstRequest: { purpose: string } | null }
   | { ok: false; message: string };
 
-type PortalInvitee = { email: string; displayName: string };
+type PortalInvitee = { email: string; displayName: string; role: PortalInviteRole | null };
 
 const SIGNED_IN_ELSEWHERE = "You’re signed in with a different email. Sign out, then open this invitation again.";
 const WRONG_PASSWORD = "That password didn’t match the Casevoya sign-in for this email.";
@@ -615,7 +619,51 @@ async function openPortalInvitee(
   const email = typeof preview.invitee?.email === "string" ? normalizeEmail(preview.invitee.email) : null;
   if (!email) return { error: "This invitation can no longer be used." };
   const displayName = typeof preview.invitee?.display_name === "string" ? preview.invitee.display_name.trim().slice(0, 200) : "";
-  return { email, displayName };
+  const rawRole = (data as { role?: unknown }).role;
+  const role = typeof rawRole === "string" && isPortalInviteRole(rawRole) ? rawRole : null;
+  return { email, displayName, role };
+}
+
+/**
+ * Where the confirmation email's link lands: /auth/confirm (which starts the session) and then
+ * back on this invitation's accept screen, signed in. Without it Supabase falls back to the
+ * Site URL (the app root), which drops the PKCE code and the invitation (prod test 2026-10-22).
+ * The origin is APP_URL, never a request header.
+ */
+function portalInviteRedirect(token: string, role: PortalInviteRole | null): string {
+  const next = `${acceptPath(role ?? "client")}?token=${encodeURIComponent(token)}`;
+  return `${appOrigin()}/auth/confirm?next=${encodeURIComponent(next)}`;
+}
+
+type ConfirmedCheck = "signed-in" | "unconfirmed" | "wrong-password" | "locked" | "no-password" | "elsewhere";
+
+/**
+ * Whether the invitee has confirmed their email some other way (the link in the same email,
+ * maybe in another tab or on another device) and can be signed in now. A session already
+ * signed in as the invitee counts (the link opened in this browser); otherwise the password
+ * typed on the sign-in step is tried. Supabase answers a resend for a confirmed email with a
+ * silent success and a used code with "expired or invalid", so neither can tell us this.
+ */
+async function signedInAfterConfirm(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  invitee: PortalInvitee,
+  password: string,
+): Promise<ConfirmedCheck> {
+  const { data: claims } = await supabase.auth.getClaims();
+  if (claims?.claims?.sub) {
+    const current = typeof claims.claims.email === "string" ? normalizeEmail(claims.claims.email) : null;
+    return current === invitee.email ? "signed-in" : "elsewhere";
+  }
+  if (!password || password.length > 200) return "no-password";
+  const { error } = await supabase.auth.signInWithPassword({ email: invitee.email, password });
+  if (!error) return "signed-in";
+  if (error.code === "email_not_confirmed" || /not confirmed/i.test(error.message)) return "unconfirmed";
+  if (lockedMessage(error.message)) return "locked";
+  return "wrong-password";
+}
+
+function passwordInput(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
 function acceptPayloadOk(payload: unknown): payload is PortalAcceptPayload {
@@ -688,7 +736,11 @@ export async function joinPortalInvite(input: {
     const { error } = await supabase.auth.signInWithPassword({ email: invitee.email, password });
     if (!error) return "signed-in";
     if (error.code === "email_not_confirmed" || /not confirmed/i.test(error.message)) {
-      const resent = await supabase.auth.resend({ type: "signup", email: invitee.email });
+      const resent = await supabase.auth.resend({
+        type: "signup",
+        email: invitee.email,
+        options: { emailRedirectTo: portalInviteRedirect(input.token, invitee.role) },
+      });
       if (resent.error) {
         return lockedMessage(resent.error.message)
           ? joinFail("Too many codes were sent. Wait a minute, then try again.")
@@ -709,7 +761,10 @@ export async function joinPortalInvite(input: {
   const signedUp = await supabase.auth.signUp({
     email: invitee.email,
     password,
-    options: { data: invitee.displayName ? { display_name: invitee.displayName } : {} },
+    options: {
+      data: invitee.displayName ? { display_name: invitee.displayName } : {},
+      emailRedirectTo: portalInviteRedirect(input.token, invitee.role),
+    },
   });
   if (signedUp.error) {
     if (/already/i.test(signedUp.error.message) || signedUp.error.code === "user_already_exists") {
@@ -740,11 +795,17 @@ export async function joinPortalInvite(input: {
   return { ok: true, confirm: true };
 }
 
-/** The six-digit code from the confirmation email, then the acceptance (see joinPortalInvite). */
+/**
+ * The six-digit code from the confirmation email, then the acceptance (see joinPortalInvite).
+ * `password` is what the person typed on the sign-in step: when the code no longer works because
+ * the email was already confirmed through the link, they are signed in with it and the
+ * invitation is accepted, instead of being stuck on the code.
+ */
 export async function confirmPortalInvite(input: {
   token: string;
   code: string;
   payload: PortalAcceptPayload;
+  password?: string;
 }): Promise<PortalJoinResult | null> {
   if (!hasPublicSupabaseEnv()) return nullResult();
   if (!isInvitationToken(input.token)) return joinFail("That invitation link is not valid.");
@@ -756,19 +817,61 @@ export async function confirmPortalInvite(input: {
   const { error } = await supabase.auth.verifyOtp({ email: invitee.email, token: input.code, type: "signup" });
   if (error) {
     if (lockedMessage(error.message)) return joinFail("Too many attempts. Wait and try again.");
+    // A used code: the email may have been confirmed through the link already.
+    if ((await signedInAfterConfirm(supabase, invitee, passwordInput(input.password))) === "signed-in") {
+      return acceptJoined(supabase, input.token, input.payload);
+    }
     return joinFail("That code didn’t match. Use the newest code we emailed you.");
   }
   return acceptJoined(supabase, input.token, input.payload);
 }
 
-/** Sends the invited email a new six-digit confirmation code. */
-export async function resendPortalInviteCode(token: string): Promise<PortalJoinResult | null> {
+/**
+ * The code step's way on without a code: the person clicked the link in the email instead
+ * ("I clicked the link", or the page noticed the session the link started in another tab).
+ * Signs in (an existing session as the invitee, or the password from the sign-in step) and
+ * accepts. An email that is still unconfirmed is answered with a message and nothing changes.
+ */
+export async function continuePortalInvite(input: {
+  token: string;
+  password?: string;
+  payload: PortalAcceptPayload;
+}): Promise<PortalJoinResult | null> {
+  if (!hasPublicSupabaseEnv()) return nullResult();
+  if (!isInvitationToken(input.token)) return joinFail("That invitation link is not valid.");
+  if (!acceptPayloadOk(input.payload)) return joinFail("The current terms and privacy notice have to be accepted.");
+  const supabase = await createClient();
+  const invitee = await openPortalInvitee(supabase, input.token);
+  if ("error" in invitee) return joinFail(invitee.error);
+  const checked = await signedInAfterConfirm(supabase, invitee, passwordInput(input.password));
+  if (checked === "signed-in") return acceptJoined(supabase, input.token, input.payload);
+  if (checked === "elsewhere") return joinFail(SIGNED_IN_ELSEWHERE);
+  if (checked === "locked") return joinFail("Too many attempts. Wait and try again.");
+  if (checked === "wrong-password") return joinFail(WRONG_PASSWORD);
+  return joinFail("Your email isn’t confirmed yet. Enter the six-digit code, or open the link in the email we sent.");
+}
+
+/**
+ * Sends the invited email a new six-digit confirmation code. Supabase sends nothing (and still
+ * answers success) when the email is already confirmed, so with the sign-in step's password the
+ * person is first signed in and the invitation accepted if they already confirmed by the link.
+ */
+export async function resendPortalInviteCode(token: string, extra?: { password?: string; payload?: PortalAcceptPayload }): Promise<PortalJoinResult | null> {
   if (!hasPublicSupabaseEnv()) return nullResult();
   if (!isInvitationToken(token)) return joinFail("That invitation link is not valid.");
   const supabase = await createClient();
   const invitee = await openPortalInvitee(supabase, token);
   if ("error" in invitee) return joinFail(invitee.error);
-  const { error } = await supabase.auth.resend({ type: "signup", email: invitee.email });
+  if (extra?.payload && acceptPayloadOk(extra.payload)) {
+    const checked = await signedInAfterConfirm(supabase, invitee, passwordInput(extra.password));
+    if (checked === "signed-in") return acceptJoined(supabase, token, extra.payload);
+    if (checked === "locked") return joinFail("Too many attempts. Wait and try again.");
+  }
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email: invitee.email,
+    options: { emailRedirectTo: portalInviteRedirect(token, invitee.role) },
+  });
   if (error) {
     return lockedMessage(error.message)
       ? joinFail("A code was sent a moment ago. Wait a minute, then ask for another.")

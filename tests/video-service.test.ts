@@ -85,11 +85,22 @@ describe("token route", () => {
     expect(fetchCalls[0].body).toMatchObject({ name: ROOM, emptyTimeout: 600, maxParticipants: 8 });
   });
 
-  it("a room that exists already is not created again", async () => {
+  it("a call whose room was created before still asks for the room (it may have closed on its own), without recording it again", async () => {
     rpc.mockResolvedValue({ data: open({ role: "host", identity: "staff:00000000-0000-4000-8000-0000000000aa", admitted: true, room_created: true }), error: null });
     const body = (await (await postToken()).json()) as { token: string };
     expect((await new TokenVerifier(KEY, SECRET).verify(body.token)).video).toMatchObject({ roomAdmin: true });
-    expect(fetchCalls).toHaveLength(0);
+    expect(fetchCalls.map((c) => c.url)).toEqual(["https://synthetic.livekit.test/twirp/livekit.RoomService/CreateRoom"]);
+    expect(fetchCalls[0].body).toMatchObject({ name: ROOM, emptyTimeout: 600, departureTimeout: 60, maxParticipants: 8 });
+    expect(rpc).not.toHaveBeenCalledWith("video_room_created", expect.anything());
+  });
+
+  it("no token when the room can't be created", async () => {
+    rpc.mockImplementation(async (name: string) => (name === "video_join" ? { data: open(), error: null } : { data: null, error: null }));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ code: "unavailable", msg: "down" }), { status: 503 })));
+    const response = await postToken();
+    expect(response.status).toBe(502);
+    expect(((await response.json()) as { token?: string }).token).toBeUndefined();
+    expect(rpc).not.toHaveBeenCalledWith("video_room_created", expect.anything());
   });
 
   it("before the window there is no token, only what the call is", async () => {

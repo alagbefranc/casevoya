@@ -24,6 +24,7 @@ const state = vi.hoisted(() => ({
   calls: [] as string[],
   signUpArgs: null as unknown,
   verifyArgs: null as unknown,
+  resendArgs: null as unknown,
   requests: [] as { purpose: string }[],
 }));
 
@@ -49,8 +50,9 @@ vi.mock("@/lib/supabase/server", () => ({
           state.calls.push("signIn");
           return { data: {}, error: state.signIn };
         },
-        resend: async () => {
+        resend: async (args: unknown) => {
           state.calls.push("resend");
+          state.resendArgs = args;
           return { data: {}, error: null };
         },
         verifyOtp: async (args: unknown) => {
@@ -72,13 +74,16 @@ vi.mock("@/lib/supabase/server", () => ({
   },
 }));
 
-const { confirmPortalInvite, joinPortalInvite, resendPortalInviteCode } = await import("@/app/auth/port-actions");
+const { confirmPortalInvite, continuePortalInvite, joinPortalInvite, resendPortalInviteCode } = await import("@/app/auth/port-actions");
+
+// The confirmation link comes back to the invitation's accept screen through /auth/confirm.
+const REDIRECT = `https://app.casevoya.ca/auth/confirm?next=${encodeURIComponent(`/accept/client?token=${TOKEN}`)}`;
 
 const GOOD = "Harbour-view-19";
 
 describe("joinPortalInvite validation", () => {
   beforeEach(() => {
-    state.preview = { status: "open", invitee: { email: "Client@Example.test", display_name: "Ana Client" } };
+    state.preview = { status: "open", role: "client", invitee: { email: "Client@Example.test", display_name: "Ana Client" } };
     state.claims = null;
     state.signUp = { session: null, user: { id: "u1", identities: [{ id: "i1" }] }, error: null };
     state.signIn = null;
@@ -144,7 +149,7 @@ describe("joinPortalInvite validation", () => {
     expect(state.signUpArgs).toEqual({
       email: "client@example.test",
       password: GOOD,
-      options: { data: { display_name: "Ana Client" } },
+      options: { data: { display_name: "Ana Client" }, emailRedirectTo: REDIRECT },
     });
     expect(state.calls).not.toContain("accept_portal_invitation");
   });
@@ -188,10 +193,13 @@ describe("joinPortalInvite validation", () => {
 
 describe("confirmPortalInvite", () => {
   beforeEach(() => {
-    state.preview = { status: "open", invitee: { email: "client@example.test", display_name: "Ana Client" } };
+    state.preview = { status: "open", role: "client", invitee: { email: "client@example.test", display_name: "Ana Client" } };
+    state.claims = null;
+    state.signIn = null;
     state.verify = null;
     state.calls = [];
     state.requests = [];
+    state.resendArgs = null;
   });
 
   it("refuses anything but six digits", async () => {
@@ -220,5 +228,90 @@ describe("confirmPortalInvite", () => {
     expect(await resendPortalInviteCode("bad")).toEqual({ ok: false, message: "That invitation link is not valid." });
     expect(await resendPortalInviteCode(TOKEN)).toEqual({ ok: true, confirm: true });
     expect(state.calls).toContain("resend");
+  });
+
+  it("a resent code's link also comes back to the invitation (sponsor screen for a sponsor)", async () => {
+    state.preview = { ...state.preview, role: "sponsor" };
+    await resendPortalInviteCode(TOKEN);
+    expect(state.resendArgs).toEqual({
+      type: "signup",
+      email: "client@example.test",
+      options: { emailRedirectTo: `https://app.casevoya.ca/auth/confirm?next=${encodeURIComponent(`/accept/sponsor?token=${TOKEN}`)}` },
+    });
+  });
+
+  it("a used code after the email was confirmed by link signs in with the chosen password and accepts", async () => {
+    state.verify = { message: "Token has expired or is invalid", code: "otp_expired" };
+    const result = await confirmPortalInvite({ token: TOKEN, code: "123456", payload: PAYLOAD, password: GOOD });
+    expect(result).toEqual({ ok: true, firstRequest: null });
+    expect(state.calls).toEqual(["preview_portal_invitation", "verifyOtp", "signIn", "accept_portal_invitation"]);
+  });
+
+  it("a wrong code for an email still unconfirmed accepts nothing", async () => {
+    state.verify = { message: "Token has expired or is invalid", code: "otp_expired" };
+    state.signIn = { message: "Email not confirmed", code: "email_not_confirmed" };
+    const result = await confirmPortalInvite({ token: TOKEN, code: "123456", payload: PAYLOAD, password: GOOD });
+    expect(result).toEqual({ ok: false, message: "That code didn’t match. Use the newest code we emailed you." });
+    expect(state.calls).not.toContain("accept_portal_invitation");
+  });
+
+  it("Send a new code after the link was used: signed in and accepted instead (Supabase sends nothing for a confirmed email)", async () => {
+    const result = await resendPortalInviteCode(TOKEN, { password: GOOD, payload: PAYLOAD });
+    expect(result).toEqual({ ok: true, firstRequest: null });
+    expect(state.calls).toEqual(["preview_portal_invitation", "signIn", "accept_portal_invitation"]);
+    expect(state.calls).not.toContain("resend");
+  });
+
+  it("Send a new code while still unconfirmed sends one", async () => {
+    state.signIn = { message: "Email not confirmed", code: "email_not_confirmed" };
+    expect(await resendPortalInviteCode(TOKEN, { password: GOOD, payload: PAYLOAD })).toEqual({ ok: true, confirm: true });
+    expect(state.calls).toContain("resend");
+    expect(state.calls).not.toContain("accept_portal_invitation");
+  });
+});
+
+describe("continuePortalInvite (I used the email link)", () => {
+  beforeEach(() => {
+    state.preview = { status: "open", role: "client", invitee: { email: "client@example.test", display_name: "Ana Client" } };
+    state.claims = null;
+    state.signIn = null;
+    state.calls = [];
+    state.requests = [];
+  });
+
+  it("accepts with the session the link started in this browser, without a password", async () => {
+    state.claims = { sub: "u1", email: "Client@example.test" };
+    const result = await continuePortalInvite({ token: TOKEN, payload: PAYLOAD });
+    expect(result).toEqual({ ok: true, firstRequest: null });
+    expect(state.calls).toEqual(["preview_portal_invitation", "accept_portal_invitation"]);
+  });
+
+  it("signs in with the chosen password when the link was opened elsewhere, then accepts", async () => {
+    state.requests = [{ purpose: "Passport copy" }];
+    const result = await continuePortalInvite({ token: TOKEN, password: GOOD, payload: PAYLOAD });
+    expect(result).toEqual({ ok: true, firstRequest: { purpose: "Passport copy" } });
+    expect(state.calls).toEqual(["preview_portal_invitation", "signIn", "accept_portal_invitation"]);
+  });
+
+  it("says so when the email isn't confirmed yet", async () => {
+    state.signIn = { message: "Email not confirmed", code: "email_not_confirmed" };
+    const result = await continuePortalInvite({ token: TOKEN, password: GOOD, payload: PAYLOAD });
+    expect(result?.ok).toBe(false);
+    expect(result && !result.ok ? result.message : "").toMatch(/isn’t confirmed yet/);
+    expect(state.calls).not.toContain("accept_portal_invitation");
+  });
+
+  it("refuses a session for someone else and a missing password without accepting", async () => {
+    state.claims = { sub: "u2", email: "someone@else.test" };
+    expect((await continuePortalInvite({ token: TOKEN, password: GOOD, payload: PAYLOAD }))?.ok).toBe(false);
+    state.claims = null;
+    expect((await continuePortalInvite({ token: TOKEN, payload: PAYLOAD }))?.ok).toBe(false);
+    expect(state.calls).not.toContain("signIn");
+    expect(state.calls).not.toContain("accept_portal_invitation");
+  });
+
+  it("refuses a malformed token before touching Supabase", async () => {
+    expect(await continuePortalInvite({ token: "nope", password: GOOD, payload: PAYLOAD })).toEqual({ ok: false, message: "That invitation link is not valid." });
+    expect(state.calls).toEqual([]);
   });
 });

@@ -7,15 +7,29 @@ import {
   PreJoin,
   RoomAudioRenderer,
   VideoConference,
+  useConnectionState,
   useLocalParticipant,
   useLocalParticipantPermissions,
   useRemoteParticipants,
   useRoomContext,
   type LocalUserChoices,
 } from "@livekit/components-react";
-import type { RemoteParticipant } from "livekit-client";
+import {
+  ConnectionState,
+  RemoteVideoTrack,
+  RoomEvent,
+  Track,
+  type LocalTrackPublication,
+  type Participant,
+  type RemoteParticipant,
+  type RemoteTrack,
+  type RemoteTrackPublication,
+  type Room,
+  type TrackPublication,
+} from "livekit-client";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { deviceNotice, identityRole, startDevices } from "@/modules/video/devices";
 import { callNotice, type JoinView } from "@/modules/video/present";
 
 type Back = { href: string; label: string };
@@ -169,11 +183,18 @@ function Call({ organizationId, callRef, view, back }: Extract<Props, { kind: "c
           serverUrl={step.grant.serverUrl}
           token={step.grant.token}
           connect
-          // A client in the lobby can't publish yet; their devices start once they're let in.
-          video={step.grant.admitted && step.choices.videoEnabled ? { deviceId: step.choices.videoDeviceId } : false}
-          audio={step.grant.admitted && step.choices.audioEnabled ? { deviceId: step.choices.audioDeviceId } : false}
+          // Devices are started by InCall once connected (and, for a client, let in), never by
+          // LiveKitRoom: its device errors reach onError, and a missing camera ended the call.
+          video={false}
+          audio={false}
           onDisconnected={() => setStep({ name: "left" })}
-          onError={() => setStep({ name: "problem", title: "The call dropped", copy: "Your connection to the call was lost. Try joining again." })}
+          // Only the connection itself now (connect refused, no server URL): a device that can't
+          // start is a notice inside the call (onMediaDeviceFailure, InCall).
+          onError={(error) => {
+            console.warn("[call] connection failed", { error: error?.name ?? "Error" });
+            setStep({ name: "problem", title: "We couldn’t connect you", copy: "Your connection to the call was lost or couldn’t start. Try joining again." });
+          }}
+          onMediaDeviceFailure={(failure, kind) => console.warn("[call] device failure", { failure, kind })}
         >
           <InCall organizationId={organizationId} callRef={callRef} grant={step.grant} choices={step.choices} hostName={view.hostName ?? view.firmName} />
           <RoomAudioRenderer />
@@ -199,24 +220,134 @@ function Call({ organizationId, callRef, view, back }: Extract<Props, { kind: "c
 function InCall({ organizationId, callRef, grant, choices, hostName }: { organizationId: string; callRef: string; grant: Grant; choices: LocalUserChoices; hostName: string }) {
   const permissions = useLocalParticipantPermissions();
   const { localParticipant } = useLocalParticipant();
+  const connection = useConnectionState();
+  const room = useRoomContext();
   const admitted = grant.role === "host" || (permissions ? permissions.canPublish && permissions.canSubscribe : grant.admitted);
+  const [deviceProblem, setDeviceProblem] = useState<string | null>(null);
+  useCallDiagnostics(room);
 
-  // Let in after joining: start the devices the client chose in the pre-join step.
-  const started = useRef(grant.admitted);
+  // Once connected and allowed to publish (a host at once, a client when let in), start the
+  // devices chosen in the pre-join step. One that fails leaves the person in the call with it off.
+  const started = useRef(false);
   useEffect(() => {
-    if (!admitted || started.current) return;
+    if (!admitted || started.current || connection !== ConnectionState.Connected) return;
     started.current = true;
-    void localParticipant.setCameraEnabled(choices.videoEnabled, choices.videoDeviceId ? { deviceId: choices.videoDeviceId } : undefined).catch(() => undefined);
-    void localParticipant.setMicrophoneEnabled(choices.audioEnabled, choices.audioDeviceId ? { deviceId: choices.audioDeviceId } : undefined).catch(() => undefined);
-  }, [admitted, choices, localParticipant]);
+    console.info("[call] starting devices", { role: grant.role, camera: choices.videoEnabled, microphone: choices.audioEnabled });
+    void startDevices(localParticipant, choices).then((failed) => setDeviceProblem(deviceNotice(failed)));
+  }, [admitted, choices, connection, grant.role, localParticipant]);
 
   if (!admitted) return <Lobby hostName={hostName} />;
   return (
     <>
       {grant.role === "host" ? <HostBar organizationId={organizationId} callRef={callRef} /> : null}
+      {deviceProblem ? (
+        <p className="cv-call-device" role="status">
+          {deviceProblem}
+          <button className="btn sm" type="button" onClick={() => setDeviceProblem(null)}>
+            OK
+          </button>
+        </p>
+      ) : null}
       <VideoConference />
     </>
   );
+}
+
+function trackLabel(publication: TrackPublication | undefined): Record<string, unknown> {
+  return { source: publication?.source ?? "unknown", kind: publication?.kind ?? "unknown", muted: publication?.isMuted ?? null };
+}
+
+/**
+ * Browser console diagnostics for a call ("[call] …"): connection changes, what is published and
+ * subscribed, permission changes (a client being let in), and a few seconds after a camera starts
+ * or is received, whether video frames are really flowing. For a black tile this tells "the
+ * camera sends no frames" (local `muted`/`framesSent: 0` on the sender) from "frames are sent but
+ * not received or decoded" (remote `framesDecoded: 0`). No ids, tokens or names are logged.
+ */
+function useCallDiagnostics(room: Room) {
+  useEffect(() => {
+    const timers: number[] = [];
+    const later = (run: () => Promise<void>) => {
+      timers.push(window.setTimeout(() => void run().catch(() => undefined), 5000));
+    };
+    const who = (participant: Participant | undefined) => identityRole(participant?.identity);
+    const onState = (state: ConnectionState) => console.info("[call] connection", { state });
+    const onDisconnected = (reason?: unknown) => console.info("[call] disconnected", { reason });
+    const onLocalPublished = (publication: LocalTrackPublication) => {
+      console.info("[call] published", trackLabel(publication));
+      if (publication.source !== Track.Source.Camera) return;
+      later(async () => {
+        const track = publication.videoTrack;
+        const media = track?.mediaStreamTrack;
+        const settings = media?.getSettings();
+        const sent = track ? await track.getSenderStats() : [];
+        console.info("[call] camera after 5s", {
+          readyState: media?.readyState ?? null,
+          // true: the camera gives no frames (often in use by another app or covered).
+          trackMuted: media?.muted ?? null,
+          width: settings?.width ?? null,
+          height: settings?.height ?? null,
+          framesSent: sent.reduce((sum, layer) => sum + (layer.framesSent ?? 0), 0),
+        });
+      });
+    };
+    const onRemotePublished = (publication: RemoteTrackPublication, participant: RemoteParticipant) =>
+      console.info("[call] remote published", { from: who(participant), ...trackLabel(publication), subscribed: publication.isSubscribed });
+    const onSubscribed = (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      console.info("[call] subscribed", { from: who(participant), ...trackLabel(publication) });
+      if (!(track instanceof RemoteVideoTrack)) return;
+      later(async () => {
+        const stats = await track.getReceiverStats();
+        const decoded = stats ? stats.framesDecoded : null;
+        const log = decoded === 0 ? console.warn : console.info;
+        log("[call] remote video after 5s", {
+          from: who(participant),
+          source: publication.source,
+          muted: publication.isMuted,
+          framesReceived: stats?.framesReceived ?? null,
+          framesDecoded: decoded,
+          width: stats?.frameWidth ?? null,
+          height: stats?.frameHeight ?? null,
+        });
+      });
+    };
+    const onSubscriptionFailed = (_sid: string, participant: RemoteParticipant, reason?: unknown) =>
+      console.warn("[call] subscription failed", { from: who(participant), reason });
+    const onMuted = (publication: TrackPublication, participant: Participant) => console.info("[call] muted", { who: who(participant), ...trackLabel(publication) });
+    const onUnmuted = (publication: TrackPublication, participant: Participant) => console.info("[call] unmuted", { who: who(participant), ...trackLabel(publication) });
+    const onPermissions = (_previous: unknown, participant: Participant) =>
+      console.info("[call] permissions", {
+        who: participant === room.localParticipant ? "me" : who(participant),
+        canPublish: participant.permissions?.canPublish ?? null,
+        canSubscribe: participant.permissions?.canSubscribe ?? null,
+      });
+    const onDeviceError = (error: Error, kind?: MediaDeviceKind) => console.warn("[call] device error", { error: error?.name, kind });
+    room
+      .on(RoomEvent.ConnectionStateChanged, onState)
+      .on(RoomEvent.Disconnected, onDisconnected)
+      .on(RoomEvent.LocalTrackPublished, onLocalPublished)
+      .on(RoomEvent.TrackPublished, onRemotePublished)
+      .on(RoomEvent.TrackSubscribed, onSubscribed)
+      .on(RoomEvent.TrackSubscriptionFailed, onSubscriptionFailed)
+      .on(RoomEvent.TrackMuted, onMuted)
+      .on(RoomEvent.TrackUnmuted, onUnmuted)
+      .on(RoomEvent.ParticipantPermissionsChanged, onPermissions)
+      .on(RoomEvent.MediaDevicesError, onDeviceError);
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+      room
+        .off(RoomEvent.ConnectionStateChanged, onState)
+        .off(RoomEvent.Disconnected, onDisconnected)
+        .off(RoomEvent.LocalTrackPublished, onLocalPublished)
+        .off(RoomEvent.TrackPublished, onRemotePublished)
+        .off(RoomEvent.TrackSubscribed, onSubscribed)
+        .off(RoomEvent.TrackSubscriptionFailed, onSubscriptionFailed)
+        .off(RoomEvent.TrackMuted, onMuted)
+        .off(RoomEvent.TrackUnmuted, onUnmuted)
+        .off(RoomEvent.ParticipantPermissionsChanged, onPermissions)
+        .off(RoomEvent.MediaDevicesError, onDeviceError);
+    };
+  }, [room]);
 }
 
 function Lobby({ hostName }: { hostName: string }) {

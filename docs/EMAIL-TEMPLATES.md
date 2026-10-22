@@ -169,7 +169,7 @@ Email Templates, with the subject shown:
 
 | File | Supabase template | Subject | Notes |
 |---|---|---|---|
-| `confirm-signup.html` | Confirm signup | Verify your email | Has both `{{ .Token }}` (the app's accept flows verify a 6-digit code with `type: signup`) and `{{ .ConfirmationURL }}`. |
+| `confirm-signup.html` | Confirm signup | Verify your email | Has both `{{ .Token }}` (the app's accept flows verify a 6-digit code with `type: signup`) and `{{ .ConfirmationURL }}`. Either works: the portal accept screens send the link through `/auth/confirm?next=/accept/<role>?token=…` (staff: `/invite/<token>`), and their code step moves on when the link was used instead ("I used the email link", or by itself when the link opened in the same browser). Keep both. |
 | `magic-link.html` | Magic Link | Your sign-in code | The app's account recovery (`sendRecoveryEmail`) uses `signInWithOtp` and asks for the 6-digit `{{ .Token }}`. The design has no button. `src/app/sign-in/actions.ts` also calls `signInWithOtp` with `emailRedirectTo` (a link): if that path is used, add a `{{ .ConfirmationURL }}` button first. The copy says the code expires in 1 hour, matching the project's Email OTP expiry (3600 s). Live in Supabase since 18 Oct 2026. |
 | `reset-password.html` | Reset Password | Reset your password | Only used if the app calls `resetPasswordForEmail`; it does not today. Says 1 hour, matching the project OTP expiry. |
 
