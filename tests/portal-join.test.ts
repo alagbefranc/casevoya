@@ -255,6 +255,27 @@ describe("confirmPortalInvite", () => {
     expect(state.calls).not.toContain("accept_portal_invitation");
   });
 
+  it("a used code says why when a new code won't help: another account here, too many attempts, the wrong password", async () => {
+    state.verify = { message: "Token has expired or is invalid", code: "otp_expired" };
+    state.claims = { sub: "u2", email: "someone@else.test" };
+    expect(await confirmPortalInvite({ token: TOKEN, code: "123456", payload: PAYLOAD, password: GOOD })).toEqual({
+      ok: false,
+      message: "You’re signed in with a different email. Sign out, then open this invitation again.",
+    });
+    state.claims = null;
+    state.signIn = { message: "Too many requests" };
+    expect(await confirmPortalInvite({ token: TOKEN, code: "123456", payload: PAYLOAD, password: GOOD })).toEqual({
+      ok: false,
+      message: "Too many attempts. Wait and try again.",
+    });
+    state.signIn = { message: "Invalid login credentials", code: "invalid_credentials" };
+    expect(await confirmPortalInvite({ token: TOKEN, code: "123456", payload: PAYLOAD, password: GOOD })).toEqual({
+      ok: false,
+      message: "That password didn’t match the Casevoya sign-in for this email.",
+    });
+    expect(state.calls).not.toContain("accept_portal_invitation");
+  });
+
   it("Send a new code after the link was used: signed in and accepted instead (Supabase sends nothing for a confirmed email)", async () => {
     const result = await resendPortalInviteCode(TOKEN, { password: GOOD, payload: PAYLOAD });
     expect(result).toEqual({ ok: true, firstRequest: null });

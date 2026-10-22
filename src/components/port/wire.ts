@@ -237,6 +237,23 @@ export function usePortActions(page: string, token?: string) {
       const session = ctx.current;
 
       /**
+       * Whether this invitation was already accepted by the person signed in here. The email's
+       * link opens a second tab of the accept screen, and the first tab's watcher (or the other
+       * tab) can accept before this one does; the invitation is then used, but they're in. Re-reads
+       * the invitation and the session. The invited email is known only while the invitation was
+       * open (the preview drops it after); when it is, the session must be that email.
+       */
+      const acceptedHere = async (): Promise<boolean> => {
+        if (!token) return false;
+        const known = invite.current?.invitee?.email?.trim().toLowerCase();
+        const opened = await previewPortalInvitation(token);
+        if ("error" in opened || asPreview(opened.preview)?.status !== "consumed") return false;
+        ctx.current = await getAuthContext();
+        const email = ctx.current.email?.trim().toLowerCase();
+        return ctx.current.signedIn && Boolean(email) && (!known || email === known);
+      };
+
+      /**
        * The code step's way on when the email was confirmed through its link (see
        * continuePortalInvite). `quiet`: the watcher found a session; nothing is shown on failure.
        */
@@ -252,6 +269,10 @@ export function usePortActions(page: string, token?: string) {
         }
         const preview = invite.current;
         if (!preview || preview.status !== "open") {
+          if (await acceptedHere()) {
+            leaveCodeStep(root, page, null);
+            return "done";
+          }
           if (!quiet) toast2("This invitation can no longer be used.", { kind: "bad" });
           return "stop";
         }
@@ -262,6 +283,10 @@ export function usePortActions(page: string, token?: string) {
         }
         const joined = await continuePortalInvite({ token, password: quiet ? "" : portalPassword(root), payload: draft });
         if (!joined || joined.ok === false) {
+          if (await acceptedHere()) {
+            leaveCodeStep(root, page, null);
+            return "done";
+          }
           if (!quiet) toast2(joined?.message ?? "That didn’t work. Try again.", { kind: "bad" });
           // A session for someone else won't become the invitee's by waiting.
           return joined && /different email/.test(joined.message) ? "stop" : "retry";
@@ -343,6 +368,8 @@ export function usePortActions(page: string, token?: string) {
             heading.textContent = `Hi ${first}, welcome to your portal`;
           }
           if (preview?.status && preview.status !== "open") {
+            // Opened from the email's link after the other tab accepted: they're in already.
+            if (await acceptedHere()) event.root.dispatchEvent(new CustomEvent("port-go", { detail: "/portal" }));
             return { ok: false, message: "This invitation can no longer be used." };
           }
         }
@@ -411,11 +438,17 @@ export function usePortActions(page: string, token?: string) {
             invite.current = asPreview(opened.preview);
           }
           const preview = invite.current;
-          if (!preview || preview.status !== "open") return { ok: false, message: "This invitation can no longer be used." };
+          if (!preview || preview.status !== "open") {
+            if (await acceptedHere()) return { ok: true, href: "/portal" };
+            return { ok: false, message: "This invitation can no longer be used." };
+          }
           const draft = portalAcceptPayload(event.root, preview, page);
           if ("error" in draft) return { ok: false, message: draft.error };
           const confirmed = await confirmPortalInvite({ token, code: event.code, payload: draft, password: portalPassword(event.root) });
-          if (!confirmed || confirmed.ok === false) return confirmed;
+          if (!confirmed || confirmed.ok === false) {
+            if (await acceptedHere()) return { ok: true, href: "/portal" };
+            return confirmed;
+          }
           ctx.current = null;
           if (page === "accept-client") {
             showFirstRequest(event.root, "firstRequest" in confirmed ? confirmed.firstRequest : null);
@@ -538,11 +571,18 @@ export function usePortActions(page: string, token?: string) {
           invite.current = asPreview(opened.preview);
         }
         const preview = invite.current;
-        if (!preview || preview.status !== "open") return { ok: false, message: "This invitation can no longer be used." };
+        if (!preview || preview.status !== "open") {
+          if (await acceptedHere()) return { ok: true, href: "/portal" };
+          return { ok: false, message: "This invitation can no longer be used." };
+        }
         const draft = portalAcceptPayload(event.root, preview, page);
         if ("error" in draft) return { ok: false, message: draft.error };
         const saved = await savePortalInvitationDraft(token, { ...draft, step: event.step });
-        if ("error" in saved) return { ok: false, message: saved.error ?? "That draft could not be saved." };
+        if ("error" in saved) {
+          // The other tab may have accepted since this one read the invitation.
+          if (await acceptedHere()) return { ok: true, href: "/portal" };
+          return { ok: false, message: saved.error ?? "That draft could not be saved." };
+        }
         const finishing =
           (page === "accept-client" && event.step === 3) ||
           (page === "accept-family" && event.step === 3) ||
@@ -557,7 +597,9 @@ export function usePortActions(page: string, token?: string) {
           // Continue on the code step: maybe the email was confirmed through its link.
           const joined = await continuePortalInvite({ token, password: portalPassword(event.root), payload: draft });
           if (!joined || joined.ok === false) {
-            return { ok: false, message: "Enter the six-digit code we emailed you, or use the link in that email, then choose “I used the email link”." };
+            if (await acceptedHere()) return { ok: true, href: "/portal" };
+            // The specific reason (wrong password, another account, still unconfirmed with both ways on).
+            return { ok: false, message: joined?.message ?? "Enter the six-digit code we emailed you, or use the link in that email, then choose “I used the email link”." };
           }
           firstRequest = "firstRequest" in joined ? joined.firstRequest : null;
           ctx.current = null;

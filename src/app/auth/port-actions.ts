@@ -662,6 +662,18 @@ async function signedInAfterConfirm(
   return "wrong-password";
 }
 
+/**
+ * Why signedInAfterConfirm could not sign the person in, when a new code won't help: another
+ * account in this browser, too many attempts, or the wrong password. Null otherwise (the email is
+ * still unconfirmed, or no password was typed).
+ */
+function notSignedInMessage(checked: ConfirmedCheck): string | null {
+  if (checked === "elsewhere") return SIGNED_IN_ELSEWHERE;
+  if (checked === "locked") return "Too many attempts. Wait and try again.";
+  if (checked === "wrong-password") return WRONG_PASSWORD;
+  return null;
+}
+
 function passwordInput(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
@@ -818,10 +830,9 @@ export async function confirmPortalInvite(input: {
   if (error) {
     if (lockedMessage(error.message)) return joinFail("Too many attempts. Wait and try again.");
     // A used code: the email may have been confirmed through the link already.
-    if ((await signedInAfterConfirm(supabase, invitee, passwordInput(input.password))) === "signed-in") {
-      return acceptJoined(supabase, input.token, input.payload);
-    }
-    return joinFail("That code didn’t match. Use the newest code we emailed you.");
+    const checked = await signedInAfterConfirm(supabase, invitee, passwordInput(input.password));
+    if (checked === "signed-in") return acceptJoined(supabase, input.token, input.payload);
+    return joinFail(notSignedInMessage(checked) ?? "That code didn’t match. Use the newest code we emailed you.");
   }
   return acceptJoined(supabase, input.token, input.payload);
 }
@@ -845,10 +856,7 @@ export async function continuePortalInvite(input: {
   if ("error" in invitee) return joinFail(invitee.error);
   const checked = await signedInAfterConfirm(supabase, invitee, passwordInput(input.password));
   if (checked === "signed-in") return acceptJoined(supabase, input.token, input.payload);
-  if (checked === "elsewhere") return joinFail(SIGNED_IN_ELSEWHERE);
-  if (checked === "locked") return joinFail("Too many attempts. Wait and try again.");
-  if (checked === "wrong-password") return joinFail(WRONG_PASSWORD);
-  return joinFail("Your email isn’t confirmed yet. Enter the six-digit code, or open the link in the email we sent.");
+  return joinFail(notSignedInMessage(checked) ?? "Your email isn’t confirmed yet. Enter the six-digit code, or open the link in the email we sent.");
 }
 
 /**
