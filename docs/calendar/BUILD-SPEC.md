@@ -475,7 +475,13 @@ normalises to `booking_fee.succeeded` / `booking_fee.failed`. `record_stripe_eve
    "Manage your booking" link for bookers without a portal, reminder templates and cron.
 6. Paid consultations: PR #19 webhook branch, hold expiry cron, Payment Element, receipt, refunds.
 7. LiveKit video: token + admit routes, room lifecycle hooks, `/call/[ref]` UI (PreJoin, lobby, grid, screen share,
-   chat), webhook route. Start on LiveKit Cloud Build; self-host switch is config only.
+   chat), webhook route. Start on LiveKit Cloud Build; self-host switch is config only. **Status 2026-10-22 (branch
+   `livekit-video`, migration `20261022100000`):** built. Tokens are signed with Web Crypto (no Node SDK on Workers);
+   the database decides who joins and when (`public.video_join`); the room is created at the first join; the lobby is
+   a token that can neither publish nor subscribe until the host's Let in (`UpdateParticipant`); cancel deletes the
+   room; webhooks verified and applied once. Hosts are the booking's host and firm owners; the window is 15 minutes
+   before to 30 minutes after. Not built here: the one-time code for bookers without a portal (slice 5), recording
+   (slice 8). Checked end to end against a local livekit-server v1.13.10 with two headless Chromium tabs.
 8. Recording with consent via Egress → R2, presigned access, retention sweep.
 9. The external-busy stub wired with tests. Google and Microsoft sync stay in the backlog.
 

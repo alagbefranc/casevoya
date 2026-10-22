@@ -405,6 +405,17 @@ PRD INT-01, INT-03 to INT-06; T020, T023; branch `intake-delivery`.
 
 Tested in `tests/intake-delivery.rls.test.ts` (send gates by role, aal2, assignment and other firm; person on the matter, past due date, unpublished form; sample mode; idempotency and a fresh round after submit; task and request rows; no outbox event; a client and a sponsor see only their own responses, requests, forms and answers; autosave version conflict keeps the first answer; submit completes the task and is refused twice; freeze then ordinary edits refused; correction as a new version on a frozen snapshot with the snapshot unchanged, numbering, description-only, proof ownership, append-only rows; notifications for staff on the matter only; review gates, latest-version rule, idempotency, review visibility).
 
+## Video calls (repository only, `20261022100000`)
+
+LiveKit rooms for bookings whose location is a Casevoya video call (BUILD-SPEC §7, slice 7). Not applied on the live project.
+
+* `video_sessions`: one room per video booking (`room_name` = `cv-` + booking id without dashes), status `scheduled` → `live` → `ended`, or `cancelled` when the booking is (trigger `bookings_video_session`). Forced RLS; scheduling staff of the firm read it.
+* `video_participants`: who was let in (`staff:<user id>` hosts, `client:<user id>` clients), admitted / removed by whom and when, first and last join, last leave from LiveKit webhooks. Forced RLS; scheduling staff read it.
+* `video_token_issues`: rate-limit counter (10 joins a minute per person and room). No API access.
+* `public.video_join(org, ref, issue)`: the caller's view of the call (`open`, `early`, `closed`, `unavailable` with a reason) and, with `issue`, the grant the app server signs into a LiveKit token. Hosts: the booking's host or an active firm owner with staff MFA; clients: the booking's own person (`app.portal_booking_caller_ok`). Window: 15 minutes before the start to 30 minutes after the end.
+* `public.video_room_created`, `public.video_admit` (host only), `public.video_end` (host only): authenticated; each audited.
+* `public.apply_livekit_event(event)`: service role only; deduped through `webhook_inbox` (provider `livekit`); unknown rooms and other event kinds are recorded as ignored.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.

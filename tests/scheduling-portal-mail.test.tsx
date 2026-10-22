@@ -96,7 +96,7 @@ describe("consultation emails (EM16a–c) through the mail worker's renderer", (
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => undefined }) }));
 
 describe("portal Appointments", () => {
-  const base = { hostName: "Kim Host", locationKind: "phone", locationDetail: null, timeZone: "America/Vancouver", version: 1, isSample: false, rules: null };
+  const base = { publicRef: "abcdefghijklmnopqrstuvwxyz", hostName: "Kim Host", locationKind: "phone", locationDetail: null, timeZone: "America/Vancouver", version: 1, isSample: false, rules: null };
   it("lists the client's coming and past calls with their zone, and the firm's booking pages", () => {
     const html = renderToStaticMarkup(
       createElement(AppointmentsLive, {

@@ -5,6 +5,7 @@ import { isUuid } from "@/lib/tenant/context";
 import { parseAvailability, slotsFromAvailability } from "./availability";
 import { shortWhen } from "./format";
 import { isTimeZone } from "./slots";
+import { closeRoomForBooking } from "@/modules/video/service";
 
 type Result = { ok: true } | { error: string; stepUp?: boolean };
 
@@ -164,7 +165,10 @@ export async function cancelBooking(input: { organizationId: string; bookingId: 
     p_reason: null,
     p_expected_version: input.version,
   });
-  return error ? bookingError(error.message) : { ok: true };
+  if (error) return bookingError(error.message);
+  // The database already refuses new call tokens; disconnect anyone still in the room.
+  await closeRoomForBooking(input.bookingId);
+  return { ok: true };
 }
 
 export async function rescheduleBooking(input: { organizationId: string; bookingId: string; version: number | null; start: string }): Promise<Result> {

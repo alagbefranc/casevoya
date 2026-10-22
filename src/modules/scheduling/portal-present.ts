@@ -5,6 +5,7 @@
 import { locationLabel, safeZone } from "./format";
 import type { PortalAppointment } from "./portal-load";
 import { utcToLocal } from "./slots";
+import { callHref, callIsOpen } from "@/modules/video/present";
 
 const WEEKDAY = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -15,25 +16,32 @@ export const JOIN_OPENS_BEFORE_MS = 10 * 60_000;
 /** The Designer's toast on the join button before the link opens. */
 export const JOIN_WAIT_TOAST = "The link opens 10 minutes before the call";
 
+/** The same toast for a Casevoya video call, which opens 15 minutes before (20261022100000). */
+export const CALL_WAIT_TOAST = "The call opens 15 minutes before the start";
+
 export type JoinState =
   /** The firm's meeting link, inside the window: the button is a link. */
   | { kind: "open"; href: string }
   /** The firm's meeting link, before the window: the Designer's button and toast. */
   | { kind: "wait"; toast: string }
-  /** A video call with no link stored: the firm sends it. */
+  /** A video call without its booking reference (never from the portal loader): the firm sends it. */
   | { kind: "firm"; toast: string }
   /** Phone or in person: no join button, the location copy says how they meet. */
   | { kind: "none" };
 
 /** How the join button renders for an upcoming call at `now`. */
-export function joinState(row: Pick<PortalAppointment, "locationKind" | "locationDetail" | "startsAt" | "endsAt">, now: number, firmName: string): JoinState {
+export function joinState(row: Pick<PortalAppointment, "locationKind" | "locationDetail" | "startsAt" | "endsAt"> & { publicRef?: string | null }, now: number, firmName: string): JoinState {
   if (row.locationKind === "meeting_link" && row.locationDetail && /^https:\/\/\S+$/.test(row.locationDetail)) {
     const start = Date.parse(row.startsAt);
     const end = Date.parse(row.endsAt);
     if (now >= start - JOIN_OPENS_BEFORE_MS && now < end) return { kind: "open", href: row.locationDetail };
     return { kind: "wait", toast: JOIN_WAIT_TOAST };
   }
-  if (row.locationKind === "video") return { kind: "firm", toast: `${firmName} will send you the meeting link` };
+  if (row.locationKind === "video") {
+    // A Casevoya video call: the call page, from 15 minutes before until 30 minutes after.
+    if (!row.publicRef) return { kind: "firm", toast: `${firmName} will send you the meeting link` };
+    return callIsOpen(row.startsAt, row.endsAt, now) ? { kind: "open", href: callHref(row.publicRef) } : { kind: "wait", toast: CALL_WAIT_TOAST };
+  }
   return { kind: "none" };
 }
 

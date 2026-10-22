@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { parseAvailability, slotsFromAvailability } from "./availability";
 import { isTimeZone } from "./slots";
+import { closeRoomForBooking } from "@/modules/video/service";
 
 const DAY = 86_400_000;
 /** How far ahead the reschedule picker looks (the type's own booking window still applies). */
@@ -89,6 +90,8 @@ export async function portalCancelBooking(input: { organizationId: string; booki
     p_reason: null,
   });
   if (error) return portalBookingError(error.message);
+  // The database already refuses new call tokens; disconnect anyone still in the room.
+  await closeRoomForBooking(input.bookingId);
   const late = Boolean(data && typeof data === "object" && !Array.isArray(data) && (data as { late?: unknown }).late === true);
   return { ok: true, late };
 }

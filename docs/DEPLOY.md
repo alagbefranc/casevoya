@@ -24,6 +24,9 @@ Do not commit secrets. Copy the names below into the host environment. Account i
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe **test-mode** publishable key (`pk_test_…`). Public; Next.js inlines it at build time, so set it in the build environment (or `.env.production`). Without it the Payments pages say card payments aren't configured. |
 | `ZERNIO_API_KEY` | Zernio API key for WhatsApp (docs/integrations/whatsapp-zernio.md). Without it WhatsApp shows "Not available" and `POST /api/whatsapp/dispatch` answers 503. The dispatcher reuses `EMAIL_DISPATCH_SECRET` as its bearer. |
 | `ZERNIO_WEBHOOK_SECRET` | Secret registered with Zernio for `POST /api/zernio/webhook` (hex HMAC-SHA256 of the raw body in `X-Zernio-Signature`). |
+| `LIVEKIT_URL` | LiveKit WebSocket URL (`wss://<project>.livekit.cloud`, or a self-hosted server). Not a secret, but kept with the two below. Without all three, the call page says video calls aren't set up and nothing is sent to LiveKit. |
+| `LIVEKIT_API_KEY` | LiveKit API key (the issuer of every token Casevoya signs). |
+| `LIVEKIT_API_SECRET` | LiveKit API secret. Signs join tokens and room calls, and verifies LiveKit webhooks. Never sent to the browser. |
 | `STRIPE_CONNECT_DASHBOARD` | Optional. `none` (default: the firm uses Connect embedded components in Casevoya only) or `full` (the firm also gets the Stripe Dashboard), for new connected accounts. Not a secret. |
 
 ### Stripe (test mode only)
@@ -34,6 +37,12 @@ Do not commit secrets. Copy the names below into the host environment. Account i
 - Locally: `stripe listen --forward-connect-to localhost:3000/api/stripe/webhook` prints a `whsec_…` to use as `STRIPE_WEBHOOK_SECRET`.
 - **Casevoya subscription billing (T042)**: the firm's own plan is a subscription on the platform account (test mode), paid through Stripe Checkout and managed in the Billing Portal. In the Stripe test Dashboard add a second event destination for **events on your account** with URL `https://app.casevoya.ca/api/stripe/billing` and events `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`; put its signing secret in `STRIPE_BILLING_WEBHOOK_SECRET`. Enable the Billing Portal (Settings > Billing > Customer portal) with plan switching between the Casevoya products, quantity changes on the seat price, payment-method updates and cancel at period end. The Products and Prices exist already in test and live mode (lookup keys `casevoya_<solo|practice|firm>_<month|year>`, `casevoya_seat_<month|year>`, currency CAD); the app resolves them by lookup key, checks each amount against `product_settings` `subscription.plans` and refuses to check out on a mismatch. Locally: `stripe listen --forward-to localhost:3000/api/stripe/billing` for the platform events. `APP_URL` is where Checkout and the portal return (`/sheet/settings?tab=billing`).
 - An invoice turns paid only when a verified webhook event is applied (`app.apply_stripe_payment_event`, service role, deduped on provider + connected account + event id). The browser redirect is never proof of payment.
+
+### Video calls (LiveKit)
+
+- Create a LiveKit project (LiveKit Cloud, or a self-hosted `livekit-server`; BUILD-SPEC §7.0) and set `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` as Worker secrets.
+- In the project settings add the webhook URL `https://app.casevoya.ca/api/video/livekit/webhook` signed with the same API key. Events used: `room_started`, `room_finished`, `participant_joined`, `participant_left`; others are recorded as ignored. Applying events needs `SUPABASE_SECRET_KEY`.
+- Apply migration `20261022100000_video_calls.sql`. Booking types with "Video call in Casevoya" then open `/call/<booking reference>` from 15 minutes before the start.
 
 ## App Worker
 

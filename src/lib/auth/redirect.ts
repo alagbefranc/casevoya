@@ -17,9 +17,9 @@ export function safeNext(value: FormDataEntryValue | string | null | undefined, 
   return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 
-const GATED_PREFIXES = ["/app", "/portal", "/sheet"];
+const GATED_PREFIXES = ["/app", "/portal", "/sheet", "/call"];
 
-/** Firm workspace, client portal, and sheet routes. Signed-out visitors go to sign-in. */
+/** Firm workspace, client portal, sheet and video call routes. Signed-out visitors go to sign-in. */
 export function isGatedPath(pathname: string): boolean {
   return GATED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }

@@ -1,0 +1,153 @@
+/* The video call page (/call/<ref>). Casevoya tokens around LiveKit's components; the call area
+   keeps LiveKit's dark theme, with Casevoya's action blue. */
+.cv-call {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: var(--font-ui);
+}
+.cv-call-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+.cv-call-head small {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.cv-call-head h1 {
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 600;
+  margin: 2px 0;
+}
+.cv-call-head p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.cv-call-card {
+  max-width: 560px;
+  width: 100%;
+  margin: 24px auto;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+}
+.cv-call-card h1,
+.cv-call-card h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.cv-call-card p {
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+.cv-call-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cv-call-prejoin {
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 16px;
+  border-radius: var(--radius-panel);
+  background: #111;
+  color: #fff;
+}
+.cv-call-lead,
+.cv-call-fine {
+  font-size: 14px;
+  color: #e6e6e6;
+  margin-bottom: 12px;
+}
+.cv-call-fine {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: #bdbdbd;
+}
+/* The name comes from the booking, not from what someone types. */
+.cv-call-prejoin .lk-username-container input {
+  display: none;
+}
+.cv-call-prejoin .lk-prejoin {
+  width: 100%;
+  max-width: none;
+}
+.cv-call-room {
+  flex: 1;
+  min-height: 70dvh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+  background: #111;
+}
+.cv-call-room .lk-video-conference {
+  flex: 1;
+}
+.cv-call-lobby {
+  margin: auto;
+}
+.cv-call-hostbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+.cv-call-hostbar ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cv-call-hostbar li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.cv-call-quiet {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.cv-call-error {
+  color: var(--danger-text);
+  font-size: 14px;
+}
+.cv-call-end {
+  margin-left: auto;
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+[data-lk-theme="default"] {
+  --lk-accent-bg: var(--action);
+  --lk-accent-fg: var(--on-action);
+}
+.cv-call :focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cv-call * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

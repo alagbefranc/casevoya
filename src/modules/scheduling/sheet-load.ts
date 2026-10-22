@@ -5,6 +5,7 @@ import type {
   BookingTypeRow,
   CancelDialogData,
   ConsultationRecordData,
+  ConsultationRecordJoin,
   ConsultationsData,
   ConsultationsTab,
   HostPanel,
@@ -19,6 +20,7 @@ import type { SheetStaff } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 import { parseAvailability, slotsFromAvailability } from "./availability";
 import { isUuid } from "@/lib/tenant/context";
+import { callHref, callIsOpen } from "@/modules/video/present";
 import { COMMON_ZONES, PRACTICE_NOTICE, locationLabel, locationShort, longWhen, safeZone, shortWhen, slotLabel } from "./format";
 import {
   BOOKING_PAGE_PILL,
@@ -140,7 +142,7 @@ async function loadRecord(supabase: Client, staff: SheetStaff, query: SheetQuery
 
   const { data: booking } = await supabase
     .from("bookings")
-    .select("id, title, starts_at, ends_at, status, host_name, location_kind, location_detail, source, person_id, matter_id, cancelled_at, cancelled_by, cancel_reason, outcome_at, attendee_time_zone, event_type_id, is_sample, version")
+    .select("id, public_ref, title, starts_at, ends_at, status, host_name, host_membership_id, location_kind, location_detail, source, person_id, matter_id, cancelled_at, cancelled_by, cancel_reason, outcome_at, attendee_time_zone, event_type_id, is_sample, version")
     .eq("organization_id", org)
     .eq("id", chosen)
     .maybeSingle();
@@ -202,6 +204,7 @@ async function loadRecord(supabase: Client, staff: SheetStaff, query: SheetQuery
       attendee: name,
       notes: { items: noteItems, copy: notesCopy, lead: notesLink },
       outcome: { chip: outcome.chip, copy: `${outcome.copy} A summary for the client isn’t sent from here.`, actions },
+      join: videoJoin(booking, staff, now),
       details: [
         { term: "Booking type", value: type.data?.title ?? booking.title },
         { term: "When (your time)", value: shortWhen(start, zone) },
@@ -221,6 +224,22 @@ async function loadRecord(supabase: Client, staff: SheetStaff, query: SheetQuery
       })),
     },
   };
+}
+
+/**
+ * The record's "Join video call" for a Casevoya video call: the booking's host and firm owners
+ * (the database checks again on the call page). Open from 15 minutes before until 30 minutes after.
+ */
+function videoJoin(
+  booking: { public_ref: string; status: string; location_kind: string; starts_at: string; ends_at: string; host_membership_id: string },
+  staff: SheetStaff,
+  now: number,
+): ConsultationRecordJoin | null {
+  if (booking.location_kind !== "video" || booking.status !== "confirmed") return null;
+  if (booking.host_membership_id !== staff.membershipId && staff.role !== "firm_owner") return null;
+  if (callIsOpen(booking.starts_at, booking.ends_at, now)) return { href: callHref(booking.public_ref), toast: null };
+  if (Date.parse(booking.ends_at) <= now) return null;
+  return { href: null, toast: "The call opens 15 minutes before the start" };
 }
 
 export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuery): Promise<ConsultationsPage> {
@@ -295,7 +314,7 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
         { term: "Timezone", value: { left: tz, right: "clients see their own" } },
         { term: "Days off", value: off.length ? off.slice(0, 4).join(", ") + (off.length > 4 ? ` and ${off.length - 4} more` : "") : "None ahead" },
         { term: "Calendars read", value: "None connected (calendar sync is planned)" },
-        { term: "Video meetings", value: "The firm sends the link (in-app video is planned)" },
+        { term: "Video meetings", value: "In Casevoya: the host lets the client in from the call page" },
       ],
       edit: canEdit
         ? {
