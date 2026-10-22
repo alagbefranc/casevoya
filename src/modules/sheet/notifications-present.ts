@@ -24,6 +24,9 @@ const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 /** What the System tab lists: the rows Casevoya itself raises (card payments, deadline reminders, support requests). */
 export const SYSTEM_KINDS = new Set<NotificationItem["kind"]>(["payment", "deadline", "support"]);
 
+/** How many notifications the page and the sidebar read: the most public.staff_notifications returns. */
+export const NOTIFICATION_READ_LIMIT = 200;
+
 /** The sidebar's Notifications count: unread rows, on every Sheet page. */
 export function unreadCount(items: readonly NotificationItem[]): number {
   return items.filter((item) => !item.read).length;

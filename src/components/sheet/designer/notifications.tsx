@@ -22,6 +22,8 @@ export type NotificationGroup = { label: string; rows: NotificationRow[] };
 export type NotificationsData = {
   tab: NotificationsTab;
   unread: number;
+  /** Live: more notifications exist than were read, so the unread count is a floor ("N+ unread"). */
+  more?: boolean;
   groups: NotificationGroup[];
   /** Live only: wires Mark all read. */
   organizationId?: string;
@@ -56,7 +58,7 @@ export function NotificationsHeader({ data }: { data: NotificationsData }) {
           {"Notifications"}
           <Icon name={"sort"} cls={"ic dd"} />
         </button>
-        <span className={"pill"}>{`${data.unread} unread`}</span>
+        <span className={"pill"}>{`${data.unread}${data.more ? "+" : ""} unread`}</span>
         <span className={"acts"}>
           <button className={"btn s sm"} id={"mar"} data-org={data.organizationId}>
             {"Mark all read"}
@@ -120,7 +122,17 @@ export function SheetNotifications({ data }: { data: NotificationsData }) {
     <>
       <div className={"ph rv"} style={i(index++)}>
         <h1 className={"display"}>{"Notifications"}</h1>
-        <p>{"Grouped by day. Choose what reaches you by email in Settings."}</p>
+        <p>
+          {"Grouped by day. Choose what reaches you by email in "}
+          {data.organizationId ? (
+            <a className={"tl"} href={"/sheet/settings?tab=notifications"}>
+              {"Settings"}
+            </a>
+          ) : (
+            "Settings"
+          )}
+          {"."}
+        </p>
       </div>
       {data.groups.length === 0 ? (
         <div className={"panel rv"} style={i(index++)}>

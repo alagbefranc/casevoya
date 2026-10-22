@@ -1081,6 +1081,14 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       }
     }, listen);
 
+    // ⌘K / Ctrl+K opens the search palette from anywhere on a Sheet page, as the sidebar's hint says.
+    window.addEventListener("keydown", (event) => {
+      if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+      if (!root.querySelector("[data-palette]")) return;
+      event.preventDefault();
+      openPalette(root, (href) => router.push(href));
+    }, listen);
+
     // A select that names pages (the Consultation record's chooser) goes to the chosen one.
     root.addEventListener("change", (event) => {
       const select = (event.target as HTMLElement).closest?.<HTMLSelectElement>("select[data-nav-select]");
@@ -1457,19 +1465,19 @@ function paletteLabel(link: HTMLAnchorElement): string {
   return copy.textContent?.replace(/\s+/g, " ").trim() || "Open";
 }
 
+/** Where focus was when a palette opened, to return it on close. */
+const returnFocus = new WeakMap<HTMLElement, Element>();
+
 /**
  * The search palette over the sidebar's places. Given a sidebar group (the Records crumb's), it
- * lists only that group's places: the crumb's dropdown mark opens it as a switcher.
+ * lists only that group's places: the crumb's dropdown mark opens it as a switcher. It finds
+ * pages only (no records yet), so it says "Go to a page". The list is read from the sidebar each
+ * time it opens, so it follows the sidebar as it changes.
  */
 function openPalette(root: HTMLElement, go: (href: string) => void, group: HTMLElement | null = null) {
   const scope = group ? (group.querySelector(":scope > button span")?.textContent?.trim() ?? "group") : "all";
-  let scrim = [...root.querySelectorAll<HTMLElement>(".scrim")].find((item) => (item.dataset.scope ?? "all") === scope) ?? null;
-  if (!scrim) {
-    scrim = document.createElement("div");
-    scrim.className = "scrim";
-    if (group) scrim.dataset.scope = scope;
-    const seen = new Set<string>();
-    const entries: { href: string; label: string }[] = [];
+  const places = () => {
+    const entries: { href: string; label: string; aliases: string[] }[] = [];
     // Menu items first, then the shortcut tiles, so a place keeps its menu name and link
     // (the Documents tile opens one matter's documents; the Invoices tile is Finance).
     const links = group
@@ -1479,37 +1487,71 @@ function openPalette(root: HTMLElement, go: (href: string) => void, group: HTMLE
       const href = link.getAttribute("href");
       if (!href || href === "#") continue;
       const label = paletteLabel(link);
-      // The sidebar repeats some places (a tile and a menu item): list each once.
+      // The sidebar repeats some places (a tile and a menu item): list each once, and keep the
+      // other name as something to search by (the Invoices tile finds Finance).
       const key = label.toLowerCase();
-      if (seen.has(key) || seen.has(href)) continue;
-      seen.add(key);
-      seen.add(href);
-      entries.push({ href, label });
+      const same = entries.find((entry) => entry.href === href || entry.label.toLowerCase() === key);
+      if (same) {
+        if (same.label.toLowerCase() !== key && !same.aliases.includes(label)) same.aliases.push(label);
+        continue;
+      }
+      entries.push({ href, label, aliases: [] });
     }
+    return entries;
+  };
+  let scrim = [...root.querySelectorAll<HTMLElement>(".scrim")].find((item) => (item.dataset.scope ?? "all") === scope) ?? null;
+  if (!scrim) {
+    scrim = document.createElement("div");
+    scrim.className = "scrim";
+    if (group) scrim.dataset.scope = scope;
+    const listId = `pal-${scope.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
     const palette = document.createElement("div");
     palette.className = "palette";
     palette.setAttribute("role", "dialog");
-    palette.setAttribute("aria-label", group ? `Go to ${scope}` : "Search");
+    palette.setAttribute("aria-modal", "true");
+    palette.setAttribute("aria-label", group ? `Go to ${scope}` : "Go to a page");
     const input = document.createElement("input");
-    input.placeholder = group ? `Go to a ${scope} page` : "Search matters, people and actions";
-    input.setAttribute("aria-label", "Search");
+    input.placeholder = group ? `Go to a ${scope} page` : "Go to a page";
+    input.setAttribute("aria-label", group ? `Go to a ${scope} page` : "Go to a page");
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-expanded", "true");
+    input.setAttribute("aria-controls", listId);
+    input.setAttribute("aria-autocomplete", "list");
     const list = document.createElement("ul");
-    for (const entry of entries) {
-      const item = document.createElement("li");
-      item.dataset.u = entry.href;
-      item.textContent = entry.label;
-      list.append(item);
-    }
-    palette.append(input, list);
+    list.id = listId;
+    list.setAttribute("role", "listbox");
+    const none = document.createElement("div");
+    none.className = "pal-none";
+    none.hidden = true;
+    none.setAttribute("role", "status");
+    const noneTitle = document.createElement("b");
+    noneTitle.textContent = "No page matches";
+    const noneCopy = document.createElement("small");
+    noneCopy.textContent = "This finds pages. To find a matter or a client, open All matters or Clients.";
+    none.append(noneTitle, noneCopy);
+    palette.append(input, list, none);
     scrim.append(palette);
     root.append(scrim);
 
-    const close = () => scrim?.classList.remove("on");
+    const close = () => {
+      if (!scrim?.classList.contains("on")) return;
+      scrim.classList.remove("on");
+      // Back to where the person was before the palette opened.
+      (returnFocus.get(scrim) as HTMLElement | undefined)?.focus?.();
+    };
     const visible = () => [...list.querySelectorAll<HTMLElement>("li")].filter((item) => !item.hidden);
     const mark = (item: HTMLElement | undefined) => {
-      list.querySelectorAll("li.on").forEach((node) => node.classList.remove("on"));
-      if (!item) return;
+      list.querySelectorAll("li.on").forEach((node) => {
+        node.classList.remove("on");
+        node.setAttribute("aria-selected", "false");
+      });
+      if (!item) {
+        input.removeAttribute("aria-activedescendant");
+        return;
+      }
       item.classList.add("on");
+      item.setAttribute("aria-selected", "true");
+      input.setAttribute("aria-activedescendant", item.id);
       item.scrollIntoView({ block: "nearest" });
     };
     const open = (item: HTMLElement | undefined) => {
@@ -1521,6 +1563,17 @@ function openPalette(root: HTMLElement, go: (href: string) => void, group: HTMLE
     scrim.addEventListener("click", (event) => {
       if (event.target === scrim) close();
     });
+    // Escape closes from anywhere in the palette, not only the input. Tab stays inside it (it is
+    // modal; the input is its one stop, and the arrow keys move through the list).
+    scrim.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close();
+      } else if (event.key === "Tab") {
+        event.preventDefault();
+        input.focus();
+      }
+    });
     list.addEventListener("click", (event) => open((event.target as HTMLElement).closest<HTMLElement>("li") ?? undefined));
     list.addEventListener("mousemove", (event) => {
       const item = (event.target as HTMLElement).closest<HTMLElement>("li");
@@ -1529,16 +1582,19 @@ function openPalette(root: HTMLElement, go: (href: string) => void, group: HTMLE
     input.addEventListener("input", () => {
       const q = input.value.trim().toLowerCase();
       list.querySelectorAll<HTMLElement>("li").forEach((item) => {
-        item.hidden = Boolean(q) && !item.textContent.toLowerCase().includes(q);
+        const names = `${item.textContent} ${item.dataset.aliases ?? ""}`.toLowerCase();
+        item.hidden = Boolean(q) && !names.includes(q);
       });
-      mark(visible()[0]);
+      const shown = visible();
+      none.hidden = shown.length > 0;
+      mark(shown[0]);
     });
     input.addEventListener("keydown", (event) => {
       const items = visible();
       const at = items.findIndex((item) => item.classList.contains("on"));
-      if (event.key === "Escape") close();
-      else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
+        if (!items.length) return;
         const step = event.key === "ArrowDown" ? 1 : -1;
         mark(items[(at + step + items.length) % items.length]);
       } else if (event.key === "Enter") {
@@ -1547,6 +1603,23 @@ function openPalette(root: HTMLElement, go: (href: string) => void, group: HTMLE
       }
     });
   }
+  // The sidebar's places as they are now.
+  const list = scrim.querySelector("ul");
+  if (list) {
+    list.replaceChildren(
+      ...places().map((entry, index) => {
+        const item = document.createElement("li");
+        item.id = `${list.id}-${index}`;
+        item.setAttribute("role", "option");
+        item.setAttribute("aria-selected", "false");
+        item.dataset.u = entry.href;
+        if (entry.aliases.length) item.dataset.aliases = entry.aliases.join(" ");
+        item.textContent = entry.label;
+        return item;
+      }),
+    );
+  }
+  if (document.activeElement instanceof HTMLElement && !scrim.contains(document.activeElement)) returnFocus.set(scrim, document.activeElement);
   const input = scrim.querySelector("input");
   if (input) {
     input.value = "";

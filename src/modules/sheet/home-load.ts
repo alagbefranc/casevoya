@@ -67,11 +67,13 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date(), v
         .from("tasks")
         .select("id, matter_id, title, status, due_on, owner_membership_id")
         .eq("organization_id", org)
+        // Staff work only, as on the Tasks page: a client's own tasks are theirs, not "Unassigned".
+        .eq("audience", "internal")
         .in("status", [...OPEN_TASK])
         .order("due_on", { ascending: true, nullsFirst: false })
         // Enough for the task bar's Mine and Today to find the viewer's tasks; it shows 8 at once.
         .limit(HOME_TASK_READ),
-      supabase.from("tasks").select("id", count).eq("organization_id", org).in("status", [...OPEN_TASK]).eq("due_on", today),
+      supabase.from("tasks").select("id", count).eq("organization_id", org).eq("audience", "internal").in("status", [...OPEN_TASK]).eq("due_on", today),
       supabase.from("deadlines").select("id, matter_id, label, due_on, verification").eq("organization_id", org).gte("due_on", today).order("due_on", { ascending: true }).limit(20),
       supabase.from("deadlines").select("due_on").eq("organization_id", org).gte("due_on", monthStart).lte("due_on", monthEnd).limit(200),
       supabase.from("deadlines").select("id", count).eq("organization_id", org).eq("verification", "tentative").gte("due_on", today),
@@ -133,7 +135,8 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date(), v
     ],
     needs: [
       { href: "/sheet/tasks", count: due, label: plural(due, "task due today", "tasks due today") },
-      { href: "/sheet/matters?view=review", count: toReview, label: plural(toReview, "document awaiting review", "documents awaiting review") },
+      // The firm's documents waiting for review are the Documents page's review queue (its first tab).
+      { href: "/sheet/documents", count: toReview, label: plural(toReview, "document awaiting review", "documents awaiting review") },
       { href: "/sheet/matters?view=blocked", count: held, label: plural(held, "blocked matter", "blocked matters") },
       // Client-account withdrawals past the CICC Code s. 32(g) date (invoice date + 30 days). Billing
       // staff only: the function returns no rows to anyone else.

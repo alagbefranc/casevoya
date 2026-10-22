@@ -4,7 +4,7 @@ import type { SidebarData } from "@/components/sheet/designer/sidebar";
 import { createClient } from "@/lib/supabase/server";
 import { staffPerson } from "@/modules/sheet/avatar";
 import type { SheetStaff } from "@/modules/sheet/load";
-import { readItems, unreadCount } from "@/modules/sheet/notifications-present";
+import { NOTIFICATION_READ_LIMIT, readItems, unreadCount } from "@/modules/sheet/notifications-present";
 import { roleLabel } from "@/modules/sheet/present";
 import { FIRM_SETTINGS } from "@/modules/sheet/home-controls";
 import { voDraftsWaiting } from "@/modules/sheet/vo-present";
@@ -62,7 +62,7 @@ export async function loadSheetChrome(staff: SheetStaff, active: string): Promis
 /** Unread in-app notifications for the signed-in staff member (public.staff_notifications); 0 when it can't be read. */
 async function unreadNotifications(staff: SheetStaff): Promise<number> {
   const supabase = await createClient({ organizationId: staff.organizationId });
-  const read = await supabase.rpc("staff_notifications", { p_organization_id: staff.organizationId, p_limit: 100 });
+  const read = await supabase.rpc("staff_notifications", { p_organization_id: staff.organizationId, p_limit: NOTIFICATION_READ_LIMIT });
   return read.error ? 0 : unreadCount(readItems(read.data));
 }
 

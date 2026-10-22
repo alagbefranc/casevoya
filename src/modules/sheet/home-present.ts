@@ -1,18 +1,27 @@
 /** Pure helpers that turn firm records into the Designer home's words. Dates use the firm's timezone. */
 
+import { DEFAULT_FIRM_TIME_ZONE } from "./birth-date";
+
 export type LocalNow = { year: number; month: number; day: number; hour: number; weekday: string; monthName: string };
 
-/** The current date and hour as seen in `timeZone`. */
+/** The current date and hour as seen in `timeZone` (the firm's default zone if it isn't one). */
 export function localNow(timeZone: string, now: Date = new Date()): LocalNow {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    hourCycle: "h23",
-    weekday: "long",
-  }).formatToParts(now);
+  const format = (zone: string) =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: zone,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      hourCycle: "h23",
+      weekday: "long",
+    }).formatToParts(now);
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = format(timeZone || DEFAULT_FIRM_TIME_ZONE);
+  } catch {
+    parts = format(DEFAULT_FIRM_TIME_ZONE);
+  }
   const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
   const month = Number(get("month"));
   return {
