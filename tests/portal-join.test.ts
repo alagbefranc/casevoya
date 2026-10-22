@@ -138,7 +138,7 @@ describe("joinPortalInvite validation", () => {
   it("refuses a session signed in with a different email", async () => {
     state.claims = { sub: "u2", email: "someone@else.test" };
     const result = await joinPortalInvite({ token: TOKEN, mode: "create", password: GOOD, payload: PAYLOAD });
-    expect(result?.ok).toBe(false);
+    expect(result).toMatchObject({ ok: false, reason: "elsewhere" });
     expect(state.calls).not.toContain("signUp");
     expect(state.calls).not.toContain("accept_portal_invitation");
   });
@@ -261,6 +261,7 @@ describe("confirmPortalInvite", () => {
     expect(await confirmPortalInvite({ token: TOKEN, code: "123456", payload: PAYLOAD, password: GOOD })).toEqual({
       ok: false,
       message: "You’re signed in with a different email. Sign out, then open this invitation again.",
+      reason: "elsewhere",
     });
     state.claims = null;
     state.signIn = { message: "Too many requests" };

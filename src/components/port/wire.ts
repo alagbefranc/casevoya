@@ -201,6 +201,13 @@ function watchForLinkSession(root: HTMLElement, invitedEmail: string | undefined
       if (!email || (invitedEmail && email !== invitedEmail)) return;
       tries += 1;
       const outcome = await onSession();
+      if (outcome === "retry" && tries >= 3) {
+        // The quiet tries showed nothing; say once that it needs the person now.
+        toast2("We couldn’t finish signing you in", {
+          kind: "bad",
+          sub: "Enter the six-digit code, or choose “I used the email link” to try again.",
+        });
+      }
       if (outcome !== "retry" || tries >= 3) stop();
     } catch {
       // A failed check is tried again on the next tick.
@@ -289,7 +296,7 @@ export function usePortActions(page: string, token?: string) {
           }
           if (!quiet) toast2(joined?.message ?? "That didn’t work. Try again.", { kind: "bad" });
           // A session for someone else won't become the invitee's by waiting.
-          return joined && /different email/.test(joined.message) ? "stop" : "retry";
+          return joined?.reason === "elsewhere" ? "stop" : "retry";
         }
         ctx.current = null;
         leaveCodeStep(root, page, "firstRequest" in joined ? joined.firstRequest : null);

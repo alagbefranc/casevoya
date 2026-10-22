@@ -367,7 +367,8 @@ export function usePort(
               toast2(result.message, { kind: "ok" });
               return;
             }
-            toast2("New code sent", { kind: "ok", sub: "Check the newest email. Older codes stop working." });
+            // Supabase answers success without sending when the email is already confirmed, so don't promise a code.
+            toast2("If you haven’t confirmed yet, a new code is on its way", { kind: "ok", sub: "Check the newest email. Older codes stop working." });
             left = 30;
             tick();
           });

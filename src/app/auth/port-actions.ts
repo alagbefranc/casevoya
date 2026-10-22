@@ -595,15 +595,16 @@ export async function joinStaffInvite(input: {
 export type PortalJoinResult =
   | { ok: true; confirm: true }
   | { ok: true; confirm?: false; firstRequest: { purpose: string } | null }
-  | { ok: false; message: string };
+  | { ok: false; message: string; reason?: "elsewhere" };
 
 type PortalInvitee = { email: string; displayName: string; role: PortalInviteRole | null };
 
 const SIGNED_IN_ELSEWHERE = "You’re signed in with a different email. Sign out, then open this invitation again.";
 const WRONG_PASSWORD = "That password didn’t match the Casevoya sign-in for this email.";
 
+/** A failure to show. `reason` lets the screen act on "signed in as someone else" without matching the wording. */
 function joinFail(message: string): PortalJoinResult {
-  return { ok: false, message };
+  return message === SIGNED_IN_ELSEWHERE ? { ok: false, message, reason: "elsewhere" } : { ok: false, message };
 }
 
 /** The invited person, from public.preview_portal_invitation; null unless the invitation is open. */
