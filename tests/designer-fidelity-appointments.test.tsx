@@ -45,6 +45,7 @@ const DESIGNER_DATA: PortalAppointments = {
   rows: [
     {
       id: "00000000-0000-4000-8000-0000000000c1",
+      publicRef: "abcdefghijklmnopqrstuvwxyc",
       title: "Package review call",
       startsAt: "2026-10-22T14:00:00Z",
       endsAt: "2026-10-22T14:30:00Z",

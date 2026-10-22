@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { AppointmentsLive } from "@/components/portal/appointments-live";
 import type { PortalViewer } from "@/modules/portal/load";
 import type { PortalAppointment } from "@/modules/scheduling/portal-load";
-import { JOIN_WAIT_TOAST, cancelBody, cancelTitle, joinState, noticeLabel, pickLabel, pickerDays, slotTime, whereLabel } from "@/modules/scheduling/portal-present";
+import { CALL_WAIT_TOAST, JOIN_WAIT_TOAST, cancelBody, cancelTitle, joinState, noticeLabel, pickLabel, pickerDays, slotTime, whereLabel } from "@/modules/scheduling/portal-present";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => undefined }) }));
 
@@ -24,6 +24,7 @@ const viewer = {
 
 const call: PortalAppointment = {
   id: "00000000-0000-4000-8000-0000000000b1",
+  publicRef: "abcdefghijklmnopqrstuvwxyz",
   title: "Initial consultation",
   startsAt: "2026-10-22T14:30:00Z",
   endsAt: "2026-10-22T15:00:00Z",
@@ -47,8 +48,13 @@ describe("portal appointments: join window", () => {
     expect(joinState(call, T("2026-10-22T15:00:00Z"), "Maple")).toEqual({ kind: "wait", toast: JOIN_WAIT_TOAST });
   });
 
-  it("a video call without a stored link says the firm sends it; phone and in person have no join button", () => {
-    expect(joinState({ ...call, locationKind: "video", locationDetail: null }, T("2026-10-22T14:25:00Z"), "Maple")).toEqual({ kind: "firm", toast: "Maple will send you the meeting link" });
+  it("a Casevoya video call opens its call page 15 minutes before until 30 minutes after; phone and in person have no join button", () => {
+    const video = { ...call, locationKind: "video", locationDetail: null };
+    expect(joinState(video, T("2026-10-22T14:14:59Z"), "Maple")).toEqual({ kind: "wait", toast: CALL_WAIT_TOAST });
+    expect(joinState(video, T("2026-10-22T14:15:00Z"), "Maple")).toEqual({ kind: "open", href: "/call/abcdefghijklmnopqrstuvwxyz" });
+    expect(joinState(video, T("2026-10-22T15:29:59Z"), "Maple")).toEqual({ kind: "open", href: "/call/abcdefghijklmnopqrstuvwxyz" });
+    expect(joinState(video, T("2026-10-22T15:30:00Z"), "Maple")).toEqual({ kind: "wait", toast: CALL_WAIT_TOAST });
+    expect(joinState({ ...video, publicRef: null }, T("2026-10-22T14:25:00Z"), "Maple")).toEqual({ kind: "firm", toast: "Maple will send you the meeting link" });
     expect(joinState({ ...call, locationKind: "phone", locationDetail: null }, T("2026-10-22T14:25:00Z"), "Maple")).toEqual({ kind: "none" });
     expect(joinState({ ...call, locationKind: "in_person", locationDetail: "1 Example Street" }, T("2026-10-22T14:25:00Z"), "Maple")).toEqual({ kind: "none" });
     // Never a link that is not https: no join button at all.

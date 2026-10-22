@@ -71,9 +71,9 @@ function CloseX({ onClick }: { onClick: () => void }) {
  * Reschedule / Cancel row, "Past", and "Book a call". Each time carries its zone.
  *
  * Live wiring (CRM-03): "Join video call" is the firm's meeting link from 10 minutes before the
- * call until it ends; before that it is the Designer's button with its toast, marked
- * aria-disabled (a video call without a stored link says the firm sends it; phone and in-person
- * calls show their location copy instead). Reschedule opens a dialog built from the Designer's
+ * call until it ends, or for a Casevoya video call its call page (/call/<reference>) from 15
+ * minutes before until 30 minutes after; before that it is the Designer's button with its toast,
+ * marked aria-disabled (phone and in-person calls show their location copy instead). Reschedule opens a dialog built from the Designer's
  * "Book a call" pieces (day and time pickers, in the client's zone) over the free times for the
  * same type and host; Cancel opens the Designer's #cxd dialog, whose late warning shows only when
  * cancelling now is inside the type's minimum notice. Both call the portal server actions, then

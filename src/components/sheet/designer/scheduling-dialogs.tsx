@@ -128,7 +128,7 @@ export function BookingTypeDialog({ organizationId, hosts, practice = false }: {
           <label htmlFor={"etC"}>{"Daily limit per person (optional)"}</label>
           <input className={"inp"} id={"etC"} type={"number"} min={1} max={48} step={1} />
         </div>
-        {select("etK", "How you meet", [["video", "Video call (link sent by the firm)"], ["phone", "Phone"], ["in_person", "In person"], ["meeting_link", "Meeting link"]])}
+        {select("etK", "How you meet", [["video", "Video call in Casevoya"], ["phone", "Phone"], ["in_person", "In person"], ["meeting_link", "Meeting link"]])}
         <div className={"fld"}>
           <label htmlFor={"etX"}>{"Address or meeting link"}</label>
           <small className={"hint"} id={"etX-h"}>

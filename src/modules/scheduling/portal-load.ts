@@ -4,6 +4,8 @@ import type { PortalViewer } from "@/modules/portal/load";
 
 export type PortalAppointment = {
   id: string;
+  /** The booking reference: a Casevoya video call's page is /call/<reference>. */
+  publicRef: string;
   title: string;
   startsAt: string;
   endsAt: string;
@@ -53,7 +55,7 @@ export async function loadPortalAppointments(viewer: PortalViewer): Promise<Port
   const [bookings, org, rules] = await Promise.all([
     supabase
       .from("bookings")
-      .select("id, title, starts_at, ends_at, status, host_name, location_kind, location_detail, attendee_time_zone, version, is_sample")
+      .select("id, public_ref, title, starts_at, ends_at, status, host_name, location_kind, location_detail, attendee_time_zone, version, is_sample")
       .eq("organization_id", viewer.organizationId)
       .in("status", ["confirmed", "completed", "no_show", "cancelled"])
       .order("starts_at", { ascending: true })
@@ -78,6 +80,7 @@ export async function loadPortalAppointments(viewer: PortalViewer): Promise<Port
   return {
     rows: (bookings.data ?? []).map((row) => ({
       id: row.id,
+      publicRef: row.public_ref,
       title: row.title,
       startsAt: row.starts_at,
       endsAt: row.ends_at,

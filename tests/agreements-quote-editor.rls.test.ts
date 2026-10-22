@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { firmDay } from "./helpers/firm-day";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 
 /**
@@ -200,7 +201,8 @@ describe("quotes", () => {
       () => saveQuote(quoteId, LINES, JSON.stringify([{ label: "On signing", amount_cents: 1, paid_as: "advance" }])),
       /add up to the total/i,
     );
-    await expectDbError(() => saveQuote(quoteId, LINES, "[]", "current_date - 1"), /today or later/i);
+    // Yesterday in the firm's timezone (save_quote counts days there, not in UTC).
+    await expectDbError(() => saveQuote(quoteId, LINES, "[]", `'${firmDay(-1)}'::date`), /today or later/i);
     await expectDbError(() => saveQuote(quoteId, JSON.stringify([{ category: "professional_fee", description: "Fee", amount_cents: "12.50" }]), "[]"), /whole amount in cents/i);
   });
 

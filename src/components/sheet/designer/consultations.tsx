@@ -544,6 +544,9 @@ export function SheetConsultations({ data }: { data: ConsultationsData }) {
 // record layout (heading, Notes and Outcome panels on the left, a details panel on the right).
 // ---------------------------------------------------------------------------
 
+/** "Join video call" on a Casevoya video call's record: a link inside the window, else the toast. */
+export type ConsultationRecordJoin = { href: string; toast: null } | { href: null; toast: string };
+
 export type ConsultationRecordData = {
   /** Bookings to choose from; each option's value is the record's URL. */
   picker: { label: string; value: string; selected: boolean }[];
@@ -551,6 +554,8 @@ export type ConsultationRecordData = {
     attendee: string;
     notes: { items: { who: string; when: string; body: string }[]; copy: string; lead: { href: string; label: string } | null };
     outcome: { chip: Chip; copy: string; actions: RowAction[] };
+    /** Live addition (no Designer control): only on a Casevoya video call, for its host and firm owners. */
+    join?: ConsultationRecordJoin | null;
     details: DlItem[];
     history: { what: string; who: string; when: string }[];
   } | null;
@@ -629,6 +634,21 @@ export function SheetConsultationRecord({ data }: { data: ConsultationRecordData
               </h2>
               <div className={"fp-pad"}>
                 <p style={{ fontSize: "14.5px" }}>{record.outcome.copy}</p>
+                {record.join ? (
+                  <div className={"fp-row"} style={{ marginTop: "10px" }}>
+                    {record.join.href ? (
+                      <a className={"btn p sm"} href={record.join.href} target={"_blank"} rel={"noopener noreferrer"}>
+                        <Icon name={"video"} cls={"ic s"} />
+                        {"Join video call"}
+                      </a>
+                    ) : (
+                      <button className={"btn p sm"} type={"button"} aria-disabled={"true"} data-toast={record.join.toast} data-sub={""} data-fpb={"1"}>
+                        <Icon name={"video"} cls={"ic s"} />
+                        {"Join video call"}
+                      </button>
+                    )}
+                  </div>
+                ) : null}
                 {record.outcome.actions.length ? (
                   <div className={"fp-row"} style={{ marginTop: "10px" }}>
                     {record.outcome.actions.map((action, n) => (

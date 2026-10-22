@@ -11068,6 +11068,10 @@ export type Database = {
         Args: { p_organization_id: string; p_stripe_customer_id: string }
         Returns: undefined
       }
+      apply_livekit_event: {
+        Args: { p_event: Json }
+        Returns: Json
+      }
       apply_stripe_subscription_event: {
         Args: { p_event: Json }
         Returns: Json
@@ -12511,6 +12515,22 @@ export type Database = {
           p_receipt_version_id?: string | null
         }
         Returns: number
+      }
+      video_admit: {
+        Args: { p_admit: boolean; p_identity: string; p_org: string; p_ref: string }
+        Returns: Json
+      }
+      video_end: {
+        Args: { p_org: string; p_ref: string }
+        Returns: Json
+      }
+      video_join: {
+        Args: { p_issue?: boolean; p_org: string; p_ref: string }
+        Returns: Json
+      }
+      video_room_created: {
+        Args: { p_org: string; p_ref: string }
+        Returns: undefined
       }
       void_agreement_envelope: {
         Args: { p_envelope_id: string; p_reason: string }
