@@ -90,6 +90,9 @@ import {
   type SheetQuery,
 } from "@/modules/sheet/present";
 
+/** Who can send an agreement (send_agreement): the Agreements page offers New agreement to the same roles. */
+const AGREEMENT_SEND_ROLES = new Set(["firm_owner", "licensed_consultant", "case_manager"]);
+
 /**
  * The Designer's matter page for one matter, read as the signed-in staff member so
  * row-level security decides what is visible. Null when the matter is not this firm's
@@ -179,9 +182,10 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
   const versionIds = agreementRows.map((row) => row.current_version_id).filter((id): id is string => Boolean(id));
   // Every deadline still ahead (a timed one by its instant, a date-only one by its day), soonest first.
   const dueDay = (row: (typeof deadlineRows)[number]) => row.due_on ?? (row.due_at ? isoDateInTimeZone(new Date(row.due_at), staff.timezone) : "");
-  const upcoming = deadlineRows
-    .filter((row) => (row.due_at ? new Date(row.due_at).getTime() >= now.getTime() : dueDay(row) >= today))
-    .sort((a, b) => dueDay(a).localeCompare(dueDay(b)));
+  const isAhead = (row: (typeof deadlineRows)[number]) => (row.due_at ? new Date(row.due_at).getTime() >= now.getTime() : dueDay(row) >= today);
+  const upcoming = deadlineRows.filter(isAhead).sort((a, b) => dueDay(a).localeCompare(dueDay(b)));
+  // Deadlines already past stay on the tab (a missed deadline must not vanish), latest first, above the rest.
+  const pastDue = deadlineRows.filter((row) => !isAhead(row)).sort((a, b) => dueDay(b).localeCompare(dueDay(a)));
   const next = upcoming[0] ?? null;
   const auditIds = [matter.id, ...documentIds, ...agreementIds, ...taskRows.map((row) => row.id)].slice(0, 300);
 
@@ -199,12 +203,12 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
           .order("sent_at", { ascending: false })
       : null,
     versionIds.length ? supabase.from("agreement_versions").select("id, version_number").eq("organization_id", org).in("id", versionIds) : null,
-    upcoming.length
+    upcoming.length || pastDue.length
       ? supabase
           .from("reminder_schedules")
           .select("deadline_id, offset_days, scheduled_for, status")
           .eq("organization_id", org)
-          .in("deadline_id", upcoming.map((row) => row.id))
+          .in("deadline_id", [...pastDue, ...upcoming].map((row) => row.id))
           .order("scheduled_for", { ascending: true })
           .limit(200)
       : null,
@@ -474,6 +478,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       const open = row.status === "open" || row.status === "blocked";
       return {
         done: managesTasks && open ? { "data-task-done": row.id, "data-org": org, "data-version": String(row.version) } : null,
+        completed: !open,
         manage: managesTasks && open ? taskManageWire(row) : null,
         title: row.title,
         parts: [
@@ -487,8 +492,9 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       };
     });
   const licensedHere = isLicensedMembership(staff.role, ownLicence?.data);
-  const deadlinePanels: MatterDeadline[] = upcoming.map((row) => {
+  const deadlinePanels: MatterDeadline[] = [...pastDue, ...upcoming].map((row) => {
     const day = dueDay(row);
+    const past = !isAhead(row);
     const can = deadlineConfirmable({ kind: row.kind, verification: row.verification, sourceUrl: row.source_url, ruleVersionId: row.rule_version_id }, staff.role, licensedHere);
     return {
       label: row.label,
@@ -510,6 +516,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       timezone: `Official: ${row.due_at ? clockTime(row.due_at, row.timezone) : "end of day"} (${row.timezone})`,
       confirm: can.ok ? { "data-deadline-confirm": row.id, "data-org": org, "data-version": String(row.version) } : null,
       confirmWhy: can.ok ? null : can.why,
+      pastDue: past,
     };
   });
 
@@ -684,6 +691,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       blockers,
       people: keyPeople,
       events,
+      eventsOwnerOnly: staff.role !== "firm_owner",
     },
     people: { cards, relationships: relationRows },
     documents: {
@@ -692,8 +700,14 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       rows: documentTable,
       vo: voReading?.panel ?? null,
       filter: true,
+      request: requestsDocuments,
     },
-    agreements: { rows: agreementTable, signing, create: matter.stage === "closed" ? null : newAgreementHref(matter.id) },
+    // New agreement for those who can send one (the Agreements page's rule), on an open matter.
+    agreements: {
+      rows: agreementTable,
+      signing,
+      create: matter.stage === "closed" || !AGREEMENT_SEND_ROLES.has(staff.role) ? null : newAgreementHref(matter.id),
+    },
     tasks: { deadlines: deadlinePanels, tasks: taskTable, record: recordsDeadlines, add: managesTasks && matter.stage !== "closed" },
     outcome: matter.outcome ? outcomeLabel(matter.outcome) : null,
     confirmOutcome,
@@ -713,6 +727,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       consultant: matter.responsible_consultant_membership_id ? (members.get(matter.responsible_consultant_membership_id) ?? null) : null,
       outcome: matter.outcome ? outcomeLabel(matter.outcome) : null,
       closed: matter.stage === "closed",
+      timeZone: staff.timezone,
     });
   }
 

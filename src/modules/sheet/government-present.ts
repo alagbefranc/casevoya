@@ -293,7 +293,7 @@ export function buildSubmissions(records: GovernmentRecords, ctx: GovernmentCont
     prepare: start ? { wire: wire("prepare", ctx), channels: [...SUBMISSION_CHANNEL_OPTIONS], warning } : null,
     submit:
       record && open
-        ? { wire: wire("submit", ctx, { id: open.id, version: String(open.version) }), representatives: ctx.representatives, now: localInput(ctx.now, ctx.timezone) }
+        ? { wire: wire("submit", ctx, { id: open.id, version: String(open.version) }), representatives: ctx.representatives, now: localInput(ctx.now, ctx.timezone), timezone: ctx.timezone }
         : null,
     receipt: unverified && canSubmit ? { wire: wire("receipt", ctx, { id: unverified.id, version: String(unverified.version) }), today: ctx.today } : null,
   };

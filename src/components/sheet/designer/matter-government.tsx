@@ -699,6 +699,8 @@ export function MatterDecisionsLive({ data }: { data: MatterDecisionsData }) {
           ))}
         </>
       ) : null}
+      {/* Letters stay listed (with Verify and Attach) after a decision, for the next one that arrives. */}
+      {data.letters.length ? <LetterRows letters={data.letters} start={index} /> : null}
     </>
   );
 }
@@ -713,7 +715,8 @@ export function MatterDecisionsLive({ data }: { data: MatterDecisionsData }) {
 export type GovDialogsData = {
   /** `warning`: documents still outstanding (the database allows the handoff; the dialog says so). */
   prepare: { wire: GovWire; channels: { value: string; label: string }[]; warning?: string | null } | null;
-  submit: { wire: GovWire; representatives: { id: string; name: string }[]; now: string } | null;
+  /** `now` is the firm's wall time in `timezone`; the time typed is read back in that zone. */
+  submit: { wire: GovWire; representatives: { id: string; name: string }[]; now: string; timezone?: string } | null;
   receipt: { wire: GovWire; today: string } | null;
 };
 
@@ -813,8 +816,8 @@ export function GovDialogs({ data }: { data: GovDialogsData }) {
                 <input id={"srR"} placeholder={"Type exactly as shown"} autoComplete={"off"} />
               </label>
               <label className={"fl"}>
-                {"Submitted at"}
-                <input id={"srT"} type={"datetime-local"} defaultValue={data.submit.now} />
+                {data.submit.timezone ? `Submitted at (${data.submit.timezone})` : "Submitted at"}
+                <input id={"srT"} type={"datetime-local"} defaultValue={data.submit.now} data-tz={data.submit.timezone} />
               </label>
               <label className={"fl"}>
                 {"Submitted by"}

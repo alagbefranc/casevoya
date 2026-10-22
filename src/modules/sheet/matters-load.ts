@@ -222,8 +222,9 @@ export async function loadSheetMatters(
       visible.length > limit
         ? `?${new URLSearchParams({ ...(query.view ? { view: query.view } : {}), limit: String(limit + MATTERS_PAGE) })}`
         : null,
-    empty:
-      rows.length === 0
+    empty: matters.error
+      ? { kind: "error" }
+      : rows.length === 0
         ? { kind: "none" }
         : visible.length === 0
           ? {

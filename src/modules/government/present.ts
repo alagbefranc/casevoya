@@ -4,6 +4,8 @@
  * labels states an immigration rule; they name what the firm recorded.
  */
 
+import { localToUtc } from "@/modules/scheduling/slots";
+
 export const CORRESPONDENCE_KINDS = [
   "acknowledgement",
   "application_number",
@@ -224,4 +226,22 @@ const GOV_ERRORS: [RegExp, string][] = [
 export function governmentError(message: string): string {
   for (const [pattern, copy] of GOV_ERRORS) if (pattern.test(message)) return copy;
   return "That couldn’t be saved.";
+}
+
+/**
+ * The "Submitted at" field as an instant. The dialog fills it with the firm's wall time, so it is
+ * read back in the firm's timezone, not the browser's (they differ for staff working elsewhere).
+ */
+export function submittedInstant(local: string, timeZone: string | undefined): string {
+  if (!local) return "";
+  const [date, time] = local.split("T");
+  if (timeZone && date && time) {
+    try {
+      return new Date(localToUtc(date, time.slice(0, 5), timeZone)).toISOString();
+    } catch {
+      // Not a zone this browser knows: fall through to the browser's own reading.
+    }
+  }
+  const at = new Date(local);
+  return Number.isNaN(at.getTime()) ? "" : at.toISOString();
 }

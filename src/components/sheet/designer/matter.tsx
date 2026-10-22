@@ -218,6 +218,8 @@ export type MatterOverviewData = {
   blockers: { blocking: boolean; text: string }[];
   people: { person: SidebarPerson; role: string; locked?: boolean }[];
   events: MatterEvent[];
+  /** Live: events come from the firm's audit log, which only the firm owner can read. */
+  eventsOwnerOnly?: boolean;
 };
 
 const GROW = "@keyframes grow{from{transform:scaleX(0)}}";
@@ -425,8 +427,12 @@ export function MatterOverview({ data }: { data: MatterOverviewData }) {
         <div className={"li rv"} style={css({ "--i": "6" })}>
           <i style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#c9c5c0", flex: "none" }}></i>
           <div>
-            <b>{"No activity recorded yet"}</b>
-            <small>{"Uploads, signatures and stage changes appear here."}</small>
+            <b>{data.eventsOwnerOnly ? "Shown to the firm owner" : "No activity recorded yet"}</b>
+            <small>
+              {data.eventsOwnerOnly
+                ? "Uploads, signatures and stage changes are kept in the firm’s audit log, which only the firm owner can read."
+                : "Uploads, signatures and stage changes appear here."}
+            </small>
           </div>
         </div>
       ) : (
@@ -1184,6 +1190,7 @@ export function MatterDocuments({
   rows,
   vo,
   filter = false,
+  request = false,
 }: {
   checklist: string | null;
   people: string[];
@@ -1191,11 +1198,20 @@ export function MatterDocuments({
   vo?: MatterDocumentReviewData | null;
   /** Live only: the person chips filter the rows (`data-who-chip`, `data-who`). */
   filter?: boolean;
+  /** Live only: the empty state offers Request a document (the header's dialog). */
+  request?: boolean;
 }) {
   if (rows.length === 0) {
     return (
       <Panel>
-        <Empty art={"review-queue-empty"} title={"No documents on this matter yet"} copy={"Requests and uploads appear here as the team works on the file."} />
+        <Empty art={"review-queue-empty"} title={"No documents on this matter yet"} copy={"Requests and uploads appear here as the team works on the file."}>
+          {request ? (
+            <button className={"btn p sm"} data-open={DOC_REQUEST_DIALOG}>
+              <Icon name={"upload"} cls={"ic s"} />
+              {"Request a document"}
+            </button>
+          ) : null}
+        </Empty>
       </Panel>
     );
   }
@@ -1273,6 +1289,15 @@ export function MatterDocuments({
       </Panel>
       <p style={css({ color: "var(--t2)", fontSize: "13px", margin: "-10px 0px 22px", "--i": "1" })} className={"rv"}>
         {"Upload state and firm review are separate. Accepted means accepted by the firm for this purpose, not validated by IRCC."}
+        {filter ? (
+          <>
+            {" Review, accept or open files in "}
+            <a className={"tl"} href={"/sheet/documents"}>
+              {"Documents"}
+            </a>
+            {"."}
+          </>
+        ) : null}
       </p>
       {vo ? <MatterDocumentReview data={vo} /> : null}
     </>
@@ -1347,6 +1372,15 @@ export function MatterAgreements({ rows, signing, create }: { rows: MatterAgreem
           </tbody>
         </table>
       </div>
+      {/* Live: an amendment or a further agreement on a matter that already has one (AGR-04). */}
+      {create ? (
+        <div style={{ marginTop: "12px" }}>
+          <a className={"btn s sm"} href={create}>
+            <Icon name={"plus"} cls={"ic s"} />
+            {"New agreement"}
+          </a>
+        </div>
+      ) : null}
       {signing ? (
         <div className={"panel rv"} style={css({ marginTop: "22px", "--i": "1" })}>
           <h2>
@@ -1390,14 +1424,18 @@ export type MatterDeadline = {
   confirm?: Record<`data-${string}`, string> | null;
   /** Live only: why this tentative deadline can't be confirmed here; shown as the badge's title. */
   confirmWhy?: string | null;
+  /** Live only: its date has passed. It stays listed, marked, so a missed deadline doesn't vanish. */
+  pastDue?: boolean;
 };
 export type MatterTaskRow = {
   title: string;
   parts: string[];
   badge: MatterBadge;
   owner: SidebarPerson;
-  /** Live only: the row's tick marks the task done (`data-task-done`). */
+  /** Live only: the row's tick marks the task done (`data-task-done`). Null: shown, not clickable. */
   done?: Record<`data-${string}`, string> | null;
+  /** Live only: the task is finished, so its tick shows as ticked. */
+  completed?: boolean;
   /** Live only: the row's Manage button opens the Task dialog (`data-task-open`). */
   manage?: Record<`data-${string}`, string> | null;
 };
@@ -1455,7 +1493,15 @@ export function MatterTasks({
       ) : (
         tasks.map((task, index) => (
           <div key={index} className={"li rv"} style={css({ "--i": String(offset + 1 + index) })}>
-            <span className={"ck"} {...(task.done ? { role: "checkbox", "aria-checked": "false" as const, tabIndex: 0, "aria-label": `Mark “${task.title}” done`, ...task.done } : {})}></span>
+            <span
+              className={task.completed ? "ck on" : "ck"}
+              {...(task.done
+                ? { role: "checkbox", "aria-checked": "false" as const, tabIndex: 0, "aria-label": `Mark “${task.title}” done`, ...task.done }
+                : task.done === null
+                  ? // Live, but this person can't change it (or it's finished): a status mark, not a control.
+                    { "aria-readonly": "true" as const, "aria-hidden": "true" as const }
+                  : {})}
+            ></span>
             <div>
               <b>{task.title}</b>
               <small>
@@ -1486,7 +1532,8 @@ function DeadlinePanel({ deadline, index }: { deadline: MatterDeadline; index: n
             <span>
               <Pair left={deadline.label} right={deadline.due} />
             </span>
-            <span className={"r"} {...(deadline.confirm ? { style: { display: "flex", gap: "6px" } } : deadline.confirmWhy ? { title: deadline.confirmWhy } : {})}>
+            <span className={"r"} {...(deadline.confirm || deadline.pastDue ? { style: { display: "flex", gap: "6px" } } : {})} {...(deadline.confirmWhy ? { title: deadline.confirmWhy } : {})}>
+              {deadline.pastDue ? <Plain badge={{ tone: "bad", label: "Past due" }} /> : null}
               <Plain badge={deadline.verified} />
               {deadline.confirm ? (
                 <button className={"btn s sm"} {...deadline.confirm}>
@@ -1746,11 +1793,12 @@ function ClosureChecklist({ data }: { data: ClosurePanelData }) {
           <ul className={"clist"}>
             {data.items.map((item) => (
               <li key={item.label}>
+                {/* Read only: each tick is worked out from the matter's records, never clicked. */}
                 <span
                   className={item.done ? "ck on" : "ck"}
                   role={"checkbox"}
                   aria-checked={item.done ? "true" : "false"}
-                  tabIndex={0}
+                  aria-readonly={"true"}
                   aria-label={item.label}
                 ></span>
                 <div>
@@ -1773,6 +1821,12 @@ function ClosureChecklist({ data }: { data: ClosurePanelData }) {
           </div>
           <p className={"mu"} style={css({ fontSize: "13.5px", marginTop: "12px" })}>
             {data.note}
+          </p>
+          {/* Lifecycle step 12: hand over or keep a copy of the client file before closing (SEC-10). */}
+          <p className={"mu"} style={css({ fontSize: "13.5px", marginTop: "8px" })}>
+            <a className={"tl"} href={"/sheet/exports"}>
+              {"Export the client file"}
+            </a>
           </p>
         </div>
       </div>
@@ -1827,7 +1881,8 @@ function StillOpen({ index }: { index: number }) {
 
 /** Tabs whose records are not stored yet: the Designer's empty-state panel, never sample rows. */
 export const MATTER_TAB_EMPTY: Partial<Record<MatterTab, { art: string; title: string; copy: string }>> = {
-  intake: { art: "clients-empty", title: "Intake isn’t shown here yet", copy: "Questionnaire answers stay on the client’s record. This tab doesn’t read them yet." },
+  // The Intake tab reads live forms and answers; this shows only when that read failed.
+  intake: { art: "clients-empty", title: "Intake couldn’t load", copy: "Reload the page to try again. Questionnaire answers are kept on the client’s record." },
   forms: { art: "templates-empty", title: "No prepared forms yet", copy: "Prepared government forms are not stored yet. Casevoya does not fill IRCC forms for you." },
   submissions: { art: "review-queue-empty", title: "No submission packages yet", copy: "Submission packages are not stored yet. Casevoya does not submit to IRCC." },
   messages: { art: "inbox-empty", title: "Inbox is clear", copy: "New emails linked to a matter will land here for triage." },
@@ -1841,7 +1896,8 @@ export type MatterPageData = {
   overview: MatterOverviewData;
   people: { cards: MatterPersonCard[]; relationships: MatterRelationship[] };
   /** `vo`: Vo's reading of one document, in the Designer's review panel (`#ocr`). */
-  documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[]; vo?: MatterDocumentReviewData | null; filter?: boolean };
+  /** `request` (live): the person may request documents, so the empty tab offers it (#dReq). */
+  documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[]; vo?: MatterDocumentReviewData | null; filter?: boolean; request?: boolean };
   agreements: { rows: MatterAgreementRow[]; signing: MatterSigning | null; create?: string | null };
   /** Every upcoming deadline, soonest first. `record` and `add` offer Record a deadline and New task from the empty state. */
   tasks: { deadlines: MatterDeadline[]; tasks: MatterTaskRow[]; record?: boolean; add?: boolean };
@@ -1870,7 +1926,14 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
       return <MatterPeople cards={data.people.cards} relationships={data.people.relationships} />;
     case "documents":
       return (
-        <MatterDocuments checklist={data.documents.checklist} people={data.documents.people} rows={data.documents.rows} vo={data.documents.vo} filter={data.documents.filter} />
+        <MatterDocuments
+          checklist={data.documents.checklist}
+          people={data.documents.people}
+          rows={data.documents.rows}
+          vo={data.documents.vo}
+          filter={data.documents.filter}
+          request={data.documents.request}
+        />
       );
     case "agreements":
       return <MatterAgreements rows={data.agreements.rows} signing={data.agreements.signing} create={data.agreements.create} />;

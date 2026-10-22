@@ -255,7 +255,7 @@ describe("Matter closure checklist (T040)", () => {
   it("renders the Designer's checklist markup with real values", () => {
     const panel = closurePanel({ check, openTasks: 0, consultant: "Dana Lee", outcome: "Approved", closed: false, closure: null, holdSince: null, money });
     const html = renderToStaticMarkup(createElement(MatterClosure, { closed: false, retention: null, panel }));
-    expect(html).toContain('<ul class="clist"><li><span class="ck on" role="checkbox" aria-checked="true" tabindex="0" aria-label="Outcome confirmed by consultant"></span>');
+    expect(html).toContain('<ul class="clist"><li><span class="ck on" role="checkbox" aria-checked="true" aria-readonly="true" aria-label="Outcome confirmed by consultant"></span>');
     expect(html).toContain('<h3>This matter is still open</h3>');
     expect(html).toContain('<div class="kv" style="margin-top:14px"><span>Policy</span><b>Firm setting: 7 years after closure</b>');
   });

@@ -18,7 +18,7 @@ import {
   verifyCorrespondence,
   verifySubmission,
 } from "@/modules/government/actions";
-import { letterChannel, letterKind } from "@/modules/government/present";
+import { letterChannel, letterKind, submittedInstant } from "@/modules/government/present";
 import { needsStepUp, stepUpLocation, withoutDialog, type MatterDialog } from "@/modules/sheet/matter-wire";
 import { setTaskStatus } from "@/modules/tasks/actions";
 
@@ -226,13 +226,13 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
       receiptVersionId = uploaded.versionId;
     }
     if (act === "submit") {
-      const submittedAt = value(scope, "#srT");
+      const submittedAt = submittedInstant(value(scope, "#srT"), scope.querySelector<HTMLInputElement>("#srT")?.dataset.tz);
       result = await recordSubmission({
         organizationId: ref.organizationId,
         handoffId: data.id ?? "",
         version,
         reference: value(scope, "#srR"),
-        submittedAt: submittedAt ? new Date(submittedAt).toISOString() : "",
+        submittedAt,
         submittedBy: value(scope, "#srB"),
         receiptVersionId,
         receiptLocator: value(scope, "#srL") || null,

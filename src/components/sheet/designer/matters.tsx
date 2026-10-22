@@ -30,8 +30,11 @@ export type MattersData = {
   shown: number;
   total: number;
   more: string | null;
-  /** No rows: either the firm has no matters yet or the search and view match none. */
-  empty: null | { kind: "none" } | { kind: "filtered"; title: string; copy: string; clear: string };
+  /**
+   * No rows: the firm has no matters yet, the search and view match none, or (`error`, live) the
+   * matters couldn't be read, which is not the same as having none.
+   */
+  empty: null | { kind: "none" } | { kind: "error" } | { kind: "filtered"; title: string; copy: string; clear: string };
   /**
    * Live only: the saved view shown (its chip is marked on), why the office, program and priority
    * chips are not filters yet, and the hidden "no match" panel search and Mine show.
@@ -160,6 +163,12 @@ export function SheetMatters({ data }: { data: MattersData }) {
             <Empty art={"matters-empty"} title={"No matters yet"} copy={"Convert a lead or start a matter from scratch."}>
               <a className={"btn p sm"} href={"/sheet/matters?new=1"}>
                 {"New matter"}
+              </a>
+            </Empty>
+          ) : data.empty.kind === "error" ? (
+            <Empty art={"matters-empty"} title={"Matters couldn’t load"} copy={"Nothing was changed. Reload the page to try again."}>
+              <a className={"btn s sm"} href={"/sheet/matters"}>
+                {"Reload"}
               </a>
             </Empty>
           ) : (
