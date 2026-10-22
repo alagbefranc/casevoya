@@ -405,9 +405,9 @@ PRD INT-01, INT-03 to INT-06; T020, T023; branch `intake-delivery`.
 
 Tested in `tests/intake-delivery.rls.test.ts` (send gates by role, aal2, assignment and other firm; person on the matter, past due date, unpublished form; sample mode; idempotency and a fresh round after submit; task and request rows; no outbox event; a client and a sponsor see only their own responses, requests, forms and answers; autosave version conflict keeps the first answer; submit completes the task and is refused twice; freeze then ordinary edits refused; correction as a new version on a frozen snapshot with the snapshot unchanged, numbering, description-only, proof ownership, append-only rows; notifications for staff on the matter only; review gates, latest-version rule, idempotency, review visibility).
 
-## Video calls (repository only, `20261022100000`)
+## Video calls (`20261022100000`, applied live 2026-10-22)
 
-LiveKit rooms for bookings whose location is a Casevoya video call (BUILD-SPEC §7, slice 7). Not applied on the live project.
+LiveKit rooms for bookings whose location is a Casevoya video call (BUILD-SPEC §7, slice 7). Applied on the live project 2026-10-22, before the app code is deployed (nothing calls it until then).
 
 * `video_sessions`: one room per video booking (`room_name` = `cv-` + booking id without dashes), status `scheduled` → `live` → `ended`, or `cancelled` when the booking is (trigger `bookings_video_session`). Forced RLS; scheduling staff of the firm read it.
 * `video_participants`: who was let in (`staff:<user id>` hosts, `client:<user id>` clients), admitted / removed by whom and when, first and last join, last leave from LiveKit webhooks. Forced RLS; scheduling staff read it.
