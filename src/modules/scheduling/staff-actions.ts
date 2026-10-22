@@ -167,7 +167,7 @@ export async function cancelBooking(input: { organizationId: string; bookingId: 
   });
   if (error) return bookingError(error.message);
   // The database already refuses new call tokens; disconnect anyone still in the room.
-  await closeRoomForBooking(input.bookingId);
+  closeRoomForBooking(input.bookingId);
   return { ok: true };
 }
 

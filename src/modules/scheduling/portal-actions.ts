@@ -91,7 +91,7 @@ export async function portalCancelBooking(input: { organizationId: string; booki
   });
   if (error) return portalBookingError(error.message);
   // The database already refuses new call tokens; disconnect anyone still in the room.
-  await closeRoomForBooking(input.bookingId);
+  closeRoomForBooking(input.bookingId);
   const late = Boolean(data && typeof data === "object" && !Array.isArray(data) && (data as { late?: unknown }).late === true);
   return { ok: true, late };
 }

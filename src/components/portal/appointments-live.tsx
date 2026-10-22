@@ -284,6 +284,8 @@ export function AppointmentsLive({ viewer, data }: { viewer: PortalViewer; data:
                   const p = parts(row);
                   const minutes = Math.round((Date.parse(row.endsAt) - p.start) / 60_000);
                   const chip = pastChip(row.status);
+                  // A Casevoya video call stays joinable for 30 minutes after its end (it may run over).
+                  const rejoin = row.locationKind === "video" && row.status !== "cancelled" ? joinState(row, now, viewer.organizationName) : null;
                   return (
                     <div key={row.id} className="li">
                       <div>
@@ -302,6 +304,12 @@ export function AppointmentsLive({ viewer, data }: { viewer: PortalViewer; data:
                         </small>
                       </div>
                       <span className="r">
+                        {rejoin?.kind === "open" ? (
+                          <a className="btn p sm" href={rejoin.href} rel="noopener noreferrer" target="_blank" style={{ marginRight: "8px" }}>
+                            <Icon name="video" />
+                            Rejoin call
+                          </a>
+                        ) : null}
                         <span className={`bd ${chip.tone}`}>
                           <i></i>
                           {chip.label}

@@ -20,7 +20,7 @@ import type { SheetStaff } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 import { parseAvailability, slotsFromAvailability } from "./availability";
 import { isUuid } from "@/lib/tenant/context";
-import { callHref, callIsOpen } from "@/modules/video/present";
+import { CALL_WAIT_TOAST, callHref, callIsOpen } from "@/modules/video/present";
 import { COMMON_ZONES, PRACTICE_NOTICE, locationLabel, locationShort, longWhen, safeZone, shortWhen, slotLabel } from "./format";
 import {
   BOOKING_PAGE_PILL,
@@ -235,11 +235,12 @@ function videoJoin(
   staff: SheetStaff,
   now: number,
 ): ConsultationRecordJoin | null {
-  if (booking.location_kind !== "video" || booking.status !== "confirmed") return null;
+  // Completed (marked Attended) stays joinable inside the window, as video_join allows.
+  if (booking.location_kind !== "video" || (booking.status !== "confirmed" && booking.status !== "completed")) return null;
   if (booking.host_membership_id !== staff.membershipId && staff.role !== "firm_owner") return null;
   if (callIsOpen(booking.starts_at, booking.ends_at, now)) return { href: callHref(booking.public_ref), toast: null };
-  if (Date.parse(booking.ends_at) <= now) return null;
-  return { href: null, toast: "The call opens 15 minutes before the start" };
+  if (booking.status !== "confirmed" || Date.parse(booking.starts_at) <= now) return null;
+  return { href: null, toast: CALL_WAIT_TOAST };
 }
 
 export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuery): Promise<ConsultationsPage> {

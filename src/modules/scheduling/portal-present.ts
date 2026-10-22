@@ -5,7 +5,7 @@
 import { locationLabel, safeZone } from "./format";
 import type { PortalAppointment } from "./portal-load";
 import { utcToLocal } from "./slots";
-import { callHref, callIsOpen } from "@/modules/video/present";
+import { CALL_WAIT_TOAST, callHref, callIsOpen } from "@/modules/video/present";
 
 const WEEKDAY = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -17,7 +17,7 @@ export const JOIN_OPENS_BEFORE_MS = 10 * 60_000;
 export const JOIN_WAIT_TOAST = "The link opens 10 minutes before the call";
 
 /** The same toast for a Casevoya video call, which opens 15 minutes before (20261022100000). */
-export const CALL_WAIT_TOAST = "The call opens 15 minutes before the start";
+export { CALL_WAIT_TOAST };
 
 export type JoinState =
   /** The firm's meeting link, inside the window: the button is a link. */

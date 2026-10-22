@@ -122,6 +122,17 @@ describe("portal appointments: the live page", () => {
     expect(phone).toContain("/api/appointments/00000000-0000-4000-8000-0000000000b1/ics?organizationId=00000000-0000-4000-8000-000000000001");
   });
 
+  it("a Casevoya video call that ran past its end keeps a Rejoin link in Past until the call closes", () => {
+    const video = { ...call, locationKind: "video", locationDetail: null };
+    // Ends 15:00; the call stays open until 15:30.
+    const running = render([video], T("2026-10-22T15:10:00Z"));
+    expect(running).toContain('href="/call/abcdefghijklmnopqrstuvwxyz"');
+    expect(running).toContain("Rejoin call");
+    expect(render([video], T("2026-10-22T15:30:00Z"))).not.toContain("Rejoin call");
+    expect(render([{ ...video, status: "cancelled" }], T("2026-10-22T15:10:00Z"))).not.toContain("Rejoin call");
+    expect(render([call], T("2026-10-22T15:10:00Z"))).not.toContain("Rejoin call");
+  });
+
   it("carries the Reschedule and Cancel buttons and both dialogs for an upcoming call, with the Designer ids on the first row only", () => {
     const second = { ...call, id: "00000000-0000-4000-8000-0000000000b2", startsAt: "2026-10-23T14:30:00Z", endsAt: "2026-10-23T15:00:00Z" };
     const html = render([call, second], T("2026-10-21T14:25:00Z"));

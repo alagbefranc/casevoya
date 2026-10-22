@@ -76,15 +76,17 @@ export async function verifyLiveKitJwt(
 ): Promise<Record<string, unknown> | null> {
   const parts = token.trim().split(".");
   if (parts.length !== 3 || !config.apiSecret) return null;
-  let header: { alg?: unknown };
-  let payload: Record<string, unknown>;
+  let header: unknown;
+  let payload: unknown;
   try {
     header = JSON.parse(new TextDecoder().decode(fromBase64url(parts[0])));
     payload = JSON.parse(new TextDecoder().decode(fromBase64url(parts[1])));
   } catch {
     return null;
   }
-  if (header.alg !== "HS256" || !payload || typeof payload !== "object") return null;
+  // Either part can be valid JSON that isn't an object (`null`, a number): refuse, never throw.
+  if (!header || typeof header !== "object" || (header as { alg?: unknown }).alg !== "HS256") return null;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
   let ok = false;
   try {
     ok = await crypto.subtle.verify("HMAC", await hmacKey(config.apiSecret, "verify"), fromBase64url(parts[2]), encoder.encode(`${parts[0]}.${parts[1]}`));
@@ -92,11 +94,12 @@ export async function verifyLiveKitJwt(
     return null;
   }
   if (!ok) return null;
+  const claims = payload as Record<string, unknown>;
   const seconds = now / 1000;
-  if (payload.iss !== config.apiKey) return null;
-  if (typeof payload.exp !== "number" || payload.exp + 10 < seconds) return null;
-  if (typeof payload.nbf === "number" && payload.nbf - 10 > seconds) return null;
-  return payload;
+  if (claims.iss !== config.apiKey) return null;
+  if (typeof claims.exp !== "number" || claims.exp + 10 < seconds) return null;
+  if (typeof claims.nbf === "number" && claims.nbf - 10 > seconds) return null;
+  return claims;
 }
 
 async function sha256Base64(body: string): Promise<string> {
@@ -188,7 +191,11 @@ export function roomService(config: LiveKitConfig, fetcher: Fetch = fetch) {
   };
 }
 
-/** Room limits (BUILD-SPEC §7.1): closes 10 minutes after the last person leaves; 8 people at most. */
+/**
+ * Room limits (BUILD-SPEC §7.1): a room nobody joins closes after 10 minutes (emptyTimeout), a room
+ * closes 60 seconds after the last person leaves (departureTimeout), 8 people at most. A join
+ * inside the window creates it again.
+ */
 export const ROOM_OPTIONS = { emptyTimeout: 600, departureTimeout: 60, maxParticipants: 8 } as const;
 
 /** What a host may publish, and what an admitted client gets (BUILD-SPEC §7.3, §7.4). */
