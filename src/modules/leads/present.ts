@@ -87,9 +87,16 @@ export function barColor(program: string | null): string {
   return BARS[hash % 3];
 }
 
-/** The column ring: a quarter at zero, a fifth more per lead, full at four. */
+/** The ring's full stroke-dashoffset: no blue arc at all. */
+export const RING_EMPTY = "62.8";
+
+/**
+ * The column ring: a fifth per lead, full at five. An empty column has no arc (a quarter arc at
+ * zero read as a loading spinner that never finished).
+ */
 export function ringOffset(count: number): string {
-  return String(62.8 * (1 - Math.min(1, 0.25 + 0.2 * count)));
+  if (count <= 0) return RING_EMPTY;
+  return String(Number((62.8 * (1 - Math.min(1, 0.2 * count))).toFixed(2)));
 }
 
 function groups(whole: number): string {

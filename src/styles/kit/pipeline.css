@@ -4,7 +4,7 @@
 .col.over{background:var(--tint);box-shadow:inset 0 0 0 2px #8fc4f5}
 .colh{display:flex;align-items:flex-start;justify-content:space-between;padding:2px 6px 10px}
 .colh b{display:block;font-weight:600;font-size:15px}.colh small{font-size:13px;color:var(--t2)}
-.ring{width:26px;height:26px;flex:none}.ring circle{fill:none;stroke-width:3}.ring .bg{stroke:#dcd9d5}.ring .fg{stroke:var(--blue);stroke-linecap:round;transition:stroke-dashoffset 300ms var(--ease)}
+.ring{width:26px;height:26px;flex:none}.ring circle{fill:none;stroke-width:3}.ring .bg{stroke:#dcd9d5}.ring .fg{stroke:var(--blue);stroke-linecap:round;transition:stroke-dashoffset 300ms var(--ease)}.ring .fg[stroke-dashoffset="62.8"]{visibility:hidden}
 .cards{display:flex;flex-direction:column;gap:8px;min-height:40px}
 .lc{background:#fff;border-radius:10px;padding:10px 12px 10px 12px;cursor:grab;transition:transform var(--fast) var(--ease),box-shadow var(--fast);touch-action:none;user-select:none}
 .lc:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(17,17,17,.08)}
