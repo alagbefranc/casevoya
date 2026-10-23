@@ -10,7 +10,7 @@
  * Every form is a live form (data-live="1"). Errors sit inline next to the control (role=alert);
  * the receipt card, not a toast, says it is signed.
  */
-import { useEffect, useRef, useState, type FormEvent, type PointerEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type FormEvent, type PointerEvent, type ReactNode } from "react";
 import { Icon } from "@/components/sheet/designer/frame";
 import { firstName, shortFingerprint, type SigningView } from "@/modules/scheduling/agreement-sign-present";
 import {
@@ -85,9 +85,18 @@ export const SIGN_PAGE_CSS = `
 .es-otp.bad input{border-color:var(--bad);background:#fffaf9}
 .es-msg{font-size:14px;min-height:20px;margin:0}.es-msg.bad{color:var(--bad)}.es-msg.ok{color:#1f7a45}
 .es .fp-short{display:none}
+.es h1{text-wrap:balance}.es .lead{text-wrap:pretty}
+.es-receipt{display:grid;grid-template-columns:120px minmax(0,1fr);gap:0;margin:20px auto 0;width:min(520px,100%);text-align:left;font-size:14.5px;border:1px solid var(--line);border-radius:14px;background:var(--canvas);overflow:hidden}
+.es-receipt dt,.es-receipt dd{margin:0;padding:11px 16px;border-top:1px solid var(--line)}
+.es-receipt dt{color:var(--t2)}.es-receipt dd{overflow-wrap:anywhere}
+.es-receipt dt:first-of-type,.es-receipt dt:first-of-type+dd{border-top:0}
+.es-receipt .fp{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;word-break:break-all}
+.es-quote{margin:4px auto 0;max-width:46ch;padding:12px 16px;border-left:3px solid var(--line);background:var(--canvas);border-radius:0 10px 10px 0;text-align:left;font-size:15px;color:var(--ink);overflow-wrap:anywhere}
+.es-version{display:grid;gap:2px;font-size:12.5px;color:var(--t2)}.es-version .fp-full{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
 .es-dlg[open]{border:0;border-radius:16px;padding:0;max-width:520px;width:calc(100% - 32px)}
 @media (max-width:1000px){.es-rev{grid-template-columns:1fr}.es-side{position:static}}
-@media (max-width:640px){.es-top{padding:12px 16px}.es-top img{height:22px}.es-top .sec span{display:none}.es-top .sec{padding:6px 9px}
+@media (max-width:640px){.es-receipt{grid-template-columns:1fr}.es-receipt dd{border-top:0;padding-top:0}
+ .es-top{padding:12px 16px}.es-top img{height:22px}.es-top .sec span{display:none}.es-top .sec{padding:6px 9px}
  .es-act .btn{flex:1 1 100%}.es-meta{grid-template-columns:1fr;gap:2px}.es-meta dd{margin-bottom:8px}
  .es-bar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:20;gap:10px;align-items:center;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--line)}
  .es-bar .btn{flex:1;height:48px}.es-bar small{font-size:13px;color:var(--t2);flex:none}
@@ -106,6 +115,28 @@ function Fingerprint({ sha256 }: { sha256: string }) {
       </span>
       <span className={"fp-short"}>{shortFingerprint(sha256)}</span>
     </span>
+  );
+}
+
+/** The receipt rows: what was signed, by whom, when, and the fingerprint. */
+function Receipt({ rows, sha256 }: { rows: [string, string][]; sha256: string }) {
+  return (
+    <dl className={"es-receipt"}>
+      {rows.map(([term, value]) => (
+        <Fragment key={term}>
+          <dt>{term}</dt>
+          <dd>{value}</dd>
+        </Fragment>
+      ))}
+      <dt>{"Fingerprint"}</dt>
+      <dd>
+        <span className={"fp"}>
+          {"SHA-256 "}
+          <span className={"fp-full"}>{sha256}</span>
+          <span className={"fp-short"}>{shortFingerprint(sha256)}</span>
+        </span>
+      </dd>
+    </dl>
   );
 }
 
@@ -197,8 +228,9 @@ function EndCard({ view, reference }: { view: Shown; reference: string }) {
       <div className={"es-card es-done"}>
         <Icon name={"file-check"} />
         <h1>{"You declined to sign"}</h1>
-        <p className={"lead"}>{`${view.firm} was told, with your reason: “${view.reason}”. Nothing was signed.`}</p>
-        <p className={"fp-note"} style={{ margin: "6px auto 0" }}>
+        <p className={"lead"}>{`${view.firm} was told you declined, with your reason. Nothing was signed.`}</p>
+        <blockquote className={"es-quote"}>{view.reason}</blockquote>
+        <p className={"fp-note"} style={{ margin: "12px auto 0" }}>
           {`Changed your mind? ${view.firm} can send you a corrected version.`}
         </p>
         <div className={"es-act"}>
@@ -224,18 +256,19 @@ function EndCard({ view, reference }: { view: Shown; reference: string }) {
       <div className={"es-card es-done"}>
         <Icon name={"check-circle"} />
         <h1>{"You’ve already signed this"}</h1>
-        <p className={"lead"}>
-          {`You signed “${view.title}”${view.signedAt ? ` on ${longWhen(Date.parse(view.signedAt), view.timeZone)}` : ""}. There’s nothing more to do.`}
-        </p>
-        <div style={{ width: "min(420px,100%)", marginTop: "12px" }}>
+        <p className={"lead"}>{"There’s nothing more to do. You can close this page."}</p>
+        <div style={{ width: "min(520px,100%)", marginTop: "14px" }}>
           <MarkView mark={{ kind: view.signatureKind ?? "typed", name: view.signedName ?? "", preview: view.signatureImage }} />
         </div>
-        <dl className={"es-meta"}>
-          <dt>{"Fingerprint"}</dt>
-          <dd>
-            <Fingerprint sha256={view.sha256} />
-          </dd>
-        </dl>
+        <Receipt
+          rows={[
+            ["Agreement", `${view.title} (version ${view.version})`],
+            ["Signed by", view.signedName ?? ""],
+            ["When", view.signedAt ? longWhen(Date.parse(view.signedAt), view.timeZone) : "Signed"],
+            ["Firm", view.firm],
+          ]}
+          sha256={view.sha256}
+        />
       </div>
     );
   }
@@ -684,10 +717,10 @@ function Flow({
               <div className={"text"} tabIndex={0}>
                 {view.body}
               </div>
-              <small className={"fp-note"} style={{ margin: 0 }}>
-                {`Version ${view.version} · `}
+              <div className={"es-version"}>
+                <span>{`Version ${view.version}`}</span>
                 <Fingerprint sha256={view.sha256} />
-              </small>
+              </div>
               <div>
                 <small style={{ color: "var(--t2)" }}>{"Your signature"}</small>
                 {mark ? (
@@ -723,9 +756,7 @@ function Flow({
                 <dt>{"For"}</dt>
                 <dd>{view.meeting}</dd>
                 <dt>{"Fingerprint"}</dt>
-                <dd>
-                  <Fingerprint sha256={view.sha256} />
-                </dd>
+                <dd className={"num"} title={view.sha256}>{`SHA-256 ${shortFingerprint(view.sha256)}`}</dd>
               </dl>
             </div>
             <div className={"es-act"}>
@@ -869,18 +900,15 @@ function Flow({
       <Icon name={"check-circle"} />
       <h1 ref={heading} tabIndex={-1}>{`Signed. Thank you, ${first}.`}</h1>
       <p className={"lead"}>{`${view.firm} has the signed agreement. You can close this page.`}</p>
-      <dl className={"es-meta"}>
-        <dt>{"Signed by"}</dt>
-        <dd>{mark?.name ?? view.attendee}</dd>
-        <dt>{"When"}</dt>
-        <dd>{signedAt ? longWhen(Date.parse(signedAt), view.timeZone) : "Just now"}</dd>
-        <dt>{"Firm"}</dt>
-        <dd>{view.firm}</dd>
-        <dt>{"Fingerprint"}</dt>
-        <dd>
-          <Fingerprint sha256={view.sha256} />
-        </dd>
-      </dl>
+      <Receipt
+        rows={[
+          ["Agreement", `${view.title} (version ${view.version})`],
+          ["Signed by", mark?.name ?? view.attendee ?? ""],
+          ["When", signedAt ? longWhen(Date.parse(signedAt), view.timeZone) : "Just now"],
+          ["Firm", view.firm],
+        ]}
+        sha256={view.sha256}
+      />
     </div>
   );
 }

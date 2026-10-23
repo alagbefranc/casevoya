@@ -104,7 +104,7 @@ describe("consultation agreement: the private link", () => {
     if (declined.state !== "declined") throw new Error("unexpected");
     const declinedHtml = render({ view: declined, reference: REF });
     expect(declinedHtml).toContain("You declined to sign");
-    expect(declinedHtml).toContain("“The fee is wrong.”");
+    expect(declinedHtml).toContain(">The fee is wrong.</blockquote>");
     expect(declinedHtml).toContain("Message Northline Immigration");
     const withdrawn = render({ view: { state: "withdrawn", firm: "Northline Immigration", firmSlug: null }, reference: REF });
     expect(withdrawn).toContain("This agreement was withdrawn.");
