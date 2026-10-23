@@ -49,7 +49,7 @@ const VARIANTS: { [K in Catalogued]: EmailContexts[K][] } = {
   EM05: [{}],
   EM06: [{ firmName: FIRM, dueOn: "2026-11-06" }, { firmName: FIRM }, { firmName: FIRM, dueOn: "2026-02-31" }],
   EM07: [{ firmName: FIRM, dueOn: "2026-10-30" }, { firmName: FIRM, dueOn: "2026-05-01" }, { firmName: FIRM }],
-  EM08: [...["service", "consultation", "amendment", "consent", "quote", "other"].map((agreementKind) => ({ firmName: FIRM, agreementKind })), { firmName: FIRM }],
+  EM08: [...["service", "consultation", "amendment", "consent", "quote", "other"].map((agreementKind) => ({ firmName: FIRM, agreementKind })), { firmName: FIRM }, { firmName: FIRM, agreementKind: "consultation", signingRef: "abcdefghijklmnopqrstuvwxyz" }],
   "EM08-staff": [{ firmName: FIRM }],
   EM09: [{ firmName: FIRM }],
   "EM09-staff": [{ firmName: FIRM }],

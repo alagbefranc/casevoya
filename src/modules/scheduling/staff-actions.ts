@@ -80,11 +80,14 @@ export async function saveBookingType(input: {
   locationDetail: string;
   hostMembershipIds: string[];
   publish: boolean;
+  /** The consultation agreement sent with each booking from the booking page; null for none, undefined to leave it. */
+  agreementTemplateId?: string | null;
 }): Promise<Result> {
   const slug = (input.slug || "").trim().toLowerCase();
   if (!input.title?.trim()) return { error: "Give the booking type a name." };
   if (!/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(slug)) return { error: "Use lowercase letters, numbers and dashes for the link name." };
   if (input.eventTypeId && !isUuid(input.eventTypeId)) return { error: "Reload and try again." };
+  if (input.agreementTemplateId && !isUuid(input.agreementTemplateId)) return { error: "Reload and try again." };
   if (!(LOCATIONS as readonly string[]).includes(input.locationKind)) return { error: "Choose how you meet." };
   const hosts = (input.hostMembershipIds ?? []).filter(isUuid);
   const whole = (value: number, min: number, max: number) => Number.isInteger(value) && value >= min && value <= max;
@@ -94,7 +97,7 @@ export async function saveBookingType(input: {
   if (input.dailyCapacity != null && !whole(input.dailyCapacity, 1, 48)) return { error: "The daily limit is 1 to 48." };
   const supabase = await session(input.organizationId);
   if (!supabase) return { error: "Sign in first." };
-  const { error } = await supabase.rpc("save_booking_event_type", {
+  const { data, error } = await supabase.rpc("save_booking_event_type", {
     p_org: input.organizationId,
     p_event_type_id: input.eventTypeId,
     p_expected_version: input.version,
@@ -113,7 +116,17 @@ export async function saveBookingType(input: {
     p_host_membership_ids: hosts,
     p_publish: Boolean(input.publish),
   });
-  return error ? bookingError(error.message) : { ok: true };
+  if (error) return bookingError(error.message);
+  const typeId = input.eventTypeId ?? (typeof data === "string" ? data : null);
+  if (input.agreementTemplateId !== undefined && typeId) {
+    const set = await supabase.rpc("set_booking_type_agreement", { p_event_type_id: typeId, p_template_id: input.agreementTemplateId });
+    if (set.error) {
+      return /approved consultation/.test(set.error.message)
+        ? { error: "The booking type was saved, but that agreement is no longer approved. Choose another one." }
+        : bookingError(set.error.message);
+    }
+  }
+  return { ok: true };
 }
 
 /** The firm owner archives a booking type (step-up): it is unpublished and leaves the lists. Bookings already made stay. */

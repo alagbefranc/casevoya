@@ -68,7 +68,8 @@ export type ConsultationsPage = {
   page: ConsultationsData;
   dialogs: { book: BookDialogData; reschedule: RescheduleDialogData; cancel: CancelDialogData };
   /** practice: sample mode, so the booking type dialog publishes practice pages. */
-  settings: { organizationId: string; zones: string[]; hosts: HostOption[]; owner: boolean; practice: boolean };
+  /** agreements: the approved consultation agreements a booking type can send (booking page). */
+  settings: { organizationId: string; zones: string[]; hosts: HostOption[]; owner: boolean; practice: boolean; agreements: Option[] };
 };
 
 type EventTypeRow = {
@@ -88,6 +89,7 @@ type EventTypeRow = {
   is_published: boolean;
   is_sample: boolean;
   version: number;
+  agreement_template_id: string | null;
 };
 
 async function loadBookings(supabase: Client, org: string, from: number, to: number, statuses: string[]): Promise<StaffBooking[]> {
@@ -305,7 +307,7 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
   const [typesResult, hostsResult, members, upcoming, orgRow, templatesResult] = await Promise.all([
     supabase
       .from("booking_event_types")
-      .select("id, slug, title, description, duration_min, slot_step_min, buffer_before_min, buffer_after_min, min_notice_min, max_advance_days, daily_capacity, location_kind, location_detail, is_published, is_sample, version")
+      .select("id, slug, title, description, duration_min, slot_step_min, buffer_before_min, buffer_after_min, min_notice_min, max_advance_days, daily_capacity, location_kind, location_detail, is_published, is_sample, version, agreement_template_id")
       .eq("organization_id", org)
       .is("archived_at", null)
       .order("title"),
@@ -457,6 +459,7 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
             detail: type.location_detail ?? "",
             hosts: hostsOf(type.id),
             published: type.is_published,
+            agreement: type.agreement_template_id ?? "",
           }),
         }
       : null,
@@ -561,7 +564,7 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
         submit: { data: { "data-booking-submit": "can", "data-org": org } },
       },
     },
-    settings: { organizationId: org, zones, hosts: members.map((m) => ({ membershipId: m.membershipId, name: m.name })), owner, practice: staff.sampleMode },
+    settings: { organizationId: org, zones, hosts: members.map((m) => ({ membershipId: m.membershipId, name: m.name })), owner, practice: staff.sampleMode, agreements: agreementTemplates.map((t) => ({ label: `${t.name} v${t.version}`, value: t.id })) },
   };
 }
 

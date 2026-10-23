@@ -66,7 +66,7 @@ portal choice "Email notices" is off is recorded as `skipped`, not emailed.
 | EM05 | Sessions signed out | Password changed with “sign out everywhere” (revoke_other_sessions). No outbox event yet | staff · platform | Your other sessions were signed out | This follows your password change. | — | — | ready-not-wired |
 | EM06 | Document requested | Staff create a document request (outbox document.request_created, template document_request) | client · firm | {firm_name} asked for a document | Upload it securely in your portal. | Open your portal → `/portal/documents` | `firm_name`, `due_on` | wired |
 | EM07 | Deadline reminder | A reminder schedule comes due (outbox reminder.due, template reminder). Honours deadline_reminders and email_notices | client · firm | A step on your file is due {due_on: 30 Oct} (without a date: A reminder from {firm_name}) | Your portal shows what to do next. | Open your portal → `/portal` | `firm_name`, `due_on` | wired |
-| EM08 | Agreement ready to sign | Staff send an agreement for signature (outbox agreement.sent, template agreement), to client signers | client · firm | An agreement from {firm_name} is ready to sign | Review it and sign in your portal. | Review and sign → `/portal/agreements` | `firm_name`, `agreement_kind` | wired |
+| EM08 | Agreement ready to sign | Staff send an agreement for signature (outbox agreement.sent, template agreement), to client signers; or a booking's consultation agreement (outbox booking_agreement.sent), to the booking's attendee | client · firm | An agreement from {firm_name} is ready to sign | Review it and sign in your portal. (Booking: Review it and sign it before your consultation.) | Review and sign → `/portal/agreements` (booking: `/consultation/<booking ref>/agreement`) | `firm_name`, `agreement_kind`, `signing_ref` | wired |
 | EM08-staff | Agreement: your turn to countersign (staff variant of EM08) | A staff signer’s turn comes (outbox agreement.signer_turn, template agreement, audience staff) | staff · platform | Your countersignature is needed at {firm_name} | Open Agreements in Casevoya to sign. | Open agreements → `/sheet/agreements` | `firm_name` | wired |
 | EM09 | Agreement executed | The last signer signs (outbox agreement.executed, template signature), to client signers | client · firm | Your agreement with {firm_name} is signed | Your copy and the completion certificate are in your portal. | Download your copy → `/portal/agreements` | `firm_name` | wired |
 | EM09-staff | Agreement executed (staff variant of EM09) | The last signer signs (outbox agreement.executed, template signature, audience staff), to staff signers | staff · platform | An agreement at {firm_name} is signed | The firm’s copy is on the matter in Casevoya. | Open agreements → `/sheet/agreements` | `firm_name` | wired |
@@ -131,6 +131,7 @@ per template is the "Status" table of `docs/i18n/email-fr-review.md`; how to app
 | `invite` | `kind: portal`, any other role | EM02 |
 | `reminder` | | EM07 |
 | `agreement` | `audience: staff` (agreement.signer_turn) | EM08-staff |
+| `agreement` | `signing_ref` (booking_agreement.sent) | EM08, booking variant |
 | `agreement` | | EM08 |
 | `signature` | `audience: staff` (staff signer) | EM09-staff |
 | `signature` | | EM09 |

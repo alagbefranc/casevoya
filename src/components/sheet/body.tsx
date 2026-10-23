@@ -754,7 +754,7 @@ export async function SheetBody({
               <CancelDialog data={loaded.dialogs.cancel} />
               {loaded.summaryDialog ? <SummaryDialog data={loaded.summaryDialog} /> : null}
               <AvailabilityDialog organizationId={loaded.settings.organizationId} zones={loaded.settings.zones} />
-              {loaded.settings.owner ? <BookingTypeDialog organizationId={loaded.settings.organizationId} hosts={loaded.settings.hosts} practice={loaded.settings.practice} /> : null}
+              {loaded.settings.owner ? <BookingTypeDialog organizationId={loaded.settings.organizationId} hosts={loaded.settings.hosts} practice={loaded.settings.practice} agreements={loaded.settings.agreements} /> : null}
             </>
           }
         >

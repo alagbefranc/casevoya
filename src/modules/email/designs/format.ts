@@ -190,6 +190,13 @@ export function uuidOrNull(value: unknown): string | null {
   return typeof value === "string" && UUID.test(value.trim()) ? value.trim().toLowerCase() : null;
 }
 
+const BOOKING_REF = /^[a-z2-7]{26}$/;
+
+/** A booking's private reference (its signing link), or null. */
+export function bookingRefOrNull(value: unknown): string | null {
+  return typeof value === "string" && BOOKING_REF.test(value.trim()) ? value.trim() : null;
+}
+
 /** A small positive whole number (minutes, hours, days), or null. */
 export function countOrNull(value: unknown, max = 10000): number | null {
   const number = typeof value === "number" ? value : typeof value === "string" && /^\d+$/.test(value.trim()) ? Number(value) : NaN;

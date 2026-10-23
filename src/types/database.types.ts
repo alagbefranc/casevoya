@@ -511,7 +511,7 @@ export type Database = {
           is_sample: boolean
           organization_id: string
           sent_at: string
-          sent_by: string
+          sent_by: string | null
           signed_at: string | null
           signed_name: string | null
           signer_ip: unknown
@@ -535,7 +535,7 @@ export type Database = {
           is_sample?: boolean
           organization_id: string
           sent_at?: string
-          sent_by: string
+          sent_by?: string | null
           signed_at?: string | null
           signed_name?: string | null
           signer_ip?: unknown
@@ -559,7 +559,7 @@ export type Database = {
           is_sample?: boolean
           organization_id?: string
           sent_at?: string
-          sent_by?: string
+          sent_by?: string | null
           signed_at?: string | null
           signed_name?: string | null
           signer_ip?: unknown
@@ -651,6 +651,7 @@ export type Database = {
       }
       booking_event_types: {
         Row: {
+          agreement_template_id: string | null
           archived_at: string | null
           buffer_after_min: number
           buffer_before_min: number
@@ -678,6 +679,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          agreement_template_id?: string | null
           archived_at?: string | null
           buffer_after_min?: number
           buffer_before_min?: number
@@ -705,6 +707,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          agreement_template_id?: string | null
           archived_at?: string | null
           buffer_after_min?: number
           buffer_before_min?: number
@@ -10251,6 +10254,10 @@ export type Database = {
       send_booking_agreement: {
         Args: { p_booking_id: string; p_template_id: string }
         Returns: string
+      }
+      set_booking_type_agreement: {
+        Args: { p_event_type_id: string; p_template_id: string | null }
+        Returns: undefined
       }
       send_quote: {
         Args: { p_agreement_id: string }

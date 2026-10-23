@@ -71,8 +71,22 @@ export function AvailabilityDialog({ organizationId, zones }: { organizationId: 
 export type HostOption = { membershipId: string; name: string };
 
 /** A booking type (firm owner, with a recent step-up). Free consultations only in this release. */
-/** practice: the firm is in sample mode, so a published type is a practice page (staff only). */
-export function BookingTypeDialog({ organizationId, hosts, practice = false }: { organizationId: string; hosts: HostOption[]; practice?: boolean }) {
+/**
+ * practice: the firm is in sample mode, so a published type is a practice page (staff only).
+ * agreements: the firm's approved consultation agreements; one can go out with each booking from
+ * the booking page (the choice shows only when there is one).
+ */
+export function BookingTypeDialog({
+  organizationId,
+  hosts,
+  practice = false,
+  agreements = [],
+}: {
+  organizationId: string;
+  hosts: HostOption[];
+  practice?: boolean;
+  agreements?: { label: string; value?: string }[];
+}) {
   const select = (id: string, label: string, options: [string, string][], hint?: string) => (
     <div className={"fld"}>
       <label htmlFor={id}>{label}</label>
@@ -146,6 +160,22 @@ export function BookingTypeDialog({ organizationId, hosts, practice = false }: {
             </label>
           ))}
         </fieldset>
+        {agreements.length ? (
+          <div className={"fld"}>
+            <label htmlFor={"etA"}>{"Consultation agreement"}</label>
+            <small className={"hint"} id={"etA-h"}>
+              {"Sent with each booking from the booking page. The client signs it from a private link."}
+            </small>
+            <select className={"sel"} id={"etA"} aria-describedby={"etA-h"}>
+              <option value={""}>{"None"}</option>
+              {agreements.map((option) => (
+                <option key={option.value ?? ""} value={option.value ?? ""}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         <label style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <input type={"checkbox"} id={"etPub"} />
           {practice ? "Published as a practice page (only your team can open it until your firm is verified)" : "Published (clients can book from the link)"}

@@ -40,7 +40,23 @@ export function bookPageBase(event: PublicEvent, zone: string): Omit<BookPageDat
 
 /** The confirmation: the time in the visitor's zone, and in the firm's own zone (never the host's
  * personal schedule zone) when they differ. Each time names its zone. */
-function Confirmation({ booking, ics, email, onAgain, firmZone }: { booking: BookingSummary; ics: string | null; email: string; onAgain: () => void; firmZone: string }) {
+type AgreementLink = { title: string; href: string };
+
+function Confirmation({
+  booking,
+  ics,
+  email,
+  agreement,
+  onAgain,
+  firmZone,
+}: {
+  booking: BookingSummary;
+  ics: string | null;
+  email: string;
+  agreement: AgreementLink | null;
+  onAgain: () => void;
+  firmZone: string;
+}) {
   const download = () => {
     if (!ics) return;
     const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
@@ -70,7 +86,15 @@ function Confirmation({ booking, ics, email, onAgain, firmZone }: { booking: Boo
       ) : null}
       <small style={{ color: "#615d59" }}>{`A confirmation is on its way to ${email}.`}</small>
       {booking.practice ? <small style={{ color: "#615d59" }}>{"This is a sample booking made on a practice page."}</small> : null}
+      {agreement ? (
+        <p style={{ margin: "0" }}>{`Next, sign the consultation agreement (${agreement.title}) before your consultation. The link is also in your email.`}</p>
+      ) : null}
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+        {agreement ? (
+          <a className={"btn p sm"} href={agreement.href}>
+            {"Sign the agreement"}
+          </a>
+        ) : null}
         {ics ? (
           <button className={"btn s sm"} type={"button"} onClick={download}>
             {"Add to calendar"}
@@ -82,6 +106,11 @@ function Confirmation({ booking, ics, email, onAgain, firmZone }: { booking: Boo
       </div>
     </div>
   );
+}
+
+/** Only a same-site signing page (/consultation/<ref>/agreement) is linked. */
+function safeAgreement(value: AgreementLink | null | undefined): AgreementLink | null {
+  return value && typeof value.title === "string" && /^\/consultation\/[a-z2-7]{26}\/agreement$/.test(value.href) ? value : null;
 }
 
 const noSubscribe = () => () => {};
@@ -110,7 +139,7 @@ export function BookLive({ event }: { event: PublicEvent }) {
   const [picked, setPicked] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ booking: BookingSummary; ics: string | null; email: string } | null>(null);
+  const [done, setDone] = useState<{ booking: BookingSummary; ics: string | null; email: string; agreement: AgreementLink | null } | null>(null);
   const opened = useRef<number>(0);
   const key = useRef<string>("");
 
@@ -160,9 +189,9 @@ export function BookLive({ event }: { event: PublicEvent }) {
           elapsedMs: Math.max(0, Date.now() - opened.current),
         }),
       });
-      const body = (await response.json()) as { booking?: BookingSummary; ics?: string | null; message?: string };
+      const body = (await response.json()) as { booking?: BookingSummary; ics?: string | null; agreement?: AgreementLink | null; message?: string };
       if (response.status === 201 && body.booking) {
-        setDone({ booking: body.booking, ics: body.ics ?? null, email });
+        setDone({ booking: body.booking, ics: body.ics ?? null, email, agreement: safeAgreement(body.agreement) });
         return;
       }
       setError(body.message || "The booking couldn’t be made. Try again.");
@@ -196,6 +225,7 @@ export function BookLive({ event }: { event: PublicEvent }) {
           booking={done.booking}
           ics={done.ics}
           email={done.email}
+          agreement={done.agreement}
           onAgain={() => {
             setDone(null);
             setPicked(null);

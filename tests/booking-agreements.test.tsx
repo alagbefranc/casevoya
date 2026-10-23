@@ -106,3 +106,23 @@ describe("consultation agreement: staff screens", () => {
     expect(recordAgreement({ ...base, row: null, template: null })).toEqual({ detail: "None sent", actions: [], link: null });
   });
 });
+
+describe("consultation agreement: the email", () => {
+  const ref = "abcdefghijklmnopqrstuvwxyz";
+  it("links the attendee to the private signing page, not the portal", async () => {
+    const { renderEmail } = await import("@/modules/email/templates");
+    const mail = renderEmail({ template: "agreement", firm: "Northline Immigration", agreement_kind: "consultation", signing_ref: ref }, { origin: "https://app.casevoya.ca" });
+    expect(mail.design).toBe("EM08");
+    expect(mail.subject).toBe("An agreement from Northline Immigration is ready to sign");
+    expect(mail.text).toContain("Review it and sign it before your consultation.");
+    expect(mail.html).toContain(`https://app.casevoya.ca/consultation/${ref}/agreement`);
+    expect(mail.html).not.toContain("/portal/agreements");
+  });
+
+  it("a malformed reference falls back to the portal wording and link", async () => {
+    const { renderEmail } = await import("@/modules/email/templates");
+    const mail = renderEmail({ template: "agreement", firm: "Northline Immigration", agreement_kind: "consultation", signing_ref: "../../evil" }, { origin: "https://app.casevoya.ca" });
+    expect(mail.html).toContain("/portal/agreements");
+    expect(mail.html).not.toContain("/consultation/");
+  });
+});
