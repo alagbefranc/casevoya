@@ -59,7 +59,7 @@ export function agreementBadge(status: string, kind: string): MatterBadge {
 /** Filter-chip tokens ("Waiting", "Executed", "Quotes", "Declined, voided, expired"). */
 export function agreementFlags(status: string, kind: string): string[] {
   const flags: string[] = [];
-  if (status === "sent" || status === "partially_signed") flags.push("waiting");
+  if ((status === "sent" || status === "partially_signed") && kind !== "quote") flags.push("waiting");
   if (status === "completed") flags.push("executed");
   if (kind === "quote") flags.push("quote");
   if (["declined", "voided", "expired", "superseded"].includes(status)) flags.push("closed");

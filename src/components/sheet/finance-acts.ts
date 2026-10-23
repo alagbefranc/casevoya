@@ -7,6 +7,7 @@ import {
   financeNeedsStepUp,
   financeStepUpLocation,
   INVOICE_DIALOG,
+  INVOICE_DRAFT_MS,
   invoiceDialogOpening,
   readNewInvoice,
   readRefund,
@@ -142,7 +143,7 @@ export async function runRefund(button: HTMLElement, router: Router) {
   if ("error" in result) {
     if (financeNeedsStepUp(result.error)) {
       try {
-        sessionStorage.setItem(REFUND_DRAFT, JSON.stringify({ ...typed, key: idempotencyKey }));
+        sessionStorage.setItem(REFUND_DRAFT, JSON.stringify({ ...typed, key: idempotencyKey, at: Date.now() }));
       } catch {
         // Storage can be unavailable; the person opens the refund again.
       }
@@ -174,7 +175,9 @@ export function reopenRefundDialog(root: ParentNode, open: (id: string) => void)
     draft = null;
   }
   const payment = draft && typeof draft.payment === "string" ? draft.payment : null;
-  if (!draft || !payment) return;
+  // Only a fresh draft, like New invoice's: an old one left in the tab doesn't refill the dialog.
+  const at = draft && typeof draft.at === "number" ? draft.at : null;
+  if (!draft || !payment || at === null || Date.now() - at < 0 || Date.now() - at > INVOICE_DRAFT_MS) return;
   const opener = [...root.querySelectorAll<HTMLElement>("[data-refund-open]")].find((item) => item.dataset.refundOpen === payment);
   if (!opener) return;
   openRefund(opener, root, open);

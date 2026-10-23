@@ -53,6 +53,7 @@ import {
   shortStripeId,
 } from "@/modules/sheet/finance-present";
 import {
+  billingNames,
   loadCreditNoteRows,
   loadInvoiceView,
   loadLastReconciliationKpi,
@@ -88,11 +89,16 @@ async function invoiceLabels(supabase: Supabase, org: string, invoiceIds: string
   if (!invoiceIds.length) return new Map();
   const invoices = await supabase.from("invoices").select("id, number, matter_id, is_sample").eq("organization_id", org).in("id", invoiceIds);
   const matterIds = [...new Set((invoices.data ?? []).map((row) => row.matter_id))];
-  const matters = matterIds.length
-    ? await supabase.from("matters").select("id, title, matter_participants(role, persons(display_name))").eq("organization_id", org).in("id", matterIds)
-    : null;
-  const clientByMatter = new Map(
-    (matters?.data ?? []).map((row) => [
+  const [matters, billing] = matterIds.length
+    ? await Promise.all([
+        supabase.from("matters").select("id, title, matter_participants(role, persons(display_name))").eq("organization_id", org).in("id", matterIds),
+        billingNames(supabase, org),
+      ])
+    : [null, new Map<string, { title: string; client: string | null }>()];
+  // A finance user reads no matter rows: the billing projection names their clients.
+  const clientByMatter = new Map<string, string>([
+    ...[...billing].map(([id, row]): [string, string] => [id, row.client || row.title]),
+    ...(matters?.data ?? []).map((row): [string, string] => [
       row.id,
       (row.matter_participants ?? [])
         .filter((party) => party.role === "applicant")
@@ -102,7 +108,7 @@ async function invoiceLabels(supabase: Supabase, org: string, invoiceIds: string
         row.title ||
         "Client",
     ]),
-  );
+  ]);
   return new Map(
     (invoices.data ?? []).map((row) => [row.id, { number: `${row.number}${row.is_sample ? " (sample)" : ""}`, client: clientByMatter.get(row.matter_id) ?? "Client" }]),
   );
@@ -316,17 +322,20 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
   const staffName = (id: string | null) => (id ? (nameOf.get(id) ?? "Staff member") : null);
 
   const matterIds = [...new Set([...ledgerRows.map((row) => row.matter_id), ...partyRows.map((row) => row.matter_id)])];
-  const [matters, invoices] = await Promise.all([
+  const [matters, invoices, billed] = await Promise.all([
     matterIds.length ? supabase.from("matters").select("id, reference, title, is_sample").eq("organization_id", org).in("id", matterIds) : null,
     matterIds.length
       ? supabase.from("invoices").select("id, number, matter_id, amount_cents, paid_cents, credited_cents, status, issued_on, is_sample").eq("organization_id", org).in("matter_id", matterIds).limit(FUNDS_READ)
       : null,
+    matterIds.length && canBill ? billingNames(supabase, org) : null,
   ]);
   const matterById = new Map((matters?.data ?? []).map((row) => [row.id, row]));
+  const sampleMatter = new Set([...ledgerRows.filter((row) => row.is_sample).map((row) => row.matter_id), ...partyRows.filter((row) => row.is_sample).map((row) => row.matter_id)]);
+  // A finance user reads no matter rows: the billing projection's title names the matter.
   const referenceOf = (matterId: string) => {
     const matter = matterById.get(matterId);
-    const label = matter?.reference || matter?.title || "Matter";
-    return matter?.is_sample ? `${label} (sample)` : label;
+    const label = matter?.reference || matter?.title || billed?.get(matterId)?.title || "Matter";
+    return matter?.is_sample || sampleMatter.has(matterId) ? `${label} (sample)` : label;
   };
   const personName = new Map(partyRows.map((row) => [row.person_id, row.display_name]));
   const invoiceById = new Map((invoices?.data ?? []).map((row) => [row.id, row]));
@@ -389,11 +398,15 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
     const totals = ledgerTotals(list);
     const client = personName.get(ledger.person_id) ?? "Client";
     const matter = referenceOf(ledger.matter_id);
-    balance += totals.balanceCents;
-    pendingIn += totals.pendingInCents;
-    pendingOut += totals.pendingOutCents;
-    if (totals.balanceCents > 0) clientsWithMoney.add(ledger.person_id);
-    if (totals.pendingInCents > 0 && !firstPending) firstPending = client;
+    // Sample ledgers stay listed (marked) after sample mode ends, but real totals leave them out.
+    const counted = staff.sampleMode || !ledger.is_sample;
+    if (counted) {
+      balance += totals.balanceCents;
+      pendingIn += totals.pendingInCents;
+      pendingOut += totals.pendingOutCents;
+      if (totals.balanceCents > 0) clientsWithMoney.add(ledger.person_id);
+      if (totals.pendingInCents > 0 && !firstPending) firstPending = client;
+    }
 
     const actions: FundsAction[] = [];
     if (canBill) {
@@ -559,9 +572,12 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
         ? [{ label: "Add the client account", primary: true, attrs: { "data-funds-open": "dlgAcct" } }]
         : []
       : [{ label: "Record a payment", primary: true, attrs: { "data-dlg": "dlgPay" } }];
+  const failed = Boolean(accounts.error || ledgers.error || entries.error);
   const empty = panels.length
     ? null
-    : !canBill
+    : failed
+      ? { title: "Client funds couldn’t load", copy: "Reload the page. Nothing was changed; if it keeps happening, sign in again.", actions: [] }
+      : !canBill
       ? { title: "No client funds to show", copy: "Client funds are shown to the firm owner and the matter’s finance user.", actions: [] }
       : !firstAccount
         ? {
@@ -722,12 +738,18 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
       .limit(PAYMENTS_READ),
   ]);
   const matterById = new Map((matters?.data ?? []).map((row) => [row.id, row]));
-  const clientByMatter = new Map(billing.map((row) => [row.matter_id, row.client_display_name || row.title]));
+  // Closed matters too: their invoices still need a name. A finance user reads no matter rows, so
+  // the billing projection's title stands in for the reference.
+  const billedTitle = new Map((billable?.data ?? []).filter((row) => row.organization_id === org).map((row) => [row.matter_id, row.title]));
+  const clientByMatter = new Map([
+    ...(billable?.data ?? []).filter((row) => row.organization_id === org).map((row): [string, string] => [row.matter_id, row.client_display_name || row.title]),
+    ...billing.map((row): [string, string] => [row.matter_id, row.client_display_name || row.title]),
+  ]);
   const processingIds = new Set((processing?.data ?? []).map((row) => row.invoice_id));
   const clientOf = (matterId: string) => clientByMatter.get(matterId) || matterById.get(matterId)?.title || "Matter";
   const referenceOf = (matterId: string) => {
     const matter = matterById.get(matterId);
-    const label = matter?.reference || matter?.title || "—";
+    const label = matter?.reference || matter?.title || billedTitle.get(matterId) || "—";
     return matter?.is_sample ? `${label} (sample)` : label;
   };
 
@@ -778,7 +800,8 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
     };
   });
 
-  const open = rows.filter((row) => row.status === "issued" || row.status === "partially_paid");
+  // Sample invoices stay listed (marked) after sample mode ends, but real totals leave them out.
+  const open = rows.filter((row) => (row.status === "issued" || row.status === "partially_paid") && (staff.sampleMode || !row.is_sample));
   const overdue = open.filter((row) => row.due_on < today);
   const owed = open.reduce((sum, row) => sum + Math.max(0, row.amount_cents - row.paid_cents - row.credited_cents), 0);
   const overdueSum = overdue.reduce((sum, row) => sum + Math.max(0, row.amount_cents - row.paid_cents - row.credited_cents), 0);
@@ -809,13 +832,16 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
       value: { money: formatMoney(received, "CAD") },
       note: refunded > 0 ? { left: paidNote, right: `${formatMoney(refunded, "CAD")} refunded` } : paidNote,
     },
-    {
-      href: "?tab=payments",
-      label: "Card payments",
-      value: { money: cardReady ? "On" : account ? "Setting up" : "Off" },
-      note: cardReady ? { left: "Stripe", right: "test mode" } : account ? "Finish the Stripe account" : "Set up a Stripe account",
-      tone: cardReady ? undefined : "warn",
-    },
+    // Only billing staff read the firm's Stripe account: for anyone else "Off" would be a guess.
+    canBill
+      ? {
+          href: "?tab=payments",
+          label: "Card payments",
+          value: { money: cardReady ? "On" : account ? "Setting up" : "Off" },
+          note: cardReady ? { left: "Stripe", right: "test mode" } : account ? "Finish the Stripe account" : "Set up a Stripe account",
+          tone: cardReady ? undefined : "warn",
+        }
+      : { href: "?tab=payments", label: "Card payments", value: { money: "—" }, note: "Shown to the firm owner and finance users" },
   ];
 
   const page: FinanceData = {
@@ -827,7 +853,9 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
     filterEmpty: true,
     empty: tableRows.length
       ? null
-      : canBill
+      : invoices.error
+        ? { title: "Invoices couldn’t load", copy: "Reload the page. Nothing was changed; if it keeps happening, sign in again." }
+        : canBill
         ? { title: "No invoices yet", copy: "Issue an invoice for delivered work or an incurred cost on a matter. The client pays it in their portal.", action: { label: "New invoice", dialog: "dlgInv" } }
         : { title: "No invoices to show", copy: "Invoices are shown to the firm owner and the matter’s finance user." },
   };

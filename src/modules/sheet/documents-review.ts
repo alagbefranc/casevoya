@@ -20,6 +20,8 @@ export function readDocumentReview(fields: {
   reason?: string;
   expires?: string;
   previousExpires?: string;
+  /** `YYYY-MM-DD`: an accepted document can't be given an expiry date already past. */
+  today?: string;
 }): { input: DocumentReviewInput } | { error: string } {
   const versionId = (fields.versionId ?? "").trim();
   const expectedVersion = Number(fields.version);
@@ -33,6 +35,9 @@ export function readDocumentReview(fields: {
   if (expires && !DATE.test(expires)) return { error: "Enter the expiry as a date." };
   const previous = (fields.previousExpires ?? "").trim();
   const expiry = expires === previous ? undefined : expires || null;
+  if (decision === "accepted" && expiry && fields.today && DATE.test(fields.today) && expiry < fields.today) {
+    return { error: "That expiry date has already passed, so the document would be expired at once. Check the date, or ask for a new version." };
+  }
   return { input: { versionId, expectedVersion, decision, reason, expiry } };
 }
 

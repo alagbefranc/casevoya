@@ -43,7 +43,8 @@ export type ReconData = {
     items: ReconItem[];
     itemsEmpty: string;
     steps: Step[];
-    sign: { label: string; disabled: boolean; why: string | null; attrs: Record<string, string> };
+    /** `discard`: opens the sign dialog for its Discard, when signing is closed to this person (they prepared it). */
+    sign: { label: string; disabled: boolean; why: string | null; attrs: Record<string, string>; discard?: Record<string, string> };
   };
   start: null | { title: string; copy: string; action: ReconAction | null };
   history: ReconHistoryRow[];
@@ -279,6 +280,11 @@ export function SheetFinanceRecon({ data }: { data: ReconData }) {
                     {pending.sign.label}
                   </button>
                 )}
+                {pending.sign.discard ? (
+                  <button className={"btn sm"} {...pending.sign.discard}>
+                    {"Discard"}
+                  </button>
+                ) : null}
                 {pending.sign.why ? <span className={"why"}>{pending.sign.why}</span> : null}
               </div>
             </div>
