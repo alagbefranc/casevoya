@@ -110,14 +110,21 @@ export async function runDocReview(button: HTMLElement, router: Router) {
     toast2(read.error, { kind: "warn", sub: "Nothing was saved." });
     return;
   }
-  const reviewed = await reviewDocumentVersion({
-    organizationId,
-    versionId: read.input.versionId,
-    expectedVersion: read.input.expectedVersion,
-    decision: read.input.decision,
-    reason: read.input.reason,
-    code: "",
-  });
+  let reviewed: Awaited<ReturnType<typeof reviewDocumentVersion>>;
+  try {
+    reviewed = await reviewDocumentVersion({
+      organizationId,
+      versionId: read.input.versionId,
+      expectedVersion: read.input.expectedVersion,
+      decision: read.input.decision,
+      reason: read.input.reason,
+      code: "",
+    });
+  } catch {
+    // Offline, a server error, or a deploy in between: say so instead of leaving the dialog silent.
+    toast2("The review couldn’t be saved.", { kind: "bad", sub: "Check your connection, then reload the page and try again." });
+    return;
+  }
   if ("error" in reviewed) {
     if (needsStepUp(reviewed.error)) {
       keepDraft(read.input.versionId, fields);

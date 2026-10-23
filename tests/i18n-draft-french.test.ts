@@ -13,6 +13,8 @@ const state = vi.hoisted(() => ({
   rpcCalls: [] as { name: string; args: Record<string, unknown> }[],
   rpcResult: { data: { ok: true } as unknown, error: null as null | { message: string } },
   signedIn: true,
+  /** The file's version as the database holds it (the dialog read 3). */
+  stored: 3 as number | null,
   ai: null as null | { run: (model: string, input: Record<string, unknown>) => Promise<unknown> },
 }));
 
@@ -22,6 +24,10 @@ vi.mock("@/lib/supabase/server", () => ({
     rpc: async (name: string, args: Record<string, unknown>) => {
       state.rpcCalls.push({ name, args });
       return state.rpcResult;
+    },
+    from: () => {
+      const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: state.stored === null ? null : { version: state.stored }, error: null }) };
+      return query;
     },
   }),
 }));
@@ -55,6 +61,7 @@ function fakeAi(response: unknown) {
 beforeEach(() => {
   state.rpcCalls = [];
   state.rpcResult = { data: { ok: true }, error: null };
+  state.stored = 3;
   state.signedIn = true;
   state.ai = null;
 });
@@ -174,6 +181,16 @@ describe("saving a review with French", () => {
     await reviewDocumentVersion({ ...base, reasonFr: "  " });
     expect(state.rpcCalls[0].name).toBe("review_document_version");
     expect(Object.keys(state.rpcCalls[0].args).sort()).toEqual(["p_annotations", "p_decision", "p_expected_version", "p_reason", "p_version_id"]);
+  });
+
+  it("refuses a review of a file someone else changed at once, without calling the review function (which can stall on it)", async () => {
+    state.stored = 4;
+    expect(await reviewDocumentVersion({ ...base })).toEqual({ error: "Someone else updated this document. Refresh and try again." });
+    expect(state.rpcCalls).toHaveLength(0);
+    // A row this person can't read is left to the function to refuse.
+    state.stored = null;
+    await reviewDocumentVersion({ ...base });
+    expect(state.rpcCalls[0].name).toBe("review_document_version");
   });
 });
 

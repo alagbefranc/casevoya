@@ -32,6 +32,18 @@ async function clientFor(organizationId: string, code: string | null) {
   return { supabase, userId };
 }
 
+/**
+ * Whether the file changed since the dialog read it. The review functions refuse a stale version
+ * with a "serialization failure" (40001), which the database API may retry for minutes before
+ * answering, so a plain read answers it first. Unreadable rows are left to the function to refuse.
+ */
+async function staleVersion(supabase: Awaited<ReturnType<typeof createClient>>, versionId: string, expected: number): Promise<boolean> {
+  const { data } = await supabase.from("document_versions").select("version").eq("id", versionId).maybeSingle();
+  return data != null && data.version !== expected;
+}
+
+const STALE = documentError("document version conflict");
+
 function objectRecord(value: Json): Record<string, Json | undefined> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value;
@@ -246,6 +258,7 @@ export async function reviewDocumentVersion(input: {
   }
   const session = await clientFor(input.organizationId, input.code);
   if ("error" in session) return { error: session.error };
+  if (await staleVersion(session.supabase, input.versionId, input.expectedVersion)) return { error: STALE };
   if (french) {
     const { data, error } = await session.supabase.rpc("review_document_version_fr", {
       p_version_id: input.versionId,
@@ -300,6 +313,7 @@ export async function setDocumentExpiry(input: {
   if (!isUuid(input.versionId)) return { error: "Choose a file." };
   const session = await clientFor(input.organizationId, input.code);
   if ("error" in session) return { error: session.error };
+  if (await staleVersion(session.supabase, input.versionId, input.expectedVersion)) return { error: STALE };
   const { data, error } = await session.supabase.rpc("set_document_expiry", {
     p_version_id: input.versionId,
     p_expected_version: input.expectedVersion,
