@@ -45,6 +45,8 @@ describe("consultation agreement: the private link", () => {
     expect(open).toContain("I agree to sign this document electronically.");
     expect(open).toContain('value="Tomás Duarte"');
     expect(open).toContain("Sign the agreement");
+    // A live form: the Sheet's "This form isn’t connected yet" stub never fires on it.
+    expect(open).toContain('data-live="1"');
     const signedView = readSigningView({ ...raw, state: "signed", signed_name: "Tomás Duarte", signed_at: "2026-10-23T15:00:00Z" });
     if (signedView.state === "unavailable") throw new Error("unexpected");
     const signed = renderToStaticMarkup(createElement(AgreementSign, { view: signedView, reference: "abcdefghijklmnopqrstuvwxyz" }));

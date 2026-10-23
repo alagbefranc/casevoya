@@ -1,5 +1,8 @@
 "use server";
 
+// Each change also refreshes the page from the action (next/cache refresh()), so Consultations
+// shows it at once: router.refresh alone can land on the old render (as on #149).
+import { refresh } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { parseAvailability, slotsFromAvailability } from "./availability";
@@ -59,7 +62,9 @@ export async function saveAvailability(input: {
     p_rules: rules,
     p_overrides: days.map((date) => ({ date, start: null, end: null })),
   });
-  return error ? bookingError(error.message) : { ok: true };
+  if (error) return bookingError(error.message);
+  refresh();
+  return { ok: true };
 }
 
 export async function saveBookingType(input: {
@@ -126,6 +131,7 @@ export async function saveBookingType(input: {
         : bookingError(set.error.message);
     }
   }
+  refresh();
   return { ok: true };
 }
 
@@ -141,7 +147,9 @@ export async function archiveBookingType(input: { organizationId: string; eventT
   });
   if (error && /already archived/.test(error.message)) return { error: "This booking type is already archived." };
   if (error && /changed by someone else/.test(error.message)) return { error: "This booking type changed since you opened it. Reload and try again." };
-  return error ? bookingError(error.message) : { ok: true };
+  if (error) return bookingError(error.message);
+  refresh();
+  return { ok: true };
 }
 
 export async function bookForClient(input: {
@@ -168,6 +176,7 @@ export async function bookForClient(input: {
     p_idempotency_key: input.idempotencyKey,
   });
   if (error) return bookingError(error.message);
+  refresh();
   if (!input.agreementTemplateId || !isUuid(input.agreementTemplateId) || typeof bookingId !== "string") return { ok: true, agreement: null };
   // The booking stands either way; a refused agreement can be sent again from the record.
   const sent = await supabase.rpc("send_booking_agreement", { p_booking_id: bookingId, p_template_id: input.agreementTemplateId });
@@ -189,7 +198,9 @@ export async function sendBookingAgreement(input: { organizationId: string; book
   const supabase = await session(input.organizationId);
   if (!supabase) return { error: "Sign in first." };
   const { error } = await supabase.rpc("send_booking_agreement", { p_booking_id: input.bookingId, p_template_id: input.templateId });
-  return error ? agreementError(error.message) : { ok: true };
+  if (error) return agreementError(error.message);
+  refresh();
+  return { ok: true };
 }
 
 /** Withdraws an unsigned consultation agreement; it stays on record as voided. */
@@ -198,7 +209,9 @@ export async function voidBookingAgreement(input: { organizationId: string; book
   const supabase = await session(input.organizationId);
   if (!supabase) return { error: "Sign in first." };
   const { error } = await supabase.rpc("void_booking_agreement", { p_booking_id: input.bookingId, p_reason: "Withdrawn from the consultation record" });
-  return error ? agreementError(error.message) : { ok: true };
+  if (error) return agreementError(error.message);
+  refresh();
+  return { ok: true };
 }
 
 export async function cancelBooking(input: { organizationId: string; bookingId: string; version: number | null }): Promise<Result> {
@@ -214,6 +227,7 @@ export async function cancelBooking(input: { organizationId: string; bookingId: 
   if (error) return bookingError(error.message);
   // The database already refuses new call tokens; disconnect anyone still in the room.
   closeRoomForBooking(input.bookingId);
+  refresh();
   return { ok: true };
 }
 
@@ -227,7 +241,9 @@ export async function rescheduleBooking(input: { organizationId: string; booking
     p_start: new Date(input.start).toISOString(),
     p_expected_version: input.version,
   });
-  return error ? bookingError(error.message) : { ok: true };
+  if (error) return bookingError(error.message);
+  refresh();
+  return { ok: true };
 }
 
 export async function recordBookingOutcome(input: { organizationId: string; bookingId: string; outcome: string }): Promise<Result> {
@@ -235,7 +251,9 @@ export async function recordBookingOutcome(input: { organizationId: string; book
   const supabase = await session(input.organizationId);
   if (!supabase) return { error: "Sign in first." };
   const { error } = await supabase.rpc("staff_record_booking_outcome", { p_org: input.organizationId, p_booking_id: input.bookingId, p_outcome: input.outcome });
-  return error ? bookingError(error.message) : { ok: true };
+  if (error) return bookingError(error.message);
+  refresh();
+  return { ok: true };
 }
 
 /** A summary refusal as words a person can act on. */
@@ -255,7 +273,9 @@ export async function saveConsultationSummary(input: { organizationId: string; b
   const supabase = await session(input.organizationId);
   if (!supabase) return { error: "Sign in first." };
   const { error } = await supabase.rpc("save_consultation_summary", { p_booking_id: input.bookingId, p_body: body, p_expected_version: input.version });
-  return error ? summaryError(error.message) : { ok: true };
+  if (error) return summaryError(error.message);
+  refresh();
+  return { ok: true };
 }
 
 /** A licensed consultant approves the summary; the client sees it in their portal. */
@@ -264,7 +284,9 @@ export async function shareConsultationSummary(input: { organizationId: string; 
   const supabase = await session(input.organizationId);
   if (!supabase) return { error: "Sign in first." };
   const { error } = await supabase.rpc("share_consultation_summary", { p_booking_id: input.bookingId, p_expected_version: input.version });
-  return error ? summaryError(error.message) : { ok: true };
+  if (error) return summaryError(error.message);
+  refresh();
+  return { ok: true };
 }
 
 /** Free starts for moving a booking: the same host and type, the next 28 days, in the staff zone. */
