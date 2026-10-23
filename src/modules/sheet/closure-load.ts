@@ -30,7 +30,7 @@ export async function loadClosurePanel(
     supabase.from("matter_legal_holds").select("placed_at").eq("organization_id", org).eq("matter_id", input.matterId).is("released_at", null).maybeSingle(),
   ]);
   if (check.error || !check.data) return null;
-  return closurePanel({
+  const panel = closurePanel({
     check: check.data as unknown as ClosureCheck,
     openTasks: input.openTasks,
     consultant: input.consultant,
@@ -43,4 +43,5 @@ export async function loadClosurePanel(
     holdSince: hold.data?.placed_at ? isoDateInTimeZone(new Date(hold.data.placed_at), input.timeZone) : null,
     money: (cents) => formatMoney(cents, "CAD"),
   });
+  return { ...panel, exportHref: `/sheet/exports?view=${input.matterId}` };
 }
