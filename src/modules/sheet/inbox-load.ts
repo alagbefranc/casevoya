@@ -75,7 +75,7 @@ async function loadTriage(supabase: Client, staff: SheetStaff): Promise<NonNulla
   const [emails, firm] = await Promise.all([
     supabase
       .from("inbound_emails")
-      .select("id, from_email, subject, matter_id, attachments_done, created_at")
+      .select("id, from_email, subject, matter_id, attachments_done, sender_verified, created_at")
       .eq("organization_id", org)
       .eq("triage_state", "open")
       .order("created_at", { ascending: false })
@@ -124,7 +124,7 @@ async function loadTriage(supabase: Client, staff: SheetStaff): Promise<NonNulla
           .filter((party) => party.person_id === person.id && labels.has(party.matter_id))
           .map((party) => ({ personId: person.id, name: person.display_name, matterId: party.matter_id, matter: labels.get(party.matter_id) ?? "Matter", email: person.email })),
       );
-    const suggestion = suggest({ emailId: row.id, organizationId: org, from, ready: row.attachments_done, addressMatter, byEmail: candidates });
+    const suggestion = suggest({ emailId: row.id, organizationId: org, from, ready: row.attachments_done, verified: row.sender_verified, addressMatter, byEmail: candidates });
     return {
       from: row.from_email,
       subject: row.subject || "(no subject)",

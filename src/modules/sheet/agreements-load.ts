@@ -67,6 +67,19 @@ const MATTERS_READ = 1000;
 
 const WAITING = new Set(["sent", "partially_signed"]);
 
+/**
+ * Out for signature and still signable. The database marks an envelope expired only when someone
+ * next tries to sign it, so one past its expiry date is treated as expired here already.
+ */
+function stillOpen(envelope: { status: string; expires_at: string } | undefined | null, now = Date.now()): boolean {
+  return Boolean(envelope && WAITING.has(envelope.status) && Date.parse(envelope.expires_at) > now);
+}
+
+/** The agreement's status as the page shows it: a sent one whose envelope lapsed reads expired. */
+function shownStatus(row: { status: string; kind: string }, envelope: { status: string; expires_at: string } | undefined): string {
+  return row.kind !== "quote" && WAITING.has(row.status) && envelope && !stillOpen(envelope) ? "expired" : row.status;
+}
+
 type EnvelopeRow = {
   id: string;
   agreement_id: string;
@@ -199,7 +212,7 @@ export async function loadSheetAgreements(staff: SheetStaff, query: SheetQuery =
     const envelope = latest.get(row.id);
     const count = envelope ? signerCount.get(envelope.id) : undefined;
     const number = row.current_version_id ? versionNumber.get(row.current_version_id) : undefined;
-    const turn = Boolean(envelope && WAITING.has(envelope.status) && countersignTurn(signerRows, envelope.id, staff.membershipId));
+    const turn = Boolean(envelope && stillOpen(envelope) && countersignTurn(signerRows, envelope.id, staff.membershipId));
     if (turn && envelope) {
       countersign.push(
         countersignDialogData({
@@ -216,20 +229,22 @@ export async function loadSheetAgreements(staff: SheetStaff, query: SheetQuery =
         }),
       );
     }
+    const status = shownStatus(row, envelope);
     let date: AgreementRow["date"] = day(row.updated_at);
-    if (row.status === "completed" && envelope?.completed_at) date = day(envelope.completed_at);
-    else if (WAITING.has(row.status) && envelope?.expires_at) date = `Expires ${day(envelope.expires_at)}`;
-    else if (row.status === "draft") date = { left: day(row.created_at), right: "not sent" };
-    else if (["declined", "voided", "expired", "superseded"].includes(row.status)) date = { left: day(row.updated_at), right: "history kept" };
+    if (status === "completed" && envelope?.completed_at) date = day(envelope.completed_at);
+    else if (status === "expired" && envelope?.expires_at) date = { left: `Expired ${day(envelope.expires_at)}`, right: "history kept" };
+    else if (WAITING.has(status) && envelope?.expires_at) date = `Expires ${day(envelope.expires_at)}`;
+    else if (status === "draft") date = { left: day(row.created_at), right: "not sent" };
+    else if (["declined", "voided", "expired", "superseded"].includes(status)) date = { left: day(row.updated_at), right: "history kept" };
     return {
       key: row.id,
-      flags: agreementFlags(row.status, row.kind),
+      flags: agreementFlags(status, row.kind),
       client: { name: clientOf(row.matter_id) },
       matter: referenceOf(row.matter_id),
       // The agreement's own view: a quote in the Quote builder, an unsent draft in the Agreement
       // editor, anything sent in Envelope (signers, events, signed copies).
       record: { href: agreementViewHref(row, Boolean(envelope)), left: row.title, right: number ? `v${number}` : kindLabel(row.kind) },
-      state: turn ? COUNTERSIGN_BADGE : agreementBadge(row.status, row.kind),
+      state: turn ? COUNTERSIGN_BADGE : agreementBadge(status, row.kind),
       signed: count ? `${count.signed} of ${count.total}` : "—",
       date,
       ...(turn && envelope ? { action: { label: "Countersign", dialog: countersignDialogId(envelope.id) } } : {}),
@@ -239,7 +254,8 @@ export async function loadSheetAgreements(staff: SheetStaff, query: SheetQuery =
   const templateRows = templates.data ?? [];
   const approved = templateRows.filter((row) => row.status === "approved" && isSendableKind(row.kind));
   const drafts = templateRows.filter((row) => row.status === "draft");
-  const waiting = rows.filter((row) => WAITING.has(row.status));
+  // Quotes are issued, not signed, so they don't wait for signatures.
+  const waiting = rows.filter((row) => row.kind !== "quote" && WAITING.has(shownStatus(row, latest.get(row.id))));
   const executed = rows.filter((row) => row.status === "completed");
   const unsent = rows.filter((row) => row.status === "draft");
   const firstWaiting = waiting[0];
@@ -623,20 +639,26 @@ async function loadEnvelope(
     return { key: event.id, when: when(event.occurred_at), event: parts, id: event.id.slice(0, 8) };
   });
 
-  const waiting = Boolean(envelope && ["sent", "partially_signed"].includes(envelope.status));
+  const waiting = stillOpen(envelope);
   const actions: EnvelopeAction[] = [];
   if (envelope?.status === "completed") {
     actions.push({ label: "Download signed PDF", primary: true, href: agreementPdfHref(envelope.id, org, "executed") });
     actions.push({ label: "Download completion certificate", href: agreementPdfHref(envelope.id, org, "certificate") });
   }
   if (envelope && waiting && ctx.turn(envelope.id)) actions.push({ label: "Countersign", primary: true, attrs: { "data-dlg": countersignDialogId(envelope.id) } });
-  if (!envelope && agreement.status === "draft" && ctx.canSend && isSendableKind(agreement.kind)) {
+  // A revised agreement is a draft again; its earlier envelope stays on record below.
+  if (agreement.status === "draft" && !waiting && ctx.canSend && isSendableKind(agreement.kind)) {
     actions.push({ label: "Send for signature", primary: true, attrs: { "data-agreement-send": agreement.id, "data-org": org } });
   }
   if (envelope && waiting && ctx.canSend) actions.push({ label: "Void envelope", attrs: { "data-dlg": "dlgVoid" } });
   actions.push({ label: "Open the matter", href: ctx.matterHref(agreement.matter_id) });
 
-  const state = agreement.status === "draft" ? "Saved as a draft. Not sent yet." : `${agreementBadge(agreement.status, agreement.kind).label}.`;
+  const state =
+    agreement.status === "draft"
+      ? envelope
+        ? "Revised, so it’s a draft again. Not sent yet."
+        : "Saved as a draft. Not sent yet."
+      : `${agreementBadge(shownStatus(agreement, envelope ?? undefined), agreement.kind).label}.`;
   const current = signerRows.find((row) => row.status === "current");
   return {
     page: {

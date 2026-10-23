@@ -2,6 +2,7 @@
 
 import { toast2 } from "@/components/port/kit";
 import { reviewStepUpLocation } from "@/modules/sheet/documents-review";
+import { keepReviewDraft } from "./documents-acts";
 import { needsStepUp } from "@/modules/sheet/matter-wire";
 import { readingHref } from "@/modules/sheet/vo-present";
 import { acceptVoDocProposal, discardVoDocDraft, readDocumentWithVo, rejectVoDocProposal } from "@/modules/vo/vo-doc-actions";
@@ -19,6 +20,7 @@ export async function runVoRead(button: HTMLElement, router: Router) {
   const result = await readDocumentWithVo({ organizationId: button.dataset.org ?? "", versionId });
   if ("error" in result) {
     if (needsStepUp(result.error)) {
+      keepReviewDraft(dialog);
       window.location.assign(reviewStepUpLocation(window.location.pathname, window.location.search, versionId));
       return;
     }

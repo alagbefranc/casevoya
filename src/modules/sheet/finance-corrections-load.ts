@@ -53,16 +53,29 @@ async function viewerId(supabase: Supabase): Promise<string> {
   return typeof claims.data?.claims?.sub === "string" ? claims.data.claims.sub : "";
 }
 
+/**
+ * Each billable matter's title and applicants, from the billing projection. A finance user reads
+ * this but not matter or person rows, so it is what names their matters and clients.
+ */
+export async function billingNames(supabase: Supabase, org: string): Promise<Map<string, { title: string; client: string | null }>> {
+  const billing = await supabase.rpc("list_matter_billing");
+  return new Map((billing.data ?? []).filter((row) => row.organization_id === org).map((row) => [row.matter_id, { title: row.title, client: row.client_display_name || null }]));
+}
+
 /** The matter's applicants as the billing projection names them (finance users don't read person rows). */
 async function clientNames(supabase: Supabase, org: string, matterIds: string[]): Promise<Map<string, string>> {
   if (!matterIds.length) return new Map();
   const [billing, matters] = await Promise.all([
-    supabase.rpc("list_matter_billing"),
+    billingNames(supabase, org),
     // The applicant is who an invoice is billed to; list_matter_billing leaves sample matters out.
     supabase.from("matters").select("id, matter_participants(role, persons(display_name))").eq("organization_id", org).in("id", matterIds),
   ]);
-  const names = new Map((billing.data ?? []).filter((row) => row.organization_id === org && row.client_display_name).map((row) => [row.matter_id, row.client_display_name as string]));
-  return new Map((matters.data ?? []).map((row) => [row.id, names.get(row.id) ?? billedTo(row.matter_participants ?? [])]));
+  const parties = new Map((matters.data ?? []).map((row) => [row.id, row.matter_participants ?? []]));
+  return new Map(
+    matterIds
+      .map((id): [string, string | null] => [id, billing.get(id)?.client ?? (parties.has(id) ? billedTo(parties.get(id) ?? []) : (billing.get(id)?.title ?? null))])
+      .filter((entry): entry is [string, string] => Boolean(entry[1])),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -129,7 +142,7 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
     .maybeSingle();
   const invoice = found.data;
   if (!invoice) return null;
-  const [viewer, matter, clients, payments, transfers, receipts, notes, name, refunds] = await Promise.all([
+  const [viewer, matter, clients, payments, transfers, receipts, notes, name, refunds, billing] = await Promise.all([
     viewerId(supabase),
     supabase.from("matters").select("id, reference, title, is_sample").eq("organization_id", org).eq("id", invoice.matter_id).maybeSingle(),
     clientNames(supabase, org, [invoice.matter_id]),
@@ -161,13 +174,16 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
       .eq("organization_id", org)
       .eq("invoice_id", invoice.id)
       .order("created_at", { ascending: true }),
+    billingNames(supabase, org),
   ]);
   const currency = invoice.currency;
+  // A finance user can't read the matter row; the billing projection still names it.
+  const matterTitle = matter.data?.title || billing.get(invoice.matter_id)?.title || "Matter";
   const money = (minor: number) => formatMoney(minor, currency);
   const amount = (minor: number) => formatAmount(minor, currency);
   const day = (iso: string) => dayMonth(isoDateInTimeZone(new Date(iso), staff.timezone));
   const client = clients.get(invoice.matter_id) ?? "Client";
-  const reference = matter.data?.reference || matter.data?.title || "Matter";
+  const reference = matter.data?.reference || matterTitle;
   const receiptOf = new Map((receipts.data ?? []).map((row) => [row.payment_id ?? row.entry_id ?? "", row]));
   const noteRows = notes.data ?? [];
   const drafts = noteRows.filter((row) => row.status === "draft").reduce((sum, row) => sum + row.amount_cents, 0);
@@ -358,7 +374,7 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
   const view: InvoiceViewData = {
     number: label,
     client,
-    intro: [`Matter ${reference}${matter.data?.is_sample ? " (sample)" : ""}`, `${matter.data?.title ?? "Matter"}. Billed to ${client}. Payee: ${staff.organizationName}.`],
+    intro: [`Matter ${reference}${matter.data?.is_sample ? " (sample)" : ""}`, `${matterTitle}. Billed to ${client}. Payee: ${staff.organizationName}.`],
     badge: { tone: state.tone, label: state.label, ...(state.detail ? { detail: state.detail } : {}) },
     tags: [
       { label: "Issued", value: invoice.issued_on ? longDate(invoice.issued_on) : "—" },
@@ -456,7 +472,8 @@ async function loadPayouts(stripe: Stripe, accountId: string, supabase: Supabase
               : { tone: "rev", label: "On the way" };
       rows.push({
         key: payout.id,
-        date: dayMonth(isoDateInTimeZone(new Date(payout.arrival_date * 1000), staff.timezone)),
+        // Stripe gives the arrival day as midnight UTC: read the day itself, not the firm's clock then.
+        date: dayMonth(new Date(payout.arrival_date * 1000).toISOString().slice(0, 10)),
         amount: `${formatAmount(payout.amount, currency)}${currency === "CAD" ? "" : ` ${currency}`}`,
         payments: paymentCount ? `${paymentCount} · ${formatAmount(gross, currency)}` : "—",
         refunds: refunds ? signedAmount(refunds, (minor) => formatAmount(minor, currency)) : "—",
@@ -608,6 +625,8 @@ export async function loadReconciliation(
               ? "The difference isn’t zero: sign it with exceptions, or prepare it again"
               : null,
         attrs: { "data-dlg": "dlgRecSign" },
+        // The preparer can't sign but may discard it and prepare it again (the dialog holds Discard).
+        ...(canBill && !canSign ? { discard: { "data-dlg": "dlgRecSign" } } : {}),
       },
     };
     summary = [
@@ -640,7 +659,9 @@ export async function loadReconciliation(
         : null;
   const start: ReconData["start"] = pendingRow
     ? null
-    : !accountRows.length
+    : accounts.error || recs.error
+      ? { title: "Reconciliations couldn’t load", copy: "Reload the page. Nothing was changed; if it keeps happening, sign in again.", action: null }
+      : !accountRows.length
       ? { title: "No client account yet", copy: "Reconciliation compares the client account’s bank statement with the ledger. The firm owner adds the account on the Client funds tab first.", action: canBill ? { label: "Go to Client funds", href: "?tab=funds" } : null }
       : canBill
         ? {

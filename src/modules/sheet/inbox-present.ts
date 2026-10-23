@@ -73,8 +73,10 @@ export function attachmentImage(uploadState: string, mediaType: string | null): 
   return null;
 }
 
+/** The label says why a file can't be opened (screen readers get it too; the preview image has no alt). */
 export function attachment(filename: string, uploadState: string, mediaType: string | null): TriageAttachment {
-  return { label: "Attachment", name: filename, image: attachmentImage(uploadState, mediaType) };
+  const label = uploadState === "quarantined" || uploadState === "failed" ? "Quarantined attachment" : uploadState === "uploading" ? "Attachment, still being checked" : "Attachment";
+  return { label, name: filename, image: attachmentImage(uploadState, mediaType) };
 }
 
 export type Candidate = { personId: string; name: string; matterId: string; matter: string; email: string | null };
@@ -98,6 +100,8 @@ export function suggest(input: {
   organizationId: string;
   from: string;
   ready: boolean;
+  /** The inbound worker checked the sender's domain authentication (inbound_emails.sender_verified). */
+  verified?: boolean;
   addressMatter: { id: string; label: string; people: Candidate[] } | null;
   byEmail: Candidate[];
 }): Suggestion {
@@ -114,7 +118,9 @@ export function suggest(input: {
       "data-name": candidate.name,
     },
   });
-  if (!input.ready) return { suggestion: "Still arriving", why: "Attachments are being checked", actions: [] };
+  const sender = input.verified ? "sender verified" : "sender not verified";
+  // An email whose attachments never finish arriving can still be set aside.
+  if (!input.ready) return { suggestion: "Still arriving", why: "Attachments are being checked", actions: [dismiss] };
 
   if (input.addressMatter) {
     const people = input.addressMatter.people;
@@ -123,7 +129,7 @@ export function suggest(input: {
       const others = people.filter((person) => person.personId !== match[0].personId).slice(0, MAX_CANDIDATES - 1);
       return {
         suggestion: [input.addressMatter.label, match[0].name],
-        why: ["Sent to this matter’s reply address", "email matches, sender not verified"],
+        why: ["Sent to this matter’s reply address", `email matches, ${sender}`],
         actions: [file(match[0], "Confirm match", true), ...others.map((person) => file(person, firstName(person.name), false)), dismiss],
       };
     }
@@ -138,7 +144,7 @@ export function suggest(input: {
   if (candidates.length === 1) {
     return {
       suggestion: [candidates[0].matter, candidates[0].name],
-      why: ["Email matches a client", "sender not verified"],
+      why: ["Email matches a client", sender],
       actions: [file(candidates[0], "Confirm match", true), dismiss],
     };
   }

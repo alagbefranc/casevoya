@@ -111,7 +111,8 @@ describe("Inbox presentation (OPS-06)", () => {
     const none = suggest({ emailId: "e3", organizationId: org, from: "x@example.test", ready: true, addressMatter: null, byEmail: [] });
     expect(none).toEqual({ suggestion: "No match", why: "—", actions: [{ label: "Not case mail", attrs: { "data-inbox-dismiss": "e3", "data-org": org } }] });
     const arriving = suggest({ emailId: "e4", organizationId: org, from: "x@example.test", ready: false, addressMatter: null, byEmail: [dana] });
-    expect(arriving.actions).toEqual([]);
+    // Still being checked: nothing is filed yet, but plain junk can be dismissed already.
+    expect(arriving.actions).toEqual([{ label: "Not case mail", attrs: { "data-inbox-dismiss": "e4", "data-org": org } }]);
   });
 
   it("names tabs, notices, problems and previews plainly", () => {

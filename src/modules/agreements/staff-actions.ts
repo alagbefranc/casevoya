@@ -120,10 +120,13 @@ async function signersForMatter(
 }
 
 async function sendAgreement(supabase: StaffSupabase, agreementId: string, signers: Signers): Promise<{ status: string } | { error: string }> {
+  // The key names the version sent, so a revised agreement (a new version, back to draft) goes
+  // out as a new envelope instead of replaying the first send.
+  const version = await supabase.from("agreements").select("current_version_id").eq("id", agreementId).maybeSingle();
   const sent = await supabase.rpc("send_agreement", {
     p_agreement_id: agreementId,
     p_signers: signers,
-    p_idempotency_key: `sheet-send-${agreementId}`,
+    p_idempotency_key: `sheet-send-${agreementId}-${version.data?.current_version_id ?? "v"}`,
     p_expires_at: null,
   });
   if (sent.error) return { error: agreementStaffError(sent.error.message) };

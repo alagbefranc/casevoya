@@ -140,7 +140,8 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
 
   const data: DocumentsData = {
     tab,
-    pills: [`${queue.length} to review`, `${quarantined} quarantined`],
+    // "To review" and "quarantined" are separate: a quarantined file isn't counted twice.
+    pills: [`${queue.length - quarantined} to review`, `${quarantined} quarantined`],
     firmName: staff.organizationName,
   };
 
@@ -176,7 +177,7 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
     data.all = { cards };
   }
 
-  if (tab === "custody") data.custody = { rows: await loadCustody(supabase, org, documents, versions, nameOf) };
+  if (tab === "custody") data.custody = { rows: await loadCustody(supabase, org, documents, versions, nameOf, staff.timezone) };
 
   const dialog: DocumentReviewDialogData | null = canReview
     ? { organizationId: org, firmName: staff.organizationName, vo: await voReadOffered(supabase, org, staff.sampleMode).catch(() => false) }
@@ -192,6 +193,7 @@ async function loadCustody(
   documents: Map<string, { id: string; person_id: string; purpose: string }>,
   versions: { id: string; documentId: string }[],
   nameOf: (id: string) => string,
+  timeZone: string,
 ): Promise<CustodyRow[]> {
   const events = await supabase
     .from("document_custody_events")
@@ -215,7 +217,7 @@ async function loadCustody(
     const doc = documents.get(documentOf.get(row.version_id) ?? "");
     if (!doc) return [];
     const acknowledged = row.acknowledged_at
-      ? `${row.recipient ? `Signed by ${row.recipient}` : "Acknowledged"}, ${dayMonth(row.acknowledged_at.slice(0, 10))}`
+      ? `${row.recipient ? `Signed by ${row.recipient}` : "Acknowledged"}, ${dayMonth(isoDateInTimeZone(new Date(row.acknowledged_at), timeZone))}`
       : ({ tone: "chg", label: "Waiting" } as const);
     return [
       {

@@ -47,7 +47,16 @@ export function reopenDocReview(root: HTMLElement, openDialog: (id: string) => v
   if (params.get("dlg") !== "review") return;
   const doc = params.get("doc");
   const link = [...root.querySelectorAll<HTMLElement>("[data-doc-review]")].find((item) => item.dataset.docReview === doc);
-  if (!link) return;
+  if (!link) {
+    // Reviewed meanwhile (or no longer visible): say so, and drop what was kept for it.
+    try {
+      window.sessionStorage.removeItem(DRAFT);
+    } catch {
+      // Nothing to drop.
+    }
+    toast2("That document isn’t waiting for review any more", { kind: "warn", sub: "Someone may have reviewed it while you confirmed it’s you." });
+    return;
+  }
   openDocReview(link, root, openDialog);
   try {
     const saved = JSON.parse(window.sessionStorage.getItem(DRAFT) ?? "null") as { doc?: string; decision?: string; reason?: string; expires?: string } | null;
@@ -68,6 +77,14 @@ export function reopenDocReview(root: HTMLElement, openDialog: (id: string) => v
   }
 }
 
+/** The dialog's typed review, kept before any step-up so it comes back (Save review, Open file, Read with Vo). */
+export function keepReviewDraft(dialog: Element | null) {
+  if (!dialog) return;
+  const doc = (dialog as HTMLElement).dataset.doc ?? "";
+  if (!doc) return;
+  keepDraft(doc, { decision: input(dialog, "drD")?.value ?? "", reason: input(dialog, "drR")?.value ?? "", expires: input(dialog, "drE")?.value ?? "" });
+}
+
 function keepDraft(doc: string, fields: { decision: string; reason: string; expires: string }) {
   try {
     window.sessionStorage.setItem(DRAFT, JSON.stringify({ doc, ...fields }));
@@ -86,23 +103,39 @@ export async function runDocReview(button: HTMLElement, router: Router) {
     reason: input(dialog, "drR")?.value ?? "",
     expires: input(dialog, "drE")?.value ?? "",
   };
-  const read = readDocumentReview({ versionId: dialog.dataset.doc, version: dialog.dataset.version, ...fields, previousExpires: dialog.dataset.expires });
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const read = readDocumentReview({ versionId: dialog.dataset.doc, version: dialog.dataset.version, ...fields, previousExpires: dialog.dataset.expires, today });
   if ("error" in read) {
     toast2(read.error, { kind: "warn", sub: "Nothing was saved." });
     return;
   }
-  const reviewed = await reviewDocumentVersion({
-    organizationId,
-    versionId: read.input.versionId,
-    expectedVersion: read.input.expectedVersion,
-    decision: read.input.decision,
-    reason: read.input.reason,
-    code: "",
-  });
+  let reviewed: Awaited<ReturnType<typeof reviewDocumentVersion>>;
+  try {
+    reviewed = await reviewDocumentVersion({
+      organizationId,
+      versionId: read.input.versionId,
+      expectedVersion: read.input.expectedVersion,
+      decision: read.input.decision,
+      reason: read.input.reason,
+      code: "",
+    });
+  } catch {
+    // Offline, a server error, or a deploy in between: say so instead of leaving the dialog silent.
+    toast2("The review couldn’t be saved.", { kind: "bad", sub: "Check your connection, then reload the page and try again." });
+    return;
+  }
   if ("error" in reviewed) {
     if (needsStepUp(reviewed.error)) {
       keepDraft(read.input.versionId, fields);
       window.location.assign(reviewStepUpLocation(window.location.pathname, window.location.search, read.input.versionId));
+      return;
+    }
+    if (/someone else updated/i.test(reviewed.error ?? "")) {
+      // The dialog holds the old version: retrying can't succeed until the row is re-read.
+      toast2(reviewed.error ?? "", { kind: "warn", sub: "The list now shows the latest version. Open it again to review." });
+      dialog.close();
+      router.refresh();
       return;
     }
     toast2(reviewed.error ?? "That action could not be completed.", { kind: "bad", sub: "Nothing was saved." });
@@ -148,6 +181,7 @@ export async function runDocFile(button: HTMLElement) {
   const result = await authorizeDocumentDownload({ organizationId: button.dataset.org ?? "", versionId });
   if ("error" in result) {
     if (needsStepUp(result.error)) {
+      keepReviewDraft(dialog);
       window.location.assign(reviewStepUpLocation(window.location.pathname, window.location.search, versionId));
       return;
     }
