@@ -209,6 +209,15 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
   const dialog = button.closest("dialog");
   const scope: ParentNode = dialog ?? button.closest(".panel") ?? button.closest(".empty") ?? root;
   let result: Result;
+  // A save that uploaded a file ran several server actions before this one finished, and an
+  // earlier action's re-render (Supabase refreshing the session cookie re-renders the page) can
+  // land over the fresh one, leaving History stale. After such a save the page is reloaded.
+  let uploadedFile = false;
+  const upload = async (input: Parameters<typeof uploadEvidence>[0]) => {
+    const done = await uploadEvidence(input);
+    if (!("error" in done)) uploadedFile = true;
+    return done;
+  };
 
   if (act === "prepare") {
     const hash = value(scope, "#spH");
@@ -222,7 +231,7 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
     const file = pickedFile(dialog?.querySelector("[data-gov-pick]") ?? null);
     let receiptVersionId: string | null = null;
     if (file) {
-      const uploaded = await uploadEvidence({ ...ref, file, purpose: "Submission receipt" });
+      const uploaded = await upload({ ...ref, file, purpose: "Submission receipt" });
       if ("error" in uploaded) return void toast2(uploaded.error, { kind: "bad", sub: "Nothing was saved." });
       receiptVersionId = uploaded.versionId;
     }
@@ -253,7 +262,7 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
   } else if (act === "receipt-file") {
     const file = await chooseFile();
     if (!file) return;
-    const uploaded = await uploadEvidence({ ...ref, file, purpose: "Submission receipt" });
+    const uploaded = await upload({ ...ref, file, purpose: "Submission receipt" });
     if ("error" in uploaded) return void toast2(uploaded.error, { kind: "bad", sub: "Nothing was saved." });
     result = await verifySubmission({ organizationId: ref.organizationId, handoffId: data.id ?? "", version, receiptVersionId: uploaded.versionId });
   } else if (act === "verify-letter") {
@@ -262,7 +271,7 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
     // A letter recorded without its evidence: choose the file, store it on the matter, attach it.
     const file = await chooseFile();
     if (!file) return;
-    const uploaded = await uploadEvidence({ ...ref, file, purpose: "Government letter" });
+    const uploaded = await upload({ ...ref, file, purpose: "Government letter" });
     if ("error" in uploaded) return void toast2(uploaded.error, { kind: "bad", sub: "Nothing was attached." });
     result = await attachCorrespondenceEvidence({ organizationId: ref.organizationId, correspondenceId: data.id ?? "", version, evidenceVersionId: uploaded.versionId });
   } else if (act === "status") {
@@ -273,7 +282,7 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
       const holder = scope.querySelector("[data-gov-file]");
       const file = pickedFile(holder);
       if (!file) return void toast2("Attach the evidence", { kind: "warn", sub: "Click Evidence to choose the letter or screenshot." });
-      const uploaded = await uploadEvidence({ ...ref, file, purpose: "Government status evidence" });
+      const uploaded = await upload({ ...ref, file, purpose: "Government status evidence" });
       if ("error" in uploaded) return void toast2(uploaded.error, { kind: "bad", sub: "Nothing was saved." });
       result = await recordCorrespondence({ ...ref, kind, channel: "other", receivedOn: data.today || today(), evidenceVersionId: uploaded.versionId });
     }
@@ -312,6 +321,15 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
   dialog?.close();
   const [title, sub] = DONE[act] ?? ["Saved", "Recorded in the matter’s history."];
   toast2(title, { kind: "ok", sub });
-  router.replace(withoutDialog(window.location.pathname, window.location.search));
+  // Drop ?dlg= only when it is there: replacing the URL with itself can land after the
+  // refresh and put the page back as it was (Government status' History stayed stale).
+  const here = `${window.location.pathname}${window.location.search}`;
+  const clean = withoutDialog(window.location.pathname, window.location.search);
+  if (uploadedFile) {
+    // The toast stays up for the reload's first moment; the page then shows the new record.
+    window.setTimeout(() => window.location.replace(clean), 600);
+    return;
+  }
+  if (clean !== here) router.replace(clean);
   router.refresh();
 }
