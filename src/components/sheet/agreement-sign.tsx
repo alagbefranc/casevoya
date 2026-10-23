@@ -307,6 +307,8 @@ function CodeBoxes({ value, onChange, bad }: { value: string; onChange: (next: s
           aria-invalid={bad ? "true" : undefined}
           value={digit}
           onChange={(event) => put(i, event.target.value)}
+          // A box's digit is selected on focus, so typing over an old code replaces it digit by digit.
+          onFocus={(event) => event.currentTarget.select()}
           onPaste={(event) => {
             event.preventDefault();
             put(0, event.clipboardData.getData("text"));
@@ -551,7 +553,12 @@ function Flow({
     setBusy(false);
     if ("error" in result) return setMsg({ tone: "bad", text: result.error });
     if (result.state === "ok") return go("review");
-    if (result.state === "wrong") return setMsg({ tone: "bad", text: `That code doesn’t match. Check the latest email; ${result.left} ${result.left === 1 ? "try" : "tries"} left.` });
+    if (result.state === "wrong") {
+      // Start the next try from empty boxes, so an old digit is never sent again by mistake.
+      setCode("");
+      document.getElementById("o0")?.focus();
+      return setMsg({ tone: "bad", text: `That code doesn’t match. Check the latest email; ${result.left} ${result.left === 1 ? "try" : "tries"} left.` });
+    }
     if (result.state === "locked") return setMsg({ tone: "bad", text: "That code can’t be used any more. Resend a new code." });
     if (result.state === "expired") return setMsg({ tone: "bad", text: "That code has expired. Resend a new code." });
     return setMsg({ tone: "bad", text: "Ask for a code first: use Resend." });
