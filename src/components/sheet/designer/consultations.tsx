@@ -609,6 +609,8 @@ export type ConsultationRecordData = {
     summary?: OutcomeSummaryData | null;
     /** Live addition (no Designer control): only on a Casevoya video call, for its host and firm owners. */
     join?: ConsultationRecordJoin | null;
+    /** Live: the consultation agreement's buttons, under the details (Send, Copy signing link, Void). */
+    agreement?: { actions: RowAction[]; link: { href: string; label: string } | null } | null;
     details: DlItem[];
     history: { what: string; who: string; when: string }[];
   } | null;
@@ -768,6 +770,18 @@ export function SheetConsultationRecord({ data }: { data: ConsultationRecordData
                     </div>
                   ))}
                 </dl>
+                {record.agreement && (record.agreement.actions.length || record.agreement.link) ? (
+                  <div className={"fp-row"} style={{ marginTop: "10px" }}>
+                    {record.agreement.actions.map((action, n) => (
+                      <ActionButton key={`${action.label}-${n}`} action={action} />
+                    ))}
+                    {record.agreement.link ? (
+                      <a className={"btn sm"} href={record.agreement.link.href} target={"_blank"} rel={"noopener noreferrer"}>
+                        {record.agreement.link.label}
+                      </a>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </section>
             {record.history.length ? (
@@ -812,8 +826,11 @@ export type Option = { label: string; value?: string; data?: Record<string, stri
 export type BookDialogData = {
   clients: Option[];
   times: Option[];
-  /** The Designer's agreement choice; the live dialog has none (consultation agreements are not linked yet). */
-  agreements?: string[] | null;
+  /**
+   * The Agreement choice: the Designer's labels, or live options (an approved consultation
+   * template to send for signing, or none).
+   */
+  agreements?: (string | Option)[] | null;
   /** Live: booking types (shown only when there is more than one). */
   types?: Option[] | null;
   submit: { toast: string; sub: string; kind: string } | { data: Record<string, string> };
@@ -877,9 +894,9 @@ export function BookDialog({ data }: { data: BookDialogData }) {
           <div className={"fld"}>
             <label htmlFor={"bkA"}>{"Agreement"}</label>
             <select className={"sel"} id={"bkA"}>
-              {data.agreements.map((label) => (
-                <option key={label}>{label}</option>
-              ))}
+              {data.agreements.map((item, index) =>
+                typeof item === "string" ? <option key={item}>{item}</option> : <OptionView key={`${item.value ?? item.label}-${index}`} option={item} />,
+              )}
             </select>
           </div>
         ) : null}

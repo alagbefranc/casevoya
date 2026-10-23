@@ -15,7 +15,72 @@ export type StaffBooking = {
   locationKind: string;
   version: number;
   attendee: string;
+  /** Live: the Upcoming row's Agreement column ("Sent, not signed"). Absent shows "—". */
+  agreement?: string;
 };
+
+/** A booking's live (sent or signed) consultation agreement, as the loader reads it. */
+export type BookingAgreementRow = {
+  booking_id: string;
+  status: string;
+  title: string;
+  template_version: number;
+  signed_name: string | null;
+  signed_at: string | null;
+};
+
+/** The Upcoming row's Agreement column for a booking's live agreement. */
+export function agreementLabel(row: BookingAgreementRow | null | undefined): string {
+  if (!row) return "—";
+  return row.status === "signed" ? `${row.title} v${row.template_version} signed` : "Sent, not signed";
+}
+
+const SENDABLE = new Set(["held", "pending_payment", "confirmed"]);
+
+/**
+ * The record's Agreement detail and its buttons. Send (an upcoming booking with no agreement, when
+ * the firm has an approved consultation template); Copy signing link and Void (sent, not signed);
+ * a link to the signed copy (signed).
+ */
+export function recordAgreement(input: {
+  row: BookingAgreementRow | null;
+  status: string;
+  startsAt: string;
+  now: number;
+  zone: string;
+  template: { id: string; name: string; version: number } | null;
+  signLink: string;
+  wire: Record<string, string>;
+}): { detail: string; actions: RowAction[]; link: { href: string; label: string } | null } {
+  const { row } = input;
+  if (row?.status === "signed") {
+    const when = row.signed_at ? ` on ${shortWhen(Date.parse(row.signed_at), input.zone)}` : "";
+    return { detail: `${row.title} v${row.template_version}, signed by ${row.signed_name ?? "the client"}${when}`, actions: [], link: { href: input.signLink, label: "Open the signed agreement" } };
+  }
+  if (row) {
+    return {
+      detail: `${row.title} v${row.template_version}, sent, not signed`,
+      actions: [
+        { label: "Copy signing link", icon: "copy", toast: "Signing link copied", data: { "data-copy": input.signLink } },
+        { label: "Void", data: { "data-agreement-void-booking": "1", ...input.wire } },
+      ],
+      link: null,
+    };
+  }
+  const upcoming = SENDABLE.has(input.status) && Date.parse(input.startsAt) > input.now;
+  // No approved consultation template the viewer can read: nothing to send.
+  if (!upcoming || !input.template) return { detail: "None sent", actions: [], link: null };
+  return {
+    detail: "None sent",
+    actions: [
+      {
+        label: "Send consultation agreement",
+        data: { "data-agreement-send-booking": "1", "data-template": input.template.id, ...input.wire },
+      },
+    ],
+    link: null,
+  };
+}
 
 export function bookingChip(status: string, startsAt: number, now: number): Chip {
   switch (status) {
@@ -72,8 +137,7 @@ function designerRow(booking: StaffBooking, zone: string, now: number): Consulta
     when: shortWhen(start, zone),
     client: booking.attendee,
     with: { left: booking.hostName ?? "—", right: locationShort(booking.locationKind) },
-    // Consultation agreements are not linked to bookings yet.
-    agreement: "—",
+    agreement: booking.agreement ?? "—",
     fee: "No fee",
     state: bookingChip(booking.status, start, now),
     actions,

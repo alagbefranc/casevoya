@@ -109,7 +109,9 @@ export async function updateSession(request: NextRequest) {
     path === "/start-trial" ||
     path === "/setup" ||
     path.startsWith("/accept/") ||
-    path.startsWith("/call/")
+    path.startsWith("/call/") ||
+    // A consultation agreement's private link: the booking reference is the secret.
+    path.startsWith("/consultation/")
   ) {
     response.headers.set("Referrer-Policy", "no-referrer");
     response.headers.set("Cache-Control", "no-store");

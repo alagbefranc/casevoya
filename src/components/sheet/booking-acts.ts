@@ -11,7 +11,9 @@ import {
   saveAvailability,
   saveBookingType,
   saveConsultationSummary,
+  sendBookingAgreement,
   shareConsultationSummary,
+  voidBookingAgreement,
 } from "@/modules/scheduling/staff-actions";
 
 type Router = { refresh: () => void };
@@ -88,6 +90,7 @@ async function runBook(button: HTMLElement, router: Router) {
     return;
   }
   button.dataset.key ||= key();
+  const agreementTemplateId = value(dialog, "bkA") || null;
   const result = await bookForClient({
     organizationId: button.dataset.org ?? "",
     eventTypeId,
@@ -95,8 +98,15 @@ async function runBook(button: HTMLElement, router: Router) {
     start,
     timeZone: button.dataset.tz ?? "",
     idempotencyKey: button.dataset.key,
+    agreementTemplateId,
   });
-  if (done(result, { title: "Consultation booked", sub: "They get a confirmation email with the time in their timezone." }, dialog, router)) delete button.dataset.key;
+  const sub =
+    "agreement" in result && result.agreement === "sent"
+      ? "They get a confirmation email. The consultation agreement is ready to sign: copy its link from the consultation record."
+      : "agreement" in result && result.agreement === "failed"
+        ? "Booked, but the agreement wasn’t sent. Send it from the consultation record."
+        : "They get a confirmation email with the time in their timezone.";
+  if (done(result, { title: "Consultation booked", sub }, dialog, router)) delete button.dataset.key;
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +171,35 @@ export async function runOutcome(button: HTMLElement, router: Router) {
   const organizationId = document.querySelector<HTMLElement>("[data-booking-submit][data-org]")?.dataset.org ?? "";
   const result = await recordBookingOutcome({ organizationId, bookingId: button.dataset.booking ?? "", outcome: button.dataset.bookingOutcome ?? "" });
   done(result, { title: button.dataset.bookingOutcome === "no_show" ? "Marked as a no-show" : "Marked as attended", sub: "The consultation record is updated." }, null, router);
+}
+
+// ---------------------------------------------------------------------------
+// Consultation agreement
+// ---------------------------------------------------------------------------
+
+/** Send consultation agreement (record): locks the approved template for the booker to sign. */
+export async function runBookingAgreementSend(button: HTMLElement, router: Router) {
+  const result = await sendBookingAgreement({ organizationId: button.dataset.org ?? "", bookingId: button.dataset.booking ?? "", templateId: button.dataset.template ?? "" });
+  done(result, { title: "Agreement ready to sign", sub: "Copy the signing link and send it to the client." }, null, router);
+}
+
+/** Void (record): asks once more, then withdraws the unsigned agreement. It stays on record. */
+export async function runBookingAgreementVoid(button: HTMLElement, router: Router) {
+  if (button.dataset.armed !== "1") {
+    button.dataset.armed = "1";
+    const label = button.textContent ?? "";
+    button.textContent = "Click again to void";
+    toast2("Void this agreement?", { kind: "warn", sub: "The signing link stops working. Click Void again to confirm." });
+    window.setTimeout(() => {
+      if (button.dataset.armed !== "1") return;
+      delete button.dataset.armed;
+      button.textContent = label;
+    }, 5000);
+    return;
+  }
+  delete button.dataset.armed;
+  const result = await voidBookingAgreement({ organizationId: button.dataset.org ?? "", bookingId: button.dataset.booking ?? "" });
+  done(result, { title: "Agreement voided", sub: "It stays on record. You can send a new one." }, null, router);
 }
 
 // ---------------------------------------------------------------------------

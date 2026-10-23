@@ -48,6 +48,8 @@ import {
   runAvailability,
   runBookingSubmit,
   runBookingType,
+  runBookingAgreementSend,
+  runBookingAgreementVoid,
   runOutcome,
   runSummarySave,
   runSummaryShare,
@@ -703,6 +705,18 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (bookingSubmit && root.contains(bookingSubmit)) {
         event.preventDefault();
         busyRun(bookingSubmit, () => runBookingSubmit(bookingSubmit, router));
+        return;
+      }
+      const agreementSend = target.closest<HTMLElement>("[data-agreement-send-booking]");
+      if (agreementSend && root.contains(agreementSend)) {
+        event.preventDefault();
+        busyRun(agreementSend, () => runBookingAgreementSend(agreementSend, router));
+        return;
+      }
+      const agreementVoid = target.closest<HTMLElement>("[data-agreement-void-booking]");
+      if (agreementVoid && root.contains(agreementVoid)) {
+        event.preventDefault();
+        void runBookingAgreementVoid(agreementVoid, router);
         return;
       }
       const summarySave = target.closest<HTMLElement>("[data-summary-save]");

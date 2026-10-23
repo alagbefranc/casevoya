@@ -499,6 +499,81 @@ export type Database = {
         }
         Relationships: []
       }
+      booking_agreements: {
+        Row: {
+          body: string
+          booking_id: string
+          consent_text: string | null
+          consent_version: string | null
+          content_sha256: string
+          created_at: string
+          id: string
+          is_sample: boolean
+          organization_id: string
+          sent_at: string
+          sent_by: string
+          signed_at: string | null
+          signed_name: string | null
+          signer_ip: unknown
+          signer_user_agent: string | null
+          status: string
+          template_id: string
+          template_version: number
+          title: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          body: string
+          booking_id: string
+          consent_text?: string | null
+          consent_version?: string | null
+          content_sha256: string
+          created_at?: string
+          id?: string
+          is_sample?: boolean
+          organization_id: string
+          sent_at?: string
+          sent_by: string
+          signed_at?: string | null
+          signed_name?: string | null
+          signer_ip?: unknown
+          signer_user_agent?: string | null
+          status?: string
+          template_id: string
+          template_version: number
+          title: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          body?: string
+          booking_id?: string
+          consent_text?: string | null
+          consent_version?: string | null
+          content_sha256?: string
+          created_at?: string
+          id?: string
+          is_sample?: boolean
+          organization_id?: string
+          sent_at?: string
+          sent_by?: string
+          signed_at?: string | null
+          signed_name?: string | null
+          signer_ip?: unknown
+          signer_user_agent?: string | null
+          status?: string
+          template_id?: string
+          template_version?: number
+          title?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: []
+      }
       booking_attendees: {
         Row: {
           booking_id: string
@@ -10141,6 +10216,10 @@ export type Database = {
         Args: { p_agreement_id: string }
         Returns: undefined
       }
+      booking_agreement_for_signing: {
+        Args: { p_ref: string }
+        Returns: Json
+      }
       create_quote: {
         Args: { p_matter_id: string; p_template_id: string | null; p_title: string | null }
         Returns: string
@@ -10167,6 +10246,10 @@ export type Database = {
           p_scope: string
           p_services: string | null
         }
+        Returns: string
+      }
+      send_booking_agreement: {
+        Args: { p_booking_id: string; p_template_id: string }
         Returns: string
       }
       send_quote: {
@@ -11089,6 +11172,10 @@ export type Database = {
       }
       firm_subscription: {
         Args: { p_organization_id: string }
+        Returns: Json
+      }
+      sign_booking_agreement: {
+        Args: { p_consent: boolean; p_ip: unknown; p_name: string; p_ref: string; p_sha256: string; p_user_agent: string }
         Returns: Json
       }
       subscription_plan_catalog: {
@@ -12594,6 +12681,10 @@ export type Database = {
       }
       void_agreement_envelope: {
         Args: { p_envelope_id: string; p_reason: string }
+        Returns: undefined
+      }
+      void_booking_agreement: {
+        Args: { p_booking_id: string; p_reason: string }
         Returns: undefined
       }
       void_invoice: {

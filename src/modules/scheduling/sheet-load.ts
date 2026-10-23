@@ -25,6 +25,7 @@ import { CALL_WAIT_TOAST, callHref, callIsOpen } from "@/modules/video/present";
 import { COMMON_ZONES, PRACTICE_NOTICE, locationLabel, locationShort, longWhen, safeZone, shortWhen, slotLabel } from "./format";
 import {
   BOOKING_PAGE_PILL,
+  agreementLabel,
   bookingEventLabel,
   bookingPageState,
   bookingPagesInOrder,
@@ -37,11 +38,13 @@ import {
   defaultWeekAnchor,
   mondayOf,
   monthBox,
+  recordAgreement,
   recordHref,
   recordOutcome,
   shiftMonth,
   summaryView,
   upcomingRows,
+  type BookingAgreementRow,
   type StaffBooking,
   type WeekItem,
 } from "./sheet-present";
@@ -140,6 +143,7 @@ async function loadRecord(
   zone: string,
   now: number,
   members: Member[],
+  template: AgreementTemplate | null,
 ): Promise<ConsultationRecordData & { summaryDialog: SummaryDialogData | null }> {
   const org = staff.organizationId;
   const list = await loadBookings(supabase, org, now - 90 * DAY, now + 120 * DAY, ["confirmed", "held", "cancelled", "no_show", "completed"]);
@@ -163,12 +167,19 @@ async function loadRecord(
     picker.unshift({ label: `${shortWhen(Date.parse(booking.starts_at), zone)} · ${booking.title}`, value: recordHref(booking.id), selected: true });
   }
 
-  const [attendee, type, events, link, summaryRow] = await Promise.all([
+  const [attendee, type, events, link, summaryRow, agreementRow] = await Promise.all([
     supabase.from("booking_attendees").select("display_name, time_zone").eq("organization_id", org).eq("booking_id", booking.id).eq("role", "primary").maybeSingle(),
     supabase.from("booking_event_types").select("title").eq("organization_id", org).eq("id", booking.event_type_id).maybeSingle(),
     supabase.from("booking_events").select("kind, actor, actor_user_id, created_at").eq("organization_id", org).eq("booking_id", booking.id).order("created_at", { ascending: false }).limit(30),
     supabase.from("lead_booking_links").select("lead_id").eq("organization_id", org).eq("booking_id", booking.id).maybeSingle(),
     supabase.from("consultation_summaries").select("body, status, shared_body, shared_at, version").eq("organization_id", org).eq("booking_id", booking.id).maybeSingle(),
+    supabase
+      .from("booking_agreements")
+      .select(AGREEMENT_COLUMNS)
+      .eq("organization_id", org)
+      .eq("booking_id", booking.id)
+      .in("status", ["sent", "signed"])
+      .maybeSingle(),
   ]);
   const leadId = link.data?.lead_id ?? null;
   const [lead, notes] = leadId
@@ -217,12 +228,23 @@ async function loadRecord(
     row: summaryRow.data,
     wire: { "data-org": org, "data-booking": booking.id },
   });
+  const agreement = recordAgreement({
+    row: agreementRow.data,
+    status: booking.status,
+    startsAt: booking.starts_at,
+    now,
+    zone,
+    template,
+    signLink: `${appOrigin()}/consultation/${booking.public_ref}/agreement`,
+    wire: { "data-org": org, "data-booking": booking.id },
+  });
   return {
     picker,
     empty,
     summaryDialog: summary.dialog,
     record: {
       summary: summary.panel,
+      agreement: { actions: agreement.actions, link: agreement.link },
       attendee: name,
       notes: { items: noteItems, copy: notesCopy, lead: notesLink },
       outcome: { chip: outcome.chip, copy: outcome.copy, actions },
@@ -235,7 +257,7 @@ async function loadRecord(
         { term: "Where", value: locationLabel(booking.location_kind, booking.location_kind === "in_person" ? booking.location_detail : null) },
         { term: "Booked", value: booking.source === "public" ? "On the booking page" : "By the firm" },
         { term: "Lead", value: lead?.data ? lead.data.display_name : "Not linked" },
-        { term: "Agreement", value: "Not linked (consultation agreements aren’t linked to bookings yet)" },
+        { term: "Agreement", value: agreement.detail },
         { term: "Fee", value: "No fee" },
         ...(booking.is_sample ? [{ term: "Record", value: "Sample (practice)" }] : []),
       ],
@@ -247,6 +269,10 @@ async function loadRecord(
     },
   };
 }
+
+type AgreementTemplate = { id: string; name: string; version: number };
+
+const AGREEMENT_COLUMNS = "booking_id, status, title, template_version, signed_name, signed_at";
 
 /**
  * The record's "Join video call" for a Casevoya video call: the booking's host and firm owners
@@ -276,7 +302,7 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
   const { data: userData } = await supabase.auth.getClaims();
   const me = userData?.claims?.sub ?? null;
 
-  const [typesResult, hostsResult, members, upcoming, orgRow] = await Promise.all([
+  const [typesResult, hostsResult, members, upcoming, orgRow, templatesResult] = await Promise.all([
     supabase
       .from("booking_event_types")
       .select("id, slug, title, description, duration_min, slot_step_min, buffer_before_min, buffer_after_min, min_notice_min, max_advance_days, daily_capacity, location_kind, location_detail, is_published, is_sample, version")
@@ -287,7 +313,25 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
     staffMembers(supabase, org),
     loadBookings(supabase, org, now - 14 * DAY, now + 120 * DAY, ["confirmed", "held", "cancelled", "no_show", "completed"]),
     supabase.from("organizations").select("slug").eq("id", org).maybeSingle(),
+    // Approved consultation agreement templates (owners, licensed consultants and case managers can read them).
+    supabase
+      .from("agreement_templates")
+      .select("id, name, version")
+      .eq("organization_id", org)
+      .eq("kind", "consultation")
+      .eq("status", "approved")
+      .order("approved_at", { ascending: false }),
   ]);
+  const agreementTemplates: AgreementTemplate[] = templatesResult.data ?? [];
+  const agreementRows = upcoming.length
+    ? ((await supabase
+        .from("booking_agreements")
+        .select(AGREEMENT_COLUMNS)
+        .eq("organization_id", org)
+        .in("booking_id", upcoming.map((b) => b.id))
+        .in("status", ["sent", "signed"])).data ?? []) as BookingAgreementRow[]
+    : [];
+  const agreementOf = new Map(agreementRows.map((row) => [row.booking_id, row]));
   const firmSlug = orgRow.data?.slug ?? "";
   const types = (typesResult.data ?? []) as EventTypeRow[];
   const hostRows = hostsResult.data ?? [];
@@ -296,7 +340,7 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
 
   // Upcoming: what's ahead first, then the last two weeks (outcomes to record, no-shows). Cancelled
   // bookings are left out (each one's record still shows on the Consultation record tab).
-  const rows = upcomingRows(upcoming, zone, now);
+  const rows = upcomingRows(upcoming.map((b) => ({ ...b, agreement: agreementLabel(agreementOf.get(b.id)) })), zone, now);
   const thisWeek = upcoming.filter((b) => b.status === "confirmed" && Date.parse(b.startsAt) > now && Date.parse(b.startsAt) < now + 7 * DAY).length;
   // A published sample type is a practice page (only the firm's staff can open it). The share link
   // and preview use a real page when there is one, otherwise the practice page.
@@ -433,7 +477,7 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
     day: (date) => `/sheet/calendar?week=${date}`,
   });
 
-  const record = tab === "record" ? await loadRecord(supabase, staff, query, zone, now, members) : null;
+  const record = tab === "record" ? await loadRecord(supabase, staff, query, zone, now, members, agreementTemplates[0] ?? null) : null;
 
   // Book for a client: people this staff member can see, with an email; sample people in sample mode.
   const people = await supabase.from("persons").select("id, display_name, email, is_sample").eq("organization_id", org).not("email", "is", null).order("display_name").limit(300);
@@ -497,6 +541,13 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
         types: typeOptions,
         times: times.length ? times : [{ label: types.length ? "No free times in the next 3 weeks" : "No booking types yet", value: "" }],
         hint: canBook ? "Only free times with buffers are shown, in your timezone" : "Set working hours and a booking type first",
+        // The client signs it from a private link; without an approved template the choice is left out.
+        agreements: agreementTemplates.length
+          ? [
+              ...agreementTemplates.map((t) => ({ label: `Send consultation agreement ${t.name} v${t.version}`, value: t.id })),
+              { label: "Don’t send one", value: "" },
+            ]
+          : null,
         submit: { data: { "data-booking-submit": "book", "data-org": org, "data-tz": zone } },
       },
       reschedule: {
