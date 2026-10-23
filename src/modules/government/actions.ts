@@ -1,5 +1,6 @@
 "use server";
 
+import { refresh } from "next/cache";
 import { safeAccessError } from "@/lib/auth/step-up";
 import { createClient } from "@/lib/supabase/server";
 import { createUploadIntent } from "@/modules/documents/actions";
@@ -160,6 +161,8 @@ export async function recordCorrespondence(
     p_corrects_id: null,
   });
   if (error) return { error: refusal(error.message) };
+  // The page that recorded it (Government status History, the matter's Decisions) shows it at once.
+  refresh();
   return { id: data };
 }
 
@@ -212,6 +215,7 @@ export async function recordCheck(input: Ref & { matterId: string; note: string 
   if ("error" in s) return { error: s.error };
   const { data, error } = await s.supabase.rpc("record_government_check", { p_matter_id: input.matterId, p_note: input.note });
   if (error) return { error: refusal(error.message) };
+  refresh();
   return { id: data };
 }
 

@@ -312,6 +312,10 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
   dialog?.close();
   const [title, sub] = DONE[act] ?? ["Saved", "Recorded in the matter’s history."];
   toast2(title, { kind: "ok", sub });
-  router.replace(withoutDialog(window.location.pathname, window.location.search));
+  // Drop ?dlg= only when it is there: replacing the URL with itself can land after the
+  // refresh and put the page back as it was (Government status' History stayed stale).
+  const here = `${window.location.pathname}${window.location.search}`;
+  const clean = withoutDialog(window.location.pathname, window.location.search);
+  if (clean !== here) router.replace(clean);
   router.refresh();
 }
