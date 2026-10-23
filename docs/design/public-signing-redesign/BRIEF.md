@@ -1,6 +1,6 @@
 # Brief: public consultation agreement + booking confirmation
 
-For **@Designer** (Francis’s design agent). Visual redesign only — not eng wiring.
+For Francis’s external designer (not the in-app Designer bot). Visual redesign only — not eng wiring.
 
 ## Surfaces
 1. Private signing link: `/consultation/<ref>/agreement`
