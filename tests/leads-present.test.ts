@@ -54,8 +54,11 @@ describe("lead money and rings", () => {
     expect(feeCents("2,400.5")).toBe(240050);
     expect(feeCents("")).toBeNull();
     expect(feeCents("12abc")).toBe("invalid");
-    expect(ringOffset(4)).toBe("0");
-    expect(Number(ringOffset(0))).toBeCloseTo(47.1);
+    // No arc at all for an empty column (a quarter arc looked like a stuck spinner); a fifth per lead.
+    expect(ringOffset(0)).toBe("62.8");
+    expect(Number(ringOffset(1))).toBeCloseTo(50.24);
+    expect(ringOffset(5)).toBe("0");
+    expect(ringOffset(9)).toBe("0");
   });
 });
 
