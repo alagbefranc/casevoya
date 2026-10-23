@@ -920,8 +920,9 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         return;
       }
       // The header's section crumb (the one with the ▾ mark): a small menu of that section's pages.
+      // A crumb that names a record (the matter's client, data-nav) opens that record instead.
       const crumb = target.closest<HTMLElement>("header.top .crumb");
-      if (crumb && root.contains(crumb) && crumb.querySelector(".ic.dd")) {
+      if (crumb && root.contains(crumb) && crumb.querySelector(".ic.dd") && !crumb.dataset.nav) {
         event.preventDefault();
         toggleCrumbMenu(root, crumb, (href) => router.push(href));
         return;
@@ -992,7 +993,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         event.preventDefault();
         toast2(toast.dataset.toast, { kind: toast.dataset.toastKind || "", sub: toast.dataset.toastSub || "" });
       }
-      const check = target.closest<HTMLElement>("[data-toggle-on], .ck");
+      // A read-only tick (the Closure checklist) shows a fact from the records; clicking it changes nothing.
+      const check = target.closest<HTMLElement>("[data-toggle-on], .ck:not([aria-readonly='true'])");
       if (check && root.contains(check)) {
         event.preventDefault();
         event.stopPropagation();

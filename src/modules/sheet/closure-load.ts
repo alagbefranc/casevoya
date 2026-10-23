@@ -3,6 +3,7 @@ import type { ClosurePanelData } from "@/components/sheet/designer/matter";
 import { createClient } from "@/lib/supabase/server";
 import { formatMoney } from "@/modules/finance/money";
 import { closurePanel, type ClosureCheck } from "@/modules/sheet/closure-present";
+import { isoDateInTimeZone } from "@/modules/sheet/present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -13,7 +14,7 @@ type Client = Awaited<ReturnType<typeof createClient>>;
  */
 export async function loadClosurePanel(
   supabase: Client,
-  input: { organizationId: string; matterId: string; openTasks: number; consultant: string | null; outcome: string | null; closed: boolean },
+  input: { organizationId: string; matterId: string; openTasks: number; consultant: string | null; outcome: string | null; closed: boolean; timeZone: string },
 ): Promise<ClosurePanelData | null> {
   const org = input.organizationId;
   const [check, closure, hold] = await Promise.all([
@@ -38,7 +39,8 @@ export async function loadClosurePanel(
     closure: closure.data
       ? { closedOn: closure.data.closed_on, retentionOn: closure.data.retention_on, years: closure.data.retention_years, overridden: Boolean(closure.data.override_reason) }
       : null,
-    holdSince: hold.data?.placed_at ?? null,
+    // The day the hold was placed, in the firm's timezone (not the UTC date).
+    holdSince: hold.data?.placed_at ? isoDateInTimeZone(new Date(hold.data.placed_at), input.timeZone) : null,
     money: (cents) => formatMoney(cents, "CAD"),
   });
 }
