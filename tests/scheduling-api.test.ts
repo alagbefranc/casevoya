@@ -113,6 +113,21 @@ describe("public booking API", () => {
     expect(String(result.body.ics)).toContain("UID:abcdefghijklmnopqrstuvwxyz@casevoya");
   });
 
+  it("links the booking type's consultation agreement when one is waiting to be signed", async () => {
+    const open = deps({ agreement: async () => ({ state: "open", title: "C-02" }) });
+    expect((await postPublicHold(open, "synthetic", "initial", goodBody(), null)).body.agreement).toEqual({
+      title: "C-02",
+      href: "/consultation/abcdefghijklmnopqrstuvwxyz/agreement",
+    });
+    // None sent, a failed read, or no reader: the booking is reported without one.
+    expect((await postPublicHold(deps({ agreement: async () => ({ state: "unavailable" }) }), "synthetic", "initial", goodBody(), null)).body.agreement).toBeNull();
+    const failing = deps({ agreement: async () => { throw new Error("down"); } });
+    const result = await postPublicHold(failing, "synthetic", "initial", goodBody(), null);
+    expect(result.status).toBe(201);
+    expect(result.body.agreement).toBeNull();
+    expect((await postPublicHold(deps(), "synthetic", "initial", goodBody(), null)).body.agreement).toBeNull();
+  });
+
   it("re-checks the start on the server: an unoffered or busy time never reaches the database", async () => {
     const d = deps({ busy: async () => availability([{ start: "2026-10-19T14:00:00Z", end: "2026-10-19T14:30:00Z" }]) });
     expect((await postPublicHold(d, "synthetic", "initial", goodBody(), null)).status).toBe(409);

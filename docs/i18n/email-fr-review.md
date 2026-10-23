@@ -190,9 +190,9 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:e7d957422ca
 
 ## EM08: Agreement ready to sign
 
-Staff send an agreement for signature (outbox agreement.sent, template agreement), to client signers. Audience: client. [French preview](../email/previews/fr/EM08.html)
+Staff send an agreement for signature (outbox agreement.sent, template agreement), to client signers; or a consultation agreement on a booking (outbox booking_agreement.sent), to the booking’s attendee, with its private signing link. Audience: client. [French preview](../email/previews/fr/EM08.html)
 
-Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:96e22381f7ae…`
+Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:10dfed57d368…`
 
 - preheader: « Examinez-le » should agree with « convention » (« Examinez-la et signez-la »).
 
@@ -210,6 +210,8 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:96e22381f7a
 | `body_quote` | Your quote from {firm_name} is ready. Review it and sign in your portal. | Votre devis de {firm_name} est prêt. Examinez-le et signez dans votre portail. | Machine draft. Keep {firm_name} |
 | `body` | Your agreement from {firm_name} is ready. Review it and sign in your portal. | Votre convention avec {firm_name} est prête. Examinez-la et signez-la dans votre portail. | Machine draft. Keep {firm_name} |
 | `cta` | Review and sign | Examiner et signer | Machine draft |
+| `preheader_booking` | Review it and sign it before your consultation. | Examinez-la et signez-la avant votre consultation. | Hand draft. Booking consultation agreement (signed from its private link, no portal). Hand draft. |
+| `body_booking` | Your consultation agreement from {firm_name} is ready. Review it and sign it before your consultation. | Votre convention de consultation de {firm_name} est prête. Examinez-la et signez-la avant votre consultation. | Hand draft. Booking consultation agreement. Hand draft, same wording as body_consultation. Keep {firm_name} |
 
 ## EM08-staff: Agreement: your turn to countersign (staff variant of EM08)
 

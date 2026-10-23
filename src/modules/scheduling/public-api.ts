@@ -55,6 +55,8 @@ export type PublicDeps = {
   event: (firm: string, event: string) => Promise<unknown>;
   busy: (eventTypeId: string, fromIso: string, toIso: string) => Promise<unknown>;
   hold: (args: HoldArgs) => Promise<unknown>;
+  /** The booking's consultation agreement as its private link shows it (booking_agreement_for_signing). */
+  agreement?: (publicRef: string) => Promise<unknown>;
   now: () => number;
 };
 
@@ -282,9 +284,25 @@ export async function postPublicHold(deps: PublicDeps, firm: string, event: stri
   const confirmed = summary.status === "confirmed";
   return {
     status: confirmed ? 201 : 202,
-    body: { booking: summary, ics: confirmed ? summaryIcs(summary, now) : null },
+    body: { booking: summary, ics: confirmed ? summaryIcs(summary, now) : null, agreement: await bookingAgreement(deps, summary.publicRef) },
     headers: { "Cache-Control": "no-store" },
   };
+}
+
+/**
+ * The booking type's consultation agreement, when one was sent with the booking and is still
+ * waiting to be signed: its title and the private signing page. Never fails the booking.
+ */
+async function bookingAgreement(deps: PublicDeps, publicRef: string): Promise<{ title: string; href: string } | null> {
+  if (!deps.agreement || !/^[a-z2-7]{26}$/.test(publicRef)) return null;
+  try {
+    const raw = await deps.agreement(publicRef);
+    const row = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+    if (row?.state !== "open" || typeof row.title !== "string") return null;
+    return { title: row.title, href: `/consultation/${publicRef}/agreement` };
+  } catch {
+    return null;
+  }
 }
 
 /** sha256 hex of the client address with a prefix (and an optional deployment salt). */

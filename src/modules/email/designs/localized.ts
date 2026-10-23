@@ -17,6 +17,7 @@ import drafts from "@/modules/email/designs/fr-drafts.json";
 import { PATHS, type EmailContexts, type TemplateId } from "@/modules/email/designs/catalog";
 import { appLink, cleanText, safeUrl, type Brand, type EmailCopy, type ShellText, type Spot } from "@/modules/email/designs/layout";
 import {
+  bookingRefOrNull,
   countOrNull,
   dateTimeIn,
   dateTimeInFr,
@@ -232,6 +233,18 @@ const BUILDERS: Builders = {
     const { t, origin } = kit;
     const firmName = firm(kit, context);
     const kind = typeof context.agreementKind === "string" && AGREEMENT_KINDS.includes(context.agreementKind) ? `body_${context.agreementKind}` : "body";
+    const ref = bookingRefOrNull(context.signingRef);
+    if (ref) {
+      return copy(kit, {
+        subject: t("subject", { firm_name: firmName }),
+        preheader: t("preheader_booking"),
+        heading: t("heading"),
+        body: t("body_booking", { firm_name: firmName }),
+        cta: cta(t("cta"), appLink(origin, `${PATHS.consultation}/${ref}/agreement`)),
+        spot: "agreement",
+        brand: firmBrand(kit, context),
+      });
+    }
     return copy(kit, {
       subject: t("subject", { firm_name: firmName }),
       preheader: t("preheader"),

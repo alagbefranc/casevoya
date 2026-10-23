@@ -28,6 +28,11 @@ export async function publicDeps(): Promise<PublicDeps> {
       if (error) throw new Error(error.message);
       return data;
     },
+    async agreement(publicRef) {
+      const { data, error } = await supabase.rpc("booking_agreement_for_signing", { p_ref: publicRef });
+      if (error) throw new Error("booking_agreement_for_signing failed");
+      return data;
+    },
     now: () => Date.now(),
   };
 }

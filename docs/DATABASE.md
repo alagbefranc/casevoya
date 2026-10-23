@@ -465,7 +465,16 @@ Pages: `/consultation/<ref>/agreement` (public, no-referrer, no-store). Staff se
 
 Tested in `tests/booking-agreements.rls.test.ts` (send, sign, consent/name/hash checks, replay, anon can't read the table, signed can't be voided, void then resend, another firm's staff or a client can't send, audit rows).
 
-Not yet: the signing link isn't emailed (staff copy it), consultation agreements aren't on the Agreements list, and there is no signed PDF.
+Not yet: consultation agreements aren't on the Agreements list, and there is no signed PDF. Emailing the link and the booking page's agreement are in `20261023190000` below.
+
+## Consultation agreements by email and from the booking page (`20261023190000`, not applied on the live project)
+
+* Email: sending one (staff or the booking page) queues `booking_agreement.sent`. `prepare_email_delivery` sends EM08's booking variant (template `agreement`, `signing_ref` = the booking's `public_ref`) to the booking's primary attendee, honouring "Email notices", only while the agreement is still `sent` and the consultation still ahead. Never critical (no matter). The mail worker builds `/consultation/<ref>/agreement`; a malformed ref falls back to the portal link.
+* `booking_event_types.agreement_template_id`: the approved consultation agreement a booking type sends with each booking from the booking page. Set with `public.set_booking_type_agreement(type, template | null)` (firm owner with step-up; only an approved `consultation` template of the firm). Audited `booking_event_type.agreement_set`.
+* `public.booking_public_hold` sends it right after confirming. A template that is no longer approved is skipped quietly, so a booking never fails over its agreement. The booking page's confirmation links to the signing page.
+* `app.issue_booking_agreement(booking, template, sent_by, strict)`: the shared send (checks, snapshot, mail, audit). `booking_agreements.sent_by` is now nullable: null when the booking page sent it (audit `by: booking_page`).
+
+Tested in `tests/booking-agreements.rls.test.ts` (the attendee gets EM08 with the signing ref; a signed one isn't mailed; only the owner sets a type's agreement, only an approved one; a booking from the page gets it and its mail; an unapproved template is skipped and the booking still goes through).
 
 ## Known gaps (next tasks)
 

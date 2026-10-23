@@ -299,7 +299,7 @@
       "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
       "promptVersion": "fr-ca-2026-10-18.3",
       "draftedOn": "2026-10-18",
-      "sourceHash": "sha256:96e22381f7aede973978ba85ce007ca2c9652b32a7715881426fe7e3af4b99be",
+      "sourceHash": "sha256:10dfed57d3682cebd14f26b4e6deb2dae6dd2c3cbd3101a82ddb4c6cb03ce4c4",
       "strings": {
         "subject": {
           "en": "An agreement from {firm_name} is ready to sign",
@@ -350,6 +350,18 @@
           "en": "Review and sign",
           "fr": "Examiner et signer",
           "origin": "machine"
+        },
+        "preheader_booking": {
+          "en": "Review it and sign it before your consultation.",
+          "fr": "Examinez-la et signez-la avant votre consultation.",
+          "origin": "hand",
+          "note": "Booking consultation agreement (signed from its private link, no portal). Hand draft."
+        },
+        "body_booking": {
+          "en": "Your consultation agreement from {firm_name} is ready. Review it and sign it before your consultation.",
+          "fr": "Votre convention de consultation de {firm_name} est prête. Examinez-la et signez-la avant votre consultation.",
+          "origin": "hand",
+          "note": "Booking consultation agreement. Hand draft, same wording as body_consultation."
         }
       }
     },

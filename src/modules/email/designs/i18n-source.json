@@ -62,7 +62,9 @@
     "body_consent": "Your consent form from {firm_name} is ready. Review it and sign in your portal.",
     "body_quote": "Your quote from {firm_name} is ready. Review it and sign in your portal.",
     "body": "Your agreement from {firm_name} is ready. Review it and sign in your portal.",
-    "cta": "Review and sign"
+    "cta": "Review and sign",
+    "preheader_booking": "Review it and sign it before your consultation.",
+    "body_booking": "Your consultation agreement from {firm_name} is ready. Review it and sign it before your consultation."
   },
   "EM08-staff": {
     "subject": "Your countersignature is needed at {firm_name}",

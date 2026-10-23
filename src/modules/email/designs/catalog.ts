@@ -13,6 +13,7 @@
 import { appLink, cleanText, safeUrl, type Brand, type EmailCopy, type Spot } from "@/modules/email/designs/layout";
 import {
   agreementNoun,
+  bookingRefOrNull,
   countOrNull,
   dateTimeIn,
   dayDate,
@@ -40,6 +41,8 @@ export const PATHS = {
   portalAppointments: "/portal/appointments",
   /** The firm's public booking pages: /book/<firm slug>. */
   book: "/book",
+  /** A consultation agreement's private signing page: /consultation/<booking ref>/agreement. */
+  consultation: "/consultation",
   sheetAgreements: "/sheet/agreements",
   sheetTasks: "/sheet/tasks",
   sheetGrants: "/sheet/grants",
@@ -57,7 +60,8 @@ export type EmailContexts = {
   EM05: Record<string, never>;
   EM06: FirmContext & { dueOn?: string | null };
   EM07: FirmContext & { dueOn?: string | null };
-  EM08: FirmContext & { agreementKind?: string | null };
+  /** signingRef: a consultation agreement on a booking, signed from its private link (no portal). */
+  EM08: FirmContext & { agreementKind?: string | null; signingRef?: string | null };
   "EM08-staff": FirmContext;
   EM09: FirmContext;
   "EM09-staff": FirmContext;
@@ -328,13 +332,27 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
     name: "Agreement ready to sign",
     audience: "client",
     brand: "firm",
-    trigger: "Staff send an agreement for signature (outbox agreement.sent, template agreement), to client signers",
+    trigger:
+      "Staff send an agreement for signature (outbox agreement.sent, template agreement), to client signers; or a consultation agreement on a booking (outbox booking_agreement.sent), to the booking’s attendee, with its private signing link",
     status: "wired",
+    // A booking's consultation agreement links to /consultation/<booking ref>/agreement instead.
     ctaTarget: PATHS.portalAgreements,
-    mergeFields: ["firm_name", "agreement_kind"],
+    mergeFields: ["firm_name", "agreement_kind", "signing_ref"],
     sample: { firmName: SYNTHETIC_FIRM, agreementKind: "service" },
     build(context, origin) {
       const firmName = firm(context);
+      const ref = bookingRefOrNull(context.signingRef);
+      if (ref) {
+        return copy({
+          subject: `An agreement from ${firmName} is ready to sign`,
+          preheader: "Review it and sign it before your consultation.",
+          heading: "An agreement is ready to sign",
+          body: `Your consultation agreement from ${firmName} is ready. Review it and sign it before your consultation.`,
+          cta: cta("Review and sign", appLink(origin, `${PATHS.consultation}/${ref}/agreement`)),
+          spot: "agreement",
+          brand: firmBrand(context),
+        });
+      }
       return copy({
         subject: `An agreement from ${firmName} is ready to sign`,
         preheader: "Review it and sign in your portal.",

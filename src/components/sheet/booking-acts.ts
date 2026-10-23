@@ -321,6 +321,8 @@ type TypeDraft = {
   detail: string;
   hosts: string[];
   published: boolean;
+  /** The approved consultation agreement sent with each booking from the booking page ("" for none). */
+  agreement: string;
 };
 
 // A new type starts with an empty name and link name (the placeholders show an example), so it
@@ -342,6 +344,7 @@ const NEW_TYPE: TypeDraft = {
   detail: "",
   hosts: [],
   published: false,
+  agreement: "",
 };
 
 export function openBookingType(opener: HTMLElement, root: HTMLElement, open: Open) {
@@ -374,6 +377,7 @@ export function openBookingType(opener: HTMLElement, root: HTMLElement, open: Op
   set("etC", draft.capacity == null ? "" : String(draft.capacity));
   set("etK", draft.kind);
   set("etX", draft.detail);
+  set("etA", draft.agreement);
   dialog.querySelectorAll<HTMLInputElement>('input[name="etH"]').forEach((box) => {
     box.checked = draft.hosts.includes(box.value);
   });
@@ -456,6 +460,8 @@ export async function runBookingType(button: HTMLElement, router: Router) {
     locationDetail: value(dialog, "etX"),
     hostMembershipIds: [...dialog.querySelectorAll<HTMLInputElement>('input[name="etH"]:checked')].map((box) => box.value),
     publish: Boolean(el(dialog, "etPub")?.checked),
+    // Only when the dialog offers the choice (the firm has an approved consultation agreement).
+    agreementTemplateId: el(dialog, "etA") ? value(dialog, "etA") || null : undefined,
   });
   done(result, { title: "Booking type saved", sub: "The booking page shows published types only." }, dialog, router);
 }

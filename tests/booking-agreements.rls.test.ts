@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { asAnon, asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asAnon, asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 
 // Consultation agreements on bookings (20261023170000): staff lock the firm's approved
 // consultation template to an upcoming booking; the booker signs through the booking's private
@@ -137,6 +137,18 @@ const forSigning = async (ref: string) => (await db.query<{ r: Record<string, un
 const sign = (ref: string, name: string, consent: boolean, sha: string) =>
   db.query<{ r: Record<string, unknown> }>(`select public.sign_booking_agreement($1, $2, $3, $4, '203.0.113.7'::inet, 'Synthetic browser') as r`, [ref, name, consent, sha]);
 
+type Mail = { action: string; messages: { to: string; template: string; context: Record<string, unknown> }[] };
+
+/** Claims the mail events and prepares the one for this agreement (EM08, booking variant). */
+async function prepareAgreementMail(agreementId: string): Promise<Mail> {
+  await asServiceRole(db);
+  const worker = `worker-${randomUUID().slice(0, 8)}`;
+  const claimed = (await db.query<{ c: { id: string; event_type: string; payload: Record<string, unknown> }[] }>(`select public.claim_mail_events($1, 50) as c`, [worker])).rows[0].c;
+  const event = claimed.find((row) => row.event_type === "booking_agreement.sent" && row.payload.booking_agreement_id === agreementId);
+  expect(event, "booking_agreement.sent").toBeTruthy();
+  return (await db.query<{ p: Mail }>(`select public.prepare_email_delivery($1, $2) as p`, [event!.id, worker])).rows[0].p;
+}
+
 describe("consultation agreements on bookings", () => {
   it("staff send the approved template; the booker signs once through the private link, without a login", async () => {
     const ctx = await firm();
@@ -212,5 +224,70 @@ describe("consultation agreements on bookings", () => {
     await expectDbError(() => db.query(`select public.send_booking_agreement($1, $2)`, [booking.id, tpl]), /denied/);
     await asUser(db, client(ctx.client.id, ctx.orgId));
     await expectDbError(() => db.query(`select public.send_booking_agreement($1, $2)`, [booking.id, tpl]), /denied/);
+  });
+
+  it("the attendee is emailed the private signing link (EM08), only while it is still unsigned", async () => {
+    const ctx = await firm();
+    const tpl = await template(ctx.orgId);
+    const booking = await book(ctx, await localStart(6));
+    const ref = await refOf(booking.id);
+    await asUser(db, staff(ctx.host.id, ctx.orgId));
+    const first = (await db.query<{ id: string }>(`select public.send_booking_agreement($1, $2) as id`, [booking.id, tpl])).rows[0].id;
+
+    const mail = await prepareAgreementMail(first);
+    expect(mail.action).toBe("send");
+    expect(mail.messages).toHaveLength(1);
+    expect(mail.messages[0]).toMatchObject({ to: ctx.client.email, template: "agreement" });
+    expect(mail.messages[0].context).toMatchObject({ agreement_kind: "consultation", signing_ref: ref, firm: "Synthetic Firm" });
+
+    // Voided before the mail went out: the new one is mailed; a signed one is not mailed again.
+    await asUser(db, staff(ctx.host.id, ctx.orgId));
+    await db.query(`select public.void_booking_agreement($1, 'Wrong template sent')`, [booking.id]);
+    const second = (await db.query<{ id: string }>(`select public.send_booking_agreement($1, $2) as id`, [booking.id, tpl])).rows[0].id;
+    await asAnon(db);
+    const shown = await forSigning(ref);
+    await sign(ref, "Synthetic Client", true, String(shown.sha256));
+    const late = await prepareAgreementMail(second);
+    expect(late.action).toBe("done");
+    await asMaintenance(db);
+    const skipped = (await db.query<{ status: string }>(`select status from public.email_deliveries where context ->> 'signing_ref' = $1 order by created_at`, [ref])).rows.map((r) => r.status);
+    expect(skipped).toEqual(["sending", "skipped"]);
+  });
+
+  it("a booking type's agreement is sent with each booking from the booking page", async () => {
+    const ctx = await firm();
+    const tpl = await template(ctx.orgId);
+    const draft = await template(ctx.orgId, "draft");
+
+    // Only the firm owner sets it, and only to an approved consultation template.
+    await asUser(db, staff(ctx.host.id, ctx.orgId));
+    await expectDbError(() => db.query(`select public.set_booking_type_agreement($1, $2)`, [ctx.typeId, tpl]), /denied|owner|step-up/i);
+    await asUser(db, staff(ctx.owner.id, ctx.orgId));
+    await expectDbError(() => db.query(`select public.set_booking_type_agreement($1, $2)`, [ctx.typeId, draft]), /approved consultation/);
+    await db.query(`select public.set_booking_type_agreement($1, $2)`, [ctx.typeId, tpl]);
+
+    const booking = await book(ctx, await localStart(7));
+    const ref = await refOf(booking.id);
+    await asAnon(db);
+    expect(await forSigning(ref)).toMatchObject({ state: "open", title: "C-02" });
+    await asMaintenance(db);
+    const row = (await db.query<{ id: string; sent_by: string | null }>(`select id, sent_by from public.booking_agreements where booking_id = $1`, [booking.id])).rows[0];
+    expect(row.sent_by).toBeNull();
+    const mail = await prepareAgreementMail(row.id);
+    expect(mail.messages[0]).toMatchObject({ to: ctx.client.email, template: "agreement" });
+    expect(mail.messages[0].context).toMatchObject({ signing_ref: ref });
+
+    // A template that is no longer approved is skipped: the booking still goes through.
+    await asMaintenance(db);
+    await db.query(`update public.agreement_templates set status = 'retired' where id = $1`, [tpl]);
+    const later = await book(ctx, await localStart(8));
+    await asMaintenance(db);
+    expect((await db.query(`select 1 from public.booking_agreements where booking_id = $1`, [later.id])).rowCount).toBe(0);
+
+    // None: the owner clears it.
+    await asUser(db, staff(ctx.owner.id, ctx.orgId));
+    await db.query(`select public.set_booking_type_agreement($1, null)`, [ctx.typeId]);
+    await asMaintenance(db);
+    expect((await db.query<{ a: string | null }>(`select agreement_template_id as a from public.booking_event_types where id = $1`, [ctx.typeId])).rows[0].a).toBeNull();
   });
 });

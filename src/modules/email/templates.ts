@@ -148,7 +148,7 @@ function contextFor(design: Wired, context: Context, firm: string): EmailContext
     case "EM07":
       return { firmName: firm, dueOn: due };
     case "EM08":
-      return { firmName: firm, agreementKind: textOf(context.agreement_kind) };
+      return { firmName: firm, agreementKind: textOf(context.agreement_kind), signingRef: textOf(context.signing_ref) || null };
     case "EM10":
       return { firmName: firm, invoiceId: textOf(context.invoice_id), invoiceNumber: textOf(context.invoice_number), dueOn: due };
     case "EX08":
