@@ -77,6 +77,7 @@ type Wired =
   | "EM16c"
   | "EX07"
   | "EX15"
+  | "EX16"
   | "EX11"
   | "EM17";
 
@@ -128,6 +129,9 @@ export function designFor(context: Context): Wired | "generic" {
       return "EX11";
     case "support_granted":
       return "EM17";
+    // Signing flow (20261023230100): the six-digit code the worker opened from its sealed form.
+    case "signing_code":
+      return "EX16";
     default:
       return "generic";
   }
@@ -187,6 +191,8 @@ function contextFor(design: Wired, context: Context, firm: string): EmailContext
     case "EX10":
     case "EX07":
       return { firmName: firm };
+    case "EX16":
+      return { firmName: firm, code: textOf(context.code) || null };
     // Support access: minutes asked for; on approval the approver, the minutes, the end and the firm's zone.
     case "EX11":
       return { firmName: firm, minutes: minutesOf(context.minutes) };

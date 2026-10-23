@@ -71,6 +71,7 @@ Subjects and preheaders must not reveal a program, document name, amount or deci
 | EX08 | Payment failed | machine_draft | — | — | No (not_approved) |
 | EX09 | Refund started | machine_draft | — | — | No (not_approved) |
 | EX10 | Refund complete | machine_draft | — | — | No (not_approved) |
+| EX16 | Signing code | machine_draft | — | — | No (not_approved) |
 | EX11 | Support access requested | machine_draft | — | — | No (not_approved) |
 | EX12 | Licence check attention | machine_draft | — | — | No (not_approved) |
 | EX13 | Privacy request received | machine_draft | — | — | No (not_approved) |
@@ -615,6 +616,20 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:5609f6110cb
 | `heading` | Your refund is complete | Votre remboursement est complet | Machine draft |
 | `body` | {firm_name}’s refund has been sent. The details are in your portal. | Le remboursement de {firm_name} a été envoyé. Les détails se trouvent dans votre portail. | Machine draft. Keep {firm_name} |
 | `cta` | View payments | Afficher les paiements | Machine draft. Same English as another template; same French reused. |
+
+## EX16: Signing code
+
+The booker asks for a code on a consultation agreement's private signing page (issue_booking_agreement_code; outbox booking_agreement.code, template signing_code), to the booking's primary attendee. The code is sealed by the app and opened by the mail worker; it works for 10 minutes. Honours email_notices. Copy pending Francis (#166). Audience: client. [French preview](../email/previews/fr/EX16.html)
+
+Status `machine_draft` · drafted 2026-10-23 · English hash `sha256:cf8ca1398997…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject` | Your signing code from {firm_name} | Votre code de signature de {firm_name} | Hand draft. EX16 hand draft (#166). Keep {firm_name} |
+| `preheader` | It works for 10 minutes. | Il est valide pendant 10 minutes. | Hand draft. EX16 hand draft (#166). |
+| `heading` | Your signing code | Votre code de signature | Hand draft. EX16 hand draft (#166). |
+| `body` | Enter this code to confirm it’s you and sign your consultation agreement from {firm_name}. It works for 10 minutes. If you didn’t ask for it, you can ignore this email. | Entrez ce code pour confirmer votre identité et signer votre convention de consultation de {firm_name}. Il est valide pendant 10 minutes. Si vous ne l’avez pas demandé, vous pouvez ignorer ce courriel. | Hand draft. EX16 hand draft (#166). Keep {firm_name} |
+| `body_missing` | Your code from {firm_name} couldn’t be added to this email. Go back to the signing page and ask for a new code. | Votre code de {firm_name} n’a pas pu être ajouté à ce courriel. Retournez à la page de signature et demandez un nouveau code. | Hand draft. EX16 hand draft (#166). Keep {firm_name} |
 
 ## EX11: Support access requested
 

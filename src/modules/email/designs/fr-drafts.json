@@ -1635,6 +1635,47 @@
           "note": "Same English as another template; same French reused."
         }
       }
+    },
+    "EX16": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-23",
+      "sourceHash": "sha256:cf8ca1398997820bee979b4f46b9879be26f94bd29d3f4e790ad2cfc9535f18a",
+      "strings": {
+        "subject": {
+          "en": "Your signing code from {firm_name}",
+          "fr": "Votre code de signature de {firm_name}",
+          "origin": "hand",
+          "note": "EX16 hand draft (#166)."
+        },
+        "preheader": {
+          "en": "It works for 10 minutes.",
+          "fr": "Il est valide pendant 10 minutes.",
+          "origin": "hand",
+          "note": "EX16 hand draft (#166)."
+        },
+        "heading": {
+          "en": "Your signing code",
+          "fr": "Votre code de signature",
+          "origin": "hand",
+          "note": "EX16 hand draft (#166)."
+        },
+        "body": {
+          "en": "Enter this code to confirm it’s you and sign your consultation agreement from {firm_name}. It works for 10 minutes. If you didn’t ask for it, you can ignore this email.",
+          "fr": "Entrez ce code pour confirmer votre identité et signer votre convention de consultation de {firm_name}. Il est valide pendant 10 minutes. Si vous ne l’avez pas demandé, vous pouvez ignorer ce courriel.",
+          "origin": "hand",
+          "note": "EX16 hand draft (#166)."
+        },
+        "body_missing": {
+          "en": "Your code from {firm_name} couldn’t be added to this email. Go back to the signing page and ask for a new code.",
+          "fr": "Votre code de {firm_name} n’a pas pu être ajouté à ce courriel. Retournez à la page de signature et demandez un nouveau code.",
+          "origin": "hand",
+          "note": "EX16 hand draft (#166)."
+        }
+      }
     }
   }
 }

@@ -486,6 +486,21 @@ The record's Agreement and fee panel (design review on #161).
 
 Tested in `tests/booking-agreements.rls.test.ts`.
 
+## Consultation agreement signing flow (`20261023230000`, `20261023230100`, not applied on the live project)
+
+The private link runs the designed flow (spec `docs/specs/consultation-agreement-states.md`, #166).
+
+* `booking_agreement_codes`: six-digit signing codes, hashes only (`code_sha256`, and `session_sha256` once verified). Forced RLS, no policies, revoked from `anon` and `authenticated`: only the definer functions read it.
+* `public.issue_booking_agreement_code(ref, code_id, code_sha256, sealed)` (anon): the app makes the code and its id, seals the code to the id with `EMAIL_DISPATCH_SECRET` (AES-GCM, the invitation-link scheme) and passes the sealed form and the hash. Queues `booking_agreement.code` (EX16, template `signing_code`) to the primary attendee. Answers `sent` (with the masked address), `wait` (30 seconds between codes), `limited` (ten an hour), `notices_off`, `closed` or `unavailable`.
+* `public.verify_booking_agreement_code(ref, code_sha256, session_sha256)` (anon): the newest code only, 10 minutes, three attempts (`ok`, `wrong` with tries left, `locked`, `expired`, `none`). On `ok` the session token's hash is kept; the app sets the token as an httpOnly cookie scoped to the link (2 hours).
+* `public.sign_booking_agreement(..., session_sha256, signature_kind, signature_image)` (anon): the existing checks plus a verified session from the last two hours, and `typed`, `drawn` or `uploaded` (a PNG or JPEG of at most 1.5 MB, stored as `signature_image`, staff-readable, never a public URL). The six-argument version now refuses.
+* Decline: status `declined` with `declined_at` and `decline_reason` (the booker's words, which the firm sees). `public.decline_booking_agreement(ref, reason)` (anon). Not live, so the firm can send a new one.
+* `public.note_booking_agreement_request(ref, kind)` (anon): `wrong_recipient`, `code_help`, `link_requested`, `message`, kept as `last_request_kind` / `last_request_at` for the record ("Client asked") and audited `booking_agreement.<kind>`; once per ten minutes per kind.
+* `public.booking_agreement_for_signing` adds the firm slug, the masked email, the stored signature of a signed agreement, and `declined` (firm, the booker's reason; never the text or the hash).
+* `app.scrub_invitation_link` also drops `sealed_code` once mail is final.
+
+Tested in `tests/booking-agreements.rls.test.ts`.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.

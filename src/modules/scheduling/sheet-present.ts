@@ -33,12 +33,25 @@ export type BookingAgreementRow = {
   voided_at?: string | null;
   voided_by?: string | null;
   void_reason?: string | null;
+  declined_at?: string | null;
+  decline_reason?: string | null;
+  last_request_kind?: string | null;
+  last_request_at?: string | null;
+};
+
+/** What the booker asked for from the signing link, for the record's "Client asked" row. */
+const CLIENT_REQUEST: Record<string, string> = {
+  wrong_recipient: "This link isn’t theirs",
+  code_help: "To check their email address",
+  link_requested: "For a new link",
+  message: "To talk to you",
 };
 
 /** The Upcoming row's Agreement column for a booking's latest agreement. */
 export function agreementLabel(row: BookingAgreementRow | null | undefined): string {
   if (!row) return "—";
   if (row.status === "voided") return "Voided";
+  if (row.status === "declined") return "Declined";
   return row.status === "signed" ? `${row.title} v${row.template_version} signed` : "Sent, not signed";
 }
 
@@ -87,6 +100,10 @@ export function recordAgreement(input: {
       ? [{ label: "Send consultation agreement", data: { "data-agreement-send-booking": "1", "data-template": input.template.id, ...input.wire } }]
       : [];
   const name = row ? `${row.title} v${row.template_version}` : "";
+  const request =
+    row?.last_request_kind && CLIENT_REQUEST[row.last_request_kind]
+      ? [{ term: "Client asked", value: [CLIENT_REQUEST[row.last_request_kind], when(row.last_request_at)].filter(Boolean).join(", ") }]
+      : [];
   if (row?.status === "signed") {
     return {
       chip: { tone: "ok", label: "Signed" },
@@ -108,6 +125,7 @@ export function recordAgreement(input: {
         { term: "Sent", value: [when(row.sent_at), input.recipient ? `to ${input.recipient}` : null].filter(Boolean).join(" ") || "Sent" },
         { term: "Opened", value: when(row.opened_at) ?? "Not yet" },
         ...(row.reminded_at ? [{ term: "Reminded", value: when(row.reminded_at) ?? "" }] : []),
+        ...request,
         fee,
       ],
       note: `The link is private to ${input.client} and works until they sign or you void it. Voiding keeps it on record.`,
@@ -127,9 +145,26 @@ export function recordAgreement(input: {
         { term: "Agreement", value: name, ...(sentDay ? { struck: `sent ${sentDay}` } : {}) },
         { term: "Voided", value: [when(row.voided_at), `by ${input.voidedBy ?? "A staff member"}`].filter(Boolean).join(" ") },
         ...(row.void_reason ? [{ term: "Reason", value: row.void_reason }] : []),
+        ...request,
         fee,
       ],
       note: `The old link now tells ${input.client} this agreement was withdrawn. Send a fresh one when you’re ready.`,
+      actions: send.map((action) => ({ ...action, tone: "primary" as const })),
+      link: null,
+    };
+  }
+  if (row?.status === "declined") {
+    const sentDay = row.sent_at ? dayMonth(row.sent_at, zone) : null;
+    return {
+      chip: { tone: "bad", label: "Declined" },
+      items: [
+        { term: "Agreement", value: name, ...(sentDay ? { struck: `sent ${sentDay}` } : {}) },
+        { term: "Declined", value: when(row.declined_at) ?? "Declined" },
+        ...(row.decline_reason ? [{ term: "Their reason", value: row.decline_reason }] : []),
+        ...request,
+        fee,
+      ],
+      note: `${input.client} declined to sign, and the link no longer accepts a signature. Send a fresh one when you’re ready.`,
       actions: send.map((action) => ({ ...action, tone: "primary" as const })),
       link: null,
     };

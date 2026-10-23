@@ -102,6 +102,7 @@ portal choice "Email notices" is off is recorded as `skipped`, not emailed.
 | EX13 | Privacy request received | A client makes a privacy request. Privacy requests are not built yet | client · firm | {firm_name} received your privacy request | You can follow it in your portal. | Open your portal → `/portal` | `firm_name`, `reply_by` | ready-not-wired |
 | EX14 | Complaint received | A client files a complaint. Complaints are not built yet | client · firm | {firm_name} received your complaint | We’ll respond in writing. | — | `firm_name`, `respond_by`, `handler_name` | ready-not-wired |
 | EX15 | Message from staff (engineering-built at the owner's request 2026-10-19; copy pending Francis) | Staff reply to a client's email or write a new one from the Sheet Inbox (`send_matter_email`; outbox matter_email.sent, template staff_message), to one person on the matter at their stored address. The staff member's text verbatim; Reply-To the matter reply address; In-Reply-To/References on a reply. Never sent for a sample matter. English only | client · firm | Re: {original subject}, or Message from {firm_name} | Reply to this email to answer {firm_name}. | Open your portal → `/portal` (only with a portal login) | `firm_name`, `sender_name`, `body`, `subject`, `portal` | wired |
+| EX16 | Signing code (copy pending Francis, #166) | The booker asks for a code on a consultation agreement's private signing page (`issue_booking_agreement_code`; outbox booking_agreement.code, template signing_code), to the booking's primary attendee. The app seals the code; the mail worker opens it; the database keeps only its hash. Works for 10 minutes. Honours email_notices | client · firm | Your signing code from {firm_name} | It works for 10 minutes. | none (the code is the heading) | `firm_name`, `code` | wired |
 
 A database template the renderer does not know falls back to a neutral firm notice ("An update
 from {firm_name}", button to `/portal`) instead of failing the send.
@@ -132,6 +133,7 @@ per template is the "Status" table of `docs/i18n/email-fr-review.md`; how to app
 | `reminder` | | EM07 |
 | `agreement` | `audience: staff` (agreement.signer_turn) | EM08-staff |
 | `agreement` | `signing_ref` (booking_agreement.sent) | EM08, booking variant |
+| `signing_code` | (booking_agreement.code) | EX16 |
 | `agreement` | | EM08 |
 | `signature` | `audience: staff` (staff signer) | EM09-staff |
 | `signature` | | EM09 |

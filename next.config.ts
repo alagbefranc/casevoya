@@ -5,6 +5,11 @@ const WORKERS = process.env.CASEVOYA_TARGET === "workers";
 const nextConfig: NextConfig = {
   /* config options here */
   allowedDevOrigins: ["127.0.0.1"],
+  experimental: {
+    // Consultation agreement signing: a drawn or uploaded signature image (PNG or JPEG, up to
+    // 1.5 MB) is posted as form data to its server action. The default is 1 MB.
+    serverActions: { bodySizeLimit: "2mb" },
+  },
   async redirects() {
     return [
       { source: "/sheet/portal", destination: "/portal", permanent: false },
