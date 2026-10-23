@@ -12,7 +12,7 @@ import type { SigningView } from "@/modules/scheduling/agreement-sign-present";
 import { signBookingAgreement } from "@/modules/scheduling/agreement-sign";
 import { longWhen } from "@/modules/scheduling/format";
 
-type Open = Exclude<SigningView, { state: "unavailable" }>;
+type Open = Exclude<SigningView, { state: "unavailable" } | { state: "withdrawn" }>;
 
 const PAGE_CSS = ".pb .doc{white-space:pre-wrap;font-size:15px;line-height:1.6;max-height:60vh;overflow:auto}.pb .hash{font-family:ui-monospace,monospace;font-size:12px;color:#615d59;word-break:break-all}";
 

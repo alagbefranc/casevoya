@@ -5,6 +5,8 @@
  */
 export type SigningView =
   | { state: "unavailable" }
+  /** The firm voided it and sent nothing new: the old link says so (the firm's name only). */
+  | { state: "withdrawn"; firm: string }
   | {
       state: "open" | "signed" | "closed";
       firm: string;
@@ -35,6 +37,10 @@ function text(value: unknown): string | null {
 export function readSigningView(raw: unknown): SigningView {
   const row = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
   const state = row?.state;
+  if (row && state === "withdrawn") {
+    const firm = text(row.firm);
+    return firm ? { state: "withdrawn", firm } : { state: "unavailable" };
+  }
   if (!row || (state !== "open" && state !== "signed" && state !== "closed")) return { state: "unavailable" };
   const firm = text(row.firm);
   const body = text(row.body);

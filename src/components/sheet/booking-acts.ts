@@ -6,6 +6,7 @@ import {
   bookForClient,
   cancelBooking,
   recordBookingOutcome,
+  remindBookingAgreement,
   rescheduleBooking,
   rescheduleOptions,
   saveAvailability,
@@ -183,23 +184,26 @@ export async function runBookingAgreementSend(button: HTMLElement, router: Route
   done(result, { title: "Agreement ready to sign", sub: "Copy the signing link and send it to the client." }, null, router);
 }
 
-/** Void (record): asks once more, then withdraws the unsigned agreement. It stays on record. */
+/** Void agreement (#dlgBkVoid): the reason is required and kept; the old link says it was withdrawn. */
 export async function runBookingAgreementVoid(button: HTMLElement, router: Router) {
-  if (button.dataset.armed !== "1") {
-    button.dataset.armed = "1";
-    const label = button.textContent ?? "";
-    button.textContent = "Click again to void";
-    toast2("Void this agreement?", { kind: "warn", sub: "The signing link stops working. Click Void again to confirm." });
-    window.setTimeout(() => {
-      if (button.dataset.armed !== "1") return;
-      delete button.dataset.armed;
-      button.textContent = label;
-    }, 5000);
+  const dialog = button.closest("dialog");
+  const reason = dialog ? value(dialog, "bvR").trim() : "";
+  const error = dialog?.querySelector<HTMLElement>("#bvR-e");
+  if (reason.length < 3) {
+    // The reason stays in the dialog: an inline error, nothing written.
+    if (error) error.hidden = false;
+    el(dialog ?? document, "bvR")?.focus();
     return;
   }
-  delete button.dataset.armed;
-  const result = await voidBookingAgreement({ organizationId: button.dataset.org ?? "", bookingId: button.dataset.booking ?? "" });
-  done(result, { title: "Agreement voided", sub: "It stays on record. You can send a new one." }, null, router);
+  if (error) error.hidden = true;
+  const result = await voidBookingAgreement({ organizationId: button.dataset.org ?? "", bookingId: button.dataset.booking ?? "", reason });
+  done(result, { title: "Agreement voided", sub: "It stays on record. The old link now says it was withdrawn." }, dialog, router);
+}
+
+/** Remind (record): emails the signing link again; once an hour at most. */
+export async function runBookingAgreementRemind(button: HTMLElement, router: Router) {
+  const result = await remindBookingAgreement({ organizationId: button.dataset.org ?? "", bookingId: button.dataset.booking ?? "" });
+  done(result, { title: "Reminder sent", sub: "They get the signing link again by email." }, null, router);
 }
 
 // ---------------------------------------------------------------------------

@@ -29,6 +29,18 @@ async function Body({ params }: { params: Promise<{ ref: string }> }) {
   const { data, error } = await supabase.rpc("booking_agreement_for_signing", { p_ref: reference });
   const view = error ? ({ state: "unavailable" } as const) : readSigningView(data);
   if (view.state === "unavailable") return <Unavailable />;
+  if (view.state === "withdrawn") {
+    return (
+      <SheetScreen page="book" tone="public">
+        <QuietSheet
+          title="This agreement was withdrawn."
+          copy={`${view.firm} withdrew this agreement. Nothing was signed.`}
+        />
+      </SheetScreen>
+    );
+  }
+  // The firm sees when the link was first opened (only while it is unsigned).
+  if (view.state === "open") await supabase.rpc("note_booking_agreement_opened", { p_ref: reference });
   return (
     <SheetScreen page="book" tone="public">
       <AgreementSign view={view} reference={reference} />

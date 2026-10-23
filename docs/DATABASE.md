@@ -476,6 +476,16 @@ Not yet: consultation agreements aren't on the Agreements list, and there is no 
 
 Tested in `tests/booking-agreements.rls.test.ts` (the attendee gets EM08 with the signing ref; a signed one isn't mailed; only the owner sets a type's agreement, only an approved one; a booking from the page gets it and its mail; an unapproved template is skipped and the booking still goes through).
 
+## Consultation agreement panel (`20261023210000`, not applied on the live project)
+
+The record's Agreement and fee panel (design review on #161).
+
+* `booking_agreements.opened_at`: when the booker first opened the private link. Set by `public.note_booking_agreement_opened(ref)` (anon), only while it is unsigned; later opens don't move it.
+* `booking_agreements.reminded_at`, `reminder_count`, and `public.remind_booking_agreement(booking)`: scheduling staff email the signing link again (the same `booking_agreement.sent` mail, EM08), at most once an hour counting from the send or the last reminder. Audited `booking_agreement.reminded`.
+* `public.booking_agreement_for_signing` now answers `{state: withdrawn, firm}` when the booking's agreement was voided and nothing new was sent, so the old link says it was withdrawn.
+
+Tested in `tests/booking-agreements.rls.test.ts`.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.

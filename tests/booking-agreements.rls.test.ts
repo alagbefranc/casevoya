@@ -207,7 +207,8 @@ describe("consultation agreements on bookings", () => {
     await expectDbError(() => db.query(`select public.void_booking_agreement($1, 'x')`, [booking.id]), /give a reason/);
     await db.query(`select public.void_booking_agreement($1, 'Wrong template sent')`, [booking.id]);
     await asAnon(db);
-    expect((await forSigning(ref)).state).toBe("unavailable");
+    // The old link says it was withdrawn (the firm's name only, nothing else).
+    expect(await forSigning(ref)).toEqual({ state: "withdrawn", firm: "Synthetic Firm" });
     await expectDbError(() => sign(ref, "Synthetic Client", true, "a".repeat(64)), /not available/);
     await asUser(db, staff(ctx.host.id, ctx.orgId));
     await db.query(`select public.send_booking_agreement($1, $2)`, [booking.id, tpl]);
@@ -289,5 +290,49 @@ describe("consultation agreements on bookings", () => {
     await db.query(`select public.set_booking_type_agreement($1, null)`, [ctx.typeId]);
     await asMaintenance(db);
     expect((await db.query<{ a: string | null }>(`select agreement_template_id as a from public.booking_event_types where id = $1`, [ctx.typeId])).rows[0].a).toBeNull();
+  });
+
+  it("records the first open, and staff remind at most once an hour", async () => {
+    const ctx = await firm();
+    const tpl = await template(ctx.orgId);
+    const booking = await book(ctx, await localStart(9));
+    const ref = await refOf(booking.id);
+    await asUser(db, staff(ctx.host.id, ctx.orgId));
+    const id = (await db.query<{ id: string }>(`select public.send_booking_agreement($1, $2) as id`, [booking.id, tpl])).rows[0].id;
+
+    await asAnon(db);
+    await db.query(`select public.note_booking_agreement_opened($1)`, [ref]);
+    await asMaintenance(db);
+    const first = (await db.query<{ opened_at: string }>(`select opened_at from public.booking_agreements where id = $1`, [id])).rows[0].opened_at;
+    expect(first).toBeTruthy();
+    await asAnon(db);
+    await db.query(`select public.note_booking_agreement_opened($1)`, [ref]);
+    await asMaintenance(db);
+    expect((await db.query<{ opened_at: string }>(`select opened_at from public.booking_agreements where id = $1`, [id])).rows[0].opened_at).toEqual(first);
+
+    // Within the hour after sending: refused. An hour later: queued, once.
+    await asUser(db, staff(ctx.host.id, ctx.orgId));
+    await expectDbError(() => db.query(`select public.remind_booking_agreement($1)`, [booking.id]), /once an hour/);
+    await asMaintenance(db);
+    await db.query(`update public.booking_agreements set sent_at = now() - interval '2 hours' where id = $1`, [id]);
+    await asUser(db, staff(ctx.host.id, ctx.orgId));
+    expect((await db.query<{ n: number }>(`select public.remind_booking_agreement($1) as n`, [booking.id])).rows[0].n).toBe(1);
+    await expectDbError(() => db.query(`select public.remind_booking_agreement($1)`, [booking.id]), /once an hour/);
+    // A client can't remind.
+    await asUser(db, client(ctx.client.id, ctx.orgId));
+    await expectDbError(() => db.query(`select public.remind_booking_agreement($1)`, [booking.id]), /denied|no unsigned/);
+
+    await asMaintenance(db);
+    const events = (await db.query<{ n: string }>(`select count(*) as n from public.outbox_events where event_type = 'booking_agreement.sent' and payload ->> 'booking_agreement_id' = $1`, [id])).rows[0].n;
+    expect(Number(events)).toBe(2);
+    const audit = (await db.query<{ action: string }>(`select action from public.audit_log where object_id = $1 and action = 'booking_agreement.reminded'`, [booking.id])).rows;
+    expect(audit).toHaveLength(1);
+
+    // Email notices off for this client: refused with a sentence, nothing queued.
+    await asMaintenance(db);
+    await db.query(`update public.booking_agreements set reminded_at = now() - interval '2 hours' where id = $1`, [id]);
+    await db.query(`insert into public.person_contact_preferences (person_id, organization_id, email_notices) values ($1, $2, false)`, [ctx.personId, ctx.orgId]);
+    await asUser(db, staff(ctx.host.id, ctx.orgId));
+    await expectDbError(() => db.query(`select public.remind_booking_agreement($1)`, [booking.id]), /email notices are off/);
   });
 });

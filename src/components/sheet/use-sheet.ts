@@ -49,6 +49,7 @@ import {
   runBookingSubmit,
   runBookingType,
   runBookingAgreementSend,
+  runBookingAgreementRemind,
   runBookingAgreementVoid,
   runOutcome,
   runSummarySave,
@@ -716,7 +717,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       const agreementVoid = target.closest<HTMLElement>("[data-agreement-void-booking]");
       if (agreementVoid && root.contains(agreementVoid)) {
         event.preventDefault();
-        void runBookingAgreementVoid(agreementVoid, router);
+        busyRun(agreementVoid, () => runBookingAgreementVoid(agreementVoid, router));
+        return;
+      }
+      const agreementRemind = target.closest<HTMLElement>("[data-agreement-remind-booking]");
+      if (agreementRemind && root.contains(agreementRemind)) {
+        event.preventDefault();
+        busyRun(agreementRemind, () => runBookingAgreementRemind(agreementRemind, router));
         return;
       }
       const summarySave = target.closest<HTMLElement>("[data-summary-save]");
