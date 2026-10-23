@@ -431,6 +431,14 @@ Stale saves (the row changed since the screen read it) raised SQLSTATE `40001`. 
 
 Tested in `tests/version-conflicts-not-retried.rls.test.ts` (no function in `app` or `public` raises `40001`; every function's body, security, settings, grants and result type are identical before and after but for the code).
 
+## Deadline reminders are sent (`20261023120000`, not applied on the live project)
+
+Nothing called `public.claim_due_reminders`, so no reminder was ever sent. The mail dispatcher (`runEmailDispatch`, run every minute by pg_cron `casevoya-mail-dispatch`) now calls it before claiming mail, and each due reminder goes out as a `reminder.due` mail event (EM07).
+
+* **Redefines** `public.claim_due_reminders` (latest `20261017200100_outbound_email.sql`): before claiming, due reminders that are stale are set `cancelled` (shown as Stopped on Automations) instead of sent: a deadline reminder whose deadline is past (`app.deadline_due_instant`), and a task reminder whose task is done or cancelled or whose due date has ended in the firm's timezone. Same signature, grants and service-role check.
+
+Tested in `tests/intake-matters.rls.test.ts` (a reminder claimed before its deadline is sent once; one claimed after its deadline has passed is cancelled and queues no mail).
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.

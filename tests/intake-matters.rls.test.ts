@@ -722,14 +722,38 @@ describe("tasks and deadlines", () => {
       /denied|42501|permission/,
     );
     await asServiceRole(db);
+    // Claimed while the deadline (17 Oct, Toronto) is still ahead: sent once.
     const claimed = await db.query<{ ids: string[] }>(
-      `select public.claim_due_reminders(10, statement_timestamp()) as ids`,
+      `select public.claim_due_reminders(10, '2026-10-17T13:00:00Z') as ids`,
     );
     expect(claimed.rows[0].ids.length).toBeGreaterThan(0);
     const again = await db.query<{ ids: string[] }>(
-      `select public.claim_due_reminders(10, statement_timestamp()) as ids`,
+      `select public.claim_due_reminders(10, '2026-10-17T13:00:00Z') as ids`,
     );
-    expect(again.rows[0].ids ?? []).toHaveLength(0);
+        expect(again.rows[0].ids ?? []).toHaveLength(0);
+
+    // A reminder first claimed after its deadline has gone by is skipped (Stopped), never sent late.
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const late = await db.query<{ id: string }>(
+      `select public.record_deadline(
+         $1, null, 'internal', 'Late follow-up', null, null, '2026-10-17', null,
+         'America/Toronto', null, null, null, null, null
+       ) as id`,
+      [created.id],
+    );
+    await db.query(`select public.schedule_deadline_reminders($1, '2026-10-17T12:00:00Z')`, [late.rows[0].id]);
+    await asServiceRole(db);
+    const stale = await db.query<{ ids: string[] }>(`select public.claim_due_reminders(10, '2026-10-20T12:00:00Z') as ids`);
+    expect(stale.rows[0].ids ?? []).toHaveLength(0);
+    await asMaintenance(db);
+    const skipped = await db.query<{ status: string }>(`select status::text from public.reminder_schedules where deadline_id = $1`, [late.rows[0].id]);
+    expect(skipped.rows.length).toBeGreaterThan(0);
+    expect(skipped.rows.every((row) => row.status === "cancelled")).toBe(true);
+    const queued = await db.query<{ count: number }>(
+      `select count(*)::int as count from public.outbox_events where event_type = 'reminder.due' and payload ->> 'deadline_id' = $1`,
+      [late.rows[0].id],
+    );
+    expect(queued.rows[0].count).toBe(0);
   });
 
   it("opens one majority review task when a minor becomes an adult", async () => {
