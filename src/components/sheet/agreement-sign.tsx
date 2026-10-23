@@ -80,7 +80,7 @@ export function AgreementSign({ view, reference }: { view: Open; reference: stri
               <small style={{ color: "#615d59" }}>{"This consultation was cancelled, so the agreement no longer needs signing."}</small>
             </div>
           ) : (
-            <form id={"f"} onSubmit={onSubmit} noValidate>
+            <form id={"f"} data-live={"1"} onSubmit={onSubmit} noValidate>
               <div className={"fld"}>
                 <label htmlFor={"sn"}>{"Your full name"}</label>
                 <input className={"inp"} id={"sn"} name={"name"} autoComplete={"name"} required maxLength={200} defaultValue={view.attendee ?? ""} />
