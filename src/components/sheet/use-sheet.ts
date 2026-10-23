@@ -1423,6 +1423,17 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     if (root.querySelector("dialog#dlgDocRev")) window.setTimeout(() => reopenDocReview(root, openDialog), 300);
 
     window.addEventListener("resize", place, listen);
+    // Consultations: back on this tab (a client may have signed or booked meanwhile), re-read the
+    // page, unless a dialog is open with someone's input in it.
+    if (page === "consultations") {
+      document.addEventListener(
+        "visibilitychange",
+        () => {
+          if (document.visibilityState === "visible" && !root.querySelector("dialog[open]")) router.refresh();
+        },
+        listen,
+      );
+    }
     return () => ac.abort();
   }, [page, ref, router]);
 
