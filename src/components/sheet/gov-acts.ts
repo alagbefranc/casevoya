@@ -82,6 +82,7 @@ export async function uploadEvidence(input: { organizationId: string; matterId: 
   return { versionId: intent.versionId };
 }
 
+/** The browser's date: only a fallback when the page didn't give the firm's (`data-today`). */
 function today(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -274,7 +275,7 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
       if (!file) return void toast2("Attach the evidence", { kind: "warn", sub: "Click Evidence to choose the letter or screenshot." });
       const uploaded = await uploadEvidence({ ...ref, file, purpose: "Government status evidence" });
       if ("error" in uploaded) return void toast2(uploaded.error, { kind: "bad", sub: "Nothing was saved." });
-      result = await recordCorrespondence({ ...ref, kind, channel: "other", receivedOn: today(), evidenceVersionId: uploaded.versionId });
+      result = await recordCorrespondence({ ...ref, kind, channel: "other", receivedOn: data.today || today(), evidenceVersionId: uploaded.versionId });
     }
   } else if (act === "decision") {
     result = await recordDecision({

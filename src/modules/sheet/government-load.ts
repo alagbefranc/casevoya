@@ -224,7 +224,12 @@ export async function loadSheetGovernment(staff: SheetStaff, query: SheetQuery, 
       href: `/sheet/government?view=${id}`,
     });
   }
-  if (!rows.length) {
+  // A failed read is not "nothing recorded": say so instead of an empty record.
+  const failed = Boolean(handoffs.error || letters.error || matters?.error);
+  if (failed) {
+    rows.length = 0;
+    rows.push({ item: "This list couldn’t load. Reload the page to try again.", status: { tone: "bad", label: "Not loaded" }, recordedBy: "—", evidence: "—", verified: "—", lastChecked: "—" });
+  } else if (!rows.length) {
     rows.push({ item: "No submissions or letters recorded yet", status: { tone: "gr", label: "Not recorded" }, recordedBy: "—", evidence: "—", verified: "—", lastChecked: "—" });
   }
   const page: GovernmentPageData = {

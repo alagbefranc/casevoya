@@ -8,6 +8,7 @@
 import { Fragment, type ReactNode } from "react";
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair, Sep } from "./frame";
+import { FilterEmpty } from "./filter-empty";
 import { Badge, type MatterBadge } from "./matters";
 import { personEditProps } from "./person-edit";
 import type { PersonEditData } from "@/modules/sheet/edit-person";
@@ -68,14 +69,18 @@ export type HouseholdData = {
 export type ClientsData = {
   tab: ClientsTab;
   counts: { people: number; households: number };
-  /** The top bar's add-client control. */
-  add: { href: string; label: string };
+  /** The top bar's add-client control; null (live) for a role that can't add one (a finance user). */
+  add: { href: string; label: string } | null;
   /** Labels of the second and third tabs: the person and household shown there. */
   tabs: { person: string; household: string };
   dir?: {
     copy: string;
     rows: ClientRow[];
     duplicate: DuplicateData | null;
+    /** Live: the people couldn't be read, which is not the same as having none. */
+    failed?: boolean;
+    /** Live: the chips and search filter the rows, so the hidden "Nothing matches" panel is rendered. */
+    filter?: boolean;
   };
   /** Null when there is no person to show. */
   person?: PersonData | null;
@@ -156,10 +161,12 @@ export function ClientsHeader({ data }: { data: Pick<ClientsData, "tab" | "count
               {"Edit details"}
             </button>
           ) : null}
-          <a className={"btn p sm"} href={data.add.href}>
-            <Icon name={"user-plus"} cls={"ic s"} />
-            {data.add.label}
-          </a>
+          {data.add ? (
+            <a className={"btn p sm"} href={data.add.href}>
+              <Icon name={"user-plus"} cls={"ic s"} />
+              {data.add.label}
+            </a>
+          ) : null}
         </span>
       </header>
       <div className={"tabs"} role={"tablist"}>
@@ -246,11 +253,17 @@ function Directory({ data, add }: { data: NonNullable<ClientsData["dir"]>; add: 
       </div>
       {data.rows.length === 0 ? (
         <div className={"panel rv"} style={i(2)}>
-          <Empty art={"clients-empty"} title={"No clients yet"} copy={"A client appears here once you’re assigned to their matter."}>
-            <a className={"btn p sm"} href={add.href}>
-              {add.label}
-            </a>
-          </Empty>
+          {data.failed ? (
+            <Empty art={"clients-empty"} title={"Clients couldn’t load"} copy={"Nothing was changed. Reload the page to try again."} />
+          ) : (
+            <Empty art={"clients-empty"} title={"No clients yet"} copy={"A client appears here once you’re assigned to their matter."}>
+              {add ? (
+                <a className={"btn p sm"} href={add.href}>
+                  {add.label}
+                </a>
+              ) : null}
+            </Empty>
+          )}
         </div>
       ) : (
         <Table label={"People"} head={["Person", "Role", "Matter", "Language", "Timezone", "Portal"]} region={{ n: 2 }}>
@@ -275,6 +288,8 @@ function Directory({ data, add }: { data: NonNullable<ClientsData["dir"]>; add: 
           ))}
         </Table>
       )}
+      {/* The chips and search can hide every row: say so (use-sheet shows it), with Clear filters. */}
+      {data.filter && data.rows.length ? <FilterEmpty n={3} /> : null}
       {data.duplicate ? (
         <div className={"alert info rv"} style={i(3)}>
           <Icon name={"merge"} />

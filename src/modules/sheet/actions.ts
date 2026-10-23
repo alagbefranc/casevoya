@@ -291,7 +291,8 @@ export async function savePersonDetails(input: {
   /** Blank keeps the date of birth on file as it is. */
   dateOfBirth: string;
 }): Promise<{ error: string } | { saved: true; notes: string[]; unchanged?: boolean }> {
-  const today = todayIso();
+  // "Not in the future" is the firm's today, in its own timezone.
+  const today = await firmToday(input.organizationId);
   const read = readPersonEdit({ ...input, today });
   if ("error" in read) return { error: read.error };
   if (!isUuid(input.organizationId)) return { error: "Open Edit details from a person on this page." };

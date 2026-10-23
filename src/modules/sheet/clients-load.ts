@@ -34,7 +34,7 @@ import { leadRow } from "@/modules/sheet/clients-present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
-const PERSON_COLUMNS = "id, display_name, email, contact_phone, user_id, date_of_birth, birth_date_precision, is_minor, created_at, version";
+const PERSON_COLUMNS = "id, display_name, email, contact_phone, user_id, date_of_birth, birth_date_precision, is_minor, is_sample, created_at, version";
 /** Participant, invitation and household rows read at once; each is a small row. */
 const LINKS_READ = 5000;
 const OPEN_TASK = ["open", "blocked"] as const;
@@ -51,6 +51,7 @@ type PersonRecord = {
   date_of_birth: string | null;
   birth_date_precision: string | null;
   is_minor: boolean;
+  is_sample: boolean;
   created_at: string;
   version: number;
 };
@@ -232,7 +233,8 @@ export async function loadSheetClients(staff: SheetStaff, query: SheetQuery, now
       href: personHref(row.id),
       flags: roleFlags(roles),
       person: { name: row.display_name },
-      role: rolesLabel(roles, row.is_minor),
+      // A sample person says so, as a sample lead does ("Lead (sample)").
+      role: `${rolesLabel(roles, row.is_minor)}${row.is_sample ? " (sample)" : ""}`,
       matter: mattersLabel(own.map((party) => matterLabel(matter.get(party.matterId)!))),
       // Language and timezone are not stored for a person yet.
       language: "—",
@@ -256,7 +258,8 @@ export async function loadSheetClients(staff: SheetStaff, query: SheetQuery, now
   // A household counts here when it groups someone the viewer can read.
   const withReadable = new Set(membership.filter((row) => people.has(row.person_id)).map((row) => row.household_id));
   const householdRows = (households.data ?? []).filter((row) => withReadable.has(row.id));
-  const householdId = person ? membership.find((row) => row.person_id === person.id)?.household_id : asked ? undefined : householdRows[0]?.id;
+  // Household tab with nobody chosen: the first person's household, or else the first household.
+  const householdId = (person ? membership.find((row) => row.person_id === person.id)?.household_id : undefined) ?? (asked ? undefined : householdRows[0]?.id);
   const household = householdRows.find((row) => row.id === householdId) ?? null;
 
   const [personData, householdData] = await Promise.all([
@@ -279,8 +282,10 @@ export async function loadSheetClients(staff: SheetStaff, query: SheetQuery, now
   };
   const clients: ClientsData = {
     tab,
-    counts: { people: peopleCount.count ?? list.length, households: householdRows.length },
-    add: ADD_CLIENT,
+    // People listed: clients plus open leads, the same rows as the table.
+    counts: { people: (peopleCount.count ?? list.length) + (leads.data?.length ?? 0), households: householdRows.length },
+    // A finance user reads no people and can't open a matter, so isn't offered Add a client.
+    add: staff.role === "finance_user" ? null : ADD_CLIENT,
     tabs: { person: person?.display_name ?? "Person", household: household?.name ?? "Household" },
     dir:
       tab === "dir"
@@ -288,6 +293,8 @@ export async function loadSheetClients(staff: SheetStaff, query: SheetQuery, now
             // Person access is assignment-based for every role, the firm owner included (DEC-006).
             copy: "Everyone on the matters you’re assigned to, one record per person. Two people who share an email stay separate, and nobody is merged without your confirmation.",
             rows,
+            failed: Boolean(persons.error),
+            filter: true,
             duplicate: findDuplicate(
               list.map((row) => ({
                 id: row.id,
