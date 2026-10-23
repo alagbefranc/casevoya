@@ -1,0 +1,105 @@
+/* Afternoon batch (17 Oct 2026): payouts (Stripe Connect), invoice/receipt detail, email-in, Vo connections, plan billing, admin depth.
+   Palette B (#0075DE on #F6F5F4, ink #111), Erode only, motion ≤300 ms, nothing moves under reduced motion. */
+.ax-sw{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 16px;font-size:13px;color:var(--t2)}
+.ax-sw>span{margin-right:4px}
+.ax-sw a{padding:3px 10px;border-radius:999px;background:#fff;border:1px solid var(--line);color:#514c47;text-decoration:none}
+.ax-sw a[aria-current="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.ax-sw a:focus-visible{outline:2px solid #075b9f;outline-offset:2px}
+/* address card (email-in) */
+.ax-addr{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;padding:18px 20px;border-radius:14px;background:#fff;border:1px solid var(--line)}
+.ax-addr .ax-ad{font:300 clamp(19px,2.2vw,26px)/1.2 Erode,serif;color:var(--ink);word-break:break-all;letter-spacing:-.01em}
+.ax-addr small{display:block;color:var(--t2);font-size:13px;margin-top:4px}
+.ax-addr .ax-mk{width:44px;height:44px;border-radius:12px;background:var(--blue);color:#fff;display:grid;place-items:center}
+.ax-addr .ax-mk .ic{width:22px;height:22px}
+.ax-copy.ok{background:var(--ok-bg);color:var(--ok)}
+.ax-how{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0 0;padding:0;list-style:none;counter-reset:h}
+.ax-how li{counter-increment:h;padding:14px 16px;border-radius:12px;background:var(--canvas);font-size:14px;color:var(--t2)}
+.ax-how li::before{content:counter(h);display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#fff;color:var(--ink);font-size:13px;margin-bottom:8px}
+.ax-how b{display:block;color:var(--ink);font-weight:500;margin-bottom:2px}
+.ax-prov{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;padding:2px 9px 2px 3px;border-radius:999px;background:var(--tint);color:#063f6e;white-space:nowrap}
+.ax-prov .ic{width:14px;height:14px;margin-left:4px}.ax-prov .av{width:18px;height:18px}
+.ax-sugg{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.ax-sugg button{display:inline-flex;gap:6px;align-items:center;font:inherit;font-size:13px;padding:4px 10px;border-radius:999px;border:1px dashed #9cc7f5;background:#fff;color:#075b9f;cursor:pointer;transition:background 160ms ease-out}
+.ax-sugg button:hover{background:var(--tint)}.ax-sugg button .num{color:var(--t2)}
+.ax-bulk{position:sticky;bottom:12px;z-index:5;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-radius:14px;background:var(--ink);color:#fff;margin:12px 0;transform:translateY(8px);opacity:0;pointer-events:none;transition:opacity 200ms ease-out,transform 200ms ease-out}
+.ax-bulk[hidden]{display:none}
+.ax-bulk.on{opacity:1;transform:none;pointer-events:auto}
+.ax-bulk .btn{background:#fff;color:var(--ink)}.ax-bulk .btn.p{background:var(--blue);color:#fff}.ax-bulk b{font-weight:500}
+.ax-mail{display:grid;grid-template-columns:22px 1fr auto;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line);align-items:start;background:#fff}
+.ax-mail:last-child{border-bottom:0}.ax-mail.is-sel{background:#f3f8fe}
+.ax-mail h3{font-size:15px;font-weight:500;margin:0}.ax-mail .meta{font-size:13px;color:var(--t2)}
+.ax-mail .att{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.ax-mail .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.ax-mail input[type=checkbox]{width:18px;height:18px;margin-top:2px;accent-color:var(--blue)}
+.ax-att{display:inline-flex;gap:6px;align-items:center;font-size:13px;padding:4px 10px;border-radius:8px;background:var(--canvas);color:#514c47}
+.ax-att.q{background:var(--bad-bg);color:var(--bad)}
+/* embedded component slots (Stripe) */
+.ax-slot{position:relative;border:1.5px dashed #9cc7f5;border-radius:14px;background:repeating-linear-gradient(135deg,#fff,#fff 10px,#f7fbff 10px,#f7fbff 20px);padding:18px}
+.ax-slot>.ax-tag{position:absolute;top:-11px;left:14px;background:#fff;padding:1px 8px;border-radius:6px;font-size:12px;color:#075b9f;border:1px solid #cfe3fb}
+.ax-slot code{font-family:inherit;font-size:12.5px;background:#eef5fd;color:#075b9f;padding:1px 6px;border-radius:5px}
+.ax-skel{display:grid;gap:10px}.ax-skel i{display:block;height:12px;border-radius:6px;background:#eceae7}.ax-skel i.h{height:40px;border-radius:10px;background:#fff;border:1px solid var(--line)}
+/* stepper */
+.ax-step{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:4px 0 18px;padding:0;list-style:none}
+.ax-step li{font-size:13px;color:var(--t2);padding-top:12px;position:relative}
+.ax-step li::before{content:"";position:absolute;top:0;left:0;right:0;height:5px;border-radius:4px;background:#e3e0dc}
+.ax-step li.d::before{background:var(--blue)}.ax-step li.c::before{background:linear-gradient(90deg,var(--blue) 50%,#e3e0dc 50%)}
+.ax-step li.c{color:var(--ink)}.ax-step li.x::before{background:var(--warn)}
+.ax-hero{display:grid;grid-template-columns:auto 1fr auto;gap:18px;align-items:center;padding:20px 22px;border-radius:16px;background:#fff;border:1px solid var(--line);margin-bottom:18px}
+.ax-hero h2{font:300 24px/1.2 Erode,serif;margin:0 0 4px}.ax-hero p{color:var(--t2);font-size:14.5px;margin:0;max-width:62ch}
+.ax-hero.blue{background:var(--blue);border-color:var(--blue);color:#fff}.ax-hero.blue p{color:#fff}.ax-hero.blue .btn{background:#fff;color:var(--blue)}
+.ax-list{list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14.5px}
+.ax-list li{display:grid;grid-template-columns:20px 1fr;gap:10px}.ax-list .ic{color:var(--blue);margin-top:2px}
+.ax-list.no .ic{color:#8b8680}
+/* connections */
+.ax-conns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.ax-conn{border:1px solid var(--line);border-radius:14px;background:#fff;padding:16px 18px;display:grid;gap:12px;align-content:start}
+.ax-conn header{display:flex;gap:12px;align-items:center}.ax-conn header img{width:32px;height:32px;object-fit:contain;flex:none}
+.ax-conn header b{font-weight:500;display:block}.ax-conn header small{color:var(--t2);font-size:13px}.ax-conn header .bd{margin-left:auto}
+.ax-conn.warn{border-color:#efd08a;background:#fffcf3}.ax-conn.bad{border-color:#f2c1b9;background:#fffaf9}
+.ax-scopes{display:flex;flex-wrap:wrap;gap:6px}.ax-scopes span{font-size:12.5px;padding:2px 8px;border-radius:6px;background:var(--canvas);color:#514c47}
+.ax-scopes span.no{text-decoration:line-through;color:#8b8680;background:transparent;box-shadow:inset 0 0 0 1px #e3e0dc}
+.ax-conn .fp-row{margin-top:2px}
+.ax-wwn{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ax-wwn>div{padding:14px 16px;border-radius:12px;background:var(--canvas)}.ax-wwn h4{font-size:14px;font-weight:500;margin:0 0 8px}
+/* plan cards */
+.ax-plans{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.ax-plan{border:1px solid var(--line);border-radius:14px;padding:16px;background:#fff;display:grid;gap:10px;align-content:start;position:relative}
+.ax-plan h3{font:300 22px/1.15 Erode,serif;margin:0}.ax-plan .pr{font-size:13.5px;color:var(--t2)}
+.ax-plan ul{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:13.5px}.ax-plan li{display:grid;grid-template-columns:16px 1fr;gap:8px}.ax-plan li .ic{width:15px;height:15px;color:var(--blue);margin-top:2px}
+.ax-plan.cur{border-color:var(--blue);box-shadow:inset 0 0 0 1px var(--blue)}
+.ax-plan .cur-t{position:absolute;top:-10px;right:12px;background:var(--blue);color:#fff;font-size:12px;padding:1px 8px;border-radius:999px}
+.ax-pm{display:flex;gap:14px;align-items:center;padding:14px 16px;border-radius:12px;background:#fff;border:1px solid var(--line)}
+.ax-pm .cc{width:44px;height:30px;border-radius:6px;background:#111;color:#fff;font-size:11px;display:grid;place-items:center;letter-spacing:.04em}
+/* signature */
+.ax-sig{border:1px solid var(--line);border-radius:12px;background:#fff;height:150px;position:relative;touch-action:none}
+.ax-sig canvas{width:100%;height:100%;display:block;border-radius:12px;cursor:crosshair}
+.ax-sig::after{content:"";position:absolute;left:18px;right:18px;bottom:34px;border-bottom:1px solid #c9c5c0;pointer-events:none}
+.ax-sig .x{position:absolute;left:18px;bottom:38px;color:#8b8680;font-size:14px;pointer-events:none}
+.ax-typed{font:italic 300 40px/1.1 Erode,serif;color:#0a3d78;padding:30px 18px 24px;border:1px solid var(--line);border-radius:12px;background:#fff;min-height:110px}
+/* drawers in this batch: definition rows and json-ish */
+.ax-json{font-size:13px;background:#111;color:#e9e6e2;border-radius:10px;padding:12px 14px;overflow:auto;white-space:pre;line-height:1.55}
+.ax-json .k{color:#9cc7f5}
+.ax-meter{height:8px;border-radius:5px;background:#eceae7;overflow:hidden}.ax-meter i{display:block;height:100%;background:var(--blue);border-radius:5px}
+.ax-meter.w i{background:#d29b00}.ax-meter.b i{background:var(--bad)}
+.ax-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:0 0 14px}
+.ax-filters .fld{margin:0;min-width:150px}.ax-filters .fld label{font-size:12.5px}
+.ax-filters .sel,.ax-filters .inp{height:36px}
+.t tr[data-drw]{cursor:pointer}.t tr[data-drw]:hover td{background:#faf9f8}
+.t tr[data-drw]:focus-visible td{background:#e6f3fe;outline:none}
+.ax-tot{display:grid;justify-content:end;gap:4px;padding:12px 18px;font-size:14.5px}
+.ax-tot>div{display:grid;grid-template-columns:200px 120px;gap:10px;text-align:right}.ax-tot .g{font-size:17px}.ax-tot .g b{font-weight:500}
+.ax-paylink{display:flex;gap:10px;align-items:center;padding:12px 14px;border-radius:12px;background:var(--tint);color:#063f6e;font-size:14px;word-break:break-all}
+@media (max-width:1100px){.ax-plans{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){
+ .ax-addr{grid-template-columns:auto 1fr;padding:16px}.ax-addr>.btn,.ax-addr>.fp-row{grid-column:1/-1}
+ .ax-how{grid-template-columns:1fr}.ax-conns,.ax-wwn{grid-template-columns:1fr}
+ .ax-hero{grid-template-columns:1fr;padding:18px}.ax-hero>.art{display:none}
+ .ax-step{grid-template-columns:repeat(4,1fr);gap:4px}.ax-step li{font-size:12px}
+ .ax-plans{grid-template-columns:1fr}
+ .ax-mail{grid-template-columns:22px 1fr;padding:14px}.ax-mail .acts{grid-column:1/-1;justify-content:flex-start}
+ .ax-tot>div{grid-template-columns:1fr auto}
+ .ax-filters .fld{min-width:calc(50% - 4px);flex:1}
+ .ax-bulk{bottom:72px}
+ .ax-sw{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}.ax-sw a{white-space:nowrap}
+}
+@media (prefers-reduced-motion:reduce){.ax-bulk,.ax-sugg button{transition:none}}
