@@ -20,6 +20,8 @@ import {
   priorityChip,
   reminderOffsets,
   deadlineConfirmable,
+  TASK_CREATE_ROLES,
+  TASK_REASSIGN_ROLES,
   TASK_STAFF_ROLES,
   taskManageWire,
   TASKS_READ,
@@ -59,7 +61,9 @@ async function loadInternal(supabase: Client, staff: SheetStaff, today: string, 
     .order("due_on", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true })
     .limit(TASKS_READ);
-  const rows = tasks.data ?? [];
+  // A task with only a due time sorts by that time's day, not after every dated task.
+  const dayOf = (row: { due_on: string | null; due_at: string | null }) => row.due_on ?? (row.due_at ? isoDateInTimeZone(new Date(row.due_at), staff.timezone) : "9999-12-31");
+  const rows = [...(tasks.data ?? [])].sort((a, b) => dayOf(a).localeCompare(dayOf(b)));
   const ids = rows.map((row) => row.id);
 
   const deps = ids.length
@@ -115,7 +119,7 @@ async function loadInternal(supabase: Client, staff: SheetStaff, today: string, 
         href: matterHref(escalated.matter_id) ?? "/sheet/tasks",
       }
     : null;
-  return { alert, rows: table };
+  return { alert, rows: table, failed: Boolean(tasks.error) };
 }
 
 async function loadClient(supabase: Client, staff: SheetStaff, today: string): Promise<NonNullable<TasksData["client"]>> {
@@ -162,7 +166,7 @@ async function loadClient(supabase: Client, staff: SheetStaff, today: string): P
       manage: row.status !== "done" && TASK_STAFF_ROLES.includes(staff.role) ? taskManageWire(row) : null,
     };
   });
-  return { rows: table };
+  return { rows: table, failed: Boolean(tasks.error) };
 }
 
 async function loadDeadlines(supabase: Client, staff: SheetStaff, today: string): Promise<NonNullable<TasksData["deadlines"]>> {
@@ -200,7 +204,7 @@ async function loadDeadlines(supabase: Client, staff: SheetStaff, today: string)
       confirmWhy: can.ok ? null : can.why,
       };
     });
-  return { rows: table };
+  return { rows: table, failed: Boolean(deadlines.error) };
 }
 
 /** The Designer's Tasks page for a firm, read as the signed-in staff member so RLS decides what is visible. */
@@ -215,7 +219,8 @@ export async function loadSheetTasks(staff: SheetStaff, query: SheetQuery, now: 
   const [chrome, open, escalated, dialog, internal, client, deadlines] = await Promise.all([
     loadSheetChrome(staff, "/sheet/tasks"),
     supabase.from("tasks").select("id", count).eq("organization_id", org).in("status", [...OPEN_TASK]),
-    supabase.from("tasks").select("id", count).eq("organization_id", org).eq("status", "open").not("escalated_at", "is", null),
+    // Escalation applies to staff work: the same rows as the Internal tab's escalation banner.
+    supabase.from("tasks").select("id", count).eq("organization_id", org).eq("audience", "internal").eq("status", "open").not("escalated_at", "is", null),
     loadNewTask(supabase, staff),
     tab === "internal" ? loadInternal(supabase, staff, today, now) : undefined,
     tab === "client" ? loadClient(supabase, staff, today) : undefined,
@@ -230,8 +235,15 @@ export async function loadSheetTasks(staff: SheetStaff, query: SheetQuery, now: 
     deadlines,
     dialog,
     edit: TASK_STAFF_ROLES.includes(staff.role)
-      ? { organizationId: org, timezone: staff.timezone, today, owners: (dialog.owners ?? []).filter((o) => o.kind === "internal" && o.value).map((o) => ({ value: o.value as string, label: o.label })) }
+      ? {
+          organizationId: org,
+          timezone: staff.timezone,
+          today,
+          owners: (dialog.owners ?? []).filter((o) => o.kind === "internal" && o.value).map((o) => ({ value: o.value as string, label: o.label })),
+          reassign: TASK_REASSIGN_ROLES.includes(staff.role),
+        }
       : null,
+    canCreate: TASK_CREATE_ROLES.includes(staff.role),
   };
   return { chrome, tasks };
 }

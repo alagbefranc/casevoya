@@ -131,6 +131,10 @@ export function deadlineTime(
 
 /** Staff roles the task controls are offered to (public.set_task_status and public.update_task accept them). */
 export const TASK_STAFF_ROLES: readonly string[] = ["firm_owner", "licensed_consultant", "case_manager", "assistant"];
+/** Who may create a task (app.create_task): the same staff. A finance user may not. */
+export const TASK_CREATE_ROLES: readonly string[] = TASK_STAFF_ROLES;
+/** Who may give a task to someone else (app.reassign_task): not an assistant. */
+export const TASK_REASSIGN_ROLES: readonly string[] = ["firm_owner", "licensed_consultant", "case_manager"];
 
 /**
  * Whether the signed-in member may confirm a tentative deadline, as public.confirm_deadline decides:

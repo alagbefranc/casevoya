@@ -562,7 +562,7 @@ export function buildGovernmentPage(records: GovernmentRecords, ctx: GovernmentC
     alert,
     rows,
     record: STAFF.has(ctx.role)
-      ? { options: [{ value: "check", label: "Checked, no change" }, ...STATUS_OPTIONS.map((option) => ({ value: option.value, label: option.label }))], save: wire("status", ctx) }
+      ? { options: [{ value: "check", label: "Checked, no change" }, ...STATUS_OPTIONS.map((option) => ({ value: option.value, label: option.label }))], save: wire("status", ctx, { today: ctx.today }) }
       : null,
     history: history.length ? history : [{ text: "Nothing recorded yet.", when: "—" }],
   };

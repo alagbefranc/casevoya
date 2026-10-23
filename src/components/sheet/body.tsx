@@ -201,7 +201,7 @@ export async function SheetBody({
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={chrome.sidebar}
-          header={<TasksHeader tab={tasks.tab} counts={tasks.counts} />}
+          header={<TasksHeader tab={tasks.tab} counts={tasks.counts} canCreate={tasks.canCreate !== false} />}
           statusbar={chrome.statusbar}
           after={
             <>
@@ -617,7 +617,7 @@ export async function SheetBody({
               {duplicate ? <DuplicateDialog data={duplicate} /> : null}
               {/* "Add a client" opens New matter here: a client is recorded with the matter that lets the team read them. */}
               <NewMatterDialog data={newMatter} />
-              {clients.edit ? <PersonEditDialog data={{ maxBirthDate: todayIso() }} /> : null}
+              {clients.edit ? <PersonEditDialog data={{ maxBirthDate: todayIso(new Date(), access.staff.timezone) }} /> : null}
             </>
           }
         >

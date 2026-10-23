@@ -67,19 +67,25 @@ export type TasksDialogData = {
   wire?: NewTaskWire;
 };
 
+/** `failed` (live): the tab's rows couldn't be read, which is not the same as having none. */
 export type TasksData = {
   tab: TasksTab;
   counts: { open: number; escalated: number };
   internal?: {
     alert: { title: string; detail: string; href: string } | null;
     rows: InternalTaskRow[];
+    failed?: boolean;
   };
-  client?: { rows: ClientTaskRow[] };
-  deadlines?: { rows: DeadlineRow[] };
+  client?: { rows: ClientTaskRow[]; failed?: boolean };
+  deadlines?: { rows: DeadlineRow[]; failed?: boolean };
   dialog: TasksDialogData;
   /** Live only: the Task dialog the rows' Manage buttons open. */
   edit?: TaskEditDialogData | null;
+  /** Live only: false when the person's role can't create tasks (create_task refuses it). */
+  canCreate?: boolean;
 };
+
+const READ_FAILED = { title: "This list couldn’t load", copy: "Nothing was changed. Reload the page to try again." };
 
 const UNDERLINE: Record<TasksTab, { left: string; width: string }> = {
   internal: { left: "0px", width: "45px" },
@@ -101,7 +107,7 @@ function Chip({ chip }: { chip: TaskChip }) {
 }
 
 /** The Tasks page's own top bar and its tab strip. */
-export function TasksHeader({ tab, counts }: { tab: TasksTab; counts: TasksData["counts"] }) {
+export function TasksHeader({ tab, counts, canCreate = true }: { tab: TasksTab; counts: TasksData["counts"]; canCreate?: boolean }) {
   const tabs: [TasksTab, string][] = [
     ["internal", "Internal"],
     ["client", "Client tasks"],
@@ -125,10 +131,12 @@ export function TasksHeader({ tab, counts }: { tab: TasksTab; counts: TasksData[
         <span className={"pill"}>{`${counts.open} open`}</span>
         <span className={"pill"}>{`${counts.escalated} escalated`}</span>
         <span className={"acts"}>
-          <button className={"btn p sm"} data-dlg={"dlgTask"} data-fpd={"1"}>
-            <Icon name={"plus"} cls={"ic s"} />
-            {"New task"}
-          </button>
+          {canCreate ? (
+            <button className={"btn p sm"} data-dlg={"dlgTask"} data-fpd={"1"}>
+              <Icon name={"plus"} cls={"ic s"} />
+              {"New task"}
+            </button>
+          ) : null}
         </span>
       </header>
       <div className={"tabs"} role={"tablist"}>
@@ -217,7 +225,11 @@ function Internal({ data }: { data: NonNullable<TasksData["internal"]> }) {
         {`${rows.length} of ${rows.length} shown`}
       </p>
       {rows.length === 0 ? (
-        <EmptyPanel n={4} title={"No open tasks"} copy={"Client tasks and internal tasks appear here with owners and due dates."} />
+        data.failed ? (
+          <EmptyPanel n={4} title={READ_FAILED.title} copy={READ_FAILED.copy} />
+        ) : (
+          <EmptyPanel n={4} title={"No open tasks"} copy={"Client tasks and internal tasks appear here with owners and due dates."} />
+        )
       ) : (
         <>
           <div className={"tw rv"} role={"region"} aria-label={"Internal tasks"} tabIndex={0} style={i(4)}>
@@ -308,7 +320,11 @@ function Client({ data }: { data: NonNullable<TasksData["client"]> }) {
     <>
       <Heading title={"Client tasks"} copy={"What clients have been asked to do, shown the way they see it in the portal."} />
       {data.rows.length === 0 ? (
-        <EmptyPanel n={1} title={"No client tasks"} copy={"Tasks you ask a client to do appear here, the way they see them in the portal."} />
+        data.failed ? (
+          <EmptyPanel n={1} title={READ_FAILED.title} copy={READ_FAILED.copy} />
+        ) : (
+          <EmptyPanel n={1} title={"No client tasks"} copy={"Tasks you ask a client to do appear here, the way they see them in the portal."} />
+        )
       ) : (
         <div className={"tw rv"} role={"region"} aria-label={"Client tasks"} tabIndex={0} style={i(1)}>
           <table className={"t"}>
@@ -362,7 +378,11 @@ function Deadlines({ data }: { data: NonNullable<TasksData["deadlines"]> }) {
         copy={"Every deadline keeps its source evidence and who verified it. OCR dates stay tentative until a consultant confirms them (OPS-02)."}
       />
       {data.rows.length === 0 ? (
-        <EmptyPanel n={1} title={"No deadlines"} copy={"Deadlines recorded on a matter appear here with their source and who verified them."} />
+        data.failed ? (
+          <EmptyPanel n={1} title={READ_FAILED.title} copy={READ_FAILED.copy} />
+        ) : (
+          <EmptyPanel n={1} title={"No deadlines"} copy={"Deadlines recorded on a matter appear here with their source and who verified them."} />
+        )
       ) : (
         <div className={"tw rv"} role={"region"} aria-label={"Deadlines"} tabIndex={0} style={i(1)}>
           <table className={"t"}>
@@ -431,6 +451,8 @@ export type TaskEditDialogData = {
   /** The firm's today (`YYYY-MM-DD`), the earliest new due date offered. */
   today: string;
   owners: { value: string; label: string }[];
+  /** False when the person's role can't reassign (reassign_task: owner, consultant, case manager). */
+  reassign?: boolean;
 };
 
 /**
@@ -440,7 +462,14 @@ export type TaskEditDialogData = {
  */
 export function TaskEditDialog({ data }: { data: TaskEditDialogData }) {
   return (
-    <dialog className={"dlg"} id={"dTask"} aria-labelledby={"dTaskH"} data-org={data.organizationId} data-tz={data.timezone}>
+    <dialog
+      className={"dlg"}
+      id={"dTask"}
+      aria-labelledby={"dTaskH"}
+      data-org={data.organizationId}
+      data-tz={data.timezone}
+      data-reassign={data.reassign === false ? "0" : undefined}
+    >
       <div className={"dh"}>
         <h2 id={"dTaskH"}>{"Task"}</h2>
         <button className={"x"} aria-label={"Close"} data-close={"dTask"}>

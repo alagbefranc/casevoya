@@ -66,7 +66,8 @@ function openTask(opener: HTMLElement, root: HTMLElement) {
   }
   const internal = data.audience !== "client";
   const ownerField = dialog.querySelector<HTMLElement>("#teOF");
-  if (ownerField) ownerField.hidden = !internal;
+  // The owner can only be changed by someone reassign_task allows (not an assistant).
+  if (ownerField) ownerField.hidden = !internal || dialog.dataset.reassign === "0";
   const clientNote = dialog.querySelector<HTMLElement>("#teC");
   if (clientNote) clientNote.hidden = internal;
   const owner = dialog.querySelector<HTMLSelectElement>("#teO");
