@@ -423,6 +423,14 @@ LiveKit rooms for bookings whose location is a Casevoya video call (BUILD-SPEC Â
 * `20261022110000_video_end_for_everyone` (applied live 2026-10-22): `video_sessions.ended_by_host_at`. A host's End for everyone stamps it, and while it is set a client gets `unavailable` / `ended` and no token; a host joining again clears it. A room LiveKit closes on its own (everyone left) is not an end.
 * `public.apply_livekit_event(event)`: service role only; deduped through `webhook_inbox` (provider `livekit`); unknown rooms and other event kinds are recorded as ignored.
 
+## Version conflicts answer at once (`20261023090000`, not applied on the live project)
+
+Stale saves (the row changed since the screen read it) raised SQLSTATE `40001`. PostgREST treats `40001` (serialization failure) as transient and retries the request, so a deterministic version conflict stalled for about two minutes and the screen never showed its message (found as a stale Documents review on PR #150; Supabase troubleshooting, "SQLSTATE 40001 in an RPC function causes infinite retries").
+
+* **Redefines** the 37 functions whose latest definition raised `40001` (stage, on-hold, outcome and retention changes on matters; tasks and deadlines; document review, expiry and waiver; intake drafts, publishing, answers and review; submissions, receipts and decisions; booking types, cancellations and rescheduling; leads; closing a matter; firm retention policy) from that latest definition, with one change: `errcode = 'PT409'`, PostgREST's code for HTTP 409 Conflict. Messages, signatures, security, settings and grants are unchanged, so the app's error mapping is too. New stale-version refusals use `PT409`, never `40001`.
+
+Tested in `tests/version-conflicts-not-retried.rls.test.ts` (no function in `app` or `public` raises `40001`; every function's body, security, settings, grants and result type are identical before and after but for the code).
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.
