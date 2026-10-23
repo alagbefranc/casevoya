@@ -88,6 +88,17 @@ describe("matter tabs: Closure", () => {
     expect(html).not.toContain("tabindex");
     expect(html).toContain('<a class="tl" href="/sheet/exports">Export the client file</a>');
   });
+
+  it("links the export to this matter when the live page knows it", () => {
+    const html = renderToStaticMarkup(
+      createElement(MatterClosure, {
+        closed: false,
+        retention: null,
+        panel: { status: { tone: "gr", label: "Not ready", detail: "matter is open" }, items: [], retention: [], note: "n", exportHref: "/sheet/exports?view=m1" },
+      }),
+    );
+    expect(html).toContain('<a class="tl" href="/sheet/exports?view=m1">Export the client file</a>');
+  });
 });
 
 describe("Matters list", () => {

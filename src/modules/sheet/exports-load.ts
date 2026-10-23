@@ -111,7 +111,12 @@ export async function loadSheetExports(staff: SheetStaff, query: SheetQuery, now
   const latestReady = jobRows.find((row) => row.status === "ready");
   const warning = latestReady ? excludedWarning(ref(latestReady.matter_id), excludedOf(latestReady)) : null;
 
-  const chosenMatter = chosen ? matterRows.find((row) => row.id === chosen) : undefined;
+  // A matter linked to directly (its Closure tab's Export the client file), even one older than
+  // the matters listed.
+  const chosenMatter = chosen
+    ? (matterRows.find((row) => row.id === chosen) ??
+      (canExport ? ((await supabase.from("matters").select("id, reference, title, is_sample").eq("organization_id", org).eq("id", chosen).maybeSingle()).data ?? undefined) : undefined))
+    : undefined;
   const exports: ExportsData = {
     header: { newAttrs: { "data-export-act": "new" } },
     job,
@@ -119,8 +124,9 @@ export async function loadSheetExports(staff: SheetStaff, query: SheetQuery, now
     note: EXPORT_NOTE,
     warning,
     dialog: {
+      // The chosen matter is the only one offered, so the dialog still names what is exported.
       matters: chosenMatter
-        ? null
+        ? [{ value: chosenMatter.id, label: `${chosenMatter.reference ? `${chosenMatter.reference} · ` : ""}${chosenMatter.title}${chosenMatter.is_sample ? " (sample)" : ""}` }]
         : matterRows.map((row) => ({ value: row.id, label: `${row.reference ?? row.title} · ${name(row.id)}${row.is_sample ? " (sample)" : ""}` })),
       confirm: {
         "data-export-act": "confirm",

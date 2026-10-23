@@ -1769,6 +1769,8 @@ export type ClosurePanelData = {
   /** The Retention column's key/value rows (no slider: the period is the firm's setting, not chosen per matter). */
   retention: [string, string][];
   note: string;
+  /** Live: the export page with this matter already chosen. */
+  exportHref?: string;
 };
 
 function ClosureChecklist({ data }: { data: ClosurePanelData }) {
@@ -1824,7 +1826,7 @@ function ClosureChecklist({ data }: { data: ClosurePanelData }) {
           </p>
           {/* Lifecycle step 12: hand over or keep a copy of the client file before closing (SEC-10). */}
           <p className={"mu"} style={css({ fontSize: "13.5px", marginTop: "8px" })}>
-            <a className={"tl"} href={"/sheet/exports"}>
+            <a className={"tl"} href={data.exportHref ?? "/sheet/exports"}>
               {"Export the client file"}
             </a>
           </p>
