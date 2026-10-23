@@ -67,12 +67,19 @@ export async function loadSheetSettingsFirm(staff: SheetStaff, tab: SettingsTab)
     succession_note: null,
     branding: {},
   };
-  const header = settingsHeader(tab, firm.display_name || staff.organizationName, planLabel(subscription.data?.status), owner);
+  // Without the firm's own row, the values above are stand-ins: nothing is offered for editing
+  // (saving the stand-ins would blank the real contacts and branding).
+  const firmOk = Boolean(firmRead.data);
+  const header = settingsHeader(tab, firm.display_name || staff.organizationName, planLabel(subscription.data?.status), owner && (firmOk || tab !== "general"));
   const dialogs: SettingsDialogs = { organizationId: org };
 
   if (tab === "general") {
-    if (owner) dialogs.firm = { fields: firmFields(firm) };
-    return { chrome, header, dialogs, page: { tab, data: firmPage(firm) } as const };
+    if (owner && firmOk) dialogs.firm = { fields: firmFields(firm) };
+    const page = firmPage(firm);
+    const data = firmOk
+      ? page
+      : { ...page, rows: page.rows.map((row) => (row.label === "Organisation ID" || row.label === "Display name" ? row : { ...row, value: "Couldn’t load. Reload the page." })) };
+    return { chrome, header, dialogs, page: { tab, data } as const };
   }
 
   if (tab === "offices") {
@@ -91,8 +98,8 @@ export async function loadSheetSettingsFirm(staff: SheetStaff, tab: SettingsTab)
 
   if (tab === "branding") {
     const url = await logoUrl(firm.branding, org);
-    if (owner) dialogs.brand = { accent: brandingAccent(firm.branding) ?? "", logoLocator: brandingLogoLocator(firm.branding) ?? "" };
-    return { chrome, header, dialogs, page: { tab, data: brandingPage({ firmName: firm.display_name, branding: firm.branding, logoUrl: url, owner }) } as const };
+    if (owner && firmOk) dialogs.brand = { accent: brandingAccent(firm.branding) ?? "", logoLocator: brandingLogoLocator(firm.branding) ?? "" };
+    return { chrome, header, dialogs, page: { tab, data: brandingPage({ firmName: firm.display_name, branding: firm.branding, logoUrl: url, owner: owner && firmOk }) } as const };
   }
 
   // Language and time: the firm's active staff, each with their own stored language and timezone.
