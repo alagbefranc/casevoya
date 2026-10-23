@@ -7,7 +7,8 @@
 --   SHA-256 of the session token handed out when it is verified. Forced RLS, no policies: only
 --   the definer functions below read it. A code works for 10 minutes and three attempts; the
 --   newest code is the only one that verifies (pending Francis: 10 minutes, three attempts).
--- * public.issue_booking_agreement_code(ref, code_id, code_sha256, sealed) (anon): the app server
+-- * public.issue_booking_agreement_code(ref, code_id, code_sha256, sealed) (service role only): the
+--   app server, never the browser, so nobody can register a code they chose. The app server
 --   makes the code and its id, seals the code to that id with the mail secret (AES-GCM, the
 --   invitation-link scheme) and passes the sealed form and the hash; the database never sees the code. Queues booking_agreement.code
 --   (EX16) to the primary attendee. One code per 30 seconds and ten an hour per agreement.
@@ -196,6 +197,10 @@ declare
   last_at timestamptz;
   code_id uuid;
 begin
+  -- Only the app server issues codes: a caller who chose the code could verify it without the email.
+  if coalesce((select auth.jwt() ->> 'role'), '') is distinct from 'service_role' then
+    raise exception 'signing codes are issued by the server' using errcode = '42501';
+  end if;
   if p_code_id is null or p_code_sha256 is null or p_code_sha256 !~ '^[0-9a-f]{64}$' or length(coalesce(p_sealed, '')) not between 1 and 1024 then
     raise exception 'signing code is malformed' using errcode = '22023';
   end if;
@@ -244,9 +249,9 @@ begin
 end;
 $$;
 comment on function public.issue_booking_agreement_code(text, uuid, text, text) is
-  'Emails the booker a six-digit signing code (sealed by the app; only its hash is stored). Anyone holding the private link; throttled.';
-revoke all on function public.issue_booking_agreement_code(text, uuid, text, text) from public;
-grant execute on function public.issue_booking_agreement_code(text, uuid, text, text) to anon, authenticated, service_role;
+  'Emails the booker a six-digit signing code (made and sealed by the app server; only its hash is stored). Service role only; throttled per agreement.';
+revoke all on function public.issue_booking_agreement_code(text, uuid, text, text) from public, anon, authenticated;
+grant execute on function public.issue_booking_agreement_code(text, uuid, text, text) to service_role;
 
 create function public.verify_booking_agreement_code(p_ref text, p_code_sha256 text, p_session_sha256 text)
 returns jsonb

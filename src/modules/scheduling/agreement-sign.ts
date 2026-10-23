@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { emailRuntimeConfig } from "@/lib/email/env";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { clientEvidence } from "@/modules/agreements/evidence";
 import { sealSigningCode } from "@/modules/email/invite-link-seal";
 import { isBookingRef, signError } from "./agreement-sign-present";
@@ -54,9 +55,9 @@ export async function sendSigningCode(ref: string): Promise<CodeAnswer> {
   const code = sixDigits();
   const codeId = crypto.randomUUID();
   const sealed = await sealSigningCode(emailRuntimeConfig().dispatchSecret, code, codeId);
-  if (!sealed) return { error: "We couldn’t send a code right now. Try again in a minute." };
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("issue_booking_agreement_code", {
+  if (!sealed || !process.env.SUPABASE_SECRET_KEY) return { error: "We couldn’t send a code right now. Try again in a minute." };
+  // Issued with the server's key only: a browser can't register a code it chose (it never sees one).
+  const { data, error } = await createServiceClient().rpc("issue_booking_agreement_code", {
     p_ref: ref,
     p_code_id: codeId,
     p_code_sha256: await sha256(code),

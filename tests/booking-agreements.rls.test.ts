@@ -139,7 +139,9 @@ const hex = (value: string) => createHash("sha256").update(value).digest("hex");
 /** Emails a code (the app's part: hash and a sealed stand-in) and verifies it; returns the session hash. */
 async function codeCheck(ref: string, code = "482913"): Promise<string> {
   const session = hex(`session-${randomUUID()}`);
+  await asServiceRole(db);
   const issued = (await db.query<{ r: { state: string } }>(`select public.issue_booking_agreement_code($1, gen_random_uuid(), $2, 'sealed-code') as r`, [ref, hex(code)])).rows[0].r;
+  await asAnon(db);
   if (issued.state !== "sent") throw new Error(`code not sent: ${issued.state}`);
   const checked = (await db.query<{ r: { state: string } }>(`select public.verify_booking_agreement_code($1, $2, $3) as r`, [ref, hex(code), session])).rows[0].r;
   if (checked.state !== "ok") throw new Error(`code not verified: ${checked.state}`);
@@ -377,7 +379,19 @@ describe("consultation agreements on bookings", () => {
       /emailed code/,
     );
 
-    const issue = async (code: string) => (await db.query<{ r: Record<string, unknown> }>(`select public.issue_booking_agreement_code($1, gen_random_uuid(), $2, 'sealed') as r`, [ref, hex(code)])).rows[0].r;
+    const issue = async (code: string) => {
+      await asServiceRole(db);
+      const r = (await db.query<{ r: Record<string, unknown> }>(`select public.issue_booking_agreement_code($1, gen_random_uuid(), $2, 'sealed') as r`, [ref, hex(code)])).rows[0].r;
+      await asAnon(db);
+      return r;
+    };
+    // Only the server issues codes: a browser that picks its own code (and so its hash) is refused,
+    // so it can never verify a code without the email.
+    await expectDbError(() => db.query(`select public.issue_booking_agreement_code($1, gen_random_uuid(), $2, 'sealed')`, [ref, hex("123123")]), /permission denied|issued by the server/);
+    await asUser(db, client(ctx.client.id, ctx.orgId));
+    await expectDbError(() => db.query(`select public.issue_booking_agreement_code($1, gen_random_uuid(), $2, 'sealed')`, [ref, hex("123123")]), /permission denied|issued by the server/);
+    await asAnon(db);
+    expect((await db.query<{ r: Record<string, unknown> }>(`select public.verify_booking_agreement_code($1, $2, $3) as r`, [ref, hex("123123"), hex("attacker")])).rows[0].r).toEqual({ state: "none" });
     const verify = async (code: string, session = hex("s1")) => (await db.query<{ r: Record<string, unknown> }>(`select public.verify_booking_agreement_code($1, $2, $3) as r`, [ref, hex(code), session])).rows[0].r;
     expect(await verify("111111")).toEqual({ state: "none" });
     expect(await issue("111111")).toMatchObject({ state: "sent" });
@@ -421,7 +435,7 @@ describe("consultation agreements on bookings", () => {
     const ref = await refOf(booking.id);
     await asUser(db, staff(ctx.host.id, ctx.orgId));
     await db.query(`select public.send_booking_agreement($1, $2)`, [booking.id, tpl]);
-    await asAnon(db);
+    await asServiceRole(db);
     await db.query(`select public.issue_booking_agreement_code($1, gen_random_uuid(), $2, 'c2VhbGVk')`, [ref, hex("123456")]);
 
     await asServiceRole(db);
@@ -438,7 +452,7 @@ describe("consultation agreements on bookings", () => {
     await asMaintenance(db);
     await db.query(`insert into public.person_contact_preferences (person_id, organization_id, email_notices) values ($1, $2, false)`, [ctx.personId, ctx.orgId]);
     await db.query(`update public.booking_agreement_codes set created_at = created_at - interval '1 minute'`);
-    await asAnon(db);
+    await asServiceRole(db);
     expect((await db.query<{ r: Record<string, unknown> }>(`select public.issue_booking_agreement_code($1, gen_random_uuid(), $2, 'x') as r`, [ref, hex("654321")])).rows[0].r).toEqual({ state: "notices_off" });
   });
 
