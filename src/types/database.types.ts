@@ -10264,7 +10264,7 @@ export type Database = {
         Args: { p_booking_id: string; p_template_id: string }
         Returns: string
       }
-      open_booking_agreement: { Args: { p_ref: string }; Returns: undefined }
+      note_booking_agreement_opened: { Args: { p_ref: string }; Returns: undefined }
       remind_booking_agreement: { Args: { p_booking_id: string }; Returns: number }
       set_booking_type_agreement: {
         Args: { p_event_type_id: string; p_template_id: string | null }

@@ -301,12 +301,12 @@ describe("consultation agreements on bookings", () => {
     const id = (await db.query<{ id: string }>(`select public.send_booking_agreement($1, $2) as id`, [booking.id, tpl])).rows[0].id;
 
     await asAnon(db);
-    await db.query(`select public.open_booking_agreement($1)`, [ref]);
+    await db.query(`select public.note_booking_agreement_opened($1)`, [ref]);
     await asMaintenance(db);
     const first = (await db.query<{ opened_at: string }>(`select opened_at from public.booking_agreements where id = $1`, [id])).rows[0].opened_at;
     expect(first).toBeTruthy();
     await asAnon(db);
-    await db.query(`select public.open_booking_agreement($1)`, [ref]);
+    await db.query(`select public.note_booking_agreement_opened($1)`, [ref]);
     await asMaintenance(db);
     expect((await db.query<{ opened_at: string }>(`select opened_at from public.booking_agreements where id = $1`, [id])).rows[0].opened_at).toEqual(first);
 
@@ -327,5 +327,12 @@ describe("consultation agreements on bookings", () => {
     expect(Number(events)).toBe(2);
     const audit = (await db.query<{ action: string }>(`select action from public.audit_log where object_id = $1 and action = 'booking_agreement.reminded'`, [booking.id])).rows;
     expect(audit).toHaveLength(1);
+
+    // Email notices off for this client: refused with a sentence, nothing queued.
+    await asMaintenance(db);
+    await db.query(`update public.booking_agreements set reminded_at = now() - interval '2 hours' where id = $1`, [id]);
+    await db.query(`insert into public.person_contact_preferences (person_id, organization_id, email_notices) values ($1, $2, false)`, [ctx.personId, ctx.orgId]);
+    await asUser(db, staff(ctx.host.id, ctx.orgId));
+    await expectDbError(() => db.query(`select public.remind_booking_agreement($1)`, [booking.id]), /email notices are off/);
   });
 });

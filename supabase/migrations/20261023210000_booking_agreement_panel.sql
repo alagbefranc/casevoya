@@ -1,7 +1,7 @@
 -- Consultation agreements: the record's Agreement and fee panel (design review on #161).
 --
 -- * booking_agreements.opened_at: when the booker first opened the private link
---   (public.open_booking_agreement, anon, only while it is unsigned).
+--   (public.note_booking_agreement_opened, anon, only while it is unsigned).
 -- * booking_agreements.reminded_at / reminder_count, and public.remind_booking_agreement(booking):
 --   scheduling staff email the signing link again (EM08, the same booking_agreement.sent mail),
 --   at most once an hour counting from the send. Audited booking_agreement.reminded.
@@ -70,7 +70,7 @@ begin
 end;
 $$;
 
-create function public.open_booking_agreement(p_ref text)
+create function public.note_booking_agreement_opened(p_ref text)
 returns void
 language plpgsql
 security definer
@@ -90,10 +90,10 @@ begin
     and agreement.opened_at is null;
 end;
 $$;
-comment on function public.open_booking_agreement(text) is
+comment on function public.note_booking_agreement_opened(text) is
   'Marks a booking''s unsigned consultation agreement as opened the first time its private link is viewed.';
-revoke all on function public.open_booking_agreement(text) from public;
-grant execute on function public.open_booking_agreement(text) to anon, authenticated, service_role;
+revoke all on function public.note_booking_agreement_opened(text) from public;
+grant execute on function public.note_booking_agreement_opened(text) to anon, authenticated, service_role;
 
 create function public.remind_booking_agreement(p_booking_id uuid)
 returns integer
@@ -120,13 +120,23 @@ begin
   if coalesce(agreement.reminded_at, agreement.sent_at) > statement_timestamp() - interval '1 hour' then
     raise exception 'a reminder can go once an hour' using errcode = '22023';
   end if;
+  -- The mail worker would skip it: say so rather than claim it was sent.
+  if exists (
+    select 1
+    from public.booking_attendees attendee
+    join public.person_contact_preferences pref on pref.person_id = attendee.person_id
+    where attendee.booking_id = booking.id and attendee.organization_id = booking.organization_id
+      and attendee.role = 'primary' and pref.email_notices is false
+  ) then
+    raise exception 'email notices are off for this client' using errcode = '22023';
+  end if;
   update public.booking_agreements
   set reminded_at = statement_timestamp(), reminder_count = agreement.reminder_count + 1
   where id = agreement.id;
   perform app.booking_outbox(
     agreement.organization_id, booking.id, 'booking_agreement.sent',
     jsonb_build_object('booking_id', booking.id, 'booking_agreement_id', agreement.id, 'reminder', true),
-    'booking-agreement-remind:' || agreement.id::text || ':' || (agreement.reminder_count + 1)::text
+    'booking-agreement-remind:' || agreement.id::text || ':' || to_char(statement_timestamp() at time zone 'UTC', 'YYYYMMDD"T"HH24MISS"Z"')
   );
   perform app.record_audit_event(
     agreement.organization_id, 'booking_agreement.reminded', 'public.bookings', booking.id, 'success',

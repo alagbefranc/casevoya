@@ -480,7 +480,7 @@ Tested in `tests/booking-agreements.rls.test.ts` (the attendee gets EM08 with th
 
 The record's Agreement and fee panel (design review on #161).
 
-* `booking_agreements.opened_at`: when the booker first opened the private link. Set by `public.open_booking_agreement(ref)` (anon), only while it is unsigned; later opens don't move it.
+* `booking_agreements.opened_at`: when the booker first opened the private link. Set by `public.note_booking_agreement_opened(ref)` (anon), only while it is unsigned; later opens don't move it.
 * `booking_agreements.reminded_at`, `reminder_count`, and `public.remind_booking_agreement(booking)`: scheduling staff email the signing link again (the same `booking_agreement.sent` mail, EM08), at most once an hour counting from the send or the last reminder. Audited `booking_agreement.reminded`.
 * `public.booking_agreement_for_signing` now answers `{state: withdrawn, firm}` when the booking's agreement was voided and nothing new was sent, so the old link says it was withdrawn.
 

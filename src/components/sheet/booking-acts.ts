@@ -188,10 +188,14 @@ export async function runBookingAgreementSend(button: HTMLElement, router: Route
 export async function runBookingAgreementVoid(button: HTMLElement, router: Router) {
   const dialog = button.closest("dialog");
   const reason = dialog ? value(dialog, "bvR").trim() : "";
+  const error = dialog?.querySelector<HTMLElement>("#bvR-e");
   if (reason.length < 3) {
-    toast2("Give a reason", { kind: "warn", sub: "A few words on why. Nothing was changed." });
+    // The reason stays in the dialog: an inline error, nothing written.
+    if (error) error.hidden = false;
+    el(dialog ?? document, "bvR")?.focus();
     return;
   }
+  if (error) error.hidden = true;
   const result = await voidBookingAgreement({ organizationId: button.dataset.org ?? "", bookingId: button.dataset.booking ?? "", reason });
   done(result, { title: "Agreement voided", sub: "It stays on record. The old link now says it was withdrawn." }, dialog, router);
 }

@@ -44,10 +44,15 @@ export function agreementLabel(row: BookingAgreementRow | null | undefined): str
 
 const SENDABLE = new Set(["held", "pending_payment", "confirmed"]);
 
+/** "21 Oct" in the given zone. */
+function dayMonth(iso: string, zone: string): string {
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: zone }).format(new Date(iso));
+}
+
 /** The record's Agreement and fee panel (design review on #161). */
 export type AgreementPanel = {
   chip: Chip | null;
-  items: { term: string; value: string; struck?: boolean }[];
+  items: { term: string; value: string; struck?: string }[];
   note: string | null;
   actions: RowAction[];
   link: { href: string; label: string } | null;
@@ -100,7 +105,7 @@ export function recordAgreement(input: {
       chip: { tone: "rev", label: "Sent, not signed" },
       items: [
         { term: "Agreement", value: name },
-        { term: "Sent", value: [when(row.sent_at), input.recipient ? `to ${input.recipient}` : null].filter(Boolean).join(", ") || "Sent" },
+        { term: "Sent", value: [when(row.sent_at), input.recipient ? `to ${input.recipient}` : null].filter(Boolean).join(" ") || "Sent" },
         { term: "Opened", value: when(row.opened_at) ?? "Not yet" },
         ...(row.reminded_at ? [{ term: "Reminded", value: when(row.reminded_at) ?? "" }] : []),
         fee,
@@ -109,24 +114,23 @@ export function recordAgreement(input: {
       actions: [
         { label: "Copy signing link", icon: "copy", toast: "Signing link copied", data: { "data-copy": input.signLink } },
         ...(upcoming ? [{ label: "Remind", data: { "data-agreement-remind-booking": "1", ...input.wire } }] : []),
-        { label: "Void", dlg: "dlgBkVoid" },
+        { label: "Void", dlg: "dlgBkVoid", tone: "danger" as const },
       ],
       link: null,
     };
   }
   if (row?.status === "voided") {
-    const by = [input.voidedBy, when(row.voided_at)].filter(Boolean).join(", ");
+    const sentDay = row.sent_at ? dayMonth(row.sent_at, zone) : null;
     return {
-      chip: { tone: "gr", label: "Voided" },
+      chip: { tone: "bad", label: "Voided" },
       items: [
-        { term: "Agreement", value: name },
-        { term: "Sent", value: when(row.sent_at) ? `sent ${when(row.sent_at)}` : "sent", struck: true },
-        { term: "Voided", value: by || "Voided" },
+        { term: "Agreement", value: name, ...(sentDay ? { struck: `sent ${sentDay}` } : {}) },
+        { term: "Voided", value: [when(row.voided_at), `by ${input.voidedBy ?? "A staff member"}`].filter(Boolean).join(" ") },
         ...(row.void_reason ? [{ term: "Reason", value: row.void_reason }] : []),
         fee,
       ],
-      note: `The old link now tells ${input.client} this agreement was withdrawn.`,
-      actions: send,
+      note: `The old link now tells ${input.client} this agreement was withdrawn. Send a fresh one when you’re ready.`,
+      actions: send.map((action) => ({ ...action, tone: "primary" as const })),
       link: null,
     };
   }

@@ -24,6 +24,8 @@ export type RowAction = {
   dlg?: string;
   toast?: string;
   data?: Record<string, string>;
+  /** Live: "primary" is the blue button; "danger" is the Designer's red text (Void). */
+  tone?: "primary" | "danger";
 };
 
 export type ConsultationRow = {
@@ -105,9 +107,11 @@ function ChipView({ chip }: { chip: Chip }) {
 
 function ActionButton({ action }: { action: RowAction }) {
   const data = action.data ?? {};
+  const cls = action.tone === "primary" ? "btn p sm" : "btn sm";
+  const style = action.tone === "danger" ? { color: "#a12c20" } : undefined;
   if (action.dlg) {
     return (
-      <button className={"btn sm"} data-dlg={action.dlg} data-fpd={"1"} {...data}>
+      <button className={cls} style={style} data-dlg={action.dlg} data-fpd={"1"} {...data}>
         {action.icon ? <Icon name={action.icon} cls={"ic s"} /> : null}
         {action.label}
       </button>
@@ -115,14 +119,14 @@ function ActionButton({ action }: { action: RowAction }) {
   }
   if (action.toast) {
     return (
-      <button className={"btn sm"} data-toast={action.toast} data-sub={""} data-fpb={"1"} {...data}>
+      <button className={cls} style={style} data-toast={action.toast} data-sub={""} data-fpb={"1"} {...data}>
         {action.icon ? <Icon name={action.icon} cls={"ic s"} /> : null}
         {action.label}
       </button>
     );
   }
   return (
-    <button className={"btn sm"} type={"button"} {...data}>
+    <button className={cls} style={style} type={"button"} {...data}>
       {action.icon ? <Icon name={action.icon} cls={"ic s"} /> : null}
       {action.label}
     </button>
@@ -600,7 +604,8 @@ export function SummaryDialog({ data }: { data: SummaryDialogData }) {
 
 export type AgreementPanelData = {
   chip: Chip | null;
-  items: { term: string; value: string; struck?: boolean }[];
+  /** struck: a struck-through part after the value ("sent 21 Oct" on a voided agreement). */
+  items: { term: string; value: string; struck?: string }[];
   note: string | null;
   actions: RowAction[];
   link: { href: string; label: string } | null;
@@ -623,7 +628,15 @@ function AgreementPanel({ data }: { data: AgreementPanelData }) {
           {data.items.map((item) => (
             <div key={item.term}>
               <dt>{item.term}</dt>
-              <dd>{item.struck ? <s>{item.value}</s> : item.value}</dd>
+              <dd>
+                {item.value}
+                {item.struck ? (
+                  <>
+                    {" "}
+                    <Sep /> <s>{item.struck}</s>
+                  </>
+                ) : null}
+              </dd>
             </div>
           ))}
         </dl>
@@ -660,10 +673,16 @@ export function BookingVoidDialog({ data }: { data: { organizationId: string; bo
         </button>
       </div>
       <div className={"db"}>
-        <p>{`${data.client} won’t be able to sign it any more; the old link will say it was withdrawn. It stays on record, and you can send a new one.`}</p>
+        <p>{`${data.client}’s signing link stops working straight away. The agreement stays on record as voided, and you can send a new one later.`}</p>
         <div className={"fld"} style={{ marginTop: "12px" }}>
-          <label htmlFor={"bvR"}>{"Reason"}</label>
-          <textarea className={"ta"} id={"bvR"} rows={3} maxLength={500}></textarea>
+          <label htmlFor={"bvR"}>{"Reason (staff only)"}</label>
+          <small className={"hint"} id={"bvR-h"}>
+            {"Shown on the record with who voided it and when."}
+          </small>
+          <textarea className={"ta"} id={"bvR"} rows={3} maxLength={500} placeholder={"e.g. Wrong template sent"} aria-describedby={"bvR-h"}></textarea>
+          <p className={"fp-note"} id={"bvR-e"} role={"alert"} hidden style={{ margin: "6px 0 0", color: "#a12c20" }}>
+            {"Say why this agreement is voided. It stays on the record."}
+          </p>
         </div>
       </div>
       <div className={"df"}>

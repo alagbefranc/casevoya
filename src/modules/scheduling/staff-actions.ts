@@ -223,6 +223,7 @@ export async function remindBookingAgreement(input: { organizationId: string; bo
   if (!supabase) return { error: "Sign in first." };
   const { error } = await supabase.rpc("remind_booking_agreement", { p_booking_id: input.bookingId });
   if (error && /once an hour/.test(error.message)) return { error: "A reminder already went out in the last hour. Try again later." };
+  if (error && /email notices are off/.test(error.message)) return { error: "Email notices are off for this client" };
   if (error) return agreementError(error.message);
   refresh();
   return { ok: true };

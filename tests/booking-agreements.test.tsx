@@ -102,7 +102,7 @@ describe("consultation agreement: staff screens", () => {
     expect(sent.actions.map((a) => a.label)).toEqual(["Copy signing link", "Remind", "Void"]);
     expect(sent.actions[0].data?.["data-copy"]).toBe(base.signLink);
     expect(sent.actions[1].data).toMatchObject({ "data-agreement-remind-booking": "1", "data-booking": "b1" });
-    expect(sent.actions[2].dlg).toBe("dlgBkVoid");
+    expect(sent.actions[2]).toMatchObject({ dlg: "dlgBkVoid", tone: "danger" });
     const opened = recordAgreement({ ...base, row: { ...row, sent_at: "2026-10-23T14:00:00Z", opened_at: "2026-10-23T15:00:00Z" } });
     expect(opened.items[2].value).not.toBe("Not yet");
   });
@@ -119,12 +119,15 @@ describe("consultation agreement: staff screens", () => {
       voidedBy: "Sam Host",
       row: { ...row, status: "voided", sent_at: "2026-10-23T14:00:00Z", voided_at: "2026-10-23T16:00:00Z", void_reason: "Wrong template sent" },
     });
-    expect(voided.chip).toEqual({ tone: "gr", label: "Voided" });
-    expect(voided.items.find((i) => i.term === "Sent")).toMatchObject({ struck: true });
-    expect(voided.items.find((i) => i.term === "Voided")?.value).toMatch(/^Sam Host, /);
+    expect(voided.chip).toEqual({ tone: "bad", label: "Voided" });
+    expect(voided.items[0]).toEqual({ term: "Agreement", value: "C-02 v3", struck: "sent 23 Oct" });
+    expect(voided.items.find((i) => i.term === "Voided")?.value).toMatch(/ by Sam Host$/);
     expect(voided.items.find((i) => i.term === "Reason")?.value).toBe("Wrong template sent");
-    expect(voided.note).toBe("The old link now tells Tomás this agreement was withdrawn.");
-    expect(voided.actions.map((a) => a.label)).toEqual(["Send consultation agreement"]);
+    expect(voided.note).toBe("The old link now tells Tomás this agreement was withdrawn. Send a fresh one when you’re ready.");
+    expect(voided.actions.map((a) => [a.label, a.tone])).toEqual([["Send consultation agreement", "primary"]]);
+    // Who voided it is unknown: "A staff member".
+    const unknown = recordAgreement({ ...base, row: { ...row, status: "voided", voided_at: "2026-10-23T16:00:00Z" } });
+    expect(unknown.items.find((i) => i.term === "Voided")?.value).toMatch(/ by A staff member$/);
     expect(agreementLabel({ ...row, status: "voided" })).toBe("Voided");
   });
 
@@ -140,6 +143,10 @@ describe("consultation agreement: staff screens", () => {
   it("the Void dialog asks for a reason, with Keep it and Void agreement", () => {
     const html = renderToStaticMarkup(createElement(BookingVoidDialog, { data: { organizationId: "o1", bookingId: "b1", client: "Tomás Duarte" } }));
     expect(html).toContain("Void this agreement?");
+    expect(html).toContain("Tomás Duarte’s signing link stops working straight away.");
+    expect(html).toContain("Reason (staff only)");
+    expect(html).toContain('placeholder="e.g. Wrong template sent"');
+    expect(html).toContain("Say why this agreement is voided. It stays on the record.");
     expect(html).toContain('id="bvR"');
     expect(html).toContain("Keep it");
     expect(html).toMatch(/data-agreement-void-booking="1"[^>]*data-booking="b1"|data-booking="b1"[^>]*data-agreement-void-booking="1"/);
