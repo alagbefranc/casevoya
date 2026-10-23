@@ -6,7 +6,7 @@ import { staffPerson } from "@/modules/sheet/avatar";
 import { loadSheetChrome, matterNames, memberNames } from "@/modules/sheet/chrome-load";
 import { isoDate, localNow } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
-import { STAFF_ROLES, isoDateInTimeZone, roleLabel } from "@/modules/sheet/present";
+import { STAFF_ROLES, isoDateInTimeZone, plusDays, roleLabel } from "@/modules/sheet/present";
 import { dueBadge, hours, orderQueue, queueItemId, ruleHours, waitingBadge, weekOf, type QueueEntry } from "@/modules/sheet/queue-present";
 
 /** Who reassign_task lets reassign an internal task (it checks again). */
@@ -38,6 +38,8 @@ export async function loadSheetQueue(staff: SheetStaff, now: Date = new Date()) 
       .eq("organization_id", org)
       .eq("audience", "internal")
       .in("status", ["open", "blocked"])
+      // Soonest (and overdue) first, so a capped read keeps the work that matters most.
+      .order("due_on", { ascending: true, nullsFirst: false })
       .limit(QUEUE_READ),
     supabase
       .from("document_versions")
@@ -46,6 +48,7 @@ export async function loadSheetQueue(staff: SheetStaff, now: Date = new Date()) 
       .eq("review_state", "pending")
       .eq("upload_state", "clean")
       .is("superseded_at", null)
+      .order("created_at", { ascending: true })
       .limit(QUEUE_READ),
     supabase
       .from("deadlines")
@@ -53,12 +56,14 @@ export async function loadSheetQueue(staff: SheetStaff, now: Date = new Date()) 
       .eq("organization_id", org)
       .eq("verification", "tentative")
       .in("kind", ["legal", "correspondence"])
+      .order("due_on", { ascending: true, nullsFirst: false })
       .limit(QUEUE_READ),
     supabase
       .from("client_fund_entries")
       .select("id, matter_id, person_id, number, kind, status, amount_cents, created_at")
       .eq("organization_id", org)
       .in("status", ["pending_verification", "pending_approval"])
+      .order("created_at", { ascending: true })
       .limit(QUEUE_READ),
   ]);
 
@@ -185,8 +190,9 @@ export async function loadSheetQueue(staff: SheetStaff, now: Date = new Date()) 
           .select("host_membership_id, starts_at, ends_at")
           .eq("organization_id", org)
           .in("status", ["confirmed", "completed", "no_show"])
-          .gte("starts_at", `${week.from}T00:00:00Z`)
-          .lte("starts_at", `${week.to}T23:59:59Z`)
+          // A day either side: the week is the firm's, and each booking is kept by its local date below.
+          .gte("starts_at", `${plusDays(week.from, -1)}T00:00:00Z`)
+          .lte("starts_at", `${plusDays(week.to, 1)}T23:59:59Z`)
           .in("host_membership_id", staffIds)
       : null,
   ]);
@@ -215,6 +221,8 @@ export async function loadSheetQueue(staff: SheetStaff, now: Date = new Date()) 
     .sort((a, b) => a.person.name.localeCompare(b.person.name));
 
   const queue: QueueData = {
+    // A failed read is said as such, not as "Nothing is waiting".
+    failed: Boolean(tasks.error || versions.error || deadlines.error || entries.error),
     counts: { open: items.length, overdue: items.filter((item) => item.flags?.includes("overdue")).length, people: staffList.length },
     load,
     items,

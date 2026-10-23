@@ -44,6 +44,8 @@ export type QueueData = {
    * move (reviews, deadlines and money follow the matter's consultant or the finance roles).
    */
   reassign?: { organizationId: string; people: { value: string; label: string }[] } | null;
+  /** Live: some of the queue couldn't be read. */
+  failed?: boolean;
 };
 
 const AMBER = "rgb(184, 110, 0)";
@@ -213,7 +215,11 @@ export function SheetQueue({ data }: { data: QueueData }) {
         </div>
       ) : (
         <div className={"panel rv"} style={i(3)}>
-          <Empty art={"review-queue-empty"} title={"Nothing is waiting"} copy={"Open tasks, documents to review, deadlines to verify and money to approve appear here."} />
+          {data.failed ? (
+            <Empty art={"review-queue-empty"} title={"The queue couldn’t load"} copy={"Reload the page. Nothing was changed; if it keeps happening, sign in again."} />
+          ) : (
+            <Empty art={"review-queue-empty"} title={"Nothing is waiting"} copy={"Open tasks, documents to review, deadlines to verify and money to approve appear here."} />
+          )}
         </div>
       )}
       {data.reassign && data.items.length ? (

@@ -53,7 +53,6 @@ export async function loadSheetMatters(
     matters,
     deadlines,
     pending,
-    refs,
     newMatter,
     dueTasks,
     mineParties,
@@ -80,12 +79,7 @@ export async function loadSheetMatters(
       .eq("organization_id", org)
       .eq("upload_state", "clean")
       .eq("review_state", "pending")
-      .limit(MATTERS_READ),
-    supabase
-      .from("document_matter_refs")
-      .select("document_id, matter_id")
-      .eq("organization_id", org)
-      .is("removed_at", null)
+      .is("superseded_at", null)
       .limit(MATTERS_READ),
     loadNewMatterDialog(supabase, staff),
     // Due this week counts open tasks due in the next 7 days as well as deadlines.
@@ -108,14 +102,20 @@ export async function loadSheetMatters(
     if (row.due_on && !nextDue.has(row.matter_id))
       nextDue.set(row.matter_id, row.due_on);
   }
-  const pendingDocuments = new Set(
-    (pending.data ?? []).map((row) => row.document_id),
+  // The matters of the documents waiting for review. Read for those documents only: a capped
+  // read of every reference in the firm missed them once a firm had more than 500 documents.
+  const pendingDocuments = [...new Set((pending.data ?? []).map((row) => row.document_id))];
+  const refChunks = await Promise.all(
+    Array.from({ length: Math.ceil(pendingDocuments.length / 100) }, (_, index) =>
+      supabase
+        .from("document_matter_refs")
+        .select("matter_id")
+        .eq("organization_id", org)
+        .is("removed_at", null)
+        .in("document_id", pendingDocuments.slice(index * 100, index * 100 + 100)),
+    ),
   );
-  const reviewMatters = new Set(
-    (refs.data ?? [])
-      .filter((row) => pendingDocuments.has(row.document_id))
-      .map((row) => row.matter_id),
-  );
+  const reviewMatters = new Set(refChunks.flatMap((chunk) => (chunk.data ?? []).map((row) => row.matter_id)));
   const taskDue = new Map<string, string>();
   for (const row of dueTasks.data ?? []) {
     if (!row.matter_id || !row.due_on) continue;

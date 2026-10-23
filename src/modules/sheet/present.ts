@@ -253,6 +253,8 @@ export function matterMatches(matter: MatterViewInput, view: string | undefined,
   const week = plusDays(today, 7);
   const within = (date: string | null | undefined) => Boolean(date && date >= today && date <= week);
   if (view === "blocked") return matter.onHold;
+  // A closed matter has nothing due and nothing to review.
+  if ((view === "review" || view === "due") && matter.stage === "closed") return false;
   if (view === "review") return (matter.pendingReview || matter.stage === "consultant_review") && matter.mine !== false;
   // Due this week: a deadline or an open task due in the next 7 days (the firm's calendar).
   if (view === "due") return within(matter.nextDue) || within(matter.nextTaskDue);
