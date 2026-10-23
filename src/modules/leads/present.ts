@@ -150,6 +150,11 @@ export function matchPhone(phone: string | null | undefined): string {
   return (phone ?? "").replace(/\D/g, "").slice(-10);
 }
 
+/** Email as compared for a possible duplicate: case and surrounding spaces don't make a different address. */
+export function matchEmail(email: string | null | undefined): string {
+  return (email ?? "").trim().toLowerCase();
+}
+
 export type DuplicateMatch = { other: LeadRow; matched: ("name" | "date of birth" | "phone" | "email")[] };
 
 /**
@@ -170,7 +175,7 @@ export function duplicateFor(lead: LeadRow, all: readonly LeadRow[], decisions: 
     const sameName = Boolean(name) && matchName(other.display_name) === name;
     const sameBirth = Boolean(lead.date_of_birth) && lead.date_of_birth === other.date_of_birth;
     const samePhone = phone.length >= 7 && matchPhone(other.phone) === phone;
-    const sameEmail = Boolean(lead.email) && lead.email === other.email;
+    const sameEmail = Boolean(matchEmail(lead.email)) && matchEmail(lead.email) === matchEmail(other.email);
     const matched: DuplicateMatch["matched"] = [];
     if (sameName) matched.push("name");
     if (sameBirth) matched.push("date of birth");
@@ -200,7 +205,7 @@ function joinWords(words: string[]): string {
 export function duplicateAlert(lead: LeadRow, match: DuplicateMatch): { title: string; copy: string } {
   const same = `Same ${joinWords(match.matched)}`;
   const differs: string[] = [];
-  if (lead.email && match.other.email && lead.email !== match.other.email) differs.push("email");
+  if (matchEmail(lead.email) && matchEmail(match.other.email) && matchEmail(lead.email) !== matchEmail(match.other.email)) differs.push("email");
   if (matchPhone(lead.phone) && matchPhone(match.other.phone) && matchPhone(lead.phone) !== matchPhone(match.other.phone)) differs.push("phone");
   return {
     title: `Possible duplicate: ${match.other.display_name} (${year(match.other.created_at)} lead)`,

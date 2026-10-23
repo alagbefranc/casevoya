@@ -191,7 +191,12 @@ export async function loadSheetPipeline(staff: SheetStaff, query: SheetQuery, no
       csv: { "data-dlg": "dlgCsv", "data-fpd": "1" },
       newLead: { "data-lead-open": "new" },
     },
-    page: { ...built.data, bookings },
+    // A failed read is said as such, not as an empty pipeline.
+    page: {
+      ...built.data,
+      bookings,
+      failed: leads.error || stages.error ? { title: "Leads couldn’t load", copy: "Reload the page. Nothing was changed; if it keeps happening, sign in again." } : null,
+    },
     csv: {
       file: null,
       map: CSV_MAP,
@@ -235,6 +240,8 @@ export type LeadPage = {
   conflictMatches: { label: string; detail: string }[] | null;
   /** Lead id and version for the page's own acts. */
   wire: { organizationId: string; leadId: string; version: number };
+  /** A converted lead's matter, for the header's Open the matter. */
+  matterHref: string | null;
 };
 
 type FullLead = LeadRow & {
@@ -299,7 +306,15 @@ export async function loadSheetLead(staff: SheetStaff, leadId: string, options: 
     staffDirectory(supabase, org),
     loadNewMatterDialog(supabase, staff),
     supabase.from("organizations").select("slug").eq("id", org).maybeSingle(),
-    supabase.from("booking_event_types").select("slug, title").eq("organization_id", org).eq("is_published", true).is("archived_at", null).order("title").limit(1),
+    // A practice (sample) page only while the firm is in sample mode.
+    (staff.sampleMode
+      ? supabase.from("booking_event_types").select("slug, title").eq("organization_id", org)
+      : supabase.from("booking_event_types").select("slug, title").eq("organization_id", org).eq("is_sample", false)
+    )
+      .eq("is_published", true)
+      .is("archived_at", null)
+      .order("title")
+      .limit(1),
     supabase
       .from("bookings")
       .select("id, starts_at, title, status")
@@ -500,5 +515,6 @@ export async function loadSheetLead(staff: SheetStaff, leadId: string, options: 
     },
     conflictMatches: conflictSearch && !conflictSearch.error ? conflictRows(conflictSearch.data, tz) : null,
     wire: { organizationId: org, leadId: lead.id, version: lead.version },
+    matterHref: lead.converted_matter_id ? `/sheet/matters/${lead.converted_matter_id}` : null,
   };
 }

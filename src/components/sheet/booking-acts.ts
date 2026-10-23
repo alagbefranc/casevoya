@@ -45,6 +45,8 @@ function done(result: { ok: true } | { error: string; stepUp?: boolean }, succes
       return false;
     }
     toast2(result.error, { kind: "bad", sub: "Nothing was changed." });
+    // Someone took the time meanwhile: re-read the free times so it isn't offered again.
+    if (/no longer free/i.test(result.error)) router.refresh();
     return false;
   }
   dialog?.close();
