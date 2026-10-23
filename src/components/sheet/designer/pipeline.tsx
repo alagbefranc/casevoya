@@ -80,6 +80,8 @@ export type PipelineData = {
   board?: Attrs | null;
   /** Live: empty states for the List and Timeline tabs. */
   empty?: { list: { title: string; copy: string }; timeline: { title: string; copy: string } } | null;
+  /** Live: the leads couldn't be read, so the board is not "no leads yet". */
+  failed?: { title: string; copy: string } | null;
   /** Live: public bookings that are not a lead yet (the alert above the filters opens #dlgBk). */
   bookings?: BookingLeadsData | null;
   /** Live: changes whenever the firm's leads change, so the board is rebuilt after the script moved cards. */
@@ -384,6 +386,15 @@ export function SheetPipeline({ data }: { data: PipelineData }) {
             <button className={"btn sm"} data-dlg={"dlgBk"} data-fpd={"1"}>
               {"Review"}
             </button>
+          </div>
+        </div>
+      ) : null}
+      {data.failed ? (
+        <div className={"alert bad"} role={"alert"} style={{ marginBottom: "12px" }}>
+          <Icon name={"info"} />
+          <div>
+            <b>{data.failed.title}</b>
+            {data.failed.copy}
           </div>
         </div>
       ) : null}

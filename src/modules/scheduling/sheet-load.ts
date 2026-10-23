@@ -283,7 +283,12 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
   const pageState = bookingPageState(published);
 
   // Availability: everyone who hosts a type or has hours, and the viewer.
-  const schedules = await supabase.from("availability_schedules").select("id, membership_id, time_zone").eq("organization_id", org).eq("is_default", true);
+  const [schedules, calendarRows] = await Promise.all([
+    supabase.from("availability_schedules").select("id, membership_id, time_zone").eq("organization_id", org).eq("is_default", true),
+    supabase.from("staff_connections").select("membership_id, toolkit, status").eq("organization_id", org).eq("toolkit", "googlecalendar"),
+  ]);
+  // A connected Google Calendar's busy times block slots once synced (Settings → Integrations).
+  const calendarOf = new Map((calendarRows.data ?? []).map((row) => [row.membership_id, row.status]));
   const scheduleIds = (schedules.data ?? []).map((row) => row.id);
   const [rulesResult, overridesResult] = await Promise.all([
     scheduleIds.length ? supabase.from("availability_rules").select("schedule_id, weekday, start_local, end_local").in("schedule_id", scheduleIds) : null,
@@ -315,7 +320,15 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
         { term: "Capacity", value: hosted.some((t) => t.daily_capacity) ? `${Math.min(...hosted.filter((t) => t.daily_capacity).map((t) => t.daily_capacity as number))} a day` : "No daily limit" },
         { term: "Timezone", value: { left: tz, right: "clients see their own" } },
         { term: "Days off", value: off.length ? off.slice(0, 4).join(", ") + (off.length > 4 ? ` and ${off.length - 4} more` : "") : "None ahead" },
-        { term: "Calendars read", value: "None connected (calendar sync is planned)" },
+        {
+          term: "Calendars read",
+          value:
+            calendarOf.get(member.membershipId) === "active"
+              ? { left: "Google Calendar", right: "busy times, synced from Settings" }
+              : calendarOf.get(member.membershipId) === "pending"
+                ? "Google Calendar (finishing setup)"
+                : "None connected",
+        },
         { term: "Video meetings", value: "In Casevoya: the host lets the client in from the call page" },
       ],
       edit: canEdit
