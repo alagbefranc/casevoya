@@ -1583,6 +1583,54 @@ export type Database = {
         }
         Relationships: []
       }
+      consultation_summaries: {
+        Row: {
+          body: string
+          booking_id: string
+          created_at: string
+          id: string
+          is_sample: boolean
+          organization_id: string
+          shared_at: string | null
+          shared_body: string | null
+          shared_by: string | null
+          status: string
+          version: number
+          written_at: string
+          written_by: string
+        }
+        Insert: {
+          body: string
+          booking_id: string
+          created_at?: string
+          id?: string
+          is_sample?: boolean
+          organization_id: string
+          shared_at?: string | null
+          shared_body?: string | null
+          shared_by?: string | null
+          status?: string
+          version?: number
+          written_at?: string
+          written_by: string
+        }
+        Update: {
+          body?: string
+          booking_id?: string
+          created_at?: string
+          id?: string
+          is_sample?: boolean
+          organization_id?: string
+          shared_at?: string | null
+          shared_body?: string | null
+          shared_by?: string | null
+          status?: string
+          version?: number
+          written_at?: string
+          written_by?: string
+        }
+        Relationships: []
+      }
       consultant_credentials: {
         Row: {
           checked_at: string | null
@@ -11343,6 +11391,10 @@ export type Database = {
         Args: { p_booking_id: string; p_expected_version: number | null; p_org: string; p_reason?: string | null }
         Returns: Json
       }
+      portal_consultation_summaries: {
+        Args: { p_org: string }
+        Returns: { booking_id: string; shared_at: string; summary: string }[]
+      }
       portal_reschedule_booking: {
         Args: { p_booking_id: string; p_expected_version: number | null; p_org: string; p_start: string; p_time_zone: string }
         Returns: undefined
@@ -11910,6 +11962,10 @@ export type Database = {
         }
         Returns: string
       }
+      save_consultation_summary: {
+        Args: { p_body: string; p_booking_id: string; p_expected_version: number }
+        Returns: number
+      }
       save_firm_office: {
         Args: {
           p_address_line: string
@@ -12205,6 +12261,10 @@ export type Database = {
           p_status: Database["public"]["Enums"]["task_status"]
           p_task_id: string
         }
+        Returns: number
+      }
+      share_consultation_summary: {
+        Args: { p_booking_id: string; p_expected_version: number }
         Returns: number
       }
       share_government_record: {

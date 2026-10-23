@@ -49,6 +49,8 @@ import {
   runBookingSubmit,
   runBookingType,
   runOutcome,
+  runSummarySave,
+  runSummaryShare,
   syncBookTimes,
 } from "./booking-acts";
 import {
@@ -701,6 +703,18 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (bookingSubmit && root.contains(bookingSubmit)) {
         event.preventDefault();
         busyRun(bookingSubmit, () => runBookingSubmit(bookingSubmit, router));
+        return;
+      }
+      const summarySave = target.closest<HTMLElement>("[data-summary-save]");
+      if (summarySave && root.contains(summarySave)) {
+        event.preventDefault();
+        busyRun(summarySave, () => runSummarySave(summarySave, router));
+        return;
+      }
+      const summaryShare = target.closest<HTMLElement>("[data-summary-share]");
+      if (summaryShare && root.contains(summaryShare)) {
+        event.preventDefault();
+        busyRun(summaryShare, () => runSummaryShare(summaryShare, router));
         return;
       }
       const outcome = target.closest<HTMLElement>("[data-booking-outcome]");

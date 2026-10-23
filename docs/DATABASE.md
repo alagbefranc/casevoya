@@ -439,6 +439,18 @@ Nothing called `public.claim_due_reminders`, so no reminder was ever sent. The m
 
 Tested in `tests/intake-matters.rls.test.ts` (a reminder claimed before its deadline is sent once; one claimed after its deadline has passed is cancelled and queues no mail).
 
+## Consultation outcome summaries (`20261023150000`, not applied on the live project)
+
+PRD CRM-04: the outcome summary a client sees is reviewed by a licensed consultant first (the Designer's Consultation record tab).
+
+* `consultation_summaries`: one per booking. `body` is the current text (staff only); `shared_body` / `shared_at` / `shared_by` the text last approved and shared, the only text a client can read; `status` `needs_review` or `shared`; `version`; `is_sample` from the booking. Forced RLS: scheduling staff of the firm read it (`app.can_read_scheduling`); no direct writes.
+* `public.save_consultation_summary(booking, body, expected_version)`: scheduling staff; the booking must be `completed` (attended); 3 to 4,000 characters; creates (expected version 0) or edits it, which puts it back to `needs_review`. Audited `consultation_summary.saved`.
+* `public.share_consultation_summary(booking, expected_version)`: a licensed consultant or licensed owner (`app.require_licensed_staff`); copies `body` to `shared_body`. Audited `consultation_summary.shared`. Idempotent once shared.
+* `public.portal_consultation_summaries(org)`: the signed-in client's own shared summaries (booking id, shared text, when) through `app.booking_person_is_me`; never a draft, never another person's.
+* A stale version is refused with `PT409`.
+
+Tested in `tests/consultation-summaries.rls.test.ts` (not before attended; stale version; a case manager writes but can't share; the licensed consultant shares; the client sees only the shared text, keeps it while an edit waits for review, and can't read the table; another client sees nothing; audit rows).
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.

@@ -23,6 +23,8 @@ export type PortalAppointment = {
    * in minutes and whether cancelling now is inside it. Null for past or cancelled rows.
    */
   rules: { minNoticeMin: number; late: boolean } | null;
+  /** The outcome summary the firm shared after this consultation (CRM-04), if any. */
+  summary?: string | null;
 };
 
 export type PortalAppointments = {
@@ -52,7 +54,7 @@ function rulesFrom(raw: unknown): Map<string, { minNoticeMin: number; late: bool
  */
 export async function loadPortalAppointments(viewer: PortalViewer): Promise<PortalAppointments> {
   const supabase = await createClient({ organizationId: viewer.organizationId });
-  const [bookings, org, rules] = await Promise.all([
+  const [bookings, org, rules, summaries] = await Promise.all([
     supabase
       .from("bookings")
       .select("id, public_ref, title, starts_at, ends_at, status, host_name, location_kind, location_detail, attendee_time_zone, version, is_sample")
@@ -62,7 +64,10 @@ export async function loadPortalAppointments(viewer: PortalViewer): Promise<Port
       .limit(100),
     supabase.from("organizations").select("slug").eq("id", viewer.organizationId).maybeSingle(),
     supabase.rpc("portal_booking_rules", { p_org: viewer.organizationId }),
+    // Only summaries a licensed consultant shared, and only the viewer's own (never a draft).
+    supabase.rpc("portal_consultation_summaries", { p_org: viewer.organizationId }),
   ]);
+  const summaryOf = new Map((summaries.error ? [] : (summaries.data ?? [])).map((row) => [row.booking_id, row.summary]));
   const slug = org.data?.slug ?? null;
   let bookable: PortalAppointments["bookable"] = [];
   if (slug) {
@@ -92,6 +97,7 @@ export async function loadPortalAppointments(viewer: PortalViewer): Promise<Port
       version: row.version,
       isSample: row.is_sample,
       rules: byBooking.get(row.id) ?? null,
+      summary: summaryOf.get(row.id) ?? null,
     })),
     now: Date.now(),
     bookable,

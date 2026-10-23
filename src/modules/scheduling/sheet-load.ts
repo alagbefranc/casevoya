@@ -11,6 +11,7 @@ import type {
   HostPanel,
   Option,
   RescheduleDialogData,
+  SummaryDialogData,
 } from "@/components/sheet/designer/consultations";
 import type { HostOption } from "@/components/sheet/designer/scheduling-dialogs";
 import { appOrigin } from "@/lib/email/env";
@@ -39,6 +40,7 @@ import {
   recordHref,
   recordOutcome,
   shiftMonth,
+  summaryView,
   upcomingRows,
   type StaffBooking,
   type WeekItem,
@@ -56,6 +58,8 @@ export type ConsultationsPage = {
   tab: ConsultationsTab | "record";
   /** The Consultation record tab (`?tab=record&id=<booking>`): a real booking's notes and outcome. */
   record: ConsultationRecordData | null;
+  /** Write or edit the outcome summary (#dlgSum), when the record offers it. */
+  summaryDialog: SummaryDialogData | null;
   pills: string[];
   book: Record<string, string> | null;
   page: ConsultationsData;
@@ -129,7 +133,14 @@ type Member = Awaited<ReturnType<typeof staffMembers>>[number];
  * chosen one's notes (the notes on the lead it belongs to), outcome, details and history. Read as
  * the signed-in staff member (RLS decides). Nothing is invented: what isn't recorded says so.
  */
-async function loadRecord(supabase: Client, staff: SheetStaff, query: SheetQuery, zone: string, now: number, members: Member[]): Promise<ConsultationRecordData> {
+async function loadRecord(
+  supabase: Client,
+  staff: SheetStaff,
+  query: SheetQuery,
+  zone: string,
+  now: number,
+  members: Member[],
+): Promise<ConsultationRecordData & { summaryDialog: SummaryDialogData | null }> {
   const org = staff.organizationId;
   const list = await loadBookings(supabase, org, now - 90 * DAY, now + 120 * DAY, ["confirmed", "held", "cancelled", "no_show", "completed"]);
   const chosen = query.id && isUuid(query.id) ? query.id : null;
@@ -139,7 +150,7 @@ async function loadRecord(supabase: Client, staff: SheetStaff, query: SheetQuery
   const empty = list.length
     ? { title: "Choose a consultation", copy: "Pick one above to see its notes, outcome and details." }
     : { title: "No consultations yet", copy: "Bookings from your booking page, and ones you make for clients, have a record here." };
-  if (!chosen) return { picker, record: null, empty };
+  if (!chosen) return { picker, record: null, empty, summaryDialog: null };
 
   const { data: booking } = await supabase
     .from("bookings")
@@ -147,16 +158,17 @@ async function loadRecord(supabase: Client, staff: SheetStaff, query: SheetQuery
     .eq("organization_id", org)
     .eq("id", chosen)
     .maybeSingle();
-  if (!booking) return { picker, record: null, empty: { title: "This consultation isn’t available", copy: "It may belong to another firm, or your role can’t open it. Choose another one above." } };
+  if (!booking) return { picker, record: null, empty: { title: "This consultation isn’t available", copy: "It may belong to another firm, or your role can’t open it. Choose another one above." }, summaryDialog: null };
   if (!picker.some((option) => option.selected)) {
     picker.unshift({ label: `${shortWhen(Date.parse(booking.starts_at), zone)} · ${booking.title}`, value: recordHref(booking.id), selected: true });
   }
 
-  const [attendee, type, events, link] = await Promise.all([
+  const [attendee, type, events, link, summaryRow] = await Promise.all([
     supabase.from("booking_attendees").select("display_name, time_zone").eq("organization_id", org).eq("booking_id", booking.id).eq("role", "primary").maybeSingle(),
     supabase.from("booking_event_types").select("title").eq("organization_id", org).eq("id", booking.event_type_id).maybeSingle(),
     supabase.from("booking_events").select("kind, actor, actor_user_id, created_at").eq("organization_id", org).eq("booking_id", booking.id).order("created_at", { ascending: false }).limit(30),
     supabase.from("lead_booking_links").select("lead_id").eq("organization_id", org).eq("booking_id", booking.id).maybeSingle(),
+    supabase.from("consultation_summaries").select("body, status, shared_body, shared_at, version").eq("organization_id", org).eq("booking_id", booking.id).maybeSingle(),
   ]);
   const leadId = link.data?.lead_id ?? null;
   const [lead, notes] = leadId
@@ -198,13 +210,22 @@ async function loadRecord(supabase: Client, staff: SheetStaff, query: SheetQuery
       : booking.source === "public" && !booking.person_id
         ? { href: "/sheet/pipeline", label: "Open the pipeline" }
         : null;
+  const summary = summaryView({
+    first: name.trim().split(/\s+/)[0] || "the client",
+    attended: booking.status === "completed",
+    reviewer: staff.role === "firm_owner" || staff.role === "licensed_consultant",
+    row: summaryRow.data,
+    wire: { "data-org": org, "data-booking": booking.id },
+  });
   return {
     picker,
     empty,
+    summaryDialog: summary.dialog,
     record: {
+      summary: summary.panel,
       attendee: name,
       notes: { items: noteItems, copy: notesCopy, lead: notesLink },
-      outcome: { chip: outcome.chip, copy: `${outcome.copy} A summary for the client isn’t sent from here.`, actions },
+      outcome: { chip: outcome.chip, copy: outcome.copy, actions },
       join: videoJoin(booking, staff, now),
       details: [
         { term: "Booking type", value: type.data?.title ?? booking.title },
@@ -430,6 +451,7 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
     chrome,
     tab,
     record,
+    summaryDialog: record?.summaryDialog ?? null,
     pills: [`${thisWeek} this week`, BOOKING_PAGE_PILL[pageState]],
     book: {},
     page: {
