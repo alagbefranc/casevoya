@@ -451,6 +451,22 @@ PRD CRM-04: the outcome summary a client sees is reviewed by a licensed consulta
 
 Tested in `tests/consultation-summaries.rls.test.ts` (not before attended; stale version; a case manager writes but can't share; the licensed consultant shares; the client sees only the shared text, keeps it while an edit waits for review, and can't read the table; another client sees nothing; audit rows).
 
+## Consultation agreements on bookings (`20261023170000`, not applied on the live project)
+
+A consultation has its own agreement, separate from any later service agreement. The matter e-sign (`agreements`, `signature_envelopes`) needs a matter and a known signer, so a booking's agreement is its own record, signed from a private link by whoever booked (a lead included), with no login.
+
+* `booking_agreements`: one live (`sent` or `signed`) per booking (`booking_agreements_live_idx`). It holds a snapshot of the approved `consultation` template (`title`, `body`, `template_version`, `content_sha256`), and when signed the typed name, time, IP, user agent and the e-sign consent text and version shown. `voided` rows stay on record. Forced RLS: scheduling staff of the firm read it; no direct writes; nothing for `anon`.
+* `public.send_booking_agreement(booking, template)`: scheduling staff; the booking is `held`, `pending_payment` or `confirmed`; the template is the firm's, `consultation` and `approved`. Refused while a live one exists. Audited `booking_agreement.sent`.
+* `public.void_booking_agreement(booking, reason)`: scheduling staff; only an unsigned (`sent`) one. Audited `booking_agreement.voided`.
+* `public.booking_agreement_for_signing(ref)` (`anon`): the booking's `public_ref` is the private link. Returns the state (`unavailable`, `open`, `signed`, `closed`), the locked text, its hash and the consent text; nothing else about the booking.
+* `public.sign_booking_agreement(ref, name, consent, sha256, ip, user_agent)` (`anon`): consent ticked, a 2–200 character name, and the hash of the text shown (`PT409` when it changed). A cancelled or expired booking is refused. Replays return `replayed`. Audited `booking_agreement.signed`.
+
+Pages: `/consultation/<ref>/agreement` (public, no-referrer, no-store). Staff send one from the Book dialog or the Consultation record, copy the signing link and void it there; Upcoming shows its state.
+
+Tested in `tests/booking-agreements.rls.test.ts` (send, sign, consent/name/hash checks, replay, anon can't read the table, signed can't be voided, void then resend, another firm's staff or a client can't send, audit rows).
+
+Not yet: the signing link isn't emailed (staff copy it), consultation agreements aren't on the Agreements list, and there is no signed PDF.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.

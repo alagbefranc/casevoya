@@ -138,13 +138,15 @@ export async function bookForClient(input: {
   start: string;
   timeZone: string;
   idempotencyKey: string;
-}): Promise<Result> {
+  /** An approved consultation template to send for signing once booked, or none. */
+  agreementTemplateId?: string | null;
+}): Promise<Result & { agreement?: "sent" | "failed" | null }> {
   if (!isUuid(input.eventTypeId) || !isUuid(input.personId)) return { error: "Choose a client and a time." };
   if (!Number.isFinite(Date.parse(input.start))) return { error: "Choose a time." };
   if (!/^[A-Za-z0-9_:-]{8,180}$/.test(input.idempotencyKey)) return { error: "Reload and try again." };
   const supabase = await session(input.organizationId);
   if (!supabase) return { error: "Sign in first." };
-  const { error } = await supabase.rpc("staff_book_consultation", {
+  const { data: bookingId, error } = await supabase.rpc("staff_book_consultation", {
     p_org: input.organizationId,
     p_event_type_id: input.eventTypeId,
     p_person_id: input.personId,
@@ -152,7 +154,38 @@ export async function bookForClient(input: {
     p_time_zone: isTimeZone(input.timeZone) ? input.timeZone : "America/Toronto",
     p_idempotency_key: input.idempotencyKey,
   });
-  return error ? bookingError(error.message) : { ok: true };
+  if (error) return bookingError(error.message);
+  if (!input.agreementTemplateId || !isUuid(input.agreementTemplateId) || typeof bookingId !== "string") return { ok: true, agreement: null };
+  // The booking stands either way; a refused agreement can be sent again from the record.
+  const sent = await supabase.rpc("send_booking_agreement", { p_booking_id: bookingId, p_template_id: input.agreementTemplateId });
+  return { ok: true, agreement: sent.error && !/already has an agreement/.test(sent.error.message) ? "failed" : "sent" };
+}
+
+/** A consultation agreement refusal as words a person can act on. */
+function agreementError(message: string): { error: string } {
+  if (/approved consultation|already has an agreement|only an upcoming|no unsigned agreement|give a reason/.test(message)) {
+    return { error: message.charAt(0).toUpperCase() + message.slice(1) + "." };
+  }
+  if (/staff access denied|booking denied/.test(message)) return { error: "You can’t change this consultation." };
+  return { error: "That couldn’t be saved. Try again." };
+}
+
+/** Locks the firm's approved consultation template to an upcoming booking for the booker to sign. */
+export async function sendBookingAgreement(input: { organizationId: string; bookingId: string; templateId: string }): Promise<Result> {
+  if (!isUuid(input.bookingId) || !isUuid(input.templateId)) return { error: "Reload and try again." };
+  const supabase = await session(input.organizationId);
+  if (!supabase) return { error: "Sign in first." };
+  const { error } = await supabase.rpc("send_booking_agreement", { p_booking_id: input.bookingId, p_template_id: input.templateId });
+  return error ? agreementError(error.message) : { ok: true };
+}
+
+/** Withdraws an unsigned consultation agreement; it stays on record as voided. */
+export async function voidBookingAgreement(input: { organizationId: string; bookingId: string }): Promise<Result> {
+  if (!isUuid(input.bookingId)) return { error: "Reload and try again." };
+  const supabase = await session(input.organizationId);
+  if (!supabase) return { error: "Sign in first." };
+  const { error } = await supabase.rpc("void_booking_agreement", { p_booking_id: input.bookingId, p_reason: "Withdrawn from the consultation record" });
+  return error ? agreementError(error.message) : { ok: true };
 }
 
 export async function cancelBooking(input: { organizationId: string; bookingId: string; version: number | null }): Promise<Result> {
