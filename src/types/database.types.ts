@@ -509,7 +509,10 @@ export type Database = {
           created_at: string
           id: string
           is_sample: boolean
+          opened_at: string | null
           organization_id: string
+          reminded_at: string | null
+          reminder_count: number
           sent_at: string
           sent_by: string | null
           signed_at: string | null
@@ -533,7 +536,10 @@ export type Database = {
           created_at?: string
           id?: string
           is_sample?: boolean
+          opened_at?: string | null
           organization_id: string
+          reminded_at?: string | null
+          reminder_count?: number
           sent_at?: string
           sent_by?: string | null
           signed_at?: string | null
@@ -557,7 +563,10 @@ export type Database = {
           created_at?: string
           id?: string
           is_sample?: boolean
+          opened_at?: string | null
           organization_id?: string
+          reminded_at?: string | null
+          reminder_count?: number
           sent_at?: string
           sent_by?: string | null
           signed_at?: string | null
@@ -10255,6 +10264,8 @@ export type Database = {
         Args: { p_booking_id: string; p_template_id: string }
         Returns: string
       }
+      open_booking_agreement: { Args: { p_ref: string }; Returns: undefined }
+      remind_booking_agreement: { Args: { p_booking_id: string }; Returns: number }
       set_booking_type_agreement: {
         Args: { p_event_type_id: string; p_template_id: string | null }
         Returns: undefined

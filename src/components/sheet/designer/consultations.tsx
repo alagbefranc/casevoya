@@ -598,6 +598,86 @@ export function SummaryDialog({ data }: { data: SummaryDialogData }) {
   );
 }
 
+export type AgreementPanelData = {
+  chip: Chip | null;
+  items: { term: string; value: string; struck?: boolean }[];
+  note: string | null;
+  actions: RowAction[];
+  link: { href: string; label: string } | null;
+};
+
+function AgreementPanel({ data }: { data: AgreementPanelData }) {
+  return (
+    <section className={"panel"}>
+      <h2>
+        <Icon name={"file-check"} />
+        {"Agreement and fee"}
+        {data.chip ? (
+          <span className={"r"}>
+            <ChipView chip={data.chip} />
+          </span>
+        ) : null}
+      </h2>
+      <div className={"fp-pad"}>
+        <dl className={"fp-dl"}>
+          {data.items.map((item) => (
+            <div key={item.term}>
+              <dt>{item.term}</dt>
+              <dd>{item.struck ? <s>{item.value}</s> : item.value}</dd>
+            </div>
+          ))}
+        </dl>
+        {data.note ? (
+          <p className={"fp-note"} style={{ marginTop: "10px" }}>
+            {data.note}
+          </p>
+        ) : null}
+        {data.actions.length || data.link ? (
+          <div className={"fp-row"} style={{ marginTop: "10px" }}>
+            {data.actions.map((action, n) => (
+              <ActionButton key={`${action.label}-${n}`} action={action} />
+            ))}
+            {data.link ? (
+              <a className={"btn sm"} href={data.link.href} target={"_blank"} rel={"noopener noreferrer"}>
+                {data.link.label}
+              </a>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+/** Void a consultation agreement: a reason is required and kept; the old link says it was withdrawn. */
+export function BookingVoidDialog({ data }: { data: { organizationId: string; bookingId: string; client: string } }) {
+  return (
+    <dialog className={"dlg"} id={"dlgBkVoid"} aria-labelledby={"dlgBkVoidH"}>
+      <div className={"dh"}>
+        <h2 id={"dlgBkVoidH"}>{"Void this agreement?"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={"dlgBkVoid"}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <p>{`${data.client} won’t be able to sign it any more; the old link will say it was withdrawn. It stays on record, and you can send a new one.`}</p>
+        <div className={"fld"} style={{ marginTop: "12px" }}>
+          <label htmlFor={"bvR"}>{"Reason"}</label>
+          <textarea className={"ta"} id={"bvR"} rows={3} maxLength={500}></textarea>
+        </div>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={"dlgBkVoid"}>
+          {"Keep it"}
+        </button>
+        <button className={"btn p"} style={{ background: "#a12c20" }} data-agreement-void-booking={"1"} data-org={data.organizationId} data-booking={data.bookingId}>
+          {"Void agreement"}
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
 export type ConsultationRecordData = {
   /** Bookings to choose from; each option's value is the record's URL. */
   picker: { label: string; value: string; selected: boolean }[];
@@ -609,8 +689,10 @@ export type ConsultationRecordData = {
     summary?: OutcomeSummaryData | null;
     /** Live addition (no Designer control): only on a Casevoya video call, for its host and firm owners. */
     join?: ConsultationRecordJoin | null;
-    /** Live: the consultation agreement's buttons, under the details (Send, Copy signing link, Void). */
-    agreement?: { actions: RowAction[]; link: { href: string; label: string } | null } | null;
+    /** Live: the Agreement and fee panel (sent, opened, voided; Send, Copy signing link, Remind, Void). */
+    agreement?: AgreementPanelData | null;
+    /** Live: the Void dialog, while an agreement is waiting to be signed. */
+    voidDialog?: { organizationId: string; bookingId: string; client: string } | null;
     details: DlItem[];
     history: { what: string; who: string; when: string }[];
   } | null;
@@ -756,8 +838,8 @@ export function SheetConsultationRecord({ data }: { data: ConsultationRecordData
           <div>
             <section className={"panel"}>
               <h2>
-                <Icon name={"file-check"} />
-                {"Booking, agreement and fee"}
+                <Icon name={"calendar"} />
+                {"Booking"}
               </h2>
               <div className={"fp-pad"}>
                 <dl className={"fp-dl"}>
@@ -770,20 +852,10 @@ export function SheetConsultationRecord({ data }: { data: ConsultationRecordData
                     </div>
                   ))}
                 </dl>
-                {record.agreement && (record.agreement.actions.length || record.agreement.link) ? (
-                  <div className={"fp-row"} style={{ marginTop: "10px" }}>
-                    {record.agreement.actions.map((action, n) => (
-                      <ActionButton key={`${action.label}-${n}`} action={action} />
-                    ))}
-                    {record.agreement.link ? (
-                      <a className={"btn sm"} href={record.agreement.link.href} target={"_blank"} rel={"noopener noreferrer"}>
-                        {record.agreement.link.label}
-                      </a>
-                    ) : null}
-                  </div>
-                ) : null}
               </div>
             </section>
+            {record.agreement ? <AgreementPanel data={record.agreement} /> : null}
+            {record.voidDialog ? <BookingVoidDialog data={record.voidDialog} /> : null}
             {record.history.length ? (
               <section className={"panel"}>
                 <h2>

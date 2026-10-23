@@ -170,7 +170,7 @@ async function loadRecord(
   }
 
   const [attendee, type, events, link, summaryRow, agreementRow] = await Promise.all([
-    supabase.from("booking_attendees").select("display_name, time_zone").eq("organization_id", org).eq("booking_id", booking.id).eq("role", "primary").maybeSingle(),
+    supabase.from("booking_attendees").select("display_name, time_zone, email").eq("organization_id", org).eq("booking_id", booking.id).eq("role", "primary").maybeSingle(),
     supabase.from("booking_event_types").select("title").eq("organization_id", org).eq("id", booking.event_type_id).maybeSingle(),
     supabase.from("booking_events").select("kind, actor, actor_user_id, created_at").eq("organization_id", org).eq("booking_id", booking.id).order("created_at", { ascending: false }).limit(30),
     supabase.from("lead_booking_links").select("lead_id").eq("organization_id", org).eq("booking_id", booking.id).maybeSingle(),
@@ -180,7 +180,9 @@ async function loadRecord(
       .select(AGREEMENT_COLUMNS)
       .eq("organization_id", org)
       .eq("booking_id", booking.id)
-      .in("status", ["sent", "signed"])
+      // The latest one, voided included (the panel shows a voided agreement until a new one is sent).
+      .order("sent_at", { ascending: false })
+      .limit(1)
       .maybeSingle(),
   ]);
   const leadId = link.data?.lead_id ?? null;
@@ -239,14 +241,19 @@ async function loadRecord(
     template,
     signLink: `${appOrigin()}/consultation/${booking.public_ref}/agreement`,
     wire: { "data-org": org, "data-booking": booking.id },
+    client: name.trim().split(/\s+/)[0] || "the client",
+    recipient: attendee.data?.email ?? null,
+    voidedBy: agreementRow.data?.voided_by ? byUser.get(agreementRow.data.voided_by) ?? "Staff" : null,
   });
+  const live = agreementRow.data?.status === "sent";
   return {
     picker,
     empty,
     summaryDialog: summary.dialog,
     record: {
       summary: summary.panel,
-      agreement: { actions: agreement.actions, link: agreement.link },
+      agreement,
+      voidDialog: live ? { organizationId: org, bookingId: booking.id, client: name } : null,
       attendee: name,
       notes: { items: noteItems, copy: notesCopy, lead: notesLink },
       outcome: { chip: outcome.chip, copy: outcome.copy, actions },
@@ -259,8 +266,6 @@ async function loadRecord(
         { term: "Where", value: locationLabel(booking.location_kind, booking.location_kind === "in_person" ? booking.location_detail : null) },
         { term: "Booked", value: booking.source === "public" ? "On the booking page" : "By the firm" },
         { term: "Lead", value: lead?.data ? lead.data.display_name : "Not linked" },
-        { term: "Agreement", value: agreement.detail },
-        { term: "Fee", value: "No fee" },
         ...(booking.is_sample ? [{ term: "Record", value: "Sample (practice)" }] : []),
       ],
       history: (events.data ?? []).map((event) => ({
@@ -274,7 +279,7 @@ async function loadRecord(
 
 type AgreementTemplate = { id: string; name: string; version: number };
 
-const AGREEMENT_COLUMNS = "booking_id, status, title, template_version, signed_name, signed_at";
+const AGREEMENT_COLUMNS = "booking_id, status, title, template_version, signed_name, signed_at, sent_at, opened_at, reminded_at, voided_at, voided_by, void_reason";
 
 /**
  * The record's "Join video call" for a Casevoya video call: the booking's host and firm owners
@@ -331,8 +336,9 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
         .select(AGREEMENT_COLUMNS)
         .eq("organization_id", org)
         .in("booking_id", upcoming.map((b) => b.id))
-        .in("status", ["sent", "signed"])).data ?? []) as BookingAgreementRow[]
+        .order("sent_at", { ascending: true })).data ?? []) as BookingAgreementRow[]
     : [];
+  // Each booking's latest agreement (the rows come oldest first).
   const agreementOf = new Map(agreementRows.map((row) => [row.booking_id, row]));
   const firmSlug = orgRow.data?.slug ?? "";
   const types = (typesResult.data ?? []) as EventTypeRow[];
