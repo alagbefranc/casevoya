@@ -117,6 +117,7 @@ const VARIANTS: { [K in Catalogued]: EmailContexts[K][] } = {
   EX11: [{ firmName: FIRM, minutes: 60 }, { firmName: FIRM }],
   EX12: [{ firmName: FIRM, consultantName: "Sam Example" }, { firmName: FIRM }],
   EX13: [{ firmName: FIRM, replyBy: "2026-11-11" }, { firmName: FIRM }],
+  EX16: [{ firmName: FIRM, code: "482913" }, { firmName: FIRM }, { firmName: FIRM, code: "12ab56" }],
   EX14: [
     { firmName: FIRM, respondBy: "2026-10-23", handlerName: "Sam Example" },
     { firmName: FIRM, respondBy: "2026-10-23" },

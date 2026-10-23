@@ -630,6 +630,19 @@ const BUILDERS: Builders = {
       brand: firmBrand(kit, context),
     });
   },
+  EX16(kit, context) {
+    const { t } = kit;
+    const firmName = firm(kit, context);
+    const code = typeof context.code === "string" && /^\d{6}$/.test(context.code.trim()) ? context.code.trim() : null;
+    return copy(kit, {
+      subject: t("subject", { firm_name: firmName }),
+      preheader: t("preheader"),
+      heading: code ?? t("heading"),
+      body: code ? t("body", { firm_name: firmName }) : t("body_missing", { firm_name: firmName }),
+      spot: "sign-in-code",
+      brand: firmBrand(kit, context),
+    });
+  },
   EX11(kit, context) {
     const { t, origin } = kit;
     const minutes = countOrNull(context.minutes, 1440);

@@ -38,6 +38,8 @@ export type DispatchDeps = {
   ) => Promise<void>;
   /** Opens a sealed invitation link (context.sealed_link) for that invitation. Null when it cannot. */
   openLink?: (sealed: string, invitationId: string) => Promise<string | null>;
+  /** Opens a sealed signing code (context.sealed_code) for that code id. Null when it cannot. */
+  openCode?: (sealed: string, codeId: string) => Promise<string | null>;
   /**
    * Each delivery's recipient locale ('en-CA' | 'fr-CA'), from public.email_delivery_locales.
    * Optional; a failure or a missing entry means English. Even 'fr-CA' sends French only for a
@@ -52,6 +54,16 @@ async function recipientLocales(deps: DispatchDeps, messages: MailDelivery[]): P
     return await deps.locales(messages.map((message) => message.delivery_id));
   } catch {
     return {};
+  }
+}
+
+/** The signing code, opened from its sealed form, or null (no key, tampered, or not a code). */
+async function openSealedCode(deps: DispatchDeps, sealed: unknown, codeId: unknown): Promise<string | null> {
+  if (!deps.openCode || typeof sealed !== "string" || typeof codeId !== "string" || !sealed || !codeId) return null;
+  try {
+    return await deps.openCode(sealed, codeId);
+  } catch {
+    return null;
   }
 }
 
@@ -106,7 +118,10 @@ export async function dispatchOutbound(
       // the database is a link.
       const context: Record<string, unknown> = { ...message.context };
       const sealed = context.sealed_link;
+      const sealedCode = context.sealed_code;
       delete context.sealed_link;
+      delete context.sealed_code;
+      delete context.code;
       delete context.link;
       delete context.locale;
       delete context.body;
@@ -120,6 +135,11 @@ export async function dispatchOutbound(
       const locale = locales[message.delivery_id];
       if (locale === "fr-CA") context.locale = locale;
       const link = await openSealedLink(deps, sealed, context.invitation_id);
+      // A signing code (EX16) reaches the template only after this worker opened it.
+      if (message.template === "signing_code") {
+        const code = await openSealedCode(deps, sealedCode, context.code_id);
+        if (code) context.code = code;
+      }
       const rendered = renderEmail(
         { ...context, template: message.template, ...(link ? { link } : {}) },
         { origin: options.appOrigin },

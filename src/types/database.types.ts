@@ -499,6 +499,42 @@ export type Database = {
         }
         Relationships: []
       }
+      booking_agreement_codes: {
+        Row: {
+          attempts: number
+          booking_agreement_id: string
+          code_sha256: string
+          created_at: string
+          expires_at: string
+          id: string
+          organization_id: string
+          session_sha256: string | null
+          verified_at: string | null
+        }
+        Insert: {
+          attempts?: number
+          booking_agreement_id: string
+          code_sha256: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          organization_id: string
+          session_sha256?: string | null
+          verified_at?: string | null
+        }
+        Update: {
+          attempts?: number
+          booking_agreement_id?: string
+          code_sha256?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          organization_id?: string
+          session_sha256?: string | null
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
       booking_agreements: {
         Row: {
           body: string
@@ -507,8 +543,12 @@ export type Database = {
           consent_version: string | null
           content_sha256: string
           created_at: string
+          decline_reason: string | null
+          declined_at: string | null
           id: string
           is_sample: boolean
+          last_request_at: string | null
+          last_request_kind: string | null
           opened_at: string | null
           organization_id: string
           reminded_at: string | null
@@ -516,6 +556,8 @@ export type Database = {
           sent_at: string
           sent_by: string | null
           signed_at: string | null
+          signature_image: string | null
+          signature_kind: string | null
           signed_name: string | null
           signer_ip: unknown
           signer_user_agent: string | null
@@ -534,8 +576,12 @@ export type Database = {
           consent_version?: string | null
           content_sha256: string
           created_at?: string
+          decline_reason?: string | null
+          declined_at?: string | null
           id?: string
           is_sample?: boolean
+          last_request_at?: string | null
+          last_request_kind?: string | null
           opened_at?: string | null
           organization_id: string
           reminded_at?: string | null
@@ -543,6 +589,8 @@ export type Database = {
           sent_at?: string
           sent_by?: string | null
           signed_at?: string | null
+          signature_image?: string | null
+          signature_kind?: string | null
           signed_name?: string | null
           signer_ip?: unknown
           signer_user_agent?: string | null
@@ -561,8 +609,12 @@ export type Database = {
           consent_version?: string | null
           content_sha256?: string
           created_at?: string
+          decline_reason?: string | null
+          declined_at?: string | null
           id?: string
           is_sample?: boolean
+          last_request_at?: string | null
+          last_request_kind?: string | null
           opened_at?: string | null
           organization_id?: string
           reminded_at?: string | null
@@ -570,6 +622,8 @@ export type Database = {
           sent_at?: string
           sent_by?: string | null
           signed_at?: string | null
+          signature_image?: string | null
+          signature_kind?: string | null
           signed_name?: string | null
           signer_ip?: unknown
           signer_user_agent?: string | null
@@ -10265,6 +10319,10 @@ export type Database = {
         Returns: string
       }
       note_booking_agreement_opened: { Args: { p_ref: string }; Returns: undefined }
+      note_booking_agreement_request: { Args: { p_kind: string; p_ref: string }; Returns: Json }
+      issue_booking_agreement_code: { Args: { p_code_id: string; p_code_sha256: string; p_ref: string; p_sealed: string }; Returns: Json }
+      verify_booking_agreement_code: { Args: { p_code_sha256: string; p_ref: string; p_session_sha256: string }; Returns: Json }
+      decline_booking_agreement: { Args: { p_reason: string; p_ref: string }; Returns: Json }
       remind_booking_agreement: { Args: { p_booking_id: string }; Returns: number }
       set_booking_type_agreement: {
         Args: { p_event_type_id: string; p_template_id: string | null }
@@ -11192,10 +11250,25 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: Json
       }
-      sign_booking_agreement: {
-        Args: { p_consent: boolean; p_ip: unknown; p_name: string; p_ref: string; p_sha256: string; p_user_agent: string }
-        Returns: Json
-      }
+      sign_booking_agreement:
+        | {
+            Args: { p_consent: boolean; p_ip: unknown; p_name: string; p_ref: string; p_sha256: string; p_user_agent: string }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_consent: boolean
+              p_ip: unknown
+              p_name: string
+              p_ref: string
+              p_session_sha256: string
+              p_sha256: string
+              p_signature_image: string | null
+              p_signature_kind: string
+              p_user_agent: string
+            }
+            Returns: Json
+          }
       subscription_plan_catalog: {
         Args: Record<PropertyKey, never>
         Returns: Json
@@ -12864,6 +12937,7 @@ export type Database = {
         | "consultation_booked"
         | "consultation_rescheduled"
         | "consultation_cancelled"
+        | "signing_code"
         | "message"
         | "staff_message"
         | "support_requested"
@@ -13323,6 +13397,7 @@ export const Constants = {
         "consultation_booked",
         "consultation_rescheduled",
         "consultation_cancelled",
+        "signing_code",
         "staff_message",
         "support_requested",
         "support_granted",

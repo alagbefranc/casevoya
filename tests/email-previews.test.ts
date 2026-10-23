@@ -34,6 +34,8 @@ const WIRED: Record<string, Record<string, unknown>> = {
   EX09: { template: "refund_started", firm: FIRM, invoice_id: INVOICE, invoice_number: "INV-0001" },
   EX10: { template: "refund_complete", firm: FIRM, invoice_id: INVOICE, invoice_number: "INV-0001" },
   EX07: { template: "message", firm: FIRM },
+  // Signing flow: dispatch.ts opens the sealed code and puts it in the context.
+  EX16: { template: "signing_code", firm: FIRM, code: "482913" },
   // Inbox replies: the text and subject come with the message; dispatch.ts puts them in the context.
   EX15: {
     template: "staff_message",

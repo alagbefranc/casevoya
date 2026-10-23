@@ -279,7 +279,8 @@ async function loadRecord(
 
 type AgreementTemplate = { id: string; name: string; version: number };
 
-const AGREEMENT_COLUMNS = "booking_id, status, title, template_version, signed_name, signed_at, sent_at, opened_at, reminded_at, voided_at, voided_by, void_reason";
+const AGREEMENT_COLUMNS =
+  "booking_id, status, title, template_version, signed_name, signed_at, sent_at, opened_at, reminded_at, voided_at, voided_by, void_reason, declined_at, decline_reason, last_request_kind, last_request_at";
 
 /**
  * The record's "Join video call" for a Casevoya video call: the booking's host and firm owners

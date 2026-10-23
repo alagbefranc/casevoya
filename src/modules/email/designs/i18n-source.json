@@ -272,6 +272,13 @@
     "body": "{firm_name}’s refund has been sent. The details are in your portal.",
     "cta": "View payments"
   },
+  "EX16": {
+    "subject": "Your signing code from {firm_name}",
+    "preheader": "It works for 10 minutes.",
+    "heading": "Your signing code",
+    "body": "Enter this code to confirm it’s you and sign your consultation agreement from {firm_name}. It works for 10 minutes. If you didn’t ask for it, you can ignore this email.",
+    "body_missing": "Your code from {firm_name} couldn’t be added to this email. Go back to the signing page and ask for a new code."
+  },
   "EX11": {
     "subject": "Casevoya support asked for access",
     "preheader": "Nothing opens unless you approve.",

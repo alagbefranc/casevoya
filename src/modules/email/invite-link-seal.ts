@@ -106,3 +106,38 @@ export async function invitationTokenHash(token: string): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(token)));
   return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
+
+/**
+ * Signing codes (consultation agreements) are sealed the same way: the app makes the six-digit
+ * code and its id, seals the code to that id, and stores only the sealed form and its SHA-256.
+ * The mail worker opens it. A sealed code only opens for the code id it was made for.
+ */
+function codeData(codeId: string): Uint8Array<ArrayBuffer> {
+  return encoder.encode(`signing-code:${codeId.toLowerCase()}`);
+}
+
+export async function sealSigningCode(secret: string, code: string, codeId: string): Promise<string | null> {
+  if (secret.length < MIN_SECRET_LENGTH || !codeId || !/^\d{6}$/.test(code)) return null;
+  const key = await linkKey(secret, "encrypt");
+  const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
+  const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: codeData(codeId) }, key, encoder.encode(code)));
+  const out = new Uint8Array(iv.length + sealed.length);
+  out.set(iv, 0);
+  out.set(sealed, iv.length);
+  return bytesToBase64(out);
+}
+
+/** The six-digit code, or null for anything that does not open cleanly. Never throws. */
+export async function openSigningCode(secret: string, sealed: string, codeId: string): Promise<string | null> {
+  try {
+    if (secret.length < MIN_SECRET_LENGTH || !codeId) return null;
+    const bytes = base64ToBytes(sealed);
+    if (!bytes || bytes.length <= IV_BYTES + 16) return null;
+    const key = await linkKey(secret, "decrypt");
+    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes.slice(0, IV_BYTES), additionalData: codeData(codeId) }, key, bytes.slice(IV_BYTES));
+    const code = decoder.decode(plain);
+    return /^\d{6}$/.test(code) ? code : null;
+  } catch {
+    return null;
+  }
+}

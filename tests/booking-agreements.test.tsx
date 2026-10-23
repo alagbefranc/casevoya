@@ -5,14 +5,23 @@ import { isBookingRef, readSigningView, signError } from "@/modules/scheduling/a
 import { agreementLabel, recordAgreement, upcomingRows } from "@/modules/scheduling/sheet-present";
 import { BookingVoidDialog } from "@/components/sheet/designer/consultations";
 
-vi.mock("@/modules/scheduling/agreement-sign", () => ({ signBookingAgreement: vi.fn() }));
-const { AgreementSign } = await import("@/components/sheet/agreement-sign");
+vi.mock("@/modules/scheduling/agreement-sign", () => ({
+  signBookingAgreement: vi.fn(),
+  sendSigningCode: vi.fn(),
+  verifySigningCode: vi.fn(),
+  declineBookingAgreement: vi.fn(),
+  noteSigningRequest: vi.fn(),
+}));
+const { AgreementSign, AgreementSignError, AgreementSignLoading } = await import("@/components/sheet/agreement-sign");
 
-const SHA = "a".repeat(64);
+const SHA = "9f3b" + "0".repeat(56) + "41aa";
+const REF = "abcdefghijklmnopqrstuvwxyz";
 const raw = {
   state: "open",
   firm: "Northline Immigration",
+  firm_slug: "northline",
   attendee: "Tomás Duarte",
+  email_mask: "toma•••@example.com",
   meeting: "Initial consultation",
   starts_at: "2026-10-27T14:30:00Z",
   time_zone: "America/Toronto",
@@ -27,40 +36,97 @@ const raw = {
   sample: false,
 };
 
+function open(overrides: Record<string, unknown> = {}) {
+  const view = readSigningView({ ...raw, ...overrides });
+  if (view.state === "unavailable") throw new Error("unexpected");
+  return view;
+}
+const render = (props: Parameters<typeof AgreementSign>[0]) => renderToStaticMarkup(createElement(AgreementSign, props));
+
 describe("consultation agreement: the private link", () => {
   it("reads only a well-formed answer; anything else is unavailable", () => {
-    expect(readSigningView(raw)).toMatchObject({ state: "open", firm: "Northline Immigration", version: 3, sha256: SHA });
+    expect(readSigningView(raw)).toMatchObject({ state: "open", firm: "Northline Immigration", firmSlug: "northline", emailMask: "toma•••@example.com", version: 3, sha256: SHA });
     expect(readSigningView({ state: "unavailable" })).toEqual({ state: "unavailable" });
     expect(readSigningView({ ...raw, sha256: "short" })).toEqual({ state: "unavailable" });
     expect(readSigningView(null)).toEqual({ state: "unavailable" });
-    expect(readSigningView({ state: "withdrawn", firm: "Northline Immigration" })).toEqual({ state: "withdrawn", firm: "Northline Immigration" });
+    expect(readSigningView({ state: "withdrawn", firm: "Northline Immigration" })).toEqual({ state: "withdrawn", firm: "Northline Immigration", firmSlug: null });
     expect(readSigningView({ state: "withdrawn" })).toEqual({ state: "unavailable" });
-    expect(isBookingRef("abcdefghijklmnopqrstuvwxyz")).toBe(true);
+    expect(readSigningView({ state: "declined", firm: "Northline Immigration", decline_reason: "Wrong fee" })).toMatchObject({ state: "declined", reason: "Wrong fee" });
+    expect(readSigningView({ state: "declined", firm: "Northline Immigration" })).toEqual({ state: "unavailable" });
+    // A stored signature becomes an image only when it is a PNG or JPEG.
+    expect(open({ state: "signed", signature_kind: "drawn", signature_image: "iVBORw0KGgo=" })).toMatchObject({ signatureImage: "data:image/png;base64,iVBORw0KGgo=" });
+    expect(open({ state: "signed", signature_kind: "drawn", signature_image: "PHN2Zz4=" })).toMatchObject({ signatureImage: null });
+    expect(isBookingRef(REF)).toBe(true);
     expect(isBookingRef("ABC")).toBe(false);
   });
 
-  it("shows the locked text, its hash, the consent and Sign; signed shows the record instead", () => {
-    const view = readSigningView(raw);
-    if (view.state === "unavailable" || view.state === "withdrawn") throw new Error("unexpected");
-    const open = renderToStaticMarkup(createElement(AgreementSign, { view, reference: "abcdefghijklmnopqrstuvwxyz" }));
-    expect(open).toContain("The consultation is advice only.");
-    expect(open).toContain(`Version 3 · SHA-256 ${SHA}`);
-    expect(open).toContain("I agree to sign this document electronically.");
-    expect(open).toContain('value="Tomás Duarte"');
-    expect(open).toContain("Sign the agreement");
-    // A live form: the Sheet's "This form isn’t connected yet" stub never fires on it.
-    expect(open).toContain('data-live="1"');
-    const signedView = readSigningView({ ...raw, state: "signed", signed_name: "Tomás Duarte", signed_at: "2026-10-23T15:00:00Z" });
-    if (signedView.state === "unavailable" || signedView.state === "withdrawn") throw new Error("unexpected");
-    const signed = renderToStaticMarkup(createElement(AgreementSign, { view: signedView, reference: "abcdefghijklmnopqrstuvwxyz" }));
-    expect(signed).toContain("Signed by Tomás Duarte");
-    expect(signed).not.toContain("Sign the agreement");
+  it("landing: the firm asked, the steps with the masked address, Review and sign, Decline; secured by Casevoya", () => {
+    const html = render({ view: open(), reference: REF });
+    expect(html).toContain("Hello Tomás");
+    expect(html).toContain("Northline Immigration asked you to sign your consultation agreement");
+    expect(html).toContain("Confirm it’s you with a code we email to toma•••@example.com");
+    expect(html).toContain("Review and sign");
+    expect(html).toContain("Decline to sign");
+    expect(html).toContain("Not Tomás Duarte?");
+    expect(html).toContain("Signing secured by Casevoya");
+    expect(html).toContain("Every step is recorded with the time and the document’s fingerprint.");
+    expect(html).not.toMatch(/DocuSign/i);
+  });
+
+  it("verify, review, sign and confirm: live forms, the code boxes, the text with its fingerprint, three ways to sign", () => {
+    const verify = render({ view: open(), reference: REF, step: "verify" });
+    expect(verify).toContain("Check it’s you");
+    expect(verify).toContain('autoComplete="one-time-code"');
+    expect(verify.match(/aria-label="Digit \d of 6"/g)).toHaveLength(6);
+    expect(verify).toContain('data-live="1"');
+    const review = render({ view: open(), reference: REF, step: "review" });
+    expect(review).toContain("The consultation is advice only.");
+    expect(review).toContain(SHA);
+    expect(review).toContain("9f3b…41aa");
+    expect(review).toContain("Sign here · required");
+    const sign = render({ view: open(), reference: REF, step: "sign" });
+    expect(sign).toContain("Add your signature");
+    for (const label of ["Type", "Draw", "Upload"]) expect(sign).toContain(`>${label}</button>`);
+    expect(sign).toContain("I agree to sign this document electronically.");
+    expect(sign).toContain('data-live="1"');
+    const confirm = render({ view: open(), reference: REF, step: "confirm", mark: { kind: "typed", name: "Tomás Duarte", image: null, preview: null } });
+    expect(confirm).toContain("Sign the document?");
+    expect(confirm).toContain("You’re signing “C-02” as Tomás Duarte.");
+    expect(confirm).toContain("Sign now");
+  });
+
+  it("end states: already signed shows the mark; declined, withdrawn and the dead link show no text or hash", () => {
+    const signed = render({ view: open({ state: "signed", signed_name: "Tomás Duarte", signed_at: "2026-10-23T15:00:00Z", signature_kind: "typed" }), reference: REF });
+    expect(signed).toContain("You’ve already signed this");
+    expect(signed).toContain("Tomás Duarte");
+    expect(signed).not.toContain("Review and sign");
+    const declined = readSigningView({ state: "declined", firm: "Northline Immigration", decline_reason: "The fee is wrong.", attendee: "Tomás Duarte" });
+    if (declined.state !== "declined") throw new Error("unexpected");
+    const declinedHtml = render({ view: declined, reference: REF });
+    expect(declinedHtml).toContain("You declined to sign");
+    expect(declinedHtml).toContain(">The fee is wrong.</blockquote>");
+    expect(declinedHtml).toContain("Message Northline Immigration");
+    const withdrawn = render({ view: { state: "withdrawn", firm: "Northline Immigration", firmSlug: null }, reference: REF });
+    expect(withdrawn).toContain("This agreement was withdrawn.");
+    expect(withdrawn).toContain("Northline Immigration withdrew this agreement. Nothing was signed.");
+    const closed = render({ view: open({ state: "closed" }), reference: REF });
+    expect(closed).toContain("This signing link no longer works.");
+    expect(closed).toContain("Ask for a new link");
+    for (const html of [declinedHtml, withdrawn]) expect(html).not.toContain(SHA);
+    const error = renderToStaticMarkup(createElement(AgreementSignError, { firm: null }));
+    expect(error).toContain("We couldn’t open this document");
+    expect(error).toContain("Try again");
+    const loading = renderToStaticMarkup(createElement(AgreementSignLoading));
+    expect(loading).toContain('aria-busy="true"');
+    expect(loading).toContain("Opening the document…");
   });
 
   it("says each refusal plainly", () => {
     expect(signError("electronic signature consent is required")).toContain("Tick the box");
     expect(signError("the agreement changed; reload it before signing")).toContain("Reload");
     expect(signError("agreement not available")).toContain("isn’t available");
+    expect(signError("confirm it's you with the emailed code before signing")).toContain("emailed code");
+    expect(signError("the signature image must be a PNG or JPEG")).toContain("PNG or JPEG");
   });
 });
 
@@ -171,5 +237,63 @@ describe("consultation agreement: the email", () => {
     const mail = renderEmail({ template: "agreement", firm: "Northline Immigration", agreement_kind: "consultation", signing_ref: "../../evil" }, { origin: "https://app.casevoya.ca" });
     expect(mail.html).toContain("/portal/agreements");
     expect(mail.html).not.toContain("/consultation/");
+  });
+});
+
+describe("consultation agreement: declined on the record, and the client's requests", () => {
+  const base = {
+    status: "confirmed",
+    startsAt: "2026-10-27T14:30:00Z",
+    now: Date.parse("2026-10-23T12:00:00Z"),
+    zone: "America/Toronto",
+    template: { id: "t1", name: "C-02", version: 3 },
+    signLink: "https://app.example/consultation/abc/agreement",
+    wire: { "data-org": "o1", "data-booking": "b1" },
+    client: "Tomás",
+    recipient: "tomas@example.test",
+    voidedBy: null,
+  };
+  const row = { booking_id: "b1", status: "declined", title: "C-02", template_version: 3, signed_name: null, signed_at: null, sent_at: "2026-10-21T19:00:00Z" };
+
+  it("Declined is not None sent: the chip, when, their reason, the note and Send again", () => {
+    const panel = recordAgreement({ ...base, row: { ...row, declined_at: "2026-10-22T13:00:00Z", decline_reason: "The fee is wrong." } });
+    expect(panel.chip).toEqual({ tone: "bad", label: "Declined" });
+    expect(panel.items[0]).toEqual({ term: "Agreement", value: "C-02 v3", struck: "sent 21 Oct" });
+    expect(panel.items.find((i) => i.term === "Their reason")?.value).toBe("The fee is wrong.");
+    expect(panel.note).toMatch(/^Tomás declined to sign/);
+    expect(panel.actions.map((a) => [a.label, a.tone])).toEqual([["Send consultation agreement", "primary"]]);
+    expect(agreementLabel({ ...row })).toBe("Declined");
+  });
+
+  it("shows what the client asked for from the link", () => {
+    const panel = recordAgreement({ ...base, row: { ...row, status: "sent", last_request_kind: "code_help", last_request_at: "2026-10-22T13:00:00Z" } });
+    expect(panel.items.find((i) => i.term === "Client asked")?.value).toMatch(/^To check their email address, /);
+  });
+});
+
+describe("consultation agreement: the signing code email (EX16)", () => {
+  it("carries the code only after the worker opened it; the subject never has it", async () => {
+    const { renderEmail } = await import("@/modules/email/templates");
+    const mail = renderEmail({ template: "signing_code", firm: "Northline Immigration", code: "482913" }, { origin: "https://app.casevoya.ca" });
+    expect(mail.design).toBe("EX16");
+    expect(mail.subject).toBe("Your signing code from Northline Immigration");
+    expect(mail.subject).not.toContain("482913");
+    expect(mail.preheader).not.toContain("482913");
+    expect(mail.text).toContain("482913");
+    expect(mail.text).toContain("It works for 10 minutes.");
+    const missing = renderEmail({ template: "signing_code", firm: "Northline Immigration", code: "12ab56" }, { origin: "https://app.casevoya.ca" });
+    expect(missing.text).toContain("ask for a new code");
+  });
+
+  it("seals a code to its id: it opens for that id only, and never for a tampered value", async () => {
+    const { openSigningCode, sealSigningCode } = await import("@/modules/email/invite-link-seal");
+    const secret = "s".repeat(32);
+    const sealed = await sealSigningCode(secret, "482913", "11111111-1111-4111-8111-111111111111");
+    expect(sealed).toBeTruthy();
+    expect(sealed).not.toContain("482913");
+    expect(await openSigningCode(secret, sealed!, "11111111-1111-4111-8111-111111111111")).toBe("482913");
+    expect(await openSigningCode(secret, sealed!, "22222222-2222-4222-8222-222222222222")).toBeNull();
+    expect(await openSigningCode("t".repeat(32), sealed!, "11111111-1111-4111-8111-111111111111")).toBeNull();
+    expect(await sealSigningCode(secret, "12345", "11111111-1111-4111-8111-111111111111")).toBeNull();
   });
 });

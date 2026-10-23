@@ -112,6 +112,8 @@ export type EmailContexts = {
    * portal: the person has a portal login (only then a portal button).
    */
   EX15: FirmContext & { senderName?: string | null; body?: string | null; subject?: string | null; portal?: boolean };
+  /** code: the six-digit signing code, opened by the mail worker from its sealed form. */
+  EX16: FirmContext & { code?: string | null };
 };
 
 export type TemplateId = keyof EmailContexts;
@@ -160,6 +162,11 @@ function copy(
   parts: Omit<EmailCopy, "cta" | "spot" | "brand"> & { cta?: EmailCopy["cta"]; spot: Spot; brand: Brand; lang?: "en" | "fr" },
 ): EmailCopy {
   return { cta: null, ...parts };
+}
+
+/** A six-digit signing code, or null. */
+function signingCode(value: unknown): string | null {
+  return typeof value === "string" && /^\d{6}$/.test(value.trim()) ? value.trim() : null;
 }
 
 function invoiceHref(origin: string, invoiceId: string | null | undefined): string | null {
@@ -1169,6 +1176,32 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         verbatim: true,
         cta: context.portal ? cta("Open your portal", appLink(origin, PATHS.portal)) : null,
         spot: "reminder",
+        brand: firmBrand(context),
+      });
+    },
+  },
+  EX16: {
+    id: "EX16",
+    name: "Signing code",
+    audience: "client",
+    brand: "firm",
+    trigger:
+      "The booker asks for a code on a consultation agreement's private signing page (issue_booking_agreement_code; outbox booking_agreement.code, template signing_code), to the booking's primary attendee. The code is sealed by the app and opened by the mail worker; it works for 10 minutes. Honours email_notices. Copy pending Francis (#166)",
+    status: "wired",
+    ctaTarget: null,
+    mergeFields: ["firm_name", "code"],
+    sample: { firmName: SYNTHETIC_FIRM, code: "482913" },
+    build(context) {
+      const firmName = firm(context);
+      const code = signingCode(context.code);
+      return copy({
+        subject: `Your signing code from ${firmName}`,
+        preheader: "It works for 10 minutes.",
+        heading: code ?? "Your signing code",
+        body: code
+          ? `Enter this code to confirm it’s you and sign your consultation agreement from ${firmName}. It works for 10 minutes. If you didn’t ask for it, you can ignore this email.`
+          : `Your code from ${firmName} couldn’t be added to this email. Go back to the signing page and ask for a new code.`,
+        spot: "sign-in-code",
         brand: firmBrand(context),
       });
     },
