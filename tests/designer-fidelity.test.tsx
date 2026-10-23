@@ -293,7 +293,7 @@ const DESIGNER_RBAR: RbarData = {
   ],
   notifications: [
     { title: "Rafael uploaded 3 photos", source: "Priya Sharma", ago: "8 min" },
-    { title: "Agreement v2 signed by Tom\u00e1s", source: "DocuSign", ago: "1 h" },
+    { title: "Agreement v2 signed by Tom\u00e1s", source: "Casevoya e-sign", ago: "1 h" },
     { title: "Advance received, CAD 1,500", source: "Pending reconciliation", ago: "2 h" },
   ],
   vo: { draft: "Reply to Sofia Reyes offering Tuesday 11:00 or Wednesday 15:00.", sources: "Sources: firm calendar, template T-04" },
@@ -414,7 +414,7 @@ const DESIGNER_MATTER_RBAR: MatterRbarData = {
     draft: "Rafael’s photos don’t show dates. Draft request: “Please add a short note with the date and place for each photo.”",
     sources: "Sources: request DR-12, checklist v3",
   },
-  agreement: { title: "Service agreement v2", state: "executed", parts: ["2 of 2 signed", "28 Sep", "DocuSign (planned)"] },
+  agreement: { title: "Service agreement v2", state: "executed", parts: ["2 of 2 signed", "28 Sep", "Signed in Casevoya"] },
   representation: { title: "Use of representative form on file", note: "Recorded separately from the agreement" },
   note: { text: "Rafael prefers WhatsApp but we only use the portal for documents.", parts: ["Staff only", "Daniel"] },
 };
@@ -2388,7 +2388,7 @@ describe("Designer fidelity: Notifications", () => {
         rows: [
           { lead: P("Lena", "av-lena-finance"), parts: ["Lena approved an earned-fee transfer (1 of 2 approvals)"], time: "16:20", unread: true },
           { lead: P("Daniel", "av-daniel-casemanager"), parts: ["Daniel mentioned you on ", { b: "Tomás Duarte" }], time: "11:05", unread: false },
-          { lead: "system", parts: ["DocuSign connection expired. Reconnect in Settings"], time: "10:00", unread: false },
+          { lead: "system", parts: ["Google Calendar connection expired. Reconnect in Settings"], time: "10:00", unread: false },
         ],
       },
     ],
@@ -3812,7 +3812,6 @@ describe("Designer fidelity: Settings, Integrations and Notifications tabs", () 
       demo("Stripe", "stripe.svg", "Payments", { tone: "ok", label: "Connected" }, true),
       demo("QuickBooks", "quickbooks.svg", "Accounting", { tone: "chg", label: "Degraded", detail: "retrying" }, true),
       demo("Google Calendar", "googlecalendar.svg", "Calendar", { tone: "ok", label: "Connected" }, true),
-      demo("DocuSign", "docusign.svg", "Agreements", { tone: "bad", label: "Expired", detail: "reconnect" }, false),
       demo("Gmail", "gmail.svg", "Email", { tone: "ok", label: "Connected" }, true),
       demo("Zoom", "zoom.svg", "Meetings", NOT_CONNECTED, false),
       demo("Dropbox", "dropbox.svg", "File import", NOT_CONNECTED, false),

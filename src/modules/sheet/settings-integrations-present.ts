@@ -262,7 +262,6 @@ export function integrationsData(input: IntegrationsInput): IntegrationsData {
       stripeRow(input),
       planned("QuickBooks", "quickbooks.svg", "Accounting"),
       composioRow(input, "googlecalendar", "Google Calendar", "googlecalendar.svg", "Calendar busy times"),
-      planned("DocuSign", "docusign.svg", "Agreements"),
       composioRow(input, "gmail", "Gmail", "gmail.svg", "Email from your Casevoya label, drafts only"),
       planned("Zoom", "zoom.svg", "Meetings"),
       planned("Dropbox", "dropbox.svg", "File import"),

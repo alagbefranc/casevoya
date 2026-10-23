@@ -33,7 +33,7 @@ const row = (rows: IntegrationRow[], name: string) => {
   return found;
 };
 
-const PLANNED = ["QuickBooks", "DocuSign", "Zoom", "Dropbox", "Calendly", "Microsoft Teams", "Google Meet", "Twilio"];
+const PLANNED = ["QuickBooks", "Zoom", "Dropbox", "Calendly", "Microsoft Teams", "Google Meet", "Twilio"];
 const COMPOSIO = ["Gmail", "Google Calendar", "Microsoft Outlook", "Microsoft 365 calendar"];
 
 describe("Settings > Integrations", () => {
