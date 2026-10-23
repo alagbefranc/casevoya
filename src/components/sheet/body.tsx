@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { DemoSheet } from "@/components/sheet/demo";
 import { CalendarHeader, CalendarRbarView, SheetCalendar } from "@/components/sheet/designer/calendar";
-import { BookDialog, CancelDialog, ConsultationsHeader, RescheduleDialog, SheetConsultationRecord, SheetConsultations } from "@/components/sheet/designer/consultations";
+import { BookDialog, CancelDialog, ConsultationsHeader, RescheduleDialog, SheetConsultationRecord, SheetConsultations, SummaryDialog } from "@/components/sheet/designer/consultations";
 import { AvailabilityDialog, BookingTypeDialog } from "@/components/sheet/designer/scheduling-dialogs";
 import { AgreementsHeader, CountersignDialog, NewAgreementDialog, SheetAgreements, TemplateDialog } from "@/components/sheet/designer/agreements";
 import {
@@ -752,6 +752,7 @@ export async function SheetBody({
               <BookDialog data={loaded.dialogs.book} />
               <RescheduleDialog data={loaded.dialogs.reschedule} />
               <CancelDialog data={loaded.dialogs.cancel} />
+              {loaded.summaryDialog ? <SummaryDialog data={loaded.summaryDialog} /> : null}
               <AvailabilityDialog organizationId={loaded.settings.organizationId} zones={loaded.settings.zones} />
               {loaded.settings.owner ? <BookingTypeDialog organizationId={loaded.settings.organizationId} hosts={loaded.settings.hosts} practice={loaded.settings.practice} /> : null}
             </>

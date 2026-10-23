@@ -192,6 +192,35 @@ export async function recordBookingOutcome(input: { organizationId: string; book
   return error ? bookingError(error.message) : { ok: true };
 }
 
+/** A summary refusal as words a person can act on. */
+function summaryError(message: string): { error: string } {
+  if (/changed by someone else/.test(message)) return { error: "Someone else changed this summary. Reload to see the latest, then try again." };
+  if (/mark the consultation attended|write the summary/.test(message)) return { error: message.charAt(0).toUpperCase() + message.slice(1) + "." };
+  if (/staff access denied/.test(message)) return { error: "Only a licensed consultant can approve and share a summary." };
+  if (/sign in/i.test(message)) return { error: "Sign in first." };
+  return { error: "That couldn’t be saved. Try again." };
+}
+
+/** Writes or edits an attended consultation's outcome summary. It then waits for a licensed reviewer (CRM-04). */
+export async function saveConsultationSummary(input: { organizationId: string; bookingId: string; body: string; version: number }): Promise<Result> {
+  if (!isUuid(input.bookingId) || !Number.isInteger(input.version) || input.version < 0) return { error: "Reload and try again." };
+  const body = input.body.trim();
+  if (body.length < 3 || body.length > 4000) return { error: "Write the summary (3 to 4,000 characters)." };
+  const supabase = await session(input.organizationId);
+  if (!supabase) return { error: "Sign in first." };
+  const { error } = await supabase.rpc("save_consultation_summary", { p_booking_id: input.bookingId, p_body: body, p_expected_version: input.version });
+  return error ? summaryError(error.message) : { ok: true };
+}
+
+/** A licensed consultant approves the summary; the client sees it in their portal. */
+export async function shareConsultationSummary(input: { organizationId: string; bookingId: string; version: number }): Promise<Result> {
+  if (!isUuid(input.bookingId) || !Number.isInteger(input.version) || input.version < 1) return { error: "Reload and try again." };
+  const supabase = await session(input.organizationId);
+  if (!supabase) return { error: "Sign in first." };
+  const { error } = await supabase.rpc("share_consultation_summary", { p_booking_id: input.bookingId, p_expected_version: input.version });
+  return error ? summaryError(error.message) : { ok: true };
+}
+
 /** Free starts for moving a booking: the same host and type, the next 28 days, in the staff zone. */
 export async function rescheduleOptions(input: { organizationId: string; bookingId: string; timeZone: string }): Promise<{ options: { value: string; label: string }[] } | { error: string }> {
   if (!isUuid(input.bookingId)) return { error: "Reload and try again." };

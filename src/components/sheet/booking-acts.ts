@@ -10,6 +10,8 @@ import {
   rescheduleOptions,
   saveAvailability,
   saveBookingType,
+  saveConsultationSummary,
+  shareConsultationSummary,
 } from "@/modules/scheduling/staff-actions";
 
 type Router = { refresh: () => void };
@@ -159,6 +161,37 @@ export async function runOutcome(button: HTMLElement, router: Router) {
   const organizationId = document.querySelector<HTMLElement>("[data-booking-submit][data-org]")?.dataset.org ?? "";
   const result = await recordBookingOutcome({ organizationId, bookingId: button.dataset.booking ?? "", outcome: button.dataset.bookingOutcome ?? "" });
   done(result, { title: button.dataset.bookingOutcome === "no_show" ? "Marked as a no-show" : "Marked as attended", sub: "The consultation record is updated." }, null, router);
+}
+
+// ---------------------------------------------------------------------------
+// Outcome summary (CRM-04)
+// ---------------------------------------------------------------------------
+
+/** Save for review (#dlgSum): the text waits for a licensed reviewer before the client sees it. */
+export async function runSummarySave(button: HTMLElement, router: Router) {
+  const dialog = button.closest<HTMLDialogElement>("dialog");
+  const body = dialog ? value(dialog, "smB") : "";
+  if (body.trim().length < 3) {
+    toast2("Write the summary first", { kind: "warn", sub: "Nothing was saved." });
+    return;
+  }
+  const result = await saveConsultationSummary({
+    organizationId: button.dataset.org ?? "",
+    bookingId: button.dataset.booking ?? "",
+    body,
+    version: Number(button.dataset.version ?? "-1"),
+  });
+  done(result, { title: "Summary saved", sub: "A licensed consultant reviews it before the client sees it." }, dialog, router);
+}
+
+/** Approve and share: the client sees it in their portal. */
+export async function runSummaryShare(button: HTMLElement, router: Router) {
+  const result = await shareConsultationSummary({
+    organizationId: button.dataset.org ?? "",
+    bookingId: button.dataset.booking ?? "",
+    version: Number(button.dataset.version ?? "-1"),
+  });
+  done(result, { title: button.dataset.done || "Shared with the client", sub: button.dataset.sub || "They see it in their portal." }, null, router);
 }
 
 // ---------------------------------------------------------------------------

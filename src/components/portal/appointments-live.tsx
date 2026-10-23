@@ -302,6 +302,12 @@ export function AppointmentsLive({ viewer, data }: { viewer: PortalViewer; data:
                             </>
                           ) : null}
                         </small>
+                        {row.summary ? (
+                          <p className="lbl" style={{ marginTop: "6px", whiteSpace: "pre-line" }}>
+                            <b>{`Summary from ${viewer.organizationName}: `}</b>
+                            {row.summary}
+                          </p>
+                        ) : null}
                       </div>
                       <span className="r">
                         {rejoin?.kind === "open" ? (

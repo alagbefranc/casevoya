@@ -1,8 +1,9 @@
 /**
  * The Designer's Consultations page (`markup/consultations.tsx`), rendered from the firm's records.
  * Same DOM, classes and order for the Upcoming, Availability and Booking page tabs and for the
- * Book for a client, Reschedule and Cancel dialogs. The Consultation record tab is not ported
- * (consultation notes and outcome summaries are not built) and keeps its old view.
+ * Book for a client, Reschedule and Cancel dialogs. The Consultation record tab follows the
+ * Designer's layout: staff notes and the client's outcome summary (CRM-04) on the left, the
+ * booking, agreement and fee on the right, with live additions (the picker, attendance, history).
  *
  * Live rows and dialogs carry data attributes (`data-booking-open`, `data-booking-submit`,
  * `data-avail-open`, `data-type-open`, `data-copy`) that use-sheet wires to the server actions;
@@ -547,6 +548,56 @@ export function SheetConsultations({ data }: { data: ConsultationsData }) {
 /** "Join video call" on a Casevoya video call's record: a link inside the window, else the toast. */
 export type ConsultationRecordJoin = { href: string; toast: null } | { href: null; toast: string };
 
+/**
+ * The Designer's "Outcome summary for Tomás" panel (CRM-04): written after an attended
+ * consultation, "Needs consultant review" until a licensed reviewer approves and shares it.
+ */
+export type OutcomeSummaryData = {
+  /** "Outcome summary for Tomás". */
+  title: string;
+  chip: Chip | null;
+  /** The current text, or why there is none yet. */
+  body: string | null;
+  empty: string;
+  /** Approve and share: only for a licensed reviewer, while it needs review. */
+  share: Record<string, string> | null;
+  /** Edit (or Write the summary): staff, after the consultation was attended. */
+  edit: { label: string; attrs: Record<string, string> } | null;
+  /** The text the client sees now, when an edit is waiting for review. */
+  sharedNote?: string | null;
+};
+
+/** Write or edit the outcome summary (#dlgSum). */
+export type SummaryDialogData = { title: string; body: string; hint: string; submit: Record<string, string> };
+
+export function SummaryDialog({ data }: { data: SummaryDialogData }) {
+  return (
+    <dialog className={"dlg"} id={"dlgSum"} aria-labelledby={"dlgSumH"}>
+      <div className={"dh"}>
+        <h2 id={"dlgSumH"}>{data.title}</h2>
+        <CloseX id={"dlgSum"} />
+      </div>
+      <div className={"db"}>
+        <div className={"fld"}>
+          <label htmlFor={"smB"}>{"Summary for the client"}</label>
+          <textarea className={"ta"} id={"smB"} rows={6} maxLength={4000} defaultValue={data.body} aria-describedby={"smB-h"}></textarea>
+          <span className={"hint"} id={"smB-h"}>
+            {data.hint}
+          </span>
+        </div>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={"dlgSum"}>
+          {"Cancel"}
+        </button>
+        <button className={"btn p"} {...data.submit}>
+          {"Save for review"}
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
 export type ConsultationRecordData = {
   /** Bookings to choose from; each option's value is the record's URL. */
   picker: { label: string; value: string; selected: boolean }[];
@@ -554,6 +605,8 @@ export type ConsultationRecordData = {
     attendee: string;
     notes: { items: { who: string; when: string; body: string }[]; copy: string; lead: { href: string; label: string } | null };
     outcome: { chip: Chip; copy: string; actions: RowAction[] };
+    /** Live: the client's outcome summary (CRM-04). */
+    summary?: OutcomeSummaryData | null;
     /** Live addition (no Designer control): only on a Casevoya video call, for its host and firm owners. */
     join?: ConsultationRecordJoin | null;
     details: DlItem[];
@@ -561,6 +614,44 @@ export type ConsultationRecordData = {
   } | null;
   empty: { title: string; copy: string };
 };
+
+function OutcomeSummaryPanel({ data }: { data: OutcomeSummaryData }) {
+  return (
+    <section className={"panel"}>
+      <h2>
+        <Icon name={"check-circle"} />
+        {data.title}
+        {data.chip ? (
+          <span className={"r"}>
+            <ChipView chip={data.chip} />
+          </span>
+        ) : null}
+      </h2>
+      <div className={"fp-pad"}>
+        {data.body ? <p style={{ fontSize: "14.5px" }}>{data.body}</p> : <p className={"fp-note"}>{data.empty}</p>}
+        {data.sharedNote ? (
+          <p className={"fp-note"} style={{ marginTop: "8px" }}>
+            {data.sharedNote}
+          </p>
+        ) : null}
+        {data.share || data.edit ? (
+          <div className={"fp-row"} style={{ marginTop: "10px" }}>
+            {data.share ? (
+              <button className={"btn p sm"} type={"button"} {...data.share}>
+                {"Approve and share"}
+              </button>
+            ) : null}
+            {data.edit ? (
+              <button className={"btn sm"} type={"button"} {...data.edit.attrs}>
+                {data.edit.label}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
 
 export function SheetConsultationRecord({ data }: { data: ConsultationRecordData }) {
   const record = data.record;
@@ -579,7 +670,7 @@ export function SheetConsultationRecord({ data }: { data: ConsultationRecordData
               "Consultation record"
             )}
           </h1>
-          <p>{"Notes are staff-only. The outcome is what the firm recorded after the meeting."}</p>
+          <p>{"Notes are staff-only. The outcome summary the client sees is reviewed by the consultant first."}</p>
         </div>
       </div>
       {data.picker.length ? (
@@ -624,10 +715,11 @@ export function SheetConsultationRecord({ data }: { data: ConsultationRecordData
                 ) : null}
               </div>
             </section>
+            {record.summary ? <OutcomeSummaryPanel data={record.summary} /> : null}
             <section className={"panel"}>
               <h2>
                 <Icon name={"check-circle"} />
-                {"Outcome"}
+                {record.summary ? "Attendance" : "Outcome"}
                 <span className={"r"}>
                   <ChipView chip={record.outcome.chip} />
                 </span>

@@ -1,5 +1,5 @@
 /** Pure presentation for the Consultations and Calendar pages. No I/O. */
-import type { Chip, ConsultationRow, MonthCal, RowAction } from "@/components/sheet/designer/consultations";
+import type { Chip, ConsultationRow, MonthCal, OutcomeSummaryData, RowAction, SummaryDialogData } from "@/components/sheet/designer/consultations";
 import type { WeekBlock, WeekGrid } from "@/components/sheet/designer/calendar";
 import { monthGrid } from "@/modules/sheet/home-present";
 import { clock, locationShort, shortWhen, zoneAbbr } from "./format";
@@ -314,4 +314,44 @@ export function calendarConnections(
       }
       return { name: member.name, tool: "no calendar connected", logo: null, chip: { tone: "gr", label: "Not connected" } };
     });
+}
+
+/**
+ * The record's "Outcome summary for …" panel and its dialog (CRM-04). Written by staff after an
+ * attended consultation; a licensed reviewer approves and shares it; editing after that needs
+ * review again, while the client keeps seeing the shared text.
+ */
+export function summaryView(input: {
+  first: string;
+  attended: boolean;
+  reviewer: boolean;
+  row: { body: string; status: string; shared_body: string | null; shared_at: string | null; version: number } | null;
+  wire: Record<string, string>;
+}): { panel: OutcomeSummaryData; dialog: SummaryDialogData | null } {
+  const { row } = input;
+  const version = String(row?.version ?? 0);
+  const waiting = row?.status === "needs_review";
+  const panel: OutcomeSummaryData = {
+    title: `Outcome summary for ${input.first}`,
+    chip: !row ? null : waiting ? { tone: "rev", label: "Needs consultant review" } : { tone: "ok", label: `Shared with ${input.first}` },
+    body: row?.body ?? null,
+    empty: input.attended
+      ? `Not written yet. Write what was discussed and the next step; a licensed consultant reviews it before ${input.first} sees it.`
+      : "Written after the consultation, once it’s marked attended.",
+    share:
+      input.reviewer && waiting
+        ? { "data-summary-share": "1", ...input.wire, "data-version": version, "data-done": `Shared with ${input.first}`, "data-sub": "They see it in their portal." }
+        : null,
+    edit: input.attended ? { label: row ? "Edit" : "Write the summary", attrs: { "data-dlg": "dlgSum" } } : null,
+    sharedNote: waiting && row?.shared_body ? `${input.first} still sees the version shared before, until this one is approved.` : null,
+  };
+  const dialog: SummaryDialogData | null = input.attended
+    ? {
+        title: `Outcome summary for ${input.first}`,
+        body: row?.body ?? "",
+        hint: input.reviewer ? "Saved for review. Then Approve and share sends it to their portal." : "A licensed consultant reviews it before the client sees it.",
+        submit: { "data-summary-save": "1", ...input.wire, "data-version": version },
+      }
+    : null;
+  return { panel, dialog };
 }
