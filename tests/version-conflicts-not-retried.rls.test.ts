@@ -1,5 +1,7 @@
+import { readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { applyMigrationsFrom, createTestDb, type TestDb } from "./helpers/postgres";
+import { asMaintenance, createTestDb, type TestDb } from "./helpers/postgres";
 
 const MIGRATION = "20261023090000";
 
@@ -22,7 +24,11 @@ describe("version conflicts are not retried by the API (40001 → PT409)", () =>
   beforeAll(async () => {
     db = await createTestDb({ stopBefore: MIGRATION });
     before = (await db.query<Row>(SNAPSHOT)).rows;
-    await applyMigrationsFrom(db, MIGRATION);
+    // This migration alone, so later migrations' own changes don't count against it.
+    const dir = path.resolve(import.meta.dirname, "../supabase/migrations");
+    const file = readdirSync(dir).find((name) => name.startsWith(MIGRATION)) as string;
+    await asMaintenance(db);
+    await db.exec(readFileSync(path.join(dir, file), "utf8"));
     after = (await db.query<Row>(SNAPSHOT)).rows;
   }, 180_000);
 
@@ -30,7 +36,7 @@ describe("version conflicts are not retried by the API (40001 → PT409)", () =>
     await db?.close();
   });
 
-  it("no live function raises SQLSTATE 40001: PostgREST retries that code, so a stale save would stall", () => {
+  it("no function raises SQLSTATE 40001: PostgREST retries that code, so a stale save would stall", () => {
     expect(after.filter((row) => row.body.includes("'40001'")).map((row) => row.signature)).toEqual([]);
   });
 

@@ -81,7 +81,7 @@ export function runRow(run: ReminderRun, now: Date, timeZone: string): Automatio
   const what = deadline ? `${deadline}: ${before.charAt(0).toLowerCase()}${before.slice(1)}` : before;
   const title = run.reference ? { left: run.matterName, right: run.reference } : run.matterName;
   if (run.status === "sent") return { title, note: { left: what, right: "sent to the mail queue" }, state: { tone: "ok", label: "Sent" }, when: when(run.sentAt ?? run.scheduledFor, now, timeZone) };
-  if (run.status === "cancelled") return { title, note: `Stopped: ${deadline ? what : what.toLowerCase()}, the deadline changed or was removed`, state: { tone: "gr", label: "Stopped" }, when: when(run.createdAt, now, timeZone) };
+  if (run.status === "cancelled") return { title, note: `Stopped: ${deadline ? what : what.toLowerCase()}, the deadline changed, was removed, or had already passed`, state: { tone: "gr", label: "Stopped" }, when: when(run.createdAt, now, timeZone) };
   return { title, note: { left: what, right: `scheduled for ${dayMonth(isoDateInTimeZone(new Date(run.scheduledFor), timeZone))}` }, state: { tone: "rev", label: "Scheduled" }, when: when(run.createdAt, now, timeZone) };
 }
 

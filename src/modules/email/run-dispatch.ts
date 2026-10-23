@@ -22,6 +22,14 @@ export async function runEmailDispatch(limit = 20) {
   const config = emailRuntimeConfig();
   const supabase = createServiceClient();
   const worker = "casevoya-email-dispatch";
+  // Deadline reminders that are due become 'reminder.due' mail events, sent below with the rest.
+  // Reminders for a date already gone by are skipped by the database, never sent late. A failure
+  // here doesn't hold up other mail: the next run claims them.
+  try {
+    await supabase.rpc("claim_due_reminders", { p_limit: 100, p_as_of: new Date().toISOString() });
+  } catch {
+    // Unreachable database: the mail claim below fails the same way and the run reports it.
+  }
   return dispatchOutbound(
     {
       async claim(workerName, count) {
