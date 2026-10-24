@@ -8,7 +8,7 @@ import { intakePanel, rawText } from "@/modules/sheet/matter-intake-present";
 
 // INT-04 (#177): each answer's provenance on the matter's Intake tab. Synthetic records only.
 
-const FIELDS: IntakeField[] = [{ key: "full_name", label: "Full name", type: "text", required: true } as IntakeField];
+const FIELDS: IntakeField[] = [{ key: "full_name", labels: { en: "Full name" }, type: "text", required: true }];
 
 const version = (id: string, text: string, at: string, by: string): AnswerVersion => ({ id, fieldKey: "full_name", presence: "provided", value: { text }, raw: { text: ` ${text} ` }, createdAt: at, createdBy: by });
 
