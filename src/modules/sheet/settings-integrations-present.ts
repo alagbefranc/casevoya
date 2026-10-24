@@ -190,7 +190,7 @@ export function whatsappDialog(input: Pick<IntegrationsInput, "organizationId" |
 
 function stripeRow(input: IntegrationsInput): IntegrationRow {
   const base = { logo: "/assets/logos/stripe.svg", name: "Stripe", tag: "test mode", sub: "Client card payments" } as const;
-  const manage = { label: "Manage", attrs: { "data-nav": "/sheet/finance?tab=payments" } };
+  const manage = { label: "Manage", attrs: { "data-nav": "/sheet/settings?tab=billing#card-payments" } };
   if (!input.stripe.canSee) return { ...base, state: { tone: "gr", label: "Billing staff only" } };
   const account = input.stripe.account;
   if (!account) return { ...base, state: NOT_CONNECTED, action: input.stripe.isOwner ? { ...manage, label: "Set up" } : null };

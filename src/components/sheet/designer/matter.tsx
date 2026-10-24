@@ -15,6 +15,7 @@ import { MatterDecisionsLive, MatterSubmissions, type MatterDecisionsData, type 
 import { MatterDocumentReview, type MatterDocumentReviewData } from "./vo-doc-review";
 import { DOC_REQUEST_DIALOG, DocRequestDialog, type DocRequestDialogData } from "./doc-request";
 import { MatterIntake, type MatterIntakeData } from "./matter-intake";
+import { MatterWork, type MatterWorkData } from "./billing-live";
 import { InboundAddress, type InboundAddressData } from "./inbound-filing";
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
 import type { PersonHistoryPanel } from "@/modules/sheet/person-history-present";
@@ -734,7 +735,75 @@ export type MatterDialogsData = {
   newTask?: TasksDialogData | null;
   /** Live only: the Task dialog (`#dTask`): edit, reassign or complete one task. */
   task?: TaskEditDialogData | null;
+  /** Live only (ORG-06): Change consultant (`#dCons`), opened from the responsible consultant's card. */
+  consultant?: ConsultantDialogData | null;
 };
+
+/**
+ * ORG-06: Change consultant. The Designer has no such dialog, so it is built from its dialog
+ * parts (`.dlg`, `.fld`, `.sel`, `.why`) like the other live dialogs. It shows who will be told
+ * before anything is saved: the people on the matter with a portal account.
+ */
+export type ConsultantDialogData = {
+  /** Active consultants with a verified licence; the current one first. */
+  consultants: { id: string; name: string }[];
+  current: string | null;
+  audience: { name: string; role: string; emailed: boolean }[];
+  /** A sample matter: nobody is told. */
+  sample: boolean;
+};
+
+export function ConsultantDialog({ data, wire }: { data: ConsultantDialogData; wire?: MatterWire | null }) {
+  return (
+    <dialog className={"dlg"} id={"dCons"} aria-labelledby={"dConsH"}>
+      <div className={"dh"}>
+        <h2 id={"dConsH"}>{"Change consultant"}</h2>
+        <Close />
+      </div>
+      <div className={"db"}>
+        <div className={"fld"}>
+          <label htmlFor={"consSel"}>{"Responsible consultant"}</label>
+          <select className={"sel"} id={"consSel"} defaultValue={data.current ?? ""} data-current={data.current ?? ""}>
+            {data.current ? null : <option value={""}>{"Choose a consultant"}</option>}
+            {data.consultants.map((consultant) => (
+              <option key={consultant.id} value={consultant.id}>
+                {consultant.id === data.current ? `${consultant.name} (now)` : consultant.name}
+              </option>
+            ))}
+          </select>
+          <span className={"hint"}>{"Only consultants with a verified licence can be responsible for a matter."}</span>
+        </div>
+        <fieldset className={"fld"} style={{ border: "0", padding: "0", margin: "0" }}>
+          <legend>{"Who will be told"}</legend>
+          {data.sample ? (
+            <p className={"mu"}>{"Nobody: this is a sample matter."}</p>
+          ) : data.audience.length ? (
+            <ul className={"cons-aud"}>
+              {data.audience.map((person, index) => (
+                <li key={index}>
+                  <b>{person.name}</b>
+                  <small>{`${person.role} · ${person.emailed ? "portal notice and email" : "portal notice only (email notices are off or there is no email)"}`}</small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className={"mu"}>{"Nobody yet: no one on this matter has a portal account. Tell the client yourself."}</p>
+          )}
+        </fieldset>
+        <p className={"why"}>
+          <Icon name={"shield"} cls={"ic s"} />
+          {"The email only says their consultant changed; the portal shows the new name. Saving asks you to confirm it’s you and is logged."}
+        </p>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-x={""}>
+          {"Cancel"}
+        </button>
+        <Go id={"consGo"} label={"Change consultant"} act={"consultant"} wire={wire} />
+      </div>
+    </dialog>
+  );
+}
 
 export type MatterDeadlineDialog = {
   /** The firm's timezone, offered as the official one. */
@@ -751,7 +820,7 @@ export type MatterDeadlineDialog = {
 /** The record a dialog's confirm button saves to; the kit reads these from the button. */
 export type MatterWire = { organizationId: string; matterId: string; version: number };
 
-export type MatterAct = "stage" | "hold" | "letter" | "resume" | "outcome" | "deadline";
+export type MatterAct = "stage" | "hold" | "letter" | "resume" | "outcome" | "deadline" | "consultant";
 
 /** `data-act` and the matter it saves to, or nothing for the Designer's inert buttons. */
 export function wireProps(act: MatterAct, wire: MatterWire | null | undefined) {
@@ -962,6 +1031,7 @@ export function MatterDialogs({ data }: { data: MatterDialogsData }) {
       {data.request ? <DocRequestDialog data={data.request} /> : null}
       {data.newTask ? <TasksDialog data={data.newTask} /> : null}
       {data.task ? <TaskEditDialog data={data.task} /> : null}
+      {data.consultant && data.wire ? <ConsultantDialog data={data.consultant} wire={data.wire} /> : null}
     </>
   );
 }
@@ -1087,12 +1157,15 @@ export type MatterPersonCard = {
   edit?: PersonEditData | null;
   /** Live only: a staff member's card. Manage opens Settings, where staff are managed. */
   staff?: string | null;
+  /** Live only (ORG-06): the responsible consultant's card; Manage opens Change consultant. */
+  consultant?: boolean;
   /** Live only: why Manage does nothing for this card; the button is disabled with this as its title. */
   inert?: string | null;
 };
 
 /** The Manage button's `data-*`: Edit details, the invitation dialog, or nothing for the Designer's inert button. */
 function manageProps(card: MatterPersonCard) {
+  if (card.consultant) return { "data-dlg": "dCons", title: "Change consultant" };
   if (card.staff) return { "data-nav": card.staff, title: "Manage staff in Settings" };
   if (card.inert && !card.edit && !card.invite) return { disabled: true, title: card.inert };
   if (card.edit) {
@@ -1603,11 +1676,13 @@ export type MatterBillingData = {
   invoices: { number: string; categories: string[]; issued: string; state: MatterBadge; total: string; payment: string[] }[];
   /** Nobody on this matter may read its invoices (they are shown to the firm owner and finance). */
   hidden?: boolean;
+  /** Live only (FIN-06): time on the matter, accepted quotes and instalments, after the invoices. */
+  work?: MatterWorkData | null;
 };
 
 export function MatterBilling({ data }: { data: MatterBillingData | null }) {
   if (!data || data.hidden || (data.invoices.length === 0 && data.held.count === 0)) {
-    return (
+    const empty = (
       <Panel>
         <Empty
           art={"invoice-plain"}
@@ -1615,6 +1690,14 @@ export function MatterBilling({ data }: { data: MatterBillingData | null }) {
           copy={data?.hidden ? "The firm owner and the matter’s finance user see this matter’s invoices and client funds." : "Invoices you issue from a matter appear here."}
         />
       </Panel>
+    );
+    return data?.work ? (
+      <>
+        {empty}
+        <MatterWork data={data.work} />
+      </>
+    ) : (
+      empty
     );
   }
   return (
@@ -1700,6 +1783,7 @@ export function MatterBilling({ data }: { data: MatterBillingData | null }) {
           </table>
         </div>
       )}
+      {data.work ? <MatterWork data={data.work} /> : null}
     </>
   );
 }

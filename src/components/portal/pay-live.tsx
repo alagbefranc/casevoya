@@ -6,6 +6,7 @@ import { loadStripe, type Appearance } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { createInvoicePayment } from "@/modules/portal/actions";
 import type { PortalInvoice } from "@/modules/finance/portal-load";
+import { advanceRefusal } from "@/modules/finance/connect-present";
 import { formatAmount, formatMoney } from "@/modules/finance/money";
 import { PAY_CSS } from "./pay-css";
 
@@ -74,7 +75,10 @@ export function PayLive({
   const money = formatMoney(due, invoice.currency);
   // FIN-09: a payment the firm recorded by hand is being checked; paying again by card could pay twice.
   const pending = invoice.pendingCents ?? 0;
-  const canPay = payable && Boolean(publishableKey) && invoice.open && !invoice.processing && pending === 0;
+  // An advance for the client (trust) account is never paid by card (FIN-02); the server refuses it too.
+  const cardPayable = invoice.cardPayable !== false;
+  const canPay = payable && Boolean(publishableKey) && invoice.open && !invoice.processing && cardPayable && pending === 0;
+  const refusal = advanceRefusal(firmName);
   const [started, setStarted] = useState<Started>(null);
 
   useEffect(() => {
@@ -167,6 +171,10 @@ export function PayLive({
           <h2 style={{ font: "400 20px/1.2 var(--font-erode)", margin: "0 0 14px" }}>{invoice.open ? `Pay ${money}` : invoice.state.label}</h2>
           {!invoice.open ? (
             <Note title={invoice.status === "paid" ? "This invoice is paid" : "This invoice is closed"}>{"Nothing is due on it."}</Note>
+          ) : !cardPayable ? (
+            <Note title={refusal.title} tone="warn">
+              {refusal.copy}
+            </Note>
           ) : invoice.processing ? (
             <Note title="Your payment is processing">{"Stripe is confirming it with your bank. This page shows it paid once Stripe confirms."}</Note>
           ) : pending > 0 ? (
