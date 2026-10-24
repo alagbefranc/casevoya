@@ -663,6 +663,23 @@ DEC-02 follows the GOV review rules (2026-10-24), branch `fix/dec-review-rules`.
 
 Tested in `tests/dec-approval-follow-up.rls.test.ts`, `tests/dec-renewal.rls.test.ts` and `tests/dec-review-rules-present.test.tsx`.
 
+## Vo lead follow-ups and call-notes summaries (`20261025250000`–`20261025250100`, not applied on the live project)
+
+AI-01 (gap #183) criteria 2 to 4, branch `feat/ai-lead-call-drafts`. Additive; no existing function is redefined.
+
+* `20261025250000_vo_lead_call_enums.sql`: `vo_run_kind` and `vo_draft_kind` gain `lead_follow_up` and `call_summary`.
+* `vo_runs`: `matter_id` may be null (lead runs only); new `lead_id` (FK `(lead_id, organization_id)` to `leads`, indexed) and `booking_id` (FK to `bookings`, indexed). `vo_runs_thread_kind_check` is restated under the same name: only `message_reply` and `document_request` carry a conversation. New checks: every run has a matter or (these kinds) a lead; `lead_id` only on these kinds; a lead follow-up has a lead and no matter; `booking_id` exactly on call summaries; a call summary is kept on a lead or a matter, not both. Policy `vo_runs_select` (altered): staff who read the matter, or lead staff (`app.can_read_leads`) for a run with no matter and a lead.
+* `vo_crm_drafts` (forced RLS, select only; read by staff who read the matter, or lead staff for a lead): the draft (`kind`, `lead_id`, `matter_id`, `booking_id`, `title`, `body`, `sources` [{kind: lead, lead_note, booking or matter; id; label}], `model`, `prompt_version`, `needs_rule`), `marketing_consent` (lead follow-up: the lead's marketing answer when Vo drafted), `left_out` (notes kept from Vo for a switched-off sensitive category) and its review: `sent` (lead follow-up; `lead_note_id`), `reviewed` (call summary; `lead_note_id` or `matter_note_id`) or `discarded`, `edited`, `reviewed_by`, `reviewed_at`. One waiting draft per lead and per consultation (partial unique indexes). Every FK indexed.
+* `app.vo_lead_consent(org, lead, purpose)`: the latest answer, no row is no. `app.vo_rate_limited(org)`: the limits `begin_vo_run` uses (20/hour, 100/day per person, 300/day per firm, advisory lock per firm). `app.vo_crm_target_readable(org, lead, matter)`.
+* `public.begin_vo_lead_follow_up(org, lead)`: lead staff with MFA; `off`, `capability_off` (Administrative reply drafts or Client messages off), `converted`, `no_contact`, `no_consent` (no current enquiry-reply consent), `sample_only`, `already_drafted`, rate limits; audited `vo.run_started`.
+* `public.begin_vo_call_summary(org, booking)`: lead staff roles, scheduling read; the summary is kept on the linked lead, else the booking's matter (`no_target`); `off`, `capability_off` (Matter summaries for staff off), `not_video`, `no_call` (not completed and no started `video_sessions` row), `sample_only`, `already_drafted`, rate limits; audited `vo.run_started`.
+* `public.finish_vo_crm_run(...)`: the run's own user within 10 minutes; drafted (sources must be the run's lead, its notes, its consultation or linked consultations, or its matter; a lead follow-up re-checks consent), abstained or failed (`refused` allowed). Audited `vo.run_finished` (ids, counts; no text).
+* `public.mark_vo_lead_follow_up_sent(draft, body)`: lead staff; no placeholder; consent still given; records the text as a lead note through `public.add_lead_note`. Audited `vo.draft_sent`.
+* `public.save_vo_call_summary(draft, body)`: no placeholder; a lead note (`add_lead_note`) or a matter staff note (`add_matter_staff_note`). Audited `vo.draft_saved`.
+* `public.discard_vo_crm_draft(draft)`: audited `vo.draft_discarded`.
+
+The pasted call notes are never stored (they go to the Vo service in the signed request). Tested in `tests/vo-lead-call.rls.test.ts`; the service in `tests/vo-lead-call-service.test.ts`; the app in `tests/vo-lead-call-app.test.ts` and `tests/vo-lead-call-present.test.tsx`.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.

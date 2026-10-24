@@ -12,6 +12,7 @@
  */
 import type { ReactNode } from "react";
 import { Empty, Icon, Pair, Sep, type CalendarDay } from "./frame";
+import { CallNotesPanel, type CallNotesData } from "./vo-crm";
 
 export type ConsultationsTab = "upcoming" | "availability" | "booking";
 type Tone = "ok" | "blue" | "rev" | "bad" | "gr" | "chg";
@@ -712,6 +713,8 @@ export type ConsultationRecordData = {
     agreement?: AgreementPanelData | null;
     /** Live: the Void dialog, while an agreement is waiting to be signed. */
     voidDialog?: { organizationId: string; bookingId: string; client: string } | null;
+    /** Live addition (AI-01): "Call notes with Vo" on a Casevoya video call, after the call. */
+    vo?: CallNotesData | null;
     details: DlItem[];
     history: { what: string; who: string; when: string }[];
   } | null;
@@ -818,6 +821,7 @@ export function SheetConsultationRecord({ data }: { data: ConsultationRecordData
                 ) : null}
               </div>
             </section>
+            {record.vo ? <CallNotesPanel data={record.vo} /> : null}
             {record.summary ? <OutcomeSummaryPanel data={record.summary} /> : null}
             <section className={"panel"}>
               <h2>

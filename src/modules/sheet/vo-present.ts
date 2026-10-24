@@ -80,7 +80,7 @@ export type VoDraftRow = {
 
 export type VoRunRow = {
   id: string;
-  kind: "message_reply" | "document_request" | "ask" | "document_review";
+  kind: "message_reply" | "document_request" | "ask" | "document_review" | "lead_follow_up" | "call_summary";
   result: "running" | "drafted" | "answered" | "abstained" | "failed";
   matterId: string;
   threadId: string | null;
@@ -380,7 +380,11 @@ const TASK_LABEL: Record<VoRunRow["kind"], string> = {
   document_request: "Document request explanation",
   ask: "Ask Vo",
   document_review: "Document reading",
+  lead_follow_up: "Lead follow-up",
+  call_summary: "Call notes summary",
 };
+/** Runs on a lead (no matter): lead follow-ups, and call summaries kept on a lead. */
+const LEAD_KINDS: readonly VoRunRow["kind"][] = ["lead_follow_up", "call_summary"];
 const FAILURE_LABEL: Record<string, string> = {
   unavailable: "Vo unavailable",
   empty: "No usable draft",
@@ -405,13 +409,15 @@ export function runReview(run: VoRunRow): { badge: MatterBadge; token: string } 
 export function aiRunRows(runs: VoRunRow[], names: VoNames, viewer: VoViewer): AiRunRow[] {
   return runs.map((run) => {
     const review = runReview(run);
-    const rateable = run.result === "drafted" || run.result === "answered";
+    // A run on a lead has no matter (and the "useful?" vote is for matter runs).
+    const onLead = LEAD_KINDS.includes(run.kind) && !run.matterId;
+    const rateable = (run.result === "drafted" || run.result === "answered") && !onLead;
     const vote = (useful: boolean): Attrs => ({ "data-vo-useful": useful ? "1" : "0", "data-run": run.id, "data-org": viewer.organizationId });
     return {
       when: dayTime(run.createdAt, viewer.timeZone),
-      matter: names.reference(run.matterId),
+      matter: onLead ? "A lead" : names.reference(run.matterId),
       ...(run.matterId ? { matterHref: `/sheet/matters/${run.matterId}` } : {}),
-      task: `${TASK_LABEL[run.kind]}${run.kind === "ask" ? "" : ` for ${names.matter(run.matterId)}`}`,
+      task: `${TASK_LABEL[run.kind]}${run.kind === "ask" || onLead ? "" : ` for ${names.matter(run.matterId)}`}`,
       model: { left: run.model ?? "—", right: `${run.tools.length} tool ${run.tools.length === 1 ? "call" : "calls"}` },
       prompt: run.promptVersion ?? "—",
       sources:

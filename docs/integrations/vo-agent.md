@@ -69,6 +69,19 @@ The run log records the served model, `read_document_version` as the tool, token
 estimated cost, and the version id as the source. Client-, staff- and third-party-written text comes
 back inside per-run nonce delimiters; identity-number-like strings are removed first.
 
+## Lead follow-ups and call summaries (`lead_follow_up`, `call_summary`, 2026-10-24)
+
+Two more tasks without the tool loop (`src/vo-crm.ts`, `src/vo-crm-data.ts`; the pure rules are
+`src/modules/vo/crm.ts` in the app). The request is signed like every other; its body names the lead,
+or the consultation plus the notes the staff member pasted (never stored). Order: the firm's
+switches → consent to contact (lead) or the sensitive-category screen on the notes (medical,
+criminal history) → the lead's record, latest notes and linked consultations, or the consultation,
+read with the staff member's own token → ONE Messages API call (same model constant, adaptive
+thinking, refusal fallback, `max_tokens` 2000, no tools, no structured output) → the shared output
+guard (`guardVoOutput`) → `finish_vo_crm_run` as the staff member (sources and consent checked again
+in SQL). Run log: `read_lead` or `read_consultation` as the tool, tokens, estimated cost, how many
+notes were left out. **The container must be rebuilt and redeployed for these tasks to exist.**
+
 ## Locks
 
 `tools: []`; every built-in name in `disallowedTools`; `allowedTools` = this task's tools only;

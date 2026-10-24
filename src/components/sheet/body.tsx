@@ -109,6 +109,7 @@ import { loadSheetCalendar, loadSheetConsultations } from "@/modules/scheduling/
 import { loadSheetLead, loadSheetPipeline } from "@/modules/leads/load";
 import { EnquiryShareDialog } from "@/components/sheet/designer/enquiry-share";
 import { loadEnquiryShare } from "@/modules/leads/share-load";
+import { loadLeadVo } from "@/modules/sheet/vo-crm-load";
 
 const PUBLIC = new Set(["enquiry", "book"]);
 
@@ -861,11 +862,11 @@ export async function SheetBody({
   if (page === "lead" && (access.kind === "live" || access.kind === "sample")) {
     // The Designer's + Lead goes to /sheet/lead?new=1: New lead is a dialog on the pipeline.
     if (!query.id) redirect("/sheet/pipeline?new=1");
-    const loaded = await loadSheetLead(access.staff, query.id, { conflict: query.dlg === "conflict" });
+    const [loaded, vo] = await Promise.all([loadSheetLead(access.staff, query.id, { conflict: query.dlg === "conflict" }), loadLeadVo(access.staff, query.id)]);
     if (!loaded) notFound();
     return (
       <SheetScreen page={page}>
-        <LeadScreen loaded={loaded} />
+        <LeadScreen loaded={loaded} vo={vo} />
       </SheetScreen>
     );
   }
