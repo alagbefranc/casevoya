@@ -37,6 +37,9 @@ export type JoinView = {
   hostName: string | null;
   firmName: string;
   isSample: boolean;
+  /** CRM-03, a guest join: the booking's firm and the name on the booking (the lobby's name check). */
+  organizationId?: string | null;
+  bookedName?: string | null;
   /** Only with an issued join (p_issue): what the token needs. */
   grant: { roomName: string; roomCreated: boolean; identity: string; name: string; admitted: boolean; ttlSeconds: number } | null;
 };
@@ -78,6 +81,8 @@ export function parseJoinView(raw: unknown): JoinView | null {
     opensAt,
     closesAt,
     hostName: str(row.host_name),
+    organizationId: str(row.organization_id),
+    bookedName: str(row.booked_name),
     firmName: str(row.firm_name) ?? "Your firm",
     isSample: row.is_sample === true,
     grant,

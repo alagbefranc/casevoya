@@ -28,6 +28,7 @@ import {
   agreementLabel,
   bookingEventLabel,
   clientActorLabel,
+  RECORDING_NOT_AVAILABLE,
   bookingPageState,
   bookingPagesInOrder,
   bookingTypeState,
@@ -270,6 +271,8 @@ async function loadRecord(
         ...(clientZone && clientZone !== zone ? [{ term: "Client’s time", value: longWhen(start, clientZone) }] : []),
         { term: "With", value: booking.host_name ?? "—" },
         { term: "Where", value: locationLabel(booking.location_kind, booking.location_kind === "in_person" ? booking.location_detail : null) },
+        // CRM-03, slice 8 not built: calls are never recorded, and the record says so.
+        ...(booking.location_kind === "video" ? [{ term: "Recording", value: RECORDING_NOT_AVAILABLE }] : []),
         { term: "Booked", value: booking.source === "public" ? "On the booking page" : "By the firm" },
         { term: "Lead", value: lead?.data ? lead.data.display_name : "Not linked" },
         ...(booking.is_sample ? [{ term: "Record", value: "Sample (practice)" }] : []),
