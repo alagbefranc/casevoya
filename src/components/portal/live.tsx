@@ -9,6 +9,8 @@ import { TasksLive } from "./tasks-live";
 import { PayLive } from "./pay-live";
 import { PaymentsLive } from "./payments-live";
 import { WithdrawShare } from "./withdraw-share";
+import { PrintButton } from "./print-button";
+import type { ReceiptView } from "@/modules/finance/portal-receipt";
 import { HOME_CSS } from "./markup/portal";
 import { homeView, matterCards, type HomeView, type MatterCard } from "@/modules/portal/home-present";
 import type { PortalAgreements } from "@/modules/agreements/load";
@@ -42,6 +44,19 @@ function icon(name: string, size?: "s") {
 }
 
 /** The sidebar chrome every live page shares with the designs (logo tile, matter pill). */
+/** The receipt page: the design's two columns (receipt card, then its actions). */
+const RECEIPT_CSS =
+  ".rcpt-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,440px);gap:24px;align-items:start}" +
+  ".rcpt{padding:28px}.rcpt-head{display:flex;justify-content:space-between;gap:16px;padding-bottom:18px;border-bottom:1px solid var(--line);margin-bottom:22px}" +
+  ".rcpt-head>span{text-align:right;white-space:nowrap}.rcpt-head small{display:block;color:var(--t2);font-size:13px;margin-top:4px}" +
+  ".rcpt-amt{font-family:var(--font-erode),Georgia,serif;font-weight:300;font-size:38px;line-height:1.1;margin-bottom:8px}" +
+  ".rcpt-rows{display:grid;gap:12px;margin:22px 0;font-size:14px}.rcpt-rows>div{display:grid;grid-template-columns:minmax(120px,180px) 1fr;gap:12px}" +
+  ".rcpt-rows dt{color:var(--t2)}.rcpt-rows dd{margin:0}" +
+  ".rcpt-note{display:flex;gap:8px;align-items:flex-start;border-top:1px solid var(--line);padding-top:16px;color:var(--t2);font-size:13px}" +
+  ".rcpt-side{display:grid;gap:12px}.rcpt-side .btn{justify-content:center;width:100%}.rcpt-due{padding:16px 18px}.rcpt-due small{color:var(--t2);display:block}.rcpt-due p{margin-top:4px;font-size:14px}" +
+  "@media (max-width:900px){.rcpt-grid{grid-template-columns:1fr}.rcpt{padding:20px}.rcpt-rows>div{grid-template-columns:1fr;gap:2px}}" +
+  "@media print{.side,.mhead,.top,.statusbar,.rcpt-side,a.lbl{display:none!important}.rcpt-grid{grid-template-columns:1fr}}";
+
 const CHROME_CSS =
   ".firmlogo{width:32px;height:32px;border-radius:9px;background:#fff;color:#111;display:grid;place-items:center;font-weight:600;font-size:13px;flex:none;overflow:hidden}" +
   ".firmlogo img{width:22px;height:22px;object-fit:contain;display:block}" +
@@ -84,6 +99,7 @@ export function LivePortal({
   home,
   logo,
   matters,
+  receipt,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -107,6 +123,8 @@ export function LivePortal({
   logo?: string | null;
   /** The My matters cards (src/modules/portal/home-present.ts); built without tasks when not loaded. */
   matters?: MatterCard[] | null;
+  /** The on-screen receipt (/portal/receipt?id=), or null when it can't be read. */
+  receipt?: ReceiptView | null;
 }) {
   const name = viewer.person?.displayName ?? "Your account";
   const matter = viewer.matters[0];
@@ -115,7 +133,7 @@ export function LivePortal({
   const badges: Record<string, number> = { "/portal/tasks": taskCount ?? 0, "/portal/messages": unread ?? 0 };
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: CHROME_CSS }} />
+      <style dangerouslySetInnerHTML={{ __html: page === "receipt" ? CHROME_CSS + RECEIPT_CSS : CHROME_CSS }} />
       <a className="sr" href="#main">Skip to content</a>
       <header className="mhead">
         <span style={{ display: "flex", gap: 12, alignItems: "center" }}><FirmLogo name={viewer.organizationName} logo={logo ?? null} />{viewer.organizationName}</span>
@@ -166,7 +184,7 @@ export function LivePortal({
               </span>
               <span className="acts"><a className="btn s sm" href="/help/client-home-screen" id="help">{icon("help", "s")}Help</a></span>
             </header>
-            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} messages={messages} intake={intake ?? null} tasks={tasks ?? null} home={home ?? null} matters={matters ?? null} />
+            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} messages={messages} intake={intake ?? null} tasks={tasks ?? null} home={home ?? null} matters={matters ?? null} receipt={receipt ?? null} />
           </div>
         </main>
         <footer className="statusbar">
@@ -191,6 +209,7 @@ function LiveMain({
   tasks,
   home,
   matters,
+  receipt,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -203,6 +222,7 @@ function LiveMain({
   tasks: PortalTask[] | null;
   home: HomeView | null;
   matters: MatterCard[] | null;
+  receipt: ReceiptView | null;
 }) {
   // Messages: the chat view (redesigned as a chat view at the owner's request, 2026-10-18).
   if (page === "messages" && messages !== undefined) {
@@ -239,6 +259,7 @@ function LiveMain({
   if (page === "agreements") {
     return agreements ? <AgreementsLive viewer={viewer} agreements={agreements} /> : <Stub page={page} />;
   }
+  if (page === "receipt") return receipt ? <LiveReceipt view={receipt} /> : <Stub page={page} />;
   if (page === "home") return <LiveHome viewer={viewer} view={home ?? emptyHome(viewer)} />;
   if (page === "matters") {
     return <LiveMatters viewer={viewer} cards={matters ?? matterCards({ matters: viewer.matters, tasks: [], consultants: new Map(), timezone: viewer.timezone })} />;
@@ -250,6 +271,49 @@ function LiveMain({
   if (page === "intake" || page === "correction") return <Sections viewer={viewer} correction={page === "correction"} />;
   if (page === "tasks" && tasks) return <TasksLive viewer={viewer} tasks={tasks} />;
   return <Stub page={page} />;
+}
+
+/** A receipt on screen, laid out as design/portal/portal-receipt.png, with its PDF. */
+function LiveReceipt({ view }: { view: ReceiptView }) {
+  return (
+    <div id="pc">
+      <a className="lbl" href="/portal/payments" style={{ display: "inline-flex", gap: 6, alignItems: "center", marginBottom: 12 }}>{icon("chevron-left", "s")}Payments</a>
+      <div className="ph pp-h rv" style={{ "--i": "0" } as CSSProperties}>
+        <div>
+          <h1 className="display">Receipt {view.number}</h1>
+          <p>Proof of what you paid {view.firm}. Keep it for your records; it’s always here.</p>
+        </div>
+      </div>
+      <div className="rcpt-grid">
+        <section className="panel rcpt rv" style={{ "--i": "1" } as CSSProperties} aria-label={`Receipt ${view.number}`}>
+          <div className="rcpt-head">
+            <b>{view.rows.find(([term]) => term === "Paid to")?.[1]}</b>
+            <span><b>{view.number}</b><small>{view.date}</small></span>
+          </div>
+          <div className="rcpt-amt">{view.amount}</div>
+          <span className="bd ok"><i></i>Paid</span>
+          <dl className="rcpt-rows">
+            {view.rows.map(([term, value]) => (
+              <div key={term}><dt>{term}</dt><dd>{value}</dd></div>
+            ))}
+          </dl>
+          <p className="rcpt-note">{icon("lock", "s")}{view.note}</p>
+          {view.sample ? <p className="lbl">Fictional sample. Not a client record.</p> : null}
+        </section>
+        <aside className="rcpt-side">
+          <a className="btn p blk" href={view.pdfHref}>{icon("download", "s")}Download PDF</a>
+          <PrintButton className="btn blk">{icon("print", "s")}Print</PrintButton>
+          {view.invoiceHref ? <a className="btn blk" href={view.invoiceHref}>{icon("file", "s")}See {view.invoiceNumber}</a> : null}
+          {view.stillToPay ? (
+            <div className="panel rcpt-due">
+              <small>Still to pay</small>
+              <p>{view.stillToPay.line} <a href={view.stillToPay.href} style={{ textDecoration: "underline" }}>Pay now</a></p>
+            </div>
+          ) : null}
+        </aside>
+      </div>
+    </div>
+  );
 }
 
 /** Home with nothing loaded: the calm hero and empty panels. */
@@ -507,6 +571,7 @@ function Stub({ page }: { page: string }) {
     agreements: ["No agreements yet", "When your firm sends an agreement, it appears here."],
     payments: ["Nothing to pay", "When your firm sends an invoice, it appears here."],
     pay: ["Choose an invoice", "Open Payments and choose the invoice you want to pay."],
+    receipt: ["Receipt not found", "Open Payments and choose the receipt you want to see."],
   };
   const [title, body] = copy[page] ?? ["Not available yet", "This part of the portal isn’t connected yet."];
   return (
@@ -514,6 +579,24 @@ function Stub({ page }: { page: string }) {
       <div className="ph"><h1 className="display">{title}</h1></div>
       <Empty title={title} copy={body} />
     </div>
+  );
+}
+
+/** While a portal page loads: a quiet skeleton, never "No portal yet" (that is for no access). */
+export function PortalLoading() {
+  return (
+    <main className="sheet">
+      <div className="main" id="main" aria-busy="true">
+        <div id="pc">
+          <p className="sr" role="status">Opening your portal…</p>
+          <div className="sk" style={{ width: 260, height: 36, margin: "8px 0 14px" }} />
+          <div className="sk" style={{ width: "60%", height: 14 }} />
+          <div className="sk" style={{ height: 180, borderRadius: 18, margin: "26px 0 18px" }} />
+          <div className="sk" style={{ height: 76, borderRadius: 14 }} />
+          <div className="sk" style={{ height: 140, borderRadius: 14, marginTop: 18 }} />
+        </div>
+      </div>
+    </main>
   );
 }
 

@@ -291,7 +291,7 @@ describe("where the receipt shows", () => {
     };
     const html = renderToStaticMarkup(createElement(PaymentsLive, { viewer, data }));
     expect(html).toContain(
-      `<a class="btn sm" href="/api/invoices/receipts/${RECEIPT_ID}?organizationId=${ORG}" aria-label="Download receipt PR-0001 for invoice INV-0001" data-payment-receipt="1">Receipt PR-0001</a>`,
+      `<a class="btn sm" href="/portal/receipt?id=${RECEIPT_ID}" aria-label="Open receipt PR-0001 for invoice INV-0001" data-payment-receipt="1">Receipt PR-0001</a>`,
     );
     // A partly paid invoice keeps its Pay button and shows the receipt for what was paid.
     expect(html).toMatch(/href="\/portal\/pay\?invoice=i2">Pay<\/a><span> <a class="btn sm"[^>]*>Receipt PR-0002<\/a><\/span>/);

@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { DemoPortal, PORTAL_SLUGS } from "@/components/portal/demo";
-import { EmptyPortal, LivePortal } from "@/components/portal/live";
+import { EmptyPortal, LivePortal, PortalLoading } from "@/components/portal/live";
 import { PortalScreen } from "@/components/portal/screen";
+import { RememberMatter } from "@/components/portal/remember-matter";
+import { PORTAL_MATTER_COOKIE } from "@/modules/portal/matter-cookie";
 import { signInLocation } from "@/lib/auth/redirect";
 import { loadPortalAgreements } from "@/modules/agreements/load";
 import { loadPortalDocuments } from "@/modules/documents/load";
-import { loadPortalInvoices } from "@/modules/finance/portal-load";
+import { loadPortalInvoices, loadPortalReceipt } from "@/modules/finance/portal-load";
 import { isUuid } from "@/lib/tenant/context";
 import { countPortalUnread, loadPortalMessages } from "@/modules/messages/load";
 import { firmLogo } from "@/modules/firm-onboarding/public-logo";
@@ -23,7 +26,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const LIVE = new Set(["home", ...PORTAL_SLUGS]);
+// The receipt page is live-only: the designs have no sample receipt (#167 §4).
+const LIVE = new Set(["home", ...PORTAL_SLUGS, "receipt"]);
 const PERSONA = new Set(["olena", "rafael"]);
 
 async function Body({
@@ -31,7 +35,7 @@ async function Body({
   searchParams,
 }: {
   params: Promise<{ slug?: string[] }>;
-  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[]; response?: string | string[]; field?: string | string[]; matter?: string | string[] }>;
+  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[]; response?: string | string[]; field?: string | string[]; matter?: string | string[]; id?: string | string[] }>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const page = slug?.[0] ?? "home";
@@ -41,6 +45,7 @@ async function Body({
   const next = page === "home" ? "/portal" : `/portal/${page}`;
   const access = await loadPortalAccess();
   if (access.kind === "signed-out") redirect(signInLocation(next));
+  if (access.kind === "sample" && page === "receipt") notFound();
   if (access.kind === "sample") {
     return (
       <PortalScreen page={page}>
@@ -56,9 +61,13 @@ async function Body({
       </PortalScreen>
     );
   }
-  // My matters → Open: ?matter= puts that matter first, so Home and the pill show it.
+  // The current matter: My matters → Open (?matter=), else the one the client opened last (a
+  // cookie), else the most recently updated. It goes first, so Home and the pill show it.
   const matterValue = Array.isArray(query.matter) ? query.matter[0] : query.matter;
-  const chosen = isUuid(matterValue) ? access.viewer.matters.find((matter) => matter.id === matterValue) : undefined;
+  const remembered = (await cookies()).get(PORTAL_MATTER_COOKIE)?.value;
+  const pick = (id: string | undefined) => (isUuid(id) ? access.viewer.matters.find((matter) => matter.id === id) : undefined);
+  const opened = pick(matterValue);
+  const chosen = opened ?? pick(remembered);
   if (chosen) access.viewer.matters = [chosen, ...access.viewer.matters.filter((matter) => matter !== chosen)];
   const documents = page === "documents" || page === "upload" ? await loadPortalDocuments(access.viewer) : null;
   const agreements = page === "agreements" ? await loadPortalAgreements(access.viewer) : null;
@@ -89,6 +98,8 @@ async function Body({
     page === "home" ? loadPortalHome(access.viewer, null).catch(() => null) : null,
   ]);
   const matters = page === "matters" ? await loadPortalMatters(access.viewer).catch(() => null) : null;
+  const receiptValue = Array.isArray(query.id) ? query.id[0] : query.id;
+  const receipt = page === "receipt" && isUuid(receiptValue) ? await loadPortalReceipt(access.viewer, receiptValue).catch(() => null) : null;
   return (
     <PortalScreen page={page}>
       <LivePortal
@@ -106,7 +117,9 @@ async function Body({
         home={home}
         logo={logo}
         matters={matters}
+        receipt={receipt}
       />
+      {opened ? <RememberMatter id={opened.id} /> : null}
     </PortalScreen>
   );
 }
@@ -116,10 +129,10 @@ export default function PortalPage({
   searchParams,
 }: {
   params: Promise<{ slug?: string[] }>;
-  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[]; response?: string | string[]; field?: string | string[]; matter?: string | string[] }>;
+  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[]; response?: string | string[]; field?: string | string[]; matter?: string | string[]; id?: string | string[] }>;
 }) {
   return (
-    <Suspense fallback={<PortalScreen page="home"><EmptyPortal /></PortalScreen>}>
+    <Suspense fallback={<PortalScreen page="home"><PortalLoading /></PortalScreen>}>
       <Body params={params} searchParams={searchParams} />
     </Suspense>
   );

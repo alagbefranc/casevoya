@@ -2,7 +2,7 @@ import type { PortalFundsEntry, PortalInvoice, PortalInvoices } from "@/modules/
 import { methodShort } from "@/modules/finance/client-funds-present";
 import type { PortalViewer } from "@/modules/portal/load";
 import { formatMoney } from "@/modules/finance/money";
-import { creditNoteHref, paymentReceiptHref } from "@/modules/finance/receipt-links";
+import { creditNoteHref } from "@/modules/finance/receipt-links";
 import { dayMonth } from "@/modules/sheet/home-present";
 
 const SPRITE = "/assets/icons-coreui/sprite.svg";
@@ -221,8 +221,8 @@ export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: Por
                             {index > 0 || (invoice.open && !invoice.processing) ? " " : null}
                             <a
                               className="btn sm"
-                              href={paymentReceiptHref(receipt.id, viewer.organizationId)}
-                              aria-label={`Download receipt ${receipt.number} for invoice ${invoice.number}`}
+                              href={`/portal/receipt?id=${receipt.id}`}
+                              aria-label={`Open receipt ${receipt.number} for invoice ${invoice.number}`}
                               data-payment-receipt="1"
                             >
                               {`Receipt ${receipt.number}`}
