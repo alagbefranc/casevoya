@@ -137,18 +137,33 @@ export async function saveFirmBranding(input: { organizationId: string; logoLoca
   return error ? refused(error.message) : { ok: true };
 }
 
-/** The signed-in staff member's own timezone, and (firm owner, step-up) the firm's when it changed. */
-export async function saveTimezones(input: { organizationId: string; mine: string; firm: string | null; firmBefore: string | null }): Promise<FirmSettingsResult> {
+/**
+ * The signed-in staff member's own timezone, and (firm owner, step-up) the firm's timezone and
+ * default language for new clients (ORG-01) when they changed.
+ */
+export async function saveTimezones(input: {
+  organizationId: string;
+  mine: string;
+  firm: string | null;
+  firmBefore: string | null;
+  locale?: string | null;
+  localeBefore?: string | null;
+}): Promise<FirmSettingsResult> {
   const mine = timezoneName(input.mine);
   if (!mine) return { error: "Choose a timezone from the list, like America/Toronto." };
   const firm = input.firm === null ? null : timezoneName(input.firm);
   if (input.firm !== null && !firm) return { error: "Choose a timezone from the list, like America/Toronto." };
+  const locale = input.locale ?? null;
+  if (locale !== null && locale !== "en-CA" && locale !== "fr-CA") return { error: "Choose English or Français." };
   const session = await signedIn(input.organizationId);
   if ("error" in session) return session;
   const { error } = await session.supabase.rpc("set_my_timezone", { p_organization_id: input.organizationId, p_timezone: mine });
   if (error) return refused(error.message);
-  if (firm && firm !== input.firmBefore) {
-    const { error: firmError } = await session.supabase.rpc("update_firm_profile", { p_organization_id: input.organizationId, p_changes: { timezone: firm } as Json });
+  const changes: Record<string, string> = {};
+  if (firm && firm !== input.firmBefore) changes.timezone = firm;
+  if (locale && locale !== input.localeBefore) changes.default_locale = locale;
+  if (Object.keys(changes).length) {
+    const { error: firmError } = await session.supabase.rpc("update_firm_profile", { p_organization_id: input.organizationId, p_changes: changes as Json });
     if (firmError) return refused(firmError.message);
   }
   return { ok: true };
