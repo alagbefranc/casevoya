@@ -2,7 +2,33 @@
 
 Requirements: GOV-01, GOV-03, GOV-04, GOV-05. Source: `docs/spec/PRD.md`, status from the PRD status review of main 6d5e54f (rechecked against aac7804, which adds only #173). UI checked on https://app.casevoya.ca on 2026-10-23.
 
-Rules for whoever builds this: test mode only for Stripe (never live keys); new migrations go in `supabase/migrations/` and are applied by Francis, not by the builder; no invented immigration rules, fees or dates; wording follows `docs/spec/DECISIONS.md` and the design system.
+Rules for whoever builds this: test mode only for Stripe (never live keys); new migrations go in `supabase/migrations/` and are applied by Francis, not by the builder; immigration content (rules, fees, forms, document lists, dates) is built from official IRCC / Government of Canada sources, with the source URL and retrieval date stored with each value (see **Official sources** below); wording follows `docs/spec/DECISIONS.md` and the design system.
+
+## Official sources (applies to everything in this file)
+
+Francis's direction: build the real content using accurate, current information from IRCC. Don't build placeholder, sample or example rules, fees, dates, forms or sources.
+
+- Use only official IRCC / Government of Canada sources:
+  - IRCC home: https://www.canada.ca/en/immigration-refugees-citizenship.html
+  - Application forms and guides (form numbers and "date modified"): https://www.canada.ca/en/immigration-refugees-citizenship/services/application/application-forms-guides.html
+  - IRCC fee list: https://ircc.canada.ca/english/information/fees/fees.asp
+  - Processing times: https://www.canada.ca/en/immigration-refugees-citizenship/services/application/check-processing-times.html. IRCC says these times are "not a maximum or a guarantee", so show them as IRCC's estimate with the date checked.
+  - Program pages and instruction guides on canada.ca for each program.
+  - Where relevant, Justice Laws: IRPA https://laws-lois.justice.gc.ca/eng/acts/I-2.5/ and IRPR https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/. Record the "current to" date shown on the page.
+- **Store the source with every value.** Every rule, fee, form, document list, deadline or date stores:
+  - its official source URL, with the section or anchor;
+  - the form number and the form's "date modified" where it applies;
+  - the date it was retrieved, plus a snapshot hash;
+  - the effective or "current to" date when the page states one.
+
+  Store these with the rule or claim (SRC-01/02). Show them in the UI next to the value.
+- **No invented values.** If something can't be found on an official page, leave it out, show it as Unknown where the UI needs a slot, and list it in your `## Handoff` comment. Don't guess.
+- **Review before live.** Content goes live only through the licensed-reviewer approval (SRC-03). Matters pin the version they used (SRC-05). Vo cites these sources or abstains (SRC-09, AI-01).
+- Spot check (retrieved 2026-10-23 from the fee list above):
+  - "Study permit (including extensions) – per person" is $150.00.
+  - "Right of permanent residence fee" is $600.00.
+
+  Use the live page at build time, not these numbers.
 
 ## GOV-01: Submission checklist
 
@@ -23,6 +49,7 @@ Rules for whoever builds this: test mode only for Stripe (never live keys); new 
 - [ ] Before **Record submission**, a **Submission checklist** card shows each gate with live status and a link: representation (Use of a Representative) current; package version released; deadlines reviewed; required signatures complete; fees handled/confirmed.
 - [ ] A blocking gate prevents recording (owner can override with a reason, audited).
 - [ ] "Done outside Casevoya" list for the channel (e.g. pay government fee in IRCC portal, upload in the portal), each tickable.
+- [ ] Gates and "done outside Casevoya" steps per program and channel come from the official IRCC application guide / instructions for that program (URL + retrieved date shown next to each step), e.g. paying the government fee per the IRCC fee list, giving biometrics where IRCC requires them, and submitting the Use of a Representative form (IMM 5476, current version from the forms page).
 
 **Likely migration:** Probably none (checks derive from existing data); maybe a checklist-state table.
 
@@ -52,6 +79,7 @@ Rules for whoever builds this: test mode only for Stripe (never live keys); new 
 - [ ] Recording a submission pins the **package manifest** (released package version, file list, SHA-256 per file) to the record, shown on screen and in the audit.
 - [ ] **Add receipt / evidence**: upload the government confirmation; acknowledgment date entered separately; only then does it read Submitted to government.
 - [ ] Without evidence it stays "Submission unverified".
+- [ ] Channel names (e.g. IRCC Portal, Permanent Residence Portal, paper) use IRCC's official names with the source page linked.
 
 **Likely migration:** Maybe: manifest snapshot column / table.
 
@@ -82,6 +110,7 @@ Rules for whoever builds this: test mode only for Stripe (never live keys); new 
 - [ ] Letter dialog adds **Issuer** (e.g. IRCC, CBSA, a visa office) and **Letter date**, separate from received date.
 - [ ] **Tasks from this letter**: add several tasks, each with owner (staff or client), due date and description.
 - [ ] Optional: a letter from Triage/inbound email can be filed here after staff review (links to OPS-06).
+- [ ] The issuer list uses official names (IRCC, CBSA, IRB, a named visa office) taken from official Government of Canada pages.
 
 **Likely migration:** Probably none (columns exist); maybe a letter→tasks link.
 
@@ -112,6 +141,7 @@ Rules for whoever builds this: test mode only for Stripe (never live keys); new 
 - [ ] Each status shows source, recorder, evidence link, verified time and **last checked** time; **Mark checked** updates last checked.
 - [ ] **Share with client** button (calls `share_government_record`) with preview of what the client will see; portal says "Recorded by <firm> on <date>".
 - [ ] No wording implying automatic sync.
+- [ ] Any IRCC processing-time estimate shown next to a status comes from the official processing-times page with the date checked, labelled as IRCC's estimate ("not a maximum or a guarantee", per IRCC).
 
 **Likely migration:** Probably none (function exists); maybe last_checked_at column.
 
