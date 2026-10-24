@@ -14,7 +14,7 @@ import { loadPortalInvoices, loadPortalReceipt } from "@/modules/finance/portal-
 import { isUuid } from "@/lib/tenant/context";
 import { countPortalUnread, loadPortalMessages } from "@/modules/messages/load";
 import { firmLogo } from "@/modules/firm-onboarding/public-logo";
-import { loadPortalHome, loadPortalMatters } from "@/modules/portal/home-load";
+import { loadPortalHome, loadPortalMatters, loadPortalNotices } from "@/modules/portal/home-load";
 import { loadPortalAccess } from "@/modules/portal/load";
 import { payStateFromQuery } from "@/modules/portal/pay";
 import { loadPortalAppointments } from "@/modules/scheduling/portal-load";
@@ -91,11 +91,12 @@ async function Body({
       : null;
   const tasks = page === "tasks" ? await loadPortalTasks(access.viewer).catch(() => null) : null;
   // The sidebar on every page: the firm's logo, and the Tasks and Messages counts.
-  const [taskCount, unread, logo, home] = await Promise.all([
+  const [taskCount, unread, logo, home, notices] = await Promise.all([
     tasks ? tasks.filter((task) => task.status !== "done").length : countPortalTasks(access.viewer).catch(() => 0),
     countPortalUnread(access.viewer).catch(() => 0),
     firmLogo(access.viewer.organizationSlug),
     page === "home" ? loadPortalHome(access.viewer, null).catch(() => null) : null,
+    page === "home" ? loadPortalNotices(access.viewer) : null,
   ]);
   const matters = page === "matters" ? await loadPortalMatters(access.viewer).catch(() => null) : null;
   const receiptValue = Array.isArray(query.id) ? query.id[0] : query.id;
@@ -116,6 +117,7 @@ async function Body({
         unread={unread}
         home={home}
         logo={logo}
+        notices={notices}
         matters={matters}
         receipt={receipt}
       />

@@ -71,6 +71,7 @@ Subjects and preheaders must not reveal a program, document name, amount or deci
 | EX08 | Payment failed | machine_draft | — | — | No (not_approved) |
 | EX09 | Refund started | machine_draft | — | — | No (not_approved) |
 | EX10 | Refund complete | machine_draft | — | — | No (not_approved) |
+| EX17 | Consultant changed | machine_draft | — | — | No (not_approved) |
 | EX16 | Signing code | machine_draft | — | — | No (not_approved) |
 | EX11 | Support access requested | machine_draft | — | — | No (not_approved) |
 | EX12 | Licence check attention | machine_draft | — | — | No (not_approved) |
@@ -616,6 +617,20 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:5609f6110cb
 | `heading` | Your refund is complete | Votre remboursement est complet | Machine draft |
 | `body` | {firm_name}’s refund has been sent. The details are in your portal. | Le remboursement de {firm_name} a été envoyé. Les détails se trouvent dans votre portail. | Machine draft. Keep {firm_name} |
 | `cta` | View payments | Afficher les paiements | Machine draft. Same English as another template; same French reused. |
+
+## EX17: Consultant changed
+
+Staff change a matter's responsible consultant from the matter's People tab (change_responsible_consultant; outbox matter.consultant_changed, template consultant_changed), to each person on the matter with a portal account. Honours email_notices. Firm name only: the new consultant's name is in the portal, not the email (ORG-06). Audience: client. [French preview](../email/previews/fr/EX17.html)
+
+Status `machine_draft` · drafted 2026-10-24 · English hash `sha256:287329ce7ab4…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject` | An update on your file from {firm_name} | Une mise à jour de votre dossier de {firm_name} | Hand draft. EX17 hand draft (ORG-06, #175). Keep {firm_name} |
+| `preheader` | Your consultant has changed. See who in your portal. | Votre consultant a changé. Voyez qui dans votre portail. | Hand draft. EX17 hand draft (ORG-06, #175). |
+| `heading` | Your consultant has changed | Votre consultant a changé | Hand draft. EX17 hand draft (ORG-06, #175). |
+| `body` | A different consultant at {firm_name} is now responsible for your file. For your privacy, their name is in your portal. | Un autre consultant de {firm_name} est maintenant responsable de votre dossier. Pour protéger votre vie privée, son nom figure dans votre portail. | Hand draft. EX17 hand draft (ORG-06, #175). Keep {firm_name} |
+| `cta` | Open your portal | Ouvrir votre portail | Hand draft. EX17 hand draft (ORG-06, #175). |
 
 ## EX16: Signing code
 

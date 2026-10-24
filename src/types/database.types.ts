@@ -11152,6 +11152,13 @@ export type Database = {
         Args: { p_matter_id: string }
         Returns: Json
       }
+      change_responsible_consultant: {
+        Args: { p_expected_version: number; p_matter_id: string; p_membership_id: string }
+        Returns: Json
+      }
+      consultant_change_audience: { Args: { p_matter_id: string }; Returns: Json }
+      dismiss_portal_notice: { Args: { p_notice_id: string }; Returns: undefined }
+      portal_notices_for_me: { Args: { p_org: string }; Returns: Json }
       email_delivery_locales: {
         Args: { p_delivery_ids: string[] }
         Returns: Json

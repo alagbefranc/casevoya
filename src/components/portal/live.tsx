@@ -21,6 +21,8 @@ import type { PortalAppointments } from "@/modules/scheduling/portal-load";
 import type { ChatData } from "@/modules/messages/present";
 import type { PortalIntake } from "@/modules/intake/portal-load";
 import type { PortalTask } from "@/modules/portal/tasks-load";
+import type { PortalNotice } from "@/modules/portal/notices";
+import { DismissNotice } from "./dismiss-notice";
 
 export type PortalPayments = { data: PortalInvoices; invoiceId: string | null };
 
@@ -100,6 +102,7 @@ export function LivePortal({
   logo,
   matters,
   receipt,
+  notices,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -125,6 +128,8 @@ export function LivePortal({
   matters?: MatterCard[] | null;
   /** The on-screen receipt (/portal/receipt?id=), or null when it can't be read. */
   receipt?: ReceiptView | null;
+  /** ORG-06: the person's own notices (their consultant changed), shown on Home. */
+  notices?: PortalNotice[] | null;
 }) {
   const name = viewer.person?.displayName ?? "Your account";
   const matter = viewer.matters[0];
@@ -184,7 +189,7 @@ export function LivePortal({
               </span>
               <span className="acts"><a className="btn s sm" href="/help/client-home-screen" id="help">{icon("help", "s")}Help</a></span>
             </header>
-            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} messages={messages} intake={intake ?? null} tasks={tasks ?? null} home={home ?? null} matters={matters ?? null} receipt={receipt ?? null} />
+            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} messages={messages} intake={intake ?? null} tasks={tasks ?? null} home={home ?? null} matters={matters ?? null} receipt={receipt ?? null} notices={notices ?? null} />
           </div>
         </main>
         <footer className="statusbar">
@@ -210,6 +215,7 @@ function LiveMain({
   home,
   matters,
   receipt,
+  notices,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -223,6 +229,7 @@ function LiveMain({
   home: HomeView | null;
   matters: MatterCard[] | null;
   receipt: ReceiptView | null;
+  notices: PortalNotice[] | null;
 }) {
   // Messages: the chat view (redesigned as a chat view at the owner's request, 2026-10-18).
   if (page === "messages" && messages !== undefined) {
@@ -266,7 +273,7 @@ function LiveMain({
     return agreements ? <AgreementsLive viewer={viewer} agreements={agreements} /> : <Stub page={page} />;
   }
   if (page === "receipt") return receipt ? <LiveReceipt view={receipt} /> : <Stub page={page} />;
-  if (page === "home") return <LiveHome viewer={viewer} view={home ?? emptyHome(viewer)} />;
+  if (page === "home") return <LiveHome viewer={viewer} view={home ?? emptyHome(viewer)} notices={notices ?? []} />;
   if (page === "matters") {
     return <LiveMatters viewer={viewer} cards={matters ?? matterCards({ matters: viewer.matters, tasks: [], consultants: new Map(), timezone: viewer.timezone })} />;
   }
@@ -339,7 +346,7 @@ function emptyHome(viewer: PortalViewer): HomeView {
 }
 
 /** The client's Home, laid out as design/portal/pages/portal.html (HomeMarkup), from their own records. */
-function LiveHome({ viewer, view }: { viewer: PortalViewer; view: HomeView }) {
+function LiveHome({ viewer, view, notices }: { viewer: PortalViewer; view: HomeView; notices: PortalNotice[] }) {
   const hello = view.firstName ? `Hi ${view.firstName}.` : "Hi.";
   const step = { done: "d", current: "c", todo: "" } as const;
   return (
@@ -350,6 +357,16 @@ function LiveHome({ viewer, view }: { viewer: PortalViewer; view: HomeView }) {
         <h1 className="display" id="hi">{hello}</h1>
         <p>Here’s what to do next, and where your application stands.</p>
       </div>
+      {notices.map((notice) => (
+        <div key={notice.id} className="alert info rv" role="status" style={{ marginBottom: 16, alignItems: "center" }}>
+          {icon("info")}
+          <div style={{ flex: 1 }}>
+            <b>{notice.title}</b>
+            {notice.body}
+          </div>
+          <DismissNotice organizationId={viewer.organizationId} noticeId={notice.id} />
+        </div>
+      ))}
       <section className={view.next.calm ? "next rv calm" : "next rv"} style={{ "--i": "1" } as CSSProperties}>
         <img className="nx-vo" src="/assets/vo/vo-point-96.png" srcSet="/assets/vo/vo-point-192.png 2x" width={56} height={56} alt="" />
         <div>
