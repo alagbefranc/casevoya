@@ -49,7 +49,7 @@ function checked(root: ParentNode, id: string) {
 type InvitePreview = {
   status?: string;
   invitee?: { display_name?: string; email?: string };
-  organization?: { display_name?: string };
+  organization?: { display_name?: string; default_locale?: string };
   policies?: { portal_terms?: { id?: string } | null; privacy_notice?: { id?: string } | null };
 };
 
@@ -66,6 +66,17 @@ function portalLocale(root: ParentNode): "en-CA" | "fr-CA" {
     (button) => button.getAttribute("aria-pressed") === "true" && /fran/i.test(button.textContent || ""),
   );
   return french ? "fr-CA" : "en-CA";
+}
+
+/** Presses the firm's default language (ORG-01) on the invite's Language switch; the client can still change it. */
+function presetPortalLocale(root: ParentNode, locale: string | undefined) {
+  if (locale !== "fr-CA" && locale !== "en-CA") return;
+  root.querySelectorAll<HTMLElement>(".seg[aria-label='Language']").forEach((seg) => {
+    seg.querySelectorAll<HTMLElement>("button").forEach((button) => {
+      const french = /fran/i.test(button.textContent || "");
+      button.setAttribute("aria-pressed", String(french === (locale === "fr-CA")));
+    });
+  });
 }
 
 function portalAcceptPayload(root: HTMLElement, preview: InvitePreview, page: string): PortalAcceptPayload | { error: string } {
@@ -366,6 +377,7 @@ export function usePortActions(page: string, token?: string) {
             const opened = await previewPortalInvitation(token);
             if ("error" in opened) return { ok: false, message: opened.error ?? "This invitation could not be opened." };
             invite.current = asPreview(opened.preview);
+            presetPortalLocale(event.root, invite.current?.organization?.default_locale);
           }
           const preview = invite.current;
           const heading = event.root.querySelector("h1");

@@ -126,6 +126,7 @@ import {
 } from "./settings-integrations-acts";
 import { reopenFirmDialog, runFirmSave } from "./settings-firm-acts";
 import { bindOffboardHold, mountMember, mountOffboard, reopenStaffAdmin, runContinuitySave, runMemberAct } from "./settings-staff-admin-acts";
+import { prepareTransferDialog, runFirmTransferAct } from "./firm-transfer-acts";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
 const NEW_MATTER = "/sheet/matters?new=1";
@@ -494,6 +495,15 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
             router.refresh();
           })
           .finally(() => enquiryToggle.removeAttribute("aria-busy"));
+        return;
+      }
+      // Settings > Team and seats, firm transfers (ORG-06): record, review authority, close.
+      const transferAct = target.closest<HTMLElement>("[data-xfer-act]");
+      if (transferAct && root.contains(transferAct)) {
+        event.preventDefault();
+        if (transferAct.getAttribute("aria-busy") === "true") return;
+        transferAct.setAttribute("aria-busy", "true");
+        void runFirmTransferAct(transferAct, router).finally(() => transferAct.removeAttribute("aria-busy"));
         return;
       }
       // Settings > Team and seats: Change role or access (role, suspend) and the continuity contact.
@@ -1033,6 +1043,7 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         return;
       }
       const opener = target.closest<HTMLElement>("[data-open], [data-dlg], [data-stage], [data-letter], [data-hold]");
+      if (opener && (opener.dataset.xferItem || opener.dataset.xferClose)) prepareTransferDialog(opener, root);
       if (opener) {
         event.preventDefault();
         const id =

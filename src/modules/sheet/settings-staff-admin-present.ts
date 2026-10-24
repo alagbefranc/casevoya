@@ -31,7 +31,14 @@ export type OffboardFacts = {
   /** Null when the session inventory can't be read. */
   sessions: number | null;
   connections: number;
+  /** ORG-06: what needs a new owner or host, one choice each. */
+  leads: { id: string; label: string; stage: string | null }[];
+  bookingTypes: { id: string; title: string; published: boolean; otherHosts: number }[];
+  bookings: { id: string; title: string; startsAt: string; timeZone: string | null }[];
 };
+
+/** The owner's choice per item for public.offboard_staff_member's p_handover. */
+export type Handover = { leads: Record<string, string>; booking_types: Record<string, string>; bookings: Record<string, string> };
 
 /** What public.offboard_staff_member returns. */
 export type OffboardResult = {
@@ -42,6 +49,10 @@ export type OffboardResult = {
   reviewTasks: number;
   connections: number;
   sessions: number;
+  leads: number;
+  followUps: number;
+  bookingTypes: number;
+  bookings: number;
 };
 
 function obj(value: unknown): Record<string, unknown> {
@@ -76,6 +87,15 @@ export function parseOffboardFacts(raw: unknown): OffboardFacts | null {
     assignments: count(row.assignments),
     sessions: row.sessions === null || row.sessions === undefined ? null : count(row.sessions),
     connections: count(row.connections),
+    leads: list(row.leads).flatMap((lead) => (text(lead.id) ? [{ id: text(lead.id) as string, label: text(lead.label) ?? "Lead", stage: text(lead.stage) }] : [])),
+    bookingTypes: list(row.booking_types).flatMap((type) =>
+      text(type.id) ? [{ id: text(type.id) as string, title: text(type.title) ?? "Booking type", published: type.published === true, otherHosts: count(type.other_hosts) }] : [],
+    ),
+    bookings: list(row.bookings).flatMap((booking) =>
+      text(booking.id) && text(booking.starts_at)
+        ? [{ id: text(booking.id) as string, title: text(booking.title) ?? "Consultation", startsAt: text(booking.starts_at) as string, timeZone: text(booking.time_zone) }]
+        : [],
+    ),
   };
 }
 
@@ -89,7 +109,83 @@ export function parseOffboardResult(raw: unknown): OffboardResult {
     reviewTasks: count(row.review_tasks),
     connections: count(row.connections),
     sessions: count(row.sessions),
+    leads: count(row.leads),
+    followUps: count(row.follow_ups),
+    bookingTypes: count(row.booking_types),
+    bookings: count(row.bookings),
   };
+}
+
+function esc(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
+}
+
+/** "Wed 29 Oct, 10:00" in the consultation's own time zone. */
+export function consultationWhen(iso: string, timeZone: string | null): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const zone = timeZone || "America/Toronto";
+  try {
+    const day = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: zone }).format(date).replace(",", "").replace("Sept", "Sep");
+    const time = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: zone }).format(date);
+    return `${day}, ${time}`;
+  } catch {
+    return iso;
+  }
+}
+
+export function hasHandover(facts: OffboardFacts): boolean {
+  return facts.leads.length + facts.bookingTypes.length + facts.bookings.length > 0;
+}
+
+/**
+ * ORG-06's live-only part of the Offboard dialog: one "New owner" / "New host" choice per open
+ * lead, hosted booking type and upcoming consultation, with no default, so the owner decides each.
+ * Plain HTML, so the server and the browser (when another person is chosen) draw the same thing.
+ */
+export function handoverHtml(facts: OffboardFacts, receivers: readonly { label: string; value: string }[], leaverId: string): string {
+  if (!hasHandover(facts)) return "";
+  const people = receivers.filter((receiver) => receiver.value && receiver.value !== leaverId);
+  const choose = (kind: keyof Handover, id: string, label: string) =>
+    `<select class="sel" aria-label="${esc(label)}" data-handover="${kind}" data-id="${esc(id)}"><option value="" selected>Choose a person</option>` +
+    people.map((person) => `<option value="${esc(person.value)}">${esc(person.label)}</option>`).join("") +
+    `</select>`;
+  const row = (kind: keyof Handover, id: string, title: string, meta: string, verb: string) =>
+    `<div class="ofh-row"><div><b>${esc(title)}</b><small>${esc(meta)}</small></div>${choose(kind, id, `${verb} for ${title}`)}</div>`;
+  const section = (heading: string, rows: string[]) => (rows.length ? `<fieldset class="ofh-set"><legend>${esc(heading)}</legend>${rows.join("")}</fieldset>` : "");
+  return (
+    `<p class="ofh-lead">Choose who takes each of these before access closes.</p>` +
+    section(
+      "Open leads: new owner",
+      facts.leads.map((lead) => row("leads", lead.id, lead.label, lead.stage ? `Lead · ${lead.stage}` : "Lead", "New owner")),
+    ) +
+    section(
+      "Booking types they host: new host",
+      facts.bookingTypes.map((type) =>
+        row(
+          "booking_types",
+          type.id,
+          type.title,
+          `${type.published ? "Published" : "Not published"} · ${type.otherHosts ? plural(type.otherHosts, "other host") : "no other host"}`,
+          "New host",
+        ),
+      ),
+    ) +
+    section(
+      "Upcoming consultations: new host",
+      facts.bookings.map((booking) => row("bookings", booking.id, booking.title, `${consultationWhen(booking.startsAt, booking.timeZone)} · same time, same link`, "New host")),
+    )
+  );
+}
+
+/** The owner's choices from the dialog, or the first item still without one. */
+export function readHandover(choices: readonly { kind: string; id: string; value: string; label: string }[]): { ok: Handover } | { missing: string } {
+  const handover: Handover = { leads: {}, booking_types: {}, bookings: {} };
+  for (const choice of choices) {
+    if (!choice.value) return { missing: choice.label };
+    if (choice.kind === "leads" || choice.kind === "booking_types" || choice.kind === "bookings") handover[choice.kind][choice.id] = choice.value;
+  }
+  return { ok: handover };
 }
 
 function plural(n: number, one: string, many = `${one}s`) {
@@ -213,13 +309,15 @@ export function offboardDialog(input: {
   const receivers = input.members.filter(receivesWork);
   const leaverName = memberName(leaver);
   const receiver = receivers.find((member) => member.membershipId !== leaver.membershipId);
-  const facts = input.facts ?? { tasks: [], deadlines: [], authority: [], assignments: 0, sessions: null, connections: 0 };
+  const facts = input.facts ?? { tasks: [], deadlines: [], authority: [], assignments: 0, sessions: null, connections: 0, leads: [], bookingTypes: [], bookings: [] };
+  const receiverOptions = receivers.map((member) => ({ label: memberName(member), value: member.membershipId }));
   return {
     title: offboardTitle(leaverName),
     intro: offboardIntro(leaverName),
     people: people.map((member) => ({ label: [memberName(member), member.status === "suspended" ? `${roleText(member)} (suspended)` : roleText(member)], value: member.membershipId })),
-    receivers: receivers.map((member) => ({ label: memberName(member), value: member.membershipId })),
+    receivers: receiverOptions,
     items: offboardItems(facts, leaverName, receiver ? memberName(receiver) : ""),
+    handover: handoverHtml(facts, receiverOptions, leaver.membershipId),
     note: OFFBOARD_NOTE,
     hold: { organizationId: input.organizationId },
     facts: input.facts ? JSON.stringify(input.facts) : undefined,
@@ -231,6 +329,12 @@ export function offboardDone(result: OffboardResult, leaver: string, receiver: s
   const to = firstName(receiver);
   const parts = [`${plural(result.tasks, "task")} and ${plural(result.deadlines, "deadline")} moved to ${to}.`];
   if (result.assignments) parts.push(`${plural(result.assignments, "matter assignment")} moved.`);
+  const handed = [
+    result.leads ? plural(result.leads, "lead") : null,
+    result.bookingTypes ? plural(result.bookingTypes, "booking type") : null,
+    result.bookings ? plural(result.bookings, "upcoming consultation") : null,
+  ].filter((part): part is string => Boolean(part));
+  if (handed.length) parts.push(`${joined(handed)} went to the people you chose.`);
   if (result.authority) parts.push(`${plural(result.authority, "matter")} now ${result.authority === 1 ? "has" : "have"} ${to} as consultant of record, each with a review task.`);
   parts.push(`Access closed: ${plural(result.sessions, "session")} ended.`);
   return { title: `${leaver} is offboarded`, sub: parts.join(" ") };

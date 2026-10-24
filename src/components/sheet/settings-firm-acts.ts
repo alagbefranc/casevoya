@@ -10,10 +10,10 @@ type Open = (id: string) => void;
 /** What was typed survives a step-up round trip in this tab only. */
 const DRAFT = "cv-firm-settings";
 
-/** Every named field in the dialog: text values, and checkboxes as true/false. */
+/** Every named field in the dialog: text and choice values, and checkboxes as true/false. */
 function fieldsOf(dialog: ParentNode): Record<string, string | boolean> {
   const fields: Record<string, string | boolean> = {};
-  dialog.querySelectorAll<HTMLInputElement>("input[name]").forEach((input) => {
+  dialog.querySelectorAll<HTMLInputElement>("input[name], select[name]").forEach((input) => {
     if (input.type === "file") return;
     fields[input.name] = input.type === "checkbox" ? input.checked : input.value;
   });
@@ -124,13 +124,17 @@ export async function runFirmSave(button: HTMLElement, router: Router) {
   }
   if (kind === "timezone") {
     const firmInput = dialog.querySelector<HTMLInputElement>("input[name=firm]");
+    const localeInput = dialog.querySelector<HTMLSelectElement>("select[name=locale]");
+    const localeBefore = localeInput ? ([...localeInput.options].find((option) => option.defaultSelected)?.value ?? null) : null;
     const result = await saveTimezones({
       organizationId,
       mine: typeof fields.mine === "string" ? fields.mine : "",
       firm: firmInput ? firmInput.value : null,
       firmBefore: firmInput ? firmInput.defaultValue : null,
+      locale: localeInput ? localeInput.value : null,
+      localeBefore,
     });
-    return finish(result, dialog, fields, { title: "Timezone saved", sub: "Your reminders and times use it from now on." }, router);
+    return finish(result, dialog, fields, { title: "Language and time saved", sub: "Reminders, times and new client invites use it from now on." }, router);
   }
 }
 
@@ -149,7 +153,7 @@ export function reopenFirmDialog(root: ParentNode, open: Open) {
   } catch {
     fields = {};
   }
-  dialog.querySelectorAll<HTMLInputElement>("input[name]").forEach((input) => {
+  dialog.querySelectorAll<HTMLInputElement>("input[name], select[name]").forEach((input) => {
     const value = fields[input.name];
     if (input.type === "checkbox" && typeof value === "boolean" && !input.disabled) input.checked = value;
     else if (input.type !== "checkbox" && input.type !== "file" && typeof value === "string") input.value = value;

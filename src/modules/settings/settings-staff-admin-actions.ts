@@ -3,12 +3,14 @@
 import { safeAccessError } from "@/lib/auth/step-up";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
+import type { Json } from "@/types/database.types";
 import { continuityProblem } from "@/modules/settings/firm-input";
 import {
   STAFF_ROLE_CHOICES,
   parseOffboardFacts,
   parseOffboardResult,
   staffAdminError,
+  type Handover,
   type OffboardFacts,
   type OffboardResult,
 } from "@/modules/sheet/settings-staff-admin-present";
@@ -76,7 +78,17 @@ export async function previewOffboarding(input: { organizationId: string; member
   return facts ? { ok: facts } : { error: "Their work couldn’t be read. Try again." };
 }
 
-export async function offboardStaff(input: { organizationId: string; membershipId: string; receiverId: string }): Promise<StaffAdminResult<OffboardResult>> {
+/** Only {id: membership id} pairs of uuids, per section; anything else is dropped (the database checks each choice). */
+function cleanHandover(handover: Handover | undefined): Handover {
+  const out: Handover = { leads: {}, booking_types: {}, bookings: {} };
+  for (const section of ["leads", "booking_types", "bookings"] as const) {
+    const entries = handover && typeof handover[section] === "object" ? Object.entries(handover[section]) : [];
+    for (const [id, to] of entries.slice(0, 500)) if (isUuid(id) && typeof to === "string" && isUuid(to)) out[section][id] = to;
+  }
+  return out;
+}
+
+export async function offboardStaff(input: { organizationId: string; membershipId: string; receiverId: string; handover?: Handover }): Promise<StaffAdminResult<OffboardResult>> {
   if (!isUuid(input.membershipId)) return { error: "Choose a person." };
   if (!isUuid(input.receiverId)) return { error: "Choose who receives their work." };
   const session = await signedIn(input.organizationId);
@@ -85,6 +97,7 @@ export async function offboardStaff(input: { organizationId: string; membershipI
     p_organization_id: input.organizationId,
     p_membership_id: input.membershipId,
     p_receiver_membership_id: input.receiverId,
+    p_handover: cleanHandover(input.handover) as unknown as Json,
   });
   return error ? refused(error.message) : { ok: parseOffboardResult(data) };
 }

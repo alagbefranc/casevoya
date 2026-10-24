@@ -52,3 +52,21 @@ export function brandingAccent(branding: unknown): string | null {
   const value = (branding as Record<string, unknown>).accent;
   return typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value.trim()) ? value.trim() : null;
 }
+
+/**
+ * The public link path of a firm's stored logo (ORG-01), for emails and pages that can't use a
+ * short-lived link. The route serves it only while it is still that firm's current logo.
+ */
+export function firmLogoPublicPath(key: string): string {
+  return `/api/firm/logo/${key}`;
+}
+
+/** Text on a firm colour: white when it reads at 4.5:1 or better, otherwise near-black. */
+export function accentInk(hex: string): "#ffffff" | "#111111" {
+  const channel = (offset: number) => {
+    const value = parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+  return 1.05 / (luminance + 0.05) >= 4.5 ? "#ffffff" : "#111111";
+}

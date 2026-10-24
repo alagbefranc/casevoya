@@ -36,6 +36,8 @@ export type OffboardDialogData = {
   hold: { toast: string; toastSub: string } | { organizationId: string };
   /** The first person's preview, for the browser. Live only. */
   facts?: string;
+  /** ORG-06: the per-item handover choices (handoverHtml), live only; empty when there is nothing. */
+  handover?: string;
 };
 
 export function OffboardDialog({ data }: { data: OffboardDialogData }) {
@@ -86,6 +88,7 @@ export function OffboardDialog({ data }: { data: OffboardDialogData }) {
             </li>
           ))}
         </ol>
+        {data.handover !== undefined ? <div className={"ofh"} data-handover-list={""} dangerouslySetInnerHTML={{ __html: data.handover }} /> : null}
         <p className={"fp-note"}>
           <Icon name={"info"} cls={"ic s"} />
           {` ${data.note}`}

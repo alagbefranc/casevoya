@@ -1,5 +1,7 @@
 import { renderEmail } from "@/modules/email/templates";
 import type { OutboundEmail, SendOutcome } from "@/modules/email/cloudflare";
+import { DEFAULT_EMAIL_ORIGIN, emailOrigin } from "@/modules/email/designs/layout";
+import { firmLogoPublicPath, ownFirmLogoKey } from "@/modules/firm-onboarding/firm-logo";
 
 export type MailDelivery = {
   delivery_id: string;
@@ -46,7 +48,37 @@ export type DispatchDeps = {
    * template whose French is approved (designs/french.ts).
    */
   locales?: (deliveryIds: string[]) => Promise<Record<string, string>>;
+  /**
+   * Each delivery's firm look (ORG-01), from public.email_delivery_brands: the firm id, its stored
+   * logo locator and colour. Optional; a failure or a missing entry means the initial tile.
+   */
+  brands?: (deliveryIds: string[]) => Promise<Record<string, FirmLook>>;
 };
+
+export type FirmLook = { organization_id?: unknown; logo_locator?: unknown; accent?: unknown };
+
+async function deliveryBrands(deps: DispatchDeps, messages: MailDelivery[]): Promise<Record<string, FirmLook>> {
+  if (!deps.brands || messages.length === 0) return {};
+  try {
+    return await deps.brands(messages.map((message) => message.delivery_id));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * The public logo link (/api/firm/logo/<firm>/<file>) and colour for a firm email's header, only
+ * for the firm's own stored logo; the renderer takes nothing else from here.
+ */
+export function firmLookContext(look: FirmLook | undefined, appOrigin: string | undefined): { firm_logo_url?: string; firm_accent?: string } {
+  if (!look) return {};
+  const out: { firm_logo_url?: string; firm_accent?: string } = {};
+  const organizationId = typeof look.organization_id === "string" ? look.organization_id : "";
+  const key = typeof look.logo_locator === "string" ? ownFirmLogoKey(look.logo_locator, organizationId) : null;
+  if (key) out.firm_logo_url = `${emailOrigin(appOrigin ?? DEFAULT_EMAIL_ORIGIN)}${firmLogoPublicPath(key)}`;
+  if (typeof look.accent === "string" && /^#[0-9A-Fa-f]{6}$/.test(look.accent.trim())) out.firm_accent = look.accent.trim();
+  return out;
+}
 
 async function recipientLocales(deps: DispatchDeps, messages: MailDelivery[]): Promise<Record<string, string>> {
   if (!deps.locales || messages.length === 0) return {};
@@ -112,6 +144,7 @@ export async function dispatchOutbound(
     const prepared = await deps.prepare(event.id, options.worker, options.inboundDomain, options.fromAddress);
     if (prepared.action !== "send" || !prepared.messages) continue;
     const locales = await recipientLocales(deps, prepared.messages);
+    const brands = await deliveryBrands(deps, prepared.messages);
     for (const message of prepared.messages) {
       // Only a link this worker opened reaches the template; never the sealed form. Every other
       // button (portal, Sheet) is a fixed path the renderer joins to the app origin; nothing from
@@ -126,6 +159,9 @@ export async function dispatchOutbound(
       delete context.locale;
       delete context.body;
       delete context.subject;
+      delete context.firm_logo_url;
+      delete context.firm_accent;
+      Object.assign(context, firmLookContext(brands[message.delivery_id], options.appOrigin));
       // A staff email's own words and subject (EX15) come with the message, never the context.
       if (message.template === "staff_message") {
         if (typeof message.body === "string") context.body = message.body;
