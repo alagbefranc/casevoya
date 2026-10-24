@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-
-/** The matter cookie the portal reads to pick the client's current matter (src/app/portal). */
-export const PORTAL_MATTER_COOKIE = "cv_portal_matter";
+import { PORTAL_MATTER_COOKIE } from "@/modules/portal/matter-cookie";
 
 /**
  * Keeps the matter the client opened from My matters as their current one on every portal page,
