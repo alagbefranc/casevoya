@@ -31,6 +31,7 @@ export type FirmRow = {
   legal_name: string;
   display_name: string;
   timezone: string;
+  default_locale?: string | null;
   jurisdiction_codes: string[] | null;
   billing_contact_name: string | null;
   billing_contact_email: string | null;
@@ -96,7 +97,7 @@ export function settingsHeader(tab: SettingsTab, firmName: string, plan: string 
       : tab === "offices" && owner
         ? { label: "Add an office", icon: "plus", dialog: OFFICE_NEW_DIALOG }
         : tab === "language"
-          ? { label: "Change my timezone", icon: "clock", dialog: TIMEZONE_DIALOG }
+          ? { label: owner ? "Change language or time" : "Change my timezone", icon: "clock", dialog: TIMEZONE_DIALOG }
           : null;
   return { tab, firmName, plan, act };
 }
@@ -189,8 +190,8 @@ export function brandingPage(input: { firmName: string; branding: unknown; logoU
     colourTag: accent ? `Firm colour ${accent.toUpperCase()}` : "No firm colour set",
     // One dialog holds both the logo and the firm colour, so the button names both.
     replace: input.owner ? { label: input.logoUrl ? "Change logo or colour" : "Add a logo or colour", dialog: BRAND_DIALOG } : null,
-    note: "Portal buttons keep Casevoya’s accessible blue. Your logo and firm colour appear on sealed agreement PDFs. The portal and emails don’t show them yet: emails use the header on the right.",
-    preview: { kind: "html", html: firmHeaderPreviewHtml(input.firmName), label: `${input.firmName} email header` },
+    note: "Your logo, or your initials on your firm colour, shows in the client portal and at the top of your emails, as on the right. It’s on sealed agreement PDFs too. Portal and email buttons keep Casevoya’s accessible blue.",
+    preview: { kind: "html", html: firmHeaderPreviewHtml(input.firmName, { logoUrl: input.logoUrl, accent, tagline: "Documents" }), label: `${input.firmName} email header` },
   };
 }
 
@@ -198,8 +199,9 @@ export function languageLabel(locale: string | null | undefined): string {
   return locale === "fr-CA" ? "French" : "English";
 }
 
-export function languagePage(staff: readonly StaffLanguageRecord[], firmTimezone: string): LanguageData {
+export function languagePage(staff: readonly StaffLanguageRecord[], firmTimezone: string, firmLocale?: string | null): LanguageData {
   return {
+    firmLanguage: firmLocale === "fr-CA" ? "Français" : "English",
     rows: [...staff]
       .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "en-CA"))
       .map((person) => ({
