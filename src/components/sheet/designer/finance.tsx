@@ -19,7 +19,9 @@
  * the Designer capture has no `receipt`, so the fidelity test renders without it).
  *
  * The Refunds and disputes tab (`variant: "tab-refunds"`) lists the firm's card refunds, credit
- * notes and the disputes Stripe reported. The dispute Add evidence button is not ported.
+ * notes and the disputes Stripe reported. Live, the Designer's Add evidence button opens
+ * `#dlgEvidence` (`EvidenceDialog`), which submits a file and an explanation to Stripe (FIN-13), and
+ * a live-only Client credits panel lists overpayments with Refund or apply (`#dlgCredit`).
  *
  * The credit note dialog (`#dlgCN`) is `CreditNoteDialog`; the Reconciliation and single-invoice
  * tabs are in `recon.tsx` and `invoice.tsx`.
@@ -645,15 +647,48 @@ export type RefundsData = {
   creditNotesEmpty: { title: string; copy: string };
   disputes: DisputeRow[];
   disputesEmpty: { title: string; copy: string };
-  /** Under the disputes table: the Designer's Add evidence button (demo only) and its note. */
-  disputeFooter: null | { evidence?: { toast: string; sub: string }; note: string };
+  /**
+   * Under the disputes table: the Designer's Add evidence button and its note. `evidence` is the
+   * Designer's demo toast; live, `evidenceLive` makes the same button open `#dlgEvidence`.
+   */
+  disputeFooter: null | { evidence?: { toast: string; sub: string }; evidenceLive?: boolean; note: string };
+  /** Live only (FIN-13): client credits from overpayments, with where their money went. */
+  credits?: CreditRow[];
+  creditsIntro?: string;
+};
+
+/** A client credit (CR-0001): money held on an invoice beyond what it asks for. */
+export type CreditRow = {
+  key: string;
+  number: string;
+  client: string;
+  /** The invoice holding the money, linking to its own tab. */
+  from: { label: string; href: string };
+  /** What is left to refund or apply ("50.00"). */
+  available: string;
+  /** Where its money went: "Applied to INV-0003, 50.00", "Card refund RF-0004, processing". */
+  links: string[];
+  state: MatterBadge;
+  /** Billing staff, something left: the Refund or apply button fills `#dlgCredit`. */
+  act?: {
+    creditId: string;
+    availableCents: number;
+    available: string;
+    label: string;
+    /** Open invoices of the same client it can be applied to. */
+    targets: { value: string; label: string; dueCents: number }[];
+    /** A card payment on the invoice can take a Stripe refund. */
+    card: boolean;
+    /** A card refund of this invoice is still pending at Stripe: no bank refund until it settles. */
+    pendingCard: boolean;
+  };
 };
 
 /**
  * The Refunds and disputes tab (Designer `tab-refunds`): refunds, credit notes (CN-, FIN-06) and
  * disputes, each in the Designer's panel. Live, a credit note's number links to its invoice's tab,
- * where it is reviewed and downloaded; the Add evidence button is not shown because evidence can't
- * be submitted from Casevoya.
+ * where it is reviewed and downloaded. The Add evidence button shows live only to billing staff
+ * when a dispute still takes evidence (`evidenceLive`), and opens `#dlgEvidence`.
  */
 export function SheetFinanceRefunds({ data }: { data: RefundsData }) {
   return (
@@ -820,6 +855,10 @@ export function SheetFinanceRefunds({ data }: { data: RefundsData }) {
                 <button className={"btn p sm"} data-toast={data.disputeFooter.evidence.toast} data-sub={data.disputeFooter.evidence.sub} data-fpb={"1"}>
                   {"Add evidence"}
                 </button>
+              ) : data.disputeFooter.evidenceLive ? (
+                <button className={"btn p sm"} data-dlg={"dlgEvidence"} data-fpb={"1"}>
+                  {"Add evidence"}
+                </button>
               ) : null}
               <span className={"fp-note"} style={{ margin: "0" }}>
                 {data.disputeFooter.note}
@@ -828,7 +867,233 @@ export function SheetFinanceRefunds({ data }: { data: RefundsData }) {
           </div>
         ) : null}
       </section>
+      {data.credits?.length ? <CreditsPanel rows={data.credits} intro={data.creditsIntro ?? ""} /> : null}
     </>
+  );
+}
+
+/**
+ * Live only (FIN-13): client credits, in the Designer's panel and table (`.panel`, `h2`, `.tw`,
+ * `table.t`, `.bd`, `.fp-row` with a `.btn sm`, `.fp-note`). Each row's Refund or apply fills and
+ * opens `#dlgCredit`; its links show where the money went.
+ */
+function CreditsPanel({ rows, intro }: { rows: CreditRow[]; intro: string }) {
+  return (
+    <section className={"panel rv"} style={i(4)}>
+      <h2>
+        <Icon name={"bank"} />
+        {"Client credits"}
+      </h2>
+      <div className={"tw"} role={"region"} aria-label={"Client credits"} tabIndex={0}>
+        <table className={"t"}>
+          <caption className={"sr"}>{"Client credits"}</caption>
+          <thead>
+            <tr>
+              <th scope={"col"}>{"Credit"}</th>
+              <th scope={"col"}>{"Client"}</th>
+              <th scope={"col"}>{"From invoice"}</th>
+              <th scope={"col"} style={RIGHT}>
+                {"CAD left"}
+              </th>
+              <th scope={"col"}>{"Where it went"}</th>
+              <th scope={"col"}>{"State"}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key}>
+                <td>{row.number}</td>
+                <td>{row.client}</td>
+                <td>
+                  <a href={row.from.href} className={"num"} style={{ color: "var(--blue)" }}>
+                    {row.from.label}
+                  </a>
+                </td>
+                <td className={"num"} style={RIGHT}>
+                  {row.available}
+                </td>
+                <td>{row.links.length ? <Parts parts={row.links} /> : "—"}</td>
+                <td>
+                  {row.act ? (
+                    <span className={"fp-row"}>
+                      <Badge badge={row.state} />
+                      <button
+                        className={"btn sm"}
+                        data-credit-open={row.act.creditId}
+                        data-available={String(row.act.availableCents)}
+                        data-amount={row.act.available}
+                        data-label={row.act.label}
+                        data-targets={JSON.stringify(row.act.targets)}
+                        data-card={row.act.card ? "1" : "0"}
+                        data-pending-card={row.act.pendingCard ? "1" : "0"}
+                      >
+                        {"Refund or apply"}
+                      </button>
+                    </span>
+                  ) : (
+                    <Badge badge={row.state} />
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {intro ? (
+        <div className={"fp-pad"}>
+          <span className={"fp-note"} style={{ margin: "0" }}>
+            {intro}
+          </span>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+export type CreditDialogData = { organizationId: string; today: string; blocked: { title: string; copy: string } | null };
+
+/**
+ * Refund or apply a client credit (FIN-13). Follows `#dlgInv`'s anatomy (`.dh`, `.db` with `.fld`,
+ * `.g2`, `.inp`, `.sel`, `.alert`, `.df`). The row's button fills it; the choice shows only the
+ * fields it needs. Its submit carries `data-credit-submit`.
+ */
+export function CreditDialog({ data }: { data: CreditDialogData }) {
+  return (
+    <dialog className={"dlg"} id={"dlgCredit"} aria-labelledby={"dlgCreditH"}>
+      <div className={"dh"}>
+        <h2 id={"dlgCreditH"}>{"Refund or apply a credit"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={"dlgCredit"}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <div className={"fld"}>
+          <label htmlFor={"crC"}>{"Credit"}</label>
+          <input className={"inp"} id={"crC"} type={"text"} readOnly defaultValue={""} />
+        </div>
+        <div className={"g2"}>
+          <div className={"fld"}>
+            <label htmlFor={"crM"}>{"What to do"}</label>
+            <select className={"sel"} id={"crM"} defaultValue={"apply"}>
+              <option value={"apply"}>{"Apply to another invoice"}</option>
+              <option value={"card"}>{"Refund to the card"}</option>
+              <option value={"bank"}>{"Record a bank refund"}</option>
+            </select>
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"crA"}>{"Amount"}</label>
+            <small className={"hint"} id={"crA-h"}>
+              {"Up to what is left on this credit."}
+            </small>
+            <input className={"inp"} id={"crA"} type={"text"} inputMode={"decimal"} autoComplete={"off"} placeholder={"0.00"} aria-describedby={"crA-h"} maxLength={16} />
+          </div>
+        </div>
+        <div className={"fld"} data-credit-for={"apply"}>
+          <label htmlFor={"crT"}>{"Invoice"}</label>
+          <select className={"sel"} id={"crT"}>
+            <option value={""}>{"No open invoice of this client"}</option>
+          </select>
+        </div>
+        <div className={"g2"} data-credit-for={"bank"} hidden>
+          <div className={"fld"}>
+            <label htmlFor={"crB"}>{"Returned by"}</label>
+            <select className={"sel"} id={"crB"} defaultValue={"e_transfer"}>
+              <option value={"e_transfer"}>{"Interac e-Transfer"}</option>
+              <option value={"cheque"}>{"Cheque"}</option>
+              <option value={"wire"}>{"Wire"}</option>
+            </select>
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"crD"}>{"Date returned"}</label>
+            <input className={"inp"} id={"crD"} type={"date"} max={data.today} defaultValue={data.today} />
+          </div>
+        </div>
+        <div className={"fld"} data-credit-for={"bank"} hidden>
+          <label htmlFor={"crR"}>{"Bank reference"}</label>
+          <input className={"inp"} id={"crR"} type={"text"} autoComplete={"off"} maxLength={120} placeholder={"e-Transfer or cheque reference"} />
+        </div>
+        {data.blocked ? (
+          <Alert tone={"warn"} icon={"info"} title={data.blocked.title}>
+            {data.blocked.copy}
+          </Alert>
+        ) : (
+          <Alert tone={"info"} icon={"info"} title={"Links are kept"}>
+            {
+              "Applying moves the money to the other invoice of the same client. A card refund goes through Stripe and counts once Stripe confirms it. A bank refund records money already returned outside Casevoya; it can’t be recorded while a card refund of the invoice is pending. The matter stage doesn’t change."
+            }
+          </Alert>
+        )}
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={"dlgCredit"}>
+          {"Cancel"}
+        </button>
+        <button className={"btn p"} data-credit-submit={"1"} data-org={data.organizationId} disabled={data.blocked ? true : undefined}>
+          {"Save"}
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
+export type EvidenceDialogData = { organizationId: string; disputes: { value: string; label: string }[] };
+
+/**
+ * Add evidence to a card dispute and submit it to Stripe (FIN-13, test mode). Follows `#dlgInv`'s
+ * anatomy; the file goes to Stripe through the firm's account, never kept by Casevoya. Its submit
+ * carries `data-evidence-submit`.
+ */
+export function EvidenceDialog({ data }: { data: EvidenceDialogData }) {
+  return (
+    <dialog className={"dlg"} id={"dlgEvidence"} aria-labelledby={"dlgEvidenceH"}>
+      <div className={"dh"}>
+        <h2 id={"dlgEvidenceH"}>{"Add evidence"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={"dlgEvidence"}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <div className={"fld"}>
+          <label htmlFor={"evD"}>{"Dispute"}</label>
+          <select className={"sel"} id={"evD"}>
+            {data.disputes.length ? (
+              data.disputes.map((dispute) => (
+                <option key={dispute.value} value={dispute.value}>
+                  {dispute.label}
+                </option>
+              ))
+            ) : (
+              <option value={""}>{"No dispute waiting for evidence"}</option>
+            )}
+          </select>
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"evT"}>{"What happened"}</label>
+          <small className={"hint"} id={"evT-h"}>
+            {"Plain facts for the bank: the agreement, the work delivered, when the client was told."}
+          </small>
+          <textarea className={"ta"} id={"evT"} rows={4} maxLength={5000} aria-describedby={"evT-h"}></textarea>
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"evF"}>{"File"}</label>
+          <small className={"hint"} id={"evF-h"}>
+            {"One PDF, JPG or PNG, up to 4.5 MB: the signed agreement, the invoice, proof of delivery."}
+          </small>
+          <input className={"inp"} id={"evF"} type={"file"} accept={"application/pdf,image/jpeg,image/png"} aria-describedby={"evF-h"} />
+        </div>
+        <Alert tone={"warn"} icon={"info"} title={"Submitted once"}>
+          {"Stripe sends the evidence to the client’s bank when you submit it, and it can’t be changed after. Test mode: no real bank sees it. You’ll confirm it’s you first."}
+        </Alert>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={"dlgEvidence"}>
+          {"Cancel"}
+        </button>
+        <button className={"btn p"} data-evidence-submit={"1"} data-org={data.organizationId} disabled={data.disputes.length ? undefined : true}>
+          {"Submit to Stripe"}
+        </button>
+      </div>
+    </dialog>
   );
 }
 

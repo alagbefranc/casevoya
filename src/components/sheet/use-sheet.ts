@@ -23,6 +23,7 @@ import {
 } from "./agreement-acts";
 import { editQuoteTable, reopenQuoteDialogs, runClauseSave, runQuoteConvert, runQuoteNew, runQuoteSave, runQuoteSend } from "./quote-acts";
 import { openRefund, reopenInvoiceDialog, reopenRefundDialog, runNewInvoice, runRefund } from "./finance-acts";
+import { openCredit, reopenCreditDialog, reopenEvidenceDialog, runCredit, runEvidence, syncCreditMode } from "./credit-acts";
 import {
   openFunds,
   openReview,
@@ -409,6 +410,23 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (refund.getAttribute("aria-busy") === "true" || refund.hasAttribute("disabled")) return;
         refund.setAttribute("aria-busy", "true");
         void runRefund(refund, router).finally(() => refund.removeAttribute("aria-busy"));
+        return;
+      }
+      // The Refunds and disputes tab (FIN-13): a credit's Refund or apply fills #dlgCredit; its
+      // Save and Add evidence's Submit to Stripe each run once at a time.
+      const creditOpen = target.closest<HTMLElement>("[data-credit-open]");
+      if (creditOpen && root.contains(creditOpen)) {
+        event.preventDefault();
+        openCredit(creditOpen, root, openDialog);
+        return;
+      }
+      const creditSubmit = target.closest<HTMLElement>("[data-credit-submit], [data-evidence-submit]");
+      if (creditSubmit && root.contains(creditSubmit)) {
+        event.preventDefault();
+        if (creditSubmit.getAttribute("aria-busy") === "true" || creditSubmit.hasAttribute("disabled")) return;
+        creditSubmit.setAttribute("aria-busy", "true");
+        const run = creditSubmit.hasAttribute("data-credit-submit") ? runCredit(creditSubmit, router) : runEvidence(creditSubmit, router);
+        void run.finally(() => creditSubmit.removeAttribute("aria-busy"));
         return;
       }
       // The Client funds tab: openers fill and open its dialogs; each submit is keyed by its own attribute.
@@ -1427,6 +1445,16 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     if (root.querySelector(CORRECTIONS_SUBMIT)) window.setTimeout(() => reopenCorrectionsDialog(root, openDialog), 300);
     // ?dlg=refund (back from step-up) reopens Refund for the same payment with what was typed.
     if (root.querySelector("dialog#dlgRefund [data-refund-submit]")) window.setTimeout(() => reopenRefundDialog(root, openDialog), 300);
+    // FIN-13: ?dlg=client-credit / ?dlg=evidence (back from step-up) reopen Refund or apply and Add evidence;
+    // the credit dialog shows only the fields its choice needs.
+    const creditDialog = root.querySelector<HTMLDialogElement>("dialog#dlgCredit");
+    if (creditDialog) {
+      window.setTimeout(() => reopenCreditDialog(root, openDialog), 300);
+      creditDialog.addEventListener("change", (event) => {
+        if ((event.target as Element | null)?.matches("#crM")) syncCreditMode(creditDialog);
+      }, listen);
+    }
+    if (root.querySelector("dialog#dlgEvidence")) window.setTimeout(() => reopenEvidenceDialog(root, openDialog), 300);
     // ?dlg=funds (back from step-up) reopens the Client funds dialog with what was typed; the
     // chosen client ledger narrows the invoices a transfer can pay.
     if (root.querySelector(FUNDS_SUBMIT)) {

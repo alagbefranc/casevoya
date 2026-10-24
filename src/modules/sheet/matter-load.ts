@@ -23,6 +23,7 @@ import type { MatterBadge } from "@/components/sheet/designer/matters";
 import { createClient } from "@/lib/supabase/server";
 import { staffPerson } from "@/modules/sheet/avatar";
 import { todayIso } from "@/modules/sheet/birth-date";
+import { consultantDialog } from "@/modules/sheet/consultant-change";
 import { isUuid } from "@/lib/tenant/context";
 import { isLicensedMembership, LICENCE_FACT_COLUMNS } from "@/lib/tenant/roles";
 import { loadSheetChrome, memberNames } from "@/modules/sheet/chrome-load";
@@ -94,6 +95,9 @@ import {
   stageLabel,
   type SheetQuery,
 } from "@/modules/sheet/present";
+
+/** Who may change a matter's responsible consultant (app.assign_responsible_consultant). */
+const CONSULTANT_CHANGERS = new Set(["firm_owner", "licensed_consultant", "case_manager"]);
 
 /** Who can send an agreement (send_agreement): the Agreements page offers New agreement to the same roles. */
 const AGREEMENT_SEND_ROLES = new Set(["firm_owner", "licensed_consultant", "case_manager"]);
@@ -646,6 +650,20 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
         }
       : null,
   };
+  // ORG-06: Change consultant, from the responsible consultant's card, for staff who may assign one
+  // (public.change_responsible_consultant decides). It lists who will be told before saving.
+  if (wire && matter.responsible_consultant_membership_id && matter.stage !== "closed" && CONSULTANT_CHANGERS.has(staff.role)) {
+    const [credentials, audience] = await Promise.all([
+      supabase.from("consultant_credentials").select("membership_id").eq("organization_id", org).eq("status", "verified").limit(200),
+      supabase.rpc("consultant_change_audience", { p_matter_id: matter.id }),
+    ]);
+    const active = new Set(holdStaff);
+    const consultants = [...new Set((credentials.data ?? []).map((row) => row.membership_id))].filter((id) => active.has(id)).map((id) => ({ id, name: memberName(id) }));
+    if (consultants.length && !audience.error) {
+      dialogs.consultant = consultantDialog({ consultants, current: matter.responsible_consultant_membership_id, audience: audience.data, sample: matter.is_sample });
+      for (const card of cards) if (card.pill.label === "Responsible") card.consultant = true;
+    }
+  }
   // New task for this matter, and the Task dialog its rows open (Tasks and deadlines tab).
   if (managesTasks && matter.stage !== "closed") {
     const staffOwners = staffOptions(holdStaff.map((id) => ({ id, name: memberName(id) })));

@@ -537,6 +537,21 @@ OPS-06, branch `feat/ops-inbound-filing`.
 
 Tested in `tests/inbound-filing.rls.test.ts`.
 
+## Stripe Connect status, disputes, failed refunds and client credits (`20261025130000`, not applied on the live project)
+
+PRD FIN-02 and FIN-13, test mode only.
+
+* `firm_payment_accounts` gains `requirements` (Stripe's open requirements as last read: description, how soon, who must act), `fees_collector` and `losses_collector` (Stripe's `defaults.responsibilities`; null until read). `public.sync_firm_payment_account_status(org, account, card, payouts, requirements, fees_collector?, losses_collector?)`: the firm owner at aal2 stores what Stripe reported; unknown keys are dropped, `requirements_due` is the list's length. `public.sync_firm_payment_account` is left as it was.
+* `public.invoice_card_checkout_check(invoice)`: for the client who is a party, `{allowed, reason}`; only `professional_fee`, `disbursement` and `consultation_fee` (`app.is_card_payable_category`). Trigger `invoice_payments_earned_fee_only` refuses a card payment on any other invoice.
+* `app.create_finance_task(org, matter, title, priority, due_on, task_key)`: an internal task for the firm's first active owner (null when there is none), with its `created` task event. Not granted to API roles.
+* `app.apply_stripe_reversal_event` redefined (copied from `20261019110100`, its only definition): a new open dispute makes a `card_dispute` task (critical, due on the evidence deadline in the firm's timezone) stored in `invoice_disputes.task_id`; a refund that fails or is canceled makes a `refund_failed` task (high, due the firm's today) stored in `invoice_refunds.task_id`. Once per dispute or refund. Nothing else changed.
+* `invoice_disputes` gains `task_id`, `evidence_submitted_at`, `evidence_submitted_by`; `invoice_refunds` gains `task_id`.
+* `invoice_dispute_evidence`: append-only, one row per file sent to Stripe (Stripe file id, name, type PDF/JPEG/PNG, size up to 4.5 MB, explanation, submitted). Billing staff of the matter read it; clients don't. `public.dispute_evidence_context(dispute)` (billing access through `app.require_refund_access`, recent step-up, dispute still `needs_response` or `warning_needs_response`, before its deadline, on the firm's account) and `public.record_dispute_evidence(...)` (test mode only; sets `evidence_submitted_at/by` when submitted). Audited `invoice.dispute_evidence_submitted` / `invoice.dispute_evidence_added`.
+* `client_credits`: one per source invoice (CR-0001 per firm), opened, reopened and settled by trigger `invoices_client_credit` from `app.invoice_overpaid_cents` (paid less refunded plus credited over the amount; everything kept on a voided invoice). What is left is computed (`app.client_credit_available_cents`: the overpayment less card refunds of that invoice still pending at Stripe), never stored.
+* `client_credit_allocations`: append-only links, kind `invoice` (target invoice), `card_refund` (an `invoice_refunds` row, unique) or `bank_refund` (method e_transfer/cheque/wire, reference, date). `public.apply_client_credit(credit, target, amount, key)` moves the amount from the source invoice's `paid_cents` to the target's (same client: same matter or a shared applicant; open; same currency; at most what is left and what the target owes); `public.client_credit_refund_context(credit)` names the card payment to refund; `public.link_client_credit_refund(credit, refund)`; `public.record_client_credit_bank_refund(credit, amount, method, reference, date, key)` lowers the source invoice's `paid_cents` and is refused while a card refund of the invoice is pending at Stripe. All need billing access to the matter and a recent step-up, are idempotent on the key and audited (`invoice.client_credit_*`). Billing staff read credits and links; clients don't.
+
+Tested in `tests/finance-stripe-disputes-credits.rls.test.ts` and `tests/finance-stripe-connect-credits.test.tsx`.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.
