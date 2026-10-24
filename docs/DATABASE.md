@@ -604,6 +604,18 @@ PRD FIN-02 and FIN-13, test mode only.
 
 Tested in `tests/finance-stripe-disputes-credits.rls.test.ts` and `tests/finance-stripe-connect-credits.test.tsx`.
 
+## Government status provenance (`20261025190000`, not applied on the live project)
+
+GOV-05, branch `feat/gov-status-provenance`.
+
+* `government_status_checks.correspondence_id` (FK `(correspondence_id, organization_id)` to `government_correspondence`, indexed): the status a check was about; null is a check of the whole matter. The table stays append-only and audited.
+* `public.mark_government_checked(matter, correspondence)` (authenticated; staff on the matter, `app.gov_staff_roles`): records "Checked … No change." with the actor's membership; refuses a status from another matter. Audited `government.status_checked`.
+* `government_processing_estimates`: one row per estimate a staff member read on IRCC's processing-times page: `source_url` (allowlisted host, and the function requires `canada.ca`), `application_type`, `estimate_text` (as written, not parsed), `checked_on` (not after `app.firm_today`), `page_retrieved_at` + `snapshot_sha256` (both or neither; the server's fetch of the page), `status` (`pending_review`, `approved`, `rejected`, `superseded`), entered and reviewed by membership. Forced RLS; staff who can read the matter (`app.gov_staff_can_read`) select; no client access; entered facts immutable (trigger), updates only through the functions (`app.gov_guard_update`), never deleted. Never seeded.
+* `public.record_processing_estimate(matter, url, application_type, estimate, checked_on, retrieved_at, sha256)` (staff on the matter; sample-mode rule) and `public.review_processing_estimate(estimate, version, decision, note)` (licensed member via `app.gov_require_licensed`: recent step-up, no licence block; a note to reject; approving supersedes the matter's earlier approved estimate). Audited `government.estimate_entered` / `_approved` / `_rejected`.
+* No function redefined; `share_government_record` is reused unchanged.
+
+Tested in `tests/gov-status-provenance.rls.test.ts` and `tests/gov-status-provenance-present.test.tsx`.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.

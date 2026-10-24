@@ -3353,10 +3353,74 @@ export type Database = {
         }
         Relationships: []
       }
+      government_processing_estimates: {
+        Row: {
+          application_type: string
+          checked_on: string
+          created_at: string
+          created_by: string | null
+          entered_by_membership_id: string
+          estimate_text: string
+          id: string
+          matter_id: string
+          organization_id: string
+          page_retrieved_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by_membership_id: string | null
+          snapshot_sha256: string | null
+          source_url: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          application_type: string
+          checked_on: string
+          created_at?: string
+          created_by?: string | null
+          entered_by_membership_id: string
+          estimate_text: string
+          id?: string
+          matter_id: string
+          organization_id: string
+          page_retrieved_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_sha256?: string | null
+          source_url: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          application_type?: string
+          checked_on?: string
+          created_at?: string
+          created_by?: string | null
+          entered_by_membership_id?: string
+          estimate_text?: string
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          page_retrieved_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_sha256?: string | null
+          source_url?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       government_status_checks: {
         Row: {
           checked_at: string
           checked_by_membership_id: string
+          correspondence_id: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -3367,6 +3431,7 @@ export type Database = {
         Insert: {
           checked_at?: string
           checked_by_membership_id: string
+          correspondence_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -3377,6 +3442,7 @@ export type Database = {
         Update: {
           checked_at?: string
           checked_by_membership_id?: string
+          correspondence_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -12747,6 +12813,10 @@ export type Database = {
         }
         Returns: string
       }
+      mark_government_checked: {
+        Args: { p_correspondence_id: string | null; p_matter_id: string }
+        Returns: string
+      }
       mark_message_thread_read: {
         Args: { p_organization_id: string; p_thread_id: string }
         Returns: number
@@ -13162,6 +13232,18 @@ export type Database = {
         }
         Returns: string
       }
+      record_processing_estimate: {
+        Args: {
+          p_application_type: string
+          p_checked_on: string
+          p_estimate: string
+          p_matter_id: string
+          p_retrieved_at: string | null
+          p_sha256: string | null
+          p_source_url: string
+        }
+        Returns: string
+      }
       record_government_check: {
         Args: {
           p_matter_id: string
@@ -13480,6 +13562,15 @@ export type Database = {
           p_reason: string
           p_reason_fr: string
           p_version_id: string
+        }
+        Returns: number
+      }
+      review_processing_estimate: {
+        Args: {
+          p_decision: string
+          p_estimate_id: string
+          p_expected_version: number
+          p_note: string | null
         }
         Returns: number
       }

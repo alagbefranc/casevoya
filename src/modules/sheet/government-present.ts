@@ -31,6 +31,8 @@ import {
   WITHDRAWAL_STEPS,
 } from "@/modules/government/present";
 import { staffPerson } from "@/modules/sheet/avatar";
+import type { EstimateRow } from "@/modules/government/status-provenance";
+import { estimateTableRow, letterProvenance, statusDialogs, submissionProvenance } from "@/modules/sheet/gov-status-present";
 import { dayMonth } from "@/modules/sheet/home-present";
 import { dayMonthYear, firstName, longDate, taskDue } from "@/modules/sheet/matter-present";
 import { isoDateInTimeZone, MATTER_OUTCOMES, outcomeLabel, stageLabel } from "@/modules/sheet/present";
@@ -101,7 +103,8 @@ export type FollowUp = {
 };
 
 export type StepRow = { decision_id: string; step: string; note: string | null; done_by_membership_id: string; done_at: string };
-export type CheckRow = { note: string; checked_by_membership_id: string; checked_at: string };
+/** `correspondence_id`: the status a check was about (GOV-05 Mark checked); null for the whole matter. */
+export type CheckRow = { note: string; checked_by_membership_id: string; checked_at: string; correspondence_id?: string | null };
 export type TransitionRow = { to_stage: string; actor_user_id: string | null; created_at: string };
 export type DeadlineLink = { correspondence_id: string; due_on: string | null };
 export type ExpiringDocument = { versionId: string; purpose: string; expiresOn: string };
@@ -118,6 +121,8 @@ export type GovernmentRecords = {
   representation: boolean;
   documents: { total: number; open: number };
   expiring: ExpiringDocument[];
+  /** GOV-05: IRCC processing-time estimates entered on this matter. */
+  estimates?: EstimateRow[];
 };
 
 export type GovernmentContext = {
@@ -138,6 +143,8 @@ export type GovernmentContext = {
   licensed: boolean;
   /** Licensed members who can be the submitting representative. */
   representatives: { id: string; name: string }[];
+  /** GOV-05: the firm's name, for "Recorded by <firm> on <date>" in the share preview. */
+  firmName?: string;
 };
 
 const STAFF = new Set(["firm_owner", "licensed_consultant", "case_manager", "assistant"]);
@@ -466,7 +473,7 @@ export function buildDecisions(records: GovernmentRecords, ctx: GovernmentContex
 
 /* ------------------------------------------------- Government status page */
 
-function letterTableRow(letter: LetterRow, ctx: GovernmentContext, item?: string): GovernmentRow {
+function letterTableRow(letter: LetterRow, ctx: GovernmentContext, item?: string, records?: GovernmentRecords): GovernmentRow {
   const hasEvidence = Boolean(letter.evidence_version_id || letter.evidence_locator);
   return {
     item: item ?? correspondenceLabel(letter.kind),
@@ -477,6 +484,8 @@ function letterTableRow(letter: LetterRow, ctx: GovernmentContext, item?: string
     lastChecked: whenFull(letter.created_at, ctx.timezone, ctx.today),
     verify: !letter.verified_at && hasEvidence && VERIFIERS.has(ctx.role) ? wire("verify-letter", ctx, { id: letter.id, version: String(letter.version) }) : null,
     attach: !letter.verified_at && !hasEvidence && STAFF.has(ctx.role) ? wire("attach-letter", ctx, { id: letter.id, version: String(letter.version) }) : null,
+    // GOV-05: source, evidence link, last checked (this status or the whole matter), Mark checked, sharing.
+    ...(records ? letterProvenance(letter, records, ctx) : {}),
   };
 }
 
@@ -517,25 +526,29 @@ export function buildGovernmentPage(records: GovernmentRecords, ctx: GovernmentC
             : `${latest.package_label}, not submitted yet`,
       verified: latest.verified_at ? `${ctx.memberName(latest.verified_by_membership_id)}, ${whenFull(latest.verified_at, ctx.timezone, ctx.today)}` : "—",
       lastChecked,
+      ...submissionProvenance(latest, records, ctx),
     });
   } else {
-    rows.push({ item: "Submission", status: { tone: "gr", label: "Not recorded" }, recordedBy: "—", evidence: "—", verified: "—", lastChecked });
+    rows.push({ item: "Submission", status: { tone: "gr", label: "Not recorded" }, recordedBy: "—", evidence: "—", verified: "—", lastChecked, ...submissionProvenance(null, records, ctx) });
   }
+  // GOV-05: IRCC's processing-time estimate sits next to the submission status, once entered.
+  const estimate = estimateTableRow(records, ctx);
+  if (estimate) rows.push(estimate);
   const number = records.letters.find((row) => row.kind === "application_number");
   rows.push(
     number
-      ? letterTableRow(number, ctx, "Application number")
+      ? letterTableRow(number, ctx, "Application number", records)
       : { item: "Application number", status: { tone: "gr", label: "Not yet recorded" }, recordedBy: "—", evidence: "—", verified: "—", lastChecked: "—" },
   );
   const biometrics = records.letters.find((row) => row.kind === "biometrics_instruction");
   rows.push(
     biometrics
-      ? letterTableRow(biometrics, ctx, "Biometrics")
+      ? letterTableRow(biometrics, ctx, "Biometrics", records)
       : { item: "Biometrics", status: { tone: "gr", label: "Not recorded" }, recordedBy: "—", evidence: "—", verified: "—", lastChecked: "—" },
   );
   for (const letter of records.letters) {
     if (letter === number || letter === biometrics) continue;
-    rows.push(letterTableRow(letter, ctx));
+    rows.push(letterTableRow(letter, ctx, undefined, records));
   }
 
   type Event = { at: string; text: string };
@@ -557,10 +570,13 @@ export function buildGovernmentPage(records: GovernmentRecords, ctx: GovernmentC
   events.sort((a, b) => b.at.localeCompare(a.at));
   const history = events.slice(0, 8).map((event) => ({ text: event.text, when: whenFull(event.at, ctx.timezone, ctx.today) }));
 
+  const provenance = statusDialogs(records, ctx);
   return {
     intro: "What the firm knows about the government application, who recorded it, from what evidence, and when it was last checked. This is a record kept by the firm, not a live feed.",
     alert,
     rows,
+    estimate: provenance.estimate,
+    dialogs: provenance.dialogs,
     record: STAFF.has(ctx.role)
       ? { options: [{ value: "check", label: "Checked, no change" }, ...STATUS_OPTIONS.map((option) => ({ value: option.value, label: option.label }))], save: wire("status", ctx, { today: ctx.today }) }
       : null,

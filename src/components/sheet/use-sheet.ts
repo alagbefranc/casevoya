@@ -94,6 +94,7 @@ import { runInboxCompose, runInboxMessage, runInboxNote, runInboxReply } from ".
 import { mountMessagingInputs, runAnnouncementSend, runTemplateApprove, runTemplateArchive, runTemplateSave } from "./messaging-acts";
 import { mountDocOpen, mountDrafts, mountInboxFilters, mountRecordsCrumb } from "./records-acts";
 import { bindGovControls } from "./gov-acts";
+import { bindGovStatusControls } from "./gov-status-acts";
 import {
   openRedaction,
   reopenComplianceDialog,
@@ -254,6 +255,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     scrim?.addEventListener("click", shut, listen);
     // Government status, Submissions and Decisions (T036 to T039): `data-gov` controls and file picks.
     bindGovControls(root, router, listen);
+    // GOV-05: Mark checked, Share with client, IRCC estimates (`data-govs`).
+    if (page === "government") bindGovStatusControls(root, router, listen);
     // Task ticks and the Task dialog, Confirm on a deadline, Change stage's label, checklist person chips.
     bindWorkControls(root, router, listen);
     // The Matters list: search and Mine together, its counts and no-match panel, Select all.
@@ -1334,7 +1337,7 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     mountRecordsCrumb(root, page, (group) => openPalette(root, (href) => router.push(href), group), ac.signal);
     if (page === "inbox") mountInboxFilters(root, ac.signal);
     if (page === "inbox" || page === "templates") mountMessagingInputs(root, ac.signal);
-    if (page === "documents") mountDocOpen(root, runDocOpen, ac.signal);
+    if (page === "documents" || page === "government") mountDocOpen(root, runDocOpen, ac.signal);
     if (page === "drafts") mountDrafts(root, () => router.refresh(), ac.signal);
     // Back from a Composio Connect Link on Settings > Integrations.
     if (page === "settings") mountIntegrations(root, router);
