@@ -70,6 +70,7 @@ import {
 } from "./corrections-acts";
 import { openDocReview, reopenDocReview, runDocFile, runDocOpen, runDocReview } from "./documents-acts";
 import { restoreDocRequest, runDocRequest } from "./doc-request-act";
+import { runUploadLimit } from "./upload-limit-act";
 import { armIntakeReview, runIntakeFreeze, runIntakeReuse, runIntakeSend } from "./intake-delivery-acts";
 import { runFlagResolve, runPersonAdd, runPersonRemove } from "./person-history-acts";
 import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
@@ -835,6 +836,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (intakeSend && root.contains(intakeSend)) {
         event.preventDefault();
         busyRun(intakeSend, () => runIntakeSend(intakeSend, router));
+        return;
+      }
+      // Settings > Security: the per-file upload limit (DOC-02).
+      const uploadLimit = target.closest<HTMLElement>("[data-upload-limit]");
+      if (uploadLimit && root.contains(uploadLimit)) {
+        event.preventDefault();
+        busyRun(uploadLimit, () => runUploadLimit(uploadLimit, router));
         return;
       }
       const intakeFreeze = target.closest<HTMLElement>("[data-intake-freeze]");
