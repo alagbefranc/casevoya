@@ -2,7 +2,8 @@
  * Pure helpers for the Sheet's Documents page: which version is a document's current one,
  * what the To review queue shows for it, and the chips on the All documents cards.
  * Upload state and firm review stay separate (DOC-02, DOC-04): "Clean" is a file check,
- * "Accepted" is the firm's acceptance for its purpose, never a government validation.
+ * "Accepted" is the firm's acceptance for its purpose, never a government validation. Live, a file
+ * only type-checked (no malware scanner connected, `structural_only`) says so instead of "Clean".
  */
 import type { DocChip, DocTone, DocumentsTab } from "@/components/sheet/designer/documents";
 import { documentCardFlags, type ReviewState, type UploadState } from "@/modules/documents/present";
@@ -23,6 +24,8 @@ export type VersionFacts = {
   versionNumber: number;
   uploadState: string;
   scanResult: string | null;
+  /** documents.scan_engine: "structural_only" (type check only) or "worker" (a scanner). Absent: the Designer's sample. */
+  scanEngine?: string | null;
   reviewState: string;
   declaredMediaType: string;
   expiresOn: string | null;
@@ -91,6 +94,15 @@ export type QueueEntry = {
   reviewable: boolean;
 };
 
+/**
+ * A passed file check, honestly (DOC-02): "Clean" only when a malware scanner checked it. Without
+ * one the file's real type was checked, and nothing more.
+ */
+export function scanChip(engine: string | null | undefined): DocChip {
+  if (engine === undefined || engine === "worker") return { tone: "ok", label: "Clean" };
+  return { tone: "unv", label: "Type checked, not virus-scanned" };
+}
+
 /** What To review shows for a document's current version, or null when it needs nothing. */
 export function queueEntry(version: VersionFacts, today: string): QueueEntry | null {
   if (version.supersededAt) return null;
@@ -101,7 +113,7 @@ export function queueEntry(version: VersionFacts, today: string): QueueEntry | n
     return { scan: { tone: "bad", pair: ["Check failed", fileProblem(version.scanResult, version.declaredMediaType)] }, review: "Can’t open", flag: "quarantined", reviewable: false };
   }
   if (version.uploadState !== "clean") return null;
-  const clean: DocChip = { tone: "ok", label: "Clean" };
+  const clean = scanChip(version.scanEngine);
   if (version.reviewState === "pending") return { scan: clean, review: { tone: "rev", label: "Awaiting review" }, flag: "review", reviewable: true };
   if (version.reviewState === "accepted" && version.expiresOn) {
     if (version.expiresOn < today) return { scan: clean, review: { tone: "bad", label: "Expired" }, flag: "expiring", reviewable: true };
