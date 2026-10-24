@@ -176,3 +176,13 @@ describe("Upload", () => {
     expect(html({ page: "upload", documents: { ...documents, requests: [] } })).toContain("Nothing to upload");
   });
 });
+
+describe("portal loading", () => {
+  it("shows a skeleton while a page loads, never the no-access card", async () => {
+    const { PortalLoading } = await import("@/components/portal/live");
+    const page = renderToStaticMarkup(createElement(PortalLoading));
+    expect(page).toContain('aria-busy="true"');
+    expect(page).toContain("Opening your portal");
+    expect(page).not.toMatch(/No portal yet|Nothing on file/);
+  });
+});
