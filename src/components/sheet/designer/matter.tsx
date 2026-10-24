@@ -9,12 +9,14 @@ import { Badge, type MatterBadge } from "./matters";
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair, Sep } from "./frame";
 import { PersonEditDialog, personEditProps, type PersonEditDialogData } from "./person-edit";
+import { PersonHistoryList } from "./person-history";
 import { PolicyMissingAlert } from "./portal-policies";
 import { MatterDecisionsLive, MatterSubmissions, type MatterDecisionsData, type MatterSubmissionsData } from "./matter-government";
 import { MatterDocumentReview, type MatterDocumentReviewData } from "./vo-doc-review";
 import { DOC_REQUEST_DIALOG, DocRequestDialog, type DocRequestDialogData } from "./doc-request";
 import { MatterIntake, type MatterIntakeData } from "./matter-intake";
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
+import type { PersonHistoryPanel } from "@/modules/sheet/person-history-present";
 import type { PersonEditData } from "@/modules/sheet/edit-person";
 import { ChatError, ChatView } from "@/components/messages/chat";
 import { TaskEditDialog, TasksDialog, type TaskEditDialogData, type TasksDialogData } from "./tasks";
@@ -1100,7 +1102,7 @@ function manageProps(card: MatterPersonCard) {
 }
 export type MatterRelationship = { from: string; relation: string; to: string; evidence: string; sharing: MatterBadge | null };
 
-export function MatterPeople({ cards, relationships }: { cards: MatterPersonCard[]; relationships: MatterRelationship[] }) {
+export function MatterPeople({ cards, relationships, history }: { cards: MatterPersonCard[]; relationships: MatterRelationship[]; history?: PersonHistoryPanel[] }) {
   if (cards.length === 0) {
     return (
       <Panel>
@@ -1167,6 +1169,7 @@ export function MatterPeople({ cards, relationships }: { cards: MatterPersonCard
           </div>
         </>
       ) : null}
+      {history?.length ? <PersonHistoryList panels={history} /> : null}
     </>
   );
 }
@@ -1896,7 +1899,8 @@ export const MATTER_TAB_EMPTY: Partial<Record<MatterTab, { art: string; title: s
 export type MatterPageData = {
   tab: MatterTab;
   overview: MatterOverviewData;
-  people: { cards: MatterPersonCard[]; relationships: MatterRelationship[] };
+  /** `history`, live only (INT-05): each client's names, passports and addresses, and their flags. */
+  people: { cards: MatterPersonCard[]; relationships: MatterRelationship[]; history?: PersonHistoryPanel[] };
   /** `vo`: Vo's reading of one document, in the Designer's review panel (`#ocr`). */
   /** `request` (live): the person may request documents, so the empty tab offers it (#dReq). */
   documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[]; vo?: MatterDocumentReviewData | null; filter?: boolean; request?: boolean };
@@ -1925,7 +1929,7 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
     case "overview":
       return <MatterOverview data={data.overview} />;
     case "people":
-      return <MatterPeople cards={data.people.cards} relationships={data.people.relationships} />;
+      return <MatterPeople cards={data.people.cards} relationships={data.people.relationships} history={data.people.history} />;
     case "documents":
       return (
         <MatterDocuments
