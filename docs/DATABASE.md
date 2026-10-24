@@ -502,6 +502,27 @@ The private link runs the designed flow (spec `docs/specs/consultation-agreement
 
 Tested in `tests/booking-agreements.rls.test.ts`.
 
+## Task detail, recurrence and task notifications (`20261025100000`, `20261025100100`, not applied on the live project)
+
+OPS-01 (gap #179). Apply in this order.
+
+* `20261025100000_task_detail.sql`: `tasks.recurrence` (`weekly` / `monthly` / null, check constraint) and `tasks.recurrence_parent_id` (FK to the completed occurrence, indexed with `organization_id`). New definer functions with security-invoker public wrappers, revoked from `anon`: `update_task_details(task, version, estimated_minutes, due_time, due_timezone, recurrence)` (estimate, due instant from the due date and time in the chosen zone, timezone, repeat; audited `task.details_updated`), `set_task_checklist(task, version, checklist)` (up to 50 `{text, done}` items; audited `task.checklist_updated`), `remove_task_watcher(task, membership)` and `remove_task_dependency(task, depends_on)` (same checks as the add functions; row audit on delete). Redefined from their latest definitions: `app.set_task_status` (completing a recurring task creates the next occurrence once, stepped with `app.firm_today`; audited `task.recurred`) and `app.escalate_overdue_work` (every overdue open task, not only critical).
+* `20261025100100_task_notifications.sql`: `app.staff_notification_items` copied from `20261020180100` with a `task` branch from `task_events` (status, reassigned, escalated) for the owner at the time, watchers, the new owner and the matter's responsible consultant, readable tasks only, never the actor.
+
+Tested in `tests/task-detail.rls.test.ts`.
+## Inbound email filing (`20261025120000`, not applied on the live project)
+
+OPS-06, branch `feat/ops-inbound-filing`.
+
+* `inbound_inbox_items.file_audience` (`document_audience`, null means `subject`), `skipped_at`, `skipped_by` (indexed): what staff chose for each file when filing its email. A left-out file is never copied.
+* `email_deliveries.follow_up_task_id` (FK `(follow_up_task_id, organization_id)` to `tasks`, indexed): the follow-up task a critical bounce opened or joined.
+* `public.matter_inbound_address(matter, domain)` (authenticated; staff who can read the matter, `app.require_active_staff`): the matter's `slug+token@domain` address through `app.firm_reply_address` (128-bit random token, made on first use), with `matter_tag = false` when a long slug falls back to the firm address.
+* `public.file_inbound_email_to_matter(email, matter, person, files)` (authenticated): calls `public.file_inbound_email` unchanged (every access, role, step-up, matter and person check), then records `[{item_id, save, audience}]` (`subject` or `staff`) for files of that email not yet copied, in one transaction. Audited `email.files_chosen`. Returns the files still to copy.
+* Redefined `public.assign_unsorted_email_file` (from `20261019200000`): refuses a left-out file; the document's audience is the file's choice (`subject` when none, as before); the audit entry names it.
+* Redefined `public.finish_email_delivery` (from `20261018190100`): a critical bounce on a matter joins the firm's already-open follow-up task (one per firm, `tasks_email_delivery_failure_open_uidx`) instead of being recorded nowhere, the task is stored on the delivery, and `email.bounced` names it. A task still needs a matter (`tasks_check`), so a critical bounce with no matter still gets none; Delivery problems says so.
+
+Tested in `tests/inbound-filing.rls.test.ts`.
+
 ## Stripe Connect status, disputes, failed refunds and client credits (`20261025130000`, not applied on the live project)
 
 PRD FIN-02 and FIN-13, test mode only.

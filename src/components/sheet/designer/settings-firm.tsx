@@ -15,6 +15,7 @@
  */
 import { Fragment } from "react";
 import { Icon, Sep } from "./frame";
+import { InboundAddress, type InboundAddressData } from "./inbound-filing";
 
 /** The Designer's Settings tabs in its order. Client portal (no Designer tab) is a header link instead, so the strip fits. */
 const SETTINGS_TABS = [
@@ -99,6 +100,8 @@ export type FirmValue = string | { parts: string[] };
 export type FirmData = {
   firmName: string;
   rows: { label: string; value: FirmValue; num?: boolean }[];
+  /** Live only (OPS-06): the firm's inbound email address, in its own panel with a Copy button. */
+  inbound?: InboundAddressData | null;
 };
 
 function Value({ value }: { value: FirmValue }) {
@@ -143,6 +146,17 @@ export function SheetSettingsFirm({ data }: { data: FirmData }) {
           </dl>
         </div>
       </section>
+      {data.inbound ? (
+        <section className={"panel rv"} style={i(2)}>
+          <h2>
+            <Icon name={"mail"} />
+            {"Email into Casevoya"}
+          </h2>
+          <div className={"fp-pad"}>
+            <InboundAddress data={data.inbound} />
+          </div>
+        </section>
+      ) : null}
     </>
   );
 }

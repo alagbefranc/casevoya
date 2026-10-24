@@ -58,6 +58,7 @@ import { MigrationHeader, SheetMigration } from "@/components/sheet/designer/mig
 import { loadSheetMigration } from "@/modules/sheet/migration-load";
 import { DocumentReviewDialog, DocumentsHeader, SheetDocuments } from "@/components/sheet/designer/documents";
 import { ComposeDialog, InboxHeader, SheetInbox } from "@/components/sheet/designer/inbox";
+import { FileToMatterDialog } from "@/components/sheet/designer/inbound-filing";
 import { PrivacyDialogs, PrivacyHeader, SheetPrivacy } from "@/components/sheet/designer/privacy";
 import { ComplaintsDialogs, ComplaintsHeader, SheetComplaints } from "@/components/sheet/designer/complaints";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
@@ -202,7 +203,7 @@ export async function SheetBody({
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={chrome.sidebar}
-          header={<TasksHeader tab={tasks.tab} counts={tasks.counts} canCreate={tasks.canCreate !== false} />}
+          header={<TasksHeader tab={tasks.tab} counts={tasks.counts} canCreate={tasks.canCreate !== false} escalate={tasks.escalate} />}
           statusbar={chrome.statusbar}
           after={
             <>
@@ -241,7 +242,12 @@ export async function SheetBody({
           sidebar={chrome.sidebar}
           header={<InboxHeader tab={inbox.tab} pills={pills} />}
           statusbar={chrome.statusbar}
-          after={<ComposeDialog data={compose} />}
+          after={
+            <>
+              <ComposeDialog data={compose} />
+              {inbox.tab === "triage" ? <FileToMatterDialog organizationId={access.staff.organizationId} /> : null}
+            </>
+          }
         >
           <SheetInbox data={inbox} />
         </SheetFrame>

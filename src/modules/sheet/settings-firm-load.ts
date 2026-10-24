@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { FIRM_LOGO_BUCKET, FIRM_LOGO_PREVIEW_SECONDS, brandingAccent, brandingLogoLocator, ownFirmLogoKey } from "@/modules/firm-onboarding/firm-logo";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
+import { emailRuntimeConfig } from "@/lib/email/env";
+import { firmAddress } from "@/modules/email/addresses";
+import { firmInboundAddress } from "@/modules/sheet/inbound-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import {
   brandingPage,
@@ -79,7 +82,10 @@ export async function loadSheetSettingsFirm(staff: SheetStaff, tab: SettingsTab)
     const data = firmOk
       ? page
       : { ...page, rows: page.rows.map((row) => (row.label === "Organisation ID" || row.label === "Display name" ? row : { ...row, value: "Couldn’t load. Reload the page." })) };
-    return { chrome, header, dialogs, page: { tab, data } as const };
+    // OPS-06: the firm's inbound address, slug@ the inbound domain (the inbound worker's own rule).
+    const slug = await supabase.from("organizations").select("slug").eq("id", org).maybeSingle();
+    const withInbound = slug.data?.slug ? { ...data, inbound: firmInboundAddress(firmAddress(slug.data.slug, emailRuntimeConfig().inboundDomain)) } : data;
+    return { chrome, header, dialogs, page: { tab, data: withInbound } as const };
   }
 
   if (tab === "offices") {

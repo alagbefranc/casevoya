@@ -2768,6 +2768,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           critical: boolean
+          follow_up_task_id: string | null
           id: string
           last_error: string | null
           matter_id: string | null
@@ -2786,6 +2787,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           critical?: boolean
+          follow_up_task_id?: string | null
           id?: string
           last_error?: string | null
           matter_id?: string | null
@@ -2804,6 +2806,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           critical?: boolean
+          follow_up_task_id?: string | null
           id?: string
           last_error?: string | null
           matter_id?: string | null
@@ -3442,6 +3445,7 @@ export type Database = {
           byte_size: number | null
           created_at: string
           created_by: string | null
+          file_audience: Database["public"]["Enums"]["document_audience"] | null
           filename: string
           id: string
           inbound_email_id: string
@@ -3450,6 +3454,8 @@ export type Database = {
           organization_id: string
           scan_result: string | null
           sha256: string | null
+          skipped_at: string | null
+          skipped_by: string | null
           storage_key: string
           updated_at: string
           upload_state: string
@@ -3460,6 +3466,7 @@ export type Database = {
           byte_size?: number | null
           created_at?: string
           created_by?: string | null
+          file_audience?: Database["public"]["Enums"]["document_audience"] | null
           filename: string
           id?: string
           inbound_email_id: string
@@ -3468,6 +3475,8 @@ export type Database = {
           organization_id: string
           scan_result?: string | null
           sha256?: string | null
+          skipped_at?: string | null
+          skipped_by?: string | null
           storage_key: string
           updated_at?: string
           upload_state?: string
@@ -3478,6 +3487,7 @@ export type Database = {
           byte_size?: number | null
           created_at?: string
           created_by?: string | null
+          file_audience?: Database["public"]["Enums"]["document_audience"] | null
           filename?: string
           id?: string
           inbound_email_id?: string
@@ -3486,6 +3496,8 @@ export type Database = {
           organization_id?: string
           scan_result?: string | null
           sha256?: string | null
+          skipped_at?: string | null
+          skipped_by?: string | null
           storage_key?: string
           updated_at?: string
           upload_state?: string
@@ -9709,6 +9721,8 @@ export type Database = {
           owner_person_id: string | null
           person_id: string | null
           priority: Database["public"]["Enums"]["task_priority"]
+          recurrence: string | null
+          recurrence_parent_id: string | null
           status: Database["public"]["Enums"]["task_status"]
           task_key: string | null
           title: string
@@ -9736,6 +9750,8 @@ export type Database = {
           owner_person_id?: string | null
           person_id?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
+          recurrence?: string | null
+          recurrence_parent_id?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           task_key?: string | null
           title: string
@@ -9763,6 +9779,8 @@ export type Database = {
           owner_person_id?: string | null
           person_id?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
+          recurrence?: string | null
+          recurrence_parent_id?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           task_key?: string | null
           title?: string
@@ -10621,6 +10639,10 @@ export type Database = {
           p_refund_id: string
         }
         Returns: string
+      }
+      matter_inbound_address: {
+        Args: { p_domain?: string; p_matter_id: string }
+        Returns: Json
       }
       quote_to_agreement: {
         Args: { p_agreement_id: string; p_template_id: string }
@@ -11566,6 +11588,15 @@ export type Database = {
         Args: { p_email_id: string; p_matter_id: string; p_person_id: string }
         Returns: Json
       }
+      file_inbound_email_to_matter: {
+        Args: {
+          p_email_id: string
+          p_files: Json
+          p_matter_id: string
+          p_person_id: string
+        }
+        Returns: Json
+      }
       finish_cicc_register_import: {
         Args: { p_import_id: string }
         Returns: Json
@@ -12384,6 +12415,14 @@ export type Database = {
         Args: { p_office_id: string; p_organization_id: string }
         Returns: undefined
       }
+      remove_task_dependency: {
+        Args: { p_depends_on_task_id: string; p_task_id: string }
+        Returns: boolean
+      }
+      remove_task_watcher: {
+        Args: { p_membership_id: string; p_task_id: string }
+        Returns: boolean
+      }
       report_licence_change: {
         Args: { p_credential_id: string; p_detail: string }
         Returns: string
@@ -12840,6 +12879,10 @@ export type Database = {
         }
         Returns: number
       }
+      set_task_checklist: {
+        Args: { p_checklist: Json; p_expected_version: number; p_task_id: string }
+        Returns: number
+      }
       set_task_status: {
         Args: {
           p_blocker_note: string | null
@@ -13030,6 +13073,17 @@ export type Database = {
           p_priority: Database["public"]["Enums"]["task_priority"] | null
           p_task_id: string
           p_title: string
+        }
+        Returns: number
+      }
+      update_task_details: {
+        Args: {
+          p_due_time: string | null
+          p_due_timezone: string | null
+          p_estimated_minutes: number | null
+          p_expected_version: number
+          p_recurrence: string | null
+          p_task_id: string
         }
         Returns: number
       }
