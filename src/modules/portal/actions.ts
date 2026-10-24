@@ -8,7 +8,7 @@ import { retrieveAccountStatus } from "@/modules/finance/stripe-account";
 
 export type InvoicePaymentResult =
   | { clientSecret: string; stripeAccount: string; amountCents: number; currency: string }
-  | { error: string; reason?: "not_configured" | "not_ready" | "processing" | "closed" };
+  | { error: string; reason?: "not_configured" | "not_ready" | "processing" | "closed" | "not_earned_fee" };
 
 type Context = {
   invoice_id: string;
@@ -39,6 +39,14 @@ export async function createInvoicePayment(input: { organizationId: string; invo
   const supabase = await createClient({ organizationId: input.organizationId });
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) return { error: "Sign in first." };
+
+  // Earned fees only (FIN-02): an advance for the client (trust) account is refused before Stripe
+  // is asked for anything. A trigger on invoice_payments refuses it again.
+  const check = await supabase.rpc("invoice_card_checkout_check", { p_invoice_id: input.invoiceId });
+  if (check.error) return { error: "This invoice isn’t available." };
+  if ((check.data as { allowed?: unknown } | null)?.allowed !== true) {
+    return { error: "This invoice is an advance for the client (trust) account, which can’t be paid by card. Nothing was charged.", reason: "not_earned_fee" };
+  }
 
   const read = await supabase.rpc("invoice_payment_context", { p_invoice_id: input.invoiceId });
   if (read.error) {

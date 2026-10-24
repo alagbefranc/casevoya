@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { loadConnectAndInitialize, type StripeConnectInstance } from "@stripe/connect-js/pure";
 import { ConnectAccountOnboarding, ConnectComponentsProvider, ConnectNotificationBanner } from "@stripe/react-connect-js";
-import { Icon } from "@/components/sheet/designer/frame";
-import type { FinanceAccountData } from "@/modules/sheet/finance-load";
+import { Icon, Sep } from "@/components/sheet/designer/frame";
+import { Badge } from "@/components/sheet/designer/matters";
+import type { ConnectCardData, FinanceAccountData } from "@/modules/finance/connect-present";
 import { connectStripeAccount, createAccountSession, refreshStripeAccount } from "@/modules/finance/staff-actions";
 import { financeNeedsStepUp, financeStepUpLocation } from "@/modules/sheet/finance-present";
 
@@ -43,14 +44,11 @@ function stepUp(dialog: string | null) {
 }
 
 /**
- * The firm's Stripe account on the Payments tab, shown only when something is needed:
- * - no account: the owner sets one up (test mode);
- * - card payments not active, or Stripe has requirements due: a banner whose "Finish with Stripe"
- *   opens Stripe's own onboarding and notification banner (Connect embedded components; Stripe
- *   collects the identity and bank details) inside the Designer's `.dlg`.
- * Payments, payouts and the balance are Casevoya's own page. TEST MODE ONLY.
+ * Stripe's onboarding (Connect embedded components) in the Designer's `.dlg`, shared by the
+ * Finance banner and the Settings card: Connect.js loads only once the owner opens the dialog, a
+ * step-up round trip reopens it (`?dlg=stripe`), and closing it reads the account from Stripe again.
  */
-export function StripeAccountStatus({ data }: { data: FinanceAccountData }) {
+function useStripeOnboarding(data: FinanceAccountData) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -93,6 +91,82 @@ export function StripeAccountStatus({ data }: { data: FinanceAccountData }) {
     return () => window.clearTimeout(timer);
   }, [canFinish]);
 
+  const create = () =>
+    start(async () => {
+      setError(null);
+      const result = await connectStripeAccount({ organizationId: data.organizationId });
+      if ("error" in result) {
+        if (financeNeedsStepUp(result.error)) return stepUp(null);
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+
+  // Closing the dialog (or leaving Stripe's onboarding), or Check with Stripe, re-reads the account from Stripe.
+  const settle = () =>
+    start(async () => {
+      setError(null);
+      const result = await refreshStripeAccount({ organizationId: data.organizationId });
+      if ("error" in result) {
+        if (financeNeedsStepUp(result.error)) return stepUp(null);
+        setError(result.error);
+      }
+      router.refresh();
+    });
+
+  return { error, pending, ready, needsMore, canFinish, instance, dialog, open: () => setOpened(true), create, settle };
+}
+
+function OnboardingDialog({
+  dialogRef,
+  instance,
+  onClose,
+}: {
+  dialogRef: React.RefObject<HTMLDialogElement | null>;
+  instance: StripeConnectInstance | null;
+  onClose: () => void;
+}) {
+  return (
+    <dialog className={"dlg"} id={STRIPE_DIALOG} aria-labelledby={`${STRIPE_DIALOG}H`} ref={dialogRef} onClose={onClose}>
+      <div className={"dh"}>
+        <h2 id={`${STRIPE_DIALOG}H`}>{"Finish with Stripe"}</h2>
+        <button className={"x"} type={"button"} aria-label={"Close"} data-close={STRIPE_DIALOG}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        {instance ? (
+          <ConnectComponentsProvider connectInstance={instance}>
+            <ConnectNotificationBanner />
+            <ConnectAccountOnboarding onExit={() => dialogRef.current?.close()} />
+          </ConnectComponentsProvider>
+        ) : (
+          <small className={"hint"}>{"Loading Stripe…"}</small>
+        )}
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} type={"button"} data-close={STRIPE_DIALOG}>
+          {"Close"}
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
+/**
+ * The firm's Stripe account on the Payments tab, shown only when something is needed:
+ * - no account: the owner sets one up (test mode);
+ * - card payments not active, or Stripe has requirements due: a banner whose "Finish with Stripe"
+ *   opens Stripe's own onboarding and notification banner (Connect embedded components; Stripe
+ *   collects the identity and bank details) inside the Designer's `.dlg`.
+ * The full status (requirements, payouts, refund and loss liability) is the Settings card,
+ * `StripeConnectCard`, built on the same hook. Payments, payouts and the balance are Casevoya's
+ * own page. TEST MODE ONLY.
+ */
+export function StripeAccountStatus({ data }: { data: FinanceAccountData }) {
+  const { error, pending, ready, needsMore, canFinish, instance, dialog, open, create, settle } = useStripeOnboarding(data);
+
   if (!data.canBill) return null;
   if (!data.configured) {
     return (
@@ -116,17 +190,6 @@ export function StripeAccountStatus({ data }: { data: FinanceAccountData }) {
     ) : null;
   }
   if (!data.account) {
-    const create = () =>
-      start(async () => {
-        setError(null);
-        const result = await connectStripeAccount({ organizationId: data.organizationId });
-        if ("error" in result) {
-          if (financeNeedsStepUp(result.error)) return stepUp(null);
-          setError(result.error);
-          return;
-        }
-        router.refresh();
-      });
     return (
       <>
         <Banner
@@ -151,17 +214,6 @@ export function StripeAccountStatus({ data }: { data: FinanceAccountData }) {
   }
   if (!canFinish) return null;
 
-  // Closing the dialog (or leaving Stripe's onboarding) re-reads the account from Stripe.
-  const settle = () =>
-    start(async () => {
-      const result = await refreshStripeAccount({ organizationId: data.organizationId });
-      if ("error" in result) {
-        if (financeNeedsStepUp(result.error)) return stepUp(null);
-        setError(result.error);
-      }
-      router.refresh();
-    });
-
   return (
     <>
       <Banner
@@ -169,7 +221,7 @@ export function StripeAccountStatus({ data }: { data: FinanceAccountData }) {
         icon={"bank"}
         title={"Stripe needs more information"}
         action={
-          <button className={"btn p sm"} type={"button"} data-dlg={STRIPE_DIALOG} onClick={() => setOpened(true)} disabled={pending} aria-busy={pending || undefined}>
+          <button className={"btn p sm"} type={"button"} data-dlg={STRIPE_DIALOG} onClick={open} disabled={pending} aria-busy={pending || undefined}>
             {"Finish with Stripe"}
           </button>
         }
@@ -183,29 +235,99 @@ export function StripeAccountStatus({ data }: { data: FinanceAccountData }) {
           {error}
         </Banner>
       ) : null}
-      <dialog className={"dlg"} id={STRIPE_DIALOG} aria-labelledby={`${STRIPE_DIALOG}H`} ref={dialog} onClose={settle}>
-        <div className={"dh"}>
-          <h2 id={`${STRIPE_DIALOG}H`}>{"Finish with Stripe"}</h2>
-          <button className={"x"} type={"button"} aria-label={"Close"} data-close={STRIPE_DIALOG}>
-            <Icon name={"close"} cls={"ic s"} />
-          </button>
+      <OnboardingDialog dialogRef={dialog} instance={instance} onClose={settle} />
+    </>
+  );
+}
+
+const STILL_NEEDS = "Stripe still needs";
+
+/**
+ * Settings > Subscription: the firm's Stripe account (FIN-02), one card. A live-only panel built
+ * from the Designer's parts (`section.panel`, `h2` with its icon and badge, `.fp-pad`, `dl.fp-dl`,
+ * `.fp-row` of `.btn`, `.fp-note`): not connected / onboarding incomplete (with Stripe's own list of
+ * requirements) / charges enabled / payouts enabled, the refund and loss liability from the
+ * account's configuration, and for the owner Set up, Continue onboarding (a recent step-up, then
+ * Stripe's form) and Check with Stripe.
+ */
+export function StripeConnectCard({ data, card, index }: { data: FinanceAccountData; card: ConnectCardData; index: number }) {
+  const { error, pending, canFinish, instance, dialog, open, create, settle } = useStripeOnboarding(data);
+  return (
+    <>
+      <section className={"panel rv"} style={{ "--i": String(index) } as React.CSSProperties} id={"card-payments"} aria-label={"Card payments from clients"}>
+        <h2>
+          <Icon name={"credit-card"} />
+          {"Card payments from clients"}
+          <span style={{ marginLeft: "auto" }}>
+            <Badge badge={card.badge} />
+          </span>
+        </h2>
+        <div className={"fp-pad"}>
+          {card.rows.length ? (
+            <dl className={"fp-dl"}>
+              {card.rows.map(([term, value]) => (
+                <div key={term}>
+                  <dt>{term}</dt>
+                  <dd>
+                    {term === STILL_NEEDS && card.requirements.length
+                      ? card.requirements.map((line, n) => (
+                          <Fragment key={n}>
+                            {n > 0 ? <Sep /> : null}
+                            {`${n > 0 ? " " : ""}${line}${n < card.requirements.length - 1 ? " " : ""}`}
+                          </Fragment>
+                        ))
+                      : value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          {card.actions.length ? (
+            <div className={"fp-row"} style={{ marginTop: "12px" }}>
+              {card.actions.map((action) =>
+                action.act === "continue" ? (
+                  <button
+                    key={action.act}
+                    className={action.primary ? "btn p sm" : "btn sm"}
+                    type={"button"}
+                    data-dlg={STRIPE_DIALOG}
+                    onClick={open}
+                    disabled={pending || !canFinish}
+                    aria-busy={pending || undefined}
+                  >
+                    {action.label}
+                  </button>
+                ) : (
+                  <button
+                    key={action.act}
+                    className={action.primary ? "btn p sm" : "btn sm"}
+                    type={"button"}
+                    onClick={action.act === "setup" ? create : settle}
+                    disabled={pending}
+                    aria-busy={pending || undefined}
+                  >
+                    {pending && action.act !== "setup" ? "Checking…" : action.label}
+                  </button>
+                ),
+              )}
+            </div>
+          ) : null}
+          {error ? (
+            <div className={"alert bad"} style={{ margin: "12px 0 0" }} role={"alert"}>
+              <Icon name={"x-circle"} />
+              <div>
+                <b>{"Stripe"}</b>
+                {error}
+              </div>
+            </div>
+          ) : null}
         </div>
-        <div className={"db"}>
-          {instance ? (
-            <ConnectComponentsProvider connectInstance={instance}>
-              <ConnectNotificationBanner />
-              <ConnectAccountOnboarding onExit={() => dialog.current?.close()} />
-            </ConnectComponentsProvider>
-          ) : (
-            <small className={"hint"}>{"Loading Stripe…"}</small>
-          )}
-        </div>
-        <div className={"df"}>
-          <button className={"btn"} type={"button"} data-close={STRIPE_DIALOG}>
-            {"Close"}
-          </button>
-        </div>
-      </dialog>
+      </section>
+      <p className={"fp-note rv"} style={{ "--i": String(index + 1) } as React.CSSProperties}>
+        <Icon name={"info"} cls={"ic s"} />
+        {` ${card.note}`}
+      </p>
+      {canFinish ? <OnboardingDialog dialogRef={dialog} instance={instance} onClose={settle} /> : null}
     </>
   );
 }

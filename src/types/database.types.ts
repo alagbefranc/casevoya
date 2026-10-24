@@ -1197,6 +1197,105 @@ export type Database = {
         }
         Relationships: []
       }
+      client_credit_allocations: {
+        Row: {
+          amount_cents: number
+          bank_method: string | null
+          bank_reference: string | null
+          created_at: string
+          created_by: string | null
+          credit_id: string
+          currency: string
+          id: string
+          idempotency_key: string | null
+          kind: string
+          organization_id: string
+          refund_id: string | null
+          refunded_on: string | null
+          target_invoice_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          bank_method?: string | null
+          bank_reference?: string | null
+          created_at?: string
+          created_by?: string | null
+          credit_id: string
+          currency: string
+          id?: string
+          idempotency_key?: string | null
+          kind: string
+          organization_id: string
+          refund_id?: string | null
+          refunded_on?: string | null
+          target_invoice_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          bank_method?: string | null
+          bank_reference?: string | null
+          created_at?: string
+          created_by?: string | null
+          credit_id?: string
+          currency?: string
+          id?: string
+          idempotency_key?: string | null
+          kind?: string
+          organization_id?: string
+          refund_id?: string | null
+          refunded_on?: string | null
+          target_invoice_id?: string | null
+        }
+        Relationships: []
+      }
+      client_credits: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          matter_id: string
+          number: string
+          opened_cents: number
+          organization_id: string
+          settled_at: string | null
+          source_invoice_id: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          currency: string
+          id?: string
+          matter_id: string
+          number: string
+          opened_cents: number
+          organization_id: string
+          settled_at?: string | null
+          source_invoice_id: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          matter_id?: string
+          number?: string
+          opened_cents?: number
+          organization_id?: string
+          settled_at?: string | null
+          source_invoice_id?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       client_fund_bank_transfers: {
         Row: {
           amount_cents: number
@@ -2901,11 +3000,14 @@ export type Database = {
           card_payments_status: string
           created_at: string
           created_by: string | null
+          fees_collector: string | null
           id: string
           livemode: boolean
+          losses_collector: string | null
           organization_id: string
           payouts_status: string
           provider: string
+          requirements: Json
           requirements_due: number
           status_checked_at: string | null
           updated_at: string
@@ -2916,11 +3018,14 @@ export type Database = {
           card_payments_status?: string
           created_at?: string
           created_by?: string | null
+          fees_collector?: string | null
           id?: string
           livemode?: boolean
+          losses_collector?: string | null
           organization_id: string
           payouts_status?: string
           provider?: string
+          requirements?: Json
           requirements_due?: number
           status_checked_at?: string | null
           updated_at?: string
@@ -2931,11 +3036,14 @@ export type Database = {
           card_payments_status?: string
           created_at?: string
           created_by?: string | null
+          fees_collector?: string | null
           id?: string
           livemode?: boolean
+          losses_collector?: string | null
           organization_id?: string
           payouts_status?: string
           provider?: string
+          requirements?: Json
           requirements_due?: number
           status_checked_at?: string | null
           updated_at?: string
@@ -4188,6 +4296,51 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_dispute_evidence: {
+        Row: {
+          content_type: string
+          created_at: string
+          created_by: string | null
+          dispute_id: string
+          explanation: string | null
+          file_name: string
+          id: string
+          livemode: boolean
+          organization_id: string
+          size_bytes: number
+          stripe_file_id: string
+          submitted: boolean
+        }
+        Insert: {
+          content_type: string
+          created_at?: string
+          created_by?: string | null
+          dispute_id: string
+          explanation?: string | null
+          file_name: string
+          id?: string
+          livemode?: boolean
+          organization_id: string
+          size_bytes: number
+          stripe_file_id: string
+          submitted?: boolean
+        }
+        Update: {
+          content_type?: string
+          created_at?: string
+          created_by?: string | null
+          dispute_id?: string
+          explanation?: string | null
+          file_name?: string
+          id?: string
+          livemode?: boolean
+          organization_id?: string
+          size_bytes?: number
+          stripe_file_id?: string
+          submitted?: boolean
+        }
+        Relationships: []
+      }
       invoice_disputes: {
         Row: {
           amount_cents: number
@@ -4199,6 +4352,8 @@ export type Database = {
           currency: string
           dispute_id: string
           evidence_due_by: string | null
+          evidence_submitted_at: string | null
+          evidence_submitted_by: string | null
           id: string
           invoice_id: string
           last_event_created: number | null
@@ -4210,6 +4365,7 @@ export type Database = {
           provider: string
           reason: string | null
           status: Database["public"]["Enums"]["invoice_dispute_status"]
+          task_id: string | null
           updated_at: string
           version: number
         }
@@ -4223,6 +4379,8 @@ export type Database = {
           currency: string
           dispute_id: string
           evidence_due_by?: string | null
+          evidence_submitted_at?: string | null
+          evidence_submitted_by?: string | null
           id?: string
           invoice_id: string
           last_event_created?: number | null
@@ -4234,6 +4392,7 @@ export type Database = {
           provider?: string
           reason?: string | null
           status: Database["public"]["Enums"]["invoice_dispute_status"]
+          task_id?: string | null
           updated_at?: string
           version?: number
         }
@@ -4247,6 +4406,8 @@ export type Database = {
           currency?: string
           dispute_id?: string
           evidence_due_by?: string | null
+          evidence_submitted_at?: string | null
+          evidence_submitted_by?: string | null
           id?: string
           invoice_id?: string
           last_event_created?: number | null
@@ -4258,6 +4419,7 @@ export type Database = {
           provider?: string
           reason?: string | null
           status?: Database["public"]["Enums"]["invoice_dispute_status"]
+          task_id?: string | null
           updated_at?: string
           version?: number
         }
@@ -4532,6 +4694,7 @@ export type Database = {
           requested_by: string | null
           status: Database["public"]["Enums"]["invoice_refund_status"]
           succeeded_at: string | null
+          task_id: string | null
           updated_at: string
           version: number
         }
@@ -4557,6 +4720,7 @@ export type Database = {
           requested_by?: string | null
           status?: Database["public"]["Enums"]["invoice_refund_status"]
           succeeded_at?: string | null
+          task_id?: string | null
           updated_at?: string
           version?: number
         }
@@ -4582,6 +4746,7 @@ export type Database = {
           requested_by?: string | null
           status?: Database["public"]["Enums"]["invoice_refund_status"]
           succeeded_at?: string | null
+          task_id?: string | null
           updated_at?: string
           version?: number
         }
@@ -10405,20 +10570,84 @@ export type Database = {
         Args: { p_agreement_id: string }
         Returns: undefined
       }
+      apply_client_credit: {
+        Args: {
+          p_amount_cents: number
+          p_credit_id: string
+          p_idempotency_key: string
+          p_target_invoice_id: string
+        }
+        Returns: string
+      }
       booking_agreement_for_signing: {
         Args: { p_ref: string }
+        Returns: Json
+      }
+      client_credit_available_cents: {
+        Args: {
+          p_credit_id: string
+        }
+        Returns: number
+      }
+      client_credit_refund_context: {
+        Args: {
+          p_credit_id: string
+        }
         Returns: Json
       }
       create_quote: {
         Args: { p_matter_id: string; p_template_id: string | null; p_title: string | null }
         Returns: string
       }
+      dispute_evidence_context: {
+        Args: {
+          p_dispute_id: string
+        }
+        Returns: Json
+      }
       edit_agreement_clause: {
         Args: { p_agreement_id: string; p_body: string; p_clause_id: string }
         Returns: string
       }
+      invoice_card_checkout_check: {
+        Args: {
+          p_invoice_id: string
+        }
+        Returns: Json
+      }
+      link_client_credit_refund: {
+        Args: {
+          p_credit_id: string
+          p_refund_id: string
+        }
+        Returns: string
+      }
       quote_to_agreement: {
         Args: { p_agreement_id: string; p_template_id: string }
+        Returns: string
+      }
+      record_client_credit_bank_refund: {
+        Args: {
+          p_amount_cents: number
+          p_credit_id: string
+          p_idempotency_key: string
+          p_method: string
+          p_reference: string
+          p_refunded_on: string
+        }
+        Returns: string
+      }
+      record_dispute_evidence: {
+        Args: {
+          p_content_type: string
+          p_dispute_id: string
+          p_explanation: string
+          p_file_name: string
+          p_livemode: boolean
+          p_size_bytes: number
+          p_stripe_file_id: string
+          p_submitted: boolean
+        }
         Returns: string
       }
       save_quote: {
@@ -12758,6 +12987,18 @@ export type Database = {
           p_org: string
           p_payouts_status: string
           p_requirements_due: number
+        }
+        Returns: undefined
+      }
+      sync_firm_payment_account_status: {
+        Args: {
+          p_account_id: string
+          p_card_payments_status: string
+          p_fees_collector?: string
+          p_losses_collector?: string
+          p_org: string
+          p_payouts_status: string
+          p_requirements: Json
         }
         Returns: undefined
       }
