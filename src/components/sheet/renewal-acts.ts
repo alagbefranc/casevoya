@@ -1,6 +1,7 @@
 "use client";
 
 import { toast2 } from "@/components/port/kit";
+import { readAttestationFrom } from "@/modules/government/page-attestation";
 import { needsStepUp, stepUpLocation, withoutDialog } from "@/modules/sheet/matter-wire";
 import {
   cancelRenewal,
@@ -30,6 +31,7 @@ const DONE: Record<string, [string, string]> = {
   cancel: ["Expiry cancelled", "Its open reminder task was cancelled."],
   timing: ["Sent for review", "A licensed consultant approves it before it sets any reminder."],
   approve: ["Approved", "It can now set reminder dates."],
+  attest: ["Approved", "It shows with “page not captured by Casevoya, checked by you” and the date."],
   reject: ["Rejected", "It won’t set any reminder."],
   retire: ["Retired", "It no longer sets new reminder dates."],
 };
@@ -40,6 +42,7 @@ const OPENERS: Record<string, [string, string]> = {
   "cancel-open": ["#dRenCan", "cancel"],
   "reject-open": ["#dRenRej", "reject"],
   "retire-open": ["#dRenRet", "retire"],
+  "attest-open": ["#dRenAtt", "attest"],
 };
 
 export function bindRenewalControls(root: HTMLElement, router: Router, listen: { signal: AbortSignal }) {
@@ -58,6 +61,8 @@ export function bindRenewalControls(root: HTMLElement, router: Router, listen: {
         if (!confirm || !dialog) return;
         confirm.dataset.id = control.dataset.id ?? "";
         confirm.dataset.version = control.dataset.version ?? "";
+        const tick = dialog.querySelector<HTMLInputElement>("input[data-attest]");
+        if (tick) tick.checked = false;
         dialog.showModal();
         return;
       }
@@ -116,10 +121,14 @@ export async function runRenewalAct(control: HTMLElement, root: HTMLElement, rou
     });
     result = proposed;
     if (proposed && "snapshot" in proposed && !proposed.snapshot) {
-      note = `${proposed.reason ?? "The page couldn’t be fetched."} It is kept for review, but it can’t be approved without a snapshot of the page.`;
+      note = `${proposed.reason ?? "The page couldn’t be fetched."} It is kept for review. A licensed consultant approves it only after opening the official page themselves.`;
     }
   } else if (act === "approve") {
     result = await reviewRenewalTiming({ organizationId, timingId: data.id ?? "", version: Number(data.version), decision: "approved", note: null });
+  } else if (act === "attest") {
+    const attested = readAttestationFrom(scope);
+    if (!attested || "error" in attested) return void toast2(attested?.error ?? "Tick that you opened the official page yourself", { kind: "warn", sub: "Nothing was saved." });
+    result = await reviewRenewalTiming({ organizationId, timingId: data.id ?? "", version: Number(data.version), decision: "approved", note: null, pageOpenedOn: attested.openedOn });
   } else if (act === "reject") {
     const why = value(scope, "#rjN");
     if (why.length < 3) return void toast2("Say why", { kind: "warn", sub: "Kept with the entry." });

@@ -10,6 +10,7 @@
  */
 import type { CSSProperties, ReactNode } from "react";
 import { Icon, Sep } from "./frame";
+import { PageAttestFields } from "./page-attestation";
 
 const css = (style: Record<string, string>) => style as CSSProperties;
 
@@ -316,6 +317,8 @@ export type ApprovalFollowUpDialogsData = {
   ack: { wire: DecWire; files: { versionId: string; label: string }[]; today: string } | null;
   reject: { wire: DecWire } | null;
   retire: { wire: DecWire } | null;
+  /** Approve a step without a page snapshot: the reviewer's attestation (2026-10-24). Optional for fidelity samples. */
+  attest?: { wire: DecWire; today: string } | null;
 };
 
 function Head({ id, title }: { id: string; title: string }) {
@@ -493,6 +496,18 @@ export function ApprovalFollowUpDialogs({ data }: { data: ApprovalFollowUpDialog
             </label>
           </div>
           <Foot label={"Reject"} wire={data.reject.wire} />
+        </dialog>
+      ) : null}
+      {data.attest ? (
+        <dialog className={"dlg wide"} id={"dDecAtt"} aria-labelledby={"dDecAttT"}>
+          <Head id={"dDecAtt"} title={"Approve without a page snapshot"} />
+          <div className={"db"}>
+            <p className={"mu"} style={{ fontSize: "13px", margin: "0" }}>
+              {"Open the step’s official page (its link is on the step) and compare it word for word before you approve."}
+            </p>
+            <PageAttestFields today={data.attest.today} />
+          </div>
+          <Foot label={"Approve"} wire={data.attest.wire} />
         </dialog>
       ) : null}
       {data.retire ? (

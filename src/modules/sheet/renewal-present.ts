@@ -52,6 +52,9 @@ export type TimingRow = {
   snapshot_sha256: string | null;
   status: string;
   version: number;
+  /** Approved without a snapshot: the licensed reviewer's attestation (2026-10-24). */
+  page_attested_by_membership_id?: string | null;
+  page_attested_on?: string | null;
 };
 
 export type FeeRow = {
@@ -96,8 +99,9 @@ function wire(act: string, input: RenewalInput, extra: Record<string, string> = 
   return out;
 }
 
-function source(row: TimingRow) {
-  return { href: row.source_url, text: sourceText(row.source_url), facts: timingFacts(row) };
+function source(row: TimingRow, memberName: (id: string | null) => string) {
+  const attestedBy = row.page_attested_on ? memberName(row.page_attested_by_membership_id ?? null) : null;
+  return { href: row.source_url, text: sourceText(row.source_url), facts: timingFacts({ ...row, attested_by: attestedBy }) };
 }
 
 function taskState(task: { status: string; due_on: string | null } | undefined): string {
@@ -144,7 +148,7 @@ export function buildRenewalPanel(input: RenewalInput): RenewalPanelData {
       parts: cancelled ? [`Cancelled: ${row.cancel_reason ?? ""}`.trim()] : parts,
       basis: {
         text: reminderBasis(timing),
-        source: timing ? source(timing) : null,
+        source: timing ? source(timing, input.memberName) : null,
       },
       client,
       fee: feeText ? { text: `IRCC fee: ${feeText}`, href: feeHref } : null,
@@ -174,7 +178,7 @@ export function buildRenewalPanel(input: RenewalInput): RenewalPanelData {
         : "Expiries are recorded once a licensed consultant confirms an approval.",
     timings: approved.map((row) => ({
       label: `${row.applies_to}: “${row.timing_text}”${row.lead_days ? `, ${row.lead_days} days before expiry` : ", no number of days stated"}`,
-      source: source(row),
+      source: source(row, input.memberName),
       retire: input.licensed ? wire("retire-open", input, { id: row.id, version: String(row.version) }) : null,
     })),
     timingsEmpty: approved.length
@@ -182,9 +186,14 @@ export function buildRenewalPanel(input: RenewalInput): RenewalPanelData {
       : "No IRCC renewal timing is approved yet, so every reminder date is the firm’s choice. Add one from the official page.",
     pending: pending.map((row) => ({
       label: `${row.applies_to}: “${row.timing_text}”${row.lead_days ? `, ${row.lead_days} days before expiry` : ""}`,
-      source: source(row),
+      source: source(row, input.memberName),
       badge: row.snapshot_sha256 ? { tone: "chg", label: "Waiting for licensed review" } : { tone: "bad", label: "No page snapshot" },
-      approve: input.licensed && row.snapshot_sha256 ? wire("approve", input, { id: row.id, version: String(row.version) }) : null,
+      // No snapshot: Approve opens the reviewer's attestation (DEC follows the GOV review rules, 2026-10-24).
+      approve: input.licensed
+        ? row.snapshot_sha256
+          ? wire("approve", input, { id: row.id, version: String(row.version) })
+          : wire("attest-open", input, { id: row.id, version: String(row.version) })
+        : null,
       reject: input.licensed ? wire("reject-open", input, { id: row.id, version: String(row.version) }) : null,
     })),
     actions: {
@@ -219,6 +228,7 @@ export function buildRenewalPanel(input: RenewalInput): RenewalPanelData {
       cancel: canRecord && live.length ? { wire: wire("cancel", input) } : null,
       timing: RECORDERS.has(input.role) ? { wire: wire("timing", input), program: input.program, today: input.today } : null,
       reject: input.licensed && pending.length ? { wire: wire("reject", input) } : null,
+      attest: input.licensed && pending.some((row) => !row.snapshot_sha256) ? { wire: wire("attest", input), today: input.today } : null,
       retire: input.licensed && approved.length ? { wire: wire("retire", input) } : null,
     },
   };

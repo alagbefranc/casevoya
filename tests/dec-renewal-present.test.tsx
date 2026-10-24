@@ -132,7 +132,7 @@ describe("DEC-02 Expiry and renewal card", () => {
     expect(panel.rows[0].basis.source).toEqual({ href: PAGE, text: "www.canada.ca/en/synthetic-renewal-page.html#synthetic-section", facts: ["checked 20 Oct 2026", "sha256 aaaaaaaaaa…"] });
     expect(panel.dialogs.expiry?.timings.map((option) => option.value)).toEqual(["tm1"]);
     expect(panel.timings).toHaveLength(2);
-    expect(panel.pending[0]).toMatchObject({ badge: { tone: "bad", label: "No page snapshot" }, approve: null });
+    expect(panel.pending[0]).toMatchObject({ badge: { tone: "bad", label: "No page snapshot" }, approve: { "data-ren": "attest-open", "data-id": "tm3", "data-version": "1" } }); // attestation (2026-10-24)
     expect(panel.pending[0].reject).toMatchObject({ "data-ren": "reject-open", "data-id": "tm3" });
     // A program's timing is offered only on a matter of that program.
     const other = buildRenewalPanel(input({ timings: [timing({ program_key: "synthetic_program" })] }));

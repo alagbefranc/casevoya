@@ -211,7 +211,7 @@ describe("DEC-02 official renewal timing", () => {
     await stale(ctx.consultant, ctx.orgId);
     await expectDbError(() => db.query(`select public.review_renewal_timing($1, 1, 'approved', null)`, [captured.rows[0].id]), /step-up/);
     await fresh(ctx.consultant, ctx.orgId);
-    await expectDbError(() => db.query(`select public.review_renewal_timing($1, 1, 'approved', null)`, [bare.rows[0].id]), /snapshot/);
+    await expectDbError(() => db.query(`select public.review_renewal_timing($1, 1, 'approved', null)`, [bare.rows[0].id]), /attestation/); // DEC review rules (2026-10-24): approved only with the reviewer's attestation
     await expectDbError(() => db.query(`select public.review_renewal_timing($1, 1, 'rejected', null)`, [bare.rows[0].id]), /why/);
     await db.query(`select public.review_renewal_timing($1, 1, 'approved', null)`, [captured.rows[0].id]);
     await expectDbError(() => db.query(`select public.review_renewal_timing($1, 2, 'approved', null)`, [captured.rows[0].id]), /nothing is waiting/);
@@ -475,5 +475,73 @@ describe("DEC-02 renewal reminder and successor lead", () => {
       () => db.query(`select public.set_renewal_reminder($1, 1, 'Synthetic renewal application, preparation and submission', null)`, [id]),
       /doesn't use the portal/,
     );
+  });
+});
+
+describe("DEC-02 renewal timings follow the GOV review rules (2026-10-24)", () => {
+  async function proposeTiming(ctx: Firm, as: string, captured: boolean) {
+    await stale(as, ctx.orgId);
+    const snapshot = captured ? JSON.stringify({ sha256: sha(`page ${randomUUID()}`), retrieved_at: new Date().toISOString(), final_url: PAGE.split("#")[0], http_status: 200 }) : null;
+    const row = await db.query<{ id: string }>(
+      `select public.propose_renewal_timing($1, null, 'Synthetic permit', 'Synthetic timing words', 30, $2, null, null, null, $3::date, null, $4::jsonb) as id`,
+      [ctx.orgId, PAGE, firmDay(), snapshot],
+    );
+    return row.rows[0].id;
+  }
+
+  it("approves a timing without a page capture only with the reviewer's attestation, and the client's reminder carries it", async () => {
+    const ctx = await firm();
+    const id = await proposeTiming(ctx, ctx.manager, false);
+    await fresh(ctx.consultant, ctx.orgId);
+    await expectDbError(() => db.query(`select public.review_renewal_timing($1, 1, 'approved', null, null)`, [id]), /attestation/);
+    await expectDbError(() => db.query(`select public.review_renewal_timing($1, 1, 'approved', null, $2::date)`, [id, firmDay(1)]), /between the day the entry was made and today/);
+    await db.query(`select public.review_renewal_timing($1, 1, 'approved', null, $2::date)`, [id, firmDay()]);
+    await asMaintenance(db);
+    const stored = await db.query<{ by: string; on: string; at: string | null }>(
+      `select page_attested_by_membership_id::text as by, page_attested_on::text as on, page_attested_at::text as at from public.renewal_timings where id = $1`,
+      [id],
+    );
+    expect(stored.rows[0]).toMatchObject({ by: ctx.consultantMembership, on: firmDay() });
+    expect(stored.rows[0].at).not.toBeNull();
+
+    // A reminder that follows the timing: the client's portal gets the attestation with it.
+    const decisionId = await decision(ctx);
+    await confirm(ctx, decisionId);
+    const renewal = await expiry(ctx, decisionId, null, id);
+    await clientChoices(ctx, true);
+    await stale(ctx.manager, ctx.orgId);
+    await db.query(`select public.set_renewal_reminder($1, 1, 'Synthetic renewal application, preparation and submission', null)`, [renewal]);
+    await stale(ctx.client, ctx.orgId);
+    const seen = await db.query<{ r: { timing: { snapshot_sha256: string | null; page_attested_on: string | null; page_attested_by: string | null } }[] }>(
+      `select public.portal_renewal_reminders($1) as r`,
+      [ctx.orgId],
+    );
+    expect(seen.rows[0].r[0].timing).toMatchObject({ snapshot_sha256: null, page_attested_on: firmDay() });
+    expect(typeof seen.rows[0].r[0].timing.page_attested_by).toBe("string");
+  });
+
+  it("refuses approving your own timing while another licensed member exists; the sole licensed member may, audited as self", async () => {
+    const ctx = await firm();
+    const own = await proposeTiming(ctx, ctx.consultant, true);
+    await fresh(ctx.consultant, ctx.orgId);
+    await expectDbError(() => db.query(`select public.review_renewal_timing($1, 1, 'approved', null, null)`, [own]), /another licensed member/);
+    await fresh(ctx.owner, ctx.orgId);
+    await db.query(`select public.review_renewal_timing($1, 1, 'approved', null, null)`, [own]);
+
+    // With the owner suspended, the consultant is the firm's only active licensed member.
+    await asMaintenance(db);
+    // The last-owner guard is a trigger; set it aside only to stage this firm state.
+    await db.exec(`alter table public.memberships disable trigger user`);
+    await db.query(`update public.memberships set status = 'suspended' where organization_id = $1 and user_id = $2`, [ctx.orgId, ctx.owner]);
+    await db.exec(`alter table public.memberships enable trigger user`);
+    const solo = await proposeTiming(ctx, ctx.consultant, true);
+    await fresh(ctx.consultant, ctx.orgId);
+    await db.query(`select public.review_renewal_timing($1, 1, 'approved', null, null)`, [solo]);
+    await asMaintenance(db);
+    const audit = await db.query<{ action: string }>(
+      `select action from public.audit_log where organization_id = $1 and action like 'decision.renewal_timing_approved%' order by occurred_at`,
+      [ctx.orgId],
+    );
+    expect(audit.rows.map((row) => row.action)).toEqual(["decision.renewal_timing_approved", "decision.renewal_timing_approved_self"]);
   });
 });

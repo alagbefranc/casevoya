@@ -283,7 +283,7 @@ describe("DEC-02 follow-up checklist: official steps under licensed review", () 
 
     const noSnapshot = await propose(ctx, ctx.manager, { snapshot: false });
     await fresh(ctx.consultant, ctx.orgId);
-    await expectDbError(() => db.query(`select public.review_approval_follow_up_step($1, 1, 'approved', null)`, [noSnapshot]), /snapshot/);
+    await expectDbError(() => db.query(`select public.review_approval_follow_up_step($1, 1, 'approved', null)`, [noSnapshot]), /attestation/); // DEC review rules (2026-10-24): approved only with the reviewer's attestation
     await expectDbError(() => db.query(`select public.review_approval_follow_up_step($1, 1, 'rejected', null)`, [noSnapshot]), /why/);
     await db.query(`select public.review_approval_follow_up_step($1, 1, 'rejected', 'No page snapshot')`, [noSnapshot]);
 
@@ -460,5 +460,86 @@ describe("DEC-02 delivery record", () => {
     expect((await db.query(`select id from public.decision_deliveries where matter_id = $1`, [ctx.matterId])).rows).toHaveLength(0);
     await client(ctx.client, ctx.orgId);
     expect((await db.query(`select id from public.decision_deliveries`)).rows).toHaveLength(0);
+  });
+});
+
+describe("DEC-02 follows the GOV review rules (2026-10-24)", () => {
+  async function auditActions(orgId: string, like: string) {
+    await asMaintenance(db);
+    const rows = await db.query<{ action: string }>(`select action from public.audit_log where organization_id = $1 and action like $2 order by occurred_at`, [orgId, like]);
+    return rows.rows.map((row) => row.action);
+  }
+
+  it("approves a follow-up step without a page capture only with the reviewer's attestation, stored with who and when", async () => {
+    const ctx = await firm();
+    const id = await propose(ctx, ctx.manager, { snapshot: false });
+    await fresh(ctx.consultant, ctx.orgId);
+    await expectDbError(() => db.query(`select public.review_approval_follow_up_step($1, 1, 'approved', null, null)`, [id]), /attestation/);
+    await expectDbError(() => db.query(`select public.review_approval_follow_up_step($1, 1, 'approved', null, $2::date)`, [id, firmDay(1)]), /between the day the entry was made and today/);
+    await db.query(`select public.review_approval_follow_up_step($1, 1, 'approved', null, $2::date)`, [id, firmDay()]);
+    await asMaintenance(db);
+    const row = await db.query<{ status: string; by: string; on: string; at: string | null }>(
+      `select status, page_attested_by_membership_id::text as by, page_attested_on::text as on, page_attested_at::text as at from public.approval_follow_up_steps where id = $1`,
+      [id],
+    );
+    expect(row.rows[0]).toMatchObject({ status: "approved", by: ctx.consultantMembership, on: firmDay() });
+    expect(row.rows[0].at).not.toBeNull();
+    // With a snapshot nothing is kept.
+    const captured = await propose(ctx, ctx.manager);
+    await fresh(ctx.consultant, ctx.orgId);
+    await db.query(`select public.review_approval_follow_up_step($1, 1, 'approved', null, $2::date)`, [captured, firmDay()]);
+    await asMaintenance(db);
+    expect((await db.query(`select page_attested_on from public.approval_follow_up_steps where id = $1`, [captured])).rows[0]).toEqual({ page_attested_on: null });
+  });
+
+  it("refuses approving your own follow-up step while another licensed member exists", async () => {
+    const ctx = await firm();
+    const own = await propose(ctx, ctx.consultant);
+    await fresh(ctx.consultant, ctx.orgId);
+    await expectDbError(() => db.query(`select public.review_approval_follow_up_step($1, 1, 'approved', null, null)`, [own]), /another licensed member/);
+    await fresh(ctx.owner, ctx.orgId);
+    await db.query(`select public.review_approval_follow_up_step($1, 1, 'approved', null, null)`, [own]);
+    expect(await auditActions(ctx.orgId, "decision.follow_up_step_approved%")).toEqual(["decision.follow_up_step_approved"]);
+  });
+
+  it("conditions summary: whoever drafted or last revised it approves it only when no other licensed member can", async () => {
+    const ctx = await firm();
+    await approval(ctx);
+    // The consultant drafts it: they can't approve it; the owner can.
+    await stale(ctx.consultant, ctx.orgId);
+    const draft = await db.query<{ id: string }>(`select public.draft_conditions_summary($1, 'Synthetic summary of the approval conditions.') as id`, [ctx.matterId]);
+    const first = draft.rows[0].id;
+    await fresh(ctx.consultant, ctx.orgId);
+    await expectDbError(() => db.query(`select public.approve_conditions_summary($1, 1)`, [first]), /another licensed member/);
+    await fresh(ctx.owner, ctx.orgId);
+    await db.query(`select public.approve_conditions_summary($1, 1)`, [first]);
+
+    // The case manager drafts, the owner revises: the owner can't approve, the consultant can.
+    await stale(ctx.manager, ctx.orgId);
+    const second = (await db.query<{ id: string }>(`select public.draft_conditions_summary($1, 'Synthetic second summary of the conditions.') as id`, [ctx.matterId])).rows[0].id;
+    await stale(ctx.owner, ctx.orgId);
+    await db.query(`select public.revise_conditions_summary($1, 1, 'Synthetic second summary of the conditions, revised.')`, [second]);
+    await fresh(ctx.owner, ctx.orgId);
+    await expectDbError(() => db.query(`select public.approve_conditions_summary($1, 2)`, [second]), /another licensed member/);
+    await fresh(ctx.consultant, ctx.orgId);
+    await db.query(`select public.approve_conditions_summary($1, 2)`, [second]);
+
+    // The sole active licensed member may approve their own draft, after a step-up, audited as self.
+    await asMaintenance(db);
+    // The last-owner guard is a trigger; set it aside only to stage this firm state.
+    await db.exec(`alter table public.memberships disable trigger user`);
+    await db.query(`update public.memberships set status = 'suspended' where organization_id = $1 and user_id = $2`, [ctx.orgId, ctx.owner]);
+    await db.exec(`alter table public.memberships enable trigger user`);
+    await stale(ctx.consultant, ctx.orgId);
+    const third = (await db.query<{ id: string }>(`select public.draft_conditions_summary($1, 'Synthetic third summary of the conditions.') as id`, [ctx.matterId])).rows[0].id;
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 30 });
+    await expectDbError(() => db.query(`select public.approve_conditions_summary($1, 1)`, [third]), /step-up/);
+    await fresh(ctx.consultant, ctx.orgId);
+    await db.query(`select public.approve_conditions_summary($1, 1)`, [third]);
+    expect(await auditActions(ctx.orgId, "decision.conditions_summary_approved%")).toEqual([
+      "decision.conditions_summary_approved",
+      "decision.conditions_summary_approved",
+      "decision.conditions_summary_approved_self",
+    ]);
   });
 });

@@ -219,7 +219,9 @@ describe("DEC-02 conditions summary and delivery record", () => {
 
   it("maps database refusals to the Sheet's copy", () => {
     expect(followUpError("follow-ups start after the consultant confirms the approval")).toBe("This opens once a licensed consultant confirms the approval.");
-    expect(followUpError("a step goes live only with a snapshot of its official page")).toMatch(/no snapshot/);
+    // DEC follows the GOV review rules (2026-10-24): no snapshot asks for the reviewer's attestation.
+    expect(followUpError("Casevoya has no capture of this page: approving it needs your attestation that you opened the official page yourself and the entry matches it")).toMatch(/Tick that you opened the official page yourself/);
+    expect(followUpError("you entered this yourself, so another licensed member of the firm approves it")).toBe("You entered this yourself, so another licensed member of the firm approves it.");
     expect(followUpError("something unexpected")).toBe("That couldn’t be saved.");
   });
 });

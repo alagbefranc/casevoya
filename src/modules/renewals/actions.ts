@@ -136,7 +136,8 @@ export async function proposeRenewalTiming(
   return { id: data as string, snapshot: Boolean(fetched.snapshot), reason: fetched.snapshot ? null : fetched.reason };
 }
 
-export async function reviewRenewalTiming(input: Ref & { timingId: string; version: number; decision: string; note: string | null }) {
+/** pageOpenedOn: the reviewer's attestation for a timing without a page snapshot (2026-10-24). */
+export async function reviewRenewalTiming(input: Ref & { timingId: string; version: number; decision: string; note: string | null; pageOpenedOn?: string | null }) {
   if (!isUuid(input.timingId)) return { error: "Choose the entry." };
   if (input.decision !== "approved" && input.decision !== "rejected") return { error: "Choose approve or reject." };
   if (input.decision === "rejected" && (text(input.note)?.length ?? 0) < 3) return { error: renewalError("say why it's rejected") };
@@ -147,6 +148,7 @@ export async function reviewRenewalTiming(input: Ref & { timingId: string; versi
     p_expected_version: input.version,
     p_decision: input.decision,
     p_note: text(input.note),
+    p_page_opened_on: input.decision === "approved" && /^\d{4}-\d{2}-\d{2}$/.test(input.pageOpenedOn ?? "") ? (input.pageOpenedOn as string) : null,
   });
   if (error) return { error: refusal(error.message) };
   return { ok: true };

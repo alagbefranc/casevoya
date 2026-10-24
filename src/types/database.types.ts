@@ -3606,6 +3606,9 @@ export type Database = {
           id: string
           lead_days: number | null
           organization_id: string
+          page_attested_at: string | null
+          page_attested_by_membership_id: string | null
+          page_attested_on: string | null
           program_key: string | null
           retired_at: string | null
           review_note: string | null
@@ -3632,6 +3635,9 @@ export type Database = {
           id?: string
           lead_days?: number | null
           organization_id: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
           program_key?: string | null
           retired_at?: string | null
           review_note?: string | null
@@ -3658,6 +3664,9 @@ export type Database = {
           id?: string
           lead_days?: number | null
           organization_id?: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
           program_key?: string | null
           retired_at?: string | null
           review_note?: string | null
@@ -10473,6 +10482,9 @@ export type Database = {
           id: string
           label: string
           organization_id: string
+          page_attested_at: string | null
+          page_attested_by_membership_id: string | null
+          page_attested_on: string | null
           program_key: string
           retired_at: string | null
           review_note: string | null
@@ -10498,6 +10510,9 @@ export type Database = {
           id?: string
           label: string
           organization_id: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
           program_key: string
           retired_at?: string | null
           review_note?: string | null
@@ -10523,6 +10538,9 @@ export type Database = {
           id?: string
           label?: string
           organization_id?: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
           program_key?: string
           retired_at?: string | null
           review_note?: string | null
@@ -12573,10 +12591,15 @@ export type Database = {
         }
         Returns: string
       }
-      review_approval_follow_up_step: {
-        Args: { p_decision: string; p_expected_version: number; p_note: string; p_step_id: string }
-        Returns: number
-      }
+      review_approval_follow_up_step:
+        | {
+            Args: { p_decision: string; p_expected_version: number; p_note: string; p_step_id: string }
+            Returns: number
+          }
+        | {
+            Args: { p_decision: string; p_expected_version: number; p_note: string; p_page_opened_on: string | null; p_step_id: string }
+            Returns: number
+          }
       retire_approval_follow_up_step: {
         Args: { p_expected_version: number; p_reason: string; p_step_id: string }
         Returns: number
@@ -12673,15 +12696,26 @@ export type Database = {
         }
         Returns: string
       }
-      review_renewal_timing: {
-        Args: {
-          p_decision: string
-          p_expected_version: number
-          p_note: string | null
-          p_timing_id: string
-        }
-        Returns: number
-      }
+      review_renewal_timing:
+        | {
+            Args: {
+              p_decision: string
+              p_expected_version: number
+              p_note: string | null
+              p_timing_id: string
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              p_decision: string
+              p_expected_version: number
+              p_note: string | null
+              p_page_opened_on: string | null
+              p_timing_id: string
+            }
+            Returns: number
+          }
       retire_renewal_timing: {
         Args: { p_expected_version: number; p_reason: string; p_timing_id: string }
         Returns: number

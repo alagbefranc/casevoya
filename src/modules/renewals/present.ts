@@ -4,6 +4,7 @@
  * a renewal timing or fee is shown only with its official source next to it.
  */
 import { formatMoney } from "@/modules/finance/money";
+import { attestationError } from "@/modules/government/page-attestation";
 
 const ERRORS: [RegExp, string][] = [
   [/step-up|aal2|recovery code/i, "Confirm it’s you with your authenticator, then try again."],
@@ -33,7 +34,6 @@ const ERRORS: [RegExp, string][] = [
   [/word for word/i, "Write the timing word for word, as the official page gives it."],
   [/document or status as the official page/i, "Name the document or status as the official page does."],
   [/days before expiry must be/i, "Days before expiry: a number from 1 to 1095, only when the page states one."],
-  [/snapshot of its official page/i, "It can’t go live without a snapshot of the page. Enter it again when the page can be fetched."],
   [/nothing is waiting/i, "This entry was already reviewed."],
   [/why it'?’?s rejected|say why it.s rejected/i, "Say why it’s rejected."],
   [/why it'?’?s retired|say why it.s retired/i, "Say why it’s retired."],
@@ -46,6 +46,10 @@ const ERRORS: [RegExp, string][] = [
 export function renewalError(message: string): string {
   const refused = /renewal reminder refused: (.+)$/i.exec(message);
   if (refused) return `Renewal reminder refused. ${refused[1].trim()}`;
+  if (!/step-up|aal2|recovery code/i.test(message)) {
+    const attestation = attestationError(message);
+    if (attestation) return attestation;
+  }
   for (const [pattern, copy] of ERRORS) if (pattern.test(message)) return copy;
   return "That couldn’t be saved.";
 }
@@ -76,16 +80,26 @@ export type TimingSource = {
   checked_on: string;
   current_to?: string | null;
   snapshot_sha256: string | null;
+  /** Approved without a snapshot: when the reviewer opened the page, and who (a name, already resolved). */
+  page_attested_on?: string | null;
+  attested_by?: string | null;
 };
 
-/** The facts shown next to an official timing: section, form and its date modified, checked, current to, hash. */
+/**
+ * The facts shown next to an official timing: section, form and its date modified, checked, current
+ * to, hash; or, approved without a snapshot, "page not captured by Casevoya, checked by <reviewer> on <date>".
+ */
 export function timingFacts(row: TimingSource): string[] {
   const facts: string[] = [];
   if (row.source_section) facts.push(row.source_section);
   if (row.form_number) facts.push(row.form_modified_on ? `${row.form_number}, date modified ${renewalDate(row.form_modified_on)}` : row.form_number);
   facts.push(`checked ${renewalDate(row.checked_on)}`);
   if (row.current_to) facts.push(`current to ${renewalDate(row.current_to)}`);
-  facts.push(shortHash(row.snapshot_sha256) ?? "no page snapshot");
+  const attested =
+    !row.snapshot_sha256 && row.page_attested_on
+      ? `page not captured by Casevoya, checked by ${row.attested_by || "a licensed member"} on ${renewalDate(row.page_attested_on)}`
+      : null;
+  facts.push(shortHash(row.snapshot_sha256) ?? attested ?? "no page snapshot");
   return facts;
 }
 
@@ -139,7 +153,15 @@ export type PortalRenewalRow = {
   expires_on: string;
   remind_on: string;
   service_scope: string | null;
-  timing: { text: string; source_url: string; checked_on: string; current_to: string | null; snapshot_sha256: string | null } | null;
+  timing: {
+    text: string;
+    source_url: string;
+    checked_on: string;
+    current_to: string | null;
+    snapshot_sha256: string | null;
+    page_attested_on?: string | null;
+    page_attested_by?: string | null;
+  } | null;
   fee: CurrentFee | null;
 };
 
@@ -171,7 +193,7 @@ export function portalRenewals(data: unknown, firmName: string, timeZone: string
           ? {
               text: `IRCC’s timing: “${row.timing.text}”`,
               href: row.timing.source_url,
-              facts: timingFacts({ ...row.timing, snapshot_sha256: row.timing.snapshot_sha256 ?? null }).join(", "),
+              facts: timingFacts({ ...row.timing, snapshot_sha256: row.timing.snapshot_sha256 ?? null, attested_by: row.timing.page_attested_by ?? null }).join(", "),
             }
           : null,
         fee: fee && row.fee ? { text: `Government fee: ${fee}`, href: row.fee.source_url } : null,
