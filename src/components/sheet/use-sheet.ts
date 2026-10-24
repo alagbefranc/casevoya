@@ -73,7 +73,7 @@ import { restoreDocRequest, runDocRequest } from "./doc-request-act";
 import { runUploadLimit } from "./upload-limit-act";
 import { armIntakeReview, runIntakeFreeze, runIntakeReuse, runIntakeSend } from "./intake-delivery-acts";
 import { runFlagResolve, runPersonAdd, runPersonRemove } from "./person-history-acts";
-import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
+import { openInboxPick, runInboxDismiss, runInboxFile, runInboxFileGo, runInboxMove, runInboxSearch } from "./inbox-acts";
 import { runInboxCompose, runInboxMessage, runInboxNote, runInboxReply } from "./inbox-reply-acts";
 import { mountDocOpen, mountDrafts, mountInboxFilters, mountRecordsCrumb } from "./records-acts";
 import { bindGovControls } from "./gov-acts";
@@ -910,6 +910,25 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (inboxDismiss && root.contains(inboxDismiss)) {
         event.preventDefault();
         busyRun(inboxDismiss, () => runInboxDismiss(inboxDismiss, router));
+        return;
+      }
+      // Email to triage › File to matter (OPS-06): open the dialog, search matters, file.
+      const inboxPick = target.closest<HTMLElement>("[data-inbox-pick]");
+      if (inboxPick && root.contains(inboxPick)) {
+        event.preventDefault();
+        openInboxPick(inboxPick, root, openDialog);
+        return;
+      }
+      const inboxSearch = target.closest<HTMLElement>("[data-inbox-search]");
+      if (inboxSearch && root.contains(inboxSearch)) {
+        event.preventDefault();
+        busyRun(inboxSearch, () => runInboxSearch(inboxSearch, root));
+        return;
+      }
+      const inboxFileGo = target.closest<HTMLElement>("[data-inbox-file-go]");
+      if (inboxFileGo && root.contains(inboxFileGo)) {
+        event.preventDefault();
+        busyRun(inboxFileGo, () => runInboxFileGo(inboxFileGo, root, router));
         return;
       }
       // Inbox, Conversations and New message: send a reply or a new email to a person on a matter.
