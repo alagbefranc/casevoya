@@ -71,6 +71,7 @@ import {
 import { openDocReview, reopenDocReview, runDocFile, runDocOpen, runDocReview } from "./documents-acts";
 import { restoreDocRequest, runDocRequest } from "./doc-request-act";
 import { openDocumentDetails, runDocumentClassify, runDocumentLink, runDocumentTranslation, runDocumentUnlink } from "./document-details-acts";
+import { openCustody, runCustodySave } from "./custody-acts";
 import { armIntakeReview, runIntakeFreeze, runIntakeSend } from "./intake-delivery-acts";
 import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
 import { runInboxCompose, runInboxMessage, runInboxNote, runInboxReply } from "./inbox-reply-acts";
@@ -866,6 +867,19 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (ddClassify && root.contains(ddClassify)) {
         event.preventDefault();
         busyRun(ddClassify, () => runDocumentClassify(router));
+        return;
+      }
+      // DOC-07: Originals we hold, a custody step.
+      const custodyOpen = target.closest<HTMLElement>("[data-custody-open]");
+      if (custodyOpen && root.contains(custodyOpen)) {
+        event.preventDefault();
+        openCustody(custodyOpen);
+        return;
+      }
+      const custodySave = target.closest<HTMLElement>("[data-custody-save]");
+      if (custodySave && root.contains(custodySave)) {
+        event.preventDefault();
+        busyRun(custodySave, () => runCustodySave(router));
         return;
       }
       const intakeFreeze = target.closest<HTMLElement>("[data-intake-freeze]");

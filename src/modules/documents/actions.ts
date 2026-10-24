@@ -419,3 +419,27 @@ export async function setDocumentClassification(input: { organizationId: string;
   if (error) return { error: documentError(error.message) };
   return { ok: true as const };
 }
+
+/** DOC-07: one custody step on a paper original (public.record_custody_step). */
+export async function recordCustodyStep(input: { organizationId: string; versionId: string; kind: string; on: string | null; location: string | null; purpose: string | null; recipient: string | null }) {
+  if (!isUuid(input.versionId)) return { error: "Choose the document." };
+  if (!["received", "moved", "returned", "acknowledged"].includes(input.kind)) return { error: "Choose a custody step." };
+  const session = await clientFor(input.organizationId, null);
+  if ("error" in session) return { error: session.error };
+  const { error } = await session.supabase.rpc("record_custody_step", {
+    p_version_id: input.versionId,
+    p_kind: input.kind,
+    p_on: input.on as string,
+    p_location: input.location as string,
+    p_purpose: input.purpose as string,
+    p_recipient: input.recipient as string,
+  });
+  if (error) return { error: custodyError(error.message) };
+  return { ok: true as const };
+}
+
+/** The custody function's own refusals are already plain; anything else goes through documentError. */
+function custodyError(message: string): string {
+  if (/^(say |record |the firm already|that original|the return was|the received date|choose )/i.test(message)) return `${message.charAt(0).toUpperCase()}${message.slice(1)}.`;
+  return documentError(message);
+}

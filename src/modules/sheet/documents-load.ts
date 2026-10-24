@@ -1,11 +1,13 @@
 import "server-only";
 import type { CustodyRow, DocCard, DocumentReviewDialogData, DocumentsData, ReviewRow } from "@/components/sheet/designer/documents";
 import { createClient } from "@/lib/supabase/server";
+import { PREVIEWABLE } from "@/modules/documents/preview";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import {
   cardOpenable,
   cardStates,
   currentVersions,
+  custodyRows,
   documentsTab,
   fileIcon,
   firstName,
@@ -168,7 +170,8 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
         meta: { parts: [matterName(matterOf.get(doc.id)), firstName(nameOf(doc.person_id))], version: `v${version.versionNumber}`, when: whenLabel(version.createdAt, staff.timezone, today) },
         states: cardStates(version as VersionFacts, today),
         // An accepted, clean file opens through a short-lived signed link after a fresh access check.
-        ...(cardOpenable(version) ? { open: { "data-doc-open": version.id, "data-org": org } } : {}),
+        // DOC-07: a PDF or image opens as the secure, watermarked preview.
+        ...(cardOpenable(version) ? { open: { "data-doc-open": version.id, "data-org": org, ...(PREVIEWABLE.has(version.declaredMediaType) ? { "data-doc-preview": "1" } : {}) } } : {}),
         ...(canReview
           ? {
               details: documentDetails({
@@ -201,7 +204,22 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
     data.all = { cards };
   }
 
-  if (tab === "custody") data.custody = { rows: await loadCustody(supabase, org, documents, versions, nameOf, staff.timezone) };
+  if (tab === "custody") {
+    data.custody = { rows: await loadCustody(supabase, org, documents, versions, nameOf, canReview) };
+    // DOC-07: Record an original, from a document whose current file passed its check.
+    if (canReview) {
+      data.custody.record = {
+        organizationId: org,
+        originals: [...current.values()]
+          .filter((version) => version.uploadState === "clean" && documents.has(version.documentId))
+          .map((version) => {
+            const doc = documents.get(version.documentId) as { person_id: string; purpose: string };
+            return { versionId: version.id, label: `${doc.purpose} · ${nameOf(doc.person_id)} · ${matterName(matterOf.get(version.documentId))}` };
+          })
+          .sort((a, b) => a.label.localeCompare(b.label)),
+      };
+    }
+  }
 
   const dialog: DocumentReviewDialogData | null = canReview
     ? { organizationId: org, firmName: staff.organizationName, vo: await voReadOffered(supabase, org, staff.sampleMode).catch(() => false) }
@@ -217,11 +235,11 @@ async function loadCustody(
   documents: Map<string, { id: string; person_id: string; purpose: string }>,
   versions: { id: string; documentId: string }[],
   nameOf: (id: string) => string,
-  timeZone: string,
+  live: boolean,
 ): Promise<CustodyRow[]> {
   const events = await supabase
     .from("document_custody_events")
-    .select("version_id, received_on, location, purpose, recipient, return_on, acknowledged_at, created_at")
+    .select("version_id, kind, received_on, location, purpose, recipient, return_on, acknowledged_at, created_at")
     .eq("organization_id", org)
     .order("created_at", { ascending: false })
     .limit(READ);
@@ -237,22 +255,22 @@ async function loadCustody(
     const more = await supabase.from("documents").select("id, person_id, purpose").eq("organization_id", org).in("id", missingDocs);
     for (const row of more.data ?? []) documents.set(row.id, row);
   }
-  return rows.flatMap((row) => {
-    const doc = documents.get(documentOf.get(row.version_id) ?? "");
-    if (!doc) return [];
-    const acknowledged = row.acknowledged_at
-      ? `${row.recipient ? `Signed by ${row.recipient}` : "Acknowledged"}, ${dayMonth(isoDateInTimeZone(new Date(row.acknowledged_at), timeZone))}`
-      : ({ tone: "chg", label: "Waiting" } as const);
-    return [
-      {
-        original: doc.purpose,
-        owner: nameOf(doc.person_id),
-        received: row.received_on ? dayMonth(row.received_on) : "—",
-        location: row.location ?? "—",
-        purpose: row.purpose,
-        returnBy: row.return_on ? dayMonth(row.return_on) : "—",
-        acknowledged,
-      },
-    ];
-  });
+  return custodyRows(
+    rows.map((row) => ({
+      versionId: row.version_id,
+      kind: row.kind,
+      receivedOn: row.received_on,
+      location: row.location,
+      purpose: row.purpose,
+      recipient: row.recipient,
+      returnOn: row.return_on,
+      acknowledgedAt: row.acknowledged_at,
+      createdAt: row.created_at,
+    })),
+    (versionId) => {
+      const doc = documents.get(documentOf.get(versionId) ?? "");
+      return doc ? { original: doc.purpose, owner: nameOf(doc.person_id) } : null;
+    },
+    dayMonth,
+  ).map(({ versionId, next, history, ...row }) => ({ ...row, ...(live ? { step: { versionId, organizationId: org, next }, history } : {}) }));
 }

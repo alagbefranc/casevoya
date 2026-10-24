@@ -162,6 +162,11 @@ export async function runDocReview(button: HTMLElement, router: Router) {
 
 /** All documents: an accepted card opens its file, by a short-lived link after a fresh access check. */
 export async function runDocOpen(card: HTMLElement) {
+  // DOC-07: a PDF or image opens as the secure preview, watermarked with the viewer's name and logged.
+  if (card.dataset.docPreview === "1") {
+    window.open(`/api/documents/preview/${encodeURIComponent(card.dataset.docOpen ?? "")}?org=${encodeURIComponent(card.dataset.org ?? "")}`, "_blank", "noopener");
+    return;
+  }
   const result = await authorizeDocumentDownload({ organizationId: card.dataset.org ?? "", versionId: card.dataset.docOpen ?? "" });
   if ("error" in result) {
     if (needsStepUp(result.error)) {

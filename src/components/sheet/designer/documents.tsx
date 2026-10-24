@@ -9,8 +9,11 @@
  * (`data-doc-details`, the card's facts as JSON) that fills the Document details dialog
  * (`DocumentDetailsDialog`, the same dialog parts): matters using it, use in another matter,
  * translation, type, sensitivity and expiry. Wired in document-details-acts.
+ * DOC-07, live only, on Originals we hold: "Record an original" above the table, a last column
+ * with each original's custody history and its next steps (Move, Return, Acknowledge), and the
+ * Custody dialog (`CustodyDialog`) they open; wired in custody-acts.
  */
-import { SENSITIVITIES, TRANSLATION_LANGUAGES, type DocumentDetails } from "@/modules/sheet/documents-present";
+import { SENSITIVITIES, TRANSLATION_LANGUAGES, type CustodyStep, type DocumentDetails } from "@/modules/sheet/documents-present";
 import { Empty, Icon, Pair, Sep } from "./frame";
 import { FilterEmpty } from "./filter-empty";
 
@@ -51,6 +54,10 @@ export type CustodyRow = {
   purpose: string;
   returnBy: string | [string, string];
   acknowledged: DocChip | string;
+  /** Live only (DOC-07): the steps a reviewer may take now, on this version. */
+  step?: { versionId: string; organizationId: string; next: CustodyStep[] };
+  /** Live only (DOC-07): every custody step, oldest first. */
+  history?: string[];
 };
 
 export type DocumentReviewDialogData = {
@@ -68,7 +75,8 @@ export type DocumentsData = {
   /** `filterEmpty` (live only): the hidden "Nothing matches" panel for the chips and search. */
   review?: { rows: ReviewRow[]; filterEmpty?: boolean };
   all?: { cards: DocCard[] };
-  custody?: { rows: CustodyRow[] };
+  /** `record`, live only (DOC-07): Record an original, from these checked files. */
+  custody?: { rows: CustodyRow[]; record?: { organizationId: string; originals: { versionId: string; label: string }[] } };
 };
 
 const UNDERLINE: Record<DocumentsTab, { left: string; width: string }> = {
@@ -445,7 +453,10 @@ function PairOr({ value }: { value: string | [string, string] }) {
   );
 }
 
-function Custody({ rows }: { rows: CustodyRow[] }) {
+const STEP_LABEL: Record<CustodyStep, string> = { moved: "Move", returned: "Return", acknowledged: "Acknowledge" };
+
+function Custody({ rows, record }: { rows: CustodyRow[]; record?: NonNullable<DocumentsData["custody"]>["record"] }) {
+  const live = rows.some((row) => row.step);
   return (
     <>
       <div className={"ph rv"} style={i(0)}>
@@ -453,6 +464,12 @@ function Custody({ rows }: { rows: CustodyRow[] }) {
           <h1 className={"display"}>{"Originals we hold"}</h1>
           <p>{"Paper originals in the office, with where they are and when they go back."}</p>
         </div>
+        {record ? (
+          <button className={"btn p sm"} data-custody-open={"received"} data-org={record.organizationId}>
+            <Icon name={"plus"} cls={"ic s"} />
+            {"Record an original"}
+          </button>
+        ) : null}
       </div>
       {rows.length === 0 ? (
         <div className={"panel rv"} style={i(1)}>
@@ -464,7 +481,7 @@ function Custody({ rows }: { rows: CustodyRow[] }) {
             <caption className={"sr"}>{"Custody records"}</caption>
             <thead>
               <tr>
-                {["Original", "Owner", "Received", "Location", "Purpose", "Return by", "Acknowledged"].map((label) => (
+                {["Original", "Owner", "Received", "Location", "Purpose", "Return by", "Acknowledged", ...(live ? ["Custody"] : [])].map((label) => (
                   <th key={label} scope={"col"}>
                     {label}
                   </th>
@@ -487,6 +504,25 @@ function Custody({ rows }: { rows: CustodyRow[] }) {
                     <PairOr value={row.returnBy} />
                   </td>
                   <td>{typeof row.acknowledged === "string" ? row.acknowledged : <Chip chip={row.acknowledged} />}</td>
+                  {live ? (
+                    <td className={"cus"}>
+                      {row.history?.length ? (
+                        <details>
+                          <summary>{`${row.history.length} step${row.history.length === 1 ? "" : "s"}`}</summary>
+                          <ol>
+                            {row.history.map((line, at) => (
+                              <li key={at}>{line}</li>
+                            ))}
+                          </ol>
+                        </details>
+                      ) : null}
+                      {row.step?.next.map((step) => (
+                        <button key={step} className={"btn s sm"} data-custody-open={step} data-version={row.step?.versionId} data-org={row.step?.organizationId} data-title={row.original}>
+                          {STEP_LABEL[step]}
+                        </button>
+                      ))}
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
@@ -507,8 +543,76 @@ export function SheetDocuments({ data }: { data: DocumentsData }) {
       </>
     );
   }
-  if (data.tab === "custody") return <Custody rows={data.custody?.rows ?? []} />;
+  if (data.tab === "custody") {
+    return (
+      <>
+        <Custody rows={data.custody?.rows ?? []} record={data.custody?.record} />
+        {data.custody?.record ? <CustodyDialog originals={data.custody.record.originals} /> : null}
+      </>
+    );
+  }
   return <Review rows={data.review?.rows ?? []} firmName={data.firmName} filterEmpty={data.review?.filterEmpty} />;
+}
+
+export const CUSTODY_DIALOG = "dCustody";
+
+/**
+ * DOC-07, live only: one custody step. The opener sets the step (`data-custody-open`); the fields
+ * for other steps are hidden. Built from the Designer's dialog parts (`.dlg`, `.fld`, `.inp`, `.sel`).
+ */
+export function CustodyDialog({ originals }: { originals: { versionId: string; label: string }[] }) {
+  return (
+    <dialog className={"dlg"} id={CUSTODY_DIALOG} aria-labelledby={"cuH"}>
+      <div className={"dh"}>
+        <h2 id={"cuH"}>{"Record an original"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={CUSTODY_DIALOG}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <p className={"mu"} id={"cuWhat"} style={{ marginBottom: "12px" }}></p>
+        <div className={"fld"} data-cu-for={"received"}>
+          <label htmlFor={"cuDoc"}>{"Document"}</label>
+          <small className={"hint"}>{"The checked file this paper original belongs to."}</small>
+          <select className={"sel"} id={"cuDoc"}>
+            {originals.map((option) => (
+              <option key={option.versionId} value={option.versionId}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className={"fld"} data-cu-for={"received returned"}>
+          <label htmlFor={"cuOn"} id={"cuOnL"}>{"Date"}</label>
+          <input className={"inp"} id={"cuOn"} type={"date"} />
+        </div>
+        <div className={"fld"} data-cu-for={"received moved"}>
+          <label htmlFor={"cuLoc"}>{"Where it’s kept"}</label>
+          <input className={"inp"} id={"cuLoc"} maxLength={200} placeholder={"Safe A, drawer 2"} />
+        </div>
+        <div className={"fld"} data-cu-for={"received"}>
+          <label htmlFor={"cuWhy"}>{"Why the firm holds it"}</label>
+          <input className={"inp"} id={"cuWhy"} maxLength={300} />
+        </div>
+        <div className={"fld"} data-cu-for={"returned acknowledged"}>
+          <label htmlFor={"cuTo"}>{"Returned to"}</label>
+          <input className={"inp"} id={"cuTo"} maxLength={200} />
+        </div>
+        <p className={"lock"} style={{ fontSize: "13.5px", marginTop: "10px" }}>
+          <Icon name={"history"} cls={"ic s"} />
+          {"Each step is added to the original’s history and the audit log. Nothing is overwritten."}
+        </p>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={CUSTODY_DIALOG}>
+          {"Cancel"}
+        </button>
+        <button className={"btn p"} data-custody-save={"1"}>
+          {"Save"}
+        </button>
+      </div>
+    </dialog>
+  );
 }
 
 /**

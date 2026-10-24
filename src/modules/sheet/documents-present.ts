@@ -268,3 +268,78 @@ export function documentDetails(input: {
     translations: input.others.filter((other) => other.translationOf === input.version.id).map((other) => `${other.title}${other.languageTag ? ` (${languageLabel(other.languageTag)})` : ""}`),
   };
 }
+
+export type CustodyEvent = {
+  versionId: string;
+  kind: string | null;
+  receivedOn: string | null;
+  location: string | null;
+  purpose: string;
+  recipient: string | null;
+  returnOn: string | null;
+  acknowledgedAt: string | null;
+  createdAt: string;
+};
+
+export type CustodyStep = "moved" | "returned" | "acknowledged";
+
+export type CustodyLine = {
+  versionId: string;
+  original: string;
+  owner: string;
+  received: string;
+  location: string | [string, string];
+  purpose: string;
+  returnBy: string | [string, string];
+  acknowledged: DocChip | string;
+  next: CustodyStep[];
+  history: string[];
+};
+
+/**
+ * Originals we hold (DOC-07): one row per original, from its custody steps. The row shows its
+ * latest custody: received, where it is now, and its return and acknowledgement. `next` is the
+ * steps a reviewer may take now; `history` lists every step with its date. Newest activity first.
+ */
+export function custodyRows(events: readonly CustodyEvent[], describe: (versionId: string) => { original: string; owner: string } | null, dayOf: (iso: string) => string): CustodyLine[] {
+  const byVersion = new Map<string, CustodyEvent[]>();
+  for (const event of [...events].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+    const list = byVersion.get(event.versionId) ?? [];
+    list.push(event);
+    byVersion.set(event.versionId, list);
+  }
+  const rows: { latest: string; line: CustodyLine }[] = [];
+  for (const [versionId, list] of byVersion) {
+    const doc = describe(versionId);
+    if (!doc) continue;
+    // The latest time the firm received it; earlier holdings stay in the history.
+    let start = 0;
+    list.forEach((event, index) => {
+      if (event.kind === "received" || event.kind === null) start = index;
+    });
+    const held = list.slice(start);
+    const received = held[0];
+    const moved = held.filter((event) => event.kind === "moved").at(-1);
+    const returned = held.find((event) => event.kind === "returned");
+    const acknowledged = held.find((event) => event.kind === "acknowledged");
+    const legacy = received.kind === null;
+    const location: string | [string, string] = returned ? ["Returned", returned.recipient ?? "—"] : (moved?.location ?? received.location ?? "—");
+    const returnBy: string | [string, string] = returned?.returnOn ? ["Returned", dayOf(returned.returnOn)] : legacy && received.returnOn ? dayOf(received.returnOn) : "—";
+    const ack = acknowledged ?? (legacy && received.acknowledgedAt ? received : null);
+    const acknowledgedCell: DocChip | string = ack?.acknowledgedAt
+      ? `${ack.recipient ? `Signed by ${ack.recipient}` : "Acknowledged"}, ${dayOf(ack.acknowledgedAt.slice(0, 10))}`
+      : { tone: "chg", label: "Waiting" };
+    const next: CustodyStep[] = legacy ? [] : returned ? (acknowledged ? [] : ["acknowledged"]) : ["moved", "returned"];
+    const history = list.map((event) => {
+      if (event.kind === "moved") return `Moved to ${event.location ?? "—"}, ${dayOf(event.createdAt.slice(0, 10))}`;
+      if (event.kind === "returned") return `Returned to ${event.recipient ?? "—"}${event.returnOn ? `, ${dayOf(event.returnOn)}` : ""}`;
+      if (event.kind === "acknowledged") return `Return acknowledged${event.recipient ? ` by ${event.recipient}` : ""}, ${dayOf(event.createdAt.slice(0, 10))}`;
+      return `Received${event.receivedOn ? ` ${dayOf(event.receivedOn)}` : ""}${event.location ? `, kept in ${event.location}` : ""}`;
+    });
+    rows.push({
+      latest: list.at(-1)?.createdAt ?? "",
+      line: { versionId, original: doc.original, owner: doc.owner, received: received.receivedOn ? dayOf(received.receivedOn) : "—", location, purpose: received.purpose, returnBy, acknowledged: acknowledgedCell, next, history },
+    });
+  }
+  return rows.sort((a, b) => b.latest.localeCompare(a.latest)).map((entry) => entry.line);
+}
