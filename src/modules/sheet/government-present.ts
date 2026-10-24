@@ -381,7 +381,6 @@ function decisionView(records: GovernmentRecords, ctx: GovernmentContext, decisi
       ? { tone: "bad", label: "Urgent consultant review" }
       : { tone: "chg", label: "Waiting for consultant confirmation" };
   const confirm = !confirmed && ctx.licensed ? { wire: wire("confirm", ctx, { id: decision.id, version: String(decision.version) }) } : null;
-  const canFollow = confirmed && VERIFIERS.has(ctx.role);
 
   const decisionIds = new Set(records.decisions.map((row) => row.id));
   const followUps: FollowUpRow[] = records.followUps
@@ -397,18 +396,8 @@ function decisionView(records: GovernmentRecords, ctx: GovernmentContext, decisi
         wire: wire("task-done", ctx, { id: task.id, version: String(task.version) }),
       };
     });
-  if (canFollow) {
-    const reminded = new Set(records.followUps.filter((row) => row.kind === "expiry_reminder").map((row) => row.document_version_id));
-    for (const doc of records.expiring) {
-      if (reminded.has(doc.versionId)) continue;
-      followUps.push({
-        title: `Add expiry reminder: ${doc.purpose} expires ${longDate(doc.expiresOn)}`,
-        note: "Adds a renewal review task due on the expiry date",
-        owner: staffAvatar(ctx.me),
-        wire: wire("expiry", ctx, { id: decision.id, doc: doc.versionId, due: doc.expiresOn }),
-      });
-    }
-  }
+  // DEC-02: expiry reminders are recorded on the Expiry and renewal card (renewal-present.ts), where the
+  // date is an approved IRCC timing or the firm's choice. No row here defaults it to the expiry date.
 
   const view: DecisionView = {
     outcome: group,

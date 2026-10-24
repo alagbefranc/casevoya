@@ -15,6 +15,7 @@ import { Icon, Pair, Sep } from "./frame";
 import { SubmissionChecklist, SubmissionChecklistDialogs, type SubmissionChecklistData, type SubmissionChecklistDialogsData } from "./matter-submissions-checklist";
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { IssuerList, type IssuerListData } from "./letter-form";
+import { RenewalPanel, type RenewalPanelData } from "./matter-renewal";
 
 const css = (style: Record<string, string>) => style as CSSProperties;
 
@@ -368,6 +369,8 @@ export type MatterDecisionsData = {
   letters: GovLetterRow[];
   /** Live only (GOV-04): the firm's issuer list, under the letters. */
   issuers?: IssuerListData | null;
+  /** Live only (DEC-02): Expiry and renewal, after an approval (src/components/sheet/designer/matter-renewal.tsx). */
+  renewal?: RenewalPanelData | null;
 };
 
 function Seg({ selected }: { selected: string }) {
@@ -719,6 +722,7 @@ export function MatterDecisionsLive({ data }: { data: MatterDecisionsData }) {
           ))}
         </>
       ) : null}
+      {data.renewal ? <RenewalPanel data={data.renewal} index={index++} /> : null}
       {/* Letters stay listed (with Verify and Attach) after a decision, for the next one that arrives. */}
       {data.letters.length ? <LetterRows letters={data.letters} start={index} /> : null}
       {data.issuers ? <IssuerList data={data.issuers} start={index + data.letters.length + 2} /> : null}

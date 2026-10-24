@@ -199,7 +199,7 @@ describe("government present: letters and decisions (T037, T038)", () => {
     expect(buildDecisions(data, ctx({ licensed: true })).decision?.confirm?.wire).toMatchObject({ "data-gov": "confirm", "data-id": "d1" });
   });
 
-  it("records withdrawal steps once each, and offers expiry reminders after confirmation", () => {
+  it("records withdrawal steps once each, and offers no defaulted expiry reminder after confirmation", () => {
     const withdrawn = records({
       letters: [letter({ kind: "decision", verified_at: "2026-10-16T15:00:00Z" })],
       decisions: [decision({ outcome: "withdrawn" })],
@@ -218,7 +218,8 @@ describe("government present: letters and decisions (T037, T038)", () => {
     const view = buildDecisions(approved, ctx()).decision;
     expect(view?.badge.label).toBe("Confirmed by Amara Osei, 17 Oct 2026");
     expect(view?.summary?.copy).toBe("Synthetic next steps");
-    expect(view?.followUps[0]).toMatchObject({ title: "Add expiry reminder: Synthetic permit expires 12 Mar 2028", wire: { "data-gov": "expiry", "data-doc": "v1", "data-due": "2028-03-12" } });
+    // DEC-02: no quick-add row defaults a reminder to the expiry date; the Expiry and renewal card records it.
+    expect(view?.followUps.some((row) => /expiry reminder/i.test(row.title))).toBe(false);
   });
 });
 

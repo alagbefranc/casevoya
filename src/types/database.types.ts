@@ -3479,6 +3479,184 @@ export type Database = {
         }
         Relationships: []
       }
+      // DEC-02 renewal follow-up (20261025210000_dec_renewal.sql)
+      decision_renewals: {
+        Row: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by_membership_id: string | null
+          client_person_id: string | null
+          consent_record_id: string | null
+          created_at: string
+          created_by: string | null
+          decision_id: string
+          document_label: string
+          document_version_id: string | null
+          expires_on: string
+          fee_group: string | null
+          fee_name: string | null
+          fee_reference_id: string | null
+          fee_section: string | null
+          id: string
+          lead_id: string | null
+          matter_id: string
+          organization_id: string
+          owner_membership_id: string
+          recorded_by_membership_id: string
+          remind_on: string
+          reminder_set_at: string | null
+          reminder_set_by_membership_id: string | null
+          service_scope: string | null
+          task_id: string
+          timing_id: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by_membership_id?: string | null
+          client_person_id?: string | null
+          consent_record_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_id: string
+          document_label: string
+          document_version_id?: string | null
+          expires_on: string
+          fee_group?: string | null
+          fee_name?: string | null
+          fee_reference_id?: string | null
+          fee_section?: string | null
+          id?: string
+          lead_id?: string | null
+          matter_id: string
+          organization_id: string
+          owner_membership_id: string
+          recorded_by_membership_id: string
+          remind_on: string
+          reminder_set_at?: string | null
+          reminder_set_by_membership_id?: string | null
+          service_scope?: string | null
+          task_id: string
+          timing_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by_membership_id?: string | null
+          client_person_id?: string | null
+          consent_record_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_id?: string
+          document_label?: string
+          document_version_id?: string | null
+          expires_on?: string
+          fee_group?: string | null
+          fee_name?: string | null
+          fee_reference_id?: string | null
+          fee_section?: string | null
+          id?: string
+          lead_id?: string | null
+          matter_id?: string
+          organization_id?: string
+          owner_membership_id?: string
+          recorded_by_membership_id?: string
+          remind_on?: string
+          reminder_set_at?: string | null
+          reminder_set_by_membership_id?: string | null
+          service_scope?: string | null
+          task_id?: string
+          timing_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      renewal_timings: {
+        Row: {
+          applies_to: string
+          checked_on: string
+          created_at: string
+          created_by: string | null
+          current_to: string | null
+          form_modified_on: string | null
+          form_number: string | null
+          id: string
+          lead_days: number | null
+          organization_id: string
+          program_key: string | null
+          retired_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by_membership_id: string | null
+          snapshot_id: string | null
+          snapshot_sha256: string | null
+          source_id: string
+          source_section: string | null
+          source_url: string
+          status: string
+          timing_text: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          applies_to: string
+          checked_on: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          id?: string
+          lead_days?: number | null
+          organization_id: string
+          program_key?: string | null
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id: string
+          source_section?: string | null
+          source_url: string
+          status?: string
+          timing_text: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          applies_to?: string
+          checked_on?: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          id?: string
+          lead_days?: number | null
+          organization_id?: string
+          program_key?: string | null
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id?: string
+          source_section?: string | null
+          source_url?: string
+          status?: string
+          timing_text?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       government_status_checks: {
         Row: {
           checked_at: string
@@ -12158,6 +12336,64 @@ export type Database = {
         }
         Returns: number
       }
+      // DEC-02 renewal follow-up (20261025210000_dec_renewal.sql)
+      propose_renewal_timing: {
+        Args: {
+          p_applies_to: string
+          p_checked_on: string
+          p_current_to: string | null
+          p_form_modified_on: string | null
+          p_form_number: string | null
+          p_lead_days: number | null
+          p_org: string
+          p_program_key: string | null
+          p_snapshot: Json | null
+          p_source_section: string | null
+          p_source_url: string
+          p_timing_text: string
+        }
+        Returns: string
+      }
+      review_renewal_timing: {
+        Args: {
+          p_decision: string
+          p_expected_version: number
+          p_note: string | null
+          p_timing_id: string
+        }
+        Returns: number
+      }
+      retire_renewal_timing: {
+        Args: { p_expected_version: number; p_reason: string; p_timing_id: string }
+        Returns: number
+      }
+      renewal_contact_state: { Args: { p_matter_id: string }; Returns: Json }
+      record_issued_expiry: {
+        Args: {
+          p_decision_id: string
+          p_document_label: string
+          p_document_version_id: string | null
+          p_expires_on: string
+          p_owner_membership_id: string | null
+          p_remind_on: string | null
+          p_timing_id: string | null
+        }
+        Returns: string
+      }
+      set_renewal_reminder: {
+        Args: {
+          p_expected_version: number
+          p_fee_reference_id: string | null
+          p_renewal_id: string
+          p_service_scope: string
+        }
+        Returns: number
+      }
+      cancel_decision_renewal: {
+        Args: { p_expected_version: number; p_reason: string; p_renewal_id: string }
+        Returns: number
+      }
+      portal_renewal_reminders: { Args: { p_org: string }; Returns: Json }
       reverse_invoice_manual_payment: {
         Args: { p_outcome: string; p_payment_id: string; p_reason: string }
         Returns: Json

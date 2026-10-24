@@ -77,6 +77,7 @@ import { inviteEmailLines } from "@/modules/email/templates";
 import { acceptPath, portalRoleForParty, portalRoleLabel } from "@/modules/sheet/portal-invite";
 import { mayOfferPersonEdit, personEditData } from "@/modules/sheet/edit-person";
 import { loadMatterGovernment } from "@/modules/sheet/government-load";
+import { loadRenewalPanel } from "@/modules/sheet/renewal-load";
 import { letterForm } from "@/modules/sheet/letter-present";
 import { DEADLINE_KINDS, DEADLINE_ROLES, deadlineSource } from "@/modules/sheet/new-deadline";
 import { missingPolicies } from "@/modules/portal-policies/defaults";
@@ -780,6 +781,21 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     submissions: government.submissions,
     decisions: government.decisions,
   };
+  // DEC-02: Expiry and renewal on the Decisions tab (expiry reminders, IRCC timing, renewal reminder, fee).
+  if (tab === "decisions" && page.decisions?.decision) {
+    page.decisions.renewal = await loadRenewalPanel(supabase, {
+      organizationId: org,
+      role: staff.role,
+      licensed: licensedHere,
+      timezone: staff.timezone,
+      today,
+      matter: { id: matter.id, is_sample: matter.is_sample, stage: matter.stage },
+      program: pack?.data?.program_key ? { key: pack.data.program_key, label: programLabel(pack.data.program_key) } : null,
+      tasks: taskRows,
+      documentIds,
+      memberName,
+    }).catch(() => null);
+  }
   // The Billing tab: this matter's invoices and client funds, as row-level security shows them.
   if (tab === "billing") {
     const [billing, work] = await Promise.all([

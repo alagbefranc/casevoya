@@ -6,6 +6,7 @@ import { loadPortalMessages } from "@/modules/messages/load";
 import type { PortalViewer } from "@/modules/portal/load";
 import { homeView, matterCards, type HomeView, type MatterCard } from "@/modules/portal/home-present";
 import { loadPortalGovernment } from "@/modules/portal/government-load";
+import { loadPortalRenewals } from "@/modules/portal/renewal-load";
 import { portalNotices, type PortalNotice } from "@/modules/portal/notices";
 import { loadPortalTasks, type PortalTask } from "@/modules/portal/tasks-load";
 
@@ -16,13 +17,15 @@ import { loadPortalTasks, type PortalTask } from "@/modules/portal/tasks-load";
  */
 export async function loadPortalHome(viewer: PortalViewer, tasks: PortalTask[] | null): Promise<HomeView> {
   const matter = viewer.matters[0] ?? null;
-  const [taskRows, documents, invoices, messages, consultant, government] = await Promise.all([
+  const [taskRows, documents, invoices, messages, consultant, government, renewals] = await Promise.all([
     tasks ? Promise.resolve(tasks) : loadPortalTasks(viewer).catch(() => []),
     loadPortalDocuments(viewer).catch(() => null),
     loadPortalInvoices(viewer).catch(() => null),
     loadPortalMessages(viewer, null).catch(() => null),
     matter ? loadPortalConsultants(viewer).then((names) => names.get(matter.id) ?? null) : Promise.resolve(null),
     loadPortalGovernment(viewer, matter?.id ?? null),
+    // DEC-02: renewal reminders the firm set (portal only).
+    loadPortalRenewals(viewer),
   ]);
   const view = homeView({
     firmName: viewer.organizationName,
@@ -37,7 +40,8 @@ export async function loadPortalHome(viewer: PortalViewer, tasks: PortalTask[] |
     messages,
   });
   // GOV-05: statuses the firm shared, "Recorded by <firm> on <date>".
-  return government.length ? { ...view, government } : view;
+  const withGovernment = government.length ? { ...view, government } : view;
+  return renewals.length ? { ...withGovernment, renewals } : withGovernment;
 }
 
 /** My matters: one card per matter, with the client's open tasks and each matter's consultant. */
