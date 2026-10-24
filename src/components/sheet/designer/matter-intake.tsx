@@ -146,6 +146,39 @@ function Questionnaire({ panel, index, data, first }: { panel: IntakePanel; inde
   );
 }
 
+/** INT-04, live only: the answer's provenance, opened from its Source cell. */
+function Provenance({ value }: { value: NonNullable<IntakeReviewRow["provenance"]> }) {
+  return (
+    <details className={"prov"}>
+      <summary>{"Provenance"}</summary>
+      <dl>
+        <dt>{"Raw value"}</dt>
+        <dd>{value.raw}</dd>
+        <dt>{"Normalised"}</dt>
+        <dd>{value.normalized}</dd>
+        <dt>{"Source"}</dt>
+        <dd>{value.sourceHref ? <a className={"tl"} href={value.sourceHref}>{`${value.source} (proof document)`}</a> : value.source}</dd>
+        <dt>{"Given by"}</dt>
+        <dd>{`${value.by}, ${value.at}`}</dd>
+        <dt>{"Review"}</dt>
+        <dd>{value.review}</dd>
+        <dt>{"Replaced"}</dt>
+        <dd>
+          {value.earlier.length ? (
+            <ul>
+              {value.earlier.map((old, index) => (
+                <li key={index}>{`${old.value} (${old.by}, ${old.at})`}</li>
+              ))}
+            </ul>
+          ) : (
+            "Nothing: this is the first answer"
+          )}
+        </dd>
+      </dl>
+    </details>
+  );
+}
+
 function ReviewTable({ rows, index, data }: { rows: IntakeReviewRow[]; index: number; data: MatterIntakeData }) {
   return (
     <div className={"tw rv"} style={css({ "--i": String(index) })}>
@@ -166,6 +199,7 @@ function ReviewTable({ rows, index, data }: { rows: IntakeReviewRow[]; index: nu
               <td>{row.answer}</td>
               <td className={"mu"}>
                 <Joined parts={row.source} />
+                {row.provenance ? <Provenance value={row.provenance} /> : null}
               </td>
               <td>
                 <Badge badge={row.badge} />
