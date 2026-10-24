@@ -11516,14 +11516,24 @@ export type Database = {
         Args: { p_batch: string; p_org: string; p_reason: string }
         Returns: undefined
       }
-      offboard_staff_member: {
-        Args: {
-          p_membership_id: string
-          p_organization_id: string
-          p_receiver_membership_id: string
-        }
-        Returns: Json
-      }
+      offboard_staff_member:
+        | {
+            Args: {
+              p_membership_id: string
+              p_organization_id: string
+              p_receiver_membership_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_handover: Json
+              p_membership_id: string
+              p_organization_id: string
+              p_receiver_membership_id: string
+            }
+            Returns: Json
+          }
       open_intake_response: {
         Args: { p_matter_id: string; p_person_id: string; p_template_id: string }
         Returns: string
