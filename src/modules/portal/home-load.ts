@@ -6,6 +6,7 @@ import { loadPortalMessages } from "@/modules/messages/load";
 import type { PortalViewer } from "@/modules/portal/load";
 import { homeView, matterCards, type HomeView, type MatterCard } from "@/modules/portal/home-present";
 import { loadPortalGovernment } from "@/modules/portal/government-load";
+import { loadPortalRenewals } from "@/modules/portal/renewal-load";
 import { loadPortalFollowUp } from "@/modules/decisions/portal-load";
 import { portalNotices, type PortalNotice } from "@/modules/portal/notices";
 import { loadPortalTasks, type PortalTask } from "@/modules/portal/tasks-load";
@@ -17,13 +18,15 @@ import { loadPortalTasks, type PortalTask } from "@/modules/portal/tasks-load";
  */
 export async function loadPortalHome(viewer: PortalViewer, tasks: PortalTask[] | null): Promise<HomeView> {
   const matter = viewer.matters[0] ?? null;
-  const [taskRows, documents, invoices, messages, consultant, government, followUp] = await Promise.all([
+  const [taskRows, documents, invoices, messages, consultant, government, renewals, followUp] = await Promise.all([
     tasks ? Promise.resolve(tasks) : loadPortalTasks(viewer).catch(() => []),
     loadPortalDocuments(viewer).catch(() => null),
     loadPortalInvoices(viewer).catch(() => null),
     loadPortalMessages(viewer, null).catch(() => null),
     matter ? loadPortalConsultants(viewer).then((names) => names.get(matter.id) ?? null) : Promise.resolve(null),
     loadPortalGovernment(viewer, matter?.id ?? null),
+    // DEC-02: renewal reminders the firm set (portal only).
+    loadPortalRenewals(viewer),
     loadPortalFollowUp(viewer, matter?.id ?? null),
   ]);
   const view = homeView({
@@ -39,9 +42,10 @@ export async function loadPortalHome(viewer: PortalViewer, tasks: PortalTask[] |
     messages,
   });
   // GOV-05: statuses the firm shared, "Recorded by <firm> on <date>".
-  // DEC-02: the firm's approved conditions summary and the decision documents delivered.
   const withGovernment = government.length ? { ...view, government } : view;
-  return followUp ? { ...withGovernment, followUp } : withGovernment;
+  const withRenewals = renewals.length ? { ...withGovernment, renewals } : withGovernment;
+  // DEC-02: the firm's approved conditions summary and the decision documents delivered.
+  return followUp ? { ...withRenewals, followUp } : withRenewals;
 }
 
 /** My matters: one card per matter, with the client's open tasks and each matter's consultant. */

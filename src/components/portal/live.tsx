@@ -425,6 +425,32 @@ function LiveHome({ viewer, view, notices }: { viewer: PortalViewer; view: HomeV
           </div>
         </div>
       ) : null}
+      {view.renewals?.length ? (
+        <div className="panel rv" style={{ "--i": "3", marginBottom: 24 } as CSSProperties} id="renewals">
+          <h2>Renewal reminders</h2>
+          <div className="rank">
+            {view.renewals.map((renewal, index) => (
+              <div key={index}>
+                {icon("calendar", "s")}
+                <span>
+                  <b style={{ fontWeight: 500, display: "block" }}>{renewal.title}</b>
+                  {renewal.lines.map((line) => <span key={line} style={{ display: "block", fontSize: 14 }}>{line}</span>)}
+                  {renewal.timing ? (
+                    <small style={{ display: "block", color: "var(--t2)", fontSize: 13, marginTop: 4 }}>
+                      {renewal.timing.text} <a href={renewal.timing.href} target="_blank" rel="noopener noreferrer">Official page</a>, {renewal.timing.facts}
+                    </small>
+                  ) : null}
+                  {renewal.fee ? (
+                    <small style={{ display: "block", color: "var(--t2)", fontSize: 13, marginTop: 4 }}>
+                      {renewal.fee.text} <a href={renewal.fee.href} target="_blank" rel="noopener noreferrer">IRCC fee list</a>
+                    </small>
+                  ) : null}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {view.followUp ? (
         <div className="panel rv" style={{ "--i": "3", marginBottom: 24 } as CSSProperties} id="decision">
           <h2>After your decision</h2>
