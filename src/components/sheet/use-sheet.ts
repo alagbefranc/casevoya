@@ -94,6 +94,7 @@ import { runInboxCompose, runInboxMessage, runInboxNote, runInboxReply } from ".
 import { mountMessagingInputs, runAnnouncementSend, runTemplateApprove, runTemplateArchive, runTemplateSave } from "./messaging-acts";
 import { mountDocOpen, mountDrafts, mountInboxFilters, mountRecordsCrumb } from "./records-acts";
 import { bindGovControls } from "./gov-acts";
+import { bindApprovalControls } from "./approval-acts";
 import { bindSubmissionControls } from "./submission-acts";
 import { bindLetterControls } from "./letter-acts";
 import { bindGovStatusControls } from "./gov-status-acts";
@@ -259,6 +260,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     bindGovControls(root, router, listen);
     // The Submissions tab's checklist (GOV-01, GOV-03): `data-sub` controls.
     bindSubmissionControls(root, router, listen);
+    // DEC-02: the Decisions tab's approval follow-up (`data-dec`).
+    bindApprovalControls(root, router, listen);
     // GOV-04: Record a government letter's issuer and task rows, and the issuer list.
     bindLetterControls(root, router, listen);
     // GOV-05: Mark checked, Share with client, IRCC estimates (`data-govs`).
