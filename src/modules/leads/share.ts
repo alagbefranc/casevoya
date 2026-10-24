@@ -66,6 +66,21 @@ export function enquiryEmbedScript(origin: string): string {
   var SLUG = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
   if (window.__casevoyaEnquiry) { window.__casevoyaEnquiry.mount(); return; }
   var frames = [];
+  // Where the visitor came from, for the firm's lead (CRM-01): this page's utm_*, its host, and
+  // the host of the page before it. Nothing else about the visitor is sent.
+  function attribution() {
+    var out = [];
+    try {
+      var params = new URLSearchParams(window.location.search);
+      ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"].forEach(function (key) {
+        var value = params.get(key);
+        if (value) out.push(key + "=" + encodeURIComponent(value.slice(0, 200)));
+      });
+      out.push("cv_host=" + encodeURIComponent(window.location.hostname));
+      if (document.referrer) out.push("cv_ref=" + encodeURIComponent(new URL(document.referrer).hostname));
+    } catch (error) {}
+    return out.length ? "?" + out.join("&") : "";
+  }
   function mount() {
     var nodes = document.querySelectorAll("[data-casevoya-enquiry]");
     for (var i = 0; i < nodes.length; i++) {
@@ -75,7 +90,7 @@ export function enquiryEmbedScript(origin: string): string {
       if (!SLUG.test(slug)) continue;
       node.setAttribute("data-casevoya-mounted", "1");
       var frame = document.createElement("iframe");
-      frame.src = ORIGIN + "/embed/enquiry/" + slug;
+      frame.src = ORIGIN + "/embed/enquiry/" + slug + attribution();
       frame.title = node.getAttribute("data-title") || "Enquiry form";
       frame.setAttribute("loading", "lazy");
       frame.setAttribute("style", "width:100%;min-height:600px;border:0;display:block;background:transparent");
@@ -113,6 +128,11 @@ export type EnquiryShareData = {
   /** No published privacy notice: the form answers "This form isn't available". */
   privacyMissing: boolean;
   bookings: BookingLink[];
+  /**
+   * CRM-01: the Settings switch for the enquiry page. `owner` may change it (step-up); everyone
+   * else sees whether it is on. Absent when it can't be read.
+   */
+  page?: { enabled: boolean; owner: boolean; organizationId: string } | null;
 };
 
 export function bookingLinks(origin: string, slug: string, types: { title: string; slug: string; is_sample: boolean }[]): BookingLink[] {

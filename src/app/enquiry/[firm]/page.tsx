@@ -4,6 +4,7 @@ import { EnquiryLive } from "@/components/sheet/enquiry-live";
 import { QuietSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
 import { loadEnquiryPage } from "@/modules/leads/enquiry-page";
+import { ENQUIRY_CLOSED_COPY, enquiryClosedTitle } from "@/modules/leads/enquiry-present";
 
 export const metadata: Metadata = {
   title: "Enquiry · Casevoya",
@@ -21,6 +22,14 @@ function EnquiryUnavailable() {
 async function Body({ params }: { params: Promise<{ firm: string }> }) {
   const loaded = await loadEnquiryPage((await params).firm, false);
   if (!loaded) return <EnquiryUnavailable />;
+  // CRM-01: the firm turned its enquiry page off in Settings.
+  if (!loaded.open) {
+    return (
+      <SheetScreen page="enquiry" tone="public">
+        <QuietSheet title={enquiryClosedTitle(loaded.firmName)} copy={ENQUIRY_CLOSED_COPY} />
+      </SheetScreen>
+    );
+  }
   return (
     <SheetScreen page="enquiry" tone="public">
       <EnquiryLive {...loaded} />

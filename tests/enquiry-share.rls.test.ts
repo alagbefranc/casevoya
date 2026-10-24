@@ -80,7 +80,7 @@ describe("enquiry_public_firm", () => {
     const live = await firm();
     const other = await firm();
     await asAnon(db);
-    expect(await publicFirm(live.slug)).toEqual({ firm_name: "Synthetic Firm", firm_slug: live.slug, practice: false, staff: false });
+    expect(await publicFirm(live.slug)).toEqual({ firm_name: "Synthetic Firm", firm_slug: live.slug, practice: false, staff: false, open: true });
     expect(await publicFirm(live.slug.toUpperCase())).toMatchObject({ firm_slug: live.slug });
     await staff(live, live.manager);
     expect(await publicFirm(live.slug)).toMatchObject({ staff: true });
@@ -111,14 +111,14 @@ describe("enquiry_public_firm", () => {
     await staff(sample, sample.manager, "aal1");
     expect(await publicFirm(sample.slug)).toBeNull();
     await staff(sample, sample.manager);
-    expect(await publicFirm(sample.slug)).toEqual({ firm_name: "Synthetic Firm", firm_slug: sample.slug, practice: true, staff: true });
+    expect(await publicFirm(sample.slug)).toEqual({ firm_name: "Synthetic Firm", firm_slug: sample.slug, practice: true, staff: true, open: true });
   });
 
   it("is callable by visitors but leaks no ids, and the practice-viewer helper stays private", async () => {
     const live = await firm();
     await asAnon(db);
     const shown = await publicFirm(live.slug);
-    expect(Object.keys(shown ?? {}).sort()).toEqual(["firm_name", "firm_slug", "practice", "staff"]);
+    expect(Object.keys(shown ?? {}).sort()).toEqual(["firm_name", "firm_slug", "open", "practice", "staff"]);
     expect(JSON.stringify(shown)).not.toContain(live.orgId);
     await expectDbError(() => db.query(`select app.booking_practice_viewer($1)`, [live.orgId]), /permission denied/);
   });
@@ -171,5 +171,65 @@ describe("submit_enquiry in sample mode", () => {
     await staff(b, b.manager);
     const seen = await db.query(`select id from public.leads where organization_id = $1`, [a.orgId]);
     expect(seen.rows).toHaveLength(0);
+  });
+});
+
+describe("enquiry page controls (CRM-01, 20261024140000)", () => {
+  it("lets the owner turn the page off with a step-up: the page says closed and submit_enquiry refuses", async () => {
+    const ctx = await firm();
+    await staff(ctx, ctx.manager);
+    await expectDbError(() => db.query(`select public.set_enquiry_page_enabled($1, false)`, [ctx.orgId]), /denied|owner/i);
+    await asUser(db, { userId: ctx.owner, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 3600 });
+    await expectDbError(() => db.query(`select public.set_enquiry_page_enabled($1, false)`, [ctx.orgId]), /step|recent|confirm|two-step/i);
+    await asUser(db, { userId: ctx.owner, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    await db.query(`select public.set_enquiry_page_enabled($1, false)`, [ctx.orgId]);
+    await asAnon(db);
+    expect(await publicFirm(ctx.slug)).toMatchObject({ firm_name: "Synthetic Firm", open: false });
+    expect(await submit(ctx.slug)).toEqual({ error: "form_closed" });
+    expect(await leadsOf(ctx.orgId)).toEqual([]);
+    await asMaintenance(db);
+    const audit = await db.query<{ context: Record<string, unknown> }>(`select context from public.audit_log where organization_id = $1 and action = 'firm.enquiry_page_changed'`, [ctx.orgId]);
+    expect(audit.rows.map((row) => row.context)).toEqual([{ enabled: false }]);
+    await asUser(db, { userId: ctx.owner, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    await db.query(`select public.set_enquiry_page_enabled($1, true)`, [ctx.orgId]);
+    await asAnon(db);
+    expect(await submit(ctx.slug)).toEqual({ ok: true });
+  });
+
+  it("keeps only the known attribution keys, cleaned, and puts utm_source in source_detail", async () => {
+    const ctx = await firm();
+    await asAnon(db);
+    const attribution = {
+      utm_source: "test",
+      utm_campaign: "fall\tintake",
+      referrer_host: "https://www.Example.org/path?q=1",
+      embed_host: "Partner.example.com",
+      gclid: "dropped",
+      utm_term: "",
+    };
+    const row = await db.query<{ r: { ok?: boolean } }>(
+      `select public.submit_enquiry($1, 'Wei Zhang', 'wei@example.test', 'email', 'Study', 'China', 'Mandarin', true,
+         'Synthetic Firm may use these details to reply to my enquiry', false, null, 'enquiry-v2', 'web_form', $2, null, $3::jsonb) as r`,
+      [ctx.slug, randomUUID(), JSON.stringify(attribution)],
+    );
+    expect(row.rows[0].r).toEqual({ ok: true });
+    await asMaintenance(db);
+    const lead = await db.query<{ attribution: Record<string, string>; source_detail: string }>(`select attribution, source_detail from public.leads where organization_id = $1`, [ctx.orgId]);
+    expect(lead.rows[0]).toEqual({
+      attribution: { utm_source: "test", utm_campaign: "fall intake", referrer_host: "www.example.org", embed_host: "partner.example.com" },
+      source_detail: "test",
+    });
+  });
+
+  it("shows the firm's current published privacy notice publicly, under the enquiry page's rule", async () => {
+    const live = await firm();
+    const sample = await firm({ sample: true });
+    const none = await firm({ privacy: false });
+    await asAnon(db);
+    const notice = (await db.query<{ r: Record<string, unknown> | null }>(`select public.public_privacy_notice($1) as r`, [live.slug])).rows[0].r;
+    expect(notice).toMatchObject({ firm_name: "Synthetic Firm", title: "Privacy notice", version_label: "v1", body: "Synthetic notice" });
+    for (const slug of [sample.slug, none.slug, "no-such-firm"]) {
+      expect((await db.query<{ r: unknown }>(`select public.public_privacy_notice($1) as r`, [slug])).rows[0].r).toBeNull();
+    }
   });
 });
