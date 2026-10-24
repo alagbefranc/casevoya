@@ -9,7 +9,7 @@
  * `.fp-row` Save button under the Retention policy carrying `data-retention-save`, `data-org` and
  * `data-version` so use-sheet saves through public.set_firm_retention_policy.
  */
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import { Icon, Sep } from "./frame";
 import { SETTINGS_TABS } from "./portal-policies";
 
@@ -135,7 +135,11 @@ function InvoiceLines({ invoices }: { invoices: SubscriptionInvoiceRow[] }) {
   );
 }
 
-export function SheetSubscription({ data }: { data: SubscriptionData }) {
+/**
+ * `children` (live only): what follows the Subscription panel on this tab, the firm's Stripe
+ * account card for clients' card payments (FIN-02, `StripeConnectCard`).
+ */
+export function SheetSubscription({ data, children }: { data: SubscriptionData; children?: ReactNode }) {
   const invoices = data.invoices ?? [];
   const buttons = data.buttons ?? [];
   return (
@@ -178,6 +182,7 @@ export function SheetSubscription({ data }: { data: SubscriptionData }) {
           {` ${data.note}`}
         </p>
       ) : null}
+      {children}
     </>
   );
 }

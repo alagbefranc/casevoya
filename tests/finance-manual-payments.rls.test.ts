@@ -388,3 +388,31 @@ describe("client-funds advances", () => {
     await expectDbError(() => db.query(`select public.verify_client_deposit($1)`, [named]), /only the named reviewer or the firm owner/);
   });
 });
+
+describe("with card checkout and client credits (FIN-02, FIN-13)", () => {
+  it("refuses card checkout while a manual payment waits for verification, and allows it after", async () => {
+    const f = await firm();
+    const id = await record(f);
+    await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
+    const pending = await db.query<{ r: { allowed: boolean; reason: string | null } }>(`select public.invoice_card_checkout_check($1) as r`, [f.invoiceId]);
+    expect(pending.rows[0].r).toEqual({ allowed: false, reason: "manual_payment_pending" });
+    await as(f, f.owner);
+    await db.query(`select public.verify_invoice_manual_payment($1)`, [id]);
+    await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
+    const after = await db.query<{ r: { allowed: boolean } }>(`select public.invoice_card_checkout_check($1) as r`, [f.invoiceId]);
+    expect(after.rows[0].r).toMatchObject({ allowed: true });
+  });
+
+  it("verifying never overpays, so it opens no client credit; reversing a full payment leaves none", async () => {
+    const f = await firm();
+    const id = await record(f, { amount: 50_000 });
+    await as(f, f.owner);
+    await db.query(`select public.verify_invoice_manual_payment($1)`, [id]);
+    await asMaintenance(db);
+    expect((await db.query(`select id from public.client_credits where source_invoice_id = $1`, [f.invoiceId])).rows).toHaveLength(0);
+    await as(f, f.owner);
+    await db.query(`select public.reverse_invoice_manual_payment($1, 'reversed', 'Recalled by the sender')`, [id]);
+    await asMaintenance(db);
+    expect((await db.query(`select id from public.client_credits where source_invoice_id = $1`, [f.invoiceId])).rows).toHaveLength(0);
+  });
+});

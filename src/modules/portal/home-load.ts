@@ -5,6 +5,7 @@ import { loadPortalInvoices } from "@/modules/finance/portal-load";
 import { loadPortalMessages } from "@/modules/messages/load";
 import type { PortalViewer } from "@/modules/portal/load";
 import { homeView, matterCards, type HomeView, type MatterCard } from "@/modules/portal/home-present";
+import { portalNotices, type PortalNotice } from "@/modules/portal/notices";
 import { loadPortalTasks, type PortalTask } from "@/modules/portal/tasks-load";
 
 /**
@@ -49,5 +50,16 @@ async function loadPortalConsultants(viewer: PortalViewer): Promise<Map<string, 
     return new Map((data ?? []).map((row) => [row.matter_id, row.consultant_name]));
   } catch {
     return new Map();
+  }
+}
+
+/** ORG-06: the signed-in person's own portal notices (their consultant changed); none when unreadable. */
+export async function loadPortalNotices(viewer: PortalViewer): Promise<PortalNotice[]> {
+  try {
+    const supabase = await createClient({ organizationId: viewer.organizationId });
+    const { data, error } = await supabase.rpc("portal_notices_for_me", { p_org: viewer.organizationId });
+    return error ? [] : portalNotices(data, viewer.organizationName);
+  } catch {
+    return [];
   }
 }

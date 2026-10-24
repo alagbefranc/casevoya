@@ -1676,6 +1676,88 @@
           "note": "EX16 hand draft (#166)."
         }
       }
+    },
+    "EX17": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-24",
+      "sourceHash": "sha256:aec2820987099aab4f457a63d9a2a6461a2a7159933d3a0a80dc2521aa1f396d",
+      "strings": {
+        "subject": {
+          "en": "An update on your file from {firm_name}",
+          "fr": "Une mise à jour de votre dossier de {firm_name}",
+          "origin": "hand",
+          "note": "EX17 hand draft (ORG-06, #175)."
+        },
+        "preheader": {
+          "en": "Your consultant has changed. See who in your portal.",
+          "fr": "Votre consultant a changé. Voyez qui dans votre portail.",
+          "origin": "hand",
+          "note": "EX17 hand draft (ORG-06, #175)."
+        },
+        "heading": {
+          "en": "Your consultant has changed",
+          "fr": "Votre consultant a changé",
+          "origin": "hand",
+          "note": "EX17 hand draft (ORG-06, #175)."
+        },
+        "body": {
+          "en": "A different consultant at {firm_name} is now responsible for your file, and your file stays with {firm_name}. For your privacy, their name is in your portal, along with anything you may need to sign. If you have questions or don't agree with this change, contact {firm_name}.",
+          "fr": "Un autre consultant de {firm_name} est maintenant responsable de votre dossier, qui reste chez {firm_name}. Pour protéger votre vie privée, son nom figure dans votre portail, avec tout document que vous pourriez avoir à signer. Si vous avez des questions ou n'êtes pas d'accord avec ce changement, communiquez avec {firm_name}.",
+          "origin": "hand",
+          "note": "EX17 hand draft (ORG-06, #175)."
+        },
+        "cta": {
+          "en": "Open your portal",
+          "fr": "Ouvrir votre portail",
+          "origin": "hand",
+          "note": "EX17 hand draft (ORG-06, #175)."
+        }
+      }
+    },
+    "EX18": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-24",
+      "sourceHash": "sha256:05b5307ba0827ce4499a4db063e1ef3bd3d1117d106dd22afa0120711e06c3e1",
+      "strings": {
+        "subject": {
+          "en": "New enquiry for {firm_name}",
+          "fr": "Nouvelle demande pour {firm_name}",
+          "origin": "hand",
+          "note": "EX18 hand draft (CRM-01, #176)."
+        },
+        "preheader": {
+          "en": "Open the Pipeline in Casevoya to read it.",
+          "fr": "Ouvrez le pipeline dans Casevoya pour la lire.",
+          "origin": "hand",
+          "note": "EX18 hand draft (CRM-01, #176)."
+        },
+        "heading": {
+          "en": "You have a new enquiry",
+          "fr": "Vous avez une nouvelle demande",
+          "origin": "hand",
+          "note": "EX18 hand draft (CRM-01, #176)."
+        },
+        "body": {
+          "en": "Someone sent {firm_name} an enquiry from your enquiry page or website form. For their privacy, the details are in the Pipeline.",
+          "fr": "Quelqu’un a envoyé une demande à {firm_name} depuis votre page de demande ou le formulaire de votre site. Pour protéger sa vie privée, les détails sont dans le pipeline.",
+          "origin": "hand",
+          "note": "EX18 hand draft (CRM-01, #176)."
+        },
+        "cta": {
+          "en": "Open the Pipeline",
+          "fr": "Ouvrir le pipeline",
+          "origin": "hand",
+          "note": "EX18 hand draft (CRM-01, #176)."
+        }
+      }
     }
   }
 }

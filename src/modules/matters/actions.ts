@@ -188,6 +188,26 @@ export async function assignResponsibleConsultant(input: {
   return { version: data };
 }
 
+/**
+ * ORG-06: changes the responsible consultant and tells the people on the matter with a portal
+ * account (portal notice and EX17), in one database call. The database checks the role, the
+ * licence, the version and the step-up.
+ */
+export async function changeResponsibleConsultant(input: { organizationId: string; matterId: string; membershipId: string; expectedVersion: number; code: string | null }) {
+  if (!isUuid(input.matterId) || !isUuid(input.membershipId)) return { error: "Choose a consultant." };
+  const session = await staffClient(input.organizationId, input.code);
+  if ("error" in session) return { error: session.error };
+  const { data, error } = await session.supabase.rpc("change_responsible_consultant", {
+    p_matter_id: input.matterId,
+    p_membership_id: input.membershipId,
+    p_expected_version: input.expectedVersion,
+  });
+  if (error) return { error: safeAccessError(error.message) };
+  const result = asRecord(data);
+  const count = (value: unknown) => (typeof value === "number" && value > 0 ? Math.floor(value) : 0);
+  return { version: typeof result.version === "number" ? result.version : null, told: count(result.told), emailed: count(result.emailed) };
+}
+
 export async function selectMatterProgram(input: {
   organizationId: string;
   matterId: string;
