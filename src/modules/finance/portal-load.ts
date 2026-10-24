@@ -9,6 +9,7 @@ import { invoiceState } from "@/modules/sheet/finance-present";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
 import { paymentReceiptFromRpc } from "@/modules/finance/payment-receipt";
 import { receiptView, type ReceiptView } from "@/modules/finance/portal-receipt";
+import { isCardPayableCategory } from "@/modules/finance/connect-present";
 
 export type PortalInvoice = {
   id: string;
@@ -27,6 +28,8 @@ export type PortalInvoice = {
   dueOn: string;
   open: boolean;
   processing: boolean;
+  /** An earned fee or incurred cost the client may pay by card; an advance never is (FIN-02). Absent means payable. */
+  cardPayable?: boolean;
   state: { tone: string; label: string; detail?: string };
   /** Receipts for the client's own payments of this invoice ("PR-0001", CICC Code s. 33(3)), oldest first. */
   receipts: { id: string; number: string }[];
@@ -71,7 +74,7 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
   const today = isoDateInTimeZone(new Date(), viewer.timezone);
   const { data } = await supabase
     .from("invoices")
-    .select("id, matter_id, number, description, amount_cents, paid_cents, refunded_cents, credited_cents, currency, status, issued_on, due_on")
+    .select("id, matter_id, number, description, fee_category, amount_cents, paid_cents, refunded_cents, credited_cents, currency, status, issued_on, due_on")
     .eq("organization_id", viewer.organizationId)
     .neq("status", "draft")
     .order("created_at", { ascending: false })
@@ -175,6 +178,7 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
         dueOn: row.due_on,
         open: row.status === "issued" || row.status === "partially_paid",
         processing: busy.has(row.id),
+        cardPayable: isCardPayableCategory(row.fee_category),
         state: { tone: state.tone, label: state.label, ...(state.detail ? { detail: state.detail } : {}) },
         receipts: receiptsOf.get(row.id) ?? [],
         creditNotes: creditsOf.get(row.id) ?? [],
