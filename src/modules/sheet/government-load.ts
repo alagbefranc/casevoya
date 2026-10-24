@@ -21,6 +21,8 @@ import { governmentLabel, type SheetQuery } from "@/modules/sheet/present";
 import { loadSubmissionChecklist } from "@/modules/sheet/matter-submissions-load";
 import { blockedWhy, type GateKey } from "@/modules/submissions/present";
 import { loadLetterExtras } from "@/modules/sheet/letter-load";
+import { loadApprovalFollowUp } from "@/modules/decisions/load";
+import { withApprovalFollowUp } from "@/modules/decisions/present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -173,12 +175,27 @@ export async function loadMatterGovernment(supabase: Client, input: MatterGovern
     ctx,
     checklist ? { blocked: checklist.blocked, why: checklist.blocked ? blockedWhy(checklist.blocked as GateKey[]) : null, channelName: checklist.channelName } : undefined,
   );
+  // DEC-02: the approval follow-up checklist, conditions summary and delivery record (matter staff).
+  const decisions = buildDecisions(records, ctx);
+  const approval = GOV_STAFF.has(input.staff.role)
+    ? await loadApprovalFollowUp(supabase, records, {
+        organizationId: org,
+        matterId: input.matter.id,
+        role: input.staff.role,
+        licensed: input.licensed,
+        timezone: input.staff.timezone,
+        today: input.today,
+        now: input.now,
+        memberName: ctx.memberName,
+        userName,
+      })
+    : null;
   return {
     issuers: extras.issuers,
     filed: extras.filed,
     submissions: { ...submissions.tab, checklist: checklist?.card ?? null },
-    decisions: buildDecisions(records, ctx),
-    dialogs: { ...submissions.dialogs, checklist: checklist?.dialogs ?? null },
+    decisions: approval ? withApprovalFollowUp(decisions, approval.card) : decisions,
+    dialogs: { ...submissions.dialogs, checklist: checklist?.dialogs ?? null, approval: approval?.dialogs ?? null },
     letters: records.letters.map((row) => ({ id: row.id, label: `${correspondenceLabel(row.kind)}, received ${dayMonth(row.received_on)}` })),
   };
 }

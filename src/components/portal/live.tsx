@@ -24,6 +24,7 @@ import type { PortalIntake } from "@/modules/intake/portal-load";
 import type { PortalTask } from "@/modules/portal/tasks-load";
 import type { PortalNotice } from "@/modules/portal/notices";
 import { DismissNotice } from "./dismiss-notice";
+import { AcknowledgeDelivery } from "./acknowledge-delivery";
 
 export type PortalPayments = { data: PortalInvoices; invoiceId: string | null };
 
@@ -422,6 +423,37 @@ function LiveHome({ viewer, view, notices }: { viewer: PortalViewer; view: HomeV
               </div>
             ))}
           </div>
+        </div>
+      ) : null}
+      {view.followUp ? (
+        <div className="panel rv" style={{ "--i": "3", marginBottom: 24 } as CSSProperties} id="decision">
+          <h2>After your decision</h2>
+          {view.followUp.summary ? (
+            <>
+              <h3>Summary of your conditions, from {viewer.organizationName}</h3>
+              <p style={{ fontSize: 14, whiteSpace: "pre-wrap", margin: "0 0 6px" }}>{view.followUp.summary.body}</p>
+              <small style={{ display: "block", color: "var(--t2)", fontSize: 13, marginBottom: 14 }}>{view.followUp.summary.line}</small>
+            </>
+          ) : null}
+          {view.followUp.deliveries.length ? (
+            <>
+              <h3>Decision documents sent to you</h3>
+              <div className="rank">
+                {view.followUp.deliveries.map((row) => (
+                  <div key={row.id}>
+                    {icon("file", "s")}
+                    <span style={{ flex: 1 }}>
+                      <b style={{ fontWeight: 500, display: "block" }}>{row.title}</b>
+                      <small style={{ display: "block", color: "var(--t2)", fontSize: 13 }}>{row.acknowledged ?? row.detail}</small>
+                    </span>
+                    <span className="r">
+                      {row.acknowledged ? <span className="bd ok"><i></i>Received</span> : <AcknowledgeDelivery organizationId={viewer.organizationId} deliveryId={row.id} />}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
         </div>
       ) : null}
       <div className="panel rv" style={{ "--i": "3" } as CSSProperties}>

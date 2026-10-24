@@ -5,6 +5,7 @@ import type { ChatData } from "@/modules/messages/present";
 import type { PortalMatter } from "@/modules/portal/load";
 import type { PortalTask } from "@/modules/portal/tasks-load";
 import type { ClientRecordView } from "@/modules/government/status-provenance";
+import type { PortalFollowUp } from "@/modules/decisions/present";
 
 /** The eight steps of "Where things stand" on the client's Home, in order. */
 export const HOME_STEPS = [
@@ -62,6 +63,8 @@ export type HomeView = {
   invoice: { title: string; detail: string; amount: string; href: string } | null;
   /** GOV-05: government statuses the firm shared on this matter (src/modules/portal/government-load.ts). */
   government?: ClientRecordView[];
+  /** DEC-02: the firm's approved conditions summary and the decision documents delivered (src/modules/decisions/portal-load.ts). */
+  followUp?: PortalFollowUp;
 };
 
 export type HomeInput = {

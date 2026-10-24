@@ -10283,6 +10283,250 @@ export type Database = {
         }
         Relationships: []
       }
+      // DEC-02 approval follow-up (20261025200000_dec_approval_follow_up.sql).
+      approval_follow_up_steps: {
+        Row: {
+          checked_on: string
+          created_at: string
+          created_by: string | null
+          current_to: string | null
+          form_modified_on: string | null
+          form_number: string | null
+          id: string
+          label: string
+          organization_id: string
+          program_key: string
+          retired_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by_membership_id: string | null
+          snapshot_id: string | null
+          snapshot_sha256: string | null
+          source_id: string
+          source_section: string | null
+          source_url: string
+          status: string
+          timing_text: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          checked_on: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          id?: string
+          label: string
+          organization_id: string
+          program_key: string
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id: string
+          source_section?: string | null
+          source_url: string
+          status?: string
+          timing_text?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          checked_on?: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          id?: string
+          label?: string
+          organization_id?: string
+          program_key?: string
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id?: string
+          source_section?: string | null
+          source_url?: string
+          status?: string
+          timing_text?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      approval_follow_up_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          decision_id: string
+          id: string
+          matter_id: string
+          membership_id: string
+          organization_id: string
+          step_id: string
+          ticked: boolean
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          decision_id: string
+          id?: string
+          matter_id: string
+          membership_id: string
+          organization_id: string
+          step_id: string
+          ticked: boolean
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          decision_id?: string
+          id?: string
+          matter_id?: string
+          membership_id?: string
+          organization_id?: string
+          step_id?: string
+          ticked?: boolean
+        }
+        Relationships: []
+      }
+      conditions_summaries: {
+        Row: {
+          approved_at: string | null
+          approved_by_membership_id: string | null
+          body: string
+          body_sha256: string | null
+          created_at: string
+          created_by: string | null
+          decision_id: string
+          drafted_by_membership_id: string
+          id: string
+          matter_id: string
+          number: number | null
+          organization_id: string
+          status: string
+          superseded_at: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          body: string
+          body_sha256?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_id: string
+          drafted_by_membership_id: string
+          id?: string
+          matter_id: string
+          number?: number | null
+          organization_id: string
+          status?: string
+          superseded_at?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          body?: string
+          body_sha256?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_id?: string
+          drafted_by_membership_id?: string
+          id?: string
+          matter_id?: string
+          number?: number | null
+          organization_id?: string
+          status?: string
+          superseded_at?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      decision_deliveries: {
+        Row: {
+          ack_evidence_note: string | null
+          ack_evidence_version_id: string | null
+          ack_recorded_by_membership_id: string | null
+          acknowledged_at: string | null
+          acknowledged_by_user_id: string | null
+          acknowledged_on: string | null
+          acknowledgement: string | null
+          created_at: string
+          created_by: string | null
+          decision_id: string
+          delivered_at: string
+          delivered_by_membership_id: string
+          document_label: string
+          document_version_id: string
+          id: string
+          matter_id: string
+          method: string
+          note: string | null
+          organization_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          ack_evidence_note?: string | null
+          ack_evidence_version_id?: string | null
+          ack_recorded_by_membership_id?: string | null
+          acknowledged_at?: string | null
+          acknowledged_by_user_id?: string | null
+          acknowledged_on?: string | null
+          acknowledgement?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_id: string
+          delivered_at: string
+          delivered_by_membership_id: string
+          document_label: string
+          document_version_id: string
+          id?: string
+          matter_id: string
+          method: string
+          note?: string | null
+          organization_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          ack_evidence_note?: string | null
+          ack_evidence_version_id?: string | null
+          ack_recorded_by_membership_id?: string | null
+          acknowledged_at?: string | null
+          acknowledged_by_user_id?: string | null
+          acknowledged_on?: string | null
+          acknowledgement?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_id?: string
+          delivered_at?: string
+          delivered_by_membership_id?: string
+          document_label?: string
+          document_version_id?: string
+          id?: string
+          matter_id?: string
+          method?: string
+          note?: string | null
+          organization_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       support_access_requests: {
         Row: {
           approved_at: string | null
@@ -12134,6 +12378,54 @@ export type Database = {
         }
         Returns: string
       }
+      // DEC-02 approval follow-up (20261025200000_dec_approval_follow_up.sql).
+      propose_approval_follow_up_step: {
+        Args: {
+          p_checked_on: string
+          p_current_to: string
+          p_form_modified_on: string
+          p_form_number: string
+          p_label: string
+          p_org: string
+          p_program_key: string
+          p_snapshot: Json
+          p_source_section: string
+          p_source_url: string
+          p_timing_text: string
+        }
+        Returns: string
+      }
+      review_approval_follow_up_step: {
+        Args: { p_decision: string; p_expected_version: number; p_note: string; p_step_id: string }
+        Returns: number
+      }
+      retire_approval_follow_up_step: {
+        Args: { p_expected_version: number; p_reason: string; p_step_id: string }
+        Returns: number
+      }
+      tick_approval_follow_up_step: {
+        Args: { p_matter_id: string; p_step_id: string; p_ticked: boolean }
+        Returns: string
+      }
+      draft_conditions_summary: { Args: { p_body: string; p_matter_id: string }; Returns: string }
+      revise_conditions_summary: {
+        Args: { p_body: string; p_expected_version: number; p_summary_id: string }
+        Returns: number
+      }
+      approve_conditions_summary: {
+        Args: { p_expected_version: number; p_summary_id: string }
+        Returns: number
+      }
+      record_decision_delivery: {
+        Args: { p_delivered_at: string; p_document_version_id: string; p_matter_id: string; p_method: string; p_note: string }
+        Returns: string
+      }
+      acknowledge_decision_delivery: { Args: { p_delivery_id: string }; Returns: undefined }
+      record_delivery_acknowledgement: {
+        Args: { p_acknowledged_on: string; p_delivery_id: string; p_evidence_note: string; p_evidence_version_id: string; p_expected_version: number }
+        Returns: number
+      }
+      portal_decision_follow_up: { Args: { p_org: string }; Returns: Json }
       record_client_advance: {
         Args: {
           p_amount_cents: number
