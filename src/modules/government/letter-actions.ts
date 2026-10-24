@@ -112,7 +112,15 @@ export async function proposeGovernmentIssuer(input: { organizationId: string; n
   return { id: data, read: Boolean(read), nameOnPage: read?.nameOnPage ?? null };
 }
 
-export async function reviewGovernmentIssuer(input: { organizationId: string; issuerId: string; version: number; decision: string; note: string | null }) {
+/** pageOpenedOn: the reviewer's attestation when the issuer's page wasn't read (decided 2026-10-24). */
+export async function reviewGovernmentIssuer(input: {
+  organizationId: string;
+  issuerId: string;
+  version: number;
+  decision: string;
+  note: string | null;
+  pageOpenedOn?: string | null;
+}) {
   if (!isUuid(input.issuerId) || !Number.isInteger(input.version)) return { error: "Choose the issuer." };
   if (!["approved", "rejected", "retired"].includes(input.decision)) return { error: "Choose approve, reject or retire." };
   const s = await session(input.organizationId);
@@ -122,6 +130,7 @@ export async function reviewGovernmentIssuer(input: { organizationId: string; is
     p_expected_version: input.version,
     p_decision: input.decision,
     p_note: text(input.note),
+    p_page_opened_on: input.decision === "approved" && DATE.test(input.pageOpenedOn ?? "") ? (input.pageOpenedOn as string) : null,
   });
   if (error) return { error: refusal(error.message) };
   refresh();

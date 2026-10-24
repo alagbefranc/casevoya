@@ -3365,6 +3365,9 @@ export type Database = {
           name: string
           name_on_page: boolean | null
           organization_id: string
+          page_attested_at: string | null
+          page_attested_by_membership_id: string | null
+          page_attested_on: string | null
           page_modified_on: string | null
           retrieved_at: string | null
           review_note: string | null
@@ -3384,6 +3387,9 @@ export type Database = {
           name: string
           name_on_page?: boolean | null
           organization_id: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
           page_modified_on?: string | null
           retrieved_at?: string | null
           review_note?: string | null
@@ -3403,6 +3409,9 @@ export type Database = {
           name?: string
           name_on_page?: boolean | null
           organization_id?: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
           page_modified_on?: string | null
           retrieved_at?: string | null
           review_note?: string | null
@@ -3427,6 +3436,9 @@ export type Database = {
           id: string
           matter_id: string
           organization_id: string
+          page_attested_at: string | null
+          page_attested_by_membership_id: string | null
+          page_attested_on: string | null
           page_retrieved_at: string | null
           review_note: string | null
           reviewed_at: string | null
@@ -3447,6 +3459,9 @@ export type Database = {
           id?: string
           matter_id: string
           organization_id: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
           page_retrieved_at?: string | null
           review_note?: string | null
           reviewed_at?: string | null
@@ -3467,6 +3482,9 @@ export type Database = {
           id?: string
           matter_id?: string
           organization_id?: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
           page_retrieved_at?: string | null
           review_note?: string | null
           reviewed_at?: string | null
@@ -10188,6 +10206,9 @@ export type Database = {
           kind: string
           label: string
           organization_id: string
+          page_attested_at: string | null
+          page_attested_by_membership_id: string | null
+          page_attested_on: string | null
           program_key: string | null
           retired_at: string | null
           review_note: string | null
@@ -10214,6 +10235,9 @@ export type Database = {
           kind: string
           label: string
           organization_id: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
           program_key?: string | null
           retired_at?: string | null
           review_note?: string | null
@@ -10240,6 +10264,9 @@ export type Database = {
           kind?: string
           label?: string
           organization_id?: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
           program_key?: string | null
           retired_at?: string | null
           review_note?: string | null
@@ -12454,15 +12481,26 @@ export type Database = {
         Args: { p_outcome: string; p_payment_id: string; p_reason: string }
         Returns: Json
       }
-      review_submission_requirement: {
-        Args: {
-          p_decision: string
-          p_expected_version: number
-          p_note: string
-          p_requirement_id: string
-        }
-        Returns: number
-      }
+      review_submission_requirement:
+        | {
+            Args: {
+              p_decision: string
+              p_expected_version: number
+              p_note: string
+              p_requirement_id: string
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              p_decision: string
+              p_expected_version: number
+              p_note: string
+              p_page_opened_on: string | null
+              p_requirement_id: string
+            }
+            Returns: number
+          }
       submission_checklist: {
         Args: { p_matter_id: string }
         Returns: Json
@@ -14182,15 +14220,26 @@ export type Database = {
         }
         Returns: number
       }
-      review_processing_estimate: {
-        Args: {
-          p_decision: string
-          p_estimate_id: string
-          p_expected_version: number
-          p_note: string | null
-        }
-        Returns: number
-      }
+      review_processing_estimate:
+        | {
+            Args: {
+              p_decision: string
+              p_estimate_id: string
+              p_expected_version: number
+              p_note: string | null
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              p_decision: string
+              p_estimate_id: string
+              p_expected_version: number
+              p_note: string | null
+              p_page_opened_on: string | null
+            }
+            Returns: number
+          }
       review_firm_transfer_authority: {
         Args: { p_authorised: boolean; p_item_id: string; p_note: string }
         Returns: undefined
@@ -14204,15 +14253,26 @@ export type Database = {
         }
         Returns: number
       }
-      review_government_issuer: {
-        Args: {
-          p_decision: string
-          p_expected_version: number
-          p_issuer_id: string
-          p_note: string | null
-        }
-        Returns: number
-      }
+      review_government_issuer:
+        | {
+            Args: {
+              p_decision: string
+              p_expected_version: number
+              p_issuer_id: string
+              p_note: string | null
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              p_decision: string
+              p_expected_version: number
+              p_issuer_id: string
+              p_note: string | null
+              p_page_opened_on: string | null
+            }
+            Returns: number
+          }
       review_intake_answer: {
         Args: { p_answer_id: string }
         Returns: string

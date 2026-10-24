@@ -69,8 +69,9 @@ export async function overrideSubmissionGate(input: Ref & { handoffId: string; g
 
 /**
  * Enters a step or channel name from an official page. The server fetches the page and hashes
- * it; when it can't, the entry is still kept for review and says so (it can't go live without a
- * snapshot). Nothing is read from the page: the words are what staff typed from it.
+ * it; when it can't, the entry is still kept for review and says so (it goes live only when a
+ * licensed reviewer attests they opened the page themselves). Nothing is read from the page: the
+ * words are what staff typed from it.
  */
 export async function proposeSubmissionRequirement(
   input: Ref & {
@@ -114,7 +115,14 @@ export async function proposeSubmissionRequirement(
   return { id: data as string, snapshot: Boolean(fetched.snapshot), reason: fetched.snapshot ? null : fetched.reason };
 }
 
-export async function reviewSubmissionRequirement(input: Ref & { requirementId: string; version: number; decision: string; note: string | null }) {
+/**
+ * Approve or reject an entry. pageOpenedOn is the reviewer's attestation for an entry without a
+ * snapshot (the date they opened the official page themselves); the database ignores it when the
+ * entry has a snapshot and refuses a no-snapshot approval without it.
+ */
+export async function reviewSubmissionRequirement(
+  input: Ref & { requirementId: string; version: number; decision: string; note: string | null; pageOpenedOn?: string | null },
+) {
   if (!isUuid(input.requirementId)) return { error: "Choose the entry." };
   if (input.decision !== "approved" && input.decision !== "rejected") return { error: "Choose approve or reject." };
   if (input.decision === "rejected" && (text(input.note)?.length ?? 0) < 3) return { error: checklistError("why it's rejected") };
@@ -125,6 +133,7 @@ export async function reviewSubmissionRequirement(input: Ref & { requirementId: 
     p_expected_version: input.version,
     p_decision: input.decision,
     p_note: text(input.note) as string,
+    p_page_opened_on: input.decision === "approved" ? date(input.pageOpenedOn) : null,
   });
   if (error) return { error: refusal(error.message) };
   return { ok: true };

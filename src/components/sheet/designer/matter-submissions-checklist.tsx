@@ -9,6 +9,7 @@
  */
 import type { CSSProperties, ReactNode } from "react";
 import { Icon, Sep } from "./frame";
+import { PageAttestFields } from "./page-attestation";
 
 const css = (style: Record<string, string>) => style as CSSProperties;
 
@@ -280,6 +281,8 @@ export type SubmissionChecklistDialogsData = {
   override: { wire: SubWire; gates: { value: string; label: string }[] } | null;
   reject: { wire: SubWire } | null;
   retire: { wire: SubWire } | null;
+  /** Approve an entry without a page snapshot: the reviewer's attestation (decided 2026-10-24). Optional for the fidelity samples. */
+  attest?: { wire: SubWire; today: string } | null;
 };
 
 function Head({ id, title }: { id: string; title: string }) {
@@ -429,6 +432,18 @@ export function SubmissionChecklistDialogs({ data }: { data: SubmissionChecklist
             </label>
           </div>
           <Foot label={"Reject"} wire={data.reject.wire} />
+        </dialog>
+      ) : null}
+      {data.attest ? (
+        <dialog className={"dlg wide"} id={"dSubAtt"} aria-labelledby={"dSubAttT"}>
+          <Head id={"dSubAtt"} title={"Approve without a page snapshot"} />
+          <div className={"db"}>
+            <p className={"mu"} style={{ fontSize: "13px", margin: "0" }}>
+              {"Open the entry’s official page (its link is on the entry) and compare it word for word before you approve."}
+            </p>
+            <PageAttestFields today={data.attest.today} />
+          </div>
+          <Foot label={"Approve"} wire={data.attest.wire} />
         </dialog>
       ) : null}
       {data.retire ? (

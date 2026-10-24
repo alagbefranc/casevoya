@@ -250,7 +250,9 @@ describe("GOV-05 IRCC processing-time estimates", () => {
 
     const second = await estimate(ctx);
     await fresh(ctx.consultant, ctx.orgId);
-    await db.query(`select public.review_processing_estimate($1, 1, 'approved', null)`, [second]);
+    // No page capture: approved only with the reviewer's attestation (GOV follow-up, 2026-10-24).
+    await expectDbError(() => db.query(`select public.review_processing_estimate($1, 1, 'approved', null)`, [second]), /attestation/);
+    await db.query(`select public.review_processing_estimate($1, 1, 'approved', null, $2::date)`, [second, firmDay()]);
     await asMaintenance(db);
     const statuses = await db.query<{ id: string; status: string }>(
       `select id, status from public.government_processing_estimates where matter_id = $1`,

@@ -6,7 +6,7 @@ import { buildSubmissionChecklist, type ChecklistEvent, type ManifestFile, type 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
 const REQUIREMENT_COLUMNS =
-  "id, program_key, channel, kind, label, source_url, source_section, form_number, form_modified_on, checked_on, current_to, snapshot_sha256, status, reviewed_by_membership_id, reviewed_at, review_note, version";
+  "id, program_key, channel, kind, label, source_url, source_section, form_number, form_modified_on, checked_on, current_to, snapshot_sha256, status, reviewed_by_membership_id, reviewed_at, review_note, version, page_attested_by_membership_id, page_attested_on";
 
 export type SubmissionChecklistInput = {
   organizationId: string;

@@ -5,6 +5,7 @@
  * firm's reviewed list (public.government_issuers) or is typed by staff for one letter.
  */
 
+import { attestationError, attestationNote } from "@/modules/government/page-attestation";
 import { longDate } from "@/modules/sheet/matter-present";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -58,6 +59,9 @@ export type IssuerSource = {
   snapshot_sha256: string | null;
   page_modified_on: string | null;
   name_on_page: boolean | null;
+  /** Approved without a page read: the licensed reviewer's attestation (decided 2026-10-24). */
+  page_attested_by_membership_id?: string | null;
+  page_attested_on?: string | null;
 };
 
 export type IssuerRow = IssuerSource & {
@@ -74,15 +78,18 @@ export function sourceLabel(url: string): string {
   return url.replace(/^https:\/\//, "").replace(/^www\./, "");
 }
 
-/** The issuer's source, shown next to its name: the URL, the date checked, and what the server read. */
-export function issuerSourceParts(source: IssuerSource): string[] {
+/**
+ * The issuer's source, shown next to its name: the URL, the date checked, and what the server read;
+ * or, approved without a page read, "page not captured by Casevoya, checked by <reviewer> on <date>".
+ */
+export function issuerSourceParts(source: IssuerSource, memberName?: (membershipId: string | null) => string): string[] {
   const parts = [`Source ${sourceLabel(source.source_url)}`, `checked ${longDate(source.checked_on)}`];
   if (source.snapshot_sha256 && source.retrieved_at) {
     parts.push(`page read ${longDate(source.retrieved_at.slice(0, 10))}, sha256 ${source.snapshot_sha256.slice(0, 4)}…${source.snapshot_sha256.slice(-4)}`);
     parts.push(source.page_modified_on ? `page’s Date modified ${source.page_modified_on}` : "page shows no Date modified");
     if (source.name_on_page === false) parts.push("name not found in the page’s text");
   } else {
-    parts.push("page not read by the server");
+    parts.push(attestationNote(source, memberName, longDate) ?? "page not read by the server");
   }
   return parts;
 }
@@ -127,6 +134,8 @@ const LETTER_ERRORS: [RegExp, string][] = [
 ];
 
 export function letterError(message: string): string | null {
+  const attestation = attestationError(message);
+  if (attestation) return attestation;
   for (const [pattern, copy] of LETTER_ERRORS) if (pattern.test(message)) return copy;
   return null;
 }

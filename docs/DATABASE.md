@@ -637,6 +637,20 @@ GOV-05, branch `feat/gov-status-provenance`.
 
 Tested in `tests/gov-status-provenance.rls.test.ts` and `tests/gov-status-provenance-present.test.tsx`.
 
+## Review attestation and self-approval (`20261025220000`, not applied on the live project)
+
+GOV follow-up (decisions of 2026-10-24, docs/DECISIONS.md), branch `fix/gov-review-decisions`.
+
+* `submission_requirements`, `government_issuers`, `government_processing_estimates`: new `page_attested_by_membership_id` (FK `(…, organization_id)` to `memberships`, indexed), `page_attested_on` (date the reviewer opened the page), `page_attested_at`. All three or none, and only on a row without `snapshot_sha256`. New check `<table>_approved_source`: an approved row has a snapshot or an attestation (`NOT VALID` on issuers and estimates, which may hold rows approved before this rule). `submission_requirements_check3` (approved needs a snapshot) is dropped in favour of it.
+* `app.gov_other_licensed_reviewers(org, user)`: active licensed members (`app.membership_is_licensed`) other than the user, not counting a blocked licence.
+* `app.gov_check_self_approval(org, entered_by, entered_at)`: refuses approving your own entry while another licensed member exists; otherwise needs a step-up after the entry. `app.gov_check_page_attestation(org, has_snapshot, opened_on, entered_at)`: without a snapshot, the date is required, from the firm day of the entry to `app.firm_today`.
+* New five-argument `app.` and `public.` `review_submission_requirement`, `review_government_issuer`, `review_processing_estimate` (`…, p_note, p_page_opened_on date`): the copied bodies plus the two checks; the attestation is stored with the approval; audit events gain `_self` on a self-approval and carry `page_attested_on` and `self_approved`.
+* **Redefines** `app.review_submission_requirement(uuid, integer, text, text)` (latest `20261025170000_gov_submission_checklist.sql`), `app.review_government_issuer(uuid, integer, text, text)` (latest `20261025180000_gov_correspondence_issuers_tasks.sql`) and `app.review_processing_estimate(uuid, integer, text, text)` (latest `20261025190000_gov_status_provenance.sql`): each now calls its five-argument version with no attestation. The four-argument public wrappers are unchanged.
+
+* `20261025220100_gov_requirement_snapshot_number.sql` **redefines** `app.propose_submission_requirement` (latest `20261025170000_gov_submission_checklist.sql`): it always inserted `source_snapshots.snapshot_number = 1`, so a second capture of the same URL broke `unique (source_id, snapshot_number)`. Now, under a transaction advisory lock per source, a capture with the same SHA-256 reuses that source's snapshot and a different one gets `max(snapshot_number) + 1`. `propose_government_issuer` and `record_processing_estimate` keep their hash on their own rows and never write `source_snapshots`, so they are unchanged.
+
+Tested in `tests/gov-review-decisions.rls.test.ts` and `tests/gov-review-decisions-present.test.tsx`.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.

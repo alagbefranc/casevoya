@@ -117,7 +117,7 @@ export function buildSubmissionChecklist(input: ChecklistInput): { card: Submiss
     const named = channelName(channel, names, program);
     channelView = {
       name: named.name,
-      source: named.official ? { href: named.official.source_url, text: sourceText(named.official.source_url), facts: provenance(named.official, date) } : null,
+      source: named.official ? { href: named.official.source_url, text: sourceText(named.official.source_url), facts: provenance(named.official, date, input.memberName) } : null,
       note: named.official ? null : "IRCC’s official name for this channel isn’t captured yet",
       retire: named.official && input.licensed ? wire("retire-open", input, { id: named.official.id, version: String(named.official.version) }) : null,
     };
@@ -134,7 +134,7 @@ export function buildSubmissionChecklist(input: ChecklistInput): { card: Submiss
         label: row.label,
         done,
         wire: canTick && handoffId ? wire("tick", input, { handoff: handoffId, requirement: row.id, ticked: done ? "false" : "true" }) : null,
-        source: { href: row.source_url, text: sourceText(row.source_url), facts: provenance(row, date) },
+        source: { href: row.source_url, text: sourceText(row.source_url), facts: provenance(row, date, input.memberName) },
         by: event ? `${done ? "Done" : "Unticked"} by ${input.memberName(event.membership_id)}, ${when(event.created_at)}` : null,
         retire: input.licensed ? wire("retire-open", input, { id: row.id, version: String(row.version) }) : null,
       };
@@ -150,9 +150,14 @@ export function buildSubmissionChecklist(input: ChecklistInput): { card: Submiss
     .map((row) => ({
       label: row.label,
       kind: row.kind === "channel_name" ? "Channel name" : "Outside step",
-      source: { href: row.source_url, text: sourceText(row.source_url), facts: provenance(row, date) },
+      source: { href: row.source_url, text: sourceText(row.source_url), facts: provenance(row, date, input.memberName) },
       badge: row.snapshot_sha256 ? { tone: "chg", label: "Waiting for review" } : { tone: "bad", label: "No page snapshot" },
-      approve: input.licensed && row.snapshot_sha256 ? wire("review", input, { id: row.id, version: String(row.version), decision: "approved" }) : null,
+      // No snapshot: Approve opens the attestation dialog (decided 2026-10-24).
+      approve: input.licensed
+        ? row.snapshot_sha256
+          ? wire("review", input, { id: row.id, version: String(row.version), decision: "approved" })
+          : wire("attest-open", input, { id: row.id, version: String(row.version) })
+        : null,
       reject: input.licensed ? wire("reject-open", input, { id: row.id, version: String(row.version) }) : null,
     }));
 
@@ -206,6 +211,7 @@ export function buildSubmissionChecklist(input: ChecklistInput): { card: Submiss
         ? { wire: wire("override", input, { handoff: handoffId }), gates: overridable.map((gate) => ({ value: gate.key, label: gateTitle(gate.key as GateKey) })) }
         : null,
     reject: pending.some((row) => row.reject) ? { wire: wire("reject", input) } : null,
+    attest: pending.some((row) => row.approve?.["data-sub"] === "attest-open") ? { wire: wire("attest", input), today: input.today } : null,
     retire: steps.some((row) => row.retire) || channelView?.retire ? { wire: wire("retire", input) } : null,
   };
   return { card, dialogs };

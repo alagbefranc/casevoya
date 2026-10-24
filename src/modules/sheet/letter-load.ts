@@ -7,7 +7,7 @@ import { isoDateInTimeZone } from "@/modules/sheet/present";
 type Client = Awaited<ReturnType<typeof createClient>>;
 
 const ISSUER_COLUMNS =
-  "id, name, source_url, checked_on, retrieved_at, snapshot_sha256, page_modified_on, name_on_page, status, review_note, reviewed_at, version";
+  "id, name, source_url, checked_on, retrieved_at, snapshot_sha256, page_modified_on, name_on_page, status, review_note, reviewed_at, version, page_attested_by_membership_id, page_attested_on";
 
 export type LetterExtras = {
   letterTasks: LetterTaskRow[];

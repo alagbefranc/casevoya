@@ -714,6 +714,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       }),
       me: staff.membershipId,
       filed: government.filed,
+      memberName,
     });
   }
   const confirmOutcome =

@@ -6,6 +6,7 @@
  * channel names come only from rows a licensed member approved from an official page.
  */
 
+import { attestationError, attestationNote } from "@/modules/government/page-attestation";
 import { SUBMISSION_CHANNEL_OPTIONS } from "@/modules/government/present";
 
 export const GATE_KEYS = ["representation", "package", "deadlines", "signatures", "fees", "outside_steps"] as const;
@@ -178,16 +179,23 @@ export type RequirementRow = {
   reviewed_at: string | null;
   review_note: string | null;
   version: number;
+  /** Set when a licensed member approved it without a snapshot, attesting they opened the page. */
+  page_attested_by_membership_id?: string | null;
+  page_attested_on?: string | null;
 };
 
-/** The provenance shown next to an official value: source page, form, dates, snapshot hash. */
-export function provenance(row: RequirementRow, date: (iso: string) => string): string[] {
+/**
+ * The provenance shown next to an official value: source page, form, dates, snapshot hash; or,
+ * approved without a snapshot, "page not captured by Casevoya, checked by <reviewer> on <date>".
+ */
+export function provenance(row: RequirementRow, date: (iso: string) => string, memberName?: (membershipId: string | null) => string): string[] {
   const parts: string[] = [];
   if (row.source_section) parts.push(`section “${row.source_section}”`);
   if (row.form_number) parts.push(row.form_modified_on ? `${row.form_number}, date modified ${date(row.form_modified_on)}` : row.form_number);
   parts.push(`checked ${date(row.checked_on)}`);
   if (row.current_to) parts.push(`current to ${date(row.current_to)}`);
-  parts.push(row.snapshot_sha256 ? `snapshot sha256 ${row.snapshot_sha256.slice(0, 4)}…${row.snapshot_sha256.slice(-4)}` : "no page snapshot");
+  const attested = row.snapshot_sha256 ? null : attestationNote(row, memberName, date);
+  parts.push(row.snapshot_sha256 ? `snapshot sha256 ${row.snapshot_sha256.slice(0, 4)}…${row.snapshot_sha256.slice(-4)}` : (attested ?? "no page snapshot"));
   return parts;
 }
 
@@ -225,7 +233,6 @@ const ERRORS: [RegExp, string][] = [
   [/date modified needs its form number/, "A form’s date modified needs the form number, and it can’t be in the future."],
   [/current-to date/, "The current-to date can’t be in the future."],
   [/as the official page gives it/, "Write the step or name as the official page gives it (3 to 300 characters)."],
-  [/goes live only with a snapshot/, "This entry has no snapshot of its page, so it can’t be approved. Enter it again when the page can be fetched."],
   [/why it.s rejected|why it.s retired/, "Say why."],
   [/nothing is waiting for review/, "That entry was already reviewed."],
   [/only an approved requirement/, "Only an approved step can be retired."],
@@ -242,6 +249,8 @@ const ERRORS: [RegExp, string][] = [
 ];
 
 export function checklistError(message: string): string {
+  const attestation = attestationError(message);
+  if (attestation) return attestation;
   for (const [pattern, copy] of ERRORS) if (pattern.test(message)) return copy;
   return "That couldn’t be saved.";
 }

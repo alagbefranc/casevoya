@@ -2,6 +2,7 @@
 
 import { toast2 } from "@/components/port/kit";
 import { shareWithClient } from "@/modules/government/actions";
+import { readAttestationFrom } from "@/modules/government/page-attestation";
 import { enterEstimate, markChecked, reviewEstimate } from "@/modules/government/status-actions";
 import { needsStepUp, stepUpLocation } from "@/modules/sheet/matter-wire";
 
@@ -66,7 +67,17 @@ export async function runGovStatusAct(button: HTMLElement, router: Router) {
     });
   } else if (act === "estimate-review") {
     done = data.decision ?? "";
-    result = await reviewEstimate({ organizationId, estimateId: data.id ?? "", version: Number(data.version), decision: done, note: value(scope, "#gerN") || null });
+    // No page capture: approving reads the reviewer's attestation from the dialog.
+    const attested = done === "approved" ? readAttestationFrom(scope) : null;
+    if (attested && "error" in attested) return void toast2(attested.error, { kind: "warn", sub: "Nothing was saved." });
+    result = await reviewEstimate({
+      organizationId,
+      estimateId: data.id ?? "",
+      version: Number(data.version),
+      decision: done,
+      note: value(scope, "#gerN") || null,
+      pageOpenedOn: attested?.openedOn ?? null,
+    });
   } else {
     return;
   }

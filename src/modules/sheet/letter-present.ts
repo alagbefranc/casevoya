@@ -18,11 +18,16 @@ export type LetterTaskRow = {
 };
 
 /** The letter's issuer line: the name as recorded, then its official source when it came from the list. */
-export function letterIssuerParts(issuer: string | null | undefined, issuerId: string | null | undefined, issuers: readonly IssuerRow[]): string[] | null {
+export function letterIssuerParts(
+  issuer: string | null | undefined,
+  issuerId: string | null | undefined,
+  issuers: readonly IssuerRow[],
+  memberName?: (membershipId: string | null) => string,
+): string[] | null {
   if (!issuer) return null;
   const listed = issuerId ? issuers.find((row) => row.id === issuerId) : undefined;
   if (!listed) return [`From ${issuer}`, "typed by staff, no official source on file"];
-  return [`From ${issuer}`, ...issuerSourceParts(listed)];
+  return [`From ${issuer}`, ...issuerSourceParts(listed, memberName)];
 }
 
 const STATUS: Record<string, string> = { done: "done", cancelled: "cancelled", blocked: "blocked" };
@@ -50,6 +55,7 @@ export function issuerList(input: {
   issuers: readonly IssuerRow[];
   canAdd: boolean;
   canReview: boolean;
+  memberName?: (membershipId: string | null) => string;
 }): IssuerListData {
   const order: Record<string, number> = { pending_review: 0, approved: 1, rejected: 2, retired: 3 };
   const rows = [...input.issuers]
@@ -67,10 +73,12 @@ export function issuerList(input: {
       return {
         id: issuer.id,
         name: issuer.name,
-        source: issuerSourceParts(issuer),
+        source: issuerSourceParts(issuer, input.memberName),
         badge: issuerState(issuer.status),
         note: issuer.review_note ? `Review note: ${issuer.review_note}` : null,
         approve: input.canReview && pending ? act("approved") : null,
+        // The page wasn't read: approving needs the reviewer's attestation (decided 2026-10-24).
+        attest: input.canReview && pending && !issuer.snapshot_sha256 ? { today: input.today } : null,
         reject: input.canReview && pending ? act("rejected") : null,
         retire: input.canReview && approved ? act("retired") : null,
       };
@@ -89,6 +97,7 @@ export function letterForm(input: {
   clients: readonly { id: string; name: string }[];
   me: string | null;
   filed: readonly { versionId: string; filename: string; subject: string | null; receivedOn: string }[];
+  memberName?: (membershipId: string | null) => string;
 }): LetterFormData {
   const owners = [
     ...input.staff.map((row) => ({ value: ownerValue("staff", row.id), label: row.name })),
@@ -100,7 +109,7 @@ export function letterForm(input: {
     issuers: input.issuers
       .filter((row) => row.status === "approved")
       .sort((a, b) => a.name.localeCompare(b.name))
-      .map((row) => ({ id: row.id, name: row.name, source: issuerSourceParts(row) })),
+      .map((row) => ({ id: row.id, name: row.name, source: issuerSourceParts(row, input.memberName) })),
     owners,
     defaultOwner: mine,
     filed: input.filed.map((file) => ({

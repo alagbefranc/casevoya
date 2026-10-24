@@ -453,11 +453,12 @@ describe("GOV-01 official outside steps and GOV-03 channel names: entered from a
       content_hash: HASH,
       current_to: null,
     });
-    // Entered without a fetched page: kept, but it can't go live.
+    // Entered without a fetched page: kept, but it goes live only with the reviewer's attestation
+    // (GOV follow-up, 2026-10-24; tests/gov-review-decisions.rls.test.ts covers the attestation).
     await stale(ctx.manager, ctx.orgId);
     const unfetched = await propose(ctx, { snapshot: null, label: "Synthetic step without a snapshot" });
     await fresh(ctx.consultant, ctx.orgId);
-    await expectDbError(() => db.query(`select public.review_submission_requirement($1, 1, 'approved', null)`, [unfetched]), /snapshot/);
+    await expectDbError(() => db.query(`select public.review_submission_requirement($1, 1, 'approved', null)`, [unfetched]), /attestation/);
 
     // Review: licensed member, fresh step-up; a case manager cannot approve.
     await fresh(ctx.manager, ctx.orgId);
