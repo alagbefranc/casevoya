@@ -73,9 +73,11 @@ export function PayLive({
 }) {
   const due = Math.max(0, invoice.amountCents - invoice.paidCents - invoice.creditedCents);
   const money = formatMoney(due, invoice.currency);
+  // FIN-09: a payment the firm recorded by hand is being checked; paying again by card could pay twice.
+  const pending = invoice.pendingCents ?? 0;
   // An advance for the client (trust) account is never paid by card (FIN-02); the server refuses it too.
   const cardPayable = invoice.cardPayable !== false;
-  const canPay = payable && Boolean(publishableKey) && invoice.open && !invoice.processing && cardPayable;
+  const canPay = payable && Boolean(publishableKey) && invoice.open && !invoice.processing && cardPayable && pending === 0;
   const refusal = advanceRefusal(firmName);
   const [started, setStarted] = useState<Started>(null);
 
@@ -175,6 +177,10 @@ export function PayLive({
             </Note>
           ) : invoice.processing ? (
             <Note title="Your payment is processing">{"Stripe is confirming it with your bank. This page shows it paid once Stripe confirms."}</Note>
+          ) : pending > 0 ? (
+            <Note title="Your payment is being verified">
+              {`${firmName} recorded a payment of ${formatMoney(pending, invoice.currency)} you sent by e-Transfer, cheque, wire or cash. It shows as paid once they’ve checked it against their bank. Contact them before paying again.`}
+            </Note>
           ) : !payable || !publishableKey ? (
             <Note title="Card payments aren’t configured" tone="warn">
               {"Nothing can be charged here yet. Your firm can tell you other ways to pay."}
