@@ -3513,6 +3513,54 @@ export type Database = {
           },
         ]
       }
+      intake_fact_reuses: {
+        Row: {
+          answer_id: string
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          created_by: string | null
+          field_key: string
+          id: string
+          organization_id: string
+          origin_answer_id: string
+          origin_matter_id: string
+          origin_response_id: string
+          response_id: string
+          status: Database["public"]["Enums"]["intake_fact_reuse_status"]
+        }
+        Insert: {
+          answer_id: string
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          field_key: string
+          id?: string
+          organization_id: string
+          origin_answer_id: string
+          origin_matter_id: string
+          origin_response_id: string
+          response_id: string
+          status?: Database["public"]["Enums"]["intake_fact_reuse_status"]
+        }
+        Update: {
+          answer_id?: string
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          field_key?: string
+          id?: string
+          organization_id?: string
+          origin_answer_id?: string
+          origin_matter_id?: string
+          origin_response_id?: string
+          response_id?: string
+          status?: Database["public"]["Enums"]["intake_fact_reuse_status"]
+        }
+        Relationships: []
+      }
       intake_corrections: {
         Row: {
           answer_id: string | null
@@ -12079,6 +12127,8 @@ export type Database = {
         }
         Returns: undefined
       }
+      confirm_reused_fact: { Args: { p_reuse_id: string }; Returns: undefined }
+      reuse_approved_facts: { Args: { p_response_id: string }; Returns: number }
       review_intake_answer: {
         Args: { p_answer_id: string }
         Returns: string
@@ -13020,6 +13070,7 @@ export type Database = {
         | "declaration"
         | "file_request"
         | "choice"
+      intake_fact_reuse_status: "needs_reconfirmation" | "confirmed" | "replaced"
       intake_response_status: "draft" | "submitted"
       intake_template_status: "draft" | "published" | "superseded"
       intake_workflow_category:
@@ -13590,6 +13641,7 @@ export const Constants = {
         "unspecified",
       ],
       intake_template_status: ["draft", "published", "superseded"],
+      intake_fact_reuse_status: ["needs_reconfirmation", "confirmed", "replaced"],
       intake_response_status: ["draft", "submitted"],
       intake_field_type: [
         "text",

@@ -8,6 +8,9 @@
  * the panel's header (`.btn s sm`, the Designer has no send control), `data-intake-*` attributes,
  * a reviewed row's fuse shown settled, a third source part (when) and a correction number, and the
  * Send a form dialog (`#dIntakeSend`, built from the Designer's dialog parts like Request a document).
+ * INT-04, also live only: a Provenance details in the Source cell, and on a draft whose person sent a
+ * form on another matter a "Reuse approved facts" button (`data-intake-reuse`); copied answers show
+ * "Reused from <matter>" and "Needs client reconfirmation" / "Client confirmed".
  */
 import { Fragment } from "react";
 import { Empty, Icon, Sep } from "./frame";
@@ -98,6 +101,12 @@ function Questionnaire({ panel, index, data, first }: { panel: IntakePanel; inde
             <button className={"btn s sm"} data-open={INTAKE_SEND_DIALOG}>
               <Icon name={"plus"} cls={"ic s"} />
               {"Send a form"}
+            </button>
+          ) : null}
+          {data.reviewer && panel.reuse ? (
+            <button className={"btn s sm"} data-intake-reuse={panel.responseId} data-org={data.organizationId}>
+              <Icon name={"repeat"} cls={"ic s"} />
+              {"Reuse approved facts"}
             </button>
           ) : null}
           {data.reviewer && panel.submitted && !panel.frozen ? (
