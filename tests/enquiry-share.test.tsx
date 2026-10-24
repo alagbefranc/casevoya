@@ -40,7 +40,7 @@ describe("enquiry paths and the public firm", () => {
     expect(enquiryPagePath("/enquiry")).toBeNull();
     expect(enquiryPagePath("/embed/enquiry.js")).toBeNull();
     expect(enquiryPagePath("/enquiry/maple/extra")).toBeNull();
-    expect(parsePublicFirm({ firm_name: "Maple", firm_slug: "maple", practice: true, staff: false })).toEqual({ firmName: "Maple", firmSlug: "maple", practice: true, staff: false });
+    expect(parsePublicFirm({ firm_name: "Maple", firm_slug: "maple", practice: true, staff: false })).toEqual({ firmName: "Maple", firmSlug: "maple", practice: true, staff: false, open: true });
     expect(parsePublicFirm(null)).toBeNull();
     expect(parsePublicFirm({ firm_name: "Maple", firm_slug: "../x" })).toBeNull();
   });

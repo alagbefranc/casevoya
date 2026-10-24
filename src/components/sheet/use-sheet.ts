@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { toast2 } from "@/components/port/kit";
+import { setEnquiryPageEnabled } from "@/modules/leads/enquiry-actions";
 import { dialogId, withoutDialog } from "@/modules/sheet/matter-wire";
 import { withoutNew } from "@/modules/sheet/new-matter";
 import { HOME_TASK_SHOWN, filterHidden, nextHomeChip, withoutParam } from "@/modules/sheet/home-controls";
@@ -469,6 +470,30 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (firmSave.getAttribute("aria-busy") === "true") return;
         firmSave.setAttribute("aria-busy", "true");
         void runFirmSave(firmSave, router).finally(() => firmSave.removeAttribute("aria-busy"));
+        return;
+      }
+      // Share your enquiry form (CRM-01): the firm owner turns the enquiry page on or off.
+      const enquiryToggle = target.closest<HTMLElement>("[data-enquiry-toggle]");
+      if (enquiryToggle && root.contains(enquiryToggle)) {
+        event.preventDefault();
+        if (enquiryToggle.getAttribute("aria-busy") === "true") return;
+        enquiryToggle.setAttribute("aria-busy", "true");
+        const enabled = enquiryToggle.dataset.enquiryToggle === "on";
+        void setEnquiryPageEnabled({ organizationId: enquiryToggle.dataset.org ?? "", enabled })
+          .then((result) => {
+            if ("error" in result) {
+              if (result.stepUp) {
+                const next = `${window.location.pathname}${window.location.search}`;
+                window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`);
+                return;
+              }
+              toast2(result.error, { kind: "bad", sub: "Nothing was changed." });
+              return;
+            }
+            toast2(enabled ? "Enquiry page on" : "Enquiry page off", { kind: "ok", sub: enabled ? "Visitors can send enquiries again." : "Visitors see that you aren’t taking enquiries online." });
+            router.refresh();
+          })
+          .finally(() => enquiryToggle.removeAttribute("aria-busy"));
         return;
       }
       // Settings > Team and seats: Change role or access (role, suspend) and the continuity contact.
