@@ -5,7 +5,12 @@
  * carries `data-doc-review` (opens the review dialog, `DocumentReviewDialog`). The review
  * dialog is built only from the Designer's own dialog parts (`.dlg`, `.fld`, `.sel`, `.ta`,
  * `.alert`, `.btn`), the same ones as the Inbox's New message dialog.
+ * DOC-06, live only: an All documents card a reviewer can manage has a "Details" button
+ * (`data-doc-details`, the card's facts as JSON) that fills the Document details dialog
+ * (`DocumentDetailsDialog`, the same dialog parts): matters using it, use in another matter,
+ * translation, type, sensitivity and expiry. Wired in document-details-acts.
  */
+import { SENSITIVITIES, TRANSLATION_LANGUAGES, type DocumentDetails } from "@/modules/sheet/documents-present";
 import { Empty, Icon, Pair, Sep } from "./frame";
 import { FilterEmpty } from "./filter-empty";
 
@@ -34,6 +39,8 @@ export type DocCard = {
   states: DocChip[];
   /** Live only: an accepted file opens (`data-doc-open`, a signed link after an access check). */
   open?: Record<string, string>;
+  /** Live only (DOC-06): the Details button's facts, for a reviewer. */
+  details?: DocumentDetails;
 };
 
 export type CustodyRow = {
@@ -285,6 +292,11 @@ function Card({ card }: { card: DocCard }) {
         {card.states.map((chip, index) => (
           <Chip key={index} chip={chip} />
         ))}
+        {card.details ? (
+          <button type={"button"} className={"btn s sm"} data-doc-details={JSON.stringify(card.details)} aria-label={`Details of ${card.title}`}>
+            {"Details"}
+          </button>
+        ) : null}
       </div>
     </article>
   );
@@ -296,6 +308,105 @@ function MetaPart({ first, text }: { first: boolean; text: string }) {
       {first ? null : <span className={"sep"}></span>}
       <span>{text}</span>
     </>
+  );
+}
+
+export const DOC_DETAILS_DIALOG = "dDocDetails";
+
+/** DOC-06, live only: one dialog for the page, filled from the Details button that opens it. */
+export function DocumentDetailsDialog() {
+  return (
+    <dialog className={"dlg wide"} id={DOC_DETAILS_DIALOG} aria-labelledby={"ddH"}>
+      <div className={"dh"}>
+        <h2 id={"ddH"}>{"Document details"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={DOC_DETAILS_DIALOG}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <p className={"mu"} id={"ddWho"} style={{ marginBottom: "12px" }}></p>
+        <h3 className={"sub"}>{"Matters using it"}</h3>
+        <ul className={"dd-refs"} id={"ddRefs"}></ul>
+        <div className={"g2"}>
+          <div className={"fld"}>
+            <label htmlFor={"ddUse"}>{"Use in another matter"}</label>
+            <small className={"hint"} id={"ddUseNote"}></small>
+            <select className={"sel"} id={"ddUse"}></select>
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"ddWhy"}>{"Why remove it from a matter"}</label>
+            <small className={"hint"}>{"Needed to remove. The file stays on the person’s record and on every other matter using it."}</small>
+            <input className={"inp"} id={"ddWhy"} maxLength={500} />
+          </div>
+        </div>
+        <button className={"btn s sm"} type={"button"} data-dd-link={"1"}>
+          {"Use in this matter"}
+        </button>
+
+        <h3 className={"sub"}>{"Translation"}</h3>
+        <p className={"mu"} id={"ddTr"}></p>
+        <div className={"g2"}>
+          <div className={"fld"}>
+            <label htmlFor={"ddOrig"}>{"This is a translation of"}</label>
+            <select className={"sel"} id={"ddOrig"}></select>
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"ddLang"}>{"Language of this translation"}</label>
+            <select className={"sel"} id={"ddLang"}>
+              {TRANSLATION_LANGUAGES.map((language) => (
+                <option key={language.value} value={language.value}>
+                  {language.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <button className={"btn s sm"} type={"button"} data-dd-translation={"1"}>
+          {"Save translation"}
+        </button>
+
+        <h3 className={"sub"}>{"Type, sensitivity and expiry"}</h3>
+        <div className={"g2"}>
+          <div className={"fld"}>
+            <label htmlFor={"ddPurpose"}>{"What it is"}</label>
+            <input className={"inp"} id={"ddPurpose"} maxLength={200} />
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"ddSens"}>{"Sensitivity"}</label>
+            <small className={"hint"}>{"Changing it changes who may read the file."}</small>
+            <select className={"sel"} id={"ddSens"}>
+              {SENSITIVITIES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"ddExp"}>{"Expires on"}</label>
+            <small className={"hint"}>{"The date printed on the document. Empty if it doesn’t expire."}</small>
+            <input className={"inp"} id={"ddExp"} type={"date"} />
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"ddCode"}>{"Six-digit code"}</label>
+            <small className={"hint"}>{"Needed to change the sensitivity or expiry, or to remove it from a matter."}</small>
+            <input className={"inp"} id={"ddCode"} inputMode={"numeric"} autoComplete={"one-time-code"} maxLength={6} />
+          </div>
+        </div>
+        <p className={"lock"} style={{ fontSize: "13.5px", marginTop: "10px" }}>
+          <Icon name={"history"} cls={"ic s"} />
+          {"Every change is kept in the audit log. Removing it from a matter never deletes the file."}
+        </p>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={DOC_DETAILS_DIALOG}>
+          {"Close"}
+        </button>
+        <button className={"btn p"} data-dd-classify={"1"}>
+          {"Save details"}
+        </button>
+      </div>
+    </dialog>
   );
 }
 
@@ -387,7 +498,15 @@ function Custody({ rows }: { rows: CustodyRow[] }) {
 }
 
 export function SheetDocuments({ data }: { data: DocumentsData }) {
-  if (data.tab === "all") return <All cards={data.all?.cards ?? []} />;
+  if (data.tab === "all") {
+    const cards = data.all?.cards ?? [];
+    return (
+      <>
+        <All cards={cards} />
+        {cards.some((card) => card.details) ? <DocumentDetailsDialog /> : null}
+      </>
+    );
+  }
   if (data.tab === "custody") return <Custody rows={data.custody?.rows ?? []} />;
   return <Review rows={data.review?.rows ?? []} firmName={data.firmName} filterEmpty={data.review?.filterEmpty} />;
 }

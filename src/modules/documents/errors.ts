@@ -3,6 +3,13 @@ import { safeAccessError } from "@/lib/auth/step-up";
 /** Maps database refusals to short portal copy. Never returns the raw message. */
 export function documentError(message: string): string {
   if (/version conflict/i.test(message)) return "Someone else updated this document. Refresh and try again.";
+  if (/not on that matter/i.test(message)) return "That person isn’t on the matter you chose.";
+  if (/passed its check/i.test(message)) return "Only a file that passed its check can be used on another matter.";
+  if (/a translation is of another document/i.test(message)) return "Choose a different document as the original.";
+  if (/already a translation of this one/i.test(message)) return "That document is already a translation of this one.";
+  if (/same person as the original/i.test(message)) return "A translation belongs to the same person as the original.";
+  if (/translation's language/i.test(message)) return "Choose the translation’s language.";
+  if (/say what the document is/i.test(message)) return "Say what the document is, in up to 200 characters.";
   if (/cannot be accepted/i.test(message)) return "A quarantined or unfinished file cannot be accepted.";
   if (/25 MB/i.test(message)) return "Files above 25 MB stay off until storage is validated.";
   if (/format is not acceptable|do not match the filename/i.test(message)) {

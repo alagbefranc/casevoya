@@ -11156,6 +11156,15 @@ export type Database = {
         Args: { p_email_id: string; p_note?: string | null }
         Returns: undefined
       }
+      link_document_matter: { Args: { p_document_id: string; p_matter_id: string }; Returns: string }
+      set_document_classification: {
+        Args: { p_document_id: string; p_expected_version: number; p_purpose: string; p_sensitivity: Database["public"]["Enums"]["document_sensitivity"] }
+        Returns: number
+      }
+      set_document_translation: {
+        Args: { p_expected_version: number; p_language_tag?: string; p_original_version_id?: string; p_version_id: string }
+        Returns: number
+      }
       document_request_progress: {
         Args: { p_matter_id: string }
         Returns: Json

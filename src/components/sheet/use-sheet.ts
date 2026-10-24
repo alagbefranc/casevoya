@@ -70,6 +70,7 @@ import {
 } from "./corrections-acts";
 import { openDocReview, reopenDocReview, runDocFile, runDocOpen, runDocReview } from "./documents-acts";
 import { restoreDocRequest, runDocRequest } from "./doc-request-act";
+import { openDocumentDetails, runDocumentClassify, runDocumentLink, runDocumentTranslation, runDocumentUnlink } from "./document-details-acts";
 import { armIntakeReview, runIntakeFreeze, runIntakeSend } from "./intake-delivery-acts";
 import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
 import { runInboxCompose, runInboxMessage, runInboxNote, runInboxReply } from "./inbox-reply-acts";
@@ -834,6 +835,37 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (intakeSend && root.contains(intakeSend)) {
         event.preventDefault();
         busyRun(intakeSend, () => runIntakeSend(intakeSend, router));
+        return;
+      }
+      // DOC-06: an All documents card's Details, and the Document details dialog's saves.
+      const docDetails = target.closest<HTMLElement>("[data-doc-details]");
+      if (docDetails && root.contains(docDetails)) {
+        event.preventDefault();
+        openDocumentDetails(docDetails);
+        return;
+      }
+      const ddLink = target.closest<HTMLElement>("[data-dd-link]");
+      if (ddLink && root.contains(ddLink)) {
+        event.preventDefault();
+        busyRun(ddLink, () => runDocumentLink(router));
+        return;
+      }
+      const ddUnlink = target.closest<HTMLElement>("[data-dd-unlink]");
+      if (ddUnlink && root.contains(ddUnlink)) {
+        event.preventDefault();
+        busyRun(ddUnlink, () => runDocumentUnlink(ddUnlink, router));
+        return;
+      }
+      const ddTranslation = target.closest<HTMLElement>("[data-dd-translation]");
+      if (ddTranslation && root.contains(ddTranslation)) {
+        event.preventDefault();
+        busyRun(ddTranslation, () => runDocumentTranslation(router));
+        return;
+      }
+      const ddClassify = target.closest<HTMLElement>("[data-dd-classify]");
+      if (ddClassify && root.contains(ddClassify)) {
+        event.preventDefault();
+        busyRun(ddClassify, () => runDocumentClassify(router));
         return;
       }
       const intakeFreeze = target.closest<HTMLElement>("[data-intake-freeze]");
