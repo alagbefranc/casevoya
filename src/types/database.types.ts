@@ -7149,6 +7149,75 @@ export type Database = {
         }
         Relationships: []
       }
+      person_flag_resolutions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          detail: string
+          flag_key: string
+          id: string
+          note: string
+          organization_id: string
+          person_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          detail: string
+          flag_key: string
+          id?: string
+          note: string
+          organization_id: string
+          person_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          detail?: string
+          flag_key?: string
+          id?: string
+          note?: string
+          organization_id?: string
+          person_id?: string
+        }
+        Relationships: []
+      }
+      person_identity_entries: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data: Json
+          id: string
+          kind: Database["public"]["Enums"]["person_identity_kind"]
+          organization_id: string
+          person_id: string
+          replaces_id: string | null
+          retired: boolean
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data: Json
+          id?: string
+          kind: Database["public"]["Enums"]["person_identity_kind"]
+          organization_id: string
+          person_id: string
+          replaces_id?: string | null
+          retired?: boolean
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data?: Json
+          id?: string
+          kind?: Database["public"]["Enums"]["person_identity_kind"]
+          organization_id?: string
+          person_id?: string
+          replaces_id?: string | null
+          retired?: boolean
+        }
+        Relationships: []
+      }
       person_relationships: {
         Row: {
           created_at: string
@@ -11218,6 +11287,14 @@ export type Database = {
         Returns: undefined
       }
       firm_transfers_overview: { Args: { p_organization_id: string }; Returns: Json }
+      record_person_identity: {
+        Args: { p_data: Json; p_kind: string; p_person_id: string; p_replaces_id?: string; p_retire?: boolean }
+        Returns: string
+      }
+      resolve_person_flag: {
+        Args: { p_detail: string; p_flag_key: string; p_note: string; p_person_id: string }
+        Returns: string
+      }
       record_firm_transfer: {
         Args: {
           p_contact_email: string
@@ -13211,6 +13288,7 @@ export type Database = {
         | "sponsor"
         | "household"
         | "other"
+      person_identity_kind: "name" | "passport" | "address"
       person_section_key:
         | "passport_bio"
         | "school_transcript"
@@ -13536,6 +13614,7 @@ export const Constants = {
         "participation_declined",
         "electronic_signature",
       ],
+      person_identity_kind: ["name", "passport", "address"],
       person_section_key: [
         "passport_bio",
         "school_transcript",

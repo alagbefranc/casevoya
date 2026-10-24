@@ -4,6 +4,7 @@ import type { MatterIntakeData } from "@/components/sheet/designer/matter-intake
 import { schemaFields, type AnswerVersion, type Presence } from "@/modules/intake/present";
 import { intakePanel, mayHandleIntake, publishedForms, sendPersonLabel } from "@/modules/sheet/matter-intake-present";
 import type { SheetStaff } from "@/modules/sheet/load";
+import { recordedNames } from "@/modules/sheet/person-history-present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -42,7 +43,7 @@ export async function loadMatterIntake(
   const rows = responses.data ?? [];
   const ids = rows.map((row) => row.id);
   const personIds = [...new Set(rows.map((row) => row.person_id))];
-  const [answers, corrections, documents, otherAnswers, reuseRows] = await Promise.all([
+  const [answers, corrections, documents, otherAnswers, reuseRows, nameRows] = await Promise.all([
     ids.length
       ? supabase.from("intake_answer_versions").select("id, response_id, field_key, presence, raw_value, normalized_value, created_at, created_by").in("response_id", ids).order("created_at", { ascending: true }).limit(3000)
       : null,
@@ -54,6 +55,10 @@ export async function loadMatterIntake(
       : null,
     // INT-04: answers copied here from the same person's earlier matter.
     ids.length ? supabase.from("intake_fact_reuses").select("response_id, answer_id, status, confirmed_at, origin_matter_id").in("response_id", ids) : null,
+    // INT-05: other names on the people's records, so a recorded alias isn't flagged as a different name.
+    personIds.length
+      ? supabase.from("person_identity_entries").select("id, person_id, kind, data, replaces_id, retired, created_at, created_by").eq("organization_id", org).eq("kind", "name").in("person_id", personIds).limit(500)
+      : null,
   ]);
   const originIds = [...new Set((reuseRows?.data ?? []).map((row) => row.origin_matter_id))];
   const origins = originIds.length ? await supabase.from("matters").select("id, reference").eq("organization_id", org).in("id", originIds) : null;
@@ -127,7 +132,18 @@ export async function loadMatterIntake(
           corrections: (corrections?.data ?? [])
             .filter((item) => item.response_id === row.id)
             .map((item) => ({ number: item.correction_number, fieldKey: item.field_key, answerId: item.answer_id, description: item.description, createdAt: item.created_at })),
-          record: person ? { displayName: person.name, dateOfBirth: person.dateOfBirth, birthPrecision: person.birthPrecision } : null,
+          record: person
+            ? {
+                displayName: person.name,
+                dateOfBirth: person.dateOfBirth,
+                birthPrecision: person.birthPrecision,
+                aliases: recordedNames(
+                  (nameRows?.data ?? [])
+                    .filter((entry) => entry.person_id === row.person_id)
+                    .map((entry) => ({ id: entry.id, kind: "name" as const, data: (entry.data ?? {}) as Record<string, unknown>, replacesId: entry.replaces_id, retired: entry.retired, createdAt: entry.created_at, createdBy: entry.created_by })),
+                ),
+              }
+            : null,
           documents: (documents?.data ?? [])
             .filter((doc) => doc.person_id === row.person_id && doc.current_version_id)
             .map((doc) => ({ purpose: doc.purpose, expiresOn: expires.get(doc.current_version_id as string) ?? null })),
