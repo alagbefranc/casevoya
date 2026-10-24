@@ -11152,6 +11152,26 @@ export type Database = {
         Args: { p_matter_id: string }
         Returns: Json
       }
+      close_firm_transfer: {
+        Args: { p_note: string; p_status: string; p_transfer_id: string }
+        Returns: undefined
+      }
+      firm_transfers_overview: { Args: { p_organization_id: string }; Returns: Json }
+      record_firm_transfer: {
+        Args: {
+          p_contact_email: string
+          p_contact_name: string
+          p_matter_ids: string[]
+          p_note: string
+          p_organization_id: string
+          p_receiving_firm: string
+        }
+        Returns: string
+      }
+      review_firm_transfer_authority: {
+        Args: { p_authorised: boolean; p_item_id: string; p_note: string }
+        Returns: undefined
+      }
       email_delivery_brands: {
         Args: { p_delivery_ids: string[] }
         Returns: Json
