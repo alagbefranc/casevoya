@@ -11,7 +11,7 @@ import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from 
  */
 let db: TestDb;
 
-const MODEL = "claude-opus-5-5";
+const MODEL = "vo-test-model";
 
 beforeAll(async () => {
   db = await createTestDb();

@@ -13,7 +13,7 @@ import { agentOptions, qualified, type ToolLog } from "../services/vo-agent/src/
 import { runVoTask, type AgentSdk, type SdkMessage } from "../services/vo-agent/src/task";
 import { TASK_TOOLS } from "../services/vo-agent/src/tools";
 import { parseVoTaskRequest, type VoTaskRequest } from "../src/modules/vo/sign";
-import { voUserPrompt } from "../src/modules/vo/prompt";
+import { VO_MODEL, voUserPrompt } from "../src/modules/vo/prompt";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const RUN = "22222222-2222-4222-8222-222222222222";
@@ -181,7 +181,7 @@ describe("Vo letter drafts: the task and its tools", () => {
     // Saved by save_vo_letter_draft with record ids only; nothing through finish_vo_run.
     expect(rpcs.map((rpc) => rpc.name)).toEqual(["save_vo_letter_draft"]);
     const save = rpcs[0].args;
-    expect(save).toMatchObject({ p_run_id: RUN, p_letter_type: "cover_letter", p_title: "Cover letter", p_model: "claude-opus-5-5", p_prompt_version: "letter-1", p_input_tokens: 2000 });
+    expect(save).toMatchObject({ p_run_id: RUN, p_letter_type: "cover_letter", p_title: "Cover letter", p_model: VO_MODEL, p_prompt_version: "letter-1", p_input_tokens: 2000 });
     expect(save.p_facts).toEqual([
       { ref: "F1", answer_id: NAME },
       { ref: "F2", answer_id: CITY },
