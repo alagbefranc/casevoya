@@ -81,6 +81,7 @@ type Wired =
   | "EX16"
   | "EX17"
   | "EX18"
+  | "EX19"
   | "EX11"
   | "EM17";
 
@@ -141,6 +142,9 @@ export function designFor(context: Context): Wired | "generic" {
     // CRM-01 (20261024150100): a new web enquiry, to the firm's owners. Firm name only.
     case "enquiry_received":
       return "EX18";
+    // OPS-04 (20261025110100): an announcement to many clients. Firm name only.
+    case "announcement":
+      return "EX19";
     default:
       return "generic";
   }
@@ -201,6 +205,7 @@ function contextFor(design: Wired, context: Context, firm: string): EmailContext
     case "EX07":
     case "EX17":
     case "EX18":
+    case "EX19":
       return { firmName: firm };
     case "EX16":
       return { firmName: firm, code: textOf(context.code) || null };

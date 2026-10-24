@@ -53,12 +53,18 @@ async function loadPortalConsultants(viewer: PortalViewer): Promise<Map<string, 
   }
 }
 
-/** ORG-06: the signed-in person's own portal notices (their consultant changed); none when unreadable. */
+/** ORG-06 and OPS-04: the signed-in person's own portal notices (consultant changed, announcements); none when unreadable. */
 export async function loadPortalNotices(viewer: PortalViewer): Promise<PortalNotice[]> {
   try {
     const supabase = await createClient({ organizationId: viewer.organizationId });
     const { data, error } = await supabase.rpc("portal_notices_for_me", { p_org: viewer.organizationId });
-    return error ? [] : portalNotices(data, viewer.organizationName);
+    if (error) return [];
+    const notices = portalNotices(data, viewer.organizationName);
+    // OPS-04: the announcements on Home are now seen (staff see how many read each one).
+    if (Array.isArray(data) && data.some((row) => row && typeof row === "object" && (row as { kind?: unknown }).kind === "announcement")) {
+      await supabase.rpc("mark_portal_announcements_seen", { p_org: viewer.organizationId });
+    }
+    return notices;
   } catch {
     return [];
   }

@@ -7,7 +7,8 @@ import { frenchApproved } from "@/modules/email/designs/french";
 import { loadSheetChrome, memberNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
-import { designUse, messageRows, programRows, templatesData, type CatalogRow, type RuleRow } from "@/modules/sheet/templates-present";
+import type { MessageTemplateDialogData } from "@/components/sheet/designer/templates";
+import { designUse, firmMessageRows, messageRows, programRows, templatesData, type CatalogRow, type RuleRow } from "@/modules/sheet/templates-present";
 
 const READ = 200;
 
@@ -126,14 +127,59 @@ export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, v
     nextReviewAt: row.next_review_at,
   }));
   const selected = view && isUuid(view) ? (rules.find((rule) => rule.id === view) ?? null) : null;
+  // OPS-04: the firm's own message and announcement templates (not archived).
+  const firm = tab === "messages"
+    ? ((
+        await supabase
+          .from("message_templates")
+          .select("id, use_for, name, title, body, status, version, approved_at, approved_by_membership_id")
+          .eq("organization_id", org)
+          .neq("status", "archived")
+          .order("updated_at", { ascending: false })
+          .limit(READ)
+      ).data ?? [])
+    : [];
+  const opened = view && isUuid(view) ? firm.find((row) => row.id === view) : undefined;
+  const messageDialog: MessageTemplateDialogData | null =
+    tab === "messages"
+      ? {
+          organizationId: org,
+          edit: opened
+            ? {
+                id: opened.id,
+                version: opened.version,
+                useFor: opened.use_for === "announcement" ? "announcement" : "message",
+                name: opened.name,
+                title: opened.title ?? "",
+                body: opened.body,
+                status: opened.status === "approved" ? "approved" : "draft",
+              }
+            : null,
+          canApprove: staff.role === "firm_owner" || staff.role === "licensed_consultant",
+          canWrite: staff.role === "firm_owner" || staff.role === "licensed_consultant" || staff.role === "case_manager",
+        }
+      : null;
   const data = templatesData({
     tab,
     program: programRows(packRows, pinned, agreementRows, used),
-    messages: messageRows(catalog, use, staff.timezone),
+    messages: [
+      ...firmMessageRows(
+        firm.map((row) => ({
+          id: row.id,
+          useFor: row.use_for,
+          name: row.name,
+          status: row.status,
+          approvedAt: row.approved_at,
+          approvedBy: row.approved_by_membership_id ? (names.get(row.approved_by_membership_id) ?? null) : null,
+        })),
+        staff.timezone,
+      ),
+      ...messageRows(catalog, use, staff.timezone),
+    ],
     rules,
     packs: packRows.length,
     selected,
     today: isoDateInTimeZone(now, staff.timezone),
   });
-  return { chrome, data };
+  return { chrome, data, messageDialog };
 }

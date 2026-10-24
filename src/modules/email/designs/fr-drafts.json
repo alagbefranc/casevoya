@@ -1758,6 +1758,47 @@
           "note": "EX18 hand draft (CRM-01, #176)."
         }
       }
+    },
+    "EX19": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-24",
+      "sourceHash": "sha256:1a45496c2bab6e441615e4681a9ea168548bf576de41ed1ba1d638deb3768e24",
+      "strings": {
+        "subject": {
+          "en": "A new notice from {firm_name}",
+          "fr": "Un nouvel avis de {firm_name}",
+          "origin": "hand",
+          "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
+        },
+        "preheader": {
+          "en": "Read it in your portal.",
+          "fr": "Lisez-le dans votre portail.",
+          "origin": "hand",
+          "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
+        },
+        "heading": {
+          "en": "You have a new notice from {firm_name}",
+          "fr": "Vous avez un nouvel avis de {firm_name}",
+          "origin": "hand",
+          "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
+        },
+        "body": {
+          "en": "{firm_name} posted a notice for its clients. For your privacy, it is in your portal.",
+          "fr": "{firm_name} a publié un avis pour ses clients. Pour protéger votre vie privée, il se trouve dans votre portail.",
+          "origin": "hand",
+          "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
+        },
+        "cta": {
+          "en": "Open your portal",
+          "fr": "Ouvrir votre portail",
+          "origin": "hand",
+          "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
+        }
+      }
     }
   }
 }

@@ -118,6 +118,7 @@ export type EmailContexts = {
   EX16: FirmContext & { code?: string | null };
   EX17: FirmContext;
   EX18: FirmContext;
+  EX19: FirmContext;
 };
 
 export type TemplateId = keyof EmailContexts;
@@ -1255,6 +1256,30 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         cta: cta("Open the Pipeline", appLink(origin, PATHS.sheetPipeline)),
         spot: "reminder",
         brand: PLATFORM,
+      });
+    },
+  },
+  EX19: {
+    id: "EX19",
+    name: "New notice (announcement)",
+    audience: "client",
+    brand: "firm",
+    trigger:
+      "Staff with permission send an announcement from an approved firm template (send_announcement; outbox announcement.sent, template announcement), to each chosen client with a portal account. Honours email_notices. Never for a sample-mode firm. Firm name only: the announcement itself is in the portal (OPS-04)",
+    status: "wired",
+    ctaTarget: PATHS.portal,
+    mergeFields: ["firm_name"],
+    sample: { firmName: SYNTHETIC_FIRM },
+    build(context, origin) {
+      const firmName = firm(context);
+      return copy({
+        subject: `A new notice from ${firmName}`,
+        preheader: "Read it in your portal.",
+        heading: `You have a new notice from ${firmName}`,
+        body: `${firmName} posted a notice for its clients. For your privacy, it is in your portal.`,
+        cta: cta("Open your portal", appLink(origin, PATHS.portal)),
+        spot: "reminder",
+        brand: firmBrand(context),
       });
     },
   },

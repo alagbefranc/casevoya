@@ -6555,6 +6555,141 @@ export type Database = {
         }
         Relationships: []
       }
+      announcement_deliveries: {
+        Row: {
+          announcement_id: string
+          created_at: string
+          dismissed_at: string | null
+          emailed: boolean
+          id: string
+          organization_id: string
+          person_id: string
+          seen_at: string | null
+        }
+        Insert: {
+          announcement_id: string
+          created_at?: string
+          dismissed_at?: string | null
+          emailed?: boolean
+          id?: string
+          organization_id: string
+          person_id: string
+          seen_at?: string | null
+        }
+        Update: {
+          announcement_id?: string
+          created_at?: string
+          dismissed_at?: string | null
+          emailed?: boolean
+          id?: string
+          organization_id?: string
+          person_id?: string
+          seen_at?: string | null
+        }
+        Relationships: []
+      }
+      announcements: {
+        Row: {
+          audience_kind: string
+          body: string
+          created_at: string
+          emailed_count: number
+          id: string
+          is_sample: boolean
+          organization_id: string
+          program_key: string | null
+          recipient_count: number
+          sent_by: string
+          sent_by_membership_id: string
+          template_id: string
+          template_version: number
+          title: string
+        }
+        Insert: {
+          audience_kind: string
+          body: string
+          created_at?: string
+          emailed_count: number
+          id?: string
+          is_sample?: boolean
+          organization_id: string
+          program_key?: string | null
+          recipient_count: number
+          sent_by: string
+          sent_by_membership_id: string
+          template_id: string
+          template_version: number
+          title: string
+        }
+        Update: {
+          audience_kind?: string
+          body?: string
+          created_at?: string
+          emailed_count?: number
+          id?: string
+          is_sample?: boolean
+          organization_id?: string
+          program_key?: string | null
+          recipient_count?: number
+          sent_by?: string
+          sent_by_membership_id?: string
+          template_id?: string
+          template_version?: number
+          title?: string
+        }
+        Relationships: []
+      }
+      message_templates: {
+        Row: {
+          approved_at: string | null
+          approved_by_membership_id: string | null
+          body: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          organization_id: string
+          status: string
+          title: string | null
+          updated_at: string
+          updated_by: string | null
+          use_for: string
+          version: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          body: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          use_for: string
+          version?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          use_for?: string
+          version?: number
+        }
+        Relationships: []
+      }
       matter_stage_evidence: {
         Row: {
           created_at: string
@@ -12732,6 +12867,37 @@ export type Database = {
         Returns: { consultant_name: string | null; matter_id: string }[]
       }
       portal_notices_for_me: { Args: { p_org: string }; Returns: Json }
+      announcement_audiences: { Args: { p_organization_id: string }; Returns: Json }
+      approve_message_template: {
+        Args: { p_expected_version: number; p_organization_id: string; p_template_id: string }
+        Returns: Json
+      }
+      archive_message_template: {
+        Args: { p_organization_id: string; p_template_id: string }
+        Returns: undefined
+      }
+      mark_portal_announcements_seen: { Args: { p_org: string }; Returns: number }
+      save_message_template: {
+        Args: {
+          p_body: string
+          p_expected_version?: number | null
+          p_name: string
+          p_organization_id: string
+          p_template_id: string | null
+          p_title: string | null
+          p_use_for: string
+        }
+        Returns: Json
+      }
+      send_announcement: {
+        Args: {
+          p_organization_id: string
+          p_program_key?: string | null
+          p_template_id: string
+          p_template_version: number
+        }
+        Returns: Json
+      }
       portal_reschedule_booking: {
         Args: { p_booking_id: string; p_expected_version: number | null; p_org: string; p_start: string; p_time_zone: string }
         Returns: undefined
@@ -14290,6 +14456,9 @@ export type Database = {
         | "staff_message"
         | "support_requested"
         | "support_granted"
+        | "consultant_changed"
+        | "enquiry_received"
+        | "announcement"
       engagement_status: "pending" | "engaged" | "exception" | "ended"
       firm_setup_step:
         | "firm_details"
@@ -14752,6 +14921,9 @@ export const Constants = {
         "staff_message",
         "support_requested",
         "support_granted",
+        "consultant_changed",
+        "enquiry_received",
+        "announcement",
       ],
       access_grant_kind: ["explicit", "guardian"],
       agreement_kind: ["quote", "consultation", "service", "amendment", "consent"],

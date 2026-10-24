@@ -91,6 +91,7 @@ import { armIntakeReview, runIntakeFreeze, runIntakeReuse, runIntakeSend } from 
 import { runFlagResolve, runPersonAdd, runPersonRemove } from "./person-history-acts";
 import { openInboxPick, runInboxDismiss, runInboxFile, runInboxFileGo, runInboxMove, runInboxSearch } from "./inbox-acts";
 import { runInboxCompose, runInboxMessage, runInboxNote, runInboxReply } from "./inbox-reply-acts";
+import { mountMessagingInputs, runAnnouncementSend, runTemplateApprove, runTemplateArchive, runTemplateSave } from "./messaging-acts";
 import { mountDocOpen, mountDrafts, mountInboxFilters, mountRecordsCrumb } from "./records-acts";
 import { bindGovControls } from "./gov-acts";
 import {
@@ -1035,6 +1036,21 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         );
         return;
       }
+      // OPS-04: Inbox > Announcements Send, and Templates > Message templates save/approve/archive.
+      const annSend = target.closest<HTMLElement>("[data-ann-send]");
+      if (annSend && root.contains(annSend)) {
+        event.preventDefault();
+        busyRun(annSend, () => runAnnouncementSend(annSend, root, router));
+        return;
+      }
+      const mtAct = target.closest<HTMLElement>("[data-mt-save], [data-mt-approve], [data-mt-archive]");
+      if (mtAct && root.contains(mtAct)) {
+        event.preventDefault();
+        busyRun(mtAct, () =>
+          mtAct.hasAttribute("data-mt-save") ? runTemplateSave(mtAct, root, router) : mtAct.hasAttribute("data-mt-approve") ? runTemplateApprove(mtAct, router) : runTemplateArchive(mtAct, router),
+        );
+        return;
+      }
       const inboxCompose = target.closest<HTMLElement>("[data-inbox-compose]");
       if (inboxCompose && root.contains(inboxCompose)) {
         event.preventDefault();
@@ -1317,6 +1333,7 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     // Inbox's conversation search and channel chips.
     mountRecordsCrumb(root, page, (group) => openPalette(root, (href) => router.push(href), group), ac.signal);
     if (page === "inbox") mountInboxFilters(root, ac.signal);
+    if (page === "inbox" || page === "templates") mountMessagingInputs(root, ac.signal);
     if (page === "documents") mountDocOpen(root, runDocOpen, ac.signal);
     if (page === "drafts") mountDrafts(root, () => router.refresh(), ac.signal);
     // Back from a Composio Connect Link on Settings > Integrations.
