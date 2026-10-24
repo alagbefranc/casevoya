@@ -71,6 +71,7 @@ Subjects and preheaders must not reveal a program, document name, amount or deci
 | EX08 | Payment failed | machine_draft | — | — | No (not_approved) |
 | EX09 | Refund started | machine_draft | — | — | No (not_approved) |
 | EX10 | Refund complete | machine_draft | — | — | No (not_approved) |
+| EX18 | New enquiry (staff) | machine_draft | — | — | No (not_approved) |
 | EX17 | Consultant changed | machine_draft | — | — | No (not_approved) |
 | EX16 | Signing code | machine_draft | — | — | No (not_approved) |
 | EX11 | Support access requested | machine_draft | — | — | No (not_approved) |
@@ -617,6 +618,20 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:5609f6110cb
 | `heading` | Your refund is complete | Votre remboursement est complet | Machine draft |
 | `body` | {firm_name}’s refund has been sent. The details are in your portal. | Le remboursement de {firm_name} a été envoyé. Les détails se trouvent dans votre portail. | Machine draft. Keep {firm_name} |
 | `cta` | View payments | Afficher les paiements | Machine draft. Same English as another template; same French reused. |
+
+## EX18: New enquiry (staff)
+
+Someone sends an enquiry from the firm's hosted page or website form (trigger leads_enquiry_notice; outbox lead.enquiry_received, template enquiry_received), to the firm's active owners and the lead's owner when set. Not for sample (practice) enquiries. Firm name only: never the enquirer's name or what they wrote (CRM-01). Audience: staff. [French preview](../email/previews/fr/EX18.html)
+
+Status `machine_draft` · drafted 2026-10-24 · English hash `sha256:05b5307ba082…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject` | New enquiry for {firm_name} | Nouvelle demande pour {firm_name} | Hand draft. EX18 hand draft (CRM-01, #176). Keep {firm_name} |
+| `preheader` | Open the Pipeline in Casevoya to read it. | Ouvrez le pipeline dans Casevoya pour la lire. | Hand draft. EX18 hand draft (CRM-01, #176). |
+| `heading` | You have a new enquiry | Vous avez une nouvelle demande | Hand draft. EX18 hand draft (CRM-01, #176). |
+| `body` | Someone sent {firm_name} an enquiry from your enquiry page or website form. For their privacy, the details are in the Pipeline. | Quelqu’un a envoyé une demande à {firm_name} depuis votre page de demande ou le formulaire de votre site. Pour protéger sa vie privée, les détails sont dans le pipeline. | Hand draft. EX18 hand draft (CRM-01, #176). Keep {firm_name} |
+| `cta` | Open the Pipeline | Ouvrir le pipeline | Hand draft. EX18 hand draft (CRM-01, #176). |
 
 ## EX17: Consultant changed
 
