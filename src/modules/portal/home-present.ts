@@ -275,7 +275,7 @@ export function matterCards(input: { matters: PortalMatter[]; tasks: PortalTask[
             : { tone: "unv", text: "Nothing for you yet" },
       consultant: closed || !consultant ? null : `${consultant}, consultant`,
       note: closed && matter.retentionOn ? `Records kept until ${monthYear(matter.retentionOn)}` : null,
-      href: closed ? "/portal/documents" : `/portal?matter=${matter.id}`,
+      href: closed ? `/portal/documents?matter=${matter.id}` : `/portal?matter=${matter.id}`,
       closed,
     };
   });
