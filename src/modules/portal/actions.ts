@@ -8,7 +8,7 @@ import { retrieveAccountStatus } from "@/modules/finance/stripe-account";
 
 export type InvoicePaymentResult =
   | { clientSecret: string; stripeAccount: string; amountCents: number; currency: string }
-  | { error: string; reason?: "not_configured" | "not_ready" | "processing" | "closed" | "not_earned_fee" };
+  | { error: string; reason?: "not_configured" | "not_ready" | "processing" | "closed" | "not_earned_fee" | "manual_payment_pending" };
 
 type Context = {
   invoice_id: string;
@@ -44,7 +44,12 @@ export async function createInvoicePayment(input: { organizationId: string; invo
   // is asked for anything. A trigger on invoice_payments refuses it again.
   const check = await supabase.rpc("invoice_card_checkout_check", { p_invoice_id: input.invoiceId });
   if (check.error) return { error: "This invoice isn’t available." };
-  if ((check.data as { allowed?: unknown } | null)?.allowed !== true) {
+  const answer = check.data as { allowed?: unknown; reason?: unknown } | null;
+  // FIN-09: a payment the firm recorded by hand waits for verification; don't take it twice.
+  if (answer?.allowed !== true && answer?.reason === "manual_payment_pending") {
+    return { error: "Your firm is checking a payment you already sent for this invoice. Nothing was charged.", reason: "manual_payment_pending" };
+  }
+  if (answer?.allowed !== true) {
     return { error: "This invoice is an advance for the client (trust) account, which can’t be paid by card. Nothing was charged.", reason: "not_earned_fee" };
   }
 

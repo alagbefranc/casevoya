@@ -520,6 +520,39 @@ PRD OPS-04 (#179).
 * Trigger `message_thread_people_external_portal` (`app.guard_thread_external_person`): a signed-in caller can't add an employer or sponsor without a portal account to a conversation. `send_matter_message` is unchanged.
 
 Tested in `tests/ops-messaging.rls.test.ts` (template roles, versions, merge fields, tenant isolation; audience counts; owner sends, case manager refused, client and other firm refused; portal notice, seen and dismiss; EX19 context has no text; rate limit audited; sample mode; external participant refused without portal, allowed with it, never reads other threads or staff notes).
+
+## Manual payments pending verification (`20261025150000`, `20261025150100`, not applied on the live project)
+
+FIN-09. Casevoya holds no money; staff record what the firm's bank shows.
+
+* `public.manual_payment_status` (own migration): `pending_verification`, `verified`, `rejected`, `reversed`, `failed`.
+* `firm_operating_accounts`: the firm's operating account record (label, institution, last four, CAD). `public.create_firm_operating_account(org, label, institution, last4)`: firm owner with a step-up (`app.require_firm_owner_step_up`), audited `finance.operating_account_added`. Read by the owner and finance users.
+* `invoices.manual_paid_cents`: verified manual payments, part of `paid_cents` (check: `manual_paid_cents + client_funds_paid_cents <= paid_cents`).
+* `invoice_manual_payments` (MP-0001 per firm): invoice, matter, method (`client_fund_method`), external reference, received date, operating account, evidence (`evidence_version_id`, a cleared document version filed on the matter, and/or `evidence_note`; one required), amount, currency, status, named reviewer, recorder, verifier (`self_verified`), rejection, reversal (`reopened_cents`, `reversal_task_id`). Recorded fields never change; `app.guard_manual_payment_change` allows pending -> verified / rejected / failed and verified -> reversed / failed only. Read by the matter's billing staff.
+* `public.record_invoice_manual_payment(...)`: billing staff of the matter (`app.require_client_funds_access`), sample-mode rule, an issued invoice with no card payment processing, amount no more than due less other pending manual payments, reference required, date not in the firm's future, an active operating account, evidence (`app.check_payment_evidence`) and an eligible reviewer (`app.check_payment_reviewer`: an active firm owner, or an active finance user assigned to the matter; not the recorder unless no one else is). Idempotent by key.
+* `public.verify_invoice_manual_payment(id)`: step-up; the named reviewer or a firm owner; the recorder only when no one else is eligible or as the firm owner, after a step-up taken after it was recorded (`self_verified`). Re-checks the amount due, then adds to `paid_cents` and `manual_paid_cents`; status from `app.invoice_settled_status`. `public.reject_invoice_manual_payment(id, reason)`.
+* `public.reverse_invoice_manual_payment(id, outcome, reason)`: `reversed` (verified only) or `failed` (pending or verified), step-up. A verified one reopens the balance. `app.create_payment_followup_task` makes an internal high-priority task (and its `task_events` row) for the matter's responsible consultant, else the longest-standing active firm owner. The matter is not touched.
+* `client_fund_deposit_reviews`: the evidence version and named reviewer of an advance, append-only. `public.record_client_advance(...)` checks reference, evidence and reviewer, then calls the unchanged `app.record_client_deposit`.
+* **Redefines** `app.verify_client_deposit` (latest `20261019140000_owner_self_verify_step_up.sql`): when a reviewer was named, only that reviewer or a firm owner verifies. Nothing else changed.
+* `public.list_payment_reviewers(org)` (billing staff): active owners and finance users with their assigned matters. `public.invoice_manual_payment_summary(invoice_ids)`: number, status, amount, date and method for invoices the caller can read (the client's portal), never the evidence or reviewer.
+
+* `20261025150300_card_checkout_manual_pending.sql` **redefines** `app.invoice_card_checkout_check` (latest `20261025130000_fin_stripe_connect_disputes_credits.sql`): it also answers `{allowed: false, reason: 'manual_payment_pending'}` while a manual payment on the invoice waits for verification, so the portal's card checkout is refused on the server. Nothing else changed.
+* Verifying refuses more than amount − paid − credited (credited includes FIN-06's `written_off_cents`), so it never makes `app.invoice_overpaid_cents` positive and opens no client credit (FIN-13); pending payments never touch `paid_cents`.
+
+Audit: `invoice.manual_payment_recorded`, `_verified`, `_verified_self`, `_rejected`, `_reversed`, `_failed`. Tested in `tests/finance-manual-payments.rls.test.ts`.
+
+## Reconciliation workspace (`20261025150200`, not applied on the live project)
+
+FIN-12, on top of `client_account_reconciliations`.
+
+* `client_reconciliation_adjustments`: deposits in transit and outstanding cheques of a reconciliation waiting for review (description, reference, date on or before the statement date, amount; removal kept as `removed_at` / `removed_by`). `app.guard_reconciliation_adjustment_change` locks them once the reconciliation is signed or discarded. `public.add_reconciliation_adjustment(...)`, `public.remove_reconciliation_adjustment(id)`: the firm owner or a finance user (`app.require_reconciliation_access`). Audited `client_funds.reconciliation_item_added` / `_removed`.
+* `client_account_reconciliations.adjusted_balance_cents`: statement + deposits in transit − outstanding cheques, stored when signed. The unnamed check "reconciled means `difference_cents = 0`" is dropped and replaced by `client_account_reconciliations_reconciled_balanced` (reconciled means the adjusted balance, or the statement for rows signed before, equals the control ledger), plus `client_account_reconciliations_adjusted_when_signed`.
+* **Redefines** `app.sign_client_reconciliation` (latest `20261019184700_client_account_reconciliations.sql`): computes the adjusted balance, requires it to equal the control ledger to sign as `reconciled`, and stores it. Everything else unchanged.
+* `app.guard_reconciled_period` (triggers on `client_fund_entries` and `client_fund_bank_transfers` inserts): nothing dated on or before a signed statement date of the same client account.
+* `public.record_reconciliation_export(id)`: audits a PDF report download (`client_funds.reconciliation_exported`).
+
+Tested in `tests/finance-reconciliation-workspace.rls.test.ts`.
+
 ## Billing: time, drafts, tax rates, write-offs, quotes, instalments, government fees (`20261025140000`, not applied on the live project)
 
 FIN-06. No existing function is redefined.
@@ -534,6 +567,7 @@ FIN-06. No existing function is redefined.
 * `government_fee_references`: the firm's catalogue read from IRCC's fee list (name, amount, URL with anchor, `retrieved_at`, `snapshot_sha256`, status pending_review / approved / rejected / superseded). `public.record_government_fee_snapshot` (owner, licensed consultant or finance user; allowlisted host; a known hash records nothing), `public.review_government_fee_snapshot` (licensed member, step-up). Nothing seeded.
 
 Forced RLS on every new table; no insert, update or delete grants. Tested in `tests/finance-billing.rls.test.ts`.
+
 ## Task detail, recurrence and task notifications (`20261025100000`, `20261025100100`, not applied on the live project)
 
 OPS-01 (gap #179). Apply in this order.

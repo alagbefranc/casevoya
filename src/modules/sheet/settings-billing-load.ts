@@ -1,4 +1,5 @@
 import "server-only";
+import type { BankAccountsData } from "@/components/sheet/designer/manual-pay";
 import type { RetentionData, SubscriptionData } from "@/components/sheet/designer/settings-billing";
 import { createClient } from "@/lib/supabase/server";
 import { stripeServer } from "@/lib/stripe/server";
@@ -41,15 +42,17 @@ export async function loadSheetSubscription(staff: SheetStaff): Promise<{
   pill: string;
   page: SubscriptionData;
   connect: { data: FinanceAccountData; card: ConnectCardData };
+  accounts: BankAccountsData | null;
 }> {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
   const canSee = staff.role === "firm_owner" || staff.role === "finance_user";
   // The firm's Stripe account for clients' card payments (FIN-02): the same read as Finance's.
-  const [chrome, firm, account] = await Promise.all([
+  const [chrome, firm, account, accounts] = await Promise.all([
     loadSheetChrome(staff, "/sheet/settings"),
     canSee ? supabase.rpc("firm_subscription", { p_organization_id: org }) : null,
     loadFirmAccount(supabase, staff, stripeServer()),
+    canSee ? loadBankAccounts(supabase, staff) : null,
   ]);
   const detail = firm && !firm.error ? readFirmSubscription(firm.data) : null;
   // After the clock moved the state, read the row again so the pill and the State row agree.
@@ -69,6 +72,35 @@ export async function loadSheetSubscription(staff: SheetStaff): Promise<{
       organizationId: org,
     }),
     connect: { data: account.data, card: connectCard(account.data, staff.timezone) },
+    accounts,
+  };
+}
+
+/**
+ * FIN-09 / FIN-12: the firm's client (trust) account and operating account records, read by the
+ * owner and finance users (RLS). Only the firm owner adds one, after a step-up (the database checks).
+ */
+async function loadBankAccounts(supabase: Client, staff: SheetStaff): Promise<BankAccountsData> {
+  const org = staff.organizationId;
+  const [client, operating] = await Promise.all([
+    supabase.from("client_accounts").select("label, institution, account_last4, currency, is_active").eq("organization_id", org).order("created_at"),
+    supabase.from("firm_operating_accounts").select("label, institution, account_last4, currency, is_active").eq("organization_id", org).order("created_at"),
+  ]);
+  const describe = (rows: { label: string; institution: string; account_last4: string; currency: string; is_active: boolean }[] | null, none: string) => {
+    const active = (rows ?? []).filter((row) => row.is_active);
+    return active.length ? active.map((row) => `${row.label}: ${row.institution} ••• ${row.account_last4} · ${row.currency}`).join("; ") : none;
+  };
+  return {
+    organizationId: org,
+    rows: [
+      ["Client (trust) account", client.error ? "Couldn’t load" : describe(client.data, "Not set up. Advances can’t be recorded until it is.")],
+      ["Operating account", operating.error ? "Couldn’t load" : describe(operating.data, "Not set up. Manual invoice payments need it as their destination.")],
+    ],
+    canAdd: staff.role === "firm_owner",
+    note:
+      staff.role === "firm_owner"
+        ? "Records of the firm’s own accounts at its bank: a name, the bank and the last four digits. Casevoya never holds or moves the money. Adding one asks you to confirm with your authenticator."
+        : "Records of the firm’s own accounts at its bank. The firm owner adds them.",
   };
 }
 

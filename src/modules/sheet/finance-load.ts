@@ -39,6 +39,7 @@ import {
 } from "@/modules/finance/client-funds-present";
 import { createClient } from "@/lib/supabase/server";
 import { stripeServer } from "@/lib/stripe/server";
+import { MANUAL_METHODS, manualPaymentState } from "@/modules/finance/manual-payments-present";
 import { formatAmount, formatMoney, INVOICE_CURRENCIES } from "@/modules/finance/money";
 import { paymentReceiptHref } from "@/modules/finance/receipt-links";
 import { loadFirmAccount } from "@/modules/finance/account-load";
@@ -115,6 +116,34 @@ function money(minor: number, currency: string): string {
 
 /** Refunds that hold part of a payment: pending, needing action, or succeeded. */
 const HELD_REFUND_STATUSES = ["pending", "requires_action", "succeeded"] as const;
+
+/** FIN-09: manual payments (e-transfer, cheque, wire, cash) on the Payments tab, read as billing staff (RLS). */
+async function loadManualPaymentRows(supabase: Supabase, staff: SheetStaff): Promise<PaymentRow[]> {
+  const org = staff.organizationId;
+  const manual = await supabase
+    .from("invoice_manual_payments")
+    .select("id, invoice_id, number, method, external_reference, received_on, amount_cents, currency, status, self_verified, updated_at")
+    .eq("organization_id", org)
+    .order("updated_at", { ascending: false })
+    .limit(PAYMENTS_READ);
+  const rows = manual.data ?? [];
+  if (!rows.length) return [];
+  const labels = await invoiceLabels(supabase, org, [...new Set(rows.map((row) => row.invoice_id))]);
+  return rows.map((row) => {
+    const invoice = labels.get(row.invoice_id);
+    const state = manualPaymentState(row.status, row.self_verified);
+    return {
+      key: row.id,
+      received: dayMonth(row.received_on),
+      from: invoice?.client ?? "Client",
+      method: MANUAL_METHODS.find((method) => method.value === row.method)?.label ?? "Manual",
+      reference: [row.number, row.external_reference],
+      goesTo: invoice?.number ?? "Invoice",
+      amount: money(row.amount_cents, row.currency),
+      state: { tone: state.tone, label: state.label, ...(state.detail ? { detail: state.detail } : {}) },
+    };
+  });
+}
 
 /**
  * The Payments tab's rows: card payments Stripe has acted on, newest first, read as the signed-in
@@ -431,7 +460,7 @@ export type ClientFundsPage = {
 async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: boolean, today: string): Promise<ClientFundsPage> {
   const org = staff.organizationId;
   const isOwner = staff.role === "firm_owner";
-  const [claims, accounts, ledgers, entries, partyResult, names, receipts, banks, dues, paymentReceipts] = await Promise.all([
+  const [claims, accounts, ledgers, entries, partyResult, names, receipts, banks, dues, paymentReceipts, reviews, reviewerRows] = await Promise.all([
     supabase.auth.getClaims(),
     supabase.from("client_accounts").select("id, label, institution, account_last4, is_active").eq("organization_id", org).order("created_at"),
     supabase.from("client_fund_ledgers").select("id, client_account_id, matter_id, person_id, is_sample, created_at").eq("organization_id", org).order("created_at"),
@@ -449,7 +478,11 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
     supabase.from("client_fund_bank_transfers").select("entry_id, transferred_on, bank_reference").eq("organization_id", org).limit(FUNDS_READ),
     canBill ? supabase.rpc("list_client_fund_withdrawals") : null,
     supabase.from("invoice_payment_receipts").select("id, entry_id, number").eq("organization_id", org).eq("source", "client_funds").limit(FUNDS_READ),
+    // FIN-09: the evidence file and reviewer named when an advance was recorded.
+    canBill ? supabase.from("client_fund_deposit_reviews").select("entry_id, evidence_version_id, reviewer_user_id").eq("organization_id", org).limit(FUNDS_READ) : null,
+    canBill ? supabase.rpc("list_payment_reviewers", { p_org: org }) : null,
   ]);
+  const reviewOf = new Map((reviews?.data ?? []).map((row) => [row.entry_id, row]));
   const receiptOf = new Map((receipts.data ?? []).map((row) => [row.entry_id, row.number]));
   // An approved transfer pays an invoice: its receipt is the invoice payment receipt (CICC Code s. 33(3)).
   const paymentReceiptOf = new Map(
@@ -569,6 +602,9 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
       for (const entry of list) {
         if (entry.kind === "deposit" && entry.status === "pending_verification") {
           const recordedByViewer = entryRows.find((item) => item.id === entry.id)?.requested_by === viewer;
+          const review = reviewOf.get(entry.id);
+          // FIN-09: a named reviewer (or the firm owner) verifies it.
+          const notNamed = Boolean(review && review.reviewer_user_id !== viewer && !isOwner);
           actions.push({
             label: `Verify ${entry.number}`,
             primary: true,
@@ -581,8 +617,10 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
               "data-evidence": entry.evidence ?? "No note",
               "data-by": recordedByViewer ? `${entry.recordedBy} (you)` : entry.recordedBy,
               "data-dest": accountLabel(ledger.client_account_id),
+              "data-reviewer": review ? `${staffName(review.reviewer_user_id) ?? "Staff member"}${review.reviewer_user_id === viewer ? " (you)" : ""}` : "Any billing staff member but the recorder",
+              ...(review?.evidence_version_id ? { "data-evidence-file": review.evidence_version_id } : {}),
               // Second person: the recorder can't verify it, unless they are the firm owner.
-              "data-can-verify": recordedByViewer && !isOwner ? "0" : "1",
+              "data-can-verify": (recordedByViewer && !isOwner) || notNamed ? "0" : "1",
               "data-own-entry": recordedByViewer && isOwner ? "1" : "0",
             },
           });
@@ -767,6 +805,7 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
         sampleMode: staff.sampleMode,
         parties: parties.length ? parties : [{ value: "", label: "No open matter with a client" }],
         accounts: accountRows.length ? accountRows.map((row) => ({ value: row.id, label: `${row.label} ••• ${row.account_last4} (advances)` })) : [{ value: "", label: "No client account yet" }],
+        reviewers: reviewerOptions((reviewerRows?.data ?? []) as ReviewerRow[], viewer),
         blocked: !canBill
           ? { title: "Billing staff only", copy: "The firm owner or the matter’s finance user records client funds." }
           : !accountRows.length
@@ -780,6 +819,17 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
     transfer: { live: { organizationId: org } },
     more: { organizationId: org, today, ledgers: ledgerOptions, invoices: invoiceOptions, corrections, bankTransfers, isOwner },
   };
+}
+
+type ReviewerRow = { user_id: string; display_name: string; role: string; matter_ids: string[] | null };
+
+/** Reviewer options for the advance dialog: each carries the matters they review ("*" for a firm owner); the dialog narrows them to the chosen matter. */
+function reviewerOptions(rows: ReviewerRow[], viewer: string): FundsOption[] {
+  return rows.map((row) => ({
+    value: row.user_id,
+    label: `${row.display_name}${row.role === "firm_owner" ? " (firm owner)" : " (finance)"}${row.user_id === viewer ? " (you)" : ""}`,
+    data: { "data-matters": row.role === "firm_owner" ? "*" : (row.matter_ids ?? []).join(" "), ...(row.user_id === viewer ? { "data-self": "1" } : {}) },
+  }));
 }
 
 function sumCurrency(funds: { amount: number; currency: string }[] | undefined, currency: string): number {
@@ -882,7 +932,7 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
   const billing = [...(billable?.data ?? []).filter((row) => row.organization_id === org && row.stage !== "closed"), ...sampleBilling];
   const matterIds = [...new Set([...rows.map((row) => row.matter_id), ...billing.map((row) => row.matter_id)])];
   const invoiceIds = rows.map((row) => row.id);
-  const [matters, processing, cardPayments] = await Promise.all([
+  const [matters, processing, cardPayments, manualPending] = await Promise.all([
     matterIds.length ? supabase.from("matters").select("id, reference, title, is_sample").eq("organization_id", org).in("id", matterIds) : null,
     invoiceIds.length
       ? supabase.from("invoice_payments").select("invoice_id").eq("organization_id", org).eq("status", "processing").in("invoice_id", invoiceIds)
@@ -894,7 +944,13 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
       .eq("organization_id", org)
       .eq("status", "succeeded")
       .limit(PAYMENTS_READ),
+    // FIN-09: manual payments waiting for their reviewer; the invoice shows "Pending verification".
+    invoiceIds.length
+      ? supabase.from("invoice_manual_payments").select("invoice_id, amount_cents").eq("organization_id", org).eq("status", "pending_verification").in("invoice_id", invoiceIds)
+      : null,
   ]);
+  const pendingByInvoice = new Map<string, number>();
+  for (const row of manualPending?.data ?? []) pendingByInvoice.set(row.invoice_id, (pendingByInvoice.get(row.invoice_id) ?? 0) + row.amount_cents);
   const matterById = new Map((matters?.data ?? []).map((row) => [row.id, row]));
   // Closed matters too: their invoices still need a name. A finance user reads no matter rows, so
   // the billing projection's title stands in for the reference.
@@ -924,6 +980,7 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
         processingIds.has(row.id),
         row.refunded_cents > 0 ? formatMoney(row.refunded_cents, row.currency) : null,
         row.credited_cents - row.written_off_cents > 0 && row.status !== "credited" ? formatMoney(row.credited_cents - row.written_off_cents, row.currency) : null,
+        pendingByInvoice.get(row.id) ? formatMoney(pendingByInvoice.get(row.id) ?? 0, row.currency) : null,
       ),
     );
     return {
@@ -1043,13 +1100,16 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
           ? { title: "Stripe isn’t configured", copy: "Refunds go through the firm’s Stripe account, which isn’t reachable in this environment. Nothing can be refunded here." }
           : null,
     };
-    const [paymentRows, balance] = await Promise.all([
+    const [cardRows, manualRows, balance] = await Promise.all([
       loadPaymentRows(supabase, staff, canBill),
+      canBill ? loadManualPaymentRows(supabase, staff) : [],
       // The account row is only visible to the owner and finance users (RLS).
       account && canBill ? loadBalance(stripe, account) : null,
     ]);
+    // Card payments first (newest first), then manual payments (newest first).
+    const paymentRows: PaymentRow[] = [...cardRows, ...manualRows];
     payments = {
-      intro: `Money ${staff.organizationName} received by card, into the firm’s own Stripe account. A payment counts only when Stripe’s signed event confirms it. Stripe runs in test mode: no real card is charged, and Casevoya never holds the money.`,
+      intro: `Money ${staff.organizationName} received by card, into the firm’s own Stripe account, and payments recorded by hand (e-transfer, cheque, wire, cash). A card payment counts only when Stripe’s signed event confirms it; a manual one only once its reviewer verifies it. Stripe runs in test mode: no real card is charged, and Casevoya never holds the money.`,
       currency: "CAD",
       balance,
       rows: paymentRows,

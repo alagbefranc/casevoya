@@ -71,6 +71,20 @@ import {
 } from "./corrections-acts";
 import { openBillingDialog, runBillingAct } from "./billing-acts";
 import { openDocReview, reopenDocReview, runDocFile, runDocOpen, runDocReview } from "./documents-acts";
+import {
+  openManual,
+  pickEvidence,
+  reopenManualDialog,
+  runBankAdd,
+  runEvidenceOpen,
+  runManualRecord,
+  runManualReject,
+  runManualReverse,
+  runManualVerify,
+  runReconItem,
+  runReconItemRemove,
+  syncReviewers,
+} from "./manual-pay-acts";
 import { restoreDocRequest, runDocRequest } from "./doc-request-act";
 import { runUploadLimit } from "./upload-limit-act";
 import { armIntakeReview, runIntakeFreeze, runIntakeReuse, runIntakeSend } from "./intake-delivery-acts";
@@ -747,6 +761,47 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         button.setAttribute("aria-busy", "true");
         void run().finally(() => button.removeAttribute("aria-busy"));
       };
+      // FIN-09 / FIN-12: manual payments, evidence files, reconciliation items and bank account records.
+      const manualOpen = target.closest<HTMLElement>("[data-mp-open]");
+      if (manualOpen && root.contains(manualOpen)) {
+        event.preventDefault();
+        openManual(manualOpen, root, openDialog);
+        return;
+      }
+      const evidencePick = target.closest<HTMLElement>("[data-mp-file]");
+      if (evidencePick && root.contains(evidencePick)) {
+        event.preventDefault();
+        busyRun(evidencePick, () => pickEvidence(evidencePick));
+        return;
+      }
+      const evidenceOpen = target.closest<HTMLElement>("[data-mp-evidence]");
+      if (evidenceOpen && root.contains(evidenceOpen)) {
+        event.preventDefault();
+        busyRun(evidenceOpen, () => runEvidenceOpen(evidenceOpen));
+        return;
+      }
+      const manualSubmit = target.closest<HTMLElement>("[data-mp-record], [data-mp-verify], [data-mp-reject], [data-mp-reverse], [data-rec-item], [data-rec-item-remove], [data-bank-add]");
+      if (manualSubmit && root.contains(manualSubmit)) {
+        event.preventDefault();
+        if (manualSubmit.hasAttribute("disabled")) return;
+        const data = manualSubmit.dataset;
+        const run =
+          "mpRecord" in data
+            ? runManualRecord
+            : "mpVerify" in data
+              ? runManualVerify
+              : "mpReject" in data
+                ? runManualReject
+                : "mpReverse" in data
+                  ? runManualReverse
+                  : "recItemRemove" in data
+                    ? runReconItemRemove
+                    : "recItem" in data
+                      ? runReconItem
+                      : runBankAdd;
+        busyRun(manualSubmit, () => run(manualSubmit, router));
+        return;
+      }
       // FIN-06 billing: a row's button fills a dialog and opens it, or runs an action.
       const billingOpen = target.closest<HTMLElement>("[data-billing-open]");
       if (billingOpen && root.contains(billingOpen)) {
@@ -1474,6 +1529,16 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     if (root.querySelector("dialog#dlgEvidence")) window.setTimeout(() => reopenEvidenceDialog(root, openDialog), 300);
     // ?dlg=funds (back from step-up) reopens the Client funds dialog with what was typed; the
     // chosen client ledger narrows the invoices a transfer can pay.
+    // ?dlg=manual|accounts (back from step-up) reopens a manual payment, reconciliation item or bank account dialog.
+    if (root.querySelector("[data-mp-record], [data-mp-verify], [data-rec-item], [data-bank-add]")) window.setTimeout(() => reopenManualDialog(root, openDialog), 300);
+    // FIN-09: #dlgPay's reviewers follow the chosen client and matter.
+    const payDialog = root.querySelector<HTMLDialogElement>("dialog#dlgPay");
+    if (payDialog?.querySelector("select[data-reviewers]")) {
+      syncReviewers(payDialog);
+      payDialog.addEventListener("change", (event) => {
+        if ((event.target as Element | null)?.matches("#mpC")) syncReviewers(payDialog);
+      }, listen);
+    }
     if (root.querySelector(FUNDS_SUBMIT)) {
       window.setTimeout(() => reopenFundsDialog(root, openDialog), 300);
       for (const fundsDialog of root.querySelectorAll<HTMLDialogElement>("dialog")) {

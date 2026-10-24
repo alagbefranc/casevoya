@@ -1058,6 +1058,7 @@ export type Database = {
       }
       client_account_reconciliations: {
         Row: {
+          adjusted_balance_cents: number | null
           client_account_id: string
           client_count: number
           client_ledgers_total_cents: number
@@ -1090,6 +1091,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          adjusted_balance_cents?: number | null
           client_account_id?: string
           client_count?: number
           client_ledgers_total_cents?: number
@@ -1122,6 +1124,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          adjusted_balance_cents?: number | null
           client_account_id?: string
           client_count?: number
           client_ledgers_total_cents?: number
@@ -1347,6 +1350,36 @@ export type Database = {
           recorded_by?: string
           transferred_on?: string
           withdraw_by?: string
+        }
+        Relationships: []
+      }
+      client_fund_deposit_reviews: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          entry_id: string
+          evidence_version_id: string | null
+          matter_id: string
+          organization_id: string
+          reviewer_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          entry_id: string
+          evidence_version_id?: string | null
+          matter_id: string
+          organization_id: string
+          reviewer_user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          entry_id?: string
+          evidence_version_id?: string | null
+          matter_id?: string
+          organization_id?: string
+          reviewer_user_id?: string
         }
         Relationships: []
       }
@@ -1599,6 +1632,57 @@ export type Database = {
           organization_id?: string
           person_id?: string
           received_on?: string
+        }
+        Relationships: []
+      }
+      client_reconciliation_adjustments: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          item_date: string
+          kind: string
+          organization_id: string
+          reconciliation_id: string
+          reference: string | null
+          removed_at: string | null
+          removed_by: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          created_by?: string | null
+          description: string
+          id?: string
+          item_date: string
+          kind: string
+          organization_id: string
+          reconciliation_id: string
+          reference?: string | null
+          removed_at?: string | null
+          removed_by?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          item_date?: string
+          kind?: string
+          organization_id?: string
+          reconciliation_id?: string
+          reference?: string | null
+          removed_at?: string | null
+          removed_by?: string | null
+          updated_at?: string
+          version?: number
         }
         Relationships: []
       }
@@ -2994,6 +3078,48 @@ export type Database = {
           source?: string
           starts_at?: string
           synced_at?: string
+        }
+        Relationships: []
+      }
+      firm_operating_accounts: {
+        Row: {
+          account_last4: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          institution: string
+          is_active: boolean
+          label: string
+          organization_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          account_last4: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          institution: string
+          is_active?: boolean
+          label: string
+          organization_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          account_last4?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          institution?: string
+          is_active?: boolean
+          label?: string
+          organization_id?: string
+          updated_at?: string
+          version?: number
         }
         Relationships: []
       }
@@ -4596,6 +4722,114 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_manual_payments: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          created_by: string | null
+          currency: string
+          evidence_note: string | null
+          evidence_version_id: string | null
+          external_reference: string
+          id: string
+          idempotency_key: string
+          invoice_id: string
+          is_sample: boolean
+          matter_id: string
+          method: Database["public"]["Enums"]["client_fund_method"]
+          number: string
+          operating_account_id: string
+          organization_id: string
+          received_on: string
+          recorded_by: string
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          reopened_cents: number
+          reversal_reason: string | null
+          reversal_task_id: string | null
+          reversed_at: string | null
+          reversed_by: string | null
+          reviewer_user_id: string
+          self_verified: boolean
+          status: Database["public"]["Enums"]["manual_payment_status"]
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+          version: number
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          created_by?: string | null
+          currency: string
+          evidence_note?: string | null
+          evidence_version_id?: string | null
+          external_reference: string
+          id?: string
+          idempotency_key: string
+          invoice_id: string
+          is_sample?: boolean
+          matter_id: string
+          method: Database["public"]["Enums"]["client_fund_method"]
+          number: string
+          operating_account_id: string
+          organization_id: string
+          received_on: string
+          recorded_by: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          reopened_cents?: number
+          reversal_reason?: string | null
+          reversal_task_id?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
+          reviewer_user_id: string
+          self_verified?: boolean
+          status?: Database["public"]["Enums"]["manual_payment_status"]
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+          version?: number
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          evidence_note?: string | null
+          evidence_version_id?: string | null
+          external_reference?: string
+          id?: string
+          idempotency_key?: string
+          invoice_id?: string
+          is_sample?: boolean
+          matter_id?: string
+          method?: Database["public"]["Enums"]["client_fund_method"]
+          number?: string
+          operating_account_id?: string
+          organization_id?: string
+          received_on?: string
+          recorded_by?: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          reopened_cents?: number
+          reversal_reason?: string | null
+          reversal_task_id?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
+          reviewer_user_id?: string
+          self_verified?: boolean
+          status?: Database["public"]["Enums"]["manual_payment_status"]
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
       invoice_lines: {
         Row: {
           amount_cents: number
@@ -5133,6 +5367,7 @@ export type Database = {
           number: string
           organization_id: string
           client_funds_paid_cents: number
+          manual_paid_cents: number
           credited_cents: number
           void_reason: string | null
           voided_at: string | null
@@ -5163,6 +5398,7 @@ export type Database = {
           number: string
           organization_id: string
           client_funds_paid_cents?: number
+          manual_paid_cents?: number
           credited_cents?: number
           void_reason?: string | null
           voided_at?: string | null
@@ -5193,6 +5429,7 @@ export type Database = {
           number?: string
           organization_id?: string
           client_funds_paid_cents?: number
+          manual_paid_cents?: number
           credited_cents?: number
           void_reason?: string | null
           voided_at?: string | null
@@ -11517,6 +11754,73 @@ export type Database = {
         Args: { p_expected_version: number; p_matter_id: string; p_reason: string }
         Returns: number
       }
+      add_reconciliation_adjustment: {
+        Args: { p_amount_cents: number; p_description: string; p_item_date: string; p_kind: string; p_reconciliation_id: string; p_reference: string | null }
+        Returns: string
+      }
+      create_firm_operating_account: {
+        Args: { p_institution: string; p_label: string; p_last4: string; p_org: string }
+        Returns: string
+      }
+      invoice_manual_payment_summary: {
+        Args: { p_invoice_ids: string[] }
+        Returns: { amount_cents: number; currency: string; invoice_id: string; method: string; number: string; payment_id: string; received_on: string; status: string }[]
+      }
+      list_payment_reviewers: {
+        Args: { p_org: string }
+        Returns: { display_name: string; matter_ids: string[] | null; role: string; user_id: string }[]
+      }
+      record_client_advance: {
+        Args: {
+          p_amount_cents: number
+          p_client_account_id: string
+          p_evidence_note: string | null
+          p_evidence_version_id: string | null
+          p_idempotency_key: string
+          p_matter_id: string
+          p_method: string
+          p_person_id: string
+          p_received_on: string
+          p_reference: string
+          p_reviewer_user_id: string
+        }
+        Returns: string
+      }
+      record_invoice_manual_payment: {
+        Args: {
+          p_amount_cents: number
+          p_evidence_note: string | null
+          p_evidence_version_id: string | null
+          p_idempotency_key: string
+          p_invoice_id: string
+          p_method: string
+          p_operating_account_id: string
+          p_received_on: string
+          p_reference: string
+          p_reviewer_user_id: string
+        }
+        Returns: string
+      }
+      record_reconciliation_export: {
+        Args: { p_reconciliation_id: string }
+        Returns: string
+      }
+      reject_invoice_manual_payment: {
+        Args: { p_payment_id: string; p_reason: string }
+        Returns: string
+      }
+      remove_reconciliation_adjustment: {
+        Args: { p_adjustment_id: string }
+        Returns: string
+      }
+      reverse_invoice_manual_payment: {
+        Args: { p_outcome: string; p_payment_id: string; p_reason: string }
+        Returns: Json
+      }
+      verify_invoice_manual_payment: {
+        Args: { p_payment_id: string }
+        Returns: Json
+      }
       client_credit_available_cents: {
         Args: {
           p_credit_id: string
@@ -14255,6 +14559,7 @@ export type Database = {
         | "consultant"
         | "case_manager"
         | "assistant"
+      manual_payment_status: "pending_verification" | "verified" | "rejected" | "reversed" | "failed"
       matter_stage:
         | "engagement_pending"
         | "intake"
@@ -14701,6 +15006,7 @@ export const Constants = {
       ],
       migration_batch_status: ["staged", "checked", "committing", "committed", "rolled_back", "discarded"],
       migration_row_plan: ["create", "link", "confirm", "review", "error", "skip"],
+      manual_payment_status: ["pending_verification", "verified", "rejected", "reversed", "failed"],
       matter_stage: [
         "engagement_pending",
         "intake",
