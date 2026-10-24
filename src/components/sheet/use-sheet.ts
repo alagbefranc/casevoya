@@ -70,7 +70,7 @@ import {
 } from "./corrections-acts";
 import { openDocReview, reopenDocReview, runDocFile, runDocOpen, runDocReview } from "./documents-acts";
 import { restoreDocRequest, runDocRequest } from "./doc-request-act";
-import { armIntakeReview, runIntakeFreeze, runIntakeSend } from "./intake-delivery-acts";
+import { armIntakeReview, runIntakeFreeze, runIntakeReuse, runIntakeSend } from "./intake-delivery-acts";
 import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
 import { runInboxCompose, runInboxMessage, runInboxNote, runInboxReply } from "./inbox-reply-acts";
 import { mountDocOpen, mountDrafts, mountInboxFilters, mountRecordsCrumb } from "./records-acts";
@@ -840,6 +840,12 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (intakeFreeze && root.contains(intakeFreeze)) {
         event.preventDefault();
         busyRun(intakeFreeze, () => runIntakeFreeze(intakeFreeze, router));
+        return;
+      }
+      const intakeReuse = target.closest<HTMLElement>("[data-intake-reuse]");
+      if (intakeReuse && root.contains(intakeReuse)) {
+        event.preventDefault();
+        busyRun(intakeReuse, () => runIntakeReuse(intakeReuse, router));
         return;
       }
       const intakeReview = target.closest<HTMLElement>("[data-intake-review] .k2-fb-idle");

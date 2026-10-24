@@ -403,6 +403,9 @@ export function intakeError(message: string): string {
   if (/describe/i.test(message)) return "Describe what needs fixing.";
   if (/no answer to correct/i.test(message)) return "That question has no answer to correct yet.";
   if (/not one of your documents/i.test(message)) return "That file isn’t one of your documents.";
+  if (/earlier matter first/i.test(message)) return "Confirm the answers from your earlier matter first.";
+  if (/was changed/i.test(message)) return "That answer changed. Check the new one instead.";
+  if (/already sent/i.test(message)) return "These answers were already sent.";
   if (/denied/i.test(message)) return "You can’t change these answers.";
   return "That didn’t save. Try again.";
 }

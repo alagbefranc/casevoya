@@ -42,7 +42,7 @@ export async function loadMatterIntake(
   const rows = responses.data ?? [];
   const ids = rows.map((row) => row.id);
   const personIds = [...new Set(rows.map((row) => row.person_id))];
-  const [answers, corrections, documents, otherAnswers] = await Promise.all([
+  const [answers, corrections, documents, otherAnswers, reuseRows] = await Promise.all([
     ids.length
       ? supabase.from("intake_answer_versions").select("id, response_id, field_key, presence, raw_value, normalized_value, created_at, created_by").in("response_id", ids).order("created_at", { ascending: true }).limit(3000)
       : null,
@@ -50,9 +50,15 @@ export async function loadMatterIntake(
     personIds.length ? supabase.from("documents").select("person_id, purpose, current_version_id").eq("organization_id", org).in("person_id", personIds).limit(300) : null,
     // The same people's date-of-birth answers on their other matters' forms (conflicting birth dates).
     personIds.length
-      ? supabase.from("intake_responses").select("id, person_id, template_id").eq("organization_id", org).in("person_id", personIds).neq("matter_id", input.matter.id).limit(100)
+      ? supabase.from("intake_responses").select("id, person_id, template_id, status").eq("organization_id", org).in("person_id", personIds).neq("matter_id", input.matter.id).limit(100)
       : null,
+    // INT-04: answers copied here from the same person's earlier matter.
+    ids.length ? supabase.from("intake_fact_reuses").select("response_id, answer_id, status, confirmed_at, origin_matter_id").in("response_id", ids) : null,
   ]);
+  const originIds = [...new Set((reuseRows?.data ?? []).map((row) => row.origin_matter_id))];
+  const origins = originIds.length ? await supabase.from("matters").select("id, reference").eq("organization_id", org).in("id", originIds) : null;
+  const originRef = new Map((origins?.data ?? []).map((row) => [row.id, row.reference]));
+  const sentElsewhere = new Set((otherAnswers?.data ?? []).filter((row) => row.status === "submitted").map((row) => row.person_id));
   const answerRows = answers?.data ?? [];
   const [reviews, versions, profiles, people, otherBirthRows] = await Promise.all([
     answerRows.length ? supabase.from("intake_answer_reviews").select("answer_id, created_at, created_by").in("answer_id", answerRows.map((row) => row.id)) : null,
@@ -127,6 +133,10 @@ export async function loadMatterIntake(
             .map((doc) => ({ purpose: doc.purpose, expiresOn: expires.get(doc.current_version_id as string) ?? null })),
           otherBirths,
           reviews: reviewInfo,
+          reuses: (reuseRows?.data ?? [])
+            .filter((reuse) => reuse.response_id === row.id)
+            .map((reuse) => ({ answerId: reuse.answer_id, status: reuse.status, confirmedAt: reuse.confirmed_at, originRef: originRef.get(reuse.origin_matter_id) ?? null })),
+          earlierForms: handles && sentElsewhere.has(row.person_id),
           proofHref: (answerId) => (proofOf.has(answerId) ? `/sheet/matters/${input.matter.id}?tab=documents` : null),
         },
         who,
