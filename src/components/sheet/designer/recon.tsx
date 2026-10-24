@@ -52,6 +52,8 @@ export type ReconData = {
     sign: { label: string; disabled: boolean; why: string | null; attrs: Record<string, string>; discard?: Record<string, string> };
     /** Live: Add an outstanding deposit or cheque (`#dlgRecItem`), under the items. */
     addItem?: ReconAction | null;
+    /** Live: the draft PDF report, in the Sign-off row. */
+    draftPdf?: string;
   };
   start: null | { title: string; copy: string; action: ReconAction | null };
   history: ReconHistoryRow[];
@@ -319,6 +321,11 @@ export function SheetFinanceRecon({ data }: { data: ReconData }) {
                   <button className={"btn sm"} {...pending.sign.discard}>
                     {"Discard"}
                   </button>
+                ) : null}
+                {pending.draftPdf ? (
+                  <a className={"btn sm"} href={pending.draftPdf}>
+                    {"Draft PDF"}
+                  </a>
                 ) : null}
                 {pending.sign.why ? <span className={"why"}>{pending.sign.why}</span> : null}
               </div>

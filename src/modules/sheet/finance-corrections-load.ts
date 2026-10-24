@@ -750,6 +750,7 @@ export async function loadReconciliation(
       items: itemRows,
       itemsEmpty: "Nothing outstanding as of the statement date.",
       addItem: canBill ? { label: "Add an outstanding deposit or cheque", attrs: { "data-dlg": "dlgRecItem" } } : null,
+      draftPdf: canBill ? reconciliationPdfHref(pendingRow.id, org) : undefined,
       steps: [
         { key: "prepared", state: "done", title: `Prepared by ${preparer}`, note: [day(pendingRow.prepared_at), ...(pendingRow.preparer_note ? [short(pendingRow.preparer_note, 80)] : [])] },
         {
