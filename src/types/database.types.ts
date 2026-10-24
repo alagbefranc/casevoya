@@ -9863,6 +9863,51 @@ export type Database = {
         }
         Relationships: []
       }
+      submission_checklist_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          handoff_id: string
+          id: string
+          item_key: string
+          kind: string
+          matter_id: string
+          membership_id: string
+          note: string | null
+          organization_id: string
+          requirement_id: string | null
+          ticked: boolean
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          handoff_id: string
+          id?: string
+          item_key: string
+          kind: string
+          matter_id: string
+          membership_id: string
+          note?: string | null
+          organization_id: string
+          requirement_id?: string | null
+          ticked: boolean
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          handoff_id?: string
+          id?: string
+          item_key?: string
+          kind?: string
+          matter_id?: string
+          membership_id?: string
+          note?: string | null
+          organization_id?: string
+          requirement_id?: string | null
+          ticked?: boolean
+        }
+        Relationships: []
+      }
       submission_handoffs: {
         Row: {
           acknowledged_on: string | null
@@ -9873,6 +9918,9 @@ export type Database = {
           created_by: string | null
           external_reference: string | null
           id: string
+          manifest_file_count: number | null
+          manifest_pinned_at: string | null
+          manifest_sha256: string | null
           matter_id: string
           organization_id: string
           package_label: string
@@ -9899,6 +9947,9 @@ export type Database = {
           created_by?: string | null
           external_reference?: string | null
           id?: string
+          manifest_file_count?: number | null
+          manifest_pinned_at?: string | null
+          manifest_sha256?: string | null
           matter_id: string
           organization_id: string
           package_label: string
@@ -9925,6 +9976,9 @@ export type Database = {
           created_by?: string | null
           external_reference?: string | null
           id?: string
+          manifest_file_count?: number | null
+          manifest_pinned_at?: string | null
+          manifest_sha256?: string | null
           matter_id?: string
           organization_id?: string
           package_label?: string
@@ -9940,6 +9994,135 @@ export type Database = {
           updated_at?: string
           verified_at?: string | null
           verified_by_membership_id?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
+      submission_manifest_files: {
+        Row: {
+          byte_size: number | null
+          created_at: string
+          created_by: string | null
+          document_id: string
+          document_version_id: string
+          file_name: string
+          file_sha256: string | null
+          handoff_id: string
+          id: string
+          organization_id: string
+          position: number
+          purpose: string
+          review_state: string
+        }
+        Insert: {
+          byte_size?: number | null
+          created_at?: string
+          created_by?: string | null
+          document_id: string
+          document_version_id: string
+          file_name: string
+          file_sha256?: string | null
+          handoff_id: string
+          id?: string
+          organization_id: string
+          position: number
+          purpose: string
+          review_state: string
+        }
+        Update: {
+          byte_size?: number | null
+          created_at?: string
+          created_by?: string | null
+          document_id?: string
+          document_version_id?: string
+          file_name?: string
+          file_sha256?: string | null
+          handoff_id?: string
+          id?: string
+          organization_id?: string
+          position?: number
+          purpose?: string
+          review_state?: string
+        }
+        Relationships: []
+      }
+      submission_requirements: {
+        Row: {
+          channel: Database["public"]["Enums"]["submission_channel"]
+          checked_on: string
+          created_at: string
+          created_by: string | null
+          current_to: string | null
+          form_modified_on: string | null
+          form_number: string | null
+          id: string
+          kind: string
+          label: string
+          organization_id: string
+          program_key: string | null
+          retired_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by_membership_id: string | null
+          snapshot_id: string | null
+          snapshot_sha256: string | null
+          source_id: string
+          source_section: string | null
+          source_url: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          channel: Database["public"]["Enums"]["submission_channel"]
+          checked_on: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          id?: string
+          kind: string
+          label: string
+          organization_id: string
+          program_key?: string | null
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id: string
+          source_section?: string | null
+          source_url: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          channel?: Database["public"]["Enums"]["submission_channel"]
+          checked_on?: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          id?: string
+          kind?: string
+          label?: string
+          organization_id?: string
+          program_key?: string | null
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id?: string
+          source_section?: string | null
+          source_url?: string
+          status?: string
+          updated_at?: string
           version?: number
         }
         Relationships: []
@@ -11758,6 +11941,10 @@ export type Database = {
         Args: { p_amount_cents: number; p_description: string; p_item_date: string; p_kind: string; p_reconciliation_id: string; p_reference: string | null }
         Returns: string
       }
+      confirm_submission_fees: {
+        Args: { p_confirmed: boolean; p_handoff_id: string; p_note: string }
+        Returns: string
+      }
       create_firm_operating_account: {
         Args: { p_institution: string; p_label: string; p_last4: string; p_org: string }
         Returns: string
@@ -11769,6 +11956,27 @@ export type Database = {
       list_payment_reviewers: {
         Args: { p_org: string }
         Returns: { display_name: string; matter_ids: string[] | null; role: string; user_id: string }[]
+      }
+      override_submission_gate: {
+        Args: { p_gate: string; p_handoff_id: string; p_reason: string }
+        Returns: string
+      }
+      propose_submission_requirement: {
+        Args: {
+          p_channel: Database["public"]["Enums"]["submission_channel"]
+          p_checked_on: string
+          p_current_to: string
+          p_form_modified_on: string
+          p_form_number: string
+          p_kind: string
+          p_label: string
+          p_org: string
+          p_program_key: string
+          p_snapshot: Json
+          p_source_section: string
+          p_source_url: string
+        }
+        Returns: string
       }
       record_client_advance: {
         Args: {
@@ -11813,9 +12021,34 @@ export type Database = {
         Args: { p_adjustment_id: string }
         Returns: string
       }
+      retire_submission_requirement: {
+        Args: {
+          p_expected_version: number
+          p_reason: string
+          p_requirement_id: string
+        }
+        Returns: number
+      }
       reverse_invoice_manual_payment: {
         Args: { p_outcome: string; p_payment_id: string; p_reason: string }
         Returns: Json
+      }
+      review_submission_requirement: {
+        Args: {
+          p_decision: string
+          p_expected_version: number
+          p_note: string
+          p_requirement_id: string
+        }
+        Returns: number
+      }
+      submission_checklist: {
+        Args: { p_matter_id: string }
+        Returns: Json
+      }
+      tick_submission_step: {
+        Args: { p_handoff_id: string; p_requirement_id: string; p_ticked: boolean }
+        Returns: string
       }
       verify_invoice_manual_payment: {
         Args: { p_payment_id: string }

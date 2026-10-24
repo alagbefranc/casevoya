@@ -118,8 +118,8 @@ const DONE: Record<string, [string, string]> = {
   prepare: ["Handoff started", "A licensed consultant signs off this package next."],
   signoff: ["Package signed off", "The representative can now submit it and record the submission."],
   submit: ["Submission recorded", "It stays unverified until the receipt is on file."],
-  receipt: ["Submission verified", "The receipt is the evidence for the Submitted stage."],
-  "receipt-file": ["Submission verified", "The receipt is the evidence for the Submitted stage."],
+  receipt: ["Submitted to government", "The confirmation is the evidence for the Submitted stage."],
+  "receipt-file": ["Submitted to government", "The confirmation is the evidence for the Submitted stage."],
   "verify-letter": ["Letter verified", "The matter’s government status follows the verified letter."],
   "attach-letter": ["Evidence attached", "A staff member can now verify the letter against it."],
   status: ["Recorded", "It stays unverified until a staff member checks it against the evidence."],
@@ -229,6 +229,15 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
     result = await signOffHandoff({ organizationId: ref.organizationId, handoffId: data.id ?? "", version });
   } else if (act === "submit" || act === "receipt") {
     const file = pickedFile(dialog?.querySelector("[data-gov-pick]") ?? null);
+    // GOV-03: the government confirmation as a file, and its acknowledgement date, entered
+    // separately. Checked before anything is uploaded.
+    if (act === "receipt" && !file) return void toast2("Add the confirmation file", { kind: "warn", sub: "Choose the government confirmation (PDF or photo)." });
+    if (act === "submit" && !file && value(scope, "#srL")) {
+      return void toast2("Choose the confirmation file too", { kind: "warn", sub: "Where it is kept is noted with the file. Or leave it empty and add the receipt later." });
+    }
+    if ((act === "receipt" && !value(scope, "#rcA")) || (act === "submit" && file && !value(scope, "#srA"))) {
+      return void toast2("Add the acknowledgement date", { kind: "warn", sub: "As shown on the confirmation." });
+    }
     let receiptVersionId: string | null = null;
     if (file) {
       const uploaded = await upload({ ...ref, file, purpose: "Submission receipt" });
@@ -249,7 +258,6 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
         acknowledgedOn: value(scope, "#srA") || null,
       });
     } else {
-      if (!receiptVersionId && !value(scope, "#rcL")) return void toast2("Add the receipt", { kind: "warn", sub: "Choose the file, or say where the receipt is kept." });
       result = await verifySubmission({
         organizationId: ref.organizationId,
         handoffId: data.id ?? "",
