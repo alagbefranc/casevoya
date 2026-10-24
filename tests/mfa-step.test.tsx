@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { EXPORT_STEP_UP_LEAD, mfaActiveStep, stepUpLead } from "@/lib/auth/mfa-step";
+import { EXPORT_STEP_UP_ACTION, EXPORT_STEP_UP_LEAD, mfaActiveStep, stepUpAction, stepUpLead } from "@/lib/auth/mfa-step";
 import { AcceptClientMarkup } from "@/components/port/markup/accept-client";
 import { AcceptFamilyMarkup } from "@/components/port/markup/accept-family";
 import { AcceptSponsorMarkup } from "@/components/port/markup/accept-sponsor";
@@ -92,5 +92,24 @@ describe("step-up wording (#214)", () => {
     const html = renderToStaticMarkup(<TwoStepMarkup activeStep={6} stepUpLead={stepUpLead("/sheet/finance?tab=reconciliation")} />);
     expect(html).toContain('<p class="lead">Signing a reconciliation needs a fresh check, even when you’re already signed in.</p>');
     expect(html).not.toContain("Exporting a whole client file");
+  });
+});
+
+describe("step-up action card", () => {
+  it("names the action the person goes back to", () => {
+    expect(stepUpAction("/sheet/exports")).toEqual(EXPORT_STEP_UP_ACTION);
+    expect(stepUpAction("/sheet/finance?tab=reconciliation&dlg=recon").title).toBe("Sign a reconciliation");
+    expect(stepUpAction("/sheet/finance?tab=payments&dlg=refund").title).toBe("Finish what you were doing");
+    expect(stepUpAction(undefined).title).toBe("Finish what you were doing");
+  });
+
+  it("shows the card for the action, never the export card for another action", () => {
+    const next = "/sheet/finance?tab=reconciliation";
+    const html = renderToStaticMarkup(<TwoStepMarkup activeStep={6} stepUpLead={stepUpLead(next)} stepUpAction={stepUpAction(next)} />);
+    expect(html).toContain("<b style=\"font-weight:500\">Sign a reconciliation</b>");
+    expect(html).toContain("sprite.svg#i-bank");
+    expect(html).not.toContain("Export a client file");
+    // The Designer's card stays the default.
+    expect(renderToStaticMarkup(<TwoStepMarkup activeStep={6} />)).toContain("Export a client file");
   });
 });
