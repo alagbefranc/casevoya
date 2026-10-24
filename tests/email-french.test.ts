@@ -12,7 +12,7 @@
  *   was not re-drafted (node scripts/i18n/draft-email-fr.mjs --check reports the same thing).
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { EMAIL_TEMPLATES, type EmailContexts, type TemplateId } from "@/modules/email/designs/catalog";
+import { EMAIL_TEMPLATES, renderTemplate, type EmailContexts, type TemplateId } from "@/modules/email/designs/catalog";
 import { chooseEmailLanguage, frenchApproved, frenchBlocker } from "@/modules/email/designs/french";
 import { renderCopy } from "@/modules/email/designs/layout";
 import {
@@ -156,7 +156,8 @@ describe("localized builders", () => {
 
   it.each(CATALOGUED)("%s in English equals the approved English builder in every branch", (id) => {
     for (const context of VARIANTS[id]) {
-      const english = (EMAIL_TEMPLATES[id].build as (c: unknown, o: string) => unknown)(context, ORIGIN);
+      // renderTemplate: the build plus its English header tagline (ORG-01).
+      const english = renderTemplate(id as TemplateId, context as never, ORIGIN);
       expect(buildLocalized(id, "en", context as never, ORIGIN), JSON.stringify(context)).toEqual(english);
     }
   });

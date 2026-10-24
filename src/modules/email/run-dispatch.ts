@@ -63,6 +63,12 @@ export async function runEmailDispatch(limit = 20) {
         const record = asRecord(data);
         return Object.fromEntries(Object.entries(record).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
       },
+      async brands(deliveryIds) {
+        const { data, error } = await supabase.rpc("email_delivery_brands", { p_delivery_ids: deliveryIds });
+        if (error) throw new Error(error.message);
+        const record = asRecord(data);
+        return Object.fromEntries(Object.entries(record).map(([id, look]) => [id, asRecord(look)]));
+      },
       openLink(sealed, invitationId) {
         return openInviteLink(config.dispatchSecret, sealed, invitationId);
       },

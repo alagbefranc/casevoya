@@ -262,5 +262,40 @@ describe("email_delivery_locales", () => {
 
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
     await expectDbError(() => db.query(`select public.email_delivery_locales($1::uuid[])`, [[client]]), /permission denied|worker role required/);
+
+    // ORG-01: someone with no stored language (a new client) gets the firm's default; a stored
+    // choice still wins.
+    await asMaintenance(db);
+    await db.query(`update public.organizations set default_locale = 'fr-CA' where id = $1`, [ctx.orgId]);
+    await db.query(`update public.person_contact_preferences set locale = 'en-CA' where person_id = $1`, [ctx.applicant]);
+    await asServiceRole(db);
+    const firmDefault = await db.query<{ result: Record<string, string> }>(`select public.email_delivery_locales($1::uuid[]) as result`, [[client, stranger]]);
+    expect(firmDefault.rows[0].result).toEqual({ [client]: "en-CA", [stranger]: "fr-CA" });
+  });
+});
+
+describe("email_delivery_brands", () => {
+  it("gives the worker each delivery's firm logo locator and colour, worker role only", async () => {
+    const ctx = await firm();
+    await asMaintenance(db);
+    const locator = `firm-logos/${ctx.orgId}/${randomUUID()}.png`;
+    await db.query(`update public.organizations set branding = jsonb_build_object('logo_locator', $2::text, 'accent', '#0A4B93') where id = $1`, [ctx.orgId, locator]);
+    const event = await db.query<{ id: string }>(
+      `insert into public.outbox_events (organization_id, aggregate_type, aggregate_id, event_type, payload, idempotency_key)
+       values ($1, 'document', $2, 'document.request_created', '{}'::jsonb, $3) returning id`,
+      [ctx.orgId, randomUUID(), `brand-${randomUUID()}`],
+    );
+    const delivery = (
+      await db.query<{ id: string }>(
+        `insert into public.email_deliveries (organization_id, outbox_event_id, recipient_email, template, context)
+         values ($1, $2, 'nobody@example.test', 'document_request', '{}'::jsonb) returning id`,
+        [ctx.orgId, event.rows[0].id],
+      )
+    ).rows[0].id;
+    await asServiceRole(db);
+    const brands = await db.query<{ result: Record<string, unknown> }>(`select public.email_delivery_brands($1::uuid[]) as result`, [[delivery]]);
+    expect(brands.rows[0].result).toEqual({ [delivery]: { organization_id: ctx.orgId, logo_locator: locator, accent: "#0A4B93" } });
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    await expectDbError(() => db.query(`select public.email_delivery_brands($1::uuid[])`, [[delivery]]), /permission denied|worker role required/);
   });
 });

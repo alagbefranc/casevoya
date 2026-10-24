@@ -11,6 +11,7 @@ import { PaymentsLive } from "./payments-live";
 import { WithdrawShare } from "./withdraw-share";
 import { PrintButton } from "./print-button";
 import type { ReceiptView } from "@/modules/finance/portal-receipt";
+import { accentInk } from "@/modules/firm-onboarding/firm-logo";
 import { HOME_CSS } from "./markup/portal";
 import { homeView, matterCards, type HomeView, type MatterCard } from "@/modules/portal/home-present";
 import type { PortalAgreements } from "@/modules/agreements/load";
@@ -78,9 +79,14 @@ function roleLabel(role: string | null | undefined): string {
   return text ? text[0].toUpperCase() + text.slice(1) : "";
 }
 
-function FirmLogo({ name, logo }: { name: string; logo: string | null }) {
+/**
+ * The firm's tile (ORG-01): its logo on white, or its initials on the firm colour (text in
+ * whichever of white or near-black reads). Buttons keep Casevoya's blue either way.
+ */
+function FirmLogo({ name, logo, accent }: { name: string; logo: string | null; accent: string | null }) {
+  const tint = !logo && accent ? { background: accent, color: accentInk(accent) } : undefined;
   return (
-    <span className="firmlogo">
+    <span className="firmlogo" style={tint}>
       {logo ? <img src={logo} alt="" width={22} height={22} /> : initials(name)}
     </span>
   );
@@ -100,6 +106,7 @@ export function LivePortal({
   unread,
   home,
   logo,
+  accent,
   matters,
   receipt,
   notices,
@@ -124,6 +131,8 @@ export function LivePortal({
   home?: HomeView | null;
   /** A short-lived link to the firm's logo, or null for its initials. */
   logo?: string | null;
+  /** The firm colour (#RRGGBB) for the initials tile, or null. */
+  accent?: string | null;
   /** The My matters cards (src/modules/portal/home-present.ts); built without tasks when not loaded. */
   matters?: MatterCard[] | null;
   /** The on-screen receipt (/portal/receipt?id=), or null when it can't be read. */
@@ -141,13 +150,13 @@ export function LivePortal({
       <style dangerouslySetInnerHTML={{ __html: page === "receipt" ? CHROME_CSS + RECEIPT_CSS : CHROME_CSS }} />
       <a className="sr" href="#main">Skip to content</a>
       <header className="mhead">
-        <span style={{ display: "flex", gap: 12, alignItems: "center" }}><FirmLogo name={viewer.organizationName} logo={logo ?? null} />{viewer.organizationName}</span>
+        <span style={{ display: "flex", gap: 12, alignItems: "center" }}><FirmLogo name={viewer.organizationName} logo={logo ?? null} accent={accent ?? null} />{viewer.organizationName}</span>
         <button aria-label="Open menu" aria-expanded="false" style={{ color: "#fff", padding: 8 }} id="mOpen">{icon("menu")}</button>
       </header>
       <div className="frame">
         <aside className="side" id="side" aria-label="Portal">
           <div className="brand" style={{ justifyContent: "flex-start", gap: 12, fontWeight: 500, color: "#fff", fontSize: 15 }}>
-            <FirmLogo name={viewer.organizationName} logo={logo ?? null} />
+            <FirmLogo name={viewer.organizationName} logo={logo ?? null} accent={accent ?? null} />
             {viewer.organizationName}
             <button id="mClose" aria-label="Close menu" style={{ marginLeft: "auto", color: "#8b8680" }}>{icon("close")}</button>
           </div>
