@@ -95,6 +95,7 @@ import { mountMessagingInputs, runAnnouncementSend, runTemplateApprove, runTempl
 import { mountDocOpen, mountDrafts, mountInboxFilters, mountRecordsCrumb } from "./records-acts";
 import { bindGovControls } from "./gov-acts";
 import { bindLetterControls } from "./letter-acts";
+import { bindSubmissionControls } from "./submission-acts";
 import {
   openRedaction,
   reopenComplianceDialog,
@@ -257,6 +258,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     bindGovControls(root, router, listen);
     // GOV-04: Record a government letter's issuer and task rows, and the issuer list.
     bindLetterControls(root, router, listen);
+    // The Submissions tab's checklist (GOV-01, GOV-03): `data-sub` controls.
+    bindSubmissionControls(root, router, listen);
     // Task ticks and the Task dialog, Confirm on a deadline, Change stage's label, checklist person chips.
     bindWorkControls(root, router, listen);
     // The Matters list: search and Mine together, its counts and no-match panel, Select all.

@@ -153,7 +153,8 @@ describe("government present: submissions (T036)", () => {
     expect(built.tab.records[0].action?.wire).toEqual({ "data-open": "dSubRcpt" });
     expect(built.dialogs.receipt?.wire).toMatchObject({ "data-gov": "receipt", "data-id": "h1" });
     const page = buildGovernmentPage(records({ handoffs: [unverified] }), ctx({ stage: "submitted" }));
-    expect(page.alert?.upload).toMatchObject({ "data-gov": "receipt-file", "data-id": "h1" });
+    // GOV-03: the confirmation needs its acknowledgement date, so the alert opens the receipt dialog.
+    expect(page.alert?.upload).toEqual({ "data-nav": "/sheet/matters/matter?tab=submissions&dlg=receipt" });
     expect(page.rows[0].status.label).toBe("Submission unverified");
     expect(JSON.stringify(page)).not.toMatch(/Submitted to government/);
   });

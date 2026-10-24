@@ -58,7 +58,14 @@ export type HandoffRow = {
   created_by: string | null;
   created_at: string;
   version: number;
+  /** GOV-03: the manifest pinned at release (20261025170000). */
+  manifest_sha256?: string | null;
+  manifest_file_count?: number | null;
+  manifest_pinned_at?: string | null;
 };
+
+/** GOV-01: the checklist's verdict for Record submission, and IRCC's official channel names. */
+export type SubmissionGate = { blocked: string[] | null; why: string | null; channelName?: (channel: string) => string };
 
 export type LetterRow = {
   id: string;
@@ -196,7 +203,7 @@ function latestSubmitted(handoffs: HandoffRow[]) {
 
 /* ------------------------------------------------------------ submissions */
 
-export function buildSubmissions(records: GovernmentRecords, ctx: GovernmentContext): { tab: MatterSubmissionsData; dialogs: GovDialogsData } {
+export function buildSubmissions(records: GovernmentRecords, ctx: GovernmentContext, gate?: SubmissionGate): { tab: MatterSubmissionsData; dialogs: GovDialogsData } {
   const open = latestOpen(records.handoffs);
   const submitted = latestSubmitted(records.handoffs);
   const current = open ?? submitted;
@@ -252,7 +259,10 @@ export function buildSubmissions(records: GovernmentRecords, ctx: GovernmentCont
 
   const submittedRow = (row: HandoffRow): SubmissionRecord => {
     const at = row.submitted_at ? whenFull(row.submitted_at, ctx.timezone, ctx.today) : "—";
-    const parts = [`Submitted ${at}`, `by ${ctx.memberName(row.submitted_by_membership_id)}`, `${channelLabel(row.channel)}`];
+    const parts = [`Submitted ${at}`, `by ${ctx.memberName(row.submitted_by_membership_id)}`, gate?.channelName ? gate.channelName(row.channel) : channelLabel(row.channel)];
+    if (row.manifest_sha256) {
+      parts.push(`manifest ${row.manifest_file_count ?? 0} ${row.manifest_file_count === 1 ? "file" : "files"}, ${shortHash(row.manifest_sha256)}`);
+    }
     if (row.status === "submission_verified") {
       parts.push(row.acknowledged_on ? `acknowledged ${dayMonth(row.acknowledged_on)}` : "receipt on file");
     } else {
@@ -277,7 +287,9 @@ export function buildSubmissions(records: GovernmentRecords, ctx: GovernmentCont
       badge: handoffBadge("cancelled"),
     }));
 
-  const record = open?.status === "authorized" && canSubmit ? { "data-open": "dSubRec" } : null;
+  // GOV-01: Record submission opens only when the database's checklist has nothing blocking.
+  const gatesClear = !gate || (gate.blocked !== null && gate.blocked.length === 0);
+  const record = open?.status === "authorized" && canSubmit && gatesClear ? { "data-open": "dSubRec" } : null;
   const start = !current && canPrepare ? { "data-open": "dSubPrep" } : null;
   // Why Record submission is not open yet, said on the disabled button.
   const recordWhy = record
@@ -286,7 +298,9 @@ export function buildSubmissions(records: GovernmentRecords, ctx: GovernmentCont
       ? "An owner, consultant or case manager records the submission."
       : open?.status === "awaiting_signoff"
         ? "Opens once a licensed consultant signs off the package."
-        : current
+        : open?.status === "authorized" && !gatesClear
+          ? (gate?.why ?? "The submission checklist couldn’t load, so Record submission stays closed. Reload the page to try again.")
+          : current
           ? null
           : "Start a submission handoff first. A licensed consultant signs it off, then the submission is recorded.";
   const tab: MatterSubmissionsData = { package: pkg, start, records: records_, record, recordWhy, earlier };
@@ -509,7 +523,8 @@ export function buildGovernmentPage(records: GovernmentRecords, ctx: GovernmentC
   if (submitted?.status === "submission_unverified") {
     alert = {
       copy: `A submission was recorded${submitted.submitted_at ? ` on ${dayMonth(isoDateInTimeZone(new Date(submitted.submitted_at), ctx.timezone))}` : ""}, but no confirmation is on file. Upload the confirmation to verify it.`,
-      upload: VERIFIERS.has(ctx.role) ? wire("receipt-file", ctx, { id: submitted.id, version: String(submitted.version) }) : { "data-nav": submissionsTab },
+      // GOV-03: the confirmation needs its acknowledgement date too, so both open the receipt dialog.
+      upload: { "data-nav": VERIFIERS.has(ctx.role) ? `${submissionsTab}&dlg=receipt` : submissionsTab },
       manual: { "data-nav": `${submissionsTab}&dlg=receipt` },
     };
   } else if (SUBMITTED_STAGES.has(ctx.stage) && !submitted) {
