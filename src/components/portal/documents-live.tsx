@@ -462,7 +462,14 @@ function RequestForm({
 }
 
 const UPLOAD_STEPS = ["Request", "Whose", "Add pages", "Check", "Send"] as const;
-const MAX_BYTES = 25 * 1024 * 1024;
+/** The 25 MB product default, when the firm's own limit wasn't read. */
+const DEFAULT_MAX_BYTES = 25 * 1024 * 1024;
+
+/** "25 MB", "30 MB", "2.5 MB". */
+export function limitText(bytes: number): string {
+  const mb = Math.round((bytes / 1024 / 1024) * 10) / 10;
+  return `${mb} MB`;
+}
 
 function bytes(size: number): string {
   return size >= 1024 * 1024 ? `${(size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`;
@@ -506,6 +513,7 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
   const [pending, start] = useTransition();
   const request = documents.requests.find((item) => item.id === requestId) ?? null;
   const cardFor = (id: string) => documents.cards.find((card) => card.requestId === id) ?? null;
+  const maxBytes = documents.maxBytes ?? DEFAULT_MAX_BYTES;
 
   if (documents.requests.length === 0 && !staff) {
     return (
@@ -521,8 +529,8 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
 
   const choose = (picked: File | null | undefined) => {
     if (!picked) return;
-    if (picked.size > MAX_BYTES) {
-      setMessage("That file is over 25 MB. Choose a smaller one.");
+    if (picked.size > maxBytes) {
+      setMessage(`That file is over ${limitText(maxBytes)}, your firm’s limit per file. Choose a smaller one.`);
       return;
     }
     setMessage("");
@@ -693,7 +701,7 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
               <label className="btn p"><Glyph name="camera" />Use camera<input type="file" className="sr" accept="image/*" capture="environment" onChange={(event) => choose(event.target.files?.[0])} /></label>
               <label className="btn"><Glyph name="paperclip" />{file ? "Choose another" : "Choose a file"}<input type="file" className="sr" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.docx,application/pdf,image/jpeg,image/png,image/heic" onChange={(event) => choose(event.target.files?.[0])} /></label>
             </div>
-            <small className="lbl">{file ? bytes(file.size) : <>{formatsText(request?.formats)} <span className="sep" aria-hidden="true" /> up to 25 MB</>}</small>
+            <small className="lbl">{file ? bytes(file.size) : <>{formatsText(request?.formats)} <span className="sep" aria-hidden="true" /> {`up to ${limitText(maxBytes)}`}</>}</small>
           </div>
         </section>
 

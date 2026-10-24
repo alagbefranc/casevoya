@@ -12,6 +12,7 @@ export function documentError(message: string): string {
   if (/say what the document is/i.test(message)) return "Say what the document is, in up to 200 characters.";
   if (/cannot be accepted/i.test(message)) return "A quarantined or unfinished file cannot be accepted.";
   if (/25 MB/i.test(message)) return "Files above 25 MB stay off until storage is validated.";
+  if (/above the upload limit/i.test(message)) return "That file is above your firm’s upload limit per file.";
   if (/format is not acceptable|do not match the filename/i.test(message)) {
     return "That file type is not accepted for this request.";
   }
