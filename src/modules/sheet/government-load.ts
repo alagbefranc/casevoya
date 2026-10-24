@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { isLicensedMembership, LICENCE_FACT_COLUMNS, type LicenceFacts } from "@/lib/tenant/roles";
 import { correspondenceLabel, handoffBadge } from "@/modules/government/present";
+import { NOT_CHECKED } from "@/modules/sheet/gov-status-present";
 import { loadSheetChrome, memberNames } from "@/modules/sheet/chrome-load";
 import { dayMonth, isoDate, localNow } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
@@ -17,9 +18,9 @@ import {
   type GovernmentRecords,
 } from "@/modules/sheet/government-present";
 import { governmentLabel, type SheetQuery } from "@/modules/sheet/present";
-import { loadLetterExtras } from "@/modules/sheet/letter-load";
 import { loadSubmissionChecklist } from "@/modules/sheet/matter-submissions-load";
 import { blockedWhy, type GateKey } from "@/modules/submissions/present";
+import { loadLetterExtras } from "@/modules/sheet/letter-load";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -30,20 +31,24 @@ const HANDOFF_COLUMNS =
   "id, package_label, package_sha256, channel, status, signoff_membership_id, signed_off_at, submitted_by_membership_id, external_reference, submitted_at, receipt_version_id, receipt_locator, acknowledged_on, verified_by_membership_id, verified_at, cancel_reason, cancelled_at, created_by, created_at, version, manifest_sha256, manifest_file_count, manifest_pinned_at";
 const LETTER_COLUMNS =
   "id, kind, channel, received_on, document_date, action_requested, stated_deadline, evidence_version_id, evidence_locator, verified_by_membership_id, verified_at, shared_with_client_at, created_by, created_at, version, issuer, issuer_id";
+const ESTIMATE_COLUMNS =
+  "id, source_url, application_type, estimate_text, checked_on, page_retrieved_at, snapshot_sha256, status, entered_by_membership_id, reviewed_by_membership_id, reviewed_at, created_at, version";
 const DECISION_COLUMNS =
   "id, correspondence_id, outcome, milestone, decided_on, authority_reasons, state, consultant_interpretation, next_steps, confirmed_by_membership_id, confirmed_at, created_by, created_at, version";
 
 /** Every government record on one matter, read as the signed-in member (row-level security decides). */
 export async function loadGovernmentRecords(supabase: Client, org: string, matterId: string): Promise<GovernmentRecords> {
-  const [handoffs, letters, decisions, checks, transitions, representation, requests, refs] = await Promise.all([
+  const [handoffs, letters, decisions, checks, transitions, representation, requests, refs, estimates] = await Promise.all([
     supabase.from("submission_handoffs").select(HANDOFF_COLUMNS).eq("organization_id", org).eq("matter_id", matterId).order("created_at", { ascending: false }).limit(20),
     supabase.from("government_correspondence").select(LETTER_COLUMNS).eq("organization_id", org).eq("matter_id", matterId).order("received_on", { ascending: false }).order("created_at", { ascending: false }).limit(100),
     supabase.from("decision_records").select(DECISION_COLUMNS).eq("organization_id", org).eq("matter_id", matterId).order("created_at", { ascending: false }).limit(20),
-    supabase.from("government_status_checks").select("note, checked_by_membership_id, checked_at").eq("organization_id", org).eq("matter_id", matterId).order("checked_at", { ascending: false }).limit(20),
+    supabase.from("government_status_checks").select("note, checked_by_membership_id, checked_at, correspondence_id").eq("organization_id", org).eq("matter_id", matterId).order("checked_at", { ascending: false }).limit(20),
     supabase.from("matter_stage_transitions").select("to_stage, actor_user_id, created_at").eq("organization_id", org).eq("matter_id", matterId).order("created_at", { ascending: false }).limit(10),
     supabase.from("representation_authorities").select("id").eq("organization_id", org).eq("matter_id", matterId).is("revoked_at", null).limit(1),
     supabase.from("document_requests").select("status, document_id").eq("organization_id", org).eq("matter_id", matterId).neq("status", "cancelled").limit(200),
     supabase.from("document_matter_refs").select("document_id").eq("organization_id", org).eq("matter_id", matterId).is("removed_at", null).limit(200),
+    // GOV-05: IRCC processing-time estimates entered on this matter (staff only).
+    supabase.from("government_processing_estimates").select(ESTIMATE_COLUMNS).eq("organization_id", org).eq("matter_id", matterId).in("status", ["pending_review", "approved"]).order("created_at", { ascending: false }).limit(10),
   ]);
   const letterRows = letters.data ?? [];
   const decisionRows = decisions.data ?? [];
@@ -89,6 +94,7 @@ export async function loadGovernmentRecords(supabase: Client, org: string, matte
     })),
     steps: steps?.data ?? [],
     checks: checks.data ?? [],
+    estimates: estimates.data ?? [],
     transitions: transitions.data ?? [],
     deadlines: (links?.data ?? []).map((row) => ({ correspondence_id: row.correspondence_id, due_on: row.deadline_id ? (deadlineDue.get(row.deadline_id) ?? null) : null })),
     representation: (representation.data ?? []).length > 0,
@@ -193,6 +199,7 @@ function context(input: MatterGovernmentInput, people: { id: string; name: strin
     role: input.staff.role,
     licensed: input.licensed,
     representatives: people,
+    firmName: input.staff.organizationName,
   };
 }
 
@@ -239,10 +246,14 @@ export async function loadSheetGovernment(staff: SheetStaff, query: SheetQuery, 
     supabase.from("government_correspondence").select("matter_id, created_at, verified_at").eq("organization_id", org).order("created_at", { ascending: false }).limit(400),
   ]);
   const matterIds = [...new Set([...(handoffs.data ?? []).map((row) => row.matter_id), ...(letters.data ?? []).map((row) => row.matter_id)])].slice(0, 100);
-  const [matters, userName] = await Promise.all([
+  const [matters, userName, checks] = await Promise.all([
     matterIds.length ? supabase.from("matters").select("id, title, reference, government_status").eq("organization_id", org).in("id", matterIds) : null,
     userNames(supabase, org, members),
+    // GOV-05: "Last checked" is when a staff member last checked the official channel, not when a record was added.
+    matterIds.length ? supabase.from("government_status_checks").select("matter_id, checked_at").eq("organization_id", org).in("matter_id", matterIds).order("checked_at", { ascending: false }).limit(500) : null,
   ]);
+  const lastCheck = new Map<string, string>();
+  for (const row of checks?.data ?? []) if (!lastCheck.has(row.matter_id)) lastCheck.set(row.matter_id, row.checked_at);
   const matterById = new Map((matters?.data ?? []).map((row) => [row.id, row]));
   const rows: GovernmentRow[] = [];
   let unverified: string | null = null;
@@ -252,7 +263,6 @@ export async function loadSheetGovernment(staff: SheetStaff, query: SheetQuery, 
     const handoff = (handoffs.data ?? []).find((row) => row.matter_id === id);
     const matterLetters = (letters.data ?? []).filter((row) => row.matter_id === id);
     if (handoff?.status === "submission_unverified" && !unverified) unverified = id;
-    const latestAt = [handoff?.created_at, matterLetters[0]?.created_at].filter((value): value is string => Boolean(value)).sort().pop();
     const verifiedAt = [handoff?.verified_at, ...matterLetters.map((row) => row.verified_at)].filter((value): value is string => Boolean(value)).sort().pop();
     rows.push({
       item: matter.reference ? `${matter.title}, ${matter.reference}` : matter.title,
@@ -260,7 +270,7 @@ export async function loadSheetGovernment(staff: SheetStaff, query: SheetQuery, 
       recordedBy: handoff ? (handoff.submitted_by_membership_id ? (members.get(handoff.submitted_by_membership_id) ?? "Unassigned") : userName(handoff.created_by)) : "—",
       evidence: matterLetters.length ? `${matterLetters.length} ${matterLetters.length === 1 ? "letter" : "letters"} on record` : "No letters yet",
       verified: verifiedAt ? whenFull(verifiedAt, staff.timezone, today) : "—",
-      lastChecked: latestAt ? whenFull(latestAt, staff.timezone, today) : "—",
+      lastChecked: lastCheck.has(id) ? whenFull(lastCheck.get(id) as string, staff.timezone, today) : NOT_CHECKED,
       href: `/sheet/government?view=${id}`,
     });
   }

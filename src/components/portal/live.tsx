@@ -407,6 +407,23 @@ function LiveHome({ viewer, view, notices }: { viewer: PortalViewer; view: HomeV
           </p>
         </>
       ) : null}
+      {view.government?.length ? (
+        <div className="panel rv" style={{ "--i": "3", marginBottom: 24 } as CSSProperties} id="gov">
+          <h2>Updates from {viewer.organizationName}</h2>
+          <div className="rank">
+            {view.government.map((record, index) => (
+              <div key={index}>
+                {icon("info", "s")}
+                <span>
+                  <b style={{ fontWeight: 500, display: "block" }}>{record.title}</b>
+                  {record.lines.map((line) => <span key={line} style={{ display: "block", fontSize: 14 }}>{line}</span>)}
+                  <small style={{ display: "block", color: "var(--t2)", fontSize: 13, marginTop: 4 }}>{record.recorded}</small>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="panel rv" style={{ "--i": "3" } as CSSProperties}>
         <h2>Documents you’ve sent<span className="r" style={{ fontSize: 13, color: "var(--t2)" }}>Uploaded and accepted are shown separately</span></h2>
         <div className="split" style={{ "--n": "2" } as CSSProperties} id="docs">

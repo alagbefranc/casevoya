@@ -625,6 +625,17 @@ GOV-04 (gap #181), branch `feat/gov-correspondence`.
 * `public.record_government_letter(matter, kind, issuer_id, issuer, channel, document_date, received_on, action_requested, stated_deadline, evidence_version_id, tasks)`: calls the unchanged `app.record_government_correspondence` (every matter, role, sample-mode, date and evidence check), pins the approved issuer (same firm only), then for each `{title, owner: staff|client, owner_id, due_on}` (at most 10; due today or later in the firm's timezone) calls the unchanged `app.create_task` and links it in `correspondence_work_links`, all in one transaction. Audited `government.letter_tasks_created`.
 
 Tested in `tests/government-letters.rls.test.ts`.
+## Government status provenance (`20261025190000`, not applied on the live project)
+
+GOV-05, branch `feat/gov-status-provenance`.
+
+* `government_status_checks.correspondence_id` (FK `(correspondence_id, organization_id)` to `government_correspondence`, indexed): the status a check was about; null is a check of the whole matter. The table stays append-only and audited.
+* `public.mark_government_checked(matter, correspondence)` (authenticated; staff on the matter, `app.gov_staff_roles`): records "Checked … No change." with the actor's membership; refuses a status from another matter. Audited `government.status_checked`.
+* `government_processing_estimates`: one row per estimate a staff member read on IRCC's processing-times page: `source_url` (allowlisted host, and the function requires `canada.ca`), `application_type`, `estimate_text` (as written, not parsed), `checked_on` (not after `app.firm_today`), `page_retrieved_at` + `snapshot_sha256` (both or neither; the server's fetch of the page), `status` (`pending_review`, `approved`, `rejected`, `superseded`), entered and reviewed by membership. Forced RLS; staff who can read the matter (`app.gov_staff_can_read`) select; no client access; entered facts immutable (trigger), updates only through the functions (`app.gov_guard_update`), never deleted. Never seeded.
+* `public.record_processing_estimate(matter, url, application_type, estimate, checked_on, retrieved_at, sha256)` (staff on the matter; sample-mode rule) and `public.review_processing_estimate(estimate, version, decision, note)` (licensed member via `app.gov_require_licensed`: recent step-up, no licence block; a note to reject; approving supersedes the matter's earlier approved estimate). Audited `government.estimate_entered` / `_approved` / `_rejected`.
+* No function redefined; `share_government_record` is reused unchanged.
+
+Tested in `tests/gov-status-provenance.rls.test.ts` and `tests/gov-status-provenance-present.test.tsx`.
 
 ## Known gaps (next tasks)
 
