@@ -5,8 +5,11 @@
  * and publication stay in the source-governance workflow (T013).
  *
  * Live-only addition: `data-nav` on New template (it opens the Agreements page's template
- * dialog, where firm templates are made).
+ * dialog, where firm templates are made). DOC-01, also live only: the Checklists tab shows the
+ * firm's checklist templates with New checklist, Edit, New version and Approve (`ChecklistsLive`).
  */
+import type { ChecklistsLiveData } from "@/modules/sheet/checklist-present";
+import { ChecklistsLive } from "./checklists-live";
 import { Empty, Icon, Pair } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
 
@@ -41,7 +44,8 @@ export type TemplatesData = {
   newTemplateLabel?: string;
   program: { rows: ProgramRow[]; note: string };
   messages: { rows: MessageRow[] };
-  checklists: { cards: ChecklistCard[] };
+  /** `live` (DOC-01): the firm's own checklist templates, with editing for staff who may. */
+  checklists: { cards: ChecklistCard[]; live?: ChecklistsLiveData };
   sources: { kpis: SourceKpi[]; rows: SourceRow[] };
   rule: RuleDetail | null;
 };
@@ -248,7 +252,16 @@ function Checklists({ data }: { data: TemplatesData }) {
           <p>{"Per-person and per-matter checklists generated from the program template and the intake answers."}</p>
         </div>
       </div>
-      {data.checklists.cards.length === 0 ? (
+      {data.checklists.live && (data.checklists.live.templates.length || data.checklists.live.edit) ? (
+        <>
+          {data.checklists.live.templates.length === 0 ? (
+            <div className={"panel rv"} style={i(1)}>
+              <Empty art={"templates-empty"} title={"No checklist templates yet"} copy={"Make the firm’s first checklist: what to ask for, from whom, and when it applies. A licensed consultant approves it before it reaches clients."} />
+            </div>
+          ) : null}
+          <ChecklistsLive data={data.checklists.live} />
+        </>
+      ) : data.checklists.cards.length === 0 ? (
         <div className={"panel rv"} style={i(1)}>
           <Empty art={"templates-empty"} title={"No checklist templates yet"} copy={"Checklists come with a reviewed program template. None is published for your firm yet."} />
         </div>

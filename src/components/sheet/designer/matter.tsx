@@ -9,6 +9,7 @@ import { Badge, type MatterBadge } from "./matters";
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair, Sep } from "./frame";
 import { PersonEditDialog, personEditProps, type PersonEditDialogData } from "./person-edit";
+import { ApplyChecklist, type ApplyChecklistData } from "./apply-checklist";
 import { PolicyMissingAlert } from "./portal-policies";
 import { MatterDecisionsLive, MatterSubmissions, type MatterDecisionsData, type MatterSubmissionsData } from "./matter-government";
 import { MatterDocumentReview, type MatterDocumentReviewData } from "./vo-doc-review";
@@ -1191,6 +1192,7 @@ export function MatterDocuments({
   vo,
   filter = false,
   request = false,
+  apply = null,
 }: {
   checklist: string | null;
   people: string[];
@@ -1200,6 +1202,8 @@ export function MatterDocuments({
   filter?: boolean;
   /** Live only: the empty state offers Request a document (the header's dialog). */
   request?: boolean;
+  /** Live only (DOC-01): Apply checklist, from the firm's approved checklists. */
+  apply?: ApplyChecklistData | null;
 }) {
   if (rows.length === 0) {
     return (
@@ -1211,12 +1215,18 @@ export function MatterDocuments({
               {"Request a document"}
             </button>
           ) : null}
+          {apply?.templates.length ? <ApplyChecklist data={apply} /> : null}
         </Empty>
       </Panel>
     );
   }
   return (
     <>
+      {apply?.templates.length ? (
+        <div className={"ph-act"}>
+          <ApplyChecklist data={apply} />
+        </div>
+      ) : null}
       <Panel>
         <h2>
           <Icon name={"document-scan"} />
@@ -1899,7 +1909,7 @@ export type MatterPageData = {
   people: { cards: MatterPersonCard[]; relationships: MatterRelationship[] };
   /** `vo`: Vo's reading of one document, in the Designer's review panel (`#ocr`). */
   /** `request` (live): the person may request documents, so the empty tab offers it (#dReq). */
-  documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[]; vo?: MatterDocumentReviewData | null; filter?: boolean; request?: boolean };
+  documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[]; vo?: MatterDocumentReviewData | null; filter?: boolean; request?: boolean; apply?: ApplyChecklistData | null };
   agreements: { rows: MatterAgreementRow[]; signing: MatterSigning | null; create?: string | null };
   /** Every upcoming deadline, soonest first. `record` and `add` offer Record a deadline and New task from the empty state. */
   tasks: { deadlines: MatterDeadline[]; tasks: MatterTaskRow[]; record?: boolean; add?: boolean };
@@ -1935,6 +1945,7 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
           vo={data.documents.vo}
           filter={data.documents.filter}
           request={data.documents.request}
+          apply={data.documents.apply}
         />
       );
     case "agreements":

@@ -59,3 +59,5 @@
 .dd-refs{list-style:none;padding:0;margin:0 0 12px;display:grid;gap:8px}.dd-refs li{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.fcard .states .btn{margin-left:auto}#dDocDetails .sub{margin:18px 0 8px}#dDocDetails .sub:first-of-type{margin-top:0}
 /* DOC-07: Originals we hold, each original's custody history and next steps (live only). */
 .cus{white-space:nowrap}.cus details{margin-bottom:6px}.cus summary{cursor:pointer;color:var(--blue,#0075de);font-size:13px}.cus ol{margin:6px 0 0;padding-left:18px;white-space:normal;font-size:13px;color:var(--t2)}.cus .btn{margin:0 6px 4px 0}
+/* DOC-01: firm checklist templates and Apply checklist (live only). */
+.ph-act{display:flex;justify-content:flex-end;margin:0 0 12px}.cl-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.cl-item{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:0 0 12px}.cl-item legend{font-weight:500;padding:0 6px}.cl-formats{display:flex;flex-wrap:wrap;gap:6px 14px}.cl-list{list-style:none;padding:0;margin:0 0 12px;display:grid;gap:6px}.cl-list .check{margin:0}.cl-none{color:var(--t2);font-size:14px;margin:0 0 12px}

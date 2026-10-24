@@ -468,6 +468,14 @@ function bytes(size: number): string {
   return size >= 1024 * 1024 ? `${(size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`;
 }
 
+const FORMAT_WORD: Record<string, string> = { pdf: "PDF", jpeg: "JPG", png: "PNG", heic: "HEIC", docx: "DOCX" };
+
+/** "PDF, JPG, PNG, HEIC or DOCX", or only the formats the chosen request accepts (DOC-01). */
+export function formatsText(formats: readonly string[] | undefined): string {
+  const words = (formats?.length ? formats : ["pdf", "jpeg", "png", "heic", "docx"]).map((format) => FORMAT_WORD[format] ?? format.toUpperCase());
+  return words.length > 1 ? `${words.slice(0, -1).join(", ")} or ${words.at(-1)}` : words[0];
+}
+
 function audienceLine(audience: string, person: string, self: boolean, firm: string): string {
   if (audience === "matter") return "Shared on the matter. People on it can see it.";
   if (audience === "staff") return `Only ${firm} can see it.`;
@@ -685,7 +693,7 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
               <label className="btn p"><Glyph name="camera" />Use camera<input type="file" className="sr" accept="image/*" capture="environment" onChange={(event) => choose(event.target.files?.[0])} /></label>
               <label className="btn"><Glyph name="paperclip" />{file ? "Choose another" : "Choose a file"}<input type="file" className="sr" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.docx,application/pdf,image/jpeg,image/png,image/heic" onChange={(event) => choose(event.target.files?.[0])} /></label>
             </div>
-            <small className="lbl">{file ? bytes(file.size) : <>PDF, JPG, PNG, HEIC or DOCX <span className="sep" aria-hidden="true" /> up to 25 MB</>}</small>
+            <small className="lbl">{file ? bytes(file.size) : <>{formatsText(request?.formats)} <span className="sep" aria-hidden="true" /> up to 25 MB</>}</small>
           </div>
         </section>
 
