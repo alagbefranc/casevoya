@@ -633,6 +633,32 @@ const BUILDERS: Builders = {
       brand: firmBrand(kit, context),
     });
   },
+  EX18(kit, context) {
+    const { t, origin } = kit;
+    const firmName = firm(kit, context);
+    return copy(kit, {
+      subject: t("subject", { firm_name: firmName }),
+      preheader: t("preheader"),
+      heading: t("heading"),
+      body: t("body", { firm_name: firmName }),
+      cta: cta(t("cta"), appLink(origin, PATHS.sheetPipeline)),
+      spot: "reminder",
+      brand: PLATFORM,
+    });
+  },
+  EX17(kit, context) {
+    const { t, origin } = kit;
+    const firmName = firm(kit, context);
+    return copy(kit, {
+      subject: t("subject", { firm_name: firmName }),
+      preheader: t("preheader"),
+      heading: t("heading"),
+      body: t("body", { firm_name: firmName }),
+      cta: cta(t("cta"), appLink(origin, PATHS.portal)),
+      spot: "reminder",
+      brand: firmBrand(kit, context),
+    });
+  },
   EX16(kit, context) {
     const { t } = kit;
     const firmName = firm(kit, context);

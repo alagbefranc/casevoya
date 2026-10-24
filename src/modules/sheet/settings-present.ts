@@ -179,6 +179,8 @@ export function securityData(input: {
   organizationId?: string;
   /** The firm's support access state (owner only). */
   support?: SupportState;
+  /** DOC-02: the per-file upload limit in force, and whether above 25 MB may be set yet. */
+  upload?: { bytes: number; largeAllowed: boolean } | null;
 }): SecurityData {
   const security = input.security;
   const known = security && security.length === input.members && security.every((row) => row.secondFactor || row.passkeys !== null);
@@ -207,6 +209,18 @@ export function securityData(input: {
     },
     { title: "Download audit", detail: "Every document download is logged", badge: { tone: "ok", label: "On" } },
   ];
+  let uploadLimit: SecurityData["uploadLimit"] = null;
+  if (input.upload) {
+    const mb = Math.round((input.upload.bytes / MB) * 10) / 10;
+    const max = input.upload.largeAllowed ? 100 : 25;
+    rows.push({
+      title: "Upload limit per file",
+      detail: `Each file can be up to ${mb} MB, checked on every upload. ${input.upload.largeAllowed ? "You can set up to 100 MB." : "Above 25 MB stays off until Casevoya has validated storage for larger files."}`,
+      badge: { tone: "gr", label: `${mb} MB` },
+      ...(input.owner && input.organizationId ? { action: { label: "Change limit", attrs: { "data-open": UPLOAD_LIMIT_DIALOG } } } : {}),
+    });
+    if (input.owner && input.organizationId) uploadLimit = { organizationId: input.organizationId, mb, max };
+  }
   if (input.owner && security && security.every((row) => row.activeSessions !== null)) {
     const open = security.reduce((sum, row) => sum + (row.activeSessions ?? 0), 0);
     const last = lastActive(security, input.timeZone);
@@ -231,7 +245,18 @@ export function securityData(input: {
       badge: input.events ? { tone: "chg", label: plural(input.events, "event", "events") } : { tone: "gr", label: "None" },
     });
   }
-  return { intro: "Staff sign-in, support access and session rules.", rows };
+  return { intro: "Staff sign-in, support access and session rules.", rows, uploadLimit };
+}
+
+const MB = 1024 * 1024;
+
+/** The Change limit dialog on the Security tab (DOC-02). */
+export const UPLOAD_LIMIT_DIALOG = "dUpLimit";
+
+/** The firm's upload limit as public.set_document_upload_limit and app.document_max_bytes keep it: null is the 25 MB default. */
+export function effectiveUploadLimit(stored: number | null, largeAllowed: boolean): number {
+  if (stored == null || (stored > 25 * MB && !largeAllowed)) return 25 * MB;
+  return Math.min(stored, 100 * MB);
 }
 
 /** The audit actions the Security tab counts. */

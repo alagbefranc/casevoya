@@ -14,7 +14,7 @@ export type TaskChip = { tone: TaskTone; label: string };
 
 export type InternalTaskRow = {
   href?: string;
-  /** Filter chip tokens: "mine", "overdue", "blocked", "high". */
+  /** Filter chip tokens: "mine", "overdue", "blocked", "high", and live "watching". */
   flags?: string[];
   title: string;
   matter: string;
@@ -75,6 +75,8 @@ export type TasksData = {
     alert: { title: string; detail: string; href: string } | null;
     rows: InternalTaskRow[];
     failed?: boolean;
+    /** Live only (OPS-01): the "Watching" chip, for tasks the viewer watches (`data-f` "watching"). */
+    watching?: boolean;
   };
   client?: { rows: ClientTaskRow[]; failed?: boolean };
   deadlines?: { rows: DeadlineRow[]; failed?: boolean };
@@ -83,6 +85,8 @@ export type TasksData = {
   edit?: TaskEditDialogData | null;
   /** Live only: false when the person's role can't create tasks (create_task refuses it). */
   canCreate?: boolean;
+  /** Live only (OPS-01): the header's "Escalate overdue" control, for an owner or consultant. */
+  escalate?: TaskWire | null;
 };
 
 const READ_FAILED = { title: "This list couldn’t load", copy: "Nothing was changed. Reload the page to try again." };
@@ -107,7 +111,18 @@ function Chip({ chip }: { chip: TaskChip }) {
 }
 
 /** The Tasks page's own top bar and its tab strip. */
-export function TasksHeader({ tab, counts, canCreate = true }: { tab: TasksTab; counts: TasksData["counts"]; canCreate?: boolean }) {
+export function TasksHeader({
+  tab,
+  counts,
+  canCreate = true,
+  escalate = null,
+}: {
+  tab: TasksTab;
+  counts: TasksData["counts"];
+  canCreate?: boolean;
+  /** Live only (OPS-01): "Escalate overdue" (public.escalate_overdue_work), for an owner or consultant. */
+  escalate?: TaskWire | null;
+}) {
   const tabs: [TasksTab, string][] = [
     ["internal", "Internal"],
     ["client", "Client tasks"],
@@ -131,6 +146,12 @@ export function TasksHeader({ tab, counts, canCreate = true }: { tab: TasksTab; 
         <span className={"pill"}>{`${counts.open} open`}</span>
         <span className={"pill"}>{`${counts.escalated} escalated`}</span>
         <span className={"acts"}>
+          {escalate ? (
+            <button className={"btn s sm"} {...escalate}>
+              <Icon name={"alarm"} cls={"ic s"} />
+              {"Escalate overdue"}
+            </button>
+          ) : null}
           {canCreate ? (
             <button className={"btn p sm"} data-dlg={"dlgTask"} data-fpd={"1"}>
               <Icon name={"plus"} cls={"ic s"} />
@@ -217,6 +238,11 @@ function Internal({ data }: { data: NonNullable<TasksData["internal"]> }) {
         <button className={"fchip"} aria-pressed={"false"}>
           {"Blocked"}
         </button>
+        {data.watching ? (
+          <button className={"fchip"} aria-pressed={"false"}>
+            {"Watching"}
+          </button>
+        ) : null}
         <button className={"fchip"} aria-pressed={"false"}>
           {"High priority"}
         </button>
@@ -453,7 +479,117 @@ export type TaskEditDialogData = {
   owners: { value: string; label: string }[];
   /** False when the person's role can't reassign (reassign_task: owner, consultant, case manager). */
   reassign?: boolean;
+  /** OPS-01: the due timezones offered (the firm's first among Canada's). */
+  zones?: string[];
 };
+
+const ROW = { display: "flex", gap: "8px", alignItems: "center", marginTop: "6px" } as const;
+
+/**
+ * Live only (OPS-01): the Task dialog's detail, in the Designer's `.fld` / `.inp` / `.sel` / `.ta`
+ * and `.li` / `.ck` parts. The lists are filled when the dialog opens (work-acts reads the task
+ * through loadTaskDetail); watchers, depends on, checklist and blocker save as they change, the
+ * rest with Save. The database decides each change.
+ */
+function TaskDetailFields({ zones }: { zones: string[] }) {
+  return (
+    <div id={"teX"} data-task-detail={"1"}>
+      <p className={"hint"} id={"teXL"} aria-live={"polite"}>
+        {"Loading the task’s detail…"}
+      </p>
+      <div className={"fld"}>
+        <label htmlFor={"teTm"}>{"Due time"}</label>
+        <small className={"hint"} id={"teTm-h"}>
+          {"Optional. In the due timezone below; it needs a due date."}
+        </small>
+        <input className={"inp"} id={"teTm"} type={"time"} aria-describedby={"teTm-h"} />
+      </div>
+      <div className={"fld"}>
+        <label htmlFor={"teZ"}>{"Due timezone"}</label>
+        <select className={"sel"} id={"teZ"}>
+          {zones.map((zone) => (
+            <option key={zone} value={zone}>
+              {zone.replace(/_/g, " ")}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className={"fld"}>
+        <label htmlFor={"teE"}>{"Estimate (minutes)"}</label>
+        <input className={"inp"} id={"teE"} type={"number"} min={0} max={100000} step={5} inputMode={"numeric"} />
+      </div>
+      <div className={"fld"}>
+        <label htmlFor={"teR"}>{"Repeats"}</label>
+        <small className={"hint"} id={"teR-h"}>
+          {"Marking it done creates the next one, due a week or a month later on the firm’s calendar."}
+        </small>
+        <select className={"sel"} id={"teR"} aria-describedby={"teR-h"}>
+          <option value={""}>{"Does not repeat"}</option>
+          <option value={"weekly"}>{"Weekly"}</option>
+          <option value={"monthly"}>{"Monthly"}</option>
+        </select>
+      </div>
+      <div className={"fld"}>
+        <label htmlFor={"teWS"}>{"Watchers"}</label>
+        <small className={"hint"} id={"teW-h"}>
+          {"Watchers get the same in-app notifications as the owner when its status changes."}
+        </small>
+        <div id={"teW"}></div>
+        <div style={ROW}>
+          <select className={"sel"} id={"teWS"} aria-describedby={"teW-h"}></select>
+          <button className={"btn s sm"} type={"button"} data-task-watch={"add"}>
+            {"Add"}
+          </button>
+        </div>
+      </div>
+      <div className={"fld"}>
+        <label htmlFor={"tePS"}>{"Depends on"}</label>
+        <small className={"hint"} id={"teP-h"}>
+          {"Another open task on the same matter. This one can’t be marked done until those are done."}
+        </small>
+        <div id={"teP"}></div>
+        <div style={ROW}>
+          <select className={"sel"} id={"tePS"} aria-describedby={"teP-h"}></select>
+          <button className={"btn s sm"} type={"button"} data-task-dep={"add"}>
+            {"Add"}
+          </button>
+        </div>
+      </div>
+      <div className={"fld"}>
+        <label htmlFor={"teKI"}>{"Checklist"}</label>
+        <small className={"hint"} id={"teKP"} aria-live={"polite"}>
+          {"No items yet"}
+        </small>
+        <div id={"teK"}></div>
+        <div style={ROW}>
+          <input className={"inp"} id={"teKI"} type={"text"} autoComplete={"off"} maxLength={200} aria-describedby={"teKP"} />
+          <button className={"btn s sm"} type={"button"} data-task-check={"add"}>
+            {"Add"}
+          </button>
+        </div>
+      </div>
+      <div className={"fld"}>
+        <label htmlFor={"teB"}>{"Blocker"}</label>
+        <small className={"hint"} id={"teBR"}>
+          {"Not blocked."}
+        </small>
+        <textarea className={"ta"} id={"teB"} rows={2} maxLength={500} aria-describedby={"teBR"}></textarea>
+        <div style={ROW}>
+          <button className={"btn s sm"} type={"button"} data-task-block={"set"}>
+            {"Mark blocked"}
+          </button>
+          <button className={"btn s sm"} type={"button"} data-task-block={"clear"} hidden>
+            {"Clear blocker"}
+          </button>
+        </div>
+      </div>
+      <div className={"fld"}>
+        <label>{"History"}</label>
+        <div id={"teH"}></div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Live only: one task's controls (title, due date, owner, Mark done). The Designer has no task
@@ -504,6 +640,7 @@ export function TaskEditDialog({ data }: { data: TaskEditDialogData }) {
         <p className={"hint"} id={"teC"} hidden>
           {"A client task stays with the client it was asked of."}
         </p>
+        <TaskDetailFields zones={data.zones ?? [data.timezone]} />
       </div>
       <div className={"df"}>
         <button className={"btn"} data-close={"dTask"}>

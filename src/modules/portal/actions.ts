@@ -101,3 +101,11 @@ export async function createInvoicePayment(input: { organizationId: string; invo
     return { error: "Stripe didn’t answer. Nothing was charged; try again." };
   }
 }
+
+/** ORG-06: hides one of the signed-in client's own portal notices (public.dismiss_portal_notice). */
+export async function dismissPortalNotice(input: { organizationId: string; noticeId: string }): Promise<{ ok: true } | { error: string }> {
+  if (!isUuid(input.organizationId) || !isUuid(input.noticeId)) return { error: "That notice couldn’t be found." };
+  const supabase = await createClient({ organizationId: input.organizationId });
+  const { error } = await supabase.rpc("dismiss_portal_notice", { p_notice_id: input.noticeId });
+  return error ? { error: "That notice couldn’t be dismissed. Try again." } : { ok: true };
+}

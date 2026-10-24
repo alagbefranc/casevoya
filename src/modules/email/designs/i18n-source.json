@@ -319,5 +319,19 @@
     "heading": "There’s an update on your file",
     "body": "{firm_name} has an update for you. For your privacy, the details are in your portal.",
     "cta": "Open your portal"
+  },
+  "EX17": {
+    "subject": "An update on your file from {firm_name}",
+    "preheader": "Your consultant has changed. See who in your portal.",
+    "heading": "Your consultant has changed",
+    "body": "A different consultant at {firm_name} is now responsible for your file, and your file stays with {firm_name}. For your privacy, their name is in your portal, along with anything you may need to sign. If you have questions or don't agree with this change, contact {firm_name}.",
+    "cta": "Open your portal"
+  },
+  "EX18": {
+    "subject": "New enquiry for {firm_name}",
+    "preheader": "Open the Pipeline in Casevoya to read it.",
+    "heading": "You have a new enquiry",
+    "body": "Someone sent {firm_name} an enquiry from your enquiry page or website form. For their privacy, the details are in the Pipeline.",
+    "cta": "Open the Pipeline"
   }
 }

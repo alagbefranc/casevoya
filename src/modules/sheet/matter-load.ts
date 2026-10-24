@@ -1,5 +1,7 @@
 import "server-only";
 import { loadMatterMessages } from "@/modules/messages/load";
+import { emailRuntimeConfig } from "@/lib/email/env";
+import { matterInboundAddress, timelineEmailEvents } from "@/modules/sheet/inbound-present";
 import { loadVoComposer } from "@/modules/sheet/vo-load";
 import { loadVoReadingPanel } from "@/modules/sheet/vo-doc-load";
 import {
@@ -21,6 +23,7 @@ import type { MatterBadge } from "@/components/sheet/designer/matters";
 import { createClient } from "@/lib/supabase/server";
 import { staffPerson } from "@/modules/sheet/avatar";
 import { todayIso } from "@/modules/sheet/birth-date";
+import { consultantDialog } from "@/modules/sheet/consultant-change";
 import { isUuid } from "@/lib/tenant/context";
 import { isLicensedMembership, LICENCE_FACT_COLUMNS } from "@/lib/tenant/roles";
 import { loadSheetChrome, memberNames } from "@/modules/sheet/chrome-load";
@@ -55,6 +58,7 @@ import {
 import { governmentBadge, programLabel } from "@/modules/sheet/matters-present";
 import { deadlineConfirmable, TASK_STAFF_ROLES, taskManageWire } from "@/modules/sheet/tasks-present";
 import { clientOptions, dependsOnOptions, matterOptions, staffOptions } from "@/modules/sheet/new-task";
+import { checklistPart, estimateLabel, recurrencePart, zoneOptions } from "@/modules/sheet/task-detail";
 import { personHref } from "@/modules/sheet/clients-present";
 import { loadMatterBilling } from "@/modules/sheet/matter-billing-load";
 import { agreementViewHref } from "@/modules/sheet/agreements-views-present";
@@ -77,6 +81,7 @@ import { missingPolicies } from "@/modules/portal-policies/defaults";
 import { loadCurrentPolicies } from "@/modules/portal-policies/load";
 import { loadClosurePanel } from "@/modules/sheet/closure-load";
 import { loadMatterIntake } from "@/modules/sheet/matter-intake-load";
+import { loadPersonHistory } from "@/modules/sheet/person-history-load";
 import { docRequestPersonLabel, mayRequestDocuments } from "@/modules/sheet/doc-request";
 import {
   governmentLabel,
@@ -89,6 +94,9 @@ import {
   stageLabel,
   type SheetQuery,
 } from "@/modules/sheet/present";
+
+/** Who may change a matter's responsible consultant (app.assign_responsible_consultant). */
+const CONSULTANT_CHANGERS = new Set(["firm_owner", "licensed_consultant", "case_manager"]);
 
 /** Who can send an agreement (send_agreement): the Agreements page offers New agreement to the same roles. */
 const AGREEMENT_SEND_ROLES = new Set(["firm_owner", "licensed_consultant", "case_manager"]);
@@ -125,7 +133,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     supabase.from("matter_participants").select("person_id, membership_id, role").eq("organization_id", org).eq("matter_id", matter.id),
     supabase
       .from("tasks")
-      .select("id, title, audience, status, due_on, owner_membership_id, owner_person_id, blocker_note, version")
+      .select("id, title, audience, status, due_on, owner_membership_id, owner_person_id, blocker_note, checklist, recurrence, estimated_minutes, version")
       .eq("organization_id", org)
       .eq("matter_id", matter.id)
       .order("due_on", { ascending: true, nullsFirst: false })
@@ -486,6 +494,8 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
           firstName(owner),
           ...(row.status === "blocked" && row.blocker_note ? [`blocked by ${row.blocker_note}`] : []),
           ...(due ? [due] : []),
+          // OPS-01: checklist progress, estimate and repeat, when set.
+          ...[checklistPart(row.checklist), estimateLabel(row.estimated_minutes), recurrencePart(row.recurrence)].filter((part): part is string => Boolean(part)),
         ],
         badge: taskRowBadge(row.status, row.due_on, today),
         owner: row.owner_membership_id ? staffPerson(owner) : { name: owner },
@@ -549,6 +559,10 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     .limit(1)
     .maybeSingle();
   if (pinned.data) rbar.note = { text: pinned.data.body, parts: ["Staff only", firstName(memberName(pinned.data.author_membership_id))] };
+  // OPS-06: the matter's inbound address (its plus-tag is made on first use). The database checks
+  // the caller can read the matter; a refusal just leaves the card out.
+  const inbound = await supabase.rpc("matter_inbound_address", { p_matter_id: matterId, p_domain: emailRuntimeConfig().inboundDomain });
+  rbar.inbound = inbound.error ? null : matterInboundAddress(inbound.data);
 
   const hold = matter.on_hold
     ? {
@@ -635,6 +649,20 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
         }
       : null,
   };
+  // ORG-06: Change consultant, from the responsible consultant's card, for staff who may assign one
+  // (public.change_responsible_consultant decides). It lists who will be told before saving.
+  if (wire && matter.responsible_consultant_membership_id && matter.stage !== "closed" && CONSULTANT_CHANGERS.has(staff.role)) {
+    const [credentials, audience] = await Promise.all([
+      supabase.from("consultant_credentials").select("membership_id").eq("organization_id", org).eq("status", "verified").limit(200),
+      supabase.rpc("consultant_change_audience", { p_matter_id: matter.id }),
+    ]);
+    const active = new Set(holdStaff);
+    const consultants = [...new Set((credentials.data ?? []).map((row) => row.membership_id))].filter((id) => active.has(id)).map((id) => ({ id, name: memberName(id) }));
+    if (consultants.length && !audience.error) {
+      dialogs.consultant = consultantDialog({ consultants, current: matter.responsible_consultant_membership_id, audience: audience.data, sample: matter.is_sample });
+      for (const card of cards) if (card.pill.label === "Responsible") card.consultant = true;
+    }
+  }
   // New task for this matter, and the Task dialog its rows open (Tasks and deadlines tab).
   if (managesTasks && matter.stage !== "closed") {
     const staffOwners = staffOptions(holdStaff.map((id) => ({ id, name: memberName(id) })));
@@ -659,6 +687,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       timezone: staff.timezone,
       today,
       owners: staffOwners.flatMap((option) => (option.value ? [{ value: option.value, label: option.label }] : [])),
+      zones: zoneOptions(staff.timezone),
     };
   }
   // Submissions and Decisions (T036 to T039), read as this member like everything above.
@@ -693,7 +722,26 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       events,
       eventsOwnerOnly: staff.role !== "firm_owner",
     },
-    people: { cards, relationships: relationRows },
+    people: {
+      cards,
+      relationships: relationRows,
+      // INT-05: read only for the People tab; row-level security returns nothing to anyone who can't write the person.
+      history:
+        tab === "people"
+          ? await loadPersonHistory(supabase, {
+              organizationId: org,
+              role: staff.role,
+              timezone: staff.timezone,
+              today,
+              people: ordered
+                .filter((row, index) => row.person_id && ordered.findIndex((other) => other.person_id === row.person_id) === index)
+                .flatMap((row) => {
+                  const found = person.get(row.person_id as string);
+                  return found ? [{ id: found.id, name: found.display_name, dateOfBirth: found.date_of_birth, birthPrecision: found.birth_date_precision, editable: true }] : [];
+                }),
+            }).catch(() => [])
+          : undefined,
+    },
     documents: {
       checklist: program,
       people: [...new Set(checklist.map((row) => firstName(personName(row.personId))))].slice(0, 4),
@@ -742,6 +790,29 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
           : [];
       });
     page.intake = await loadMatterIntake(supabase, { staff, matter, people: intakePeople, today }).catch(() => null);
+  }
+
+  // OPS-06: the Timeline tab shows the matter's inbound email (RLS: staff who can read the matter).
+  if (tab === "timeline") {
+    const mail = await supabase
+      .from("inbound_emails")
+      .select("id, from_email, subject, triage_state, person_id, sender_verified, created_at")
+      .eq("organization_id", org)
+      .eq("matter_id", matter.id)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    const rows = mail.data ?? [];
+    const files = rows.length
+      ? await supabase.from("inbound_attachment_files").select("inbound_email_id").eq("organization_id", org).in("inbound_email_id", rows.map((row) => row.id))
+      : null;
+    const count = new Map<string, number>();
+    for (const file of files?.data ?? []) count.set(file.inbound_email_id, (count.get(file.inbound_email_id) ?? 0) + 1);
+    page.timeline = mail.error
+      ? null
+      : {
+          note: "Email received on this matter. Other changes are kept in the firm’s audit log; this tab doesn’t show them yet.",
+          events: timelineEmailEvents(rows, { timeZone: staff.timezone, today, personName: (id) => person.get(id)?.display_name ?? null, files: count }),
+        };
   }
 
   return { chrome, header, rbar, dialogs, page, countersign, governmentDialogs: government.dialogs };
