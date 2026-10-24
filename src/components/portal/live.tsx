@@ -280,7 +280,7 @@ function LiveHome({ viewer, view }: { viewer: PortalViewer; view: HomeView }) {
           <h2>{view.next.title}</h2>
           <p>{view.next.body}</p>
         </div>
-        <a className="btn" id="cont" href={view.next.href}>{view.next.action}</a>
+        <a className="btn" href={view.next.href}>{view.next.action}</a>
       </section>
       <div className="q4 panel rv" style={{ "--i": "2" } as CSSProperties}>
         <div><small>What do I need to do?</small><b>{view.strip.todo}</b></div>
@@ -343,7 +343,7 @@ function LiveHome({ viewer, view }: { viewer: PortalViewer; view: HomeView }) {
           {view.invoice ? (
             <div className="li">
               <div><b>{view.invoice.title}</b><small>{view.invoice.detail}</small></div>
-              <span className="r"><b className="num">{view.invoice.amount}</b><a className="btn p sm" id="pay" href={view.invoice.href}>Pay</a></span>
+              <span className="r"><b className="num">{view.invoice.amount}</b><a className="btn p sm" href={view.invoice.href}>Pay</a></span>
             </div>
           ) : (
             <div className="li"><div><b>Nothing to pay</b><small>Invoices from {viewer.organizationName} appear here.</small></div></div>

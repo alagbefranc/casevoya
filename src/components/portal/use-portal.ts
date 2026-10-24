@@ -66,18 +66,22 @@ export function usePortal(ref: RefObject<HTMLElement | null>, page: string) {
       }, listen);
     });
 
+    // The Designer's demo pages: their buttons go to fixed pages and the switches filter the DOM.
+    // Live pages render their own links and filter in React, so none of this runs there.
+    const demo = Boolean(root.querySelector(".statusbar .demo"));
+
     const help = root.querySelector<HTMLButtonElement>("button#help");
     help?.addEventListener("click", () => {
       location.href = "/help/client-home-screen";
     }, listen);
-    root.querySelector<HTMLButtonElement>("#cont")?.addEventListener("click", () => {
+    if (demo) root.querySelector<HTMLButtonElement>("#cont")?.addEventListener("click", () => {
       location.href = "/portal/upload";
     }, listen);
-    root.querySelector<HTMLButtonElement>("#pay")?.addEventListener("click", () => {
+    if (demo) root.querySelector<HTMLButtonElement>("#pay")?.addEventListener("click", () => {
       location.href = "/portal/pay";
     }, listen);
 
-    root.querySelectorAll<HTMLElement>(".seg[role=radiogroup], .seg[role=group]").forEach((group) => {
+    if (demo) root.querySelectorAll<HTMLElement>(".seg[role=radiogroup], .seg[role=group]").forEach((group) => {
       group.addEventListener("click", (event) => {
         const button = (event.target as HTMLElement).closest("button");
         if (!button || !group.contains(button)) return;
@@ -106,7 +110,6 @@ export function usePortal(ref: RefObject<HTMLElement | null>, page: string) {
       }, listen);
     });
 
-    const demo = Boolean(root.querySelector(".statusbar .demo"));
     const params = new URLSearchParams(location.search);
     const empty = EMPTY[page];
     if (demo && params.has("empty") && empty) {
