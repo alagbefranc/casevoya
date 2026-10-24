@@ -6,7 +6,8 @@ import { signInLocation } from "@/lib/auth/redirect";
 import { loadPortalAccess } from "@/modules/portal/load";
 import { loadSheetAccess } from "@/modules/sheet/load";
 import { CALL_REF } from "@/modules/video/present";
-import { readCall } from "@/modules/video/service";
+import { readCall, readGuestCall } from "@/modules/video/service";
+import { isManageToken, managePath } from "@/modules/scheduling/manage-present";
 
 export const metadata: Metadata = {
   title: "Video call · Casevoya",
@@ -18,10 +19,20 @@ export const metadata: Metadata = {
  * not a secret: nothing renders until the signed-in person is the booking's host, a firm owner
  * (Sheet, staff MFA) or the booking's own client (portal). Staff are checked first, then the portal.
  */
-async function Body({ params }: { params: Promise<{ ref: string }> }) {
+async function Body({ params, searchParams }: { params: Promise<{ ref: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { ref } = await params;
   const back = { href: "/portal/appointments", label: "Back to appointments" };
   if (!CALL_REF.test(ref)) return <CallScreen kind="refused" back={back} />;
+
+  // CRM-03: a booker without a portal, with the token from their Manage your booking link.
+  const raw = (await searchParams).t;
+  const guestToken = Array.isArray(raw) ? raw[0] : raw;
+  if (guestToken && isManageToken(guestToken)) {
+    const view = await readGuestCall(ref, guestToken);
+    const manage = { href: managePath(ref, guestToken), label: "Back to your booking" };
+    if ("error" in view || !view.organizationId) return <CallScreen kind="refused" back={manage} />;
+    return <CallScreen kind="call" organizationId={view.organizationId} callRef={ref} view={view} back={manage} guestToken={guestToken} />;
+  }
 
   // Both lookups at once; the staff answer wins when the person is both.
   const [sheet, portal] = await Promise.all([loadSheetAccess(), loadPortalAccess()]);
@@ -38,10 +49,10 @@ async function Body({ params }: { params: Promise<{ ref: string }> }) {
   return <CallScreen kind="refused" back={staffOrg ? staffBack : back} />;
 }
 
-export default function CallPage({ params }: { params: Promise<{ ref: string }> }) {
+export default function CallPage(props: { params: Promise<{ ref: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   return (
     <Suspense fallback={null}>
-      <Body params={params} />
+      <Body {...props} />
     </Suspense>
   );
 }
