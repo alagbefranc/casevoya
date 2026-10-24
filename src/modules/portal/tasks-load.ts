@@ -11,6 +11,8 @@ export type PortalTask = {
   blockerNote: string | null;
   /** The intake form this task asks for (intake_requests), opened from the task. */
   intakeResponseId: string | null;
+  /** The matter it belongs to, when it belongs to one. */
+  matterId?: string | null;
 };
 
 /**
@@ -23,7 +25,7 @@ export async function loadPortalTasks(viewer: PortalViewer): Promise<PortalTask[
   const supabase = await createClient({ organizationId: viewer.organizationId });
   const { data: tasks } = await supabase
     .from("tasks")
-    .select("id, title, status, due_on, completed_at, blocker_note")
+    .select("id, title, status, due_on, completed_at, blocker_note, matter_id")
     .eq("organization_id", viewer.organizationId)
     .eq("audience", "client")
     .eq("owner_person_id", personId)
@@ -44,6 +46,7 @@ export async function loadPortalTasks(viewer: PortalViewer): Promise<PortalTask[
     completedAt: row.completed_at,
     blockerNote: row.blocker_note,
     intakeResponseId: intake.get(row.id) ?? null,
+    matterId: row.matter_id,
   }));
 }
 

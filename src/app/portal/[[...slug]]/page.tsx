@@ -11,7 +11,7 @@ import { loadPortalInvoices } from "@/modules/finance/portal-load";
 import { isUuid } from "@/lib/tenant/context";
 import { countPortalUnread, loadPortalMessages } from "@/modules/messages/load";
 import { firmLogo } from "@/modules/firm-onboarding/public-logo";
-import { loadPortalHome } from "@/modules/portal/home-load";
+import { loadPortalHome, loadPortalMatters } from "@/modules/portal/home-load";
 import { loadPortalAccess } from "@/modules/portal/load";
 import { payStateFromQuery } from "@/modules/portal/pay";
 import { loadPortalAppointments } from "@/modules/scheduling/portal-load";
@@ -31,7 +31,7 @@ async function Body({
   searchParams,
 }: {
   params: Promise<{ slug?: string[] }>;
-  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[]; response?: string | string[]; field?: string | string[] }>;
+  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[]; response?: string | string[]; field?: string | string[]; matter?: string | string[] }>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const page = slug?.[0] ?? "home";
@@ -56,6 +56,10 @@ async function Body({
       </PortalScreen>
     );
   }
+  // My matters → Open: ?matter= puts that matter first, so Home and the pill show it.
+  const matterValue = Array.isArray(query.matter) ? query.matter[0] : query.matter;
+  const chosen = isUuid(matterValue) ? access.viewer.matters.find((matter) => matter.id === matterValue) : undefined;
+  if (chosen) access.viewer.matters = [chosen, ...access.viewer.matters.filter((matter) => matter !== chosen)];
   const documents = page === "documents" || page === "upload" ? await loadPortalDocuments(access.viewer) : null;
   const agreements = page === "agreements" ? await loadPortalAgreements(access.viewer) : null;
   const invoiceValue = Array.isArray(query.invoice) ? query.invoice[0] : query.invoice;
@@ -84,6 +88,7 @@ async function Body({
     firmLogo(access.viewer.organizationSlug),
     page === "home" ? loadPortalHome(access.viewer, null).catch(() => null) : null,
   ]);
+  const matters = page === "matters" ? await loadPortalMatters(access.viewer).catch(() => null) : null;
   return (
     <PortalScreen page={page}>
       <LivePortal
@@ -100,6 +105,7 @@ async function Body({
         unread={unread}
         home={home}
         logo={logo}
+        matters={matters}
       />
     </PortalScreen>
   );
@@ -110,7 +116,7 @@ export default function PortalPage({
   searchParams,
 }: {
   params: Promise<{ slug?: string[] }>;
-  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[]; response?: string | string[]; field?: string | string[] }>;
+  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[]; response?: string | string[]; field?: string | string[]; matter?: string | string[] }>;
 }) {
   return (
     <Suspense fallback={<PortalScreen page="home"><EmptyPortal /></PortalScreen>}>

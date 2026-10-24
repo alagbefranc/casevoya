@@ -10,7 +10,7 @@ import { PayLive } from "./pay-live";
 import { PaymentsLive } from "./payments-live";
 import { WithdrawShare } from "./withdraw-share";
 import { HOME_CSS } from "./markup/portal";
-import { homeView, type HomeView } from "@/modules/portal/home-present";
+import { homeView, matterCards, type HomeView, type MatterCard } from "@/modules/portal/home-present";
 import type { PortalAgreements } from "@/modules/agreements/load";
 import type { PortalDocuments } from "@/modules/documents/load";
 import type { PortalInvoices } from "@/modules/finance/portal-load";
@@ -83,6 +83,7 @@ export function LivePortal({
   unread,
   home,
   logo,
+  matters,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -104,6 +105,8 @@ export function LivePortal({
   home?: HomeView | null;
   /** A short-lived link to the firm's logo, or null for its initials. */
   logo?: string | null;
+  /** The My matters cards (src/modules/portal/home-present.ts); built without tasks when not loaded. */
+  matters?: MatterCard[] | null;
 }) {
   const name = viewer.person?.displayName ?? "Your account";
   const matter = viewer.matters[0];
@@ -163,7 +166,7 @@ export function LivePortal({
               </span>
               <span className="acts"><a className="btn s sm" href="/help/client-home-screen" id="help">{icon("help", "s")}Help</a></span>
             </header>
-            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} messages={messages} intake={intake ?? null} tasks={tasks ?? null} home={home ?? null} />
+            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} messages={messages} intake={intake ?? null} tasks={tasks ?? null} home={home ?? null} matters={matters ?? null} />
           </div>
         </main>
         <footer className="statusbar">
@@ -187,6 +190,7 @@ function LiveMain({
   intake,
   tasks,
   home,
+  matters,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -198,6 +202,7 @@ function LiveMain({
   intake: { data: PortalIntake; field: string | null } | null;
   tasks: PortalTask[] | null;
   home: HomeView | null;
+  matters: MatterCard[] | null;
 }) {
   // Messages: the chat view (redesigned as a chat view at the owner's request, 2026-10-18).
   if (page === "messages" && messages !== undefined) {
@@ -235,7 +240,9 @@ function LiveMain({
     return agreements ? <AgreementsLive viewer={viewer} agreements={agreements} /> : <Stub page={page} />;
   }
   if (page === "home") return <LiveHome viewer={viewer} view={home ?? emptyHome(viewer)} />;
-  if (page === "matters") return <MatterList viewer={viewer} home={false} />;
+  if (page === "matters") {
+    return <LiveMatters viewer={viewer} cards={matters ?? matterCards({ matters: viewer.matters, tasks: [], consultants: new Map(), timezone: viewer.timezone })} />;
+  }
   if (page === "family" || page === "rafael" || page === "olena") return <People viewer={viewer} />;
   if (page === "guardian") return <Guardian viewer={viewer} />;
   if (page === "account") return <Account viewer={viewer} />;
@@ -354,20 +361,54 @@ function LiveHome({ viewer, view }: { viewer: PortalViewer; view: HomeView }) {
   );
 }
 
-function MatterList({ viewer, home }: { viewer: PortalViewer; home: boolean }) {
+/** My matters, laid out as design/portal/pages/portal-matters.html: one card per matter. */
+function LiveMatters({ viewer, cards }: { viewer: PortalViewer; cards: MatterCard[] }) {
+  const step = { done: "d", current: "c", todo: "" } as const;
+  const others = viewer.people.filter((person) => person.id !== viewer.person?.id).length;
   return (
     <div id="pc">
-      <div className="ph"><h1 className="display">{home ? `Hi ${viewer.person?.displayName.split(" ")[0] ?? ""}.`.trim() : "My matters"}</h1>
-        <p>{home ? "Here’s what is open on your file." : "Applications your firm has opened for you."}</p>
+      <style dangerouslySetInnerHTML={{ __html: HOME_CSS }} />
+      <div className="ph pp-h rv" style={{ "--i": "0" } as CSSProperties}>
+        <div>
+          <h1 className="display">My matters</h1>
+          <p>Each matter is one application {viewer.organizationName} is working on for you. Pick one to see its next step.</p>
+        </div>
       </div>
-      {viewer.matters.length === 0 ? <Empty title="No matters yet" copy="When your firm opens an application, it appears here." /> : viewer.matters.map((matter) => (
-        <a className="mcard" key={matter.id} href="/portal/documents">
+      {cards.length === 0 ? <Empty title="No matters yet" copy="When your firm opens an application, it appears here." /> : null}
+      {cards.map((card, index) => (
+        <a className="mcard rv" style={{ "--i": String(index + 1) } as CSSProperties} href={card.href} key={card.id}>
           <div>
-            <h3>{matter.title}</h3>
-            <p className="lbl">{matter.onHold ? "On hold" : matter.stage}</p>
+            {card.label ? <span className="lbl">{card.label}</span> : null}
+            <h3>{card.title}</h3>
+            <p style={{ color: "var(--t2)", fontSize: 14, marginTop: 4 }}>{card.withLine}</p>
+            {card.steps ? (
+              <div className="steps">
+                {card.steps.map((item) => (
+                  <div key={item.label} className={step[item.state]}><span>{item.label}</span></div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
+            <span className={`bd ${card.badge.tone}`}><i></i>{card.badge.text}</span>
+            {card.consultant ? (
+              <span className="lbl" style={{ display: "flex", gap: 8, alignItems: "center" }}><span className="av" aria-hidden="true">{initials(card.consultant)}</span>{card.consultant}</span>
+            ) : null}
+            {card.note ? <span className="lbl">{card.note}</span> : null}
+            {card.closed ? null : <span className="btn p sm">Open</span>}
           </div>
         </a>
       ))}
+      {others > 0 ? (
+        <div className="alert info rv" style={{ "--i": String(cards.length + 1) } as CSSProperties}>
+          {icon("info")}
+          <div>
+            <b>Why some people see less</b>
+            Others on your file each have their own login. They see what they share with you, not your private records.{" "}
+            <a href="/portal/family" style={{ textDecoration: "underline" }}>See who’s on your file</a>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

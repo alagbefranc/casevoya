@@ -74,11 +74,16 @@ export type HomeInput = {
   messages: ChatData | null;
 };
 
+/** en-GB writes September "Sept"; the designs use three letters. */
+function sep(text: string): string {
+  return text.replace("Sept", "Sep");
+}
+
 /** "Tue 20 Oct" for a date-only value (no shift across time zones). */
 export function shortDay(isoDate: string): string {
   const date = new Date(`${isoDate.slice(0, 10)}T12:00:00Z`);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(date).replace(",", "");
+  return new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(date).replace(",", "").replace("Sept", "Sep");
 }
 
 function plural(count: number, one: string, many: string): string {
@@ -93,7 +98,7 @@ function messageWhen(at: string, now: Date, timeZone: string): string {
   if (day(date) === day(now)) {
     return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone }).format(date);
   }
-  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone }).format(date);
+  return sep(new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone }).format(date));
 }
 
 /** The stage's enum value (the viewer carries it with spaces, for display). */
@@ -114,7 +119,8 @@ function invoiceDue(invoice: PortalInvoice): number {
 /** What the client's Home shows, from their own records. */
 export function homeView(input: HomeInput): HomeView {
   const firstName = (input.personName ?? "").trim().split(/\s+/)[0] ?? "";
-  const open = input.tasks.filter((task) => task.status !== "done");
+  // Blocked tasks wait on the firm, so they aren't the client's to do.
+  const open = input.tasks.filter((task) => task.status === "open");
   const dated = open.filter((task) => task.dueOn).sort((a, b) => (a.dueOn ?? "").localeCompare(b.dueOn ?? ""));
   const first = dated[0] ?? open[0] ?? null;
   const needed = input.documents.filter((card) => card.needsYou);
@@ -212,4 +218,66 @@ export function homeView(input: HomeInput): HomeView {
         }
       : null,
   };
+}
+
+export type MatterCard = {
+  id: string;
+  label: string;
+  title: string;
+  withLine: string;
+  steps: HomeStep[] | null;
+  badge: { tone: "blue" | "unv" | "chg"; text: string };
+  consultant: string | null;
+  note: string | null;
+  href: string;
+  closed: boolean;
+};
+
+function longDay(iso: string, timeZone: string): string {
+  const date = new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return sep(new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: iso.length === 10 ? "UTC" : timeZone }).format(date));
+}
+
+function monthYear(isoDate: string): string {
+  const date = new Date(`${isoDate.slice(0, 10)}T12:00:00Z`);
+  if (Number.isNaN(date.getTime())) return "";
+  return sep(new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }).format(date));
+}
+
+/** "With Jordan Lee (sponsor) and Sam Lee (dependant)", or "Only you". */
+function withLine(people: { name: string; role: string; self: boolean }[]): string {
+  const others = people.filter((person) => !person.self);
+  if (!others.length) return "Only you";
+  const named = others.map((person) => `${person.name} (${person.role.replaceAll("_", " ")})`);
+  return `With ${named.length > 1 ? `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}` : named[0]}`;
+}
+
+/** The My matters cards: one per matter the client is on, open ones first. */
+export function matterCards(input: { matters: PortalMatter[]; tasks: PortalTask[]; consultants: Map<string, string | null>; timezone: string }): MatterCard[] {
+  const cards = input.matters.map((matter): MatterCard => {
+    const closed = stageKey(matter) === "closed";
+    const open = input.tasks.filter((task) => task.matterId === matter.id && task.status === "open").length;
+    const when = matter.openedAt ? `opened ${longDay(matter.openedAt, input.timezone)}` : "";
+    const consultant = input.consultants.get(matter.id) ?? null;
+    return {
+      id: matter.id,
+      label: [matter.reference, closed ? "closed" : when].filter(Boolean).join(" · "),
+      title: matter.title,
+      withLine: withLine(matter.people ?? []),
+      steps: closed ? null : stepsFor(matter),
+      badge: closed
+        ? { tone: "unv", text: "Closed" }
+        : matter.onHold
+          ? { tone: "chg", text: "On hold" }
+          : open
+            ? { tone: "blue", text: `${plural(open, "task", "tasks")} for you` }
+            : { tone: "unv", text: "Nothing for you yet" },
+      consultant: closed || !consultant ? null : `${consultant}, consultant`,
+      note: closed && matter.retentionOn ? `Records kept until ${monthYear(matter.retentionOn)}` : null,
+      href: closed ? "/portal/documents" : `/portal?matter=${matter.id}`,
+      closed,
+    };
+  });
+  return [...cards.filter((card) => !card.closed), ...cards.filter((card) => card.closed)];
 }

@@ -32,7 +32,7 @@ function doneLabel(iso: string, timeZone: string): string {
   }
 }
 
-export type TaskCard = { id: string; title: string; line: string; due: string | null; done: boolean; href: string | null; action: string | null };
+export type TaskCard = { id: string; title: string; line: string; due: string | null; done: boolean; href: string | null; action: string | null; by?: string | null };
 
 export function taskCards(tasks: readonly PortalTask[], firm: string, timeZone: string): { todo: TaskCard[]; waiting: TaskCard[]; done: TaskCard[] } {
   const card = (task: PortalTask): TaskCard => ({
@@ -52,6 +52,7 @@ export function taskCards(tasks: readonly PortalTask[], firm: string, timeZone: 
     done: task.status === "done",
     href: task.intakeResponseId ? `/portal/intake?response=${task.intakeResponseId}` : null,
     action: task.intakeResponseId ? (task.status === "done" ? "View" : "Resume") : null,
+    by: task.status === "open" ? `Requested by ${firm}` : null,
   });
   return {
     todo: tasks.filter((task) => task.status === "open").map(card),
@@ -77,6 +78,7 @@ export function TaskCardView({ card, index, mine }: { card: TaskCard; index: num
               {`Due ${card.due}`}
             </span>
           ) : null}
+          {card.by ? <span className="lbl">{card.by}</span> : null}
         </div>
       </div>
       <span className="r">
