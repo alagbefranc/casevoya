@@ -16,6 +16,7 @@ import source from "@/modules/email/designs/i18n-source.json";
 import drafts from "@/modules/email/designs/fr-drafts.json";
 import { PATHS, type EmailContexts, type TemplateId } from "@/modules/email/designs/catalog";
 import { appLink, cleanText, safeUrl, type Brand, type EmailCopy, type ShellText, type Spot } from "@/modules/email/designs/layout";
+import { TAGLINES } from "@/modules/email/designs/taglines";
 import {
   bookingRefOrNull,
   countOrNull,
@@ -754,7 +755,10 @@ export function buildLocalized<K extends LocalizedId>(
   drafted: DraftFile = FR_DRAFTS,
 ): EmailCopy {
   const kit: Kit = { t: translator(tableFor(lang, drafted), id), f: FORMATS[lang], lang, origin, drafted };
-  return (BUILDERS[id] as (kit: Kit, context: unknown) => EmailCopy)(kit, context);
+  const built = (BUILDERS[id] as (kit: Kit, context: unknown) => EmailCopy)(kit, context);
+  // English carries the same per-template tagline as catalog.ts; French keeps its shared one.
+  const tagline = lang === "en" ? TAGLINES[id] : undefined;
+  return tagline ? { ...built, tagline } : built;
 }
 
 /** The shell strings (header tagline, footers) in a language, for layout.ts. */
