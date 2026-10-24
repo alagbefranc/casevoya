@@ -604,6 +604,15 @@ PRD FIN-02 and FIN-13, test mode only.
 
 Tested in `tests/finance-stripe-disputes-credits.rls.test.ts` and `tests/finance-stripe-connect-credits.test.tsx`.
 
+## Stripe webhook: dispute before payment, refund failed after success (`20261025160000`, not applied on the live project)
+
+Found in the live test-mode run of FIN-13 (#214). `app.apply_stripe_reversal_event` copied from `20261025130000` with two changes:
+
+* A refund or dispute event whose payment has no row yet, or isn't succeeded (`requires_payment`, `processing`, `failed`), raises SQLSTATE 55000 "payment not applied yet; retry the event" while it is recent (Stripe's `created` within 24 hours). The transaction rolls back (no inbox row), the webhook answers 500 and Stripe retries; after `payment_intent.succeeded` the retry is recorded. Older events, or ones without `created`, are ignored or rejected as before; an amount above what a received payment took is still rejected.
+* A refund Stripe moves from `succeeded` to `failed` or `canceled` is reversed: `invoice_payments.refunded_cents` and `invoices.refunded_cents` go down by its amount, the invoice status is recomputed with `app.invoice_settled_status` (refunded goes back to paid or partially paid), `failure_reason` and `failed_at` are stored, the `refund_failed` task is made once, and it is audited `invoice.refund_reversed`. A linked client credit reopens through `invoices_client_credit`. Failed and canceled refunds stay final.
+
+Tested in `tests/finance-stripe-disputes-credits.rls.test.ts`, `tests/finance-refunds.rls.test.ts` and `tests/finance-refund-webhook.test.ts`.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.

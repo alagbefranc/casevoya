@@ -122,13 +122,25 @@ async function paidInvoice(f: Firm, amount = 113_000, matterId: string = f.matte
   return { invoiceId, paymentId: payment.rows[0].id, intent };
 }
 
-type Reversal = { type: string; object: string; intent: string; amount: number; status?: string | null; reason?: string | null; failure?: string | null; evidenceDue?: string | null; id?: string };
+type Reversal = {
+  type: string;
+  object: string;
+  intent: string;
+  amount: number;
+  status?: string | null;
+  reason?: string | null;
+  failure?: string | null;
+  evidenceDue?: string | null;
+  id?: string;
+  /** Stripe's `created` (Unix seconds); null by default, as for an event of unknown age. */
+  created?: number | null;
+};
 
 async function reversal(f: Firm, event: Reversal) {
   await asServiceRole(db);
   const result = await db.query<{ r: { outcome: string; refund_status?: string | null; dispute_status?: string | null } }>(
-    `select public.apply_stripe_reversal_event($1, $2, $3, $4, $5, null, $6, 'cad', $7, $8, $9, $10::timestamptz, null, null, false, '{}'::jsonb) as r`,
-    [event.id ?? eventId(), f.account, event.type, event.object, event.intent, event.amount, event.status ?? null, event.reason ?? null, event.failure ?? null, event.evidenceDue ?? null],
+    `select public.apply_stripe_reversal_event($1, $2, $3, $4, $5, null, $6, 'cad', $7, $8, $9, $10::timestamptz, null, $11, false, '{}'::jsonb) as r`,
+    [event.id ?? eventId(), f.account, event.type, event.object, event.intent, event.amount, event.status ?? null, event.reason ?? null, event.failure ?? null, event.evidenceDue ?? null, event.created ?? null],
   );
   return result.rows[0].r;
 }
@@ -402,5 +414,92 @@ describe("overpayments become a client credit (FIN-13)", () => {
     await asStepUp(b);
     expect((await db.query(`select * from public.client_credits where id = $1`, [credit.id])).rows).toHaveLength(0);
     await expectDbError(() => db.query(`select public.client_credit_refund_context($1)`, [credit.id]), /billing access denied/);
+  });
+});
+
+/** Now, as Stripe's `created` (Unix seconds). */
+const nowSeconds = () => Math.floor(Date.now() / 1000);
+
+describe("live test-mode fixes (#214, 20261025160000)", () => {
+  it("retries a dispute that arrives before its payment is applied, then records it once the payment is", async () => {
+    const f = await firm();
+    const invoiceId = await issue(f, 30_000);
+    const intent = intentId();
+    await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
+    await db.query(`select public.record_invoice_payment_intent($1, $2, $3, 30000, 'cad', 0, false)`, [invoiceId, intent, f.account]);
+    const dispute = disputeId();
+    const event = { id: eventId(), type: "charge.dispute.created", object: dispute, intent, amount: 30_000, status: "needs_response", reason: "fraudulent", evidenceDue: `${firmDay(10)}T15:00:00Z`, created: nowSeconds() };
+
+    // charge.dispute.created first, as Stripe sent it: refused as "not yet" (the webhook answers 500), nothing kept.
+    await expectDbError(() => reversal(f, event), /payment not applied yet/);
+    await asMaintenance(db);
+    expect((await db.query(`select 1 from public.invoice_disputes where dispute_id = $1`, [dispute])).rows).toHaveLength(0);
+    expect((await db.query(`select 1 from public.webhook_inbox where provider = 'stripe' and event_id = $1`, [event.id])).rows).toHaveLength(0);
+
+    // payment_intent.succeeded is applied; Stripe's retry of the same event records the dispute and its task.
+    expect((await paymentEvent(f, "payment_intent.succeeded", intent, 30_000, 30_000)).outcome).toBe("applied");
+    expect(await reversal(f, event)).toMatchObject({ outcome: "applied", dispute_status: "needs_response" });
+    expect(await reversal(f, event)).toMatchObject({ outcome: "duplicate" });
+    await asMaintenance(db);
+    const row = (await db.query<{ task_id: string | null; amount_cents: string }>(`select task_id, amount_cents from public.invoice_disputes where dispute_id = $1`, [dispute])).rows[0];
+    expect(Number(row.amount_cents)).toBe(30_000);
+    expect(row.task_id).toBeTruthy();
+  });
+
+  it("retries a recent refund or dispute event for a payment it doesn't know yet, and ignores an old one", async () => {
+    const f = await firm();
+    await expectDbError(() => reversal(f, { type: "charge.dispute.created", object: disputeId(), intent: intentId(), amount: 1_000, status: "needs_response", created: nowSeconds() }), /payment not applied yet/);
+    await expectDbError(() => reversal(f, { type: "refund.created", object: refundId(), intent: intentId(), amount: 1_000, status: "pending", created: nowSeconds() }), /payment not applied yet/);
+    expect(await reversal(f, { type: "charge.dispute.created", object: disputeId(), intent: intentId(), amount: 1_000, status: "needs_response", created: nowSeconds() - 2 * 86_400 })).toMatchObject({ outcome: "ignored" });
+    expect(await reversal(f, { type: "charge.dispute.created", object: disputeId(), intent: intentId(), amount: 1_000, status: "needs_response" })).toMatchObject({ outcome: "ignored" });
+  });
+
+  it("still rejects a dispute amount above what a received payment took", async () => {
+    const f = await firm();
+    const { intent } = await paidInvoice(f, 30_000);
+    expect(await reversal(f, { type: "charge.dispute.created", object: disputeId(), intent, amount: 30_001, status: "needs_response", created: nowSeconds() })).toMatchObject({ outcome: "rejected" });
+  });
+
+  it("reverses a refund Stripe fails after it succeeded: the money, the invoice status, the credit and one task", async () => {
+    const f = await firm();
+    // A full refund: the invoice goes refunded, then back to paid when Stripe fails it.
+    const full = await paidInvoice(f, 20_000);
+    const { id: fullRow, refund: fullRefund } = await requestRefund(f, full.paymentId, 20_000);
+    expect((await reversal(f, { type: "refund.updated", object: fullRefund, intent: full.intent, amount: 20_000, status: "succeeded" })).refund_status).toBe("succeeded");
+    expect(await invoiceMoney(full.invoiceId)).toEqual({ status: "refunded", paid: 20_000 });
+    const failed = await reversal(f, { type: "refund.failed", object: fullRefund, intent: full.intent, amount: 20_000, status: "failed", failure: "expired_or_canceled_card", created: nowSeconds() });
+    expect(failed).toMatchObject({ outcome: "applied", refund_status: "failed" });
+    await asMaintenance(db);
+    const invoice = (await db.query<{ status: string; refunded_cents: string }>(`select status, refunded_cents from public.invoices where id = $1`, [full.invoiceId])).rows[0];
+    expect(invoice).toMatchObject({ status: "paid" });
+    expect(Number(invoice.refunded_cents)).toBe(0);
+    const payment = (await db.query<{ refunded_cents: string }>(`select refunded_cents from public.invoice_payments where id = $1`, [full.paymentId])).rows[0];
+    expect(Number(payment.refunded_cents)).toBe(0);
+    const refund = (await db.query<{ status: string; failure_reason: string; task_id: string; number: string }>(`select * from public.invoice_refunds where id = $1`, [fullRow])).rows[0];
+    expect(refund).toMatchObject({ status: "failed", failure_reason: "expired_or_canceled_card" });
+    const task = (await db.query<{ title: string; task_key: string }>(`select title, task_key from public.tasks where id = $1`, [refund.task_id])).rows[0];
+    expect(task.task_key).toBe("refund_failed");
+    expect(task.title).toContain(`Refund ${refund.number} failed`);
+    expect((await db.query(`select 1 from public.audit_log where object_id = $1 and action = 'invoice.refund_reversed'`, [fullRow])).rows).toHaveLength(1);
+    // Redelivery and refund.updated with the same status change nothing and make no second task.
+    expect(await reversal(f, { type: "refund.updated", object: fullRefund, intent: full.intent, amount: 20_000, status: "failed", failure: "expired_or_canceled_card" })).toMatchObject({ outcome: "unchanged", refund_status: "failed" });
+    await asMaintenance(db);
+    expect(Number((await db.query<{ n: string }>(`select count(*) as n from public.tasks where organization_id = $1 and task_key = 'refund_failed'`, [f.orgId])).rows[0].n)).toBe(1);
+    // The payment can be refunded again.
+    await asStepUp(f);
+    expect((await db.query<{ c: { refundable: number } }>(`select public.invoice_refund_context($1) as c`, [full.paymentId])).rows[0].c.refundable).toBe(20_000);
+
+    // A credit refunded to the card: the failure puts the money back on the credit.
+    const over = await paidInvoice(f, 100_000);
+    await overpay(over.invoiceId, 5_000);
+    const credit = await creditOf(over.invoiceId);
+    const { id: creditRefundRow, refund: creditRefund } = await requestRefund(f, over.paymentId, 3_000);
+    await asStepUp(f);
+    await db.query(`select public.link_client_credit_refund($1, $2)`, [credit.id, creditRefundRow]);
+    expect((await reversal(f, { type: "refund.updated", object: creditRefund, intent: over.intent, amount: 3_000, status: "succeeded" })).refund_status).toBe("succeeded");
+    expect(Number((await creditOf(over.invoiceId)).available)).toBe(2_000);
+    expect((await reversal(f, { type: "refund.failed", object: creditRefund, intent: over.intent, amount: 3_000, status: "failed", failure: "lost_or_stolen_card" })).outcome).toBe("applied");
+    expect(await creditOf(over.invoiceId)).toMatchObject({ status: "open" });
+    expect(Number((await creditOf(over.invoiceId)).available)).toBe(5_000);
   });
 });
