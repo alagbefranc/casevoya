@@ -228,8 +228,14 @@ function LiveMain({
   if (page === "messages" && messages !== undefined) {
     return (
       <div id="pc">
-        <h1 className="sr">Messages</h1>
+        <div className="ph pp-h rv" style={{ "--i": "0", marginBottom: 18 } as CSSProperties}>
+          <div>
+            <h1 className="display">Messages</h1>
+            <p>Write to {viewer.organizationName} any time. Before you send, you’ll always see who can read it.</p>
+          </div>
+        </div>
         {messages ? <ChatView data={messages} /> : <ChatError />}
+        <p className="lbl" style={{ marginTop: 14 }}>Messages aren’t legal advice until your consultant says so. For an urgent deadline, call {viewer.organizationName}.</p>
       </div>
     );
   }
@@ -477,33 +483,142 @@ function LiveMatters({ viewer, cards }: { viewer: PortalViewer; cards: MatterCar
   );
 }
 
+const FAMILY_ART = (
+  <span className="art" style={{ "--a": "52px" } as CSSProperties} aria-hidden="true">
+    <img src="/assets/generated/b2/family-tags-160@1x.webp" srcSet="/assets/generated/b2/family-tags-160@2x.webp 2x" width={52} height={52} alt="" loading="lazy" decoding="async" />
+  </span>
+);
+
+/** What each person on the file sees, in their own words. */
+function roleLine(person: PortalViewer["people"][number], self: boolean): string {
+  const role = roleLabel(person.role) || (person.isMinor ? "Minor" : "Person");
+  if (self) return `${role} · you`;
+  if (person.isMinor) return `${role} · a parent or guardian manages their records`;
+  return `${role} · their own login, tasks and private records`;
+}
+
+/**
+ * People on your file, laid out as design/portal/pages/portal-family.html: one card per person,
+ * "Who sees what" from the sections people actually shared, then those shares to withdraw.
+ */
 function People({ viewer }: { viewer: PortalViewer }) {
+  const self = viewer.person?.id ?? null;
+  const people = [...viewer.people].sort((a, b) => Number(b.id === self) - Number(a.id === self));
+  const first = (name: string) => name.trim().split(/\s+/)[0] ?? name;
+  const minors = people.some((person) => person.isMinor);
   return (
     <div id="pc">
-      <div className="ph"><h1 className="display">People on your file</h1><p>Names come from your firm’s records.</p></div>
-      {viewer.people.length === 0 ? <Empty title="No people yet" copy="People appear here when your firm adds them to a matter." /> : (
-        <div className="who">
-          {viewer.people.map((person) => (
-            <div key={person.id}>
-              <b>{person.displayName}</b>
-              <small>{person.role ?? (person.isMinor ? "Minor" : "Person")}</small>
-            </div>
+      <div className="ph pp-h rv" style={{ "--i": "0" } as CSSProperties}>
+        {FAMILY_ART}
+        <div>
+          <h1 className="display">Each person has their own view</h1>
+          <p>Everyone on your file signs in separately. They see shared information, their own tasks, and nothing private of anyone else’s.</p>
+        </div>
+      </div>
+      {people.length === 0 ? <Empty title="No people yet" copy="People appear here when your firm adds them to a matter." /> : (
+        <div className="who rv" style={{ "--i": "1" } as CSSProperties}>
+          {people.map((person) => (
+            <a key={person.id} href={person.id === self ? "/portal/account" : "#who-sees"}>
+              <span className="av xl ini" aria-hidden="true">{initials(person.displayName)}</span>
+              <b style={{ fontWeight: 500 }}>{person.id === self ? `You · ${person.displayName}` : person.displayName}</b>
+              <small>{roleLine(person, person.id === self)}</small>
+            </a>
           ))}
         </div>
       )}
+      {people.length > 1 ? (
+        <div className="panel rv" id="who-sees" style={{ "--i": "2", marginTop: 24 } as CSSProperties}>
+          <h2>{icon("shield", "s")}Who sees what</h2>
+          <div className="tw">
+            <table className="t">
+              <thead><tr><th>Record</th>{people.map((person) => <th key={person.id}>{person.id === self ? "You" : first(person.displayName)}</th>)}</tr></thead>
+              <tbody>
+                <tr><td>Next step and stages</td>{people.map((person) => <td key={person.id}><span className="bd ok"><i></i>Yes</span></td>)}</tr>
+                {viewer.shares.map((share) => (
+                  <tr key={share.id}>
+                    <td>{share.subjectName}’s {share.sectionKey}</td>
+                    {people.map((person) => {
+                      const sees = person.displayName === share.subjectName || person.displayName === share.granteeName;
+                      return <td key={person.id}><span className={sees ? "bd ok" : "bd unv"}><i></i>{sees ? "Yes" : "Hidden"}</span></td>;
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="lbl pad">Each adult chooses what to share. {viewer.organizationName} sets the rest based on their role. Sharing a household or paying an invoice doesn’t change this.</p>
+        </div>
+      ) : null}
       <Shares viewer={viewer} />
+      {minors ? (
+        <div className="alert info rv" style={{ "--i": "3" } as CSSProperties}>
+          {icon("users")}
+          <div><b>Children under 18</b>A parent or legal guardian manages a minor’s records until they turn 18. <a href="/portal/guardian" style={{ textDecoration: "underline" }}>See guardian access</a></div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
+/**
+ * Guardian access, laid out as design/portal/pages/portal-guardian.html: who the signed-in person
+ * acts for, and the authority the firm recorded for each.
+ */
 function Guardian({ viewer }: { viewer: PortalViewer }) {
   const grants = viewer.grants.filter((grant) => grant.kind === "guardian");
+  const me = viewer.person?.displayName ?? null;
+  const mine = grants.filter((grant) => grant.granteeName === me);
+  const names = [...new Set(mine.map((grant) => grant.subjectName.trim().split(/\s+/)[0] ?? grant.subjectName))];
+  const heading = names.length ? `You act for ${names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0]}` : "Guardian access";
+  const minor = (name: string) => viewer.people.find((person) => person.displayName === name);
   return (
     <div id="pc">
-      <div className="ph"><h1 className="display">Guardian access</h1><p>Who may act for a minor, and which sections are shared.</p></div>
-      {grants.length === 0 ? <Empty title="No guardian grants" copy="A guardian grant appears here when your firm records one." /> : grants.map((grant) => (
-        <div className="li" key={grant.id}><div><b>{grant.granteeName}</b><small>For {grant.subjectName} · {grant.purpose}</small></div></div>
-      ))}
+      <div className="ph pp-h rv" style={{ "--i": "0" } as CSSProperties}>
+        {FAMILY_ART}
+        <div>
+          <h1 className="display">{heading}</h1>
+          <p>
+            {names.length
+              ? `You’re recorded as their guardian on this file, so you see and manage their records. ${viewer.organizationName} checks this again as each child gets older.`
+              : "Who may act for a minor, and which sections are shared."}
+          </p>
+        </div>
+      </div>
+      {grants.length === 0 ? <Empty title="No guardian grants" copy="A guardian grant appears here when your firm records one." /> : (
+        <>
+          <div className="who rv" style={{ "--i": "1" } as CSSProperties}>
+            {me && mine.length ? (
+              <a href="/portal/account">
+                <span className="av xl ini" aria-hidden="true">{initials(me)}</span>
+                <b style={{ fontWeight: 500 }}>You · {me}</b>
+                <small>{roleLabel(viewer.person?.role) || "Person"} · guardian</small>
+              </a>
+            ) : null}
+            {grants.map((grant) => (
+              <a key={grant.id} href={`#grant-${grant.id}`}>
+                <span className="av xl ini" aria-hidden="true">{initials(grant.subjectName)}</span>
+                <b style={{ fontWeight: 500 }}>{grant.subjectName}</b>
+                <small>{minor(grant.subjectName)?.isMinor ? "Minor" : "Person"} · {grant.granteeName === me ? "you manage their records" : `${grant.granteeName} manages their records`}</small>
+              </a>
+            ))}
+          </div>
+          {grants.map((grant, index) => (
+            <div className="panel rv" id={`grant-${grant.id}`} key={grant.id} style={{ "--i": String(index + 2), marginTop: index === 0 ? 24 : undefined } as CSSProperties}>
+              <h2>{icon("shield", "s")}{grant.granteeName === me ? "Your authority" : `${grant.granteeName}’s authority`}<span className="r"><span className="bd ok"><i></i>On file</span></span></h2>
+              <div className="pad">
+                <div className="kv">
+                  <span>For</span><b>{grant.subjectName}</b>
+                  <span>Guardian</span><b>{grant.granteeName}</b>
+                  <span>Purpose</span><b>{grant.purpose}</b>
+                </div>
+                <p className="lbl" style={{ marginTop: 12 }}>
+                  If a court order or custody change affects who can act for a child, tell {viewer.organizationName}. Access changes only after they review the new document.
+                </p>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
       <Shares viewer={viewer} />
     </div>
   );
@@ -517,7 +632,7 @@ function Shares({ viewer }: { viewer: PortalViewer }) {
       <div className="pad">
         {viewer.shares.map((share) => (
           <div className="li" key={share.id}>
-            <div><b>{share.sectionKey}</b><small>{share.subjectName} shared with {share.granteeName} · {share.matterTitle}</small></div>
+            <div><b>{roleLabel(share.sectionKey)}</b><small>{share.subjectName} shared with {share.granteeName} · {share.matterTitle}</small></div>
             <WithdrawShare organizationId={viewer.organizationId} shareId={share.id} />
           </div>
         ))}
@@ -530,33 +645,50 @@ function Account({ viewer }: { viewer: PortalViewer }) {
   const person = viewer.person;
   return (
     <div id="pc">
-      <div className="ph"><h1 className="display">Your account</h1><p>Contact choices are saved on your person record.</p></div>
+      <div className="ph pp-h rv" style={{ "--i": "0" } as CSSProperties}><div><h1 className="display">Your account</h1><p>Your details, and what {viewer.organizationName} may send you. Changes here never touch your application answers.</p></div></div>
       {person ? (
-        <AccountForm organizationId={viewer.organizationId} name={person.displayName} email={person.email} phone={person.phone} prefs={viewer.prefs} />
+        <AccountForm organizationId={viewer.organizationId} name={person.displayName} email={person.email} phone={person.phone} prefs={viewer.prefs} firm={viewer.organizationName} timezone={viewer.timezone} />
       ) : (
         <Empty title="No person record" copy="Your login isn’t linked to a person in this firm yet." />
       )}
-      <form method="post" action="/sign-out" style={{ marginTop: "18px" }}>
-        <button className="btn s" type="submit">
-          <svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-logout"></use></svg>Sign out
-        </button>
-      </form>
+      <div className="panel rv" style={{ "--i": "3", marginTop: 22 } as CSSProperties}>
+        <h2>{icon("laptop", "s")}Signing in</h2>
+        <div className="pad">
+          <div className="li">
+            <div><b>This device</b><small>You sign in with your email and a one-time code.</small></div>
+            <span className="r">
+              <form method="post" action="/sign-out">
+                <button className="btn sm" type="submit">{icon("logout", "s")}Sign out</button>
+              </form>
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
+/** Intake or Correction when the forms couldn't be read: the designed heading, then what is on record. */
 function Sections({ viewer, correction }: { viewer: PortalViewer; correction: boolean }) {
   return (
     <div id="pc">
-      <div className="ph">
-        <h1 className="display">{correction ? "Request a correction" : "Your information"}</h1>
-        <p>{correction ? "A correction becomes a new version of an answer. That workflow isn’t available yet." : "Sections your firm has recorded."}</p>
+      <div className="ph pp-h rv" style={{ "--i": "0" } as CSSProperties}>
+        <div>
+          <h1 className="display">{correction ? "Request a correction" : "Your questions"}</h1>
+          <p>{correction ? "A correction is for answers you already sent." : `Forms ${viewer.organizationName} asked you to fill in.`}</p>
+        </div>
       </div>
-      {viewer.sections.length === 0 ? (
-        <Empty title={correction ? "Nothing to correct yet" : "No sections recorded"} copy={correction ? "A correction becomes a new version of an answer. That step isn’t available yet." : "Recorded answers appear here."} />
-      ) : viewer.sections.map((section) => (
-        <div className="li" key={section.id}><div><b>{section.sectionKey}</b><small>{section.personName} · {section.matterTitle} · {section.summary}</small></div></div>
-      ))}
+      <Empty title="Your forms couldn’t be shown just now" copy="Nothing was lost. Try again in a moment." />
+      {viewer.sections.length ? (
+        <div className="panel rv" style={{ "--i": "2", marginTop: 18 } as CSSProperties}>
+          <h2>{icon("file", "s")}On record</h2>
+          <div className="pad">
+            {viewer.sections.map((section) => (
+              <div className="li" key={section.id}><div><b>{roleLabel(section.sectionKey)}</b><small>{section.personName} · {section.matterTitle} · {section.summary}</small></div></div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

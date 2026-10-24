@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type CSSProperties } from "react";
 import { saveMyContactPreferences } from "@/modules/portal-invitations/actions";
 import { setMyWhatsAppNotices } from "@/modules/whatsapp/actions";
 import type { PortalPrefs } from "@/modules/portal/load";
@@ -11,12 +11,18 @@ export function AccountForm({
   email,
   phone,
   prefs,
+  firm = "your firm",
+  timezone = null,
 }: {
   organizationId: string;
   name: string;
   email: string | null;
   phone: string | null;
   prefs: PortalPrefs | null;
+  /** The firm's name, for "What {firm} may send you". */
+  firm?: string;
+  /** The time zone times are shown in. */
+  timezone?: string | null;
 }) {
   const [message, setMessage] = useState("");
   const [pending, start] = useTransition();
@@ -51,28 +57,39 @@ export function AccountForm({
         });
       }}
     >
-      <div className="panel">
-        <h2>Profile</h2>
-        <div className="pad">
-          <div className="kv">
-            <span>Name</span><b>{name}</b>
-            <span>Email</span><b>{email || "No email on file"}</b>
-            <span>Mobile</span><b>{phone || "No mobile on file"}</b>
+      <div className="split rv" style={{ "--i": "1", "--n": "2", gap: "22px", alignItems: "start" } as CSSProperties}>
+        <div className="panel">
+          <h2><Icon name="user" />Profile</h2>
+          <div className="pad">
+            <div className="kv">
+              <span>Name</span><b>{name}</b>
+              <span>Email</span><b>{email || "No email on file"}</b>
+              <span>Mobile</span><b className="num">{phone || "No mobile on file"}</b>
+              {timezone ? <><span>Time zone</span><b>{timezone}</b></> : null}
+            </div>
+            <p className="lbl" style={{ marginTop: 12 }}>
+              Your legal name and date of birth come from your passport. To change them, <a href="/portal/correction" style={{ textDecoration: "underline" }}>request a correction</a>.
+            </p>
+          </div>
+        </div>
+        <div className="panel">
+          <h2><Icon name="globe" />Language</h2>
+          <div className="pad">
+            <div className="seg" role="group" aria-label="Portal language">
+              <button type="button" data-locale="en-CA" aria-pressed={saved.locale !== "fr-CA"} onClick={(event) => pressLocale(event.currentTarget)}>English</button>
+              <button type="button" data-locale="fr-CA" aria-pressed={saved.locale === "fr-CA"} onClick={(event) => pressLocale(event.currentTarget)}>Français</button>
+            </div>
+            <p className="lbl" style={{ marginTop: 10 }}>Emails and reminders follow this choice once you save. Your documents stay in the language they were written in.</p>
           </div>
         </div>
       </div>
-      <div className="panel" style={{ marginTop: 16 }}>
-        <h2>Language</h2>
+      <div className="panel rv" style={{ "--i": "2", marginTop: 22 } as CSSProperties}>
+        <h2><Icon name="bell" />What {firm} may send you</h2>
         <div className="pad">
-          <div className="seg" role="group" aria-label="Portal language">
-            <button type="button" data-locale="en-CA" aria-pressed={saved.locale !== "fr-CA"} onClick={(event) => pressLocale(event.currentTarget)}>English</button>
-            <button type="button" data-locale="fr-CA" aria-pressed={saved.locale === "fr-CA"} onClick={(event) => pressLocale(event.currentTarget)}>Français</button>
+          <div className="li">
+            <div><b>About your application</b><small>Requests, deadlines, signatures and invoices in your portal. Needed to run your file, so they can’t be turned off.</small></div>
+            <span className="r"><span className="bd ok"><i />Always on</span></span>
           </div>
-        </div>
-      </div>
-      <div className="panel" style={{ marginTop: 16 }}>
-        <h2>What your firm may send you</h2>
-        <div className="pad">
           <Pref id="pref-email" label="Email notices" detail="Requests, deadlines and invoices." on={saved.emailNotices} />
           <Pref
             id="pref-wa"
@@ -87,6 +104,14 @@ export function AccountForm({
         </div>
       </div>
     </form>
+  );
+}
+
+function Icon({ name }: { name: string }) {
+  return (
+    <svg className="ic s" aria-hidden="true">
+      <use href={`/assets/icons-coreui/sprite.svg#i-${name}`}></use>
+    </svg>
   );
 }
 
