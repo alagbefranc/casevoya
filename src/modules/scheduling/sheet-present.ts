@@ -407,6 +407,14 @@ const EVENT_LABEL: Record<string, string> = {
   completed: "Marked attended",
 };
 
+/**
+ * Who a client's change came from (CRM-03): a client with a portal login acts from the portal;
+ * a booker without one can only use the Manage your booking link from their email.
+ */
+export function clientActorLabel(hasPortal: boolean): string {
+  return hasPortal ? "Client" : "Booker, from the Manage link";
+}
+
 export function bookingEventLabel(kind: string): string {
   return EVENT_LABEL[kind] ?? "Updated";
 }

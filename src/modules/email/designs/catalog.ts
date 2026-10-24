@@ -80,8 +80,10 @@ export type EmailContexts = {
     portal?: boolean;
     locationKind?: string | null;
     address?: string | null;
+    /** CRM-03: the booker's Manage your booking link (no portal), made by the mail worker. */
+    manageUrl?: string | null;
   };
-  EM16b: FirmContext & { startsAt?: string | null; timeZone?: string | null; portal?: boolean };
+  EM16b: FirmContext & { startsAt?: string | null; timeZone?: string | null; portal?: boolean; manageUrl?: string | null };
   /**
    * bookingPage: the firm's slug when it has a booking page this attendee can use (no portal).
    * cancelledBy: "client" when the attendee cancelled from their portal; otherwise the firm did.
@@ -191,6 +193,22 @@ function meetingLine(firmName: string, kind: string | null | undefined, address:
     }
     default:
       return "";
+  }
+}
+
+/** CRM-03: the line and button for an attendee with no portal when the email carries their Manage link. */
+export const MANAGE_LINE = "To change the time or cancel, use Manage your booking.";
+export const MANAGE_CTA = "Manage your booking";
+
+/** A Manage your booking link only when it is this app's own /booking/<ref>?t=<token>. */
+export function manageLink(value: unknown, origin: string): string | null {
+  const url = safeUrl(value);
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    return parsed.origin === new URL(origin).origin && /^\/booking\/[a-z2-7]{26}$/.test(parsed.pathname) && parsed.searchParams.get("t") ? url : null;
+  } catch {
+    return null;
   }
 }
 
@@ -615,13 +633,14 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
       const consultant = name(context.consultantName);
       const lead = when ? `${when} (${zoneLabel(context.timeZone)})` : "Your consultation";
       const meet = meetingLine(firmName, context.locationKind, context.address);
-      const end = context.portal ? "" : ` ${contactToChange(firmName)}`;
+      const manage = context.portal ? null : manageLink(context.manageUrl, origin);
+      const end = context.portal ? "" : manage ? ` ${MANAGE_LINE}` : ` ${contactToChange(firmName)}`;
       return copy({
         subject: `Your consultation with ${firmName} is booked`,
         preheader: "Here’s when, and how you’ll meet.",
         heading: "Your consultation is booked",
         body: `${lead}${consultant ? ` with ${consultant}` : ""}.${meet ? ` ${meet}` : ""}${end}`,
-        cta: context.portal ? cta("View booking", appLink(origin, PATHS.portalAppointments)) : null,
+        cta: context.portal ? cta("View booking", appLink(origin, PATHS.portalAppointments)) : manage ? cta(MANAGE_CTA, manage) : null,
         spot: "reminder",
         brand: firmBrand(context),
       });
@@ -642,6 +661,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
       const firmName = firm(context);
       const when = dateTimeIn(context.startsAt, context.timeZone);
       const moved = when ? `Your consultation is now ${when} (${zoneLabel(context.timeZone)}).` : "Your consultation has a new time.";
+      const manage = context.portal ? null : manageLink(context.manageUrl, origin);
       return copy({
         subject: `Your appointment with ${firmName} moved`,
         preheader: context.portal ? "The new time is in your portal." : "Here’s the new time.",
@@ -650,8 +670,8 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
           ? when
             ? `${moved} Your reminders moved too.`
             : "Your consultation has a new time. It’s in your portal, and your reminders moved too."
-          : `${moved} ${contactToChange(firmName)}`,
-        cta: context.portal ? cta("View booking", appLink(origin, PATHS.portalAppointments)) : null,
+          : `${moved} ${manage ? MANAGE_LINE : contactToChange(firmName)}`,
+        cta: context.portal ? cta("View booking", appLink(origin, PATHS.portalAppointments)) : manage ? cta(MANAGE_CTA, manage) : null,
         spot: "reminder",
         brand: firmBrand(context),
       });

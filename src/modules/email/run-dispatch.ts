@@ -63,6 +63,11 @@ export async function runEmailDispatch(limit = 20) {
         const record = asRecord(data);
         return Object.fromEntries(Object.entries(record).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
       },
+      async manageToken(deliveryId, sha256) {
+        const { data, error } = await supabase.rpc("issue_booking_manage_token", { p_delivery_id: deliveryId, p_sha256: sha256 });
+        if (error) throw new Error(error.message);
+        return typeof data === "string" ? data : null;
+      },
       openLink(sealed, invitationId) {
         return openInviteLink(config.dispatchSecret, sealed, invitationId);
       },
