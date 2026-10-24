@@ -62,6 +62,8 @@ import {
   type ReconPage,
 } from "@/modules/sheet/finance-corrections-load";
 import { dayMonth } from "@/modules/sheet/home-present";
+import { loadFinanceBilling, loadInvoiceBillingDialogs } from "@/modules/billing/load";
+import { billingInvoiceState } from "@/modules/billing/present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone, plusDays } from "@/modules/sheet/present";
 
@@ -690,7 +692,7 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
     loadSheetChrome(staff, "/sheet/finance"),
     supabase
       .from("invoices")
-      .select("id, matter_id, number, description, fee_category, amount_cents, currency, paid_cents, refunded_cents, credited_cents, status, issued_on, due_on, is_sample, created_at")
+      .select("id, matter_id, number, description, fee_category, amount_cents, currency, paid_cents, refunded_cents, credited_cents, written_off_cents, status, issued_on, due_on, is_sample, discarded_at, created_at")
       .eq("organization_id", org)
       .order("created_at", { ascending: false })
       .limit(INVOICES_READ),
@@ -776,13 +778,16 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
   const cardReady = account?.card_payments_status === "active";
 
   const tableRows: InvoiceRow[] = rows.map((row) => {
-    const state = invoiceState(
-      row.status,
-      row.due_on,
-      today,
-      processingIds.has(row.id),
-      row.refunded_cents > 0 ? formatMoney(row.refunded_cents, row.currency) : null,
-      row.credited_cents > 0 && row.status !== "credited" ? formatMoney(row.credited_cents, row.currency) : null,
+    const state = billingInvoiceState(
+      row,
+      invoiceState(
+        row.status,
+        row.due_on,
+        today,
+        processingIds.has(row.id),
+        row.refunded_cents > 0 ? formatMoney(row.refunded_cents, row.currency) : null,
+        row.credited_cents - row.written_off_cents > 0 && row.status !== "credited" ? formatMoney(row.credited_cents - row.written_off_cents, row.currency) : null,
+      ),
     );
     return {
       key: row.id,
@@ -940,9 +945,21 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
   const recon: ReconPage | null =
     tab === "recon" ? await loadReconciliation(supabase, staff, canBill, today, account && canBill ? stripe : null, account && canBill ? account.account_id : null) : null;
   const invoiceView: InvoiceViewPage | null = tab === "invoice" && invoiceId ? await loadInvoiceView(supabase, staff, canBill, invoiceId, today) : null;
+  // FIN-06: ageing, unbilled time, tax rates and fee references under the Invoices tab; a draft's
+  // and an open invoice's own dialogs on its tab.
+  const billingPanels =
+    tab === "invoices"
+      ? await loadFinanceBilling(supabase, {
+          staff,
+          today,
+          invoices: rows,
+          matterName: (matterId) => `${clientOf(matterId)} · ${referenceOf(matterId)}`,
+        })
+      : null;
+  const invoiceBilling = invoiceView ? await loadInvoiceBillingDialogs(supabase, { staff, invoice: invoiceView.billing, today, canBill }) : null;
   if (invoiceView) header.invoiceTab = invoiceView.number;
   // An invoice that isn't there (or isn't this person's to see) falls back to the Invoices tab.
   else if (tab === "invoice") header.tab = "invoices";
 
-  return { chrome, header, page, dialog, account: accountData, payments, refunds, refundDialog, funds, recon, invoiceView };
+  return { chrome, header, page, dialog, account: accountData, payments, refunds, refundDialog, funds, recon, invoiceView, billing: billingPanels, invoiceBilling };
 }

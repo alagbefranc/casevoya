@@ -15,6 +15,7 @@ import { MatterDecisionsLive, MatterSubmissions, type MatterDecisionsData, type 
 import { MatterDocumentReview, type MatterDocumentReviewData } from "./vo-doc-review";
 import { DOC_REQUEST_DIALOG, DocRequestDialog, type DocRequestDialogData } from "./doc-request";
 import { MatterIntake, type MatterIntakeData } from "./matter-intake";
+import { MatterWork, type MatterWorkData } from "./billing-live";
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
 import type { PersonHistoryPanel } from "@/modules/sheet/person-history-present";
 import type { PersonEditData } from "@/modules/sheet/edit-person";
@@ -1592,11 +1593,13 @@ export type MatterBillingData = {
   invoices: { number: string; categories: string[]; issued: string; state: MatterBadge; total: string; payment: string[] }[];
   /** Nobody on this matter may read its invoices (they are shown to the firm owner and finance). */
   hidden?: boolean;
+  /** Live only (FIN-06): time on the matter, accepted quotes and instalments, after the invoices. */
+  work?: MatterWorkData | null;
 };
 
 export function MatterBilling({ data }: { data: MatterBillingData | null }) {
   if (!data || data.hidden || (data.invoices.length === 0 && data.held.count === 0)) {
-    return (
+    const empty = (
       <Panel>
         <Empty
           art={"invoice-plain"}
@@ -1604,6 +1607,14 @@ export function MatterBilling({ data }: { data: MatterBillingData | null }) {
           copy={data?.hidden ? "The firm owner and the matter’s finance user see this matter’s invoices and client funds." : "Invoices you issue from a matter appear here."}
         />
       </Panel>
+    );
+    return data?.work ? (
+      <>
+        {empty}
+        <MatterWork data={data.work} />
+      </>
+    ) : (
+      empty
     );
   }
   return (
@@ -1689,6 +1700,7 @@ export function MatterBilling({ data }: { data: MatterBillingData | null }) {
           </table>
         </div>
       )}
+      {data.work ? <MatterWork data={data.work} /> : null}
     </>
   );
 }

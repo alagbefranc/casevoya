@@ -268,7 +268,8 @@ const HEADS: [string, boolean][] = [
   ["State", false],
 ];
 
-export function SheetFinance({ data }: { data: FinanceData }) {
+/** `after`: live-only panels under the Designer's note (FIN-06 ageing, unbilled time, tax rates, fee references). */
+export function SheetFinance({ data, after }: { data: FinanceData; after?: ReactNode }) {
   return (
     <>
       <div className={"ph rv"} style={i(0)}>
@@ -331,6 +332,7 @@ export function SheetFinance({ data }: { data: FinanceData }) {
           "State comes from payment allocations, never typed by hand. Issued invoices can’t be edited; correct them with a credit note. In the Canada RCIC set-up, an invoice needs delivered work or an incurred disbursement first; before that, send a quote or an advance request."
         }
       </p>
+      {after}
     </>
   );
 }

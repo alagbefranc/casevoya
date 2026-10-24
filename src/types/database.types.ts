@@ -3050,6 +3050,72 @@ export type Database = {
         }
         Relationships: []
       }
+      government_fee_references: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          created_by: string | null
+          currency: string
+          fee_group: string | null
+          id: string
+          name: string
+          organization_id: string
+          position: number
+          retrieved_at: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          section: string | null
+          snapshot_sha256: string
+          source_url: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          fee_group?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          position: number
+          retrieved_at: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          section?: string | null
+          snapshot_sha256: string
+          source_url: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          fee_group?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          position?: number
+          retrieved_at?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          section?: string | null
+          snapshot_sha256?: string
+          source_url?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       government_status_checks: {
         Row: {
           checked_at: string
@@ -3381,6 +3447,99 @@ export type Database = {
           storage_key?: string
           updated_at?: string
           upload_state?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      instalment_plan_items: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          due_on: string
+          id: string
+          label: string
+          organization_id: string
+          paid_as: string
+          plan_id: string
+          position: number
+          quote_instalment_id: string
+          task_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          due_on: string
+          id?: string
+          label: string
+          organization_id: string
+          paid_as: string
+          plan_id: string
+          position: number
+          quote_instalment_id: string
+          task_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          due_on?: string
+          id?: string
+          label?: string
+          organization_id?: string
+          paid_as?: string
+          plan_id?: string
+          position?: number
+          quote_instalment_id?: string
+          task_id?: string | null
+        }
+        Relationships: []
+      }
+      instalment_plans: {
+        Row: {
+          agreement_id: string
+          agreement_version_id: string
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_sample: boolean
+          matter_id: string
+          organization_id: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          agreement_id: string
+          agreement_version_id: string
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_sample?: boolean
+          matter_id: string
+          organization_id: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          agreement_id?: string
+          agreement_version_id?: string
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_sample?: boolean
+          matter_id?: string
+          organization_id?: string
+          status?: string
+          updated_at?: string
           version?: number
         }
         Relationships: []
@@ -4263,6 +4422,87 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_lines: {
+        Row: {
+          amount_cents: number
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string
+          fee_reference_id: string | null
+          id: string
+          instalment_item_id: string | null
+          invoice_id: string
+          is_sample: boolean
+          minutes: number | null
+          organization_id: string
+          position: number
+          quote_line_id: string | null
+          rate_cents: number | null
+          source_checked_on: string | null
+          source_retrieved_at: string | null
+          source_sha256: string | null
+          source_url: string | null
+          tax_cents: number
+          tax_name: string | null
+          tax_rate_id: string | null
+          tax_rate_percent: number | null
+          time_entry_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          category: string
+          created_at?: string
+          created_by?: string | null
+          description: string
+          fee_reference_id?: string | null
+          id?: string
+          instalment_item_id?: string | null
+          invoice_id: string
+          is_sample?: boolean
+          minutes?: number | null
+          organization_id: string
+          position: number
+          quote_line_id?: string | null
+          rate_cents?: number | null
+          source_checked_on?: string | null
+          source_retrieved_at?: string | null
+          source_sha256?: string | null
+          source_url?: string | null
+          tax_cents?: number
+          tax_name?: string | null
+          tax_rate_id?: string | null
+          tax_rate_percent?: number | null
+          time_entry_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          fee_reference_id?: string | null
+          id?: string
+          instalment_item_id?: string | null
+          invoice_id?: string
+          is_sample?: boolean
+          minutes?: number | null
+          organization_id?: string
+          position?: number
+          quote_line_id?: string | null
+          rate_cents?: number | null
+          source_checked_on?: string | null
+          source_retrieved_at?: string | null
+          source_sha256?: string | null
+          source_url?: string | null
+          tax_cents?: number
+          tax_name?: string | null
+          tax_rate_id?: string | null
+          tax_rate_percent?: number | null
+          time_entry_id?: string | null
+        }
+        Relationships: []
+      }
       invoice_payment_events: {
         Row: {
           amount_cents: number | null
@@ -4656,8 +4896,51 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_write_offs: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency: string
+          id: string
+          idempotency_key: string
+          invoice_id: string
+          is_sample: boolean
+          organization_id: string
+          reason: string
+          written_off_by: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          currency: string
+          id?: string
+          idempotency_key: string
+          invoice_id: string
+          is_sample?: boolean
+          organization_id: string
+          reason: string
+          written_off_by: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          idempotency_key?: string
+          invoice_id?: string
+          is_sample?: boolean
+          organization_id?: string
+          reason?: string
+          written_off_by?: string
+        }
+        Relationships: []
+      }
       invoices: {
         Row: {
+          discard_reason: string | null
+          discarded_at: string | null
+          discarded_by: string | null
+          written_off_cents: number
           amount_cents: number
           created_at: string
           created_by: string | null
@@ -4684,6 +4967,10 @@ export type Database = {
           version: number
         }
         Insert: {
+          discard_reason?: string | null
+          discarded_at?: string | null
+          discarded_by?: string | null
+          written_off_cents?: number
           amount_cents: number
           created_at?: string
           created_by?: string | null
@@ -4710,6 +4997,10 @@ export type Database = {
           version?: number
         }
         Update: {
+          discard_reason?: string | null
+          discarded_at?: string | null
+          discarded_by?: string | null
+          written_off_cents?: number
           amount_cents?: number
           created_at?: string
           created_by?: string | null
@@ -9642,6 +9933,117 @@ export type Database = {
           },
         ]
       }
+      tax_rates: {
+        Row: {
+          approved_by: string
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          effective_to: string | null
+          ended_by: string | null
+          id: string
+          name: string
+          organization_id: string
+          rate_percent: number
+          source_note: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          approved_by: string
+          created_at?: string
+          created_by?: string | null
+          effective_from: string
+          effective_to?: string | null
+          ended_by?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          rate_percent: number
+          source_note?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          approved_by?: string
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          ended_by?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          rate_percent?: number
+          source_note?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      time_entries: {
+        Row: {
+          billable: boolean
+          created_at: string
+          created_by: string | null
+          description: string
+          discarded_at: string | null
+          discarded_by: string | null
+          id: string
+          is_sample: boolean
+          matter_id: string
+          membership_id: string
+          minutes: number | null
+          organization_id: string
+          rate_cents: number
+          started_at: string | null
+          stopped_at: string | null
+          updated_at: string
+          version: number
+          worked_on: string
+        }
+        Insert: {
+          billable?: boolean
+          created_at?: string
+          created_by?: string | null
+          description: string
+          discarded_at?: string | null
+          discarded_by?: string | null
+          id?: string
+          is_sample?: boolean
+          matter_id: string
+          membership_id: string
+          minutes?: number | null
+          organization_id: string
+          rate_cents: number
+          started_at?: string | null
+          stopped_at?: string | null
+          updated_at?: string
+          version?: number
+          worked_on: string
+        }
+        Update: {
+          billable?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          discarded_at?: string | null
+          discarded_by?: string | null
+          id?: string
+          is_sample?: boolean
+          matter_id?: string
+          membership_id?: string
+          minutes?: number | null
+          organization_id?: string
+          rate_cents?: number
+          started_at?: string | null
+          stopped_at?: string | null
+          updated_at?: string
+          version?: number
+          worked_on?: string
+        }
+        Relationships: []
+      }
       translation_draft_requests: {
         Row: {
           char_count: number
@@ -10405,21 +10807,157 @@ export type Database = {
         Args: { p_agreement_id: string }
         Returns: undefined
       }
+      add_invoice_government_fee: {
+        Args: {
+          p_amount_cents: number | null
+          p_checked_on: string | null
+          p_invoice_id: string
+          p_name: string | null
+          p_reference_id: string | null
+          p_source_url: string | null
+        }
+        Returns: string
+      }
+      add_tax_rate: {
+        Args: {
+          p_approved_by: string
+          p_effective_from: string
+          p_effective_to: string | null
+          p_name: string
+          p_org: string
+          p_rate_percent: number
+          p_source_note: string | null
+        }
+        Returns: string
+      }
       booking_agreement_for_signing: {
         Args: { p_ref: string }
         Returns: Json
+      }
+      cancel_instalment_plan: {
+        Args: {
+          p_plan_id: string
+          p_reason: string
+        }
+        Returns: number
+      }
+      create_instalment_plan: {
+        Args: {
+          p_agreement_id: string
+          p_due_dates: string[]
+        }
+        Returns: string
       }
       create_quote: {
         Args: { p_matter_id: string; p_template_id: string | null; p_title: string | null }
         Returns: string
       }
+      create_quote_invoice: {
+        Args: {
+          p_agreement_id: string
+          p_due_on: string
+          p_idempotency_key: string
+          p_tax_name: string | null
+        }
+        Returns: string
+      }
+      create_time_invoice: {
+        Args: {
+          p_due_on: string
+          p_entry_ids: string[] | null
+          p_idempotency_key: string
+          p_matter_id: string
+          p_tax_name: string | null
+        }
+        Returns: string
+      }
+      discard_invoice_draft: {
+        Args: {
+          p_invoice_id: string
+          p_reason: string
+        }
+        Returns: undefined
+      }
+      discard_time_entry: {
+        Args: {
+          p_entry_id: string
+        }
+        Returns: undefined
+      }
       edit_agreement_clause: {
         Args: { p_agreement_id: string; p_body: string; p_clause_id: string }
+        Returns: string
+      }
+      end_tax_rate: {
+        Args: {
+          p_effective_to: string
+          p_rate_id: string
+        }
+        Returns: undefined
+      }
+      invoice_instalment: {
+        Args: {
+          p_due_on: string
+          p_idempotency_key: string
+          p_item_id: string
+          p_tax_name: string | null
+        }
+        Returns: string
+      }
+      issue_invoice_draft: {
+        Args: {
+          p_due_on: string | null
+          p_invoice_id: string
+        }
+        Returns: Json
+      }
+      matter_time_invoices: {
+        Args: { p_matter_id: string }
+        Returns: {
+          invoice_number: string
+          invoice_status: string
+          time_entry_id: string
+        }[]
+      }
+      log_time_entry: {
+        Args: {
+          p_billable: boolean
+          p_description: string
+          p_matter_id: string
+          p_minutes: number
+          p_rate_cents: number
+          p_worked_on: string
+        }
         Returns: string
       }
       quote_to_agreement: {
         Args: { p_agreement_id: string; p_template_id: string }
         Returns: string
+      }
+      record_government_fee_snapshot: {
+        Args: {
+          p_org: string
+          p_retrieved_at: string
+          p_rows: Json
+          p_sha256: string
+          p_source_url: string
+        }
+        Returns: number
+      }
+      remove_invoice_line: {
+        Args: {
+          p_line_id: string
+        }
+        Returns: undefined
+      }
+      review_government_fee_snapshot: {
+        Args: {
+          p_decision: string
+          p_note: string | null
+          p_org: string
+          p_sha256: string
+        }
+        Returns: number
       }
       save_quote: {
         Args: {
@@ -11432,6 +11970,21 @@ export type Database = {
             }
             Returns: Json
           }
+      start_timer: {
+        Args: {
+          p_billable: boolean
+          p_description: string
+          p_matter_id: string
+          p_rate_cents: number
+        }
+        Returns: string
+      }
+      stop_timer: {
+        Args: {
+          p_entry_id: string
+        }
+        Returns: number
+      }
       subscription_plan_catalog: {
         Args: Record<PropertyKey, never>
         Returns: Json
@@ -12973,6 +13526,15 @@ export type Database = {
       withdraw_section_share: {
         Args: { p_share_id: string }
         Returns: undefined
+      }
+      write_off_invoice: {
+        Args: {
+          p_amount_cents: number
+          p_idempotency_key: string
+          p_invoice_id: string
+          p_reason: string
+        }
+        Returns: Json
       }
     }
     Enums: {

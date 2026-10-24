@@ -87,8 +87,8 @@ async function one<T>(sql: string, params: unknown[] = []): Promise<T> {
 
 async function invoice(id: string) {
   await asMaintenance(db);
-  const row = (await db.query<Record<string, string | number | null>>(`select * from public.invoices where id = $1`, [id])).rows[0];
-  return { ...row, amount: Number(row.amount_cents), credited: Number(row.credited_cents), writtenOff: Number(row.written_off_cents) };
+  const row = (await db.query<Record<string, unknown>>(`select * from public.invoices where id = $1`, [id])).rows[0];
+  return { ...row, status: String(row.status), issued_on: row.issued_on, amount: Number(row.amount_cents), credited: Number(row.credited_cents), writtenOff: Number(row.written_off_cents) };
 }
 
 async function lines(invoiceId: string) {
@@ -183,6 +183,10 @@ describe("time entries", () => {
     await expectDbError(() => db.query(`select public.create_time_invoice($1, null, $2::date, null, $3)`, [f.matterId, firmDay(30), key()]), /no unbilled billable time/);
     await as(f, f.consultant, false);
     await expectDbError(() => db.query(`select public.discard_time_entry($1)`, [entry]), /on an invoice/);
+    // The consultant doesn't read invoices but sees which one their time is on.
+    expect((await db.query(`select invoice_status from public.matter_time_invoices($1)`, [f.matterId])).rows).toEqual([{ invoice_status: "draft" }]);
+    await as(f, f.otherFinance, false);
+    expect((await db.query(`select 1 from public.matter_time_invoices($1)`, [f.matterId])).rows).toHaveLength(0);
     await as(f, f.client, false);
     expect((await db.query(`select id from public.invoices where id = $1`, [draft])).rows).toHaveLength(0);
     // Issuing it: the client now sees the invoice and its line.

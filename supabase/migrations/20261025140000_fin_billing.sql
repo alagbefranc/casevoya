@@ -1739,6 +1739,26 @@ end;
 $$;
 revoke all on function app.cancel_instalment_plan(uuid, text) from public, anon;
 
+-- Which invoice each time entry on a matter is on, for whoever reads the matter's time (staff on
+-- the matter who don't read invoices see the number and state, not the invoice).
+create function public.matter_time_invoices(p_matter_id uuid)
+returns table (time_entry_id uuid, invoice_number text, invoice_status text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select line.time_entry_id, invoice.number, invoice.status::text
+  from public.invoice_lines line
+  join public.invoices invoice on invoice.id = line.invoice_id
+  join public.time_entries entry on entry.id = line.time_entry_id
+  where entry.matter_id = p_matter_id
+    and invoice.status <> 'voided' and invoice.discarded_at is null
+    and app.can_read_time_entry(p_matter_id);
+$$;
+revoke all on function public.matter_time_invoices(uuid) from public, anon;
+grant execute on function public.matter_time_invoices(uuid) to authenticated;
+
 -- ---------------------------------------------------------------------------
 -- Public wrappers (security invoker; the app functions check the caller)
 -- ---------------------------------------------------------------------------

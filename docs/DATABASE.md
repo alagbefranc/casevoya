@@ -502,6 +502,21 @@ The private link runs the designed flow (spec `docs/specs/consultation-agreement
 
 Tested in `tests/booking-agreements.rls.test.ts`.
 
+## Billing: time, drafts, tax rates, write-offs, quotes, instalments, government fees (`20261025140000`, not applied on the live project)
+
+FIN-06. No existing function is redefined.
+
+* `tax_rates`: the firm's rates (name, `rate_percent` numeric(7,4), `effective_from`/`effective_to`, `approved_by`, `source_note`). `public.add_tax_rate`, `public.end_tax_rate` (firm owner or finance user, step-up; no overlap per name; never edited). `app.tax_rate_on(org, name, date)`.
+* `time_entries`: matter, membership, `worked_on`, `minutes` (null while a timer runs), `rate_cents` per hour, description, billable, `discarded_at`. One running timer per membership (partial unique index). `public.log_time_entry`, `public.start_timer`, `public.stop_timer`, `public.discard_time_entry`; `app.time_amount_cents` (minutes × rate ÷ 60, rounded half away from zero). `public.matter_time_invoices(matter)` says which invoice each entry is on.
+* `invoice_lines`: lines of a draft-built invoice (category professional_fee / disbursement / government_fee, minutes and rate for time, amount, tax name/rate/cents, links to the time entry, quote line, instalment item or fee reference, and a government fee's `source_url`, `source_checked_on`, `source_retrieved_at`, `source_sha256`). Change only while the invoice is a draft (trigger). Clients read the lines of invoices they can read.
+* `invoices` gains `written_off_cents` (part of `credited_cents`) and `discarded_at`, `discarded_by`, `discard_reason` (a discarded draft stays a draft).
+* `public.create_time_invoice`, `public.create_quote_invoice`, `public.invoice_instalment` make drafts (billing staff, idempotency key, number from `app.next_invoice_number` under the same advisory lock as `create_invoice`); `public.add_invoice_government_fee`, `public.remove_invoice_line`, `public.issue_invoice_draft` (rate in effect on the firm's today; the existing draft-to-issued mail trigger sends the approved invoice email), `public.discard_invoice_draft`.
+* `invoice_write_offs` (append-only) and `public.write_off_invoice` (billing staff, step-up, up to what is owed less credit-note drafts; adds to `credited_cents` and `written_off_cents`; status by `app.invoice_settled_status`).
+* `instalment_plans`, `instalment_plan_items` (one active plan per quote; a due date and an internal reminder task per quote instalment). `public.create_instalment_plan`, `public.cancel_instalment_plan` (cancels open reminder tasks through `app.open_task_write`).
+* `government_fee_references`: the firm's catalogue read from IRCC's fee list (name, amount, URL with anchor, `retrieved_at`, `snapshot_sha256`, status pending_review / approved / rejected / superseded). `public.record_government_fee_snapshot` (owner, licensed consultant or finance user; allowlisted host; a known hash records nothing), `public.review_government_fee_snapshot` (licensed member, step-up). Nothing seeded.
+
+Forced RLS on every new table; no insert, update or delete grants. Tested in `tests/finance-billing.rls.test.ts`.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.

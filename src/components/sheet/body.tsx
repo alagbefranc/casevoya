@@ -18,6 +18,7 @@ import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet
 import { CreditNoteDialog, FinanceHeader, NewInvoiceDialog, RefundDialog, SheetFinance, SheetFinancePayments, SheetFinanceRefunds } from "@/components/sheet/designer/finance";
 import { CreditReviewDialog, SheetFinanceInvoice, VoidDialog } from "@/components/sheet/designer/invoice";
 import { ReconDialogs, SheetFinanceRecon } from "@/components/sheet/designer/recon";
+import { FinanceBillingDialogs, FinanceBillingPanels, InvoiceBillingDialogs, MatterWorkDialogs } from "@/components/sheet/designer/billing-live";
 import { SheetFrame } from "@/components/sheet/designer/frame";
 import { ApproveTransferDialog, FundsLiveDialogs, RecordPaymentDialog, SheetFinanceFunds, VerifyPaymentDialog } from "@/components/sheet/designer/funds";
 import { StripeAccountStatus } from "@/components/sheet/stripe-connect";
@@ -728,6 +729,8 @@ export async function SheetBody({
                 </>
               ) : null}
               {finance.recon ? <ReconDialogs data={finance.recon.dialogs} /> : null}
+              {finance.billing ? <FinanceBillingDialogs data={finance.billing} /> : null}
+              {finance.invoiceBilling ? <InvoiceBillingDialogs data={finance.invoiceBilling} /> : null}
             </>
           }
         >
@@ -742,7 +745,7 @@ export async function SheetBody({
           ) : finance.refunds ? (
             <SheetFinanceRefunds data={finance.refunds} />
           ) : (
-            <SheetFinance data={finance.page} />
+            <SheetFinance data={finance.page} after={finance.billing ? <FinanceBillingPanels data={finance.billing} /> : null} />
           )}
         </SheetFrame>
       </SheetScreen>
@@ -847,6 +850,7 @@ export async function SheetBody({
             <>
               <MatterDialogs data={loaded.dialogs} />
               <GovDialogs data={loaded.governmentDialogs} />
+              {loaded.page.billing?.work ? <MatterWorkDialogs data={loaded.page.billing.work} /> : null}
               {loaded.countersign.map((sign) => (
                 <CountersignDialog key={sign.envelopeId} data={sign} />
               ))}
