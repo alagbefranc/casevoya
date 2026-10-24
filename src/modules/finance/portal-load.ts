@@ -7,6 +7,8 @@ import { formatMoney } from "@/modules/finance/money";
 import type { PortalViewer } from "@/modules/portal/load";
 import { invoiceState } from "@/modules/sheet/finance-present";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
+import { paymentReceiptFromRpc } from "@/modules/finance/payment-receipt";
+import { receiptView, type ReceiptView } from "@/modules/finance/portal-receipt";
 
 export type PortalInvoice = {
   id: string;
@@ -179,4 +181,18 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
       };
     }),
   };
+}
+
+/**
+ * One of the client's payment receipts on screen (/portal/receipt?id=): the same audited read as the
+ * PDF (`invoice_payment_receipt`), plus their invoices for "Still to pay". Null when it can't be read.
+ */
+export async function loadPortalReceipt(viewer: PortalViewer, receiptId: string): Promise<ReceiptView | null> {
+  const supabase = await createClient({ organizationId: viewer.organizationId });
+  const { data, error } = await supabase.rpc("invoice_payment_receipt", { p_receipt_id: receiptId });
+  if (error) return null;
+  const receipt = paymentReceiptFromRpc(data);
+  if (!receipt) return null;
+  const invoices = await loadPortalInvoices(viewer).catch(() => null);
+  return receiptView({ receipt, receiptId, organizationId: viewer.organizationId, invoices: invoices?.invoices ?? [] });
 }

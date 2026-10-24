@@ -7,7 +7,7 @@ import { PortalScreen } from "@/components/portal/screen";
 import { signInLocation } from "@/lib/auth/redirect";
 import { loadPortalAgreements } from "@/modules/agreements/load";
 import { loadPortalDocuments } from "@/modules/documents/load";
-import { loadPortalInvoices } from "@/modules/finance/portal-load";
+import { loadPortalInvoices, loadPortalReceipt } from "@/modules/finance/portal-load";
 import { isUuid } from "@/lib/tenant/context";
 import { countPortalUnread, loadPortalMessages } from "@/modules/messages/load";
 import { firmLogo } from "@/modules/firm-onboarding/public-logo";
@@ -23,7 +23,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const LIVE = new Set(["home", ...PORTAL_SLUGS]);
+// The receipt page is live-only: the designs have no sample receipt (#167 §4).
+const LIVE = new Set(["home", ...PORTAL_SLUGS, "receipt"]);
 const PERSONA = new Set(["olena", "rafael"]);
 
 async function Body({
@@ -31,7 +32,7 @@ async function Body({
   searchParams,
 }: {
   params: Promise<{ slug?: string[] }>;
-  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[]; response?: string | string[]; field?: string | string[]; matter?: string | string[] }>;
+  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[]; response?: string | string[]; field?: string | string[]; matter?: string | string[]; id?: string | string[] }>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const page = slug?.[0] ?? "home";
@@ -41,6 +42,7 @@ async function Body({
   const next = page === "home" ? "/portal" : `/portal/${page}`;
   const access = await loadPortalAccess();
   if (access.kind === "signed-out") redirect(signInLocation(next));
+  if (access.kind === "sample" && page === "receipt") notFound();
   if (access.kind === "sample") {
     return (
       <PortalScreen page={page}>
@@ -89,6 +91,8 @@ async function Body({
     page === "home" ? loadPortalHome(access.viewer, null).catch(() => null) : null,
   ]);
   const matters = page === "matters" ? await loadPortalMatters(access.viewer).catch(() => null) : null;
+  const receiptValue = Array.isArray(query.id) ? query.id[0] : query.id;
+  const receipt = page === "receipt" && isUuid(receiptValue) ? await loadPortalReceipt(access.viewer, receiptValue).catch(() => null) : null;
   return (
     <PortalScreen page={page}>
       <LivePortal
@@ -106,6 +110,7 @@ async function Body({
         home={home}
         logo={logo}
         matters={matters}
+        receipt={receipt}
       />
     </PortalScreen>
   );
@@ -116,7 +121,7 @@ export default function PortalPage({
   searchParams,
 }: {
   params: Promise<{ slug?: string[] }>;
-  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[]; response?: string | string[]; field?: string | string[]; matter?: string | string[] }>;
+  searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[]; response?: string | string[]; field?: string | string[]; matter?: string | string[]; id?: string | string[] }>;
 }) {
   return (
     <Suspense fallback={<PortalScreen page="home"><EmptyPortal /></PortalScreen>}>
