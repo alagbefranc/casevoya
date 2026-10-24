@@ -291,3 +291,43 @@ describe("Approving your own entry", () => {
     expect(await attestation("government_issuers", issuer)).toMatchObject({ status: "approved" });
   });
 });
+
+describe("Several entries captured from the same official page", () => {
+  it("reuses the snapshot for the same content and numbers a changed page's snapshot next", async () => {
+    const ctx = await firm();
+    const OTHER = "e".repeat(64);
+    const enter = async (hash: string, label: string) => {
+      await stale(ctx.manager, ctx.orgId);
+      const snapshot = JSON.stringify({ sha256: hash, retrieved_at: new Date().toISOString(), final_url: PAGE.split("#")[0], http_status: 200 });
+      const row = await db.query<{ id: string }>(
+        `select public.propose_submission_requirement($1, null, 'online_portal'::public.submission_channel, 'outside_step', $2, $3, null, null, null, $4::date, null, $5::jsonb) as id`,
+        [ctx.orgId, label, PAGE, firmDay(), snapshot],
+      );
+      return row.rows[0].id;
+    };
+    const first = await enter(HASH, "Synthetic first step");
+    const second = await enter(HASH, "Synthetic second step, same page content");
+    const third = await enter(OTHER, "Synthetic third step, page changed");
+    await asMaintenance(db);
+    const rows = await db.query<{ id: string; snapshot_number: number; content_hash: string; snapshot_sha256: string }>(
+      `select r.id, s.snapshot_number, s.content_hash, r.snapshot_sha256
+       from public.submission_requirements r join public.source_snapshots s on s.id = r.snapshot_id
+       where r.id = any($1::uuid[])`,
+      [[first, second, third]],
+    );
+    const byId = Object.fromEntries(rows.rows.map((row) => [row.id, row]));
+    expect(byId[first]).toMatchObject({ snapshot_number: 1, content_hash: HASH, snapshot_sha256: HASH });
+    expect(byId[second]).toMatchObject({ snapshot_number: 1, content_hash: HASH, snapshot_sha256: HASH });
+    expect(byId[third]).toMatchObject({ snapshot_number: 2, content_hash: OTHER, snapshot_sha256: OTHER });
+    const snapshots = await db.query<{ n: number }>(
+      `select count(*)::int as n from public.source_snapshots s where s.source_id = (select source_id from public.submission_requirements where id = $1)`,
+      [first],
+    );
+    expect(snapshots.rows[0].n).toBe(2);
+    // An entry without a capture still records no snapshot.
+    await stale(ctx.manager, ctx.orgId);
+    const uncaptured = await proposeRequirement(ctx, false);
+    await asMaintenance(db);
+    expect((await db.query(`select snapshot_id from public.submission_requirements where id = $1`, [uncaptured])).rows[0]).toEqual({ snapshot_id: null });
+  });
+});

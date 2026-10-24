@@ -647,6 +647,8 @@ GOV follow-up (decisions of 2026-10-24, docs/DECISIONS.md), branch `fix/gov-revi
 * New five-argument `app.` and `public.` `review_submission_requirement`, `review_government_issuer`, `review_processing_estimate` (`…, p_note, p_page_opened_on date`): the copied bodies plus the two checks; the attestation is stored with the approval; audit events gain `_self` on a self-approval and carry `page_attested_on` and `self_approved`.
 * **Redefines** `app.review_submission_requirement(uuid, integer, text, text)` (latest `20261025170000_gov_submission_checklist.sql`), `app.review_government_issuer(uuid, integer, text, text)` (latest `20261025180000_gov_correspondence_issuers_tasks.sql`) and `app.review_processing_estimate(uuid, integer, text, text)` (latest `20261025190000_gov_status_provenance.sql`): each now calls its five-argument version with no attestation. The four-argument public wrappers are unchanged.
 
+* `20261025220100_gov_requirement_snapshot_number.sql` **redefines** `app.propose_submission_requirement` (latest `20261025170000_gov_submission_checklist.sql`): it always inserted `source_snapshots.snapshot_number = 1`, so a second capture of the same URL broke `unique (source_id, snapshot_number)`. Now, under a transaction advisory lock per source, a capture with the same SHA-256 reuses that source's snapshot and a different one gets `max(snapshot_number) + 1`. `propose_government_issuer` and `record_processing_estimate` keep their hash on their own rows and never write `source_snapshots`, so they are unchanged.
+
 Tested in `tests/gov-review-decisions.rls.test.ts` and `tests/gov-review-decisions-present.test.tsx`.
 
 ## Known gaps (next tasks)
