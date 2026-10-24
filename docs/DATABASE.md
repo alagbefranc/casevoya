@@ -668,6 +668,20 @@ GOV-01 and GOV-03 (gap #181), on the manual submission handoff (`20261019202100`
 
 Forced RLS on every new table; reads only (matter staff through `app.gov_staff_can_read`; requirements to the firm's staff at aal2). Audit: `submission.step_done`, `_step_undone`, `_fees_confirmed`, `_fees_unconfirmed`, `_gate_overridden`, `_requirement_entered`, `_requirement_approved`, `_requirement_rejected`, `_requirement_retired`. Tested in `tests/gov-submission-checklist.rls.test.ts` and `tests/government-handoff.rls.test.ts`.
 
+## Approval follow-up: checklist, conditions summary, delivery record (`20261025200000`, not applied on the live project)
+
+DEC-02 (gap #182), branch `feat/dec-approval-followup`, on the T038/T039 decisions (`20261019202100`).
+
+* `approval_follow_up_steps`: a firm's official step after an approval, per program (`program_key`, required): label, `timing_text` (only as the page words it), `source_id` (firm `official_sources` row), `snapshot_id` (`source_snapshots`), `source_url` (allowlisted, trigger), section, form number and date modified, `checked_on`, `current_to`, `snapshot_sha256`, status pending_review / approved / rejected / retired with reviewer. Entered values immutable (trigger); status only through the functions (`app.gov_guard_update`). Staff of the firm (aal2) read it. Never seeded.
+* `approval_follow_up_events` (append-only): an official step ticked or unticked on a matter, with the decision, membership and time; the latest per step is its state.
+* `conditions_summaries`: draft / approved / superseded, `number` per matter (set on approval), `body`, `body_sha256`, drafter, approver, `approved_at`, `superseded_at`. One draft and one approved per matter (partial unique indexes); approved text immutable (trigger).
+* `decision_deliveries`: matter, decision, `document_version_id` (stored clean file on the matter), `document_label`, `method` (portal, email, in_person, mail), `delivered_at`, note, recorder; acknowledgement `client_portal` (user, time) or `staff_recorded` (membership, date, evidence file and/or note), set once (trigger).
+* Functions (public invoker wrappers over `app.*` SECURITY DEFINER, `search_path = ''`): `propose_approval_follow_up_step` (owner, licensed consultant, case manager), `review_approval_follow_up_step` and `retire_approval_follow_up_step` (licensed, fresh step-up, no licence block; snapshot required to approve), `tick_approval_follow_up_step` (matter staff, approval confirmed, step approved for the matter's program), `draft_conditions_summary`, `revise_conditions_summary`, `approve_conditions_summary` (licensed, fresh step-up; supersedes the earlier version; completes the conditions-summary task), `record_decision_delivery` (completes the document-delivery task), `record_delivery_acknowledgement` (evidence required), `acknowledge_decision_delivery` (a client party to the matter), and `portal_decision_follow_up(org)` (the signed-in client's current approved summaries and deliveries; no drafts or staff details). Helpers: `app.dec_latest_approval`, `app.dec_open_approved_matter`, `app.dec_complete_follow_up` (calls the unchanged `app.set_task_status`).
+* Forced RLS on every new table; staff on the matter read through `app.gov_staff_can_read`; clients read nothing directly. Audited `decision.follow_up_step_entered` / `_approved` / `_rejected` / `_retired` / `_done` / `_undone`, `decision.conditions_summary_drafted` / `_revised` / `_approved`, `decision.document_delivered`, `decision.delivery_acknowledged`.
+* No function redefined.
+
+Tested in `tests/dec-approval-follow-up.rls.test.ts` and `tests/dec-approval-follow-up-present.test.tsx`.
+
 ## Renewal follow-up: expiry, official timing, renewal reminder (`20261025210000`, not applied on the live project)
 
 DEC-02 (gap #182), branch `feat/dec-renewal`. No existing function redefined.
