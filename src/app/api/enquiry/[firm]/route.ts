@@ -43,6 +43,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ fir
     if (!page) {
       return NextResponse.json({ error: "form_unavailable", message: ENQUIRY_MESSAGES.form_unavailable }, { status: 404, headers: NO_STORE });
     }
+    if (!page.open) {
+      return NextResponse.json({ error: "form_closed", message: ENQUIRY_MESSAGES.form_closed }, { status: 403, headers: NO_STORE });
+    }
     const statements = enquiryStatements(page.firmName);
     const hash = await clientHash(clientAddress(request.headers), process.env.BOOKING_CLIENT_SALT ?? "");
     const { data, error } = await supabase.rpc("submit_enquiry", {
@@ -61,12 +64,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ fir
       p_source: input.source,
       p_idempotency_key: input.key,
       p_client_hash: hash,
+      p_attribution: input.attribution,
     });
     if (error) throw new Error("submit_enquiry failed");
     const result = (data && typeof data === "object" ? data : {}) as { ok?: boolean; error?: keyof typeof ENQUIRY_MESSAGES };
     if (result.ok) return NextResponse.json({ ok: true, practice: page.practice }, { headers: NO_STORE });
     const code = result.error && result.error in ENQUIRY_MESSAGES ? result.error : "unavailable";
-    const status = code === "form_unavailable" ? 404 : code === "enquiry_rate_limited" ? 429 : 400;
+    const status = code === "form_unavailable" ? 404 : code === "form_closed" ? 403 : code === "enquiry_rate_limited" ? 429 : 400;
     return NextResponse.json({ error: code, message: ENQUIRY_MESSAGES[code] }, { status, headers: NO_STORE });
   } catch {
     return NextResponse.json({ error: "unavailable", message: ENQUIRY_MESSAGES.unavailable }, { status: 502, headers: NO_STORE });

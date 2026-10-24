@@ -4969,6 +4969,7 @@ export type Database = {
           conflict_note: string | null
           conflict_result: Database["public"]["Enums"]["lead_conflict_result"]
           converted_at: string | null
+          attribution: Json
           converted_matter_id: string | null
           converted_person_id: string | null
           country_now: string | null
@@ -5004,6 +5005,7 @@ export type Database = {
           conflict_note?: string | null
           conflict_result?: Database["public"]["Enums"]["lead_conflict_result"]
           converted_at?: string | null
+          attribution?: Json
           converted_matter_id?: string | null
           converted_person_id?: string | null
           country_now?: string | null
@@ -5039,6 +5041,7 @@ export type Database = {
           conflict_note?: string | null
           conflict_result?: Database["public"]["Enums"]["lead_conflict_result"]
           converted_at?: string | null
+          attribution?: Json
           converted_matter_id?: string | null
           converted_person_id?: string | null
           country_now?: string | null
@@ -6848,6 +6851,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           default_locale: string
+          enquiry_page_enabled: boolean
           document_max_bytes: number | null
           display_name: string
           dpa_accepted_at: string | null
@@ -6880,6 +6884,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           default_locale?: string
+          enquiry_page_enabled?: boolean
           document_max_bytes?: number | null
           display_name: string
           dpa_accepted_at?: string | null
@@ -6912,6 +6917,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           default_locale?: string
+          enquiry_page_enabled?: boolean
           document_max_bytes?: number | null
           display_name?: string
           dpa_accepted_at?: string | null
@@ -10948,6 +10954,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           default_locale: string
+          enquiry_page_enabled: boolean
           display_name: string
           dpa_accepted_at: string | null
           dpa_version: string | null
@@ -10986,6 +10993,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           default_locale: string
+          enquiry_page_enabled: boolean
           display_name: string
           dpa_accepted_at: string | null
           dpa_version: string | null
@@ -11151,6 +11159,11 @@ export type Database = {
       document_request_progress: {
         Args: { p_matter_id: string }
         Returns: Json
+      }
+      public_privacy_notice: { Args: { p_firm_slug: string }; Returns: Json }
+      set_enquiry_page_enabled: {
+        Args: { p_enabled: boolean; p_organization_id: string }
+        Returns: undefined
       }
       close_firm_transfer: {
         Args: { p_note: string; p_status: string; p_transfer_id: string }
@@ -12594,6 +12607,7 @@ export type Database = {
           p_reply_statement: string
           p_service_interest: string | null
           p_source: Database["public"]["Enums"]["lead_source"]
+          p_attribution?: Json
         }
         Returns: Json
       }
