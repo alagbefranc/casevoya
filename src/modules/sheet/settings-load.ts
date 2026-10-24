@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import { readSupportAccess } from "@/modules/sheet/grants-present";
 import type { SheetStaff } from "@/modules/sheet/load";
-import { planPill, securityData, SIGN_IN_EVENT_ACTIONS, teamData, type MemberSecurity } from "@/modules/sheet/settings-present";
+import { effectiveUploadLimit, planPill, securityData, SIGN_IN_EVENT_ACTIONS, teamData, type MemberSecurity } from "@/modules/sheet/settings-present";
 import { continuityDialog, memberDialog, offboardDialog, parseOffboardFacts, type OffboardFacts } from "@/modules/sheet/settings-staff-admin-present";
 import { transferViews, type FirmTransfersData } from "@/modules/sheet/firm-transfers-present";
 import { loadMembers } from "@/modules/sheet/staff-load";
@@ -136,7 +136,7 @@ export async function loadSheetSettingsSecurity(staff: SheetStaff, now: Date = n
   const org = staff.organizationId;
   const owner = staff.role === "firm_owner";
   const since = new Date(now.getTime() - 30 * 86_400_000).toISOString();
-  const [chrome, header, members, security, events, support] = await Promise.all([
+  const [chrome, header, members, security, events, support, firmLimit, largeUploads] = await Promise.all([
     loadSheetChrome(staff, "/sheet/settings"),
     loadHeader(supabase, staff, "security"),
     loadMembers(supabase, org),
@@ -150,7 +150,11 @@ export async function loadSheetSettingsSecurity(staff: SheetStaff, now: Date = n
           .gte("occurred_at", since)
       : null,
     owner ? supabase.rpc("firm_support_access", { p_organization_id: org }) : null,
+    // DOC-02: the per-file upload limit, and whether above 25 MB may be set yet.
+    supabase.from("organizations").select("document_max_bytes").eq("id", org).maybeSingle(),
+    supabase.from("product_settings").select("value").eq("key", "documents.large_uploads_enabled").maybeSingle(),
   ]);
+  const largeAllowed = (largeUploads.data?.value as { enabled?: unknown } | null)?.enabled === true;
   const supportAccess = support && !support.error ? readSupportAccess(support.data) : null;
   const page: SecurityData = securityData({
     owner,
@@ -160,6 +164,7 @@ export async function loadSheetSettingsSecurity(staff: SheetStaff, now: Date = n
     timeZone: staff.timezone,
     organizationId: org,
     support: supportAccess ? { active: supportAccess.alert ? { endsAt: supportAccess.alert.ends_at } : null, pending: supportAccess.pending } : null,
+    upload: firmLimit.error ? null : { bytes: effectiveUploadLimit(firmLimit.data?.document_max_bytes ?? null, largeAllowed), largeAllowed },
   });
   return { chrome, header, page };
 }

@@ -95,6 +95,11 @@ export async function createUploadIntent(input: {
     p_translation_of_version_id: input.translationOfVersionId ?? null,
     p_language_tag: input.languageTag ?? null,
   });
+  if (error && /above the upload limit/i.test(error.message)) {
+    // DOC-02: name the firm's limit in the refusal.
+    const { data: bytes } = await session.supabase.rpc("document_upload_limit", { p_organization_id: input.organizationId });
+    if (typeof bytes === "number") return { error: `That file is above your firm’s limit of ${Math.round((bytes / 1024 / 1024) * 10) / 10} MB per file.` };
+  }
   if (error) return { error: documentError(error.message) };
   const intent = objectRecord(data);
   const documentId = intent?.document_id;

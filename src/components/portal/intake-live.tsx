@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { useRouter } from "next/navigation";
 import { toast2 } from "@/components/port/kit";
 import { uploadOwnFile } from "./own-upload";
-import { requestIntakeCorrection, saveIntakeAnswerLive, submitIntakeLive } from "@/modules/intake/delivery-actions";
+import { confirmReusedFact, requestIntakeCorrection, saveIntakeAnswerLive, submitIntakeLive } from "@/modules/intake/delivery-actions";
 import type { PortalIntake, PortalIntakeForm } from "@/modules/intake/portal-load";
 import {
   allowsNotApplicable,
@@ -549,7 +549,17 @@ function writePending(responseId: string, pending: Pending) {
   }
 }
 
-export type ReviewRow = { key: string; label: string; text: string; missing: boolean; href: string; link: string; num?: boolean };
+export type ReviewRow = {
+  key: string;
+  label: string;
+  text: string;
+  missing: boolean;
+  href: string;
+  link: string;
+  num?: boolean;
+  /** INT-04, live only: an answer copied from the person's earlier matter, waiting for them to confirm it. */
+  reuse?: { label: string; busy: boolean; onConfirm: () => void };
+};
 
 export function reviewRows(fields: readonly IntakeField[], answers: ReadonlyMap<string, LatestAnswer>, hrefFor: (key: string) => string, linkText: string): ReviewRow[] {
   return visibleFields(fields, answers).map((field) => {
@@ -574,7 +584,8 @@ export function ReviewPanel({
   firm: string;
   rows: ReviewRow[];
   rightLabel: string;
-  send?: { missing: number; busy: boolean; onSend: () => void } | null;
+  /** `waiting`: answers from an earlier matter still to confirm (INT-04). */
+  send?: { missing: number; busy: boolean; onSend: () => void; waiting?: number } | null;
   after?: ReactNode;
 }) {
   return (
@@ -597,9 +608,24 @@ export function ReviewPanel({
                     </span>{" "}
                   </>
                 ) : null}
+                {row.reuse ? (
+                  <>
+                    <span className="bd rev">
+                      <i></i>
+                      {row.reuse.label}
+                    </span>{" "}
+                  </>
+                ) : null}
                 {row.text}
               </dd>
               <dd>
+                {row.reuse ? (
+                  <>
+                    <button className={row.reuse.busy ? "btn sm is-loading" : "btn sm"} type="button" {...(row.reuse.busy ? { "aria-busy": "true" as const } : {})} onClick={row.reuse.onConfirm}>
+                      Confirm
+                    </button>{" "}
+                  </>
+                ) : null}
                 <a href={row.href}>{row.link}</a>
               </dd>
             </Fragment>
@@ -616,7 +642,7 @@ export function ReviewPanel({
           <>
             <button
               className={send.busy ? "btn p is-loading" : "btn p"}
-              {...(send.missing > 0 ? { "aria-disabled": "true" as const, "aria-describedby": "w2" } : {})}
+              {...(send.missing > 0 || send.waiting ? { "aria-disabled": "true" as const, "aria-describedby": "w2" } : {})}
               {...(send.busy ? { "aria-busy": "true" as const } : {})}
               onClick={send.onSend}
             >
@@ -626,6 +652,11 @@ export function ReviewPanel({
               <div className="why" id="w2">
                 <Icon name="lock" />
                 {`Fix ${send.missing} missing answer${send.missing === 1 ? "" : "s"} first`}
+              </div>
+            ) : send.waiting ? (
+              <div className="why" id="w2">
+                <Icon name="lock" />
+                {`Confirm or change ${send.waiting} answer${send.waiting === 1 ? "" : "s"} from your earlier matter first`}
               </div>
             ) : null}
           </>
@@ -720,11 +751,28 @@ export function IntakeForm({ viewer, form }: { viewer: PortalViewer; form: Porta
   const [conflict, setConflict] = useState<Conflict | null>(null);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
+  // INT-04: answers your firm copied from your earlier matter; each is confirmed here or changed.
+  const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(() => new Set((form.reuses ?? []).filter((reuse) => reuse.status === "confirmed").map((reuse) => reuse.id)));
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   const submitted = form.status === "submitted";
   const fields = form.fields;
   const progress = formProgress(fields, answers);
   const visible = visibleFields(fields, answers);
+  const waiting = (form.reuses ?? []).filter((reuse) => reuse.status === "needs_reconfirmation" && !confirmed.has(reuse.id) && answers.get(reuse.fieldKey)?.latest.id === reuse.answerId);
+
+  const confirmReuse = (reuseId: string) => {
+    if (confirming) return;
+    setConfirming(reuseId);
+    void confirmReusedFact({ organizationId: viewer.organizationId, reuseId }).then((result) => {
+      setConfirming(null);
+      if ("error" in result) {
+        toast2(result.error, { kind: "bad", sub: "Check the answer, then confirm it again or change it." });
+        return;
+      }
+      setConfirmed((current) => new Set(current).add(reuseId));
+    });
+  };
 
   const updatePending = useCallback(
     (next: Pending) => {
@@ -897,6 +945,11 @@ export function IntakeForm({ viewer, form }: { viewer: PortalViewer; form: Porta
       document.getElementById(`q-${first.key}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
+    if (waiting.length > 0) {
+      toast2("Confirm the answers from your earlier matter first", { kind: "warn", sub: "Each one is marked in Review and send. Confirm it if it’s still right, or change it." });
+      document.getElementById("rv")?.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
     setSending(true);
     void (async () => {
       for (const key of Object.keys(pendingRef.current)) await flush(key);
@@ -977,6 +1030,15 @@ export function IntakeForm({ viewer, form }: { viewer: PortalViewer; form: Porta
           </div>
         </div>
       ) : null}
+      {waiting.length ? (
+        <div className="alert info" role="status" style={{ marginBottom: "16px" }}>
+          <Icon name="info" cls="ic " />
+          <div>
+            <b>Answers from your earlier matter</b>
+            {`${firm} filled ${waiting.length} answer${waiting.length === 1 ? "" : "s"} from what you told them before${waiting[0].originRef ? ` (${waiting[0].originRef})` : ""}. Check each one in Review and send: confirm it if it’s still right, or change it.`}
+          </div>
+        </div>
+      ) : null}
       {conflict ? (
         <div className="alert warn" role="alert" style={{ marginBottom: "16px" }}>
           <Icon name="alert" cls="ic " />
@@ -1033,9 +1095,12 @@ export function IntakeForm({ viewer, form }: { viewer: PortalViewer; form: Porta
       </div>
       <ReviewPanel
         firm={firm}
-        rows={reviewRows(fields, answers, (key) => `#q-${key}`, "Change")}
+        rows={reviewRows(fields, answers, (key) => `#q-${key}`, "Change").map((row) => {
+          const reuse = waiting.find((item) => item.fieldKey === row.key);
+          return reuse ? { ...row, reuse: { label: "From your earlier matter", busy: confirming === reuse.id, onConfirm: () => confirmReuse(reuse.id) } } : row;
+        })}
         rightLabel={`Nothing goes to ${firm} until you send`}
-        send={{ missing: progress.missing.length, busy: sending, onSend: send }}
+        send={{ missing: progress.missing.length, busy: sending, onSend: send, waiting: waiting.length }}
       />
     </div>
   );

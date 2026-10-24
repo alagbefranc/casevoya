@@ -30,6 +30,21 @@ export type IntakeReviewRow = {
   /** The answer version Mark reviewed records; null: no review button (a document, a description). */
   answerId: string | null;
   reviewed: boolean;
+  /** INT-04, live only: the answer's provenance in one place (the Provenance details). */
+  provenance?: IntakeProvenance | null;
+};
+
+/** INT-04: where an answer came from: raw and normalised value, source, who and when, review, and what it replaced. */
+export type IntakeProvenance = {
+  raw: string;
+  normalized: string;
+  source: string;
+  /** A correction's proof document, on the matter's Documents tab. */
+  sourceHref: string | null;
+  by: string;
+  at: string;
+  review: string;
+  earlier: { value: string; by: string; at: string }[];
 };
 
 export type IntakePanel = {
@@ -45,6 +60,17 @@ export type IntakePanel = {
   rows: IntakeReviewRow[];
   submitted: boolean;
   frozen: boolean;
+  /** INT-04: Reuse approved facts is offered on a draft whose person sent a form on another matter. */
+  reuse?: boolean;
+};
+
+/** INT-04: an answer copied from the person's earlier matter, and whether they have reconfirmed it. */
+export type IntakeReuse = {
+  answerId: string;
+  status: "needs_reconfirmation" | "confirmed" | "replaced";
+  confirmedAt: string | null;
+  /** The earlier matter's reference, or null when this member can't read it. */
+  originRef: string | null;
 };
 
 export type IntakeResponseInput = {
@@ -62,7 +88,33 @@ export type IntakeResponseInput = {
   record: PersonRecord | null;
   documents: { purpose: string; expiresOn: string | null }[];
   otherBirths: AnswerVersion[];
+  /** INT-04: who reviewed each answer version, and when. */
+  reviews?: ReadonlyMap<string, { by: string | null; at: string }>;
+  /** INT-04: a correction's proof document link, by the answer version it made. */
+  proofHref?: (answerId: string) => string | null;
+  /** INT-04: answers copied from the person's earlier matter on this form. */
+  reuses?: readonly IntakeReuse[];
+  /** INT-04: the person sent a form on another matter, so earlier answers may be reused here. */
+  earlierForms?: boolean;
 };
+
+/** "24 Oct 14:05" in the firm's zone. */
+export function stampAt(iso: string, timeZone: string): string {
+  try {
+    const time = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(iso));
+    return `${shortDay(iso, timeZone)} ${time}`;
+  } catch {
+    return shortDay(iso, timeZone);
+  }
+}
+
+/** The raw value as saved, readable: its text, else the stored JSON (short). */
+export function rawText(raw: Record<string, unknown> | undefined): string {
+  if (!raw || Object.keys(raw).length === 0) return "Nothing entered";
+  if (typeof raw.text === "string") return raw.text;
+  const json = JSON.stringify(raw);
+  return json.length > 200 ? `${json.slice(0, 199)}…` : json;
+}
 
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -104,6 +156,7 @@ export function intakePanel(input: IntakeResponseInput, who: (userId: string | n
   for (const flag of flags) if (flag.fieldKey && !flagFor.has(flag.fieldKey)) flagFor.set(flag.fieldKey, flag);
   const correctionFor = new Map(input.corrections.filter((row) => row.answerId).map((row) => [row.answerId as string, row]));
   const submitted = input.status === "submitted";
+  const reuseFor = new Map((input.reuses ?? []).map((reuse) => [reuse.answerId, reuse]));
 
   const rows: IntakeReviewRow[] = [];
   for (const field of visibleFields(input.fields, answers)) {
@@ -115,14 +168,46 @@ export function intakePanel(input: IntakeResponseInput, who: (userId: string | n
     const correction = correctionFor.get(latest.id);
     const source = [firstWord(who(latest.createdBy)) || "Someone", `v${entry.versionNumber}`, shortDay(latest.createdAt, timeZone)];
     if (correction) source.push(correctionRef(correction.number));
+    const reuse = reuseFor.get(latest.id);
+    const from = reuse ? `Reused from ${reuse.originRef ?? "an earlier matter"}` : null;
+    if (from) source.push(from);
+    const review = input.reviews?.get(latest.id);
+    const provenance: IntakeProvenance | null = input.reviews
+      ? {
+          raw: rawText(latest.raw),
+          normalized: answerText(field, latest),
+          source: correction
+            ? `Correction ${correctionRef(correction.number)} to ${input.title} v${input.versionNumber}`
+            : reuse
+              ? `${from}: an answer reviewed there. ${reuse.status === "confirmed" ? `The client confirmed it${reuse.confirmedAt ? ` ${stampAt(reuse.confirmedAt, timeZone)}` : ""}.` : "The client hasn’t confirmed it yet."}`
+              : `Answer on ${input.title} v${input.versionNumber}`,
+          sourceHref: input.proofHref?.(latest.id) ?? null,
+          by: who(latest.createdBy),
+          at: stampAt(latest.createdAt, timeZone),
+          review: reviewed ? `Reviewed${review?.by ? ` by ${who(review.by)}` : ""}${review ? `, ${stampAt(review.at, timeZone)}` : ""}` : submitted ? "Not reviewed yet" : "Draft: not submitted",
+          earlier: [...entry.history].reverse().map((old) => ({ value: answerText(field, old), by: who(old.createdBy), at: stampAt(old.createdAt, timeZone) })),
+        }
+      : null;
     rows.push({
       key: field.key,
       question: fieldLabel(field),
       answer: flag && flag.kind !== "birth" && flag.kind !== "name" ? `${partial(field, latest)}. ${flag.detail}` : partial(field, latest),
       source,
-      badge: flag && !reviewed ? { tone: "chg", label: flag.label } : reviewed ? { tone: "ok", label: "Reviewed" } : submitted ? { tone: "rev", label: "Awaiting review" } : { tone: "unv", label: "Draft" },
+      badge:
+        flag && !reviewed
+          ? { tone: "chg", label: flag.label }
+          : reviewed
+            ? { tone: "ok", label: "Reviewed" }
+            : submitted
+              ? { tone: "rev", label: "Awaiting review" }
+              : reuse?.status === "needs_reconfirmation"
+                ? { tone: "rev", label: "Needs client reconfirmation" }
+                : reuse?.status === "confirmed"
+                  ? { tone: "ok", label: "Client confirmed" }
+                  : { tone: "unv", label: "Draft" },
       answerId: submitted ? latest.id : null,
       reviewed,
+      provenance,
     });
   }
   for (const flag of flags.filter((item) => item.kind === "expired")) {
@@ -163,6 +248,8 @@ export function intakePanel(input: IntakeResponseInput, who: (userId: string | n
         { label: "Required, still missing", badge: progress.missing.length ? { tone: "chg", label: String(progress.missing.length) } : { tone: "ok", label: "None" } },
       ];
   if (input.corrections.length) sections.push({ label: "Corrections asked", badge: { tone: "chg", label: String(input.corrections.length) } });
+  const waitingClient = rows.filter((row) => row.badge.label === "Needs client reconfirmation").length;
+  if (!submitted && reuseFor.size) sections.push({ label: "Reused, client to confirm", badge: waitingClient ? { tone: "rev", label: String(waitingClient) } : { tone: "ok", label: "None" } });
 
   const by = [`answered by ${firstWord(input.personName)}`];
   if (progress.unknown) by.push(`${progress.unknown} marked “I don’t know”`);
@@ -180,6 +267,7 @@ export function intakePanel(input: IntakeResponseInput, who: (userId: string | n
     rows,
     submitted,
     frozen: Boolean(input.frozenAt),
+    reuse: !submitted && !input.frozenAt && input.earlierForms === true,
   };
 }
 

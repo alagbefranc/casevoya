@@ -77,6 +77,7 @@ import { missingPolicies } from "@/modules/portal-policies/defaults";
 import { loadCurrentPolicies } from "@/modules/portal-policies/load";
 import { loadClosurePanel } from "@/modules/sheet/closure-load";
 import { loadMatterIntake } from "@/modules/sheet/matter-intake-load";
+import { loadPersonHistory } from "@/modules/sheet/person-history-load";
 import { docRequestPersonLabel, mayRequestDocuments } from "@/modules/sheet/doc-request";
 import {
   governmentLabel,
@@ -693,7 +694,26 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       events,
       eventsOwnerOnly: staff.role !== "firm_owner",
     },
-    people: { cards, relationships: relationRows },
+    people: {
+      cards,
+      relationships: relationRows,
+      // INT-05: read only for the People tab; row-level security returns nothing to anyone who can't write the person.
+      history:
+        tab === "people"
+          ? await loadPersonHistory(supabase, {
+              organizationId: org,
+              role: staff.role,
+              timezone: staff.timezone,
+              today,
+              people: ordered
+                .filter((row, index) => row.person_id && ordered.findIndex((other) => other.person_id === row.person_id) === index)
+                .flatMap((row) => {
+                  const found = person.get(row.person_id as string);
+                  return found ? [{ id: found.id, name: found.display_name, dateOfBirth: found.date_of_birth, birthPrecision: found.birth_date_precision, editable: true }] : [];
+                }),
+            }).catch(() => [])
+          : undefined,
+    },
     documents: {
       checklist: program,
       people: [...new Set(checklist.map((row) => firstName(personName(row.personId))))].slice(0, 4),
