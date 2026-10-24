@@ -14,7 +14,7 @@ import { localInput } from "@/modules/sheet/government-present";
 type Client = Awaited<ReturnType<typeof createClient>>;
 
 const STEP_COLUMNS =
-  "id, program_key, label, timing_text, source_url, source_section, form_number, form_modified_on, checked_on, current_to, snapshot_sha256, status, reviewed_by_membership_id, reviewed_at, review_note, version";
+  "id, program_key, label, timing_text, source_url, source_section, form_number, form_modified_on, checked_on, current_to, snapshot_sha256, status, reviewed_by_membership_id, reviewed_at, review_note, version, page_attested_by_membership_id, page_attested_on";
 const SUMMARY_COLUMNS =
   "id, number, body, status, drafted_by_membership_id, approved_by_membership_id, approved_at, body_sha256, superseded_at, updated_at, version";
 const DELIVERY_COLUMNS =

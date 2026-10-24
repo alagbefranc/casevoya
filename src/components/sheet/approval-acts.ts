@@ -11,6 +11,7 @@ import {
   saveConditionsSummary,
   tickFollowUpStep,
 } from "@/modules/decisions/actions";
+import { readAttestationFrom } from "@/modules/government/page-attestation";
 import { submittedInstant } from "@/modules/government/present";
 import { needsStepUp, stepUpLocation, withoutDialog } from "@/modules/sheet/matter-wire";
 
@@ -32,6 +33,7 @@ const DONE: Record<string, [string, string]> = {
   tick: ["Saved", "Kept on the matter with your name and the time."],
   propose: ["Sent for review", "A licensed consultant approves it before it reaches a checklist."],
   review: ["Approved", "It now shows on follow-up checklists for its program."],
+  attest: ["Approved", "It shows with “page not captured by Casevoya, checked by you” and the date."],
   reject: ["Rejected", "It won’t reach any checklist."],
   retire: ["Retired", "It no longer shows on new checklists."],
   "draft-summary": ["Draft saved", "A licensed consultant approves it before the client sees it."],
@@ -45,6 +47,7 @@ const DONE: Record<string, [string, string]> = {
 const SHARED: Record<string, [string, string]> = {
   "reject-open": ["#dDecRej", "reject"],
   "retire-open": ["#dDecRet", "retire"],
+  "attest-open": ["#dDecAtt", "attest"],
   "ack-open": ["#dDecAck", "ack"],
 };
 
@@ -64,6 +67,8 @@ export function bindApprovalControls(root: HTMLElement, router: Router, listen: 
         if (!confirm || !dialog) return;
         confirm.dataset.id = control.dataset.id ?? "";
         confirm.dataset.version = control.dataset.version ?? "";
+        const tick = dialog.querySelector<HTMLInputElement>("input[data-attest]");
+        if (tick) tick.checked = false;
         dialog.showModal();
         return;
       }
@@ -106,10 +111,14 @@ export async function runApprovalAct(control: HTMLElement, root: HTMLElement, ro
     });
     result = proposed;
     if (proposed && "snapshot" in proposed && !proposed.snapshot) {
-      note = `${proposed.reason ?? "The page couldn’t be fetched."} It is kept for review, but it can’t be approved without a snapshot of the page.`;
+      note = `${proposed.reason ?? "The page couldn’t be fetched."} It is kept for review. A licensed consultant approves it only after opening the official page themselves.`;
     }
   } else if (act === "review") {
     result = await reviewFollowUpStep({ organizationId, stepId: data.id ?? "", version, decision: "approved", note: null });
+  } else if (act === "attest") {
+    const attested = readAttestationFrom(scope);
+    if (!attested || "error" in attested) return void toast2(attested?.error ?? "Tick that you opened the official page yourself", { kind: "warn", sub: "Nothing was saved." });
+    result = await reviewFollowUpStep({ organizationId, stepId: data.id ?? "", version, decision: "approved", note: null, pageOpenedOn: attested.openedOn });
   } else if (act === "reject") {
     const why = value(scope, "#djN");
     if (why.length < 3) return void toast2("Say why", { kind: "warn", sub: "Kept with the step." });

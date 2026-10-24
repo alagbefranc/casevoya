@@ -15,6 +15,7 @@ import type {
   FollowUpCheckItem,
 } from "@/components/sheet/designer/matter-approval-follow-up";
 import type { MatterDecisionsData } from "@/components/sheet/designer/matter-government";
+import { attestationError } from "@/modules/government/page-attestation";
 import { shortHash } from "@/modules/government/present";
 import { dayMonthYear } from "@/modules/sheet/matter-present";
 import { programLabel } from "@/modules/sheet/matters-present";
@@ -38,6 +39,9 @@ export type FollowUpStepRow = {
   reviewed_at: string | null;
   review_note: string | null;
   version: number;
+  /** Approved without a snapshot: the licensed reviewer's attestation (DEC follows the GOV review rules, 2026-10-24). */
+  page_attested_by_membership_id?: string | null;
+  page_attested_on?: string | null;
 };
 
 export type FollowUpEventRow = { step_id: string; ticked: boolean; membership_id: string; created_at: string };
@@ -175,7 +179,7 @@ export function buildApprovalFollowUp(input: ApprovalInput): { card: ApprovalFol
     .map((row) => {
       const event = latest.get(row.id) ?? null;
       const done = Boolean(event?.ticked);
-      const facts = provenance(asRequirement(row), date);
+      const facts = provenance(asRequirement(row), date, input.memberName);
       return {
         id: row.id,
         label: row.label,
@@ -201,9 +205,14 @@ export function buildApprovalFollowUp(input: ApprovalInput): { card: ApprovalFol
     .map((row) => ({
       label: row.label,
       kind: programLabel(row.program_key),
-      source: { href: row.source_url, text: sourceText(row.source_url), facts: provenance(asRequirement(row), date) },
+      source: { href: row.source_url, text: sourceText(row.source_url), facts: provenance(asRequirement(row), date, input.memberName) },
       badge: row.snapshot_sha256 ? { tone: "chg", label: "Waiting for review" } : { tone: "bad", label: "No page snapshot" },
-      approve: input.licensed && row.snapshot_sha256 ? wire("review", input, { id: row.id, version: String(row.version) }) : null,
+      // No snapshot: Approve opens the reviewer's attestation (DEC follows the GOV review rules, 2026-10-24).
+      approve: input.licensed
+        ? row.snapshot_sha256
+          ? wire("review", input, { id: row.id, version: String(row.version) })
+          : wire("attest-open", input, { id: row.id, version: String(row.version) })
+        : null,
       reject: input.licensed ? wire("reject-open", input, { id: row.id, version: String(row.version) }) : null,
     }));
 
@@ -303,6 +312,7 @@ export function buildApprovalFollowUp(input: ApprovalInput): { card: ApprovalFol
     delivery: writer && confirmed && input.files.length ? { wire: wire("deliver", input), files: input.files, methods: [...DELIVERY_METHODS], now: input.nowLocal, timezone: input.timezone } : null,
     ack: deliveries.some((row) => row.ack) ? { wire: wire("ack", input), files: input.files, today: input.today } : null,
     reject: pending.some((row) => row.reject) ? { wire: wire("reject", input) } : null,
+    attest: pending.some((row) => row.approve?.["data-dec"] === "attest-open") ? { wire: wire("attest", input), today: input.today } : null,
     retire: official.some((row) => row.retire) ? { wire: wire("retire", input) } : null,
   };
   return { card, dialogs };
@@ -331,7 +341,6 @@ const ERRORS: [RegExp, string][] = [
   [/choose the program/, "Choose the program the step applies to."],
   [/write the timing/, "Write the timing as the page gives it (3 to 300 characters), or leave it empty."],
   [/as the official page gives it/, "Write the step as the official page gives it (3 to 300 characters)."],
-  [/goes live only with a snapshot/, "This step has no snapshot of its page, so it can’t be approved. Enter it again when the page can be fetched."],
   [/why it.s rejected|why it.s retired/, "Say why."],
   [/nothing is waiting for review/, "That step was already reviewed."],
   [/only an approved step/, "Only an approved step can be retired."],
@@ -357,6 +366,8 @@ const ERRORS: [RegExp, string][] = [
 ];
 
 export function followUpError(message: string): string {
+  const attestation = attestationError(message);
+  if (attestation) return attestation;
   for (const [pattern, copy] of ERRORS) if (pattern.test(message)) return copy;
   return "That couldn’t be saved.";
 }

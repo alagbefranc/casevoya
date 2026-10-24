@@ -11,7 +11,7 @@ const GOV_STAFF = new Set(["firm_owner", "licensed_consultant", "case_manager", 
 const RENEWAL_COLUMNS =
   "id, decision_id, document_label, expires_on, document_version_id, remind_on, timing_id, task_id, owner_membership_id, recorded_by_membership_id, client_person_id, service_scope, fee_section, fee_group, fee_name, lead_id, reminder_set_at, reminder_set_by_membership_id, cancelled_at, cancel_reason, created_at, version";
 const TIMING_COLUMNS =
-  "id, program_key, applies_to, timing_text, lead_days, source_url, source_section, form_number, form_modified_on, checked_on, current_to, snapshot_sha256, status, version";
+  "id, program_key, applies_to, timing_text, lead_days, source_url, source_section, form_number, form_modified_on, checked_on, current_to, snapshot_sha256, status, version, page_attested_by_membership_id, page_attested_on";
 const FEE_COLUMNS = "id, section, fee_group, name, amount_cents, currency, source_url, retrieved_at, snapshot_sha256, status, reviewed_at";
 
 export type RenewalLoadInput = {

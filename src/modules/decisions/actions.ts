@@ -80,7 +80,10 @@ export async function proposeFollowUpStep(
   return { id: data as string, snapshot: Boolean(fetched.snapshot), reason: fetched.snapshot ? null : fetched.reason };
 }
 
-export async function reviewFollowUpStep(input: Ref & { stepId: string; version: number; decision: "approved" | "rejected"; note: string | null }): Promise<Outcome> {
+/** pageOpenedOn: the reviewer's attestation for a step without a page snapshot (2026-10-24). */
+export async function reviewFollowUpStep(
+  input: Ref & { stepId: string; version: number; decision: "approved" | "rejected"; note: string | null; pageOpenedOn?: string | null },
+): Promise<Outcome> {
   if (!isUuid(input.stepId)) return { error: "Choose the step." };
   if (input.decision !== "approved" && input.decision !== "rejected") return { error: "Choose approve or reject." };
   if (input.decision === "rejected" && (text(input.note)?.length ?? 0) < 3) return { error: followUpError("why it's rejected") };
@@ -91,6 +94,7 @@ export async function reviewFollowUpStep(input: Ref & { stepId: string; version:
     p_expected_version: input.version,
     p_decision: input.decision,
     p_note: text(input.note) as string,
+    p_page_opened_on: input.decision === "approved" && /^\d{4}-\d{2}-\d{2}$/.test(input.pageOpenedOn ?? "") ? (input.pageOpenedOn as string) : null,
   });
   return error ? { error: refusal(error.message) } : { ok: true };
 }

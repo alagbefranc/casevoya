@@ -8,6 +8,7 @@
  */
 import type { CSSProperties, ReactNode } from "react";
 import { Icon, Sep } from "./frame";
+import { PageAttestFields } from "./page-attestation";
 
 const css = (style: Record<string, string>) => style as CSSProperties;
 
@@ -47,6 +48,8 @@ export type RenewalPanelData = {
     timing: { wire: RenewalWire; program: { key: string; label: string } | null; today: string } | null;
     reject: { wire: RenewalWire } | null;
     retire: { wire: RenewalWire } | null;
+    /** Approve a timing without a page snapshot: the reviewer's attestation (2026-10-24). Optional for fidelity samples. */
+    attest?: { wire: RenewalWire; today: string } | null;
   };
 };
 
@@ -406,6 +409,18 @@ function RenewalDialogs({ data }: { data: RenewalPanelData["dialogs"] }) {
             </div>
           </div>
           <Foot label={"Send for review"} wire={data.timing.wire} />
+        </dialog>
+      ) : null}
+      {data.attest ? (
+        <dialog className={"dlg wide"} id={"dRenAtt"} aria-labelledby={"dRenAttT"}>
+          <Head id={"dRenAtt"} title={"Approve without a page snapshot"} />
+          <div className={"db"}>
+            <p className={"mu"} style={{ fontSize: "13px", margin: "0" }}>
+              {"Open the timing’s official page (its link is on the timing) and compare it word for word before you approve."}
+            </p>
+            <PageAttestFields today={data.attest.today} />
+          </div>
+          <Foot label={"Approve"} wire={data.attest.wire} />
         </dialog>
       ) : null}
       {data.reject ? (

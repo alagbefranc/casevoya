@@ -651,6 +651,18 @@ GOV follow-up (decisions of 2026-10-24, docs/DECISIONS.md), branch `fix/gov-revi
 
 Tested in `tests/gov-review-decisions.rls.test.ts` and `tests/gov-review-decisions-present.test.tsx`.
 
+## DEC review rules (`20261025230000`, not applied on the live project)
+
+DEC-02 follows the GOV review rules (2026-10-24), branch `fix/dec-review-rules`.
+
+* `approval_follow_up_steps`, `renewal_timings`: new `page_attested_by_membership_id` (FK `(…, organization_id)` to `memberships`, indexed), `page_attested_on`, `page_attested_at`; all or none, only without `snapshot_sha256`. `approval_follow_up_steps_check3` and `renewal_timings_check3` (approved needs a snapshot) are replaced by `<table>_approved_source` (a snapshot or an attestation).
+* New five-argument `app.`/`public.` `review_approval_follow_up_step` and `review_renewal_timing` (`…, p_note, p_page_opened_on date`): copied bodies plus `app.gov_check_page_attestation` and `app.gov_check_self_approval` (from `20261025220000`); audits gain `_self`, `page_attested_on` and `self_approved`.
+* **Redefines** `app.review_approval_follow_up_step(uuid, integer, text, text)` (latest `20261025200000_dec_approval_follow_up.sql`) and `app.review_renewal_timing(uuid, integer, text, text)` (latest `20261025210000_dec_renewal.sql`): now call their five-argument versions with no attestation.
+* **Redefines** `app.approve_conditions_summary(uuid, integer)` (latest `20261025200000_dec_approval_follow_up.sql`): self-approval rule on the draft's drafter or last reviser (`drafted_by_membership_id`) and its last save (`updated_at`); audit `decision.conditions_summary_approved_self` when it applies.
+* **Redefines** `app.portal_renewal_reminders(uuid)` (latest `20261025210000_dec_renewal.sql`): the timing also carries `page_attested_on` and `page_attested_by` (the reviewer's display name, or "your consultant").
+
+Tested in `tests/dec-approval-follow-up.rls.test.ts`, `tests/dec-renewal.rls.test.ts` and `tests/dec-review-rules-present.test.tsx`.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.
