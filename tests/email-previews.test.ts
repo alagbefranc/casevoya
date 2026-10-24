@@ -38,6 +38,8 @@ const WIRED: Record<string, Record<string, unknown>> = {
   EX16: { template: "signing_code", firm: FIRM, code: "482913" },
   // ORG-06: the matter's consultant changed.
   EX17: { template: "consultant_changed", firm: FIRM },
+  // CRM-01: a new web enquiry, to the firm's owners.
+  EX18: { template: "enquiry_received", firm: FIRM, audience: "staff" },
   // Inbox replies: the text and subject come with the message; dispatch.ts puts them in the context.
   EX15: {
     template: "staff_message",

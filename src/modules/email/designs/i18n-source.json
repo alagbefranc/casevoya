@@ -324,5 +324,12 @@
     "heading": "Your consultant has changed",
     "body": "A different consultant at {firm_name} is now responsible for your file. For your privacy, their name is in your portal.",
     "cta": "Open your portal"
+  },
+  "EX18": {
+    "subject": "New enquiry for {firm_name}",
+    "preheader": "Open the Pipeline in Casevoya to read it.",
+    "heading": "You have a new enquiry",
+    "body": "Someone sent {firm_name} an enquiry from your enquiry page or website form. For their privacy, the details are in the Pipeline.",
+    "cta": "Open the Pipeline"
   }
 }
