@@ -15,6 +15,7 @@ import { Icon, Pair, Sep } from "./frame";
 import { SubmissionChecklist, SubmissionChecklistDialogs, type SubmissionChecklistData, type SubmissionChecklistDialogsData } from "./matter-submissions-checklist";
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { IssuerList, type IssuerListData } from "./letter-form";
+import { ApprovalFollowUp, ApprovalFollowUpDialogs, type ApprovalFollowUpData, type ApprovalFollowUpDialogsData } from "./matter-approval-follow-up";
 
 const css = (style: Record<string, string>) => style as CSSProperties;
 
@@ -368,6 +369,8 @@ export type MatterDecisionsData = {
   letters: GovLetterRow[];
   /** Live only (GOV-04): the firm's issuer list, under the letters. */
   issuers?: IssuerListData | null;
+  /** Live only (DEC-02): the approval follow-up checklist, conditions summary and delivery record. */
+  approval?: ApprovalFollowUpData | null;
 };
 
 function Seg({ selected }: { selected: string }) {
@@ -688,6 +691,10 @@ export function MatterDecisionsLive({ data }: { data: MatterDecisionsData }) {
   }
   const tintIndex = index++;
   const panelIndex = index++;
+  // Live only (DEC-02): the three follow-up panels come after the follow-up rows; the letters after them.
+  const showFollow = view.outcome !== "withdrawn" || view.followUps.length > 0;
+  const approvalIndex = index + (showFollow ? 1 + view.followUps.length : 0);
+  const extra = data.approval ? 3 : 0;
   return (
     <>
       {preview}
@@ -719,9 +726,10 @@ export function MatterDecisionsLive({ data }: { data: MatterDecisionsData }) {
           ))}
         </>
       ) : null}
+      {data.approval ? <ApprovalFollowUp data={data.approval} index={approvalIndex} /> : null}
       {/* Letters stay listed (with Verify and Attach) after a decision, for the next one that arrives. */}
-      {data.letters.length ? <LetterRows letters={data.letters} start={index} /> : null}
-      {data.issuers ? <IssuerList data={data.issuers} start={index + data.letters.length + 2} /> : null}
+      {data.letters.length ? <LetterRows letters={data.letters} start={index + extra} /> : null}
+      {data.issuers ? <IssuerList data={data.issuers} start={index + extra + data.letters.length + 2} /> : null}
     </>
   );
 }
@@ -741,6 +749,8 @@ export type GovDialogsData = {
   receipt: { wire: GovWire; today: string } | null;
   /** Live only (GOV-01): the checklist's dialogs. */
   checklist?: SubmissionChecklistDialogsData | null;
+  /** Live only (DEC-02): the approval follow-up dialogs. */
+  approval?: ApprovalFollowUpDialogsData | null;
 };
 
 function DlgHead({ id, title }: { id: string; title: string }) {
@@ -892,6 +902,7 @@ export function GovDialogs({ data }: { data: GovDialogsData }) {
         </dialog>
       ) : null}
       {data.checklist ? <SubmissionChecklistDialogs data={data.checklist} /> : null}
+      {data.approval ? <ApprovalFollowUpDialogs data={data.approval} /> : null}
     </>
   );
 }
