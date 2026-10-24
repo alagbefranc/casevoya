@@ -124,7 +124,9 @@ describe("approved email designs", () => {
     const firm = renderEmail({ template: "invoice", firm: "Maple & Birch Immigration", invoice_number: "INV-0007", due_on: "2026-11-06" });
     expect(firm.html).toContain("Maple &amp; Birch Immigration</td>");
     expect(firm.html).toContain(">M</td>");
-    expect(firm.html).toContain("Your immigration file");
+    // ORG-01: each firm email says what it is about, not one line for every email.
+    expect(firm.html).toContain(">Invoices</td>");
+    expect(firm.html).not.toContain("Your immigration file");
     expect(firm.html).toContain("Sent by Maple &amp; Birch Immigration via Casevoya");
     expect(firm.html).not.toContain("header-platform");
     expect(firm.html).not.toContain("header-firm");

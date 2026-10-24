@@ -7,6 +7,7 @@ import { readSupportAccess } from "@/modules/sheet/grants-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { planPill, securityData, SIGN_IN_EVENT_ACTIONS, teamData, type MemberSecurity } from "@/modules/sheet/settings-present";
 import { continuityDialog, memberDialog, offboardDialog, parseOffboardFacts, type OffboardFacts } from "@/modules/sheet/settings-staff-admin-present";
+import { transferViews, type FirmTransfersData } from "@/modules/sheet/firm-transfers-present";
 import { loadMembers } from "@/modules/sheet/staff-load";
 import { EXPIRED_SHOWN_DAYS, type PendingInvitation } from "@/modules/sheet/staff-present";
 
@@ -100,6 +101,21 @@ export async function loadSheetSettingsTeam(staff: SheetStaff, now: Date = new D
     now,
     timeZone: staff.timezone,
   });
+  // ORG-06: the owner's firm transfers (under Continuity contact) and the matters New transfer offers.
+  let transfers: FirmTransfersData | null = null;
+  if (owner) {
+    const [overview, matters] = await Promise.all([
+      supabase.rpc("firm_transfers_overview", { p_organization_id: org }),
+      supabase.from("matters").select("id, reference, title").eq("organization_id", org).eq("is_sample", false).neq("stage", "closed").order("updated_at", { ascending: false }).limit(200),
+    ]);
+    if (!overview.error) {
+      transfers = {
+        organizationId: org,
+        transfers: transferViews(overview.data),
+        matters: (matters.data ?? []).map((row) => ({ id: row.id, label: row.reference ? `${row.reference} · ${row.title}` : row.title })),
+      };
+    }
+  }
   // The owner's dialogs: the Designer's Offboard (#dlgOff), Change role or access, Continuity contact.
   let dialogs: { offboard: OffboardDialogData | null; member: MemberDialogData | null; continuity: ContinuityDialogData | null } | null = null;
   if (owner) {
@@ -111,7 +127,7 @@ export async function loadSheetSettingsTeam(staff: SheetStaff, now: Date = new D
       continuity: continuityDialog(org, continuity),
     };
   }
-  return { chrome, header, page, dialogs };
+  return { chrome, header, page, dialogs, transfers };
 }
 
 /** Settings > Security: the firm's sign-in posture, with team-wide counts for a firm owner. */

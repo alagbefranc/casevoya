@@ -7,11 +7,13 @@ import {
   CONTINUITY_DIALOG,
   MEMBER_DIALOG,
   OFFBOARD_DIALOG,
+  handoverHtml,
   offboardDone,
   offboardIntro,
   offboardItems,
   offboardTitle,
   parseOffboardFacts,
+  readHandover,
   type OffboardFacts,
 } from "@/modules/sheet/settings-staff-admin-present";
 
@@ -62,6 +64,27 @@ function escapeHtml(value: string): string {
 // Offboard (#dlgOff)
 // ---------------------------------------------------------------------------
 const facts = new Map<string, OffboardFacts>();
+/** Handover choices to put back after a step-up, once the person's rows are drawn. */
+let pendingHandover: Record<string, Record<string, string>> | null = null;
+
+/** ORG-06: redraws the per-item choices when the person changes; keeps them when only the receiver does. */
+function renderHandover(dialog: HTMLElement, leaverId: string, known: OffboardFacts) {
+  const list = dialog.querySelector<HTMLElement>("[data-handover-list]");
+  const receiver = select(dialog, "ofR");
+  if (!list || !receiver) return;
+  if (list.dataset.for !== leaverId) {
+    const receivers = [...receiver.options].map((option) => ({ label: option.textContent?.trim() ?? "", value: option.value }));
+    list.innerHTML = handoverHtml(known, receivers, leaverId);
+    list.dataset.for = leaverId;
+  }
+  if (pendingHandover) {
+    list.querySelectorAll<HTMLSelectElement>("select[data-handover]").forEach((choice) => {
+      const value = pendingHandover?.[choice.dataset.handover ?? ""]?.[choice.dataset.id ?? ""];
+      if (value && [...choice.options].some((option) => option.value === value)) choice.value = value;
+    });
+    pendingHandover = null;
+  }
+}
 
 function render(dialog: HTMLElement) {
   const person = select(dialog, "ofP");
@@ -83,6 +106,7 @@ function render(dialog: HTMLElement) {
   if (intro) intro.textContent = offboardIntro(leaver);
   const known = facts.get(leaverId);
   if (!known) return;
+  renderHandover(dialog, leaverId, known);
   const items = offboardItems(known, leaver, to);
   dialog.querySelectorAll<HTMLLIElement>("ol.ofl > li").forEach((li, index) => {
     const item = items[index];
@@ -115,6 +139,8 @@ export function mountOffboard(root: HTMLElement, signal: AbortSignal) {
   try {
     const initial = parseOffboardFacts(JSON.parse(dialog.dataset.facts ?? "null"));
     if (initial && person?.value) facts.set(person.value, initial);
+    const list = dialog.querySelector<HTMLElement>("[data-handover-list]");
+    if (list && person?.value) list.dataset.for = person.value;
   } catch {
     // No preview: the list is filled when a person is chosen.
   }
@@ -151,8 +177,21 @@ export async function runOffboard(button: HTMLElement, router: Router) {
   }
   const leaver = optionName(person?.selectedOptions[0]);
   const to = optionName(receiver?.selectedOptions[0]);
-  const result = await offboardStaff({ organizationId: button.dataset.org ?? "", membershipId: draft.person, receiverId: draft.receiver });
-  if ("error" in result) return refused(result, OFFBOARD_DIALOG, draft);
+  // ORG-06: every open lead, booking type and upcoming consultation needs its own choice.
+  const choices = [...dialog.querySelectorAll<HTMLSelectElement>("[data-handover-list] select[data-handover]")].map((choice) => ({
+    kind: choice.dataset.handover ?? "",
+    id: choice.dataset.id ?? "",
+    value: choice.value,
+    label: choice.getAttribute("aria-label") ?? "",
+  }));
+  const handover = readHandover(choices);
+  if ("missing" in handover) {
+    toast2("Choose a person for each item", { kind: "bad", sub: `${handover.missing} still needs one. Nothing was changed.` });
+    return;
+  }
+  const saved = { ...draft, handover: JSON.stringify(handover.ok) };
+  const result = await offboardStaff({ organizationId: button.dataset.org ?? "", membershipId: draft.person, receiverId: draft.receiver, handover: handover.ok });
+  if ("error" in result) return refused(result, OFFBOARD_DIALOG, saved);
   dialog.close();
   const done = offboardDone(result.ok, leaver, to);
   toast2(done.title, { kind: "ok", sub: done.sub });
@@ -292,6 +331,11 @@ export function reopenStaffAdmin(root: HTMLElement, open: Open) {
     control.dispatchEvent(new Event("change", { bubbles: true }));
   };
   if (id === OFFBOARD_DIALOG) {
+    try {
+      pendingHandover = typeof draft.handover === "string" ? (JSON.parse(draft.handover) as Record<string, Record<string, string>>) : null;
+    } catch {
+      pendingHandover = null;
+    }
     set("#ofP", draft.person);
     set("#ofR", draft.receiver);
   } else if (id === MEMBER_DIALOG) {

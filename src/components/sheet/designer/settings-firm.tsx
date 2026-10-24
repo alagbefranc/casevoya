@@ -312,6 +312,8 @@ export function SheetSettingsBranding({ data }: { data: BrandingData }) {
 // Language and time
 // ---------------------------------------------------------------------------
 export type LanguageData = {
+  /** The firm's default language for new clients (ORG-01); live only, the Designer page has none. */
+  firmLanguage?: string;
   rows: { name: string; language: string; timezone: string }[];
   empty: string;
   alert: { title: string; body: string };
@@ -324,6 +326,13 @@ export function SheetSettingsLanguage({ data }: { data: LanguageData }) {
         <div>
           <h1 className={"display"}>{"Language and time"}</h1>
           <p>{"Stored per person. Reminders use each person’s timezone, and official deadlines keep their own timezone too."}</p>
+          {data.firmLanguage ? (
+            <p>
+              {"New clients start in "}
+              <b>{data.firmLanguage}</b>
+              {"."}
+            </p>
+          ) : null}
         </div>
       </div>
       <div className={"tw rv"} role={"region"} aria-label={"People"} tabIndex={0} style={i(1)}>
@@ -395,7 +404,8 @@ export type SettingsDialogs = {
   firm?: { fields: FirmField[] };
   offices?: { offices: OfficeDialogData[]; firmTimezone: string };
   brand?: { accent: string; logoLocator: string };
-  timezone?: { mine: string; firm: string | null };
+  /** `firm` and `locale` are the firm's, offered to owners only (null otherwise). */
+  timezone?: { mine: string; firm: string | null; locale: "en-CA" | "fr-CA" | null };
   /** IANA names for the timezone inputs' suggestions. */
   zones?: string[];
 };
@@ -524,6 +534,16 @@ export function SettingsFirmAfter({ data }: { data: SettingsDialogs }) {
           <Field id={"tzM"} name={"mine"} label={"Your timezone"} value={data.timezone.mine} max={64} list={"tzList"} hint={"Your reminders and times use it."} />
           {data.timezone.firm !== null ? (
             <Field id={"tzF"} name={"firm"} label={"Firm timezone"} value={data.timezone.firm} max={64} list={"tzList"} hint={"Used for firm-wide times and offices without their own. Changing it asks you to confirm it’s you."} />
+          ) : null}
+          {data.timezone.locale !== null ? (
+            <div className={"fld"}>
+              <label htmlFor={"tzL"}>{"Default language for new clients"}</label>
+              <select className={"sel"} id={"tzL"} name={"locale"} defaultValue={data.timezone.locale}>
+                <option value={"en-CA"}>{"English"}</option>
+                <option value={"fr-CA"}>{"Français"}</option>
+              </select>
+              <span className={"hint"}>{"New invites open in this language and the client can switch. French emails still wait for an approved translation. Changing it asks you to confirm it’s you."}</span>
+            </div>
           ) : null}
         </Dialog>
       ) : null}

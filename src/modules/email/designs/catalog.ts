@@ -24,6 +24,7 @@ import {
   uuidOrNull,
 } from "@/modules/email/designs/format";
 import { buildLocalized } from "@/modules/email/designs/localized";
+import { TAGLINES } from "@/modules/email/designs/taglines";
 
 export type TemplateStatus = "wired" | "ready-not-wired" | "deferred";
 export type Audience = "staff" | "firm owner" | "client" | "adult dependant";
@@ -1259,5 +1260,7 @@ export function clientInviteLines(firmName: string, inviterName?: string | null)
 }
 
 export function renderTemplate<K extends TemplateId>(id: K, context: EmailContexts[K], origin: string): EmailCopy {
-  return (EMAIL_TEMPLATES[id] as TemplateDef<EmailContexts[K]>).build(context, origin);
+  const copy = (EMAIL_TEMPLATES[id] as TemplateDef<EmailContexts[K]>).build(context, origin);
+  const tagline = TAGLINES[id];
+  return tagline && !copy.shell ? { ...copy, tagline } : copy;
 }

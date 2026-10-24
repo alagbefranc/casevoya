@@ -7,12 +7,14 @@ import { SettingsMarkup } from "@/components/sheet/markup/settings";
 import { teamData } from "@/modules/sheet/settings-present";
 import {
   continuityDialog,
+  handoverHtml,
   memberDialog,
   offboardDialog,
   offboardDone,
   offboardItems,
   parseOffboardFacts,
   parseOffboardResult,
+  readHandover,
   staffAdminError,
   type OffboardFacts,
 } from "@/modules/sheet/settings-staff-admin-present";
@@ -92,7 +94,7 @@ describe("offboarding preview", () => {
   });
 
   it("is honest when there is nothing to move", () => {
-    const empty: OffboardFacts = { tasks: [], deadlines: [], authority: [], assignments: 0, sessions: null, connections: 0 };
+    const empty: OffboardFacts = { tasks: [], deadlines: [], authority: [], assignments: 0, sessions: null, connections: 0, leads: [], bookingTypes: [], bookings: [] };
     const items = offboardItems(empty, "Kai Moss", "Dana Lee");
     expect(items.map((item) => item.title)).toEqual(["No open tasks", "No deadlines", "No matters where Kai is the consultant of record", "Access closes last"]);
     expect(items.every((item) => item.done)).toBe(true);
@@ -116,7 +118,8 @@ describe("Offboard dialog (live)", () => {
     // Live-only attributes stripped, the classes are exactly the Designer's dialog's.
     const captured = renderToStaticMarkup(createElement(SettingsMarkup, { variant: "tab-team" })).match(/<dialog class="dlg wide" id="dlgOff"[\s\S]*?<\/dialog>/)![0];
     const classes = (markup: string) => [...new Set([...markup.matchAll(/class="([^"]*)"/g)].map((match) => match[1]))].sort();
-    expect(classes(html)).toEqual(classes(captured));
+    // The ORG-06 handover block (div.ofh) is a live-only addition after the Designer's list.
+    expect(classes(html.replace(/<div class="ofh"[^>]*>[\s\S]*?<\/div>(?=<p class="fp-note")/, ""))).toEqual(classes(captured));
   });
 
   it("is not offered when you're the only one on the team", () => {
@@ -131,6 +134,62 @@ describe("Offboard dialog (live)", () => {
     expect(done.sub).toBe(
       "3 tasks and 1 deadline moved to Dana. 2 matter assignments moved. 2 matters now have Dana as consultant of record, each with a review task. Access closed: 2 sessions ended.",
     );
+  });
+});
+
+describe("offboarding hands over leads and booking hosting (ORG-06)", () => {
+  const RECEIVERS = [
+    { label: "Dana Lee", value: OWNER },
+    { label: "Sam Rivers", value: "33333333-3333-4333-8333-333333333333" },
+  ];
+  const facts = parseOffboardFacts({
+    ...RAW,
+    leads: [{ id: "l1", label: "Synthetic Lead <A>", stage: "New" }],
+    booking_types: [{ id: "t1", title: "Initial consultation", published: true, other_hosts: 0 }],
+    bookings: [{ id: "b1", title: "Initial consultation", starts_at: "2026-10-29T14:00:00Z", time_zone: "America/Toronto" }],
+  })!;
+
+  it("parses what needs a new owner or host", () => {
+    expect(facts.leads).toEqual([{ id: "l1", label: "Synthetic Lead <A>", stage: "New" }]);
+    expect(facts.bookingTypes).toEqual([{ id: "t1", title: "Initial consultation", published: true, otherHosts: 0 }]);
+    expect(facts.bookings[0]).toMatchObject({ id: "b1", startsAt: "2026-10-29T14:00:00Z" });
+    expect(parseOffboardFacts(RAW)).toMatchObject({ leads: [], bookingTypes: [], bookings: [] });
+  });
+
+  it("draws one choice per item with no default, never offering the leaver, escaped", () => {
+    const html = handoverHtml(facts, RECEIVERS, OWNER);
+    expect(html).toContain("Open leads: new owner");
+    expect(html).toContain("Booking types they host: new host");
+    expect(html).toContain("Upcoming consultations: new host");
+    expect(html).toContain("Synthetic Lead &lt;A&gt;");
+    expect(html).toContain("Published · no other host");
+    expect(html).toContain("Thu 29 Oct, 10:00 · same time, same link");
+    expect(html.match(/<select /g)).toHaveLength(3);
+    expect(html.match(/<option value="" selected>Choose a person<\/option>/g)).toHaveLength(3);
+    expect(html).not.toContain(`value="${OWNER}"`);
+    expect(handoverHtml(parseOffboardFacts(RAW)!, RECEIVERS, OWNER)).toBe("");
+  });
+
+  it("needs every choice before it sends anything", () => {
+    expect(readHandover([{ kind: "leads", id: "l1", value: "", label: "New owner for Lead" }])).toEqual({ missing: "New owner for Lead" });
+    expect(
+      readHandover([
+        { kind: "leads", id: "l1", value: "m1", label: "" },
+        { kind: "booking_types", id: "t1", value: "m2", label: "" },
+        { kind: "bookings", id: "b1", value: "m2", label: "" },
+      ]),
+    ).toEqual({ ok: { leads: { l1: "m1" }, booking_types: { t1: "m2" }, bookings: { b1: "m2" } } });
+  });
+
+  it("says what went to the people chosen", () => {
+    const result = parseOffboardResult({ tasks: 0, deadlines: 0, sessions: 1, leads: 2, booking_types: 1, bookings: 1 });
+    expect(offboardDone(result, "Sam Rivers", "Dana Lee").sub).toContain("2 leads, 1 booking type and 1 upcoming consultation went to the people you chose.");
+  });
+
+  it("puts the choices in the dialog only when there is something to hand over", () => {
+    const dialog = offboardDialog({ organizationId: ORG, members: MEMBERS, selfMembershipId: OWNER, facts });
+    expect(dialog?.handover).toContain("data-handover=\"leads\"");
+    expect(offboardDialog({ organizationId: ORG, members: MEMBERS, selfMembershipId: OWNER, facts: parseOffboardFacts(RAW) })?.handover).toBe("");
   });
 });
 

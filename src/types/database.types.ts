@@ -11166,6 +11166,30 @@ export type Database = {
       }
       booking_manage_view: { Args: { p_ref: string; p_sha256: string }; Returns: Json }
       issue_booking_manage_token: { Args: { p_delivery_id: string; p_sha256: string }; Returns: string }
+      close_firm_transfer: {
+        Args: { p_note: string; p_status: string; p_transfer_id: string }
+        Returns: undefined
+      }
+      firm_transfers_overview: { Args: { p_organization_id: string }; Returns: Json }
+      record_firm_transfer: {
+        Args: {
+          p_contact_email: string
+          p_contact_name: string
+          p_matter_ids: string[]
+          p_note: string
+          p_organization_id: string
+          p_receiving_firm: string
+        }
+        Returns: string
+      }
+      review_firm_transfer_authority: {
+        Args: { p_authorised: boolean; p_item_id: string; p_note: string }
+        Returns: undefined
+      }
+      email_delivery_brands: {
+        Args: { p_delivery_ids: string[] }
+        Returns: Json
+      }
       email_delivery_locales: {
         Args: { p_delivery_ids: string[] }
         Returns: Json
@@ -11530,14 +11554,24 @@ export type Database = {
         Args: { p_batch: string; p_org: string; p_reason: string }
         Returns: undefined
       }
-      offboard_staff_member: {
-        Args: {
-          p_membership_id: string
-          p_organization_id: string
-          p_receiver_membership_id: string
-        }
-        Returns: Json
-      }
+      offboard_staff_member:
+        | {
+            Args: {
+              p_membership_id: string
+              p_organization_id: string
+              p_receiver_membership_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_handover: Json
+              p_membership_id: string
+              p_organization_id: string
+              p_receiver_membership_id: string
+            }
+            Returns: Json
+          }
       open_intake_response: {
         Args: { p_matter_id: string; p_person_id: string; p_template_id: string }
         Returns: string

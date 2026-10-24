@@ -38,6 +38,7 @@ import { loadSheetSettingsFirm } from "@/modules/sheet/settings-firm-load";
 import { settingsTab } from "@/modules/sheet/settings-firm-present";
 import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam } from "@/components/sheet/designer/settings";
 import { TeamDialogs } from "@/components/sheet/designer/settings-staff-admin";
+import { FirmTransferDialogs, FirmTransfersPanel } from "@/components/sheet/designer/firm-transfers";
 import { PlanDialog, SettingsBillingHeader, SheetRetention, SheetSubscription } from "@/components/sheet/designer/settings-billing";
 import { loadSheetRetention, loadSheetSubscription } from "@/modules/sheet/settings-billing-load";
 import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
@@ -427,8 +428,18 @@ export async function SheetBody({
       query.tab === "team"
         ? await loadSheetSettingsTeam(access.staff).then((loaded) => ({
             ...loaded,
-            content: <SheetSettingsTeam data={loaded.page} />,
-            after: loaded.dialogs ? <TeamDialogs {...loaded.dialogs} /> : null,
+            content: (
+              <>
+                <SheetSettingsTeam data={loaded.page} />
+                {loaded.transfers ? <FirmTransfersPanel data={loaded.transfers} /> : null}
+              </>
+            ),
+            after: (
+              <>
+                {loaded.dialogs ? <TeamDialogs {...loaded.dialogs} /> : null}
+                {loaded.transfers ? <FirmTransferDialogs data={loaded.transfers} /> : null}
+              </>
+            ),
           }))
         : await loadSheetSettingsSecurity(access.staff).then((loaded) => ({ ...loaded, content: <SheetSettingsSecurity data={loaded.page} />, after: null }));
     return (
