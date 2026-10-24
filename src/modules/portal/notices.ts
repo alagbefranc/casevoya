@@ -24,8 +24,8 @@ export function portalNotices(raw: unknown, firmName: string): PortalNotice[] {
         id,
         title: "Your consultant has changed",
         body: name
-          ? `${name} at ${firmName} is now the consultant responsible for ${where}. Questions about the change go to ${firmName}.`
-          : `A different consultant at ${firmName} is now responsible for ${where}. Questions about the change go to ${firmName}.`,
+          ? `${name} at ${firmName} is now the consultant responsible for ${where}. Your file stays with ${firmName}. ${firmName} may ask you to sign an updated service agreement and, if your previous consultant is your representative with IRCC, a new Use of a Representative form (IMM 5476). If you have questions or don't agree with this change, contact ${firmName}.`
+          : `A different consultant at ${firmName} is now responsible for ${where}. Your file stays with ${firmName}. ${firmName} may ask you to sign an updated service agreement and, if your previous consultant is your representative with IRCC, a new Use of a Representative form (IMM 5476). If you have questions or don't agree with this change, contact ${firmName}.`,
       },
     ];
   });

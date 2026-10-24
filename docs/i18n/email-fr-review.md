@@ -622,14 +622,14 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:5609f6110cb
 
 Staff change a matter's responsible consultant from the matter's People tab (change_responsible_consultant; outbox matter.consultant_changed, template consultant_changed), to each person on the matter with a portal account. Honours email_notices. Firm name only: the new consultant's name is in the portal, not the email (ORG-06). Audience: client. [French preview](../email/previews/fr/EX17.html)
 
-Status `machine_draft` · drafted 2026-10-24 · English hash `sha256:287329ce7ab4…`
+Status `machine_draft` · drafted 2026-10-24 · English hash `sha256:aec282098709…`
 
 | Key | English | French draft | Notes for the reviewer |
 |---|---|---|---|
 | `subject` | An update on your file from {firm_name} | Une mise à jour de votre dossier de {firm_name} | Hand draft. EX17 hand draft (ORG-06, #175). Keep {firm_name} |
 | `preheader` | Your consultant has changed. See who in your portal. | Votre consultant a changé. Voyez qui dans votre portail. | Hand draft. EX17 hand draft (ORG-06, #175). |
 | `heading` | Your consultant has changed | Votre consultant a changé | Hand draft. EX17 hand draft (ORG-06, #175). |
-| `body` | A different consultant at {firm_name} is now responsible for your file. For your privacy, their name is in your portal. | Un autre consultant de {firm_name} est maintenant responsable de votre dossier. Pour protéger votre vie privée, son nom figure dans votre portail. | Hand draft. EX17 hand draft (ORG-06, #175). Keep {firm_name} |
+| `body` | A different consultant at {firm_name} is now responsible for your file, and your file stays with {firm_name}. For your privacy, their name is in your portal, along with anything you may need to sign. If you have questions or don't agree with this change, contact {firm_name}. | Un autre consultant de {firm_name} est maintenant responsable de votre dossier, qui reste chez {firm_name}. Pour protéger votre vie privée, son nom figure dans votre portail, avec tout document que vous pourriez avoir à signer. Si vous avez des questions ou n'êtes pas d'accord avec ce changement, communiquez avec {firm_name}. | Hand draft. EX17 hand draft (ORG-06, #175). Keep {firm_name} |
 | `cta` | Open your portal | Ouvrir votre portail | Hand draft. EX17 hand draft (ORG-06, #175). |
 
 ## EX16: Signing code
