@@ -58,6 +58,7 @@ export type VoDocSettings = {
   read_medical?: boolean;
   read_criminal?: boolean;
   read_narratives?: boolean;
+  read_on_upload?: boolean;
 };
 
 export type VoDocCapabilities = { classification: boolean; fields: boolean; missing: boolean; inconsistencies: boolean };

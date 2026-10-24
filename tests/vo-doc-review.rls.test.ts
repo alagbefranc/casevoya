@@ -444,3 +444,17 @@ describe("Vo document reading: review", () => {
     expect((await begin(f)).ok).toBe(true);
   });
 });
+
+describe("Vo document reading: read on upload (DOC-05)", () => {
+  it("is off by default and only the owner turns it on, like every Vo switch", async () => {
+    const f = await firm();
+    await settings(f, { enabled: true });
+    await asMaintenance(db);
+    expect((await db.query<{ read_on_upload: boolean }>(`select read_on_upload from public.vo_settings where organization_id = $1`, [f.orgId])).rows[0].read_on_upload).toBe(false);
+    await settings(f, { read_on_upload: true });
+    await asMaintenance(db);
+    expect((await db.query<{ read_on_upload: boolean }>(`select read_on_upload from public.vo_settings where organization_id = $1`, [f.orgId])).rows[0].read_on_upload).toBe(true);
+    await staff(f, f.consultant);
+    await expectDbError(() => db.query(`select public.set_vo_settings($1, '{"read_on_upload": false}'::jsonb)`, [f.orgId]), /staff access denied/);
+  });
+});

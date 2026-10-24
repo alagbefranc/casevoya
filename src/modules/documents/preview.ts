@@ -1,7 +1,6 @@
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
 
-/** The file types the secure preview renders (DOC-07); others are downloaded instead. */
-export const PREVIEWABLE = new Set(["application/pdf", "image/jpeg", "image/png"]);
+export { PREVIEWABLE } from "@/modules/documents/previewable";
 
 /** Text the standard PDF font can draw: anything outside Latin-1 becomes "?". */
 export function latin1(text: string): string {

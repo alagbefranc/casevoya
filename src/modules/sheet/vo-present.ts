@@ -23,6 +23,8 @@ export type VoSettingsRow = {
   ocr_normalisation: boolean;
   missing_fields: boolean;
   inconsistency_flags: boolean;
+  /** DOC-05: Vo reads a matter's new uploads when staff open its Documents tab. */
+  read_on_upload: boolean;
 };
 
 export type VoSettings = VoSettingsRow & { saved: boolean };
@@ -50,6 +52,7 @@ export function effectiveSettings(row: Partial<VoSettingsRow> | null, sampleMode
     ocr_normalisation: row?.ocr_normalisation ?? true,
     missing_fields: row?.missing_fields ?? true,
     inconsistency_flags: row?.inconsistency_flags ?? true,
+    read_on_upload: row?.read_on_upload ?? false,
   };
 }
 
@@ -354,6 +357,7 @@ export function aiSettings(viewer: VoViewer, settings: VoSettings): AiSettings {
         aiSwitch("swVoSummaries", "Matter summaries for staff", settings.staff_answers, a("staff_answers")),
         aiSwitch("swVoReplies", "Administrative reply drafts", settings.reply_drafts, a("reply_drafts")),
         aiSwitch("swVoLetters", "First drafts of letters from approved facts", false, a(null)),
+        aiSwitch("swVoUpload", "Read documents on upload", settings.read_on_upload, a("read_on_upload"), "New uploads get proposals when staff open the matter’s Documents tab; people still confirm each one"),
       ].map(sub),
     ],
     categories: [

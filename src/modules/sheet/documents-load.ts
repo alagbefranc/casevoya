@@ -1,7 +1,7 @@
 import "server-only";
 import type { CustodyRow, DocCard, DocumentReviewDialogData, DocumentsData, ReviewRow } from "@/components/sheet/designer/documents";
 import { createClient } from "@/lib/supabase/server";
-import { PREVIEWABLE } from "@/modules/documents/preview";
+import { PREVIEWABLE } from "@/modules/documents/previewable";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import {
   cardOpenable,
