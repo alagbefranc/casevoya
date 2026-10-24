@@ -1676,6 +1676,47 @@
           "note": "EX16 hand draft (#166)."
         }
       }
+    },
+    "EX17": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-24",
+      "sourceHash": "sha256:287329ce7ab42452ce3131648e2667d5e6ef155dcf7bd71ab3ea0d53fa61688a",
+      "strings": {
+        "subject": {
+          "en": "An update on your file from {firm_name}",
+          "fr": "Une mise à jour de votre dossier de {firm_name}",
+          "origin": "hand",
+          "note": "EX17 hand draft (ORG-06, #175)."
+        },
+        "preheader": {
+          "en": "Your consultant has changed. See who in your portal.",
+          "fr": "Votre consultant a changé. Voyez qui dans votre portail.",
+          "origin": "hand",
+          "note": "EX17 hand draft (ORG-06, #175)."
+        },
+        "heading": {
+          "en": "Your consultant has changed",
+          "fr": "Votre consultant a changé",
+          "origin": "hand",
+          "note": "EX17 hand draft (ORG-06, #175)."
+        },
+        "body": {
+          "en": "A different consultant at {firm_name} is now responsible for your file. For your privacy, their name is in your portal.",
+          "fr": "Un autre consultant de {firm_name} est maintenant responsable de votre dossier. Pour protéger votre vie privée, son nom figure dans votre portail.",
+          "origin": "hand",
+          "note": "EX17 hand draft (ORG-06, #175)."
+        },
+        "cta": {
+          "en": "Open your portal",
+          "fr": "Ouvrir votre portail",
+          "origin": "hand",
+          "note": "EX17 hand draft (ORG-06, #175)."
+        }
+      }
     }
   }
 }

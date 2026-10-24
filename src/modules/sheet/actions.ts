@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { safeAccessError } from "@/lib/auth/step-up";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
-import { clearMatterOnHold, overrideMatterStage, recordGovernmentStatus, recordMatterOutcome, setMatterOnHold } from "@/modules/matters/actions";
+import { changeResponsibleConsultant, clearMatterOnHold, overrideMatterStage, recordGovernmentStatus, recordMatterOutcome, setMatterOnHold } from "@/modules/matters/actions";
 import { createPortalInvitation } from "@/modules/portal-invitations/actions";
 import { closeMatter } from "@/modules/matters/closure";
 import { acceptLink, guardianSubjects, readPortalInvite } from "@/modules/sheet/portal-invite";
@@ -49,6 +49,11 @@ export async function holdMatter(input: MatterRef & { reason: string; ownerMembe
     reviewOn: input.reviewOn,
     code: null,
   });
+}
+
+/** ORG-06: Change consultant on the People tab; the people with portal access are told. */
+export async function changeMatterConsultant(input: MatterRef & { membershipId: string }) {
+  return changeResponsibleConsultant({ organizationId: input.organizationId, matterId: input.matterId, membershipId: input.membershipId, expectedVersion: input.version, code: null });
 }
 
 export async function resumeMatter(input: MatterRef) {
