@@ -15,6 +15,11 @@
  *   * Item actions go to the Client funds tab, where deposits are verified and bank transfers recorded.
  *   * Under the Earlier months, an optional read-only Card payouts panel: Stripe's payouts (test mode)
  *     with the card payments, refunds and fees in each, matched to Casevoya's card payments.
+ *   * FIN-12 workspace, all optional so the capture renders unchanged: a validation `banner` (`.alert
+ *     warn`) under the header; a card's `tone` colours its figure when it differs from the control
+ *     ledger; the Outstanding items panel lists the deposits in transit and outstanding cheques typed
+ *     in for the bank side (each with Remove) and ends with `addItem` (opens `#dlgRecItem`); a signed
+ *     month's row links its PDF report (`pdf`) in the Signed cell.
  */
 import { Empty, Icon, Pair } from "./frame";
 import { Alert, i, Parts, RIGHT } from "./finance";
@@ -22,14 +27,14 @@ import { Field, LiveDialog, Options, type FundsOption } from "./funds";
 import { Steps, type Step } from "./invoice";
 import { Badge, type MatterBadge } from "./matters";
 
-export type ReconCard = { title: string; value: string; note: string };
+export type ReconCard = { title: string; value: string; note: string; /** Live: the figure differs from the control ledger. */ tone?: "bad" };
 
 /** A button that opens a dialog (`attrs`) or a link to another tab (`href`). */
 export type ReconAction = { label: string; primary?: boolean; attrs?: Record<string, string>; href?: string };
 
 export type ReconItem = { key?: string; item: string[]; bank: string; ledger: string; amount: string; action: ReconAction | null };
 
-export type ReconHistoryRow = { key?: string; month: string; bank: string; control: string; clients: string; signed: string };
+export type ReconHistoryRow = { key?: string; month: string; bank: string; control: string; clients: string; signed: string; /** Live: the signed month's PDF report. */ pdf?: string };
 
 export type PayoutRow = { key?: string; date: string; amount: string; payments: string; refunds: string; fees: string; matched: string; state: MatterBadge };
 
@@ -45,6 +50,8 @@ export type ReconData = {
     steps: Step[];
     /** `discard`: opens the sign dialog for its Discard, when signing is closed to this person (they prepared it). */
     sign: { label: string; disabled: boolean; why: string | null; attrs: Record<string, string>; discard?: Record<string, string> };
+    /** Live: Add an outstanding deposit or cheque (`#dlgRecItem`), under the items. */
+    addItem?: ReconAction | null;
   };
   start: null | { title: string; copy: string; action: ReconAction | null };
   history: ReconHistoryRow[];
@@ -52,6 +59,8 @@ export type ReconData = {
   /** The signed list's heading: the Designer's "Earlier months", or live "Signed reconciliations" when the current month is in it. */
   historyTitle?: string;
   payouts: null | { rows: PayoutRow[]; empty: string; note: string };
+  /** Live: the accountant / practice reviewer validation banner (FIN-12). */
+  banner?: { title: string; copy: string } | null;
 };
 
 function ActionControl({ action, sm = true }: { action: ReconAction; sm?: boolean }) {
@@ -97,7 +106,17 @@ function History({ data, index }: { data: ReconData; index: number }) {
                   <td>{row.bank}</td>
                   <td>{row.control}</td>
                   <td>{row.clients}</td>
-                  <td>{row.signed}</td>
+                  <td>
+                    {row.signed}
+                    {row.pdf ? (
+                      <>
+                        {" "}
+                        <a href={row.pdf} className={"num"} style={{ color: "var(--blue)" }}>
+                          {"PDF"}
+                        </a>
+                      </>
+                    ) : null}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -191,13 +210,22 @@ export function SheetFinanceRecon({ data }: { data: ReconData }) {
           <p>{data.intro}</p>
         </div>
       </div>
+      {data.banner ? (
+        <div className={"alert warn rv"} style={{ marginBottom: "18px", ...i(1) }} role={"note"}>
+          <Icon name={"info"} />
+          <div>
+            <b>{data.banner.title}</b>
+            {data.banner.copy}
+          </div>
+        </div>
+      ) : null}
       {pending ? (
         <>
           <div className={"fp-g3 rv"} style={i(1)}>
             {pending.cards.map((card) => (
               <div key={card.title} className={"fp-card"}>
                 <h3>{card.title}</h3>
-                <b className={"display num"} style={{ fontSize: "28px", display: "block" }}>
+                <b className={"display num"} style={card.tone ? { fontSize: "28px", display: "block", color: "var(--bad)" } : { fontSize: "28px", display: "block" }}>
                   {card.value}
                 </b>
                 <p>{card.note}</p>
@@ -262,6 +290,13 @@ export function SheetFinanceRecon({ data }: { data: ReconData }) {
                 </p>
               </div>
             )}
+            {pending.addItem ? (
+              <div className={"fp-pad"}>
+                <div className={"fp-row"}>
+                  <ActionControl action={pending.addItem} />
+                </div>
+              </div>
+            ) : null}
           </section>
           <section className={"panel rv"} style={i(4)}>
             <h2>

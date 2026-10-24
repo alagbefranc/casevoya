@@ -72,7 +72,9 @@ export function PayLive({
 }) {
   const due = Math.max(0, invoice.amountCents - invoice.paidCents - invoice.creditedCents);
   const money = formatMoney(due, invoice.currency);
-  const canPay = payable && Boolean(publishableKey) && invoice.open && !invoice.processing;
+  // FIN-09: a payment the firm recorded by hand is being checked; paying again by card could pay twice.
+  const pending = invoice.pendingCents ?? 0;
+  const canPay = payable && Boolean(publishableKey) && invoice.open && !invoice.processing && pending === 0;
   const [started, setStarted] = useState<Started>(null);
 
   useEffect(() => {
@@ -167,6 +169,10 @@ export function PayLive({
             <Note title={invoice.status === "paid" ? "This invoice is paid" : "This invoice is closed"}>{"Nothing is due on it."}</Note>
           ) : invoice.processing ? (
             <Note title="Your payment is processing">{"Stripe is confirming it with your bank. This page shows it paid once Stripe confirms."}</Note>
+          ) : pending > 0 ? (
+            <Note title="Your payment is being verified">
+              {`${firmName} recorded a payment of ${formatMoney(pending, invoice.currency)} you sent by e-Transfer, cheque, wire or cash. It shows as paid once they’ve checked it against their bank. Contact them before paying again.`}
+            </Note>
           ) : !payable || !publishableKey ? (
             <Note title="Card payments aren’t configured" tone="warn">
               {"Nothing can be charged here yet. Your firm can tell you other ways to pay."}
