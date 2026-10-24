@@ -617,3 +617,20 @@ Tested in `tests/finance-stripe-disputes-credits.rls.test.ts` and `tests/finance
 * External tamper-evident audit sink (DB owner can still disable triggers).
 * Majority review still enqueues `person.majority_review_due`. T026 also opens one internal task titled `Majority review` when `is_minor` changes from true to false and a date of birth is on file. The birth date is not copied onto the task. Francis confirmed `age_of_majority_years` defaults to 19 and is firm-configurable from 18 to 21.
 * T018 firm onboarding, sample mode, and manual licence checks are in `20261017140600` and `20261017140700` and are not applied on the live project. There is no register scraper. Client invitation rows remain T021. An approved professional review is still not a verified licence until a manual register check is recorded.
+
+## Submission checklist, manifest and official steps (`20261025170000`, not applied on the live project)
+
+GOV-01 and GOV-03 (gap #181), on the manual submission handoff (`20261019202100`).
+
+* `submission_handoffs` gains `manifest_sha256`, `manifest_file_count`, `manifest_pinned_at` (all set together, check constraint).
+* `submission_manifest_files` (append-only): the files pinned at release: handoff, position, document, document version, file name, purpose, byte size, `file_sha256`, review state.
+* `submission_requirements`: a firm's official outside steps and channel names per program (null: every program) and `submission_channel`: label, `source_id` (firm `official_sources` row), `snapshot_id` (`source_snapshots`), `source_url` (allowlisted, trigger), section, form number and date modified, `checked_on`, `current_to`, `snapshot_sha256`, status pending_review / approved / rejected / retired with reviewer. One approved channel name per program and channel (partial unique index). Entered values are immutable (trigger); status changes only through the functions (`app.gov_guard_update` nonce).
+* `submission_checklist_events` (append-only): per handoff, an outside step ticked or unticked, the fee handling confirmed (with a note), a gate overridden by the firm owner (with a reason). The latest event per item is its state.
+* `public.submission_checklist(matter)` (matter staff): the gates from `app.submission_gates_for` (representation, package, deadlines, signatures, fees, outside_steps; state ok / blocked / overridden / none) and the blocked keys.
+* `public.tick_submission_step`, `public.confirm_submission_fees` (owner, consultant, case manager), `public.override_submission_gate` (firm owner, step-up, reason; never the package gate).
+* `public.propose_submission_requirement` (owner, consultant, case manager; canada.ca or gc.ca URL with anchor or section; date checked within the last year; optional snapshot JSON from the server's fetch), `public.review_submission_requirement` and `public.retire_submission_requirement` (licensed member, step-up; approval needs a snapshot hash).
+* **Redefines** `app.sign_off_submission_handoff` (latest `20261023090000_version_conflicts_not_retried.sql`): also pins the manifest (`app.gov_pin_manifest`; refuses with no stored files) and audits its hash and file count.
+* **Redefines** `app.record_submission` (latest `20261023090000_version_conflicts_not_retried.sql`): refuses while a gate blocks; the audit event carries the package label, manifest hash, each pinned file with its hash, and the overridden gates.
+* **Redefines** `app.gov_finish_verification` (latest `20261019216100_firm_today_rules.sql`): needs the confirmation file on the matter and the acknowledgement date.
+
+Forced RLS on every new table; reads only (matter staff through `app.gov_staff_can_read`; requirements to the firm's staff at aal2). Audit: `submission.step_done`, `_step_undone`, `_fees_confirmed`, `_fees_unconfirmed`, `_gate_overridden`, `_requirement_entered`, `_requirement_approved`, `_requirement_rejected`, `_requirement_retired`. Tested in `tests/gov-submission-checklist.rls.test.ts` and `tests/government-handoff.rls.test.ts`.

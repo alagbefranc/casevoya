@@ -17,11 +17,16 @@ import {
   type GovernmentRecords,
 } from "@/modules/sheet/government-present";
 import { governmentLabel, type SheetQuery } from "@/modules/sheet/present";
+import { loadSubmissionChecklist } from "@/modules/sheet/matter-submissions-load";
+import { blockedWhy, type GateKey } from "@/modules/submissions/present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
+/** Roles that read government records on a matter (app.gov_staff_roles). */
+const GOV_STAFF = new Set(["firm_owner", "licensed_consultant", "case_manager", "assistant"]);
+
 const HANDOFF_COLUMNS =
-  "id, package_label, package_sha256, channel, status, signoff_membership_id, signed_off_at, submitted_by_membership_id, external_reference, submitted_at, receipt_version_id, receipt_locator, acknowledged_on, verified_by_membership_id, verified_at, cancel_reason, cancelled_at, created_by, created_at, version";
+  "id, package_label, package_sha256, channel, status, signoff_membership_id, signed_off_at, submitted_by_membership_id, external_reference, submitted_at, receipt_version_id, receipt_locator, acknowledged_on, verified_by_membership_id, verified_at, cancel_reason, cancelled_at, created_by, created_at, version, manifest_sha256, manifest_file_count, manifest_pinned_at";
 const LETTER_COLUMNS =
   "id, kind, channel, received_on, document_date, action_requested, stated_deadline, evidence_version_id, evidence_locator, verified_by_membership_id, verified_at, shared_with_client_at, created_by, created_at, version";
 const DECISION_COLUMNS =
@@ -128,11 +133,40 @@ export async function loadMatterGovernment(supabase: Client, input: MatterGovern
     userNames(supabase, org, input.members),
   ]);
   const ctx = context(input, people, userName);
-  const submissions = buildSubmissions(records, ctx);
+  // GOV-01 and GOV-03: the Submission checklist and the pinned manifest, for the matter's staff.
+  const shown =
+    records.handoffs.find((row) => row.status === "awaiting_signoff" || row.status === "authorized") ??
+    records.handoffs.find((row) => row.status === "submission_unverified" || row.status === "submission_verified") ??
+    null;
+  const checklist = GOV_STAFF.has(input.staff.role)
+    ? await loadSubmissionChecklist(supabase, {
+        organizationId: org,
+        matterId: input.matter.id,
+        role: input.staff.role,
+        licensed: input.licensed,
+        timezone: input.staff.timezone,
+        today: input.today,
+        memberName: ctx.memberName,
+        manifestHandoff: shown
+          ? {
+              id: shown.id,
+              package_label: shown.package_label,
+              manifest_sha256: shown.manifest_sha256 ?? null,
+              manifest_file_count: shown.manifest_file_count ?? null,
+              manifest_pinned_at: shown.manifest_pinned_at ?? null,
+            }
+          : null,
+      })
+    : null;
+  const submissions = buildSubmissions(
+    records,
+    ctx,
+    checklist ? { blocked: checklist.blocked, why: checklist.blocked ? blockedWhy(checklist.blocked as GateKey[]) : null, channelName: checklist.channelName } : undefined,
+  );
   return {
-    submissions: submissions.tab,
+    submissions: { ...submissions.tab, checklist: checklist?.card ?? null },
     decisions: buildDecisions(records, ctx),
-    dialogs: submissions.dialogs,
+    dialogs: { ...submissions.dialogs, checklist: checklist?.dialogs ?? null },
     letters: records.letters.map((row) => ({ id: row.id, label: `${correspondenceLabel(row.kind)}, received ${dayMonth(row.received_on)}` })),
   };
 }
