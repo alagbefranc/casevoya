@@ -186,3 +186,17 @@ describe("portal loading", () => {
     expect(page).not.toMatch(/No portal yet|Nothing on file/);
   });
 });
+
+describe("the current-matter cookie", () => {
+  it("is read by the server page from a plain module, not a client one", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { PORTAL_MATTER_COOKIE } = await import("@/modules/portal/matter-cookie");
+    expect(PORTAL_MATTER_COOKIE).toBe("cv_portal_matter");
+    // A value imported from a "use client" module reaches a server component as a client
+    // reference, so cookies().get() would never match (#172, @swe's check 1).
+    for (const file of ["src/app/portal/[[...slug]]/page.tsx", "src/components/portal/remember-matter.tsx"]) {
+      expect(readFileSync(file, "utf8")).toContain('import { PORTAL_MATTER_COOKIE } from "@/modules/portal/matter-cookie";');
+    }
+    expect(readFileSync("src/modules/portal/matter-cookie.ts", "utf8")).not.toMatch(/^\s*["']use client["']/m);
+  });
+});
