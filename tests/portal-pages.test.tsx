@@ -113,7 +113,8 @@ describe("My matters", () => {
     expect(first.steps?.find((step) => step.state === "current")?.label).toBe("Documents");
     expect(first.href).toBe("/portal?matter=m1");
     expect(held.badge).toEqual({ tone: "chg", text: "On hold" });
-    expect(held.withLine).toBe("Only you");
+    // No other readable names: say nothing rather than "Only you" (a client sees others only with a grant).
+    expect(held.withLine).toBe("");
     expect(closed).toMatchObject({ label: "EX-2025-0388 · closed", closed: true, steps: null, note: "Records kept until Mar 2033", href: "/portal/documents?matter=m2" });
   });
 
@@ -204,7 +205,9 @@ describe("the current-matter cookie", () => {
 describe("Tasks narrow screens", () => {
   it("lets a long firm name shorten in the switch instead of overlapping", () => {
     const page = html({ page: "tasks", tasks: [task({})] });
-    expect(page).toContain("#pc&gt;.seg.k2-rs&gt;button{min-width:0;overflow:hidden;text-overflow:ellipsis}".replaceAll("&gt;", ">"));
+    expect(page).toContain("#pc>.seg.k2-rs>button{min-width:0;overflow:hidden;text-overflow:ellipsis}");
+    // On a phone the switch scrolls instead, so "Waiting on {firm} · n" stays whole.
+    expect(page).toContain("@media (max-width:600px){#pc>.seg.k2-rs{display:flex;overflow-x:auto;scrollbar-width:none}");
   });
 });
 
@@ -215,5 +218,13 @@ describe("Account switches without a mobile number", () => {
     expect(page).toMatch(/id="pref-sms" disabled="" aria-disabled="true"/);
     expect(page).toContain("Ask your firm to add your mobile number before choosing WhatsApp.");
     expect(page).not.toMatch(/id="pref-email" disabled/);
+  });
+});
+
+describe("follow-ups from the #171 and #173 reports", () => {
+  it("names an unreadable owner plainly and says how clients sign in", () => {
+    const docs = html({ page: "documents", documents: { ...documents, cards: [card({ key: "z", title: "Joint lease", personId: "p9", personName: "Person", requestId: null })] } });
+    expect(docs).toContain("Someone on your file");
+    expect(html({ page: "account" })).toContain("You sign in with your email and password.");
   });
 });
