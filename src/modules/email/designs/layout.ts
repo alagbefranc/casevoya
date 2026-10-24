@@ -10,6 +10,8 @@
  * passed in as `origin`.
  */
 
+import { accentInk } from "@/modules/firm-onboarding/firm-logo";
+
 export const DEFAULT_EMAIL_ORIGIN = "https://app.casevoya.ca";
 
 export type Spot =
@@ -24,7 +26,11 @@ export type Spot =
   | "verify";
 
 /** Platform emails carry the Casevoya header image; firm emails an HTML header with the firm's name. */
-export type Brand = { kind: "platform" } | { kind: "firm"; firmName: string };
+/**
+ * A firm email's header: the firm's name, and (ORG-01) its logo as a public image link and its
+ * colour for the initial tile, when the firm has set them.
+ */
+export type Brand = { kind: "platform" } | { kind: "firm"; firmName: string; logoUrl?: string | null; accent?: string | null };
 
 export type Cta = { label: string; href: string };
 
@@ -49,6 +55,11 @@ export type EmailCopy = {
    * Absent: the English shell (and, for lang "fr", the earlier hand-drafted French footer).
    */
   shell?: ShellText;
+  /**
+   * The English header tagline for this template (catalog.ts TAGLINES), in place of the shell's.
+   * Ignored when a French shell is set: French keeps its approved shared tagline.
+   */
+  tagline?: string;
 };
 
 /** footerFirm carries {firm_name}. */
@@ -134,20 +145,33 @@ export function firmInitial(firmName: string): string {
   return match ? match[0].toLocaleUpperCase("en-CA") : "•";
 }
 
+const TILE = "#0A4B93";
+
+function hexColour(value: string | null | undefined): string | null {
+  return typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value.trim()) ? value.trim() : null;
+}
+
+export type FirmHeaderLook = { logoUrl?: string | null; accent?: string | null };
+
 /**
  * header-firm.png has the Designer's example firm baked in, so firm emails draw the same header in
- * HTML: a 52px rounded tile with the firm's initial, the firm's display name, the right-aligned
- * tagline, and a 1px rule, 120px tall in all, like the image. Firm logos live in a private bucket,
- * so no logo image is used.
+ * HTML: a 52px rounded tile, the firm's display name, the right-aligned tagline, and a 1px rule,
+ * 120px tall in all, like the image. The tile is the firm's logo (served from /api/firm/logo, on
+ * white) when it has one, otherwise its initial on the firm colour (or the shell's blue).
  */
-function firmHeader(firmName: string, tagline: string = SHELL_EN.tagline): string {
+function firmHeader(firmName: string, tagline: string = SHELL_EN.tagline, look: FirmHeaderLook = {}): string {
   const name = escapeHtml(firmName);
   const initial = escapeHtml(firmInitial(firmName));
+  const logo = look.logoUrl ? safeUrl(look.logoUrl) : null;
+  const accent = hexColour(look.accent);
+  const tile = logo
+    ? `<td width="52" height="52" align="center" valign="middle" style="width:52px;height:52px;background:#ffffff;border:1px solid #e6e2db;border-radius:10px;text-align:center"><img src="${escapeHtml(logo)}" width="40" height="40" alt="${name}" style="display:block;margin:0 auto;width:40px;height:40px;object-fit:contain;border:0"></td>`
+    : `<td width="52" height="52" align="center" valign="middle" style="width:52px;height:52px;background:${accent ?? TILE};border-radius:10px;color:${accent ? accentInk(accent) : "#ffffff"};font-family:Erode,Georgia,serif;font-size:26px;font-weight:500;line-height:52px;text-align:center">${initial}</td>`;
   return (
     `<tr><td style="padding:34px 40px 0">` +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>` +
     `<td width="52" valign="middle" style="width:52px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
-    `<td width="52" height="52" align="center" valign="middle" style="width:52px;height:52px;background:#0A4B93;border-radius:10px;color:#ffffff;font-family:Erode,Georgia,serif;font-size:26px;font-weight:500;line-height:52px;text-align:center">${initial}</td>` +
+    tile +
     `</tr></table></td>` +
     `<td valign="middle" style="padding:0 16px 0 12px;font-family:Erode,Georgia,serif;font-size:22px;font-weight:400;line-height:1.2;color:#111">${name}</td>` +
     `<td align="right" valign="middle" style="font-family:Erode,Georgia,serif;font-size:13px;line-height:1.3;color:#6b6862;white-space:nowrap;text-align:right">${escapeHtml(tagline)}</td>` +
@@ -157,8 +181,8 @@ function firmHeader(firmName: string, tagline: string = SHELL_EN.tagline): strin
 }
 
 /** The firm email header exactly as firm emails draw it, in its own table (Settings > Branding preview). */
-export function firmHeaderPreviewHtml(firmName: string): string {
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;font-family:Erode,Georgia,serif;border-collapse:collapse">${firmHeader(firmName)}<tr><td style="height:16px"></td></tr></table>`;
+export function firmHeaderPreviewHtml(firmName: string, look: FirmHeaderLook & { tagline?: string } = {}): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;font-family:Erode,Georgia,serif;border-collapse:collapse">${firmHeader(firmName, look.tagline, look)}<tr><td style="height:16px"></td></tr></table>`;
 }
 
 function platformHeader(origin: string): string {
@@ -204,7 +228,8 @@ export function renderHtml(copy: EmailCopy, origin: string = DEFAULT_EMAIL_ORIGI
   const lang = copy.lang ?? "en";
   const shell = shellFor(copy);
   const href = copy.cta ? safeUrl(copy.cta.href) : null;
-  const header = copy.brand.kind === "firm" ? firmHeader(copy.brand.firmName, shell.tagline) : platformHeader(origin);
+  const tagline = copy.shell ? shell.tagline : (copy.tagline ?? shell.tagline);
+  const header = copy.brand.kind === "firm" ? firmHeader(copy.brand.firmName, tagline, copy.brand) : platformHeader(origin);
   const button =
     copy.cta && href
       ? `<tr><td style="padding:8px 40px 28px"><a href="${escapeHtml(href)}" style="display:inline-block;background:#0075DE;color:#fff;text-decoration:none;font-weight:500;padding:12px 20px;border-radius:10px">${escapeHtml(copy.cta.label)}</a></td></tr>`

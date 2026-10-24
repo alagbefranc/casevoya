@@ -2,6 +2,7 @@ import { renderEmail } from "@/modules/email/templates";
 import type { OutboundEmail, SendOutcome } from "@/modules/email/cloudflare";
 import { DEFAULT_EMAIL_ORIGIN, emailOrigin } from "@/modules/email/designs/layout";
 import { managePath, manageTokenHash, newManageToken } from "@/modules/scheduling/manage-present";
+import { firmLogoPublicPath, ownFirmLogoKey } from "@/modules/firm-onboarding/firm-logo";
 
 export type MailDelivery = {
   delivery_id: string;
@@ -53,7 +54,37 @@ export type DispatchDeps = {
    * returns the booking reference, or null when that delivery gets no link (portal, not upcoming).
    */
   manageToken?: (deliveryId: string, sha256: string) => Promise<string | null>;
+  /**
+   * Each delivery's firm look (ORG-01), from public.email_delivery_brands: the firm id, its stored
+   * logo locator and colour. Optional; a failure or a missing entry means the initial tile.
+   */
+  brands?: (deliveryIds: string[]) => Promise<Record<string, FirmLook>>;
 };
+
+export type FirmLook = { organization_id?: unknown; logo_locator?: unknown; accent?: unknown };
+
+async function deliveryBrands(deps: DispatchDeps, messages: MailDelivery[]): Promise<Record<string, FirmLook>> {
+  if (!deps.brands || messages.length === 0) return {};
+  try {
+    return await deps.brands(messages.map((message) => message.delivery_id));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * The public logo link (/api/firm/logo/<firm>/<file>) and colour for a firm email's header, only
+ * for the firm's own stored logo; the renderer takes nothing else from here.
+ */
+export function firmLookContext(look: FirmLook | undefined, appOrigin: string | undefined): { firm_logo_url?: string; firm_accent?: string } {
+  if (!look) return {};
+  const out: { firm_logo_url?: string; firm_accent?: string } = {};
+  const organizationId = typeof look.organization_id === "string" ? look.organization_id : "";
+  const key = typeof look.logo_locator === "string" ? ownFirmLogoKey(look.logo_locator, organizationId) : null;
+  if (key) out.firm_logo_url = `${emailOrigin(appOrigin ?? DEFAULT_EMAIL_ORIGIN)}${firmLogoPublicPath(key)}`;
+  if (typeof look.accent === "string" && /^#[0-9A-Fa-f]{6}$/.test(look.accent.trim())) out.firm_accent = look.accent.trim();
+  return out;
+}
 
 /** The Manage your booking link for a consultation email to a booker without a portal, or null. */
 async function manageLinkFor(deps: DispatchDeps, message: MailDelivery, context: Record<string, unknown>, appOrigin: string | undefined): Promise<string | null> {
@@ -132,6 +163,7 @@ export async function dispatchOutbound(
     const prepared = await deps.prepare(event.id, options.worker, options.inboundDomain, options.fromAddress);
     if (prepared.action !== "send" || !prepared.messages) continue;
     const locales = await recipientLocales(deps, prepared.messages);
+    const brands = await deliveryBrands(deps, prepared.messages);
     for (const message of prepared.messages) {
       // Only a link this worker opened reaches the template; never the sealed form. Every other
       // button (portal, Sheet) is a fixed path the renderer joins to the app origin; nothing from
@@ -147,6 +179,9 @@ export async function dispatchOutbound(
       delete context.body;
       delete context.subject;
       delete context.manage_link;
+      delete context.firm_logo_url;
+      delete context.firm_accent;
+      Object.assign(context, firmLookContext(brands[message.delivery_id], options.appOrigin));
       // A staff email's own words and subject (EX15) come with the message, never the context.
       if (message.template === "staff_message") {
         if (typeof message.body === "string") context.body = message.body;

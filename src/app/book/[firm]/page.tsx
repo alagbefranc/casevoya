@@ -6,6 +6,7 @@ import { SheetScreen } from "@/components/sheet/screen";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { PRACTICE_NOTICE, locationLabel } from "@/modules/scheduling/format";
+import { parsePrivacyNotice, privacyPath } from "@/modules/leads/privacy";
 
 export const metadata: Metadata = {
   title: "Book · Casevoya",
@@ -24,10 +25,15 @@ type Listing = {
 async function Body({ params }: { params: Promise<{ firm: string }> }) {
   const firm = (await params).firm.toLowerCase();
   let listing: Listing | null = null;
+  let hasPrivacy = false;
   if (SLUG.test(firm) && hasPublicSupabaseEnv()) {
     const supabase = await createClient();
-    const { data } = await supabase.rpc("booking_public_event_types", { p_firm_slug: firm });
+    const [{ data }, privacy] = await Promise.all([
+      supabase.rpc("booking_public_event_types", { p_firm_slug: firm }),
+      supabase.rpc("public_privacy_notice", { p_firm_slug: firm }),
+    ]);
     listing = data && typeof data === "object" ? (data as unknown as Listing) : null;
+    hasPrivacy = !privacy.error && parsePrivacyNotice(privacy.data) !== null;
   }
   if (!listing || listing.types.length === 0) {
     return (
@@ -67,6 +73,8 @@ async function Body({ params }: { params: Promise<{ firm: string }> }) {
         </main>
         <footer>
           <span>{listing.firm_name}</span>
+          {/* CRM-01: the firm's published privacy notice, the same link as its enquiry page. */}
+          {hasPrivacy ? <a href={privacyPath(listing.firm_slug)}>Privacy notice</a> : null}
           <span>Powered by Casevoya</span>
         </footer>
       </div>

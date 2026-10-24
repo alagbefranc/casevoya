@@ -8,6 +8,7 @@ import {
 import { chooseEmailLanguage } from "@/modules/email/designs/french";
 import { DEFAULT_EMAIL_ORIGIN, appLink, cleanText, emailOrigin, renderCopy, safeUrl, type EmailCopy } from "@/modules/email/designs/layout";
 import { buildLocalized } from "@/modules/email/designs/localized";
+import { TAGLINES } from "@/modules/email/designs/taglines";
 
 export { INVITE_WITHOUT_LINK } from "@/modules/email/designs/catalog";
 
@@ -227,7 +228,22 @@ function genericEnglish(firm: string, origin: string): EmailCopy {
     heading: "There’s an update on your file",
     body: `${firm} has an update for you. For your privacy, the details are in your portal.`,
     cta: { label: "Open your portal", href: appLink(origin, PATHS.portal) ?? "" },
+    tagline: TAGLINES.generic,
   };
+}
+
+/**
+ * The firm's logo link and colour on a firm email's header (ORG-01): context.firm_logo_url is the
+ * public /api/firm/logo link the mail worker built from the firm's own stored logo, and
+ * context.firm_accent its colour. Anything else is ignored.
+ */
+function withFirmLook(copy: EmailCopy, context: Context, origin: string): EmailCopy {
+  if (copy.brand.kind !== "firm") return copy;
+  const logo = typeof context.firm_logo_url === "string" ? safeUrl(context.firm_logo_url) : null;
+  const ours = logo && new URL(logo).origin === new URL(origin).origin && new URL(logo).pathname.startsWith("/api/firm/logo/") ? logo : null;
+  const accent = typeof context.firm_accent === "string" && /^#[0-9A-Fa-f]{6}$/.test(context.firm_accent) ? context.firm_accent : null;
+  if (!ours && !accent) return copy;
+  return { ...copy, brand: { ...copy.brand, logoUrl: ours, accent } };
 }
 
 /**
@@ -259,6 +275,6 @@ export function renderEmail(context: Context, options: { origin?: string } = {})
     const typed = contextFor(design, context, firm);
     copy = lang === "fr" ? buildLocalized(design, "fr", typed as never, origin) : renderTemplate(design, typed as never, origin);
   }
-  const rendered = renderCopy(copy, origin);
+  const rendered = renderCopy(withFirmLook(copy, context, origin), origin);
   return { ...rendered, design, lang };
 }

@@ -129,6 +129,21 @@ describe("firm settings", () => {
     await expectDbError(() => db.query(`select public.update_firm_profile($1, $2::jsonb)`, [orgId, JSON.stringify({ verification_status: "verified" })]), /unknown firm detail/);
   });
 
+  it("saves the firm's default language for new clients (ORG-01), English or French only", async () => {
+    const owner = await createUser();
+    const orgId = await createOrg(owner);
+    await as(owner, orgId);
+    await db.query(`select public.update_firm_profile($1, $2::jsonb)`, [orgId, JSON.stringify({ default_locale: "fr-CA" })]);
+    await asMaintenance(db);
+    const saved = await db.query<{ default_locale: string }>(`select default_locale from public.organizations where id = $1`, [orgId]);
+    expect(saved.rows[0].default_locale).toBe("fr-CA");
+    expect((await audits(orgId, "firm.profile_updated")).at(-1)).toEqual({ fields: ["default_locale"] });
+    await as(owner, orgId);
+    await expectDbError(() => db.query(`select public.update_firm_profile($1, $2::jsonb)`, [orgId, JSON.stringify({ default_locale: "es-MX" })]), /language is not usable/);
+    await as(owner, orgId, false);
+    await expectDbError(() => db.query(`select public.update_firm_profile($1, $2::jsonb)`, [orgId, JSON.stringify({ default_locale: "en-CA" })]), /step|two-step|confirm/i);
+  });
+
   it("refuses firm details without a fresh step-up, from other roles, and across firms", async () => {
     const owner = await createUser();
     const orgId = await createOrg(owner);
