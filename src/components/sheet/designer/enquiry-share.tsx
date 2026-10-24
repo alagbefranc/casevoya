@@ -58,6 +58,24 @@ export function EnquiryShareDialog({ data }: { data: EnquiryShareData }) {
             </div>
           </div>
         ) : null}
+        {data.page ? (
+          <div className={data.page.enabled ? "fp-row" : "alert warn"} style={{ alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+            {data.page.enabled ? null : <Icon name={"alert"} />}
+            <div style={{ flex: 1 }}>
+              <b>{data.page.enabled ? "Your enquiry page is on" : "Your enquiry page is off"}</b>
+              {data.page.enabled
+                ? " Visitors can send an enquiry from the link, the QR code and your website."
+                : " Visitors see “not taking enquiries online right now”, and nothing they send is accepted."}
+            </div>
+            {data.page.owner ? (
+              <button className={"btn s sm"} data-enquiry-toggle={data.page.enabled ? "off" : "on"} data-org={data.page.organizationId}>
+                {data.page.enabled ? "Turn off" : "Turn on"}
+              </button>
+            ) : (
+              <small style={{ color: "var(--t2)" }}>{"The firm owner can change this."}</small>
+            )}
+          </div>
+        ) : null}
         {data.practice ? (
           <div className={"alert info"}>
             <Icon name={"info"} />

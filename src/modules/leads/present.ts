@@ -713,3 +713,28 @@ export function boardKey(leads: readonly Pick<LeadRow, "id" | "stage_id" | "vers
   }
   return `b${leads.length}-${hash.toString(36)}`;
 }
+
+/**
+ * CRM-01: where a web enquiry came from, as the Lead page lists it: "Campaign" (utm_* joined),
+ * "Came from" (the referrer's host) and "Website" (the site the form is embedded on). Only what
+ * was recorded; nothing when there is none.
+ */
+export function attributionItems(raw: unknown): { term: string; value: string }[] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+  const row = raw as Record<string, unknown>;
+  const get = (key: string) => (typeof row[key] === "string" && (row[key] as string).trim() ? (row[key] as string).trim() : null);
+  const items: { term: string; value: string }[] = [];
+  const campaign = [
+    ["source", get("utm_source")],
+    ["medium", get("utm_medium")],
+    ["campaign", get("utm_campaign")],
+    ["term", get("utm_term")],
+    ["content", get("utm_content")],
+  ].filter(([, value]) => value).map(([label, value]) => `${label} ${value}`);
+  if (campaign.length) items.push({ term: "Campaign", value: campaign.join(" · ") });
+  const came = get("referrer_host");
+  if (came) items.push({ term: "Came from", value: came });
+  const site = get("embed_host");
+  if (site) items.push({ term: "Website", value: site });
+  return items;
+}
