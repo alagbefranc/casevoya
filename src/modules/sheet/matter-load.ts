@@ -61,6 +61,7 @@ import { clientOptions, dependsOnOptions, matterOptions, staffOptions } from "@/
 import { checklistPart, estimateLabel, recurrencePart, zoneOptions } from "@/modules/sheet/task-detail";
 import { personHref } from "@/modules/sheet/clients-present";
 import { loadMatterBilling } from "@/modules/sheet/matter-billing-load";
+import { loadMatterWork } from "@/modules/billing/load";
 import { agreementViewHref } from "@/modules/sheet/agreements-views-present";
 import {
   COUNTERSIGN_BADGE,
@@ -765,7 +766,14 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     decisions: government.decisions,
   };
   // The Billing tab: this matter's invoices and client funds, as row-level security shows them.
-  if (tab === "billing") page.billing = await loadMatterBilling(supabase, { organizationId: org, matterId: matter.id, today, role: staff.role });
+  if (tab === "billing") {
+    const [billing, work] = await Promise.all([
+      loadMatterBilling(supabase, { organizationId: org, matterId: matter.id, today, role: staff.role }),
+      // FIN-06: time on the matter, and (billing staff) accepted quotes and instalments.
+      loadMatterWork(supabase, { staff, matterId: matter.id, closed: matter.stage === "closed", today }),
+    ]);
+    page.billing = { ...billing, work };
+  }
   // The Closure tab's checklist (T040): money, tasks, retention setting and legal hold.
   if (tab === "closure") {
     page.closure.panel = await loadClosurePanel(supabase, {

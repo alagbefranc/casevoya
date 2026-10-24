@@ -69,6 +69,7 @@ import {
   runRecSign,
   runVoid,
 } from "./corrections-acts";
+import { openBillingDialog, runBillingAct } from "./billing-acts";
 import { openDocReview, reopenDocReview, runDocFile, runDocOpen, runDocReview } from "./documents-acts";
 import { restoreDocRequest, runDocRequest } from "./doc-request-act";
 import { runUploadLimit } from "./upload-limit-act";
@@ -745,6 +746,20 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         button.setAttribute("aria-busy", "true");
         void run().finally(() => button.removeAttribute("aria-busy"));
       };
+      // FIN-06 billing: a row's button fills a dialog and opens it, or runs an action.
+      const billingOpen = target.closest<HTMLElement>("[data-billing-open]");
+      if (billingOpen && root.contains(billingOpen)) {
+        event.preventDefault();
+        openBillingDialog(billingOpen, root, openDialog);
+        return;
+      }
+      const billingAct = target.closest<HTMLElement>("[data-billing-act]");
+      if (billingAct && root.contains(billingAct)) {
+        event.preventDefault();
+        if (billingAct.hasAttribute("disabled")) return;
+        busyRun(billingAct, () => runBillingAct(billingAct, router));
+        return;
+      }
       // Settings > Retention (firm owner): Save stores the slider's period as a new policy version.
       const retentionSave = target.closest<HTMLElement>("[data-retention-save]");
       if (retentionSave && root.contains(retentionSave)) {

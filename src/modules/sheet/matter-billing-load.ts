@@ -17,7 +17,8 @@ export async function loadMatterBilling(
   input: { organizationId: string; matterId: string; today: string; role: string },
 ): Promise<MatterBillingData> {
   const [invoices, entries] = await Promise.all([
-    supabase.from("invoices").select(BILLING_INVOICE_COLUMNS).eq("organization_id", input.organizationId).eq("matter_id", input.matterId).order("issued_on", { ascending: false }).limit(200),
+    // A discarded draft (FIN-06) was never sent; it stays on Finance, not on the matter.
+    supabase.from("invoices").select(BILLING_INVOICE_COLUMNS).eq("organization_id", input.organizationId).eq("matter_id", input.matterId).is("discarded_at", null).order("issued_on", { ascending: false }).limit(200),
     supabase.from("client_fund_entries").select("kind, status, direction, amount_cents").eq("organization_id", input.organizationId).eq("matter_id", input.matterId).limit(1000),
   ]);
   return matterBilling({

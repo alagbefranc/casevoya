@@ -22,6 +22,9 @@ import { creditNoteHref, invoicePdfHref } from "@/modules/finance/receipt-links"
 import { longDate } from "@/modules/finance/receipt-pdf";
 import { balanceLine, billedTo, FEE_CATEGORY_LABEL, invoiceState, paymentState, shortStripeId } from "@/modules/sheet/finance-present";
 import { dayMonth } from "@/modules/sheet/home-present";
+import { billingInvoiceState, durationLabel, percentLabel, rateLabel } from "@/modules/billing/present";
+
+const LINE_CATEGORY: Record<string, string> = { professional_fee: "Professional fee", disbursement: "Disbursement", government_fee: "Government fee" };
 import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
 
@@ -125,6 +128,8 @@ export async function loadCreditNoteRows(supabase: Supabase, staff: SheetStaff, 
 
 export type InvoiceViewPage = {
   number: string;
+  /** What the FIN-06 dialogs (write-off, government fee, discard) need. */
+  billing: { id: string; number: string; status: string; discarded: boolean; owedCents: number; draftCreditCents: number };
   view: InvoiceViewData;
   creditDialog: CreditNoteDialogData;
   reviewDialog: CreditReviewDialogData | null;
@@ -136,13 +141,15 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
   const isOwner = staff.role === "firm_owner";
   const found = await supabase
     .from("invoices")
-    .select("id, matter_id, number, description, fee_category, amount_cents, currency, paid_cents, refunded_cents, credited_cents, client_funds_paid_cents, status, issued_on, due_on, is_sample, voided_at, voided_by, void_reason, created_at")
+    .select(
+      "id, matter_id, number, description, fee_category, amount_cents, currency, paid_cents, refunded_cents, credited_cents, written_off_cents, client_funds_paid_cents, status, issued_on, due_on, is_sample, voided_at, voided_by, void_reason, discarded_at, discarded_by, discard_reason, created_at",
+    )
     .eq("organization_id", org)
     .eq("id", invoiceId)
     .maybeSingle();
   const invoice = found.data;
   if (!invoice) return null;
-  const [viewer, matter, clients, payments, transfers, receipts, notes, name, refunds, billing] = await Promise.all([
+  const [viewer, matter, clients, payments, transfers, receipts, notes, name, refunds, billing, invoiceLines, writeOffs] = await Promise.all([
     viewerId(supabase),
     supabase.from("matters").select("id, reference, title, is_sample").eq("organization_id", org).eq("id", invoice.matter_id).maybeSingle(),
     clientNames(supabase, org, [invoice.matter_id]),
@@ -175,8 +182,17 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
       .eq("invoice_id", invoice.id)
       .order("created_at", { ascending: true }),
     billingNames(supabase, org),
+    // FIN-06: the lines of an invoice drafted from time, a quote, an instalment or a government fee.
+    supabase
+      .from("invoice_lines")
+      .select("id, position, category, description, minutes, rate_cents, amount_cents, tax_name, tax_rate_percent, tax_cents, source_url, source_checked_on")
+      .eq("organization_id", org)
+      .eq("invoice_id", invoice.id)
+      .order("position"),
+    supabase.from("invoice_write_offs").select("id, amount_cents, reason, written_off_by, created_at").eq("organization_id", org).eq("invoice_id", invoice.id).order("created_at"),
   ]);
   const currency = invoice.currency;
+  const isDraft = invoice.status === "draft" && !invoice.discarded_at;
   // A finance user can't read the matter row; the billing projection still names it.
   const matterTitle = matter.data?.title || billing.get(invoice.matter_id)?.title || "Matter";
   const money = (minor: number) => formatMoney(minor, currency);
@@ -200,28 +216,68 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
   const due = amountDue(moneyState);
   const balance = creditBalance(moneyState);
   const left = creditable(moneyState, drafts);
-  const state = invoiceState(
-    invoice.status,
-    invoice.due_on,
-    today,
-    listed.some((row) => row.status === "processing"),
-    invoice.refunded_cents > 0 ? money(invoice.refunded_cents) : null,
-    invoice.credited_cents > 0 && invoice.status !== "credited" ? money(invoice.credited_cents) : null,
+  const noteCredits = invoice.credited_cents - invoice.written_off_cents;
+  const state = billingInvoiceState(
+    invoice,
+    invoiceState(
+      invoice.status,
+      invoice.due_on,
+      today,
+      listed.some((row) => row.status === "processing"),
+      invoice.refunded_cents > 0 ? money(invoice.refunded_cents) : null,
+      noteCredits > 0 && invoice.status !== "credited" ? money(noteCredits) : null,
+    ),
   );
   const label = `${invoice.number}${invoice.is_sample ? " (sample)" : ""}`;
 
-  // Lines: the invoice line, the total, what was paid and credited, the balance due.
-  const lines: LineRow[] = [
-    {
-      key: "line",
-      category: { text: FEE_CATEGORY_LABEL[invoice.fee_category] ?? "Fee" },
-      description: { parts: [invoice.description] },
-      qty: "1",
-      tax: "—",
-      amount: { text: amount(invoice.amount_cents) },
-    },
-    { key: "total", category: null, description: { bold: true, parts: ["Total"] }, qty: null, tax: null, amount: { bold: true, text: amount(invoice.amount_cents) } },
-  ];
+  // Lines: the invoice's lines (or its one line), the total, what was paid and credited, the balance due.
+  const lineRows = invoiceLines.data ?? [];
+  const lines: LineRow[] = lineRows.length
+    ? [
+        ...lineRows.map(
+          (line): LineRow => ({
+            key: line.id,
+            category: { text: LINE_CATEGORY[line.category] ?? "Fee" },
+            description: {
+              parts: [
+                line.description,
+                ...(line.minutes !== null && line.rate_cents !== null ? [`${durationLabel(line.minutes)} at ${rateLabel(line.rate_cents, currency)}`] : []),
+                ...(line.category === "government_fee" && line.source_url ? [`Source ${line.source_url}`, `checked ${line.source_checked_on ? dayMonth(line.source_checked_on) : "—"}`] : []),
+              ],
+            },
+            qty: line.minutes !== null ? durationLabel(line.minutes) : "1",
+            tax: line.tax_name ? `${line.tax_name} ${line.tax_rate_percent !== null ? percentLabel(line.tax_rate_percent) : ""}`.trim() + (line.tax_cents ? ` · ${amount(line.tax_cents)}` : "") : "—",
+            amount: { text: amount(line.amount_cents) },
+            ...(isDraft && canBill && lineRows.length > 1
+              ? { remove: { "data-billing-act": "line-remove", "data-org": org, "data-line": line.id } }
+              : {}),
+          }),
+        ),
+        ...(lineRows.some((line) => line.tax_cents > 0)
+          ? [
+              {
+                key: "tax",
+                category: null,
+                description: { parts: ["Tax"] },
+                qty: null,
+                tax: null,
+                amount: { text: amount(lineRows.reduce((sum, line) => sum + line.tax_cents, 0)) },
+              } satisfies LineRow,
+            ]
+          : []),
+        { key: "total", category: null, description: { bold: true, parts: ["Total"] }, qty: null, tax: null, amount: { bold: true, text: amount(invoice.amount_cents) } },
+      ]
+    : [
+        {
+          key: "line",
+          category: { text: FEE_CATEGORY_LABEL[invoice.fee_category] ?? "Fee" },
+          description: { parts: [invoice.description] },
+          qty: "1",
+          tax: "—",
+          amount: { text: amount(invoice.amount_cents) },
+        },
+        { key: "total", category: null, description: { bold: true, parts: ["Total"] }, qty: null, tax: null, amount: { bold: true, text: amount(invoice.amount_cents) } },
+      ];
   for (const payment of received) {
     const receipt = receiptOf.get(payment.id);
     const card = payment.card_last4 ? `${cardBrandName(payment.card_brand)} ••••${payment.card_last4}` : "card";
@@ -253,6 +309,16 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
       qty: null,
       tax: null,
       amount: { text: signedAmount(-note.amount_cents, amount) },
+    });
+  }
+  for (const writeOff of writeOffs.data ?? []) {
+    lines.push({
+      key: writeOff.id,
+      category: null,
+      description: { parts: [`Written off ${day(writeOff.created_at)}`, short(writeOff.reason, 48)] },
+      qty: null,
+      tax: null,
+      amount: { text: signedAmount(-writeOff.amount_cents, amount) },
     });
   }
   lines.push({
@@ -324,37 +390,51 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
 
   // History: issued, credits, then where it stands.
   const history: Step[] = [];
-  const closed = invoice.status !== "issued" && invoice.status !== "partially_paid";
-  const anyMoney = received.length > 0 || transferRows.some((row) => row.status === "approved");
-  history.push({
-    key: "issued",
-    state: invoice.status === "issued" && !anyMoney && !noteRows.some((row) => row.status === "issued") ? "now" : "done",
-    title: "Issued",
-    note: [invoice.issued_on ? dayMonth(invoice.issued_on) : "—", "in the client’s portal"],
-  });
-  for (const note of noteRows.filter((row) => row.status === "issued")) {
-    history.push({ key: note.id, state: "done", title: `Credit note ${note.number}`, note: [day(note.issued_at ?? note.created_at), `${money(note.amount_cents)} by ${name(note.issued_by)}`] });
-  }
-  // Card refunds: succeeded ones are history; pending ones say so.
-  for (const refund of (refunds.data ?? []).filter((row) => row.status === "succeeded" || row.status === "pending" || row.status === "requires_action")) {
-    const done = refund.status === "succeeded";
+  const closed = invoice.status !== "issued" && invoice.status !== "partially_paid" && invoice.status !== "draft";
+  if (invoice.status === "draft") {
     history.push({
-      key: refund.id,
-      state: "done",
-      title: `Refund ${refund.number}`,
-      note: [day(refund.succeeded_at ?? refund.created_at), `${formatMoney(refund.amount_cents, refund.currency)} to the card${done ? "" : ", waiting for Stripe"}`],
+      key: "draft",
+      state: "now",
+      title: invoice.discarded_at ? "Discarded draft" : "Draft",
+      note: invoice.discarded_at
+        ? [day(invoice.discarded_at), `by ${name(invoice.discarded_by)}: ${short(invoice.discard_reason ?? "", 80)}`]
+        : [day(invoice.created_at), "not sent to the client"],
     });
+  } else {
+    const anyMoney = received.length > 0 || transferRows.some((row) => row.status === "approved");
+    history.push({
+      key: "issued",
+      state: invoice.status === "issued" && !anyMoney && !noteRows.some((row) => row.status === "issued") && !(writeOffs.data ?? []).length ? "now" : "done",
+      title: "Issued",
+      note: [invoice.issued_on ? dayMonth(invoice.issued_on) : "—", "in the client’s portal"],
+    });
+    for (const writeOff of writeOffs.data ?? []) {
+      history.push({ key: writeOff.id, state: "done", title: "Written off", note: [day(writeOff.created_at), `${money(writeOff.amount_cents)} by ${name(writeOff.written_off_by)}`] });
+    }
+    for (const note of noteRows.filter((row) => row.status === "issued")) {
+      history.push({ key: note.id, state: "done", title: `Credit note ${note.number}`, note: [day(note.issued_at ?? note.created_at), `${money(note.amount_cents)} by ${name(note.issued_by)}`] });
+    }
+    // Card refunds: succeeded ones are history; pending ones say so.
+    for (const refund of (refunds.data ?? []).filter((row) => row.status === "succeeded" || row.status === "pending" || row.status === "requires_action")) {
+      const done = refund.status === "succeeded";
+      history.push({
+        key: refund.id,
+        state: "done",
+        title: `Refund ${refund.number}`,
+        note: [day(refund.succeeded_at ?? refund.created_at), `${formatMoney(refund.amount_cents, refund.currency)} to the card${done ? "" : ", waiting for Stripe"}`],
+      });
+    }
+    if (invoice.status === "voided") {
+      history.push({ key: "voided", state: "now", title: "Voided", note: [day(invoice.voided_at ?? invoice.created_at), `by ${name(invoice.voided_by)}: ${short(invoice.void_reason ?? "", 80)}`] });
+    } else if (invoice.status === "partially_paid") {
+      history.push({ key: "partial", state: "now", title: "Partially paid", note: [`${money(invoice.paid_cents)} allocated`] });
+    } else if (closed) {
+      history.push({ key: "closed", state: "now", title: state.label, note: [invoice.status === "credited" ? `${money(invoice.credited_cents)} credited` : `${money(invoice.paid_cents)} allocated`] });
+    } else if (history.length > 1) {
+      history.push({ key: "open", state: "now", title: "Issued", note: [`${money(due)} due`] });
+    }
   }
-  if (invoice.status === "voided") {
-    history.push({ key: "voided", state: "now", title: "Voided", note: [day(invoice.voided_at ?? invoice.created_at), `by ${name(invoice.voided_by)}: ${short(invoice.void_reason ?? "", 80)}`] });
-  } else if (invoice.status === "partially_paid") {
-    history.push({ key: "partial", state: "now", title: "Partially paid", note: [`${money(invoice.paid_cents)} allocated`] });
-  } else if (closed) {
-    history.push({ key: "closed", state: "now", title: state.label, note: [invoice.status === "credited" ? `${money(invoice.credited_cents)} credited` : `${money(invoice.paid_cents)} allocated`] });
-  } else if (history.length > 1) {
-    history.push({ key: "open", state: "now", title: "Issued", note: [`${money(due)} due`] });
-  }
-  if (!closed) history.push({ key: "paid", state: "", title: "Paid", note: ["When the balance is allocated"] });
+  if (!closed && !invoice.discarded_at) history.push({ key: "paid", state: "", title: invoice.status === "draft" ? "Issued" : "Paid", note: [invoice.status === "draft" ? "When billing staff issue it" : "When the balance is allocated"] });
 
   const blockers = {
     payments: listed.filter((row) => row.status === "processing" || row.status === "succeeded").length,
@@ -365,10 +445,22 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
   const voidable = canBill && canVoid(moneyState, blockers);
   const creditOk = canBill && canCredit(invoice.status) && left > 0;
   const actions: InvoiceAction[] = [];
+  if (isDraft && canBill) {
+    actions.push({ label: "Issue invoice", primary: true, run: true, attrs: { "data-billing-act": "issue", "data-org": org, "data-invoice": invoice.id } });
+    actions.push({ label: "Add a government fee", attrs: { "data-dlg": "dlgGovFee" } });
+    actions.push({ label: "Discard draft", attrs: { "data-dlg": "dlgDiscard" } });
+  }
+  if (canBill && (invoice.status === "issued" || invoice.status === "partially_paid") && due - drafts > 0) actions.push({ label: "Write off", attrs: { "data-dlg": "dlgWO" } });
   if (creditOk) actions.push({ label: "Issue a credit note", attrs: { "data-dlg": "dlgCN" } });
   if (voidable) actions.push({ label: "Void invoice", attrs: { "data-dlg": "dlgVoid" } });
   // The invoice as a PDF, drawn from the invoice as it stands (the receipts' layout).
   if (invoice.status !== "draft") actions.push({ label: "Download PDF", attrs: {}, href: invoicePdfHref(invoice.id, org) });
+  const tags = isDraft || invoice.discarded_at
+    ? [{ label: "Due", value: longDate(invoice.due_on) }]
+    : [
+        { label: "Issued", value: invoice.issued_on ? longDate(invoice.issued_on) : "—" },
+        { label: due > 0 || invoice.status === "issued" || invoice.status === "partially_paid" ? "Balance due" : "Was due", value: longDate(invoice.due_on) },
+      ];
 
   const fromFunds = invoice.client_funds_paid_cents > 0;
   const view: InvoiceViewData = {
@@ -376,11 +468,14 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
     client,
     intro: [`Matter ${reference}${matter.data?.is_sample ? " (sample)" : ""}`, `${matterTitle}. Billed to ${client}. Payee: ${staff.organizationName}.`],
     badge: { tone: state.tone, label: state.label, ...(state.detail ? { detail: state.detail } : {}) },
-    tags: [
-      { label: "Issued", value: invoice.issued_on ? longDate(invoice.issued_on) : "—" },
-      { label: due > 0 || invoice.status === "issued" || invoice.status === "partially_paid" ? "Balance due" : "Was due", value: longDate(invoice.due_on) },
-    ],
-    lock: invoice.status === "voided" ? ["Voided", "can’t be paid or edited"] : ["Issued", "can’t be edited"],
+    tags,
+    lock: invoice.discarded_at
+      ? ["Discarded", "never sent"]
+      : isDraft
+        ? ["Draft", "not sent to the client"]
+        : invoice.status === "voided"
+          ? ["Voided", "can’t be paid or edited"]
+          : ["Issued", "can’t be edited"],
     lines,
     allocations,
     allocationsEmpty: "Nothing is allocated to this invoice yet.",
@@ -414,6 +509,7 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
   };
   return {
     number: label,
+    billing: { id: invoice.id, number: label, status: invoice.status, discarded: Boolean(invoice.discarded_at), owedCents: due, draftCreditCents: drafts },
     view,
     creditDialog,
     reviewDialog: canBill && noteRows.some((row) => row.status === "draft") ? { organizationId: org } : null,
