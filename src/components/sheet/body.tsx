@@ -59,7 +59,7 @@ import { loadSheetExports } from "@/modules/sheet/exports-load";
 import { MigrationHeader, SheetMigration } from "@/components/sheet/designer/migration";
 import { loadSheetMigration } from "@/modules/sheet/migration-load";
 import { DocumentReviewDialog, DocumentsHeader, SheetDocuments } from "@/components/sheet/designer/documents";
-import { ComposeDialog, InboxHeader, SheetInbox } from "@/components/sheet/designer/inbox";
+import { AnnouncementDialog, ComposeDialog, InboxHeader, SheetInbox } from "@/components/sheet/designer/inbox";
 import { FileToMatterDialog } from "@/components/sheet/designer/inbound-filing";
 import { PrivacyDialogs, PrivacyHeader, SheetPrivacy } from "@/components/sheet/designer/privacy";
 import { ComplaintsDialogs, ComplaintsHeader, SheetComplaints } from "@/components/sheet/designer/complaints";
@@ -76,7 +76,8 @@ import { GrantDialog, GrantRevokeDialog, GrantsHeader, SheetGrants, SupportDecli
 import { loadSheetGrants } from "@/modules/sheet/grants-load";
 import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder } from "@/components/sheet/designer/intake-builder";
 import { loadSheetIntakeBuilder } from "@/modules/sheet/intake-builder-load";
-import { SheetTemplates, TemplatesHeader } from "@/components/sheet/designer/templates";
+import { MessageTemplateDialog, SheetTemplates, TemplatesHeader } from "@/components/sheet/designer/templates";
+import { OpenOnLoad } from "@/components/sheet/open-on-load";
 import { loadSheetTemplates } from "@/modules/sheet/templates-load";
 import { AutomationsDialog, AutomationsHeader, AutomationsSettings, SheetAutomations } from "@/components/sheet/designer/automations";
 import { loadSheetAutomations } from "@/modules/sheet/automations-load";
@@ -237,16 +238,17 @@ export async function SheetBody({
   }
   // Inbox: Conversations (filed client email), Email to triage, Delivery problems and Announcements (OPS-06).
   if (page === "inbox" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, pills, inbox, compose } = await loadSheetInbox(access.staff, query);
+    const { chrome, pills, inbox, compose, announce } = await loadSheetInbox(access.staff, query);
     return (
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={chrome.sidebar}
-          header={<InboxHeader tab={inbox.tab} pills={pills} />}
+          header={<InboxHeader tab={inbox.tab} pills={pills} announce={Boolean(announce)} />}
           statusbar={chrome.statusbar}
           after={
             <>
               <ComposeDialog data={compose} />
+              {announce ? <AnnouncementDialog data={announce} /> : null}
               {inbox.tab === "triage" ? <FileToMatterDialog organizationId={access.staff.organizationId} /> : null}
             </>
           }
@@ -605,7 +607,19 @@ export async function SheetBody({
     const loaded = await loadSheetTemplates(access.staff, tab, query.view);
     return (
       <SheetScreen page={page}>
-        <SheetFrame sidebar={loaded.chrome.sidebar} header={<TemplatesHeader data={loaded.data} />} statusbar={loaded.chrome.statusbar}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<TemplatesHeader data={loaded.data} />}
+          statusbar={loaded.chrome.statusbar}
+          after={
+            loaded.messageDialog ? (
+              <>
+                <MessageTemplateDialog data={loaded.messageDialog} />
+                {loaded.messageDialog.edit ? <OpenOnLoad key={loaded.messageDialog.edit.id} id={"dlgMt"} /> : null}
+              </>
+            ) : undefined
+          }
+        >
           <SheetTemplates data={loaded.data} />
         </SheetFrame>
       </SheetScreen>

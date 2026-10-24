@@ -105,6 +105,7 @@ portal choice "Email notices" is off is recorded as `skipped`, not emailed.
 | EX16 | Signing code (copy pending Francis, #166) | The booker asks for a code on a consultation agreement's private signing page (`issue_booking_agreement_code`; outbox booking_agreement.code, template signing_code), to the booking's primary attendee. The app seals the code; the mail worker opens it; the database keeps only its hash. Works for 10 minutes. Honours email_notices | client · firm | Your signing code from {firm_name} | It works for 10 minutes. | none (the code is the heading) | `firm_name`, `code` | wired |
 | EX17 | Consultant changed (ORG-06, #175) | Staff change a matter's responsible consultant on its People tab (`change_responsible_consultant`; outbox matter.consultant_changed, template consultant_changed), to each person on the matter with a portal account, who also get a portal notice naming the new consultant. Honours email_notices | client · firm | An update on your file from {firm_name} | Your consultant has changed. See who in your portal. | Open your portal → /portal | `firm_name` | wired |
 | EX18 | New enquiry, staff (CRM-01, #176) | Someone sends an enquiry from the firm's hosted page or website form (trigger `leads_enquiry_notice`; outbox lead.enquiry_received, template enquiry_received), to the firm's active owners and the lead's owner when set. Not for practice enquiries. Firm name only | firm owner · platform | New enquiry for {firm_name} | Open the Pipeline in Casevoya to read it. | Open the Pipeline → /sheet/pipeline | `firm_name` | wired |
+| EX19 | New notice, announcement (OPS-04, #179) | Staff with permission (firm owner, licensed consultant) send an announcement from an approved firm template on Inbox > Announcements (`send_announcement`; outbox announcement.sent, template announcement), to each chosen client with a portal account. The announcement itself shows on portal Home. Never emailed for a sample-mode firm. Honours email_notices. French hand draft, not reviewed | client · firm | A new notice from {firm_name} | Read it in your portal. | Open your portal → /portal | `firm_name` | wired |
 
 A database template the renderer does not know falls back to a neutral firm notice ("An update
 from {firm_name}", button to `/portal`) instead of failing the send.
@@ -138,6 +139,7 @@ per template is the "Status" table of `docs/i18n/email-fr-review.md`; how to app
 | `signing_code` | (booking_agreement.code) | EX16 |
 | `consultant_changed` | (matter.consultant_changed) | EX17 |
 | `enquiry_received` | (lead.enquiry_received) | EX18 |
+| `announcement` | (announcement.sent) | EX19 |
 | `agreement` | | EM08 |
 | `signature` | `audience: staff` (staff signer) | EM09-staff |
 | `signature` | | EM09 |

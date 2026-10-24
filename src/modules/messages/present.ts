@@ -2,6 +2,7 @@
  * Pure presentation for matter messaging (PRD OPS-04): thread summaries, audience lines, day
  * grouping, read and acknowledgement state. No database access; the loaders hand rows in.
  */
+import type { MessageTemplateOption } from "./templates";
 
 export type ChatAttachment = {
   documentId: string;
@@ -30,6 +31,8 @@ export type ChatMessage = {
   attachments: ChatAttachment[];
   /** How it reached the firm: the portal or Sheet, or a WhatsApp message from the client. */
   channel?: "portal" | "whatsapp";
+  /** Staff view (OPS-04): what happened to the email notice of a staff message, or null for none. */
+  email?: string | null;
 };
 
 export type ChatThread = {
@@ -52,7 +55,11 @@ export type ChatThread = {
   whatsapp?: { until: string | null } | null;
 };
 
-export type ChatAudienceOption = { personId: string; name: string; role: string; email: boolean };
+/**
+ * `portal`: they can sign in to the portal. `external` (OPS-04): on the matter only as employer or
+ * sponsor, who can be in a conversation only with portal access (the database refuses otherwise).
+ */
+export type ChatAudienceOption = { personId: string; name: string; role: string; email: boolean; portal?: boolean; external?: boolean };
 
 export type ChatDocument = { id: string; label: string; personId: string; audience: string; sensitivity: string };
 
@@ -77,6 +84,10 @@ export type ChatData = {
   matterId: string | null;
   /** Staff: "Draft with Vo" (src/modules/vo). Absent in the portal. */
   vo?: ChatVo;
+  /** Staff (OPS-04): the firm's approved message templates for Insert template. */
+  templates?: MessageTemplateOption[];
+  /** Staff (OPS-04): merge values the composer knows; null ones stay a gap to fill. */
+  merge?: { firmName: string; matterReference: string | null; consultantName: string | null };
 };
 
 export type ChatVo = {
@@ -233,10 +244,49 @@ export function messageError(raw: string): string {
   if (/not shared with everyone/i.test(raw)) return "One of the documents can’t be shared with everyone who can read this conversation. Remove it and try again.";
   if (/choose who can read/i.test(raw)) return "Choose who can read this message.";
   if (/must be on this matter/i.test(raw)) return "Everyone you write to must be on this matter.";
+  if (/needs portal access/i.test(raw)) return "An employer or sponsor needs portal access to this matter before they can be in a conversation. Invite them to the portal first.";
   if (/1 to 4000/i.test(raw)) return "Write a message of up to 4,000 characters.";
   if (/at most 5/i.test(raw)) return "Attach up to 5 documents.";
   if (/clients write to the firm only/i.test(raw)) return "You can write to your firm only.";
   if (/addressed/i.test(raw)) return "Only the people this message is for can acknowledge it.";
   if (/does not ask/i.test(raw)) return "This message doesn’t need an acknowledgement.";
   return "That didn’t go through. Nothing was sent.";
+}
+
+/** Staff (OPS-04): an audience option that can't be chosen, and why; null when it can. */
+export function audienceBlocked(option: ChatAudienceOption): string | null {
+  return option.external && option.portal === false ? "No portal access" : null;
+}
+
+const EMAIL_RANK = ["bounced", "failed", "suppressed", "skipped", "queued_worker", "sent"] as const;
+
+/**
+ * Staff (OPS-04): the email notice of one staff message, from its outbox event and deliveries, in
+ * the Inbox's words (outboundStatus). Null when no email went or will go (no event, or the worker
+ * found nobody to email). With several recipients, the worst state is shown.
+ */
+export function messageEmailState(input: { eventStatus: string | null; deliveries: string[]; sample: boolean }): string | null {
+  if (!input.eventStatus) return null;
+  if (!input.deliveries.length) return input.eventStatus === "published" ? null : "Email queued";
+  const normal = input.deliveries.map((status) => (status === "queued" ? "sent" : status === "pending" || status === "sending" ? "queued_worker" : status));
+  const worst = EMAIL_RANK.find((status) => normal.includes(status)) ?? "sent";
+  switch (worst) {
+    case "bounced":
+      return "Email failed: address bounced";
+    case "failed":
+      return "Email failed";
+    case "suppressed":
+      return "Email not sent: on the do-not-send list";
+    case "skipped":
+      return input.sample ? "Email not sent: sample client" : "Email not sent";
+    case "queued_worker":
+      return "Email queued";
+    default:
+      return "Email sent";
+  }
+}
+
+/** Staff (OPS-04): a sent message's state: read by whom, else delivered to their portal. */
+export function readState(readBy: string[]): string {
+  return readBy.length ? `Read by ${readBy.join(", ")}` : "Delivered";
 }
