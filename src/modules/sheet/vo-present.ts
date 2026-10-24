@@ -7,6 +7,7 @@ import type { Attrs, DraftCard, DraftsData, DraftsHeaderData, DraftSwitch } from
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import type { VoSettingKey, VoSwitchKey } from "@/modules/vo/errors";
 import { MATTER_STAGES, stageLabel } from "@/modules/sheet/present";
+import type { AiVendorTermsData } from "@/modules/sheet/vo-vendor-terms-present";
 
 export type VoSettingsRow = {
   enabled: boolean;
@@ -332,8 +333,10 @@ function aiSwitch(id: string, label: string, on: boolean, attrs: Attrs, small?: 
   return { id, label, small, sr, on, attrs };
 }
 
-export function aiSettings(viewer: VoViewer, settings: VoSettings): AiSettings {
+export function aiSettings(viewer: VoViewer, settings: VoSettings, vendorTerms?: AiVendorTermsData): AiSettings {
   const a = (key: VoSettingKey | null) => switchAttrs(viewer, key);
+  // AI-06: turning Vo on asks the owner to acknowledge the AI vendor terms first (once per version).
+  const firmAttrs = viewer.isOwner && !settings.enabled && vendorTerms && !vendorTerms.acknowledged ? { "data-vo-terms": "1", "data-org": viewer.organizationId } : a("enabled");
   const notes: string[] = [];
   if (!settings.saved) notes.push(viewer.sampleMode ? "Vo is on because this firm is in sample mode, for sample records only. A real firm starts with Vo off." : "Vo is off until the firm owner turns it on.");
   if (!viewer.agentReady) notes.push("Vo isn’t configured on this server yet, so it shows as unavailable.");
@@ -345,7 +348,7 @@ export function aiSettings(viewer: VoViewer, settings: VoSettings): AiSettings {
   return {
     intro: "Turn Vo off for the whole firm, for one capability or for a sensitive kind of document. Switched off, every workflow still works by hand.",
     firm: [
-      aiSwitch("swVoFirm", `Vo for ${viewer.firmName}`, settings.enabled, a("enabled"), "Drafts only. People accept, edit or reject everything."),
+      aiSwitch("swVoFirm", `Vo for ${viewer.firmName}`, settings.enabled, firmAttrs, "Drafts only. People accept, edit or reject everything."),
       ...[
         aiSwitch("swVoClassify", "Document classification", settings.doc_classification, a("doc_classification")),
         aiSwitch("swVoOcr", "OCR normalisation (names, dates, numbers)", settings.ocr_normalisation, a("ocr_normalisation")),
@@ -366,12 +369,12 @@ export function aiSettings(viewer: VoViewer, settings: VoSettings): AiSettings {
       aiSwitch("swVoMessages", "Client messages", settings.read_client_messages, a("read_client_messages"), "Portal messages", "Vo may read Client messages"),
     ].map(sub),
     dataUse: [
-      { term: "Training on your files", value: "Never by Casevoya. The AI vendor’s terms are in review (pending)" },
-      { term: "Vendor retention", value: "Pending the AI vendor review (Anthropic, Cloudflare)" },
+      { term: "Training on your files", value: "Never by Casevoya. What each AI vendor’s terms say is quoted in AI vendor terms below" },
       { term: "What Vo can read", value: "Only the matter and conversation you’re working in, with your own access" },
       { term: "Documents’ own instructions", value: "Ignored. Text inside an upload or a message can’t change Vo’s rules" },
     ],
     note: notes.length ? notes.join(" ") : null,
+    ...(vendorTerms ? { vendorTerms } : {}),
   };
 }
 
@@ -601,12 +604,14 @@ export function aiPage(input: {
   sources: ApprovedSourceRow[];
   names: VoNames;
   readings?: readonly VoReadingAuditRow[];
+  /** Settings: the AI vendor terms panel (AI-06). */
+  vendorTerms?: AiVendorTermsData;
 }): AiData {
   const { tab, viewer, settings, names } = input;
   return {
     tab,
     pills: aiPills(viewer, settings),
-    settings: tab === "settings" ? aiSettings(viewer, settings) : undefined,
+    settings: tab === "settings" ? aiSettings(viewer, settings, input.vendorTerms) : undefined,
     runs:
       tab === "runs"
         ? {

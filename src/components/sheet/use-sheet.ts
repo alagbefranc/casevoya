@@ -132,6 +132,8 @@ import { runAutomationSave } from "./automations-acts";
 import { signOutOtherSessions } from "@/modules/settings/firm-actions";
 import { mountIntakeBuilder } from "./intake-builder-acts";
 import { runVoAccept, runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
+import { runVoTermsAck } from "./vo-vendor-terms-acts";
+import { VO_TERMS_DIALOG } from "@/modules/sheet/vo-vendor-terms-present";
 import { runVoDocAccept, runVoDocDiscard, runVoDocReject, runVoRead } from "./vo-doc-acts";
 import { mountRetentionSlider, runRetentionSave } from "./retention-act";
 import { mountSubscription, runSubscriptionAct } from "./subscription-act";
@@ -1115,6 +1117,14 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
               ? () => runVoDocReject(voDoc, router)
               : () => runVoDocDiscard(voDoc, router);
         busyRun(voDoc, run);
+        return;
+      }
+      // AI-06: turning Vo on first opens the AI vendor terms acknowledgement; its button records it.
+      const voTerms = target.closest<HTMLElement>(".k2-sw[data-vo-terms], [data-vo-terms-ack]");
+      if (voTerms && root.contains(voTerms)) {
+        event.preventDefault();
+        if (voTerms.hasAttribute("data-vo-terms-ack")) busyRun(voTerms, () => runVoTermsAck(voTerms, router));
+        else openDialog(VO_TERMS_DIALOG);
         return;
       }
       // Vo drafts and Vo and AI: Reject, the owner's switches, "useful?" votes and Ask Vo.

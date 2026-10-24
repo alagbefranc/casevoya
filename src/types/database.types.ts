@@ -11756,6 +11756,30 @@ export type Database = {
         }
         Relationships: []
       }
+      vo_vendor_terms_acknowledgements: {
+        Row: {
+          acknowledged_at: string
+          acknowledged_by: string
+          id: string
+          organization_id: string
+          terms_version: string
+        }
+        Insert: {
+          acknowledged_at?: string
+          acknowledged_by: string
+          id?: string
+          organization_id: string
+          terms_version: string
+        }
+        Update: {
+          acknowledged_at?: string
+          acknowledged_by?: string
+          id?: string
+          organization_id?: string
+          terms_version?: string
+        }
+        Relationships: []
+      }
       staff_connections: {
         Row: {
           connected_account_id: string | null
@@ -12158,6 +12182,10 @@ export type Database = {
       acknowledge_matter_message: {
         Args: { p_message_id: string; p_organization_id: string }
         Returns: string
+      }
+      acknowledge_vo_vendor_terms: {
+        Args: { p_organization_id: string; p_terms_version: string }
+        Returns: Json
       }
       add_consultant_licence: {
         Args: {
