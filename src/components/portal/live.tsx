@@ -714,6 +714,24 @@ function Stub({ page }: { page: string }) {
   );
 }
 
+/** While a portal page loads: a quiet skeleton, never "No portal yet" (that is for no access). */
+export function PortalLoading() {
+  return (
+    <main className="sheet">
+      <div className="main" id="main" aria-busy="true">
+        <div id="pc">
+          <p className="sr" role="status">Opening your portal…</p>
+          <div className="sk" style={{ width: 260, height: 36, margin: "8px 0 14px" }} />
+          <div className="sk" style={{ width: "60%", height: 14 }} />
+          <div className="sk" style={{ height: 180, borderRadius: 18, margin: "26px 0 18px" }} />
+          <div className="sk" style={{ height: 76, borderRadius: 14 }} />
+          <div className="sk" style={{ height: 140, borderRadius: 14, marginTop: 18 }} />
+        </div>
+      </div>
+    </main>
+  );
+}
+
 export function EmptyPortal() {
   return (
     <main className="sheet">

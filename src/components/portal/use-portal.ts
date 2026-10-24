@@ -130,7 +130,12 @@ export function usePortal(ref: RefObject<HTMLElement | null>, page: string) {
     const sum = root.querySelector<HTMLDetailsElement>("#sum");
     if (sum && window.matchMedia("(max-width:860px)").matches) sum.open = false;
 
-    return () => ac.abort();
+    // Clear the guard too: React runs an effect twice in development (StrictMode), and the second
+    // run must attach the listeners the first run's cleanup removed.
+    return () => {
+      ac.abort();
+      delete root.dataset.portalReady;
+    };
   }, [page, ref]);
 }
 
