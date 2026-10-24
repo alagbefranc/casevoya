@@ -3513,6 +3513,54 @@ export type Database = {
           },
         ]
       }
+      intake_fact_reuses: {
+        Row: {
+          answer_id: string
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          created_by: string | null
+          field_key: string
+          id: string
+          organization_id: string
+          origin_answer_id: string
+          origin_matter_id: string
+          origin_response_id: string
+          response_id: string
+          status: Database["public"]["Enums"]["intake_fact_reuse_status"]
+        }
+        Insert: {
+          answer_id: string
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          field_key: string
+          id?: string
+          organization_id: string
+          origin_answer_id: string
+          origin_matter_id: string
+          origin_response_id: string
+          response_id: string
+          status?: Database["public"]["Enums"]["intake_fact_reuse_status"]
+        }
+        Update: {
+          answer_id?: string
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          field_key?: string
+          id?: string
+          organization_id?: string
+          origin_answer_id?: string
+          origin_matter_id?: string
+          origin_response_id?: string
+          response_id?: string
+          status?: Database["public"]["Enums"]["intake_fact_reuse_status"]
+        }
+        Relationships: []
+      }
       intake_corrections: {
         Row: {
           answer_id: string | null
@@ -7098,6 +7146,75 @@ export type Database = {
           locale?: string
           sms_notices?: boolean
           updated_at?: string
+        }
+        Relationships: []
+      }
+      person_flag_resolutions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          detail: string
+          flag_key: string
+          id: string
+          note: string
+          organization_id: string
+          person_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          detail: string
+          flag_key: string
+          id?: string
+          note: string
+          organization_id: string
+          person_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          detail?: string
+          flag_key?: string
+          id?: string
+          note?: string
+          organization_id?: string
+          person_id?: string
+        }
+        Relationships: []
+      }
+      person_identity_entries: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data: Json
+          id: string
+          kind: Database["public"]["Enums"]["person_identity_kind"]
+          organization_id: string
+          person_id: string
+          replaces_id: string | null
+          retired: boolean
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data: Json
+          id?: string
+          kind: Database["public"]["Enums"]["person_identity_kind"]
+          organization_id: string
+          person_id: string
+          replaces_id?: string | null
+          retired?: boolean
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data?: Json
+          id?: string
+          kind?: Database["public"]["Enums"]["person_identity_kind"]
+          organization_id?: string
+          person_id?: string
+          replaces_id?: string | null
+          retired?: boolean
         }
         Relationships: []
       }
@@ -11171,6 +11288,14 @@ export type Database = {
         Returns: undefined
       }
       firm_transfers_overview: { Args: { p_organization_id: string }; Returns: Json }
+      record_person_identity: {
+        Args: { p_data: Json; p_kind: string; p_person_id: string; p_replaces_id?: string; p_retire?: boolean }
+        Returns: string
+      }
+      resolve_person_flag: {
+        Args: { p_detail: string; p_flag_key: string; p_note: string; p_person_id: string }
+        Returns: string
+      }
       record_firm_transfer: {
         Args: {
           p_contact_email: string
@@ -12080,6 +12205,8 @@ export type Database = {
         }
         Returns: undefined
       }
+      confirm_reused_fact: { Args: { p_reuse_id: string }; Returns: undefined }
+      reuse_approved_facts: { Args: { p_response_id: string }; Returns: number }
       review_intake_answer: {
         Args: { p_answer_id: string }
         Returns: string
@@ -13021,6 +13148,7 @@ export type Database = {
         | "declaration"
         | "file_request"
         | "choice"
+      intake_fact_reuse_status: "needs_reconfirmation" | "confirmed" | "replaced"
       intake_response_status: "draft" | "submitted"
       intake_template_status: "draft" | "published" | "superseded"
       intake_workflow_category:
@@ -13161,6 +13289,7 @@ export type Database = {
         | "sponsor"
         | "household"
         | "other"
+      person_identity_kind: "name" | "passport" | "address"
       person_section_key:
         | "passport_bio"
         | "school_transcript"
@@ -13486,6 +13615,7 @@ export const Constants = {
         "participation_declined",
         "electronic_signature",
       ],
+      person_identity_kind: ["name", "passport", "address"],
       person_section_key: [
         "passport_bio",
         "school_transcript",
@@ -13591,6 +13721,7 @@ export const Constants = {
         "unspecified",
       ],
       intake_template_status: ["draft", "published", "superseded"],
+      intake_fact_reuse_status: ["needs_reconfirmation", "confirmed", "replaced"],
       intake_response_status: ["draft", "submitted"],
       intake_field_type: [
         "text",
