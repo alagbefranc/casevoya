@@ -14,6 +14,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { Icon, Pair, Sep } from "./frame";
 import { SubmissionChecklist, SubmissionChecklistDialogs, type SubmissionChecklistData, type SubmissionChecklistDialogsData } from "./matter-submissions-checklist";
 import { Avatar, type SidebarPerson } from "./sidebar";
+import { IssuerList, type IssuerListData } from "./letter-form";
 
 const css = (style: Record<string, string>) => style as CSSProperties;
 
@@ -319,6 +320,10 @@ export type GovLetterRow = {
   attach?: GovWire | null;
   /** The Designer's sample letter thumbnail; never set from real data. */
   thumb?: string | null;
+  /** Live only (GOV-04): who sent it, with its official source when it came from the firm's list. */
+  issuer?: string[] | null;
+  /** Live only (GOV-04): one line per task the letter created. */
+  tasks?: string[];
 };
 
 export type FollowUpRow = { title: string; note: string; owner: SidebarPerson; urgent?: boolean; wire?: GovWire | null };
@@ -361,6 +366,8 @@ export type MatterDecisionsData = {
   /** The empty state offers Record a government letter. */
   letter: boolean;
   letters: GovLetterRow[];
+  /** Live only (GOV-04): the firm's issuer list, under the letters. */
+  issuers?: IssuerListData | null;
 };
 
 function Seg({ selected }: { selected: string }) {
@@ -561,6 +568,14 @@ function LetterRows({ letters, start }: { letters: GovLetterRow[]; start: number
               <small>
                 <Joined parts={letter.parts} />
               </small>
+              {letter.issuer ? (
+                <small>
+                  <Joined parts={letter.issuer} />
+                </small>
+              ) : null}
+              {(letter.tasks ?? []).map((line, n) => (
+                <small key={n}>{line}</small>
+              ))}
             </div>
             <span className={"r"}>
               {letter.verify ? (
@@ -667,6 +682,7 @@ export function MatterDecisionsLive({ data }: { data: MatterDecisionsData }) {
           </div>
         )}
         <LetterRows letters={data.letters} start={index} />
+        {data.issuers ? <IssuerList data={data.issuers} start={index + data.letters.length + 2} /> : null}
       </>
     );
   }
@@ -705,6 +721,7 @@ export function MatterDecisionsLive({ data }: { data: MatterDecisionsData }) {
       ) : null}
       {/* Letters stay listed (with Verify and Attach) after a decision, for the next one that arrives. */}
       {data.letters.length ? <LetterRows letters={data.letters} start={index} /> : null}
+      {data.issuers ? <IssuerList data={data.issuers} start={index + data.letters.length + 2} /> : null}
     </>
   );
 }

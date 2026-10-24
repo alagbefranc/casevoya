@@ -66,6 +66,9 @@ export async function runMatterAct(button: HTMLElement, root: HTMLElement, route
     // follows only once a staff member verifies it against the evidence.
     result = await recordLetter(scope, dialog, { organizationId: ref.organizationId, matterId: ref.matterId });
     sub = "Kept as received. It counts once a staff member verifies it against the evidence.";
+    // GOV-04: the tasks it created, each linked to the letter.
+    const made = result && "tasks" in result && typeof result.tasks === "number" ? result.tasks : 0;
+    if (made) sub = `Kept as received, with ${made === 1 ? "1 task" : `${made} tasks`} linked to it. It counts once a staff member verifies it.`;
   } else if (act === "consultant") {
     const membershipId = text(scope, "#consSel");
     const current = scope.querySelector<HTMLSelectElement>("#consSel")?.dataset.current ?? "";

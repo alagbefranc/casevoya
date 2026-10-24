@@ -3224,6 +3224,7 @@ export type Database = {
           evidence_version_id: string | null
           id: string
           issuer: string | null
+          issuer_id: string | null
           kind: Database["public"]["Enums"]["correspondence_kind"]
           matter_id: string
           organization_id: string
@@ -3248,6 +3249,7 @@ export type Database = {
           evidence_version_id?: string | null
           id?: string
           issuer?: string | null
+          issuer_id?: string | null
           kind: Database["public"]["Enums"]["correspondence_kind"]
           matter_id: string
           organization_id: string
@@ -3272,6 +3274,7 @@ export type Database = {
           evidence_version_id?: string | null
           id?: string
           issuer?: string | null
+          issuer_id?: string | null
           kind?: Database["public"]["Enums"]["correspondence_kind"]
           matter_id?: string
           organization_id?: string
@@ -3346,6 +3349,66 @@ export type Database = {
           reviewed_by?: string | null
           section?: string | null
           snapshot_sha256?: string
+          source_url?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      government_issuers: {
+        Row: {
+          checked_on: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          name_on_page: boolean | null
+          organization_id: string
+          page_modified_on: string | null
+          retrieved_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          snapshot_sha256: string | null
+          source_url: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          checked_on: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          name_on_page?: boolean | null
+          organization_id: string
+          page_modified_on?: string | null
+          retrieved_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          snapshot_sha256?: string | null
+          source_url: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          checked_on?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          name_on_page?: boolean | null
+          organization_id?: string
+          page_modified_on?: string | null
+          retrieved_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          snapshot_sha256?: string | null
           source_url?: string
           status?: string
           updated_at?: string
@@ -13189,6 +13252,19 @@ export type Database = {
         Args: { p_request_id: string }
         Returns: Json
       }
+      propose_government_issuer: {
+        Args: {
+          p_checked_on: string
+          p_modified_on: string | null
+          p_name: string
+          p_name_on_page: boolean | null
+          p_org: string
+          p_retrieved_at: string | null
+          p_sha256: string | null
+          p_source_url: string
+        }
+        Returns: string
+      }
       public_privacy_notice: { Args: { p_firm_slug: string }; Returns: Json }
       publish_intake_draft: {
         Args: { p_expected_version: number; p_template_id: string }
@@ -13428,6 +13504,22 @@ export type Database = {
           p_source_url: string
         }
         Returns: number
+      }
+      record_government_letter: {
+        Args: {
+          p_action_requested: string | null
+          p_channel: Database["public"]["Enums"]["correspondence_channel"]
+          p_document_date: string | null
+          p_evidence_version_id: string | null
+          p_issuer: string | null
+          p_issuer_id: string | null
+          p_kind: Database["public"]["Enums"]["correspondence_kind"]
+          p_matter_id: string
+          p_received_on: string
+          p_stated_deadline: string | null
+          p_tasks: Json
+        }
+        Returns: string
       }
       record_government_status: {
         Args: {
@@ -13726,6 +13818,15 @@ export type Database = {
           p_note: string | null
           p_org: string
           p_sha256: string
+        }
+        Returns: number
+      }
+      review_government_issuer: {
+        Args: {
+          p_decision: string
+          p_expected_version: number
+          p_issuer_id: string
+          p_note: string | null
         }
         Returns: number
       }

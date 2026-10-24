@@ -34,6 +34,8 @@ import { staffPerson } from "@/modules/sheet/avatar";
 import { dayMonth } from "@/modules/sheet/home-present";
 import { dayMonthYear, firstName, longDate, taskDue } from "@/modules/sheet/matter-present";
 import { isoDateInTimeZone, MATTER_OUTCOMES, outcomeLabel, stageLabel } from "@/modules/sheet/present";
+import type { IssuerRow } from "@/modules/government/letters";
+import { issuerList, letterIssuerParts, letterTaskLines, type LetterTaskRow } from "@/modules/sheet/letter-present";
 
 export type HandoffRow = {
   id: string;
@@ -81,6 +83,9 @@ export type LetterRow = {
   created_by: string | null;
   created_at: string;
   version: number;
+  /** GOV-04: who sent it, as recorded, and the approved issuer it names (null when typed). */
+  issuer?: string | null;
+  issuer_id?: string | null;
 };
 
 export type DecisionRow = {
@@ -125,6 +130,10 @@ export type GovernmentRecords = {
   representation: boolean;
   documents: { total: number; open: number };
   expiring: ExpiringDocument[];
+  /** GOV-04 (matter page only): the tasks each letter created, the firm's issuer list, client names. */
+  letterTasks?: LetterTaskRow[];
+  issuers?: IssuerRow[];
+  people?: Map<string, string>;
 };
 
 export type GovernmentContext = {
@@ -323,8 +332,10 @@ function letterRows(records: GovernmentRecords, ctx: GovernmentContext): GovLett
     const hasEvidence = Boolean(letter.evidence_version_id || letter.evidence_locator);
     const deadlines = records.deadlines.filter((link) => link.correspondence_id === letter.id && link.due_on);
     const parts = [`Received ${dayMonth(letter.received_on)} by ${channelLabel(letter.channel)}`, `recorded by ${firstName(ctx.userName(letter.created_by))}`];
+    if (letter.document_date) parts.splice(1, 0, `dated ${dayMonthYear(letter.document_date, ctx.today)}`);
     for (const link of deadlines) parts.push(`created the ${dayMonth(link.due_on as string)} deadline`);
     if (letter.stated_deadline) parts.push(`letter says: ${statedDeadline(letter.stated_deadline, ctx.today)}`);
+    const tasks = (records.letterTasks ?? []).filter((task) => task.correspondence_id === letter.id);
     const urgent = letter.kind === "request" || letter.kind === "procedural_fairness" || letter.kind === "decision";
     return {
       dot: urgent ? "#0075DE" : "#2e9d5b",
@@ -337,6 +348,8 @@ function letterRows(records: GovernmentRecords, ctx: GovernmentContext): GovLett
           : null,
       // A letter recorded without its evidence: attach it, then it can be verified.
       attach: !letter.verified_at && !hasEvidence && STAFF.has(ctx.role) ? wire("attach-letter", ctx, { id: letter.id, version: String(letter.version) }) : null,
+      issuer: letterIssuerParts(letter.issuer, letter.issuer_id, records.issuers ?? []),
+      tasks: letterTaskLines(tasks, { member: ctx.memberName, person: (id) => (id ? records.people?.get(id) : undefined) ?? "the client" }, ctx.today),
     };
   });
 }
@@ -461,12 +474,17 @@ function decisionView(records: GovernmentRecords, ctx: GovernmentContext, decisi
 export function buildDecisions(records: GovernmentRecords, ctx: GovernmentContext): MatterDecisionsData {
   const latest = records.decisions[0] ?? null;
   const letters = letterRows(records, ctx);
-  if (latest) return { decision: decisionView(records, ctx, latest), letter: STAFF.has(ctx.role), letters };
+  // GOV-04: the firm's issuer list, on the matter page only (the loader reads it there).
+  const issuers = records.issuers
+    ? issuerList({ organizationId: ctx.organizationId, today: ctx.today, issuers: records.issuers, canAdd: STAFF.has(ctx.role), canReview: ctx.licensed })
+    : null;
+  if (latest) return { decision: decisionView(records, ctx, latest), letter: STAFF.has(ctx.role), letters, issuers };
   const verifiedDecision = records.letters.find((row) => row.kind === "decision" && row.verified_at) ?? null;
   return {
     decision: null,
     letter: STAFF.has(ctx.role),
     letters,
+    issuers,
     recordForm:
       verifiedDecision && VERIFIERS.has(ctx.role)
         ? {
