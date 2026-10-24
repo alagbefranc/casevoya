@@ -300,7 +300,13 @@ export function normalizeName(name: string): string {
     .join(" ");
 }
 
-export type PersonRecord = { displayName: string; dateOfBirth: string | null; birthPrecision: string | null };
+export type PersonRecord = {
+  displayName: string;
+  dateOfBirth: string | null;
+  birthPrecision: string | null;
+  /** INT-05: other names recorded on the person (alias, maiden name, transliteration); a match isn't flagged. */
+  aliases?: readonly string[];
+};
 
 /** The answers' date of birth at the precision both sides have, as YYYY, YYYY-MM or YYYY-MM-DD. */
 function birthKey(answer: AnswerVersion): { year: number; month: number | null; day: number | null } | null {
@@ -360,7 +366,8 @@ export function reviewFlags(input: {
       }
     }
     if (field.type === "text" && NAME_KEY.test(field.key) && answer.presence === "provided" && input.record && typeof answer.value.text === "string") {
-      if (normalizeName(answer.value.text) !== normalizeName(input.record.displayName)) {
+      const known = [input.record.displayName, ...(input.record.aliases ?? [])].map(normalizeName);
+      if (!known.includes(normalizeName(answer.value.text))) {
         flags.push({ kind: "name", label: FLAG_LABEL.name, detail: `“${answer.value.text}” here; “${input.record.displayName}” on the person’s record`, fieldKey: field.key });
       }
     }
