@@ -502,6 +502,19 @@ The private link runs the designed flow (spec `docs/specs/consultation-agreement
 
 Tested in `tests/booking-agreements.rls.test.ts`.
 
+## Inbound email filing (`20261025120000`, not applied on the live project)
+
+OPS-06, branch `feat/ops-inbound-filing`.
+
+* `inbound_inbox_items.file_audience` (`document_audience`, null means `subject`), `skipped_at`, `skipped_by` (indexed): what staff chose for each file when filing its email. A left-out file is never copied.
+* `email_deliveries.follow_up_task_id` (FK `(follow_up_task_id, organization_id)` to `tasks`, indexed): the follow-up task a critical bounce opened or joined.
+* `public.matter_inbound_address(matter, domain)` (authenticated; staff who can read the matter, `app.require_active_staff`): the matter's `slug+token@domain` address through `app.firm_reply_address` (128-bit random token, made on first use), with `matter_tag = false` when a long slug falls back to the firm address.
+* `public.file_inbound_email_to_matter(email, matter, person, files)` (authenticated): calls `public.file_inbound_email` unchanged (every access, role, step-up, matter and person check), then records `[{item_id, save, audience}]` (`subject` or `staff`) for files of that email not yet copied, in one transaction. Audited `email.files_chosen`. Returns the files still to copy.
+* Redefined `public.assign_unsorted_email_file` (from `20261019200000`): refuses a left-out file; the document's audience is the file's choice (`subject` when none, as before); the audit entry names it.
+* Redefined `public.finish_email_delivery` (from `20261018190100`): a critical bounce on a matter joins the firm's already-open follow-up task (one per firm, `tasks_email_delivery_failure_open_uidx`) instead of being recorded nowhere, the task is stored on the delivery, and `email.bounced` names it. A task still needs a matter (`tasks_check`), so a critical bounce with no matter still gets none; Delivery problems says so.
+
+Tested in `tests/inbound-filing.rls.test.ts`.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.
