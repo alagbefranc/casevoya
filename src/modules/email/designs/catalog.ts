@@ -1227,7 +1227,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         subject: `An update on your file from ${firmName}`,
         preheader: "Your consultant has changed. See who in your portal.",
         heading: "Your consultant has changed",
-        body: `A different consultant at ${firmName} is now responsible for your file. For your privacy, their name is in your portal.`,
+        body: `A different consultant at ${firmName} is now responsible for your file, and your file stays with ${firmName}. For your privacy, their name is in your portal, along with anything you may need to sign. If you have questions or don't agree with this change, contact ${firmName}.`,
         cta: cta("Open your portal", appLink(origin, PATHS.portal)),
         spot: "reminder",
         brand: firmBrand(context),
