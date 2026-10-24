@@ -240,6 +240,8 @@ describe("portal Home: the designed layout", () => {
     expect(html).toContain('class="next rv"');
     expect(html).toContain("Hi Casey.");
     expect(html).toContain('href="/portal/tasks"');
+    // use-portal sends the demo's #cont and #pay to fixed pages; live links must not carry them.
+    expect(html).not.toMatch(/id="(cont|pay)"/);
     expect(html).toContain('class="q4 panel rv"');
     expect(html).toContain("Who is working on it?");
     expect(html).toContain('class="steps"');
