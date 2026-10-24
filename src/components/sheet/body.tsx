@@ -203,7 +203,7 @@ export async function SheetBody({
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={chrome.sidebar}
-          header={<TasksHeader tab={tasks.tab} counts={tasks.counts} canCreate={tasks.canCreate !== false} />}
+          header={<TasksHeader tab={tasks.tab} counts={tasks.counts} canCreate={tasks.canCreate !== false} escalate={tasks.escalate} />}
           statusbar={chrome.statusbar}
           after={
             <>
