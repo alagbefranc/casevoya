@@ -8,7 +8,7 @@
       "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
       "promptVersion": "fr-ca-2026-10-18.3",
       "draftedOn": "2026-10-18",
-      "sourceHash": "sha256:0f2d34633cbb1c642066b8baf07c3dfdd2f958e602ab0f4ee2d4e242b18c3cb4",
+      "sourceHash": "sha256:2392d7d1cd0a2ba833dabd23561b927831d09cc3a246dfc26510eccb43016d77",
       "strings": {
         "your_firm": {
           "en": "Your firm",
@@ -87,6 +87,18 @@
           "fr": "membre de l’équipe",
           "origin": "hand",
           "note": "Article-free (EM01)."
+        },
+        "manage_line": {
+          "en": "To change the time or cancel, use Manage your booking.",
+          "fr": "Pour changer l’heure ou annuler, utilisez Gérer votre réservation.",
+          "origin": "hand",
+          "note": "CRM-03 hand draft (#176)."
+        },
+        "manage_cta": {
+          "en": "Manage your booking",
+          "fr": "Gérer votre réservation",
+          "origin": "hand",
+          "note": "CRM-03 hand draft (#176)."
         }
       }
     },

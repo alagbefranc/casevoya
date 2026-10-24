@@ -110,6 +110,8 @@ export async function updateSession(request: NextRequest) {
     path === "/setup" ||
     path.startsWith("/accept/") ||
     path.startsWith("/call/") ||
+    // Manage your booking (CRM-03): the token in the address is the secret.
+    path.startsWith("/booking/") ||
     // A consultation agreement's private link: the booking reference is the secret.
     path.startsWith("/consultation/")
   ) {

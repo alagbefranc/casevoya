@@ -14,7 +14,7 @@
  */
 import source from "@/modules/email/designs/i18n-source.json";
 import drafts from "@/modules/email/designs/fr-drafts.json";
-import { PATHS, type EmailContexts, type TemplateId } from "@/modules/email/designs/catalog";
+import { manageLink, PATHS, type EmailContexts, type TemplateId } from "@/modules/email/designs/catalog";
 import { appLink, cleanText, safeUrl, type Brand, type EmailCopy, type ShellText, type Spot } from "@/modules/email/designs/layout";
 import { TAGLINES } from "@/modules/email/designs/taglines";
 import {
@@ -375,13 +375,14 @@ const BUILDERS: Builders = {
         break;
       }
     }
-    const parts = [lead, meet, context.portal ? "" : t("_shared.contact_to_change", values)].filter(Boolean);
+    const manage = context.portal ? null : manageLink(context.manageUrl, origin);
+    const parts = [lead, meet, context.portal ? "" : manage ? t("_shared.manage_line") : t("_shared.contact_to_change", values)].filter(Boolean);
     return copy(kit, {
       subject: t("subject", values),
       preheader: t("preheader"),
       heading: t("heading"),
       body: parts.join(" "),
-      cta: context.portal ? cta(t("cta"), appLink(origin, PATHS.portalAppointments)) : null,
+      cta: context.portal ? cta(t("cta"), appLink(origin, PATHS.portalAppointments)) : manage ? cta(t("_shared.manage_cta"), manage) : null,
       spot: "reminder",
       brand: firmBrand(kit, context),
     });
@@ -391,6 +392,7 @@ const BUILDERS: Builders = {
     const firmName = firm(kit, context);
     const when = f.dateTimeIn(context.startsAt, context.timeZone);
     const moved = when ? t("moved_when", { date_time: when, time_zone_label: zoneLabel(kit, context.timeZone) }) : t("moved");
+    const manage = context.portal ? null : manageLink(context.manageUrl, origin);
     return copy(kit, {
       subject: t("subject", { firm_name: firmName }),
       preheader: context.portal ? t("preheader_portal") : t("preheader"),
@@ -399,8 +401,8 @@ const BUILDERS: Builders = {
         ? when
           ? `${moved} ${t("reminders_moved")}`
           : t("portal_no_time")
-        : `${moved} ${t("_shared.contact_to_change", { firm_name: firmName })}`,
-      cta: context.portal ? cta(t("cta"), appLink(origin, PATHS.portalAppointments)) : null,
+        : `${moved} ${manage ? t("_shared.manage_line") : t("_shared.contact_to_change", { firm_name: firmName })}`,
+      cta: context.portal ? cta(t("cta"), appLink(origin, PATHS.portalAppointments)) : manage ? cta(t("_shared.manage_cta"), manage) : null,
       spot: "reminder",
       brand: firmBrand(kit, context),
     });
