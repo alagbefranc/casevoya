@@ -85,7 +85,7 @@ export async function enterEstimate(input: Ref & { matterId: string; sourceUrl: 
 }
 
 /** A licensed member approves or rejects an estimate (recent step-up). */
-export async function reviewEstimate(input: Ref & { estimateId: string; version: number; decision: string; note?: string | null }) {
+export async function reviewEstimate(input: Ref & { estimateId: string; version: number; decision: string; note?: string | null; pageOpenedOn?: string | null }) {
   if (!isUuid(input.estimateId) || !Number.isInteger(input.version)) return { error: "Choose an estimate." };
   if (input.decision !== "approved" && input.decision !== "rejected") return { error: "Approve or reject it." };
   const note = (input.note ?? "").trim();
@@ -97,6 +97,8 @@ export async function reviewEstimate(input: Ref & { estimateId: string; version:
     p_expected_version: input.version,
     p_decision: input.decision,
     p_note: note || null,
+    // The reviewer's attestation when IRCC's page wasn't captured (decided 2026-10-24).
+    p_page_opened_on: input.decision === "approved" && /^\d{4}-\d{2}-\d{2}$/.test(input.pageOpenedOn ?? "") ? (input.pageOpenedOn as string) : null,
   });
   if (error) return { error: refusal(error.message) };
   refresh();

@@ -3,6 +3,7 @@
 import { toast2 } from "@/components/port/kit";
 import { proposeGovernmentIssuer, reviewGovernmentIssuer } from "@/modules/government/letter-actions";
 import { readLetterTasks, type LetterTask } from "@/modules/government/letters";
+import { readAttestationFrom } from "@/modules/government/page-attestation";
 import { needsStepUp, stepUpLocation } from "@/modules/sheet/matter-wire";
 
 /**
@@ -108,9 +109,20 @@ async function runIssuerAct(button: HTMLElement, router: Router) {
       return;
     }
   } else if (act === "approved" || act === "rejected" || act === "retired") {
-    const note = field(button.closest("[data-issuer-row]") ?? document, "[data-issuer-note]");
+    const row = button.closest("[data-issuer-row]") ?? document;
+    const note = field(row, "[data-issuer-note]");
     if (act !== "approved" && note.length < 3) return void toast2("Say why", { kind: "warn", sub: "Type the reason in the field on this issuer’s row." });
-    result = await reviewGovernmentIssuer({ organizationId, issuerId: button.dataset.id ?? "", version: Number(button.dataset.version), decision: act, note: act === "approved" ? null : note });
+    // The page wasn't read: the row carries the reviewer's attestation fields.
+    const attested = act === "approved" ? readAttestationFrom(row) : null;
+    if (attested && "error" in attested) return void toast2(attested.error, { kind: "warn", sub: "Nothing was saved." });
+    result = await reviewGovernmentIssuer({
+      organizationId,
+      issuerId: button.dataset.id ?? "",
+      version: Number(button.dataset.version),
+      decision: act,
+      note: act === "approved" ? null : note,
+      pageOpenedOn: attested?.openedOn ?? null,
+    });
   } else {
     return;
   }

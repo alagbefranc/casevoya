@@ -355,7 +355,7 @@ function letterRows(records: GovernmentRecords, ctx: GovernmentContext): GovLett
           : null,
       // A letter recorded without its evidence: attach it, then it can be verified.
       attach: !letter.verified_at && !hasEvidence && STAFF.has(ctx.role) ? wire("attach-letter", ctx, { id: letter.id, version: String(letter.version) }) : null,
-      issuer: letterIssuerParts(letter.issuer, letter.issuer_id, records.issuers ?? []),
+      issuer: letterIssuerParts(letter.issuer, letter.issuer_id, records.issuers ?? [], ctx.memberName),
       tasks: letterTaskLines(tasks, { member: ctx.memberName, person: (id) => (id ? records.people?.get(id) : undefined) ?? "the client" }, ctx.today),
     };
   });
@@ -483,7 +483,7 @@ export function buildDecisions(records: GovernmentRecords, ctx: GovernmentContex
   const letters = letterRows(records, ctx);
   // GOV-04: the firm's issuer list, on the matter page only (the loader reads it there).
   const issuers = records.issuers
-    ? issuerList({ organizationId: ctx.organizationId, today: ctx.today, issuers: records.issuers, canAdd: STAFF.has(ctx.role), canReview: ctx.licensed })
+    ? issuerList({ organizationId: ctx.organizationId, today: ctx.today, issuers: records.issuers, canAdd: STAFF.has(ctx.role), canReview: ctx.licensed, memberName: ctx.memberName })
     : null;
   if (latest) return { decision: decisionView(records, ctx, latest), letter: STAFF.has(ctx.role), letters, issuers };
   const verifiedDecision = records.letters.find((row) => row.kind === "decision" && row.verified_at) ?? null;

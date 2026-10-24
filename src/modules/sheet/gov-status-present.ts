@@ -83,7 +83,7 @@ export function estimateTableRow(records: GovernmentRecords, ctx: GovernmentCont
     recordedBy: ctx.memberName(shown.entered_by_membership_id),
     evidence: `${shown.application_type}. ${ESTIMATE_NOTE}.`,
     evidenceHref: shown.source_url,
-    source: estimateSource(shown),
+    source: estimateSource(shown, ctx.memberName),
     verified: approved && reviewer && approved.reviewed_at ? `${reviewer}, ${whenFull(approved.reviewed_at, ctx.timezone, ctx.today)}` : "Waiting for licensed review",
     review: pending && ctx.licensed ? { "data-open": "dGovEstRev" } : null,
     lastChecked: fullDay(shown.checked_on),
@@ -96,7 +96,7 @@ function reviewFacts(row: EstimateRow, ctx: GovernmentContext): [string, string]
     ["IRCC’s estimate", row.estimate_text],
     ["Date checked", fullDay(row.checked_on)],
     ["Entered by", ctx.memberName(row.entered_by_membership_id)],
-    ["Page", estimateSource(row).replace(/^Source: /, "")],
+    ["Page", estimateSource(row, ctx.memberName).replace(/^Source: /, "")],
   ];
 }
 
@@ -126,6 +126,8 @@ export function statusDialogs(records: GovernmentRecords, ctx: GovernmentContext
               reject: wire("estimate-review", ctx, { id: pending.id, version: String(pending.version), decision: "rejected" }),
               facts: reviewFacts(pending, ctx),
               href: pending.source_url,
+              // No page capture: approving needs the reviewer's attestation (decided 2026-10-24).
+              attest: pending.snapshot_sha256 ? null : { today: ctx.today },
             }
           : null,
     },

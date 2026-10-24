@@ -119,7 +119,8 @@ describe("GOV-01 Submission checklist card", () => {
     expect(pending.steps).toEqual([]);
     expect(pending.pending[0].approve).toMatchObject({ "data-sub": "review", "data-id": "r1", "data-version": "2" });
     const unfetched = buildSubmissionChecklist(input({ requirements: [requirement({ status: "pending_review", snapshot_sha256: null })], licensed: true })).card;
-    expect(unfetched.pending[0].approve).toBeNull();
+    // No snapshot: Approve opens the reviewer's attestation (decided 2026-10-24).
+    expect(unfetched.pending[0].approve).toMatchObject({ "data-sub": "attest-open", "data-id": "r1", "data-version": "2" });
     expect(unfetched.pending[0].badge.label).toBe("No page snapshot");
   });
 

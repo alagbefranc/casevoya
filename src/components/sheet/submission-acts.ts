@@ -1,6 +1,7 @@
 "use client";
 
 import { toast2 } from "@/components/port/kit";
+import { readAttestationFrom } from "@/modules/government/page-attestation";
 import { needsStepUp, stepUpLocation, withoutDialog } from "@/modules/sheet/matter-wire";
 import {
   confirmSubmissionFees,
@@ -30,6 +31,7 @@ const DONE: Record<string, [string, string]> = {
   override: ["Gate overridden", "Your reason is in the audit trail."],
   propose: ["Sent for review", "A licensed consultant approves it before it reaches a checklist."],
   review: ["Approved", "It now shows on checklists for its program and channel."],
+  attest: ["Approved", "It shows on checklists with “page not captured by Casevoya, checked by you” and the date."],
   reject: ["Rejected", "It won’t reach any checklist."],
   retire: ["Retired", "It no longer shows on checklists."],
 };
@@ -43,14 +45,17 @@ export function bindSubmissionControls(root: HTMLElement, router: Router, listen
       event.preventDefault();
       event.stopPropagation();
       if (control.getAttribute("aria-busy") === "true") return;
-      if (control.dataset.sub === "reject-open" || control.dataset.sub === "retire-open") {
-        // One Reject (or Retire) dialog serves every entry: it takes this entry's id and version.
-        const which = control.dataset.sub === "reject-open" ? ["#dSubRej", "reject"] : ["#dSubRet", "retire"];
+      if (control.dataset.sub === "reject-open" || control.dataset.sub === "retire-open" || control.dataset.sub === "attest-open") {
+        // One Reject (Retire, Approve without a snapshot) dialog serves every entry: it takes this entry's id and version.
+        const which =
+          control.dataset.sub === "reject-open" ? ["#dSubRej", "reject"] : control.dataset.sub === "retire-open" ? ["#dSubRet", "retire"] : ["#dSubAtt", "attest"];
         const confirm = root.querySelector<HTMLElement>(`${which[0]} [data-sub="${which[1]}"]`);
         const dialog = root.querySelector<HTMLDialogElement>(which[0]);
         if (!confirm || !dialog) return;
         confirm.dataset.id = control.dataset.id ?? "";
         confirm.dataset.version = control.dataset.version ?? "";
+        const tick = dialog.querySelector<HTMLInputElement>("input[data-attest]");
+        if (tick) tick.checked = false;
         dialog.showModal();
         return;
       }
@@ -100,10 +105,14 @@ export async function runSubmissionAct(control: HTMLElement, root: HTMLElement, 
     });
     result = proposed;
     if (proposed && "snapshot" in proposed && !proposed.snapshot) {
-      note = `${proposed.reason ?? "The page couldn’t be fetched."} It is kept for review, but it can’t be approved without a snapshot of the page.`;
+      note = `${proposed.reason ?? "The page couldn’t be fetched."} It is kept for review. A licensed consultant approves it only after opening the official page themselves.`;
     }
   } else if (act === "review") {
     result = await reviewSubmissionRequirement({ organizationId, requirementId: data.id ?? "", version: Number(data.version), decision: "approved", note: null });
+  } else if (act === "attest") {
+    const attested = readAttestationFrom(scope);
+    if (!attested || "error" in attested) return void toast2(attested?.error ?? "Tick that you opened the official page yourself", { kind: "warn", sub: "Nothing was saved." });
+    result = await reviewSubmissionRequirement({ organizationId, requirementId: data.id ?? "", version: Number(data.version), decision: "approved", note: null, pageOpenedOn: attested.openedOn });
   } else if (act === "reject") {
     const why = value(scope, "#sjN");
     if (why.length < 3) return void toast2("Say why", { kind: "warn", sub: "Kept with the entry." });

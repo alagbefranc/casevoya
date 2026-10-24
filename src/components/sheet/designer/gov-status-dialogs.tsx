@@ -8,6 +8,7 @@
  */
 import type { ClientRecordView } from "@/modules/government/status-provenance";
 import { Icon } from "./frame";
+import { PageAttestFields } from "./page-attestation";
 
 export type GovStatusWire = Record<`data-${string}`, string>;
 
@@ -20,6 +21,8 @@ export type GovEstimateReview = {
   reject: GovStatusWire;
   facts: [string, string][];
   href: string;
+  /** No page capture: the reviewer's attestation (decided 2026-10-24). */
+  attest?: { today: string } | null;
 };
 
 export type GovStatusDialogsData = {
@@ -138,6 +141,7 @@ export function GovStatusDialogs({ data }: { data: GovStatusDialogsData }) {
               {"Note (required to reject)"}
               <input id={"gerN"} autoComplete={"off"} />
             </label>
+            {data.review.attest ? <PageAttestFields today={data.review.attest.today} /> : null}
           </div>
           <div className={"df"}>
             <button className={"btn"} {...data.review.reject}>

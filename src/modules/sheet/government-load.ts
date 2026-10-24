@@ -32,7 +32,7 @@ const HANDOFF_COLUMNS =
 const LETTER_COLUMNS =
   "id, kind, channel, received_on, document_date, action_requested, stated_deadline, evidence_version_id, evidence_locator, verified_by_membership_id, verified_at, shared_with_client_at, created_by, created_at, version, issuer, issuer_id";
 const ESTIMATE_COLUMNS =
-  "id, source_url, application_type, estimate_text, checked_on, page_retrieved_at, snapshot_sha256, status, entered_by_membership_id, reviewed_by_membership_id, reviewed_at, created_at, version";
+  "id, source_url, application_type, estimate_text, checked_on, page_retrieved_at, snapshot_sha256, status, entered_by_membership_id, reviewed_by_membership_id, reviewed_at, created_at, version, page_attested_by_membership_id, page_attested_on";
 const DECISION_COLUMNS =
   "id, correspondence_id, outcome, milestone, decided_on, authority_reasons, state, consultant_interpretation, next_steps, confirmed_by_membership_id, confirmed_at, created_by, created_at, version";
 

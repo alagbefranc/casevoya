@@ -10,6 +10,7 @@
  *   processing-times page, with the date checked. It shows only once a licensed member approved
  *   it, and always as IRCC's estimate, "not a maximum or a guarantee" (IRCC's words).
  */
+import { attestationError, attestationNote } from "@/modules/government/page-attestation";
 import { channelLabel, correspondenceLabel } from "@/modules/government/present";
 
 /** IRCC's processing-times page (docs/spec gaps GOV "Official sources"). The entry dialog starts here. */
@@ -98,6 +99,9 @@ export type EstimateRow = {
   reviewed_at: string | null;
   created_at: string;
   version: number;
+  /** Approved without a page capture: the licensed reviewer's attestation (decided 2026-10-24). */
+  page_attested_by_membership_id?: string | null;
+  page_attested_on?: string | null;
 };
 
 /** The estimate shown next to the status (approved), and the one waiting for review, if any. */
@@ -109,15 +113,20 @@ export function currentEstimates(rows: EstimateRow[]): { approved: EstimateRow |
   };
 }
 
-/** "canada.ca, checked 20 Oct 2026, page captured (sha256 9be2…11c4)". */
-export function estimateSource(row: EstimateRow): string {
+/**
+ * "canada.ca, checked 20 Oct 2026, page captured (sha256 9be2…11c4)"; approved without a capture,
+ * "…, page not captured by Casevoya, checked by <reviewer> on <date>".
+ */
+export function estimateSource(row: EstimateRow, memberName?: (membershipId: string | null) => string): string {
   let host = "canada.ca";
   try {
     host = new URL(row.source_url).host.replace(/^www\./, "");
   } catch {
     // Stored URLs are checked by the database; keep the plain label if one ever isn't parseable.
   }
-  const capture = row.snapshot_sha256 ? `page captured (sha256 ${row.snapshot_sha256.slice(0, 4)}…${row.snapshot_sha256.slice(-4)})` : "page not captured";
+  const capture = row.snapshot_sha256
+    ? `page captured (sha256 ${row.snapshot_sha256.slice(0, 4)}…${row.snapshot_sha256.slice(-4)})`
+    : (attestationNote(row, memberName, fullDay) ?? "page not captured");
   return `Source: ${host}, checked ${fullDay(row.checked_on)}, ${capture}`;
 }
 
@@ -149,6 +158,8 @@ const ERRORS: [RegExp, string][] = [
 ];
 
 export function provenanceError(message: string): string {
+  const attestation = attestationError(message);
+  if (attestation) return attestation;
   for (const [pattern, copy] of ERRORS) if (pattern.test(message)) return copy;
   return "That couldn’t be saved.";
 }

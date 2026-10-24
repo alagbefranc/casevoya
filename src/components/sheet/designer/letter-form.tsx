@@ -16,6 +16,7 @@
  */
 import type { CSSProperties, ReactNode } from "react";
 import { Icon, Sep } from "./frame";
+import { PageAttestFields } from "./page-attestation";
 
 const css = (style: Record<string, string>) => style as CSSProperties;
 
@@ -144,6 +145,8 @@ export type IssuerListRow = {
   approve?: LetterWire | null;
   reject?: LetterWire | null;
   retire?: LetterWire | null;
+  /** The page wasn't read: Approve needs the reviewer's attestation (decided 2026-10-24). */
+  attest?: { today: string } | null;
 };
 
 export type IssuerListData = {
@@ -185,6 +188,7 @@ export function IssuerList({ data, start }: { data: IssuerListData; start: numbe
                     <input data-issuer-note={""} autoComplete={"off"} maxLength={500} />
                   </label>
                 ) : null}
+                {row.attest ? <PageAttestFields today={row.attest.today} /> : null}
               </div>
               <span className={"r"}>
                 {row.approve ? (
