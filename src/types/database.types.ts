@@ -11156,6 +11156,7 @@ export type Database = {
         Args: { p_email_id: string; p_note?: string | null }
         Returns: undefined
       }
+      document_upload_limit: { Args: { p_organization_id: string }; Returns: number }
       document_request_progress: {
         Args: { p_matter_id: string }
         Returns: Json
