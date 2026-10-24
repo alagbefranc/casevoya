@@ -4,7 +4,7 @@ import { loadPortalDocuments } from "@/modules/documents/load";
 import { loadPortalInvoices } from "@/modules/finance/portal-load";
 import { loadPortalMessages } from "@/modules/messages/load";
 import type { PortalViewer } from "@/modules/portal/load";
-import { homeView, type HomeView } from "@/modules/portal/home-present";
+import { homeView, matterCards, type HomeView, type MatterCard } from "@/modules/portal/home-present";
 import { loadPortalTasks, type PortalTask } from "@/modules/portal/tasks-load";
 
 /**
@@ -19,7 +19,7 @@ export async function loadPortalHome(viewer: PortalViewer, tasks: PortalTask[] |
     loadPortalDocuments(viewer).catch(() => null),
     loadPortalInvoices(viewer).catch(() => null),
     loadPortalMessages(viewer, null).catch(() => null),
-    matter ? consultantFor(viewer, matter.id) : Promise.resolve(null),
+    matter ? loadPortalConsultants(viewer).then((names) => names.get(matter.id) ?? null) : Promise.resolve(null),
   ]);
   return homeView({
     firmName: viewer.organizationName,
@@ -35,13 +35,19 @@ export async function loadPortalHome(viewer: PortalViewer, tasks: PortalTask[] |
   });
 }
 
-/** The responsible consultant's name on this matter (public.portal_matter_consultants), or null. */
-async function consultantFor(viewer: PortalViewer, matterId: string): Promise<string | null> {
+/** My matters: one card per matter, with the client's open tasks and each matter's consultant. */
+export async function loadPortalMatters(viewer: PortalViewer): Promise<MatterCard[]> {
+  const [tasks, consultants] = await Promise.all([loadPortalTasks(viewer).catch(() => []), loadPortalConsultants(viewer)]);
+  return matterCards({ matters: viewer.matters, tasks, consultants, timezone: viewer.timezone });
+}
+
+/** Each of the client's matters and its responsible consultant's name (public.portal_matter_consultants). */
+async function loadPortalConsultants(viewer: PortalViewer): Promise<Map<string, string | null>> {
   try {
     const supabase = await createClient({ organizationId: viewer.organizationId });
     const { data } = await supabase.rpc("portal_matter_consultants", { p_org: viewer.organizationId });
-    return (data ?? []).find((row) => row.matter_id === matterId)?.consultant_name ?? null;
+    return new Map((data ?? []).map((row) => [row.matter_id, row.consultant_name]));
   } catch {
-    return null;
+    return new Map();
   }
 }
