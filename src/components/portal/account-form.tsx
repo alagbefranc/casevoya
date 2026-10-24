@@ -94,10 +94,11 @@ export function AccountForm({
           <Pref
             id="pref-wa"
             label="WhatsApp notices"
-            detail={phone ? `To ${phone}. Only that you have something new in your portal, never details of your file. Turn it off any time.` : "Add a mobile number before choosing WhatsApp."}
+            detail={phone ? `To ${phone}. Only that you have something new in your portal, never details of your file. Turn it off any time.` : "Ask your firm to add your mobile number before choosing WhatsApp."}
             on={saved.whatsapp === true}
+            disabled={!phone}
           />
-          <Pref id="pref-sms" label="Text message reminders" detail={phone ? `To ${phone}. Never document details.` : "Add a phone number before choosing texts."} on={saved.smsNotices} />
+          <Pref id="pref-sms" label="Text message reminders" detail={phone ? `To ${phone}. Never document details.` : "Ask your firm to add your mobile number before choosing texts."} on={saved.smsNotices} disabled={!phone} />
           <Pref id="pref-deadlines" label="Deadline reminders" detail="A reminder before something is due." on={saved.deadlineReminders} />
           <button className="btn p" type="submit" disabled={pending} style={{ marginTop: 12 }}>{pending ? "Saving" : "Save choices"}</button>
           {message ? <p className="lbl" role="status" style={{ marginTop: 8 }}>{message}</p> : null}
@@ -120,12 +121,13 @@ function pressLocale(button: HTMLButtonElement) {
   group?.querySelectorAll("button").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
 }
 
-function Pref({ id, label, detail, on }: { id: string; label: string; detail: string; on: boolean }) {
+/** One notice switch. `disabled` when it needs a mobile number the client has no record of. */
+function Pref({ id, label, detail, on, disabled = false }: { id: string; label: string; detail: string; on: boolean; disabled?: boolean }) {
   return (
     <div className="li">
       <div><b>{label}</b><small>{detail}</small></div>
       <span className="r">
-        <button type="button" className="k2-sw" role="switch" aria-checked={on} id={id}>
+        <button type="button" className="k2-sw" role="switch" aria-checked={disabled ? false : on} id={id} disabled={disabled} aria-disabled={disabled || undefined} style={disabled ? { opacity: 0.45, cursor: "not-allowed" } : undefined}>
           <span className="k2-th" aria-hidden="true" />
           <span className="k2-sr">{label}</span>
         </button>

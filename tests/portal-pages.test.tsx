@@ -114,7 +114,7 @@ describe("My matters", () => {
     expect(first.href).toBe("/portal?matter=m1");
     expect(held.badge).toEqual({ tone: "chg", text: "On hold" });
     expect(held.withLine).toBe("Only you");
-    expect(closed).toMatchObject({ label: "EX-2025-0388 · closed", closed: true, steps: null, note: "Records kept until Mar 2033", href: "/portal/documents" });
+    expect(closed).toMatchObject({ label: "EX-2025-0388 · closed", closed: true, steps: null, note: "Records kept until Mar 2033", href: "/portal/documents?matter=m2" });
   });
 
   it("renders the designed cards and the empty state", () => {
@@ -198,5 +198,22 @@ describe("the current-matter cookie", () => {
       expect(readFileSync(file, "utf8")).toContain('import { PORTAL_MATTER_COOKIE } from "@/modules/portal/matter-cookie";');
     }
     expect(readFileSync("src/modules/portal/matter-cookie.ts", "utf8")).not.toMatch(/^\s*["']use client["']/m);
+  });
+});
+
+describe("Tasks narrow screens", () => {
+  it("lets a long firm name shorten in the switch instead of overlapping", () => {
+    const page = html({ page: "tasks", tasks: [task({})] });
+    expect(page).toContain("#pc&gt;.seg.k2-rs&gt;button{min-width:0;overflow:hidden;text-overflow:ellipsis}".replaceAll("&gt;", ">"));
+  });
+});
+
+describe("Account switches without a mobile number", () => {
+  it("disables WhatsApp and texts with a hint, and keeps email", () => {
+    const page = html({ page: "account" });
+    expect(page).toMatch(/id="pref-wa" disabled="" aria-disabled="true"/);
+    expect(page).toMatch(/id="pref-sms" disabled="" aria-disabled="true"/);
+    expect(page).toContain("Ask your firm to add your mobile number before choosing WhatsApp.");
+    expect(page).not.toMatch(/id="pref-email" disabled/);
   });
 });
