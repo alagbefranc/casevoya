@@ -50,6 +50,7 @@ export const PATHS = {
   sheetSettings: "/sheet/settings",
   sheetExports: "/sheet/exports",
   sheetLicence: "/sheet/licence",
+  sheetPipeline: "/sheet/pipeline",
 } as const;
 
 type FirmContext = { firmName: string };
@@ -116,6 +117,7 @@ export type EmailContexts = {
   /** code: the six-digit signing code, opened by the mail worker from its sealed form. */
   EX16: FirmContext & { code?: string | null };
   EX17: FirmContext;
+  EX18: FirmContext;
 };
 
 export type TemplateId = keyof EmailContexts;
@@ -1229,6 +1231,30 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         cta: cta("Open your portal", appLink(origin, PATHS.portal)),
         spot: "reminder",
         brand: firmBrand(context),
+      });
+    },
+  },
+  EX18: {
+    id: "EX18",
+    name: "New enquiry (staff)",
+    audience: "staff",
+    brand: "platform",
+    trigger:
+      "Someone sends an enquiry from the firm's hosted page or website form (trigger leads_enquiry_notice; outbox lead.enquiry_received, template enquiry_received), to the firm's active owners and the lead's owner when set. Not for sample (practice) enquiries. Firm name only: never the enquirer's name or what they wrote (CRM-01)",
+    status: "wired",
+    ctaTarget: PATHS.sheetPipeline,
+    mergeFields: ["firm_name"],
+    sample: { firmName: SYNTHETIC_FIRM },
+    build(context, origin) {
+      const firmName = firm(context);
+      return copy({
+        subject: `New enquiry for ${firmName}`,
+        preheader: "Open the Pipeline in Casevoya to read it.",
+        heading: "You have a new enquiry",
+        body: `Someone sent ${firmName} an enquiry from your enquiry page or website form. For their privacy, the details are in the Pipeline.`,
+        cta: cta("Open the Pipeline", appLink(origin, PATHS.sheetPipeline)),
+        spot: "reminder",
+        brand: PLATFORM,
       });
     },
   },

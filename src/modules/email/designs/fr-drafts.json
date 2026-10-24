@@ -1717,6 +1717,47 @@
           "note": "EX17 hand draft (ORG-06, #175)."
         }
       }
+    },
+    "EX18": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-24",
+      "sourceHash": "sha256:05b5307ba0827ce4499a4db063e1ef3bd3d1117d106dd22afa0120711e06c3e1",
+      "strings": {
+        "subject": {
+          "en": "New enquiry for {firm_name}",
+          "fr": "Nouvelle demande pour {firm_name}",
+          "origin": "hand",
+          "note": "EX18 hand draft (CRM-01, #176)."
+        },
+        "preheader": {
+          "en": "Open the Pipeline in Casevoya to read it.",
+          "fr": "Ouvrez le pipeline dans Casevoya pour la lire.",
+          "origin": "hand",
+          "note": "EX18 hand draft (CRM-01, #176)."
+        },
+        "heading": {
+          "en": "You have a new enquiry",
+          "fr": "Vous avez une nouvelle demande",
+          "origin": "hand",
+          "note": "EX18 hand draft (CRM-01, #176)."
+        },
+        "body": {
+          "en": "Someone sent {firm_name} an enquiry from your enquiry page or website form. For their privacy, the details are in the Pipeline.",
+          "fr": "Quelqu’un a envoyé une demande à {firm_name} depuis votre page de demande ou le formulaire de votre site. Pour protéger sa vie privée, les détails sont dans le pipeline.",
+          "origin": "hand",
+          "note": "EX18 hand draft (CRM-01, #176)."
+        },
+        "cta": {
+          "en": "Open the Pipeline",
+          "fr": "Ouvrir le pipeline",
+          "origin": "hand",
+          "note": "EX18 hand draft (CRM-01, #176)."
+        }
+      }
     }
   }
 }
