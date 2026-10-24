@@ -55,6 +55,7 @@ import {
 import { governmentBadge, programLabel } from "@/modules/sheet/matters-present";
 import { deadlineConfirmable, TASK_STAFF_ROLES, taskManageWire } from "@/modules/sheet/tasks-present";
 import { clientOptions, dependsOnOptions, matterOptions, staffOptions } from "@/modules/sheet/new-task";
+import { checklistPart, estimateLabel, recurrencePart, zoneOptions } from "@/modules/sheet/task-detail";
 import { personHref } from "@/modules/sheet/clients-present";
 import { loadMatterBilling } from "@/modules/sheet/matter-billing-load";
 import { agreementViewHref } from "@/modules/sheet/agreements-views-present";
@@ -126,7 +127,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     supabase.from("matter_participants").select("person_id, membership_id, role").eq("organization_id", org).eq("matter_id", matter.id),
     supabase
       .from("tasks")
-      .select("id, title, audience, status, due_on, owner_membership_id, owner_person_id, blocker_note, version")
+      .select("id, title, audience, status, due_on, owner_membership_id, owner_person_id, blocker_note, checklist, recurrence, estimated_minutes, version")
       .eq("organization_id", org)
       .eq("matter_id", matter.id)
       .order("due_on", { ascending: true, nullsFirst: false })
@@ -487,6 +488,8 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
           firstName(owner),
           ...(row.status === "blocked" && row.blocker_note ? [`blocked by ${row.blocker_note}`] : []),
           ...(due ? [due] : []),
+          // OPS-01: checklist progress, estimate and repeat, when set.
+          ...[checklistPart(row.checklist), estimateLabel(row.estimated_minutes), recurrencePart(row.recurrence)].filter((part): part is string => Boolean(part)),
         ],
         badge: taskRowBadge(row.status, row.due_on, today),
         owner: row.owner_membership_id ? staffPerson(owner) : { name: owner },
@@ -660,6 +663,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       timezone: staff.timezone,
       today,
       owners: staffOwners.flatMap((option) => (option.value ? [{ value: option.value, label: option.label }] : [])),
+      zones: zoneOptions(staff.timezone),
     };
   }
   // Submissions and Decisions (T036 to T039), read as this member like everything above.

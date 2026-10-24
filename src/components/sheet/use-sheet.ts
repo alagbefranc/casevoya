@@ -180,6 +180,8 @@ const FILTER_TOKEN: Record<string, string> = {
   Overdue: "overdue",
   Blocked: "blocked",
   "High priority": "high",
+  // OPS-01: tasks the viewer watches (live only).
+  Watching: "watching",
   Applicants: "applicant",
   Sponsors: "sponsor",
   Dependants: "dependant",

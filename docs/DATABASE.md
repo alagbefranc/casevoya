@@ -502,6 +502,15 @@ The private link runs the designed flow (spec `docs/specs/consultation-agreement
 
 Tested in `tests/booking-agreements.rls.test.ts`.
 
+## Task detail, recurrence and task notifications (`20261025100000`, `20261025100100`, not applied on the live project)
+
+OPS-01 (gap #179). Apply in this order.
+
+* `20261025100000_task_detail.sql`: `tasks.recurrence` (`weekly` / `monthly` / null, check constraint) and `tasks.recurrence_parent_id` (FK to the completed occurrence, indexed with `organization_id`). New definer functions with security-invoker public wrappers, revoked from `anon`: `update_task_details(task, version, estimated_minutes, due_time, due_timezone, recurrence)` (estimate, due instant from the due date and time in the chosen zone, timezone, repeat; audited `task.details_updated`), `set_task_checklist(task, version, checklist)` (up to 50 `{text, done}` items; audited `task.checklist_updated`), `remove_task_watcher(task, membership)` and `remove_task_dependency(task, depends_on)` (same checks as the add functions; row audit on delete). Redefined from their latest definitions: `app.set_task_status` (completing a recurring task creates the next occurrence once, stepped with `app.firm_today`; audited `task.recurred`) and `app.escalate_overdue_work` (every overdue open task, not only critical).
+* `20261025100100_task_notifications.sql`: `app.staff_notification_items` copied from `20261020180100` with a `task` branch from `task_events` (status, reassigned, escalated) for the owner at the time, watchers, the new owner and the matter's responsible consultant, readable tasks only, never the actor.
+
+Tested in `tests/task-detail.rls.test.ts`.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.
