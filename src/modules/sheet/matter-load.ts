@@ -1,5 +1,7 @@
 import "server-only";
 import { loadMatterMessages } from "@/modules/messages/load";
+import { emailRuntimeConfig } from "@/lib/email/env";
+import { matterInboundAddress, timelineEmailEvents } from "@/modules/sheet/inbound-present";
 import { loadVoComposer } from "@/modules/sheet/vo-load";
 import { loadVoReadingPanel } from "@/modules/sheet/vo-doc-load";
 import {
@@ -55,6 +57,7 @@ import {
 import { governmentBadge, programLabel } from "@/modules/sheet/matters-present";
 import { deadlineConfirmable, TASK_STAFF_ROLES, taskManageWire } from "@/modules/sheet/tasks-present";
 import { clientOptions, dependsOnOptions, matterOptions, staffOptions } from "@/modules/sheet/new-task";
+import { checklistPart, estimateLabel, recurrencePart, zoneOptions } from "@/modules/sheet/task-detail";
 import { personHref } from "@/modules/sheet/clients-present";
 import { loadMatterBilling } from "@/modules/sheet/matter-billing-load";
 import { loadMatterWork } from "@/modules/billing/load";
@@ -127,7 +130,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     supabase.from("matter_participants").select("person_id, membership_id, role").eq("organization_id", org).eq("matter_id", matter.id),
     supabase
       .from("tasks")
-      .select("id, title, audience, status, due_on, owner_membership_id, owner_person_id, blocker_note, version")
+      .select("id, title, audience, status, due_on, owner_membership_id, owner_person_id, blocker_note, checklist, recurrence, estimated_minutes, version")
       .eq("organization_id", org)
       .eq("matter_id", matter.id)
       .order("due_on", { ascending: true, nullsFirst: false })
@@ -488,6 +491,8 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
           firstName(owner),
           ...(row.status === "blocked" && row.blocker_note ? [`blocked by ${row.blocker_note}`] : []),
           ...(due ? [due] : []),
+          // OPS-01: checklist progress, estimate and repeat, when set.
+          ...[checklistPart(row.checklist), estimateLabel(row.estimated_minutes), recurrencePart(row.recurrence)].filter((part): part is string => Boolean(part)),
         ],
         badge: taskRowBadge(row.status, row.due_on, today),
         owner: row.owner_membership_id ? staffPerson(owner) : { name: owner },
@@ -551,6 +556,10 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     .limit(1)
     .maybeSingle();
   if (pinned.data) rbar.note = { text: pinned.data.body, parts: ["Staff only", firstName(memberName(pinned.data.author_membership_id))] };
+  // OPS-06: the matter's inbound address (its plus-tag is made on first use). The database checks
+  // the caller can read the matter; a refusal just leaves the card out.
+  const inbound = await supabase.rpc("matter_inbound_address", { p_matter_id: matterId, p_domain: emailRuntimeConfig().inboundDomain });
+  rbar.inbound = inbound.error ? null : matterInboundAddress(inbound.data);
 
   const hold = matter.on_hold
     ? {
@@ -661,6 +670,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       timezone: staff.timezone,
       today,
       owners: staffOwners.flatMap((option) => (option.value ? [{ value: option.value, label: option.label }] : [])),
+      zones: zoneOptions(staff.timezone),
     };
   }
   // Submissions and Decisions (T036 to T039), read as this member like everything above.
@@ -770,6 +780,29 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
           : [];
       });
     page.intake = await loadMatterIntake(supabase, { staff, matter, people: intakePeople, today }).catch(() => null);
+  }
+
+  // OPS-06: the Timeline tab shows the matter's inbound email (RLS: staff who can read the matter).
+  if (tab === "timeline") {
+    const mail = await supabase
+      .from("inbound_emails")
+      .select("id, from_email, subject, triage_state, person_id, sender_verified, created_at")
+      .eq("organization_id", org)
+      .eq("matter_id", matter.id)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    const rows = mail.data ?? [];
+    const files = rows.length
+      ? await supabase.from("inbound_attachment_files").select("inbound_email_id").eq("organization_id", org).in("inbound_email_id", rows.map((row) => row.id))
+      : null;
+    const count = new Map<string, number>();
+    for (const file of files?.data ?? []) count.set(file.inbound_email_id, (count.get(file.inbound_email_id) ?? 0) + 1);
+    page.timeline = mail.error
+      ? null
+      : {
+          note: "Email received on this matter. Other changes are kept in the firm’s audit log; this tab doesn’t show them yet.",
+          events: timelineEmailEvents(rows, { timeZone: staff.timezone, today, personName: (id) => person.get(id)?.display_name ?? null, files: count }),
+        };
   }
 
   return { chrome, header, rbar, dialogs, page, countersign, governmentDialogs: government.dialogs };
