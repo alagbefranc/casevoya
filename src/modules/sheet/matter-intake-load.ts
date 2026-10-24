@@ -4,6 +4,7 @@ import type { MatterIntakeData } from "@/components/sheet/designer/matter-intake
 import { schemaFields, type AnswerVersion, type Presence } from "@/modules/intake/present";
 import { intakePanel, mayHandleIntake, publishedForms, sendPersonLabel } from "@/modules/sheet/matter-intake-present";
 import type { SheetStaff } from "@/modules/sheet/load";
+import { recordedNames } from "@/modules/sheet/person-history-present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -42,20 +43,30 @@ export async function loadMatterIntake(
   const rows = responses.data ?? [];
   const ids = rows.map((row) => row.id);
   const personIds = [...new Set(rows.map((row) => row.person_id))];
-  const [answers, corrections, documents, otherAnswers] = await Promise.all([
+  const [answers, corrections, documents, otherAnswers, reuseRows, nameRows] = await Promise.all([
     ids.length
-      ? supabase.from("intake_answer_versions").select("id, response_id, field_key, presence, normalized_value, created_at, created_by").in("response_id", ids).order("created_at", { ascending: true }).limit(3000)
+      ? supabase.from("intake_answer_versions").select("id, response_id, field_key, presence, raw_value, normalized_value, created_at, created_by").in("response_id", ids).order("created_at", { ascending: true }).limit(3000)
       : null,
-    ids.length ? supabase.from("intake_corrections").select("response_id, correction_number, field_key, answer_id, description, created_at").in("response_id", ids) : null,
+    ids.length ? supabase.from("intake_corrections").select("response_id, correction_number, field_key, answer_id, description, created_at, proof_document_id").in("response_id", ids) : null,
     personIds.length ? supabase.from("documents").select("person_id, purpose, current_version_id").eq("organization_id", org).in("person_id", personIds).limit(300) : null,
     // The same people's date-of-birth answers on their other matters' forms (conflicting birth dates).
     personIds.length
-      ? supabase.from("intake_responses").select("id, person_id, template_id").eq("organization_id", org).in("person_id", personIds).neq("matter_id", input.matter.id).limit(100)
+      ? supabase.from("intake_responses").select("id, person_id, template_id, status").eq("organization_id", org).in("person_id", personIds).neq("matter_id", input.matter.id).limit(100)
+      : null,
+    // INT-04: answers copied here from the same person's earlier matter.
+    ids.length ? supabase.from("intake_fact_reuses").select("response_id, answer_id, status, confirmed_at, origin_matter_id").in("response_id", ids) : null,
+    // INT-05: other names on the people's records, so a recorded alias isn't flagged as a different name.
+    personIds.length
+      ? supabase.from("person_identity_entries").select("id, person_id, kind, data, replaces_id, retired, created_at, created_by").eq("organization_id", org).eq("kind", "name").in("person_id", personIds).limit(500)
       : null,
   ]);
+  const originIds = [...new Set((reuseRows?.data ?? []).map((row) => row.origin_matter_id))];
+  const origins = originIds.length ? await supabase.from("matters").select("id, reference").eq("organization_id", org).in("id", originIds) : null;
+  const originRef = new Map((origins?.data ?? []).map((row) => [row.id, row.reference]));
+  const sentElsewhere = new Set((otherAnswers?.data ?? []).filter((row) => row.status === "submitted").map((row) => row.person_id));
   const answerRows = answers?.data ?? [];
   const [reviews, versions, profiles, people, otherBirthRows] = await Promise.all([
-    answerRows.length ? supabase.from("intake_answer_reviews").select("answer_id").in("answer_id", answerRows.map((row) => row.id)) : null,
+    answerRows.length ? supabase.from("intake_answer_reviews").select("answer_id, created_at, created_by").in("answer_id", answerRows.map((row) => row.id)) : null,
     (documents?.data ?? []).some((row) => row.current_version_id)
       ? supabase
           .from("document_versions")
@@ -66,12 +77,17 @@ export async function loadMatterIntake(
     answerRows.length ? supabase.from("profiles").select("id, display_name").in("id", [...new Set(answerRows.map((row) => row.created_by).filter((id): id is string => Boolean(id)))]) : null,
     personIds.length ? supabase.from("persons").select("id, user_id, display_name").eq("organization_id", org).in("id", personIds) : null,
     (otherAnswers?.data ?? []).length
-      ? supabase.from("intake_answer_versions").select("id, response_id, field_key, presence, normalized_value, created_at, created_by").in("response_id", (otherAnswers?.data ?? []).map((row) => row.id)).limit(500)
+      ? supabase.from("intake_answer_versions").select("id, response_id, field_key, presence, raw_value, normalized_value, created_at, created_by").in("response_id", (otherAnswers?.data ?? []).map((row) => row.id)).limit(500)
       : null,
   ]);
   const reviewed = new Set((reviews?.data ?? []).map((row) => row.answer_id));
+  // INT-04: who reviewed each answer and when, and a correction's proof document.
+  const reviewInfo = new Map((reviews?.data ?? []).map((row) => [row.answer_id, { by: row.created_by ?? null, at: row.created_at }]));
+  const reviewerIds = [...new Set((reviews?.data ?? []).map((row) => row.created_by).filter((id): id is string => Boolean(id)))];
+  const reviewers = reviewerIds.length ? await supabase.from("profiles").select("id, display_name").in("id", reviewerIds) : null;
+  const proofOf = new Map((corrections?.data ?? []).filter((row) => row.answer_id && row.proof_document_id).map((row) => [row.answer_id as string, row.proof_document_id as string]));
   const expires = new Map((versions?.data ?? []).map((row) => [row.id, row.expires_on]));
-  const profileName = new Map((profiles?.data ?? []).map((row) => [row.id, row.display_name]));
+  const profileName = new Map([...(profiles?.data ?? []), ...(reviewers?.data ?? [])].map((row) => [row.id, row.display_name]));
   const personByUser = new Map((people?.data ?? []).filter((row) => row.user_id).map((row) => [row.user_id as string, row.display_name]));
   const templateById = new Map((templates.data ?? []).map((row) => [row.id, row]));
   const personInfo = new Map(input.people.map((person) => [person.id, person]));
@@ -81,6 +97,7 @@ export async function loadMatterIntake(
     fieldKey: row.field_key,
     presence: row.presence as Presence,
     value: record(row.normalized_value),
+    raw: record(row.raw_value),
     createdAt: row.created_at,
     createdBy: row.created_by,
   });
@@ -115,11 +132,28 @@ export async function loadMatterIntake(
           corrections: (corrections?.data ?? [])
             .filter((item) => item.response_id === row.id)
             .map((item) => ({ number: item.correction_number, fieldKey: item.field_key, answerId: item.answer_id, description: item.description, createdAt: item.created_at })),
-          record: person ? { displayName: person.name, dateOfBirth: person.dateOfBirth, birthPrecision: person.birthPrecision } : null,
+          record: person
+            ? {
+                displayName: person.name,
+                dateOfBirth: person.dateOfBirth,
+                birthPrecision: person.birthPrecision,
+                aliases: recordedNames(
+                  (nameRows?.data ?? [])
+                    .filter((entry) => entry.person_id === row.person_id)
+                    .map((entry) => ({ id: entry.id, kind: "name" as const, data: (entry.data ?? {}) as Record<string, unknown>, replacesId: entry.replaces_id, retired: entry.retired, createdAt: entry.created_at, createdBy: entry.created_by })),
+                ),
+              }
+            : null,
           documents: (documents?.data ?? [])
             .filter((doc) => doc.person_id === row.person_id && doc.current_version_id)
             .map((doc) => ({ purpose: doc.purpose, expiresOn: expires.get(doc.current_version_id as string) ?? null })),
           otherBirths,
+          reviews: reviewInfo,
+          reuses: (reuseRows?.data ?? [])
+            .filter((reuse) => reuse.response_id === row.id)
+            .map((reuse) => ({ answerId: reuse.answer_id, status: reuse.status, confirmedAt: reuse.confirmed_at, originRef: originRef.get(reuse.origin_matter_id) ?? null })),
+          earlierForms: handles && sentElsewhere.has(row.person_id),
+          proofHref: (answerId) => (proofOf.has(answerId) ? `/sheet/matters/${input.matter.id}?tab=documents` : null),
         },
         who,
         input.staff.timezone,

@@ -12,6 +12,7 @@
  */
 import { Icon, Sep } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
+import { UPLOAD_LIMIT_DIALOG } from "@/modules/sheet/settings-present";
 
 /** The Designer's Settings tabs, exactly as it lists them. */
 export const DESIGNER_SETTINGS_TABS = [
@@ -238,7 +239,8 @@ export function SheetSettingsTeam({ data }: { data: TeamData }) {
 /** `action` (live only): a button after the badge, e.g. "Sign out my other sessions". */
 export type SecurityRow = { title: string; detail: string; badge: MatterBadge; action?: { label: string; attrs: Record<string, string> } };
 
-export type SecurityData = { intro: string; rows: SecurityRow[] };
+/** `uploadLimit`, live only (DOC-02): the owner's Change limit dialog, in MB. */
+export type SecurityData = { intro: string; rows: SecurityRow[]; uploadLimit?: { organizationId: string; mb: number; max: number } | null };
 
 export function SheetSettingsSecurity({ data }: { data: SecurityData }) {
   return (
@@ -263,6 +265,46 @@ export function SheetSettingsSecurity({ data }: { data: SecurityData }) {
           </span>
         </div>
       ))}
+      {data.uploadLimit ? <UploadLimitDialog data={data.uploadLimit} /> : null}
     </>
+  );
+}
+
+/**
+ * Live only (DOC-02): the owner changes the per-file upload limit. The Designer has no such dialog,
+ * so it is the Designer's `.dlg` with `.fld` / `.inp` fields and the six-digit code field of
+ * "Confirm it's you". public.set_document_upload_limit checks the owner, the step-up and the ceiling.
+ */
+function UploadLimitDialog({ data }: { data: NonNullable<SecurityData["uploadLimit"]> }) {
+  return (
+    <dialog className={"dlg"} id={UPLOAD_LIMIT_DIALOG} aria-labelledby={"dUpLimitH"}>
+      <div className={"dh"}>
+        <h2 id={"dUpLimitH"}>{"Upload limit per file"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={UPLOAD_LIMIT_DIALOG}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <div className={"fld"}>
+          <label htmlFor={"ulMb"}>{"Limit in MB"}</label>
+          <small className={"hint"} id={"ulMb-h"}>
+            {data.max === 100 ? "From 1 to 100 MB. The default is 25 MB." : "From 1 to 25 MB. Above 25 MB stays off until Casevoya has validated storage for larger files."}
+          </small>
+          <input className={"inp"} id={"ulMb"} type={"number"} min={1} max={data.max} step={1} defaultValue={String(data.mb)} aria-describedby={"ulMb-h"} />
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"ulC"}>{"Six-digit code"}</label>
+          <input className={"inp"} id={"ulC"} inputMode={"numeric"} autoComplete={"one-time-code"} maxLength={6} />
+        </div>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={UPLOAD_LIMIT_DIALOG}>
+          {"Cancel"}
+        </button>
+        <button className={"btn p"} data-upload-limit={"1"} data-org={data.organizationId} data-max={String(data.max)}>
+          {"Save limit"}
+        </button>
+      </div>
+    </dialog>
   );
 }

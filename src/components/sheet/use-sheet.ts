@@ -71,7 +71,9 @@ import {
 import { openDocReview, reopenDocReview, runDocFile, runDocOpen, runDocReview } from "./documents-acts";
 import { restoreDocRequest, runDocRequest } from "./doc-request-act";
 import { openDocumentDetails, runDocumentClassify, runDocumentLink, runDocumentTranslation, runDocumentUnlink } from "./document-details-acts";
-import { armIntakeReview, runIntakeFreeze, runIntakeSend } from "./intake-delivery-acts";
+import { runUploadLimit } from "./upload-limit-act";
+import { armIntakeReview, runIntakeFreeze, runIntakeReuse, runIntakeSend } from "./intake-delivery-acts";
+import { runFlagResolve, runPersonAdd, runPersonRemove } from "./person-history-acts";
 import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
 import { runInboxCompose, runInboxMessage, runInboxNote, runInboxReply } from "./inbox-reply-acts";
 import { mountDocOpen, mountDrafts, mountInboxFilters, mountRecordsCrumb } from "./records-acts";
@@ -868,10 +870,42 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(ddClassify, () => runDocumentClassify(router));
         return;
       }
+      // Settings > Security: the per-file upload limit (DOC-02).
+      const uploadLimit = target.closest<HTMLElement>("[data-upload-limit]");
+      if (uploadLimit && root.contains(uploadLimit)) {
+        event.preventDefault();
+        busyRun(uploadLimit, () => runUploadLimit(uploadLimit, router));
+        return;
+      }
       const intakeFreeze = target.closest<HTMLElement>("[data-intake-freeze]");
       if (intakeFreeze && root.contains(intakeFreeze)) {
         event.preventDefault();
         busyRun(intakeFreeze, () => runIntakeFreeze(intakeFreeze, router));
+        return;
+      }
+      // INT-05: a person's names, passports and addresses, and resolving a review flag.
+      const personAdd = target.closest<HTMLElement>("[data-ph-add]");
+      if (personAdd && root.contains(personAdd)) {
+        event.preventDefault();
+        busyRun(personAdd, () => runPersonAdd(personAdd, router));
+        return;
+      }
+      const personRemove = target.closest<HTMLElement>("[data-ph-remove]");
+      if (personRemove && root.contains(personRemove)) {
+        event.preventDefault();
+        busyRun(personRemove, () => runPersonRemove(personRemove, router));
+        return;
+      }
+      const flagResolve = target.closest<HTMLElement>("[data-ph-resolve]");
+      if (flagResolve && root.contains(flagResolve)) {
+        event.preventDefault();
+        busyRun(flagResolve, () => runFlagResolve(flagResolve, router));
+        return;
+      }
+      const intakeReuse = target.closest<HTMLElement>("[data-intake-reuse]");
+      if (intakeReuse && root.contains(intakeReuse)) {
+        event.preventDefault();
+        busyRun(intakeReuse, () => runIntakeReuse(intakeReuse, router));
         return;
       }
       const intakeReview = target.closest<HTMLElement>("[data-intake-review] .k2-fb-idle");

@@ -72,11 +72,14 @@ function readContentTypes(bytes: Uint8Array): string | null {
   return null;
 }
 
-/** A DOCX is a ZIP whose [Content_Types].xml declares a wordprocessingml main document part. */
+/**
+ * A DOCX is a ZIP whose [Content_Types].xml declares a wordprocessingml main document part and no
+ * macro part (DOC-02): a package that declares VBA or a macro-enabled part is refused, never opened.
+ */
 export function isWordDocument(bytes: Uint8Array): boolean {
   if (!isZip(bytes)) return false;
   const types = readContentTypes(bytes);
-  return types != null && types.includes(DOCX_MAIN_PART);
+  return types != null && types.includes(DOCX_MAIN_PART) && !/vbaProject|macroEnabled|vbaData/i.test(types);
 }
 
 /** The verified media type of a whole file, or null. Other ZIPs (XLSX, JAR, plain archives) are rejected. */
