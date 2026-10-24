@@ -11152,6 +11152,10 @@ export type Database = {
         Args: { p_matter_id: string }
         Returns: Json
       }
+      email_delivery_brands: {
+        Args: { p_delivery_ids: string[] }
+        Returns: Json
+      }
       email_delivery_locales: {
         Args: { p_delivery_ids: string[] }
         Returns: Json

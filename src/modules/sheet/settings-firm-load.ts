@@ -22,7 +22,7 @@ import {
 const STAFF_ROLES = ["firm_owner", "licensed_consultant", "case_manager", "assistant", "finance_user"] as const;
 
 const FIRM_COLUMNS =
-  "id, legal_name, display_name, timezone, jurisdiction_codes, billing_contact_name, billing_contact_email, privacy_contact_name, privacy_contact_email, continuity_contact_name, continuity_contact_email, succession_note, branding";
+  "id, legal_name, display_name, timezone, default_locale, jurisdiction_codes, billing_contact_name, billing_contact_email, privacy_contact_name, privacy_contact_email, continuity_contact_name, continuity_contact_email, succession_note, branding";
 
 /** A short-lived link to the firm's own saved logo in the private bucket, or null. */
 async function logoUrl(branding: unknown, organizationId: string): Promise<string | null> {
@@ -120,7 +120,7 @@ export async function loadSheetSettingsFirm(staff: SheetStaff, tab: SettingsTab)
   const me = await supabase.auth.getClaims();
   const myId = me.data?.claims?.sub;
   const mine = (myId ? byId.get(myId)?.timezone : null) ?? firm.timezone;
-  dialogs.timezone = { mine, firm: owner ? firm.timezone : null };
+  dialogs.timezone = { mine, firm: owner ? firm.timezone : null, locale: owner && firmOk ? (firm.default_locale === "fr-CA" ? "fr-CA" : "en-CA") : null };
   dialogs.zones = timezoneSuggestions([mine, firm.timezone]);
-  return { chrome, header, dialogs, page: { tab: "language" as const, data: languagePage(people, firm.timezone) } };
+  return { chrome, header, dialogs, page: { tab: "language" as const, data: languagePage(people, firm.timezone, firm.default_locale) } };
 }

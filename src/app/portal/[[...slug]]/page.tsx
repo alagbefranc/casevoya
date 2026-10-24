@@ -13,7 +13,7 @@ import { loadPortalDocuments } from "@/modules/documents/load";
 import { loadPortalInvoices, loadPortalReceipt } from "@/modules/finance/portal-load";
 import { isUuid } from "@/lib/tenant/context";
 import { countPortalUnread, loadPortalMessages } from "@/modules/messages/load";
-import { firmLogo } from "@/modules/firm-onboarding/public-logo";
+import { firmLook } from "@/modules/firm-onboarding/public-logo";
 import { loadPortalHome, loadPortalMatters } from "@/modules/portal/home-load";
 import { loadPortalAccess } from "@/modules/portal/load";
 import { payStateFromQuery } from "@/modules/portal/pay";
@@ -90,11 +90,11 @@ async function Body({
           .catch(() => null)
       : null;
   const tasks = page === "tasks" ? await loadPortalTasks(access.viewer).catch(() => null) : null;
-  // The sidebar on every page: the firm's logo, and the Tasks and Messages counts.
-  const [taskCount, unread, logo, home] = await Promise.all([
+  // The sidebar on every page: the firm's logo or initials on its colour, and the Tasks and Messages counts.
+  const [taskCount, unread, look, home] = await Promise.all([
     tasks ? tasks.filter((task) => task.status !== "done").length : countPortalTasks(access.viewer).catch(() => 0),
     countPortalUnread(access.viewer).catch(() => 0),
-    firmLogo(access.viewer.organizationSlug),
+    firmLook(access.viewer.organizationSlug),
     page === "home" ? loadPortalHome(access.viewer, null).catch(() => null) : null,
   ]);
   const matters = page === "matters" ? await loadPortalMatters(access.viewer).catch(() => null) : null;
@@ -115,7 +115,8 @@ async function Body({
         taskCount={taskCount}
         unread={unread}
         home={home}
-        logo={logo}
+        logo={look.logo}
+        accent={look.accent}
         matters={matters}
         receipt={receipt}
       />
