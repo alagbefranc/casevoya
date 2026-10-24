@@ -2669,6 +2669,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           critical: boolean
+          follow_up_task_id: string | null
           id: string
           last_error: string | null
           matter_id: string | null
@@ -2687,6 +2688,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           critical?: boolean
+          follow_up_task_id?: string | null
           id?: string
           last_error?: string | null
           matter_id?: string | null
@@ -2705,6 +2707,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           critical?: boolean
+          follow_up_task_id?: string | null
           id?: string
           last_error?: string | null
           matter_id?: string | null
@@ -3334,6 +3337,7 @@ export type Database = {
           byte_size: number | null
           created_at: string
           created_by: string | null
+          file_audience: Database["public"]["Enums"]["document_audience"] | null
           filename: string
           id: string
           inbound_email_id: string
@@ -3342,6 +3346,8 @@ export type Database = {
           organization_id: string
           scan_result: string | null
           sha256: string | null
+          skipped_at: string | null
+          skipped_by: string | null
           storage_key: string
           updated_at: string
           upload_state: string
@@ -3352,6 +3358,7 @@ export type Database = {
           byte_size?: number | null
           created_at?: string
           created_by?: string | null
+          file_audience?: Database["public"]["Enums"]["document_audience"] | null
           filename: string
           id?: string
           inbound_email_id: string
@@ -3360,6 +3367,8 @@ export type Database = {
           organization_id: string
           scan_result?: string | null
           sha256?: string | null
+          skipped_at?: string | null
+          skipped_by?: string | null
           storage_key: string
           updated_at?: string
           upload_state?: string
@@ -3370,6 +3379,7 @@ export type Database = {
           byte_size?: number | null
           created_at?: string
           created_by?: string | null
+          file_audience?: Database["public"]["Enums"]["document_audience"] | null
           filename?: string
           id?: string
           inbound_email_id?: string
@@ -3378,6 +3388,8 @@ export type Database = {
           organization_id?: string
           scan_result?: string | null
           sha256?: string | null
+          skipped_at?: string | null
+          skipped_by?: string | null
           storage_key?: string
           updated_at?: string
           upload_state?: string
@@ -10417,6 +10429,10 @@ export type Database = {
         Args: { p_agreement_id: string; p_body: string; p_clause_id: string }
         Returns: string
       }
+      matter_inbound_address: {
+        Args: { p_domain?: string; p_matter_id: string }
+        Returns: Json
+      }
       quote_to_agreement: {
         Args: { p_agreement_id: string; p_template_id: string }
         Returns: string
@@ -11335,6 +11351,15 @@ export type Database = {
       }
       file_inbound_email: {
         Args: { p_email_id: string; p_matter_id: string; p_person_id: string }
+        Returns: Json
+      }
+      file_inbound_email_to_matter: {
+        Args: {
+          p_email_id: string
+          p_files: Json
+          p_matter_id: string
+          p_person_id: string
+        }
         Returns: Json
       }
       finish_cicc_register_import: {
