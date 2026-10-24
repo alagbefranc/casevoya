@@ -57,6 +57,7 @@ function controls(source: string): string {
 const VIEWER = {
   organizationId: "00000000-0000-4000-8000-00000000000a",
   organizationName: "Amara",
+  organizationSlug: "example-firm",
   timezone: "Asia/Kolkata",
   role: "client",
   person: { id: "00000000-0000-4000-8000-0000000000p1", displayName: "Priya Sharma", email: null, phone: null, isMinor: false, role: "applicant" },

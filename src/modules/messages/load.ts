@@ -264,6 +264,35 @@ export async function loadPortalMessages(viewer: PortalViewer, threadId?: string
 }
 
 /**
+ * The portal sidebar's Messages badge: messages to the signed-in client that they haven't opened
+ * (no read receipt of theirs), among the latest MESSAGE_LIMIT they can read. RLS limits the rows
+ * to their own threads, as on the Messages page.
+ */
+export async function countPortalUnread(viewer: PortalViewer): Promise<number> {
+  const org = viewer.organizationId;
+  const supabase = await createClient({ organizationId: org });
+  const { data: claims } = await supabase.auth.getClaims();
+  const me = String(claims?.claims?.sub ?? "");
+  if (!me) return 0;
+  const { data: rows } = await supabase
+    .from("matter_messages")
+    .select("id, author_user_id")
+    .eq("organization_id", org)
+    .order("created_at", { ascending: false })
+    .limit(MESSAGE_LIMIT);
+  const theirs = (rows ?? []).filter((row) => row.author_user_id !== me).map((row) => row.id);
+  if (!theirs.length) return 0;
+  const { data: receipts } = await supabase
+    .from("matter_message_receipts")
+    .select("message_id")
+    .eq("organization_id", org)
+    .eq("user_id", me)
+    .in("message_id", theirs);
+  const read = new Set((receipts ?? []).map((row) => row.message_id));
+  return theirs.filter((id) => !read.has(id)).length;
+}
+
+/**
  * For staff: which of these people chose WhatsApp with consent, and when each one's 24-hour window
  * closes (24 hours after their last WhatsApp message). RLS limits both to people on matters the
  * staff member reads.

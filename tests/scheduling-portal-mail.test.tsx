@@ -8,6 +8,7 @@ import type { PortalViewer } from "@/modules/portal/load";
 const viewer = {
   organizationId: "00000000-0000-4000-8000-000000000001",
   organizationName: "Maple Example Immigration",
+  organizationSlug: "example-firm",
   timezone: "America/Toronto",
   role: "client",
   person: null,
