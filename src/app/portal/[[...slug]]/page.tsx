@@ -9,7 +9,9 @@ import { loadPortalAgreements } from "@/modules/agreements/load";
 import { loadPortalDocuments } from "@/modules/documents/load";
 import { loadPortalInvoices } from "@/modules/finance/portal-load";
 import { isUuid } from "@/lib/tenant/context";
-import { loadPortalMessages } from "@/modules/messages/load";
+import { countPortalUnread, loadPortalMessages } from "@/modules/messages/load";
+import { firmLogo } from "@/modules/firm-onboarding/public-logo";
+import { loadPortalHome } from "@/modules/portal/home-load";
 import { loadPortalAccess } from "@/modules/portal/load";
 import { payStateFromQuery } from "@/modules/portal/pay";
 import { loadPortalAppointments } from "@/modules/scheduling/portal-load";
@@ -75,10 +77,30 @@ async function Body({
           .catch(() => null)
       : null;
   const tasks = page === "tasks" ? await loadPortalTasks(access.viewer).catch(() => null) : null;
-  const taskCount = tasks ? tasks.filter((task) => task.status !== "done").length : await countPortalTasks(access.viewer).catch(() => 0);
+  // The sidebar on every page: the firm's logo, and the Tasks and Messages counts.
+  const [taskCount, unread, logo, home] = await Promise.all([
+    tasks ? tasks.filter((task) => task.status !== "done").length : countPortalTasks(access.viewer).catch(() => 0),
+    countPortalUnread(access.viewer).catch(() => 0),
+    firmLogo(access.viewer.organizationSlug),
+    page === "home" ? loadPortalHome(access.viewer, null).catch(() => null) : null,
+  ]);
   return (
     <PortalScreen page={page}>
-      <LivePortal page={page} viewer={access.viewer} documents={documents} agreements={agreements} payments={payments} appointments={appointments} messages={messages} intake={intake} tasks={tasks} taskCount={taskCount} />
+      <LivePortal
+        page={page}
+        viewer={access.viewer}
+        documents={documents}
+        agreements={agreements}
+        payments={payments}
+        appointments={appointments}
+        messages={messages}
+        intake={intake}
+        tasks={tasks}
+        taskCount={taskCount}
+        unread={unread}
+        home={home}
+        logo={logo}
+      />
     </PortalScreen>
   );
 }

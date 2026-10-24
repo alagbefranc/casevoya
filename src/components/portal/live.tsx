@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { AccountForm } from "./account-form";
 import { AgreementsLive } from "./agreements-live";
 import { AppointmentsLive } from "./appointments-live";
@@ -9,6 +9,8 @@ import { TasksLive } from "./tasks-live";
 import { PayLive } from "./pay-live";
 import { PaymentsLive } from "./payments-live";
 import { WithdrawShare } from "./withdraw-share";
+import { HOME_CSS } from "./markup/portal";
+import { homeView, type HomeView } from "@/modules/portal/home-present";
 import type { PortalAgreements } from "@/modules/agreements/load";
 import type { PortalDocuments } from "@/modules/documents/load";
 import type { PortalInvoices } from "@/modules/finance/portal-load";
@@ -31,11 +33,39 @@ const NAV = [
   ["credit-card", "Payments", "/portal/payments"],
 ] as const;
 
-function icon(name: string) {
+function icon(name: string, size?: "s") {
   return (
-    <svg className="ic" aria-hidden="true">
+    <svg className={size ? `ic ${size}` : "ic"} aria-hidden="true">
       <use href={`/assets/icons-coreui/sprite.svg#i-${name}`} />
     </svg>
+  );
+}
+
+/** The sidebar chrome every live page shares with the designs (logo tile, matter pill). */
+const CHROME_CSS =
+  ".firmlogo{width:32px;height:32px;border-radius:9px;background:#fff;color:#111;display:grid;place-items:center;font-weight:600;font-size:13px;flex:none;overflow:hidden}" +
+  ".firmlogo img{width:22px;height:22px;object-fit:contain;display:block}" +
+  "@media (min-width:901px){#mClose{display:none}}" +
+  ".mx{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:40px;padding:0 10px;border-radius:9px;background:#262626;color:#fff;font-weight:500;font-size:14.5px;margin:0 0 14px;text-decoration:none}" +
+  ".mx>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+  ".side .brand{padding:4px 2px 18px}";
+
+/** Up to two initials, for a logo tile or an avatar without a picture. */
+export function initials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  return words.slice(0, 2).map((word) => word[0]?.toUpperCase() ?? "").join("") || "·";
+}
+
+function roleLabel(role: string | null | undefined): string {
+  const text = (role ?? "").replaceAll("_", " ").trim();
+  return text ? text[0].toUpperCase() + text.slice(1) : "";
+}
+
+function FirmLogo({ name, logo }: { name: string; logo: string | null }) {
+  return (
+    <span className="firmlogo">
+      {logo ? <img src={logo} alt="" width={22} height={22} /> : initials(name)}
+    </span>
   );
 }
 
@@ -50,6 +80,9 @@ export function LivePortal({
   intake,
   tasks,
   taskCount,
+  unread,
+  home,
+  logo,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -65,51 +98,76 @@ export function LivePortal({
   tasks?: PortalTask[] | null;
   /** Open client tasks, intake requests included: the Designer's count on Tasks. */
   taskCount?: number;
+  /** Messages to the client they haven't opened: the count on Messages. */
+  unread?: number;
+  /** The Home page's view (src/modules/portal/home-present.ts); empty when not loaded. */
+  home?: HomeView | null;
+  /** A short-lived link to the firm's logo, or null for its initials. */
+  logo?: string | null;
 }) {
   const name = viewer.person?.displayName ?? "Your account";
   const matter = viewer.matters[0];
   const current = page === "home" ? "/portal" : `/portal/${page}`;
+  const role = roleLabel(viewer.person?.role ?? viewer.role);
+  const badges: Record<string, number> = { "/portal/tasks": taskCount ?? 0, "/portal/messages": unread ?? 0 };
   return (
     <>
+      <style dangerouslySetInnerHTML={{ __html: CHROME_CSS }} />
       <a className="sr" href="#main">Skip to content</a>
       <header className="mhead">
-        <span style={{ display: "flex", gap: 12, alignItems: "center" }}>{viewer.organizationName}</span>
+        <span style={{ display: "flex", gap: 12, alignItems: "center" }}><FirmLogo name={viewer.organizationName} logo={logo ?? null} />{viewer.organizationName}</span>
         <button aria-label="Open menu" aria-expanded="false" style={{ color: "#fff", padding: 8 }} id="mOpen">{icon("menu")}</button>
       </header>
       <div className="frame">
         <aside className="side" id="side" aria-label="Portal">
           <div className="brand" style={{ justifyContent: "flex-start", gap: 12, fontWeight: 500, color: "#fff", fontSize: 15 }}>
+            <FirmLogo name={viewer.organizationName} logo={logo ?? null} />
             {viewer.organizationName}
             <button id="mClose" aria-label="Close menu" style={{ marginLeft: "auto", color: "#8b8680" }}>{icon("close")}</button>
           </div>
-          {matter ? <a className="mx" href="/portal/matters">{matter.title}</a> : null}
+          {matter ? (
+            <a className="mx" href="/portal/matters" title={viewer.matters.length > 1 ? "Switch matter" : matter.title}>
+              <span>{matter.title}</span>
+              {viewer.matters.length > 1 ? <span>{icon("sort", "s")}</span> : null}
+            </a>
+          ) : null}
           <nav className="nav" id="pnav">
             {NAV.map(([glyph, label, href]) => (
               <a key={href} href={href} className={href === current ? "on" : undefined} aria-current={href === current ? "page" : undefined}>
                 {icon(glyph)}
                 <span>{label}</span>
-                {href === "/portal/tasks" && taskCount ? <span className="k b">{taskCount}</span> : null}
+                {badges[href] ? <span className="k b">{badges[href]}</span> : null}
               </a>
             ))}
           </nav>
           <div className="me" style={{ flexDirection: "column", alignItems: "flex-start", gap: 14 }}>
-            <span>{name}<small style={{ display: "block", color: "#8b8680", fontSize: 13 }}>{viewer.person?.role ?? viewer.role.replaceAll("_", " ")}</small></span>
-            <a className="whois" href="/portal/account">Your account</a>
-            <a className="whois" href="/portal/family">People on your file</a>
-            <small style={{ color: "#8b8680", fontSize: 13, lineHeight: 1.5 }}>Powered by Casevoya · your file belongs to {viewer.organizationName}</small>
+            <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <span className="av" aria-hidden="true">{initials(name)}</span>
+              <span>{name}{role ? <small style={{ display: "block", color: "#8b8680", fontSize: 13 }}>{role}</small> : null}</span>
+            </span>
+            <span style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+              <a className="whois" href="/portal/account">Your account</a>
+              <a className="whois" href="/portal/family">People on your file</a>
+            </span>
+            <small style={{ color: "#8b8680", fontSize: 13, lineHeight: 1.5 }}>Powered by Casevoya <span className="sep" aria-hidden="true"></span> your file belongs to {viewer.organizationName}</small>
           </div>
         </aside>
         <main className="sheet">
           <div className="main" id="main">
             <header className="top">
-              <span className="pill">{matter ? matter.title : viewer.organizationName}</span>
-              <span className="acts"><a className="btn s sm" href="/help/client-home-screen" id="help">Help</a></span>
+              <span className="pill">
+                <span>
+                  {matter ? matter.title : viewer.organizationName}
+                  {matter?.reference ? (<> <span className="sep" aria-hidden="true"></span> {matter.reference}</>) : null}
+                </span>
+              </span>
+              <span className="acts"><a className="btn s sm" href="/help/client-home-screen" id="help">{icon("help", "s")}Help</a></span>
             </header>
-            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} messages={messages} intake={intake ?? null} tasks={tasks ?? null} />
+            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} messages={messages} intake={intake ?? null} tasks={tasks ?? null} home={home ?? null} />
           </div>
         </main>
         <footer className="statusbar">
-          <span><a href="#" id="lang">English · Français</a></span>
+          <span><a href="#" id="lang">English <span className="sep" aria-hidden="true"></span> Français</a></span>
           <span>Times in your timezone: {viewer.timezone}</span>
         </footer>
       </div>
@@ -128,6 +186,7 @@ function LiveMain({
   messages,
   intake,
   tasks,
+  home,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -138,6 +197,7 @@ function LiveMain({
   messages?: ChatData | null;
   intake: { data: PortalIntake; field: string | null } | null;
   tasks: PortalTask[] | null;
+  home: HomeView | null;
 }) {
   // Messages: the chat view (redesigned as a chat view at the owner's request, 2026-10-18).
   if (page === "messages" && messages !== undefined) {
@@ -174,7 +234,8 @@ function LiveMain({
   if (page === "agreements") {
     return agreements ? <AgreementsLive viewer={viewer} agreements={agreements} /> : <Stub page={page} />;
   }
-  if (page === "home" || page === "matters") return <MatterList viewer={viewer} home={page === "home"} />;
+  if (page === "home") return <LiveHome viewer={viewer} view={home ?? emptyHome(viewer)} />;
+  if (page === "matters") return <MatterList viewer={viewer} home={false} />;
   if (page === "family" || page === "rafael" || page === "olena") return <People viewer={viewer} />;
   if (page === "guardian") return <Guardian viewer={viewer} />;
   if (page === "account") return <Account viewer={viewer} />;
@@ -182,6 +243,115 @@ function LiveMain({
   if (page === "intake" || page === "correction") return <Sections viewer={viewer} correction={page === "correction"} />;
   if (page === "tasks" && tasks) return <TasksLive viewer={viewer} tasks={tasks} />;
   return <Stub page={page} />;
+}
+
+/** Home with nothing loaded: the calm hero and empty panels. */
+function emptyHome(viewer: PortalViewer): HomeView {
+  return homeView({
+    firmName: viewer.organizationName,
+    personName: viewer.person?.displayName ?? null,
+    timezone: viewer.timezone,
+    now: new Date(),
+    matter: viewer.matters[0] ?? null,
+    consultant: null,
+    tasks: [],
+    documents: [],
+    invoices: [],
+    messages: null,
+  });
+}
+
+/** The client's Home, laid out as design/portal/pages/portal.html (HomeMarkup), from their own records. */
+function LiveHome({ viewer, view }: { viewer: PortalViewer; view: HomeView }) {
+  const hello = view.firstName ? `Hi ${view.firstName}.` : "Hi.";
+  const step = { done: "d", current: "c", todo: "" } as const;
+  return (
+    <div id="pc">
+      {/* The design indents Payments under Messages on a phone; stacked, both start at the edge. */}
+      <style dangerouslySetInnerHTML={{ __html: `${HOME_CSS}@media (max-width:900px){.pm>div+div{padding-left:0}}` }} />
+      <div className="ph" style={{ marginBottom: 22 }}>
+        <h1 className="display" id="hi">{hello}</h1>
+        <p>Here’s what to do next, and where your application stands.</p>
+      </div>
+      <section className={view.next.calm ? "next rv calm" : "next rv"} style={{ "--i": "1" } as CSSProperties}>
+        <img className="nx-vo" src="/assets/vo/vo-point-96.png" srcSet="/assets/vo/vo-point-192.png 2x" width={56} height={56} alt="" />
+        <div>
+          <small>{view.next.eyebrow}</small>
+          <h2>{view.next.title}</h2>
+          <p>{view.next.body}</p>
+        </div>
+        <a className="btn" id="cont" href={view.next.href}>{view.next.action}</a>
+      </section>
+      <div className="q4 panel rv" style={{ "--i": "2" } as CSSProperties}>
+        <div><small>What do I need to do?</small><b>{view.strip.todo}</b></div>
+        <div><small>By when?</small><b>{view.strip.byWhen}</b></div>
+        <div>
+          <small>Who is working on it?</small>
+          <b style={{ display: "flex", gap: 8, alignItems: "center" }}><span className="av" aria-hidden="true">{initials(view.strip.who)}</span>{view.strip.who}</b>
+        </div>
+        <div><small>What happens next?</small><b>{view.strip.whatNext}</b></div>
+      </div>
+      {view.steps ? (
+        <>
+          <h3 style={{ fontSize: 14, fontWeight: 500, margin: "4px 0 6px" }}>Where things stand</h3>
+          <div className="steps" id="steps">
+            {view.steps.map((item) => (
+              <div key={item.label} className={step[item.state]} aria-current={item.state === "current" ? "step" : undefined}><span>{item.label}</span></div>
+            ))}
+          </div>
+          <p style={{ fontSize: 13, color: "var(--t2)", margin: "8px 0 24px" }}>
+            Updates here are recorded by {viewer.organizationName}. There’s no live link to IRCC, and nothing here is a decision.
+          </p>
+        </>
+      ) : null}
+      <div className="panel rv" style={{ "--i": "3" } as CSSProperties}>
+        <h2>Documents you’ve sent<span className="r" style={{ fontSize: 13, color: "var(--t2)" }}>Uploaded and accepted are shown separately</span></h2>
+        <div className="split" style={{ "--n": "2" } as CSSProperties} id="docs">
+          <div>
+            <h3>Accepted by your consultant</h3>
+            <div className="rank">
+              {view.docs.accepted.length ? view.docs.accepted.map((doc) => (
+                <div key={doc.key}>{icon("check-circle", "s")}{doc.title}<span className="r"><span className="bd ok"><i></i>Accepted</span></span></div>
+              )) : <div style={{ color: "var(--t2)" }}>Nothing accepted yet.</div>}
+            </div>
+          </div>
+          <div>
+            <h3>Uploaded, not yet accepted</h3>
+            <div className="rank">
+              {view.docs.pending.length ? view.docs.pending.map((doc) => (
+                <div key={doc.key}>{icon(doc.tone === "chg" ? "alert" : "clock", "s")}{doc.title}<span className="r"><span className={`bd ${doc.tone}`}><i></i>{doc.label}</span></span></div>
+              )) : <div style={{ color: "var(--t2)" }}>Nothing waiting for review.</div>}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="split pm" style={{ "--n": "2", gap: 24 } as CSSProperties}>
+        <div>
+          <h3 className="sub" style={{ fontWeight: 400, color: "var(--t2)", fontSize: 14 }}>Messages</h3>
+          {view.message ? (
+            <a className="li" href="/portal/messages">
+              <span className="av" aria-hidden="true">{initials(view.message.author)}</span>
+              <div><b>{view.message.author}</b><small>{view.message.preview}</small></div>
+              <span className="r"><small className="num" style={{ color: "var(--t2)" }}>{view.message.when}</small></span>
+            </a>
+          ) : (
+            <div className="li"><div><b>No messages yet</b><small>Write to {viewer.organizationName} from Messages.</small></div></div>
+          )}
+        </div>
+        <div>
+          <h3 className="sub" style={{ fontWeight: 400, color: "var(--t2)", fontSize: 14 }}>Payments</h3>
+          {view.invoice ? (
+            <div className="li">
+              <div><b>{view.invoice.title}</b><small>{view.invoice.detail}</small></div>
+              <span className="r"><b className="num">{view.invoice.amount}</b><a className="btn p sm" id="pay" href={view.invoice.href}>Pay</a></span>
+            </div>
+          ) : (
+            <div className="li"><div><b>Nothing to pay</b><small>Invoices from {viewer.organizationName} appear here.</small></div></div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function MatterList({ viewer, home }: { viewer: PortalViewer; home: boolean }) {

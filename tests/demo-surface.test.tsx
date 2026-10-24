@@ -76,10 +76,11 @@ const person = {
 const viewer: PortalViewer = {
   organizationId: "00000000-0000-4000-8000-000000000001",
   organizationName: "Example Firm",
+  organizationSlug: "example-firm",
   timezone: "America/Toronto",
   role: "client",
   person,
-  matters: [{ id: "m1", title: "Work permit", stage: "Open", onHold: false }],
+  matters: [{ id: "m1", title: "Work permit", stage: "Open", onHold: false, reference: "EX-2026-0001" }],
   people: [person, { ...person, id: "p2", displayName: "Jordan Lee", role: "sponsor" }],
   grants: [{ id: "g1", kind: "guardian", purpose: "File a form", subjectName: "Jordan Lee", granteeName: "Casey Nguyen" }],
   shares: [{ id: "s1", sectionKey: "passport_bio", subjectName: "Casey Nguyen", granteeName: "Jordan Lee", matterTitle: "Work permit" }],

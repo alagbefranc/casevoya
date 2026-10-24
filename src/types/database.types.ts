@@ -11573,6 +11573,10 @@ export type Database = {
         Args: { p_org: string }
         Returns: { booking_id: string; shared_at: string; summary: string }[]
       }
+      portal_matter_consultants: {
+        Args: { p_org: string }
+        Returns: { consultant_name: string | null; matter_id: string }[]
+      }
       portal_reschedule_booking: {
         Args: { p_booking_id: string; p_expected_version: number | null; p_org: string; p_start: string; p_time_zone: string }
         Returns: undefined

@@ -447,6 +447,7 @@ PRD CRM-04: the outcome summary a client sees is reviewed by a licensed consulta
 * `public.save_consultation_summary(booking, body, expected_version)`: scheduling staff; the booking must be `completed` (attended); 3 to 4,000 characters; creates (expected version 0) or edits it, which puts it back to `needs_review`. Audited `consultation_summary.saved`.
 * `public.share_consultation_summary(booking, expected_version)`: a licensed consultant or licensed owner (`app.require_licensed_staff`); copies `body` to `shared_body`. Audited `consultation_summary.shared`. Idempotent once shared.
 * `public.portal_consultation_summaries(org)`: the signed-in client's own shared summaries (booking id, shared text, when) through `app.booking_person_is_me`; never a draft, never another person's.
+* `public.portal_matter_consultants(org)` (20261024090000): for each matter the signed-in client is a party to (`app.is_matter_party`), the responsible consultant's display name, or null when none is set or their membership isn't active. The portal Home's "Who is working on it?". No other staff details.
 * A stale version is refused with `PT409`.
 
 Tested in `tests/consultation-summaries.rls.test.ts` (not before attended; stale version; a case manager writes but can't share; the licensed consultant shares; the client sees only the shared text, keeps it while an edit waits for review, and can't read the table; another client sees nothing; audit rows).
