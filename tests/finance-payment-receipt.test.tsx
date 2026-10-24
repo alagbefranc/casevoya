@@ -299,4 +299,42 @@ describe("where the receipt shows", () => {
     expect(html.match(/<small>Paid<\/small>/g)).toHaveLength(1);
     expect(html.match(/data-payment-receipt=/g)).toHaveLength(2);
   });
+
+  it("keeps \"Pending verification\" on the portal Payments list while a manual payment waits for the firm's check (#214)", () => {
+    const viewer = { organizationId: ORG, organizationName: "Synthetic Firm", timezone: "America/Toronto", matters: [] } as unknown as PortalViewer;
+    const base: PortalInvoice = {
+      id: "i1",
+      number: "INV-0001",
+      description: "Preparation stage",
+      matterTitle: "Work permit",
+      amountCents: 113_000,
+      paidCents: 0,
+      refundedCents: 0,
+      creditedCents: 0,
+      creditNotes: [],
+      currency: "CAD",
+      status: "issued",
+      issuedOn: "2026-10-16",
+      dueOn: "2026-10-30",
+      open: true,
+      processing: false,
+      state: { tone: "chg", label: "Issued" },
+      receipts: [],
+    };
+    const data: PortalInvoices = {
+      clientFunds: null,
+      today: "2026-10-18",
+      payable: true,
+      publishableKey: null,
+      invoices: [
+        { ...base, pendingCents: 50_000, state: { tone: "rev", label: "Pending verification", detail: "CAD 500.00 recorded" } },
+        { ...base, id: "i2", number: "INV-0002" },
+      ],
+    };
+    const html = renderToStaticMarkup(createElement(PaymentsLive, { viewer, data }));
+    expect(html).toContain('<span class="bd rev"><i></i><span>Pending verification <');
+    expect(html).toContain("CAD 500.00 recorded");
+    // An open invoice with nothing pending still shows its due date.
+    expect(html).toContain(`<span class="bd chg"><i></i>Due ${dayMonth("2026-10-30")}</span>`);
+  });
 });
