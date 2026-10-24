@@ -153,7 +153,8 @@ describe("government present: submissions (T036)", () => {
     expect(built.tab.records[0].action?.wire).toEqual({ "data-open": "dSubRcpt" });
     expect(built.dialogs.receipt?.wire).toMatchObject({ "data-gov": "receipt", "data-id": "h1" });
     const page = buildGovernmentPage(records({ handoffs: [unverified] }), ctx({ stage: "submitted" }));
-    expect(page.alert?.upload).toMatchObject({ "data-gov": "receipt-file", "data-id": "h1" });
+    // GOV-03: the confirmation needs its acknowledgement date, so the alert opens the receipt dialog.
+    expect(page.alert?.upload).toEqual({ "data-nav": "/sheet/matters/matter?tab=submissions&dlg=receipt" });
     expect(page.rows[0].status.label).toBe("Submission unverified");
     expect(JSON.stringify(page)).not.toMatch(/Submitted to government/);
   });
@@ -173,7 +174,7 @@ describe("government present: letters and decisions (T037, T038)", () => {
     });
     const built = buildDecisions(data, ctx());
     expect(built.letters).toHaveLength(2);
-    expect(built.letters[1].parts).toEqual(["Received 12 Oct by portal message", "recorded by Daniel", "created the 12 Nov deadline"]);
+    expect(built.letters[1].parts).toEqual(["Received 12 Oct by portal message", "dated 8 Oct", "recorded by Daniel", "created the 12 Nov deadline"]);
     expect(built.letters[1].verify).toMatchObject({ "data-gov": "verify-letter", "data-id": "l1" });
     expect(buildDecisions(data, ctx({ role: "assistant" })).letters[1].verify).toBeNull();
     const page = buildGovernmentPage(data, ctx());

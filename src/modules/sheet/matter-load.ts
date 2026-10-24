@@ -77,6 +77,7 @@ import { inviteEmailLines } from "@/modules/email/templates";
 import { acceptPath, portalRoleForParty, portalRoleLabel } from "@/modules/sheet/portal-invite";
 import { mayOfferPersonEdit, personEditData } from "@/modules/sheet/edit-person";
 import { loadMatterGovernment } from "@/modules/sheet/government-load";
+import { letterForm } from "@/modules/sheet/letter-present";
 import { DEADLINE_KINDS, DEADLINE_ROLES, deadlineSource } from "@/modules/sheet/new-deadline";
 import { missingPolicies } from "@/modules/portal-policies/defaults";
 import { loadCurrentPolicies } from "@/modules/portal-policies/load";
@@ -701,6 +702,20 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     now,
   });
   if (dialogs.deadline) dialogs.deadline.letters = government.letters;
+  // GOV-04: Record a government letter's issuer, letter date, filed-email file and tasks.
+  if (government.decisions.letter && matter.stage !== "closed") {
+    dialogs.letterForm = letterForm({
+      today,
+      issuers: government.issuers,
+      staff: holdStaff.map((id) => ({ id, name: memberName(id) })),
+      clients: ordered.flatMap((row) => {
+        const found = row.person_id ? person.get(row.person_id) : undefined;
+        return found && ordered.findIndex((other) => other.person_id === row.person_id) === ordered.indexOf(row) ? [{ id: found.id, name: found.display_name }] : [];
+      }),
+      me: staff.membershipId,
+      filed: government.filed,
+    });
+  }
   const confirmOutcome =
     !matter.outcome && matter.government_status === "decision_evidence_on_file" && isLicensedMembership(staff.role, ownLicence?.data)
       ? { options: MATTER_OUTCOMES.map((value) => ({ value, label: outcomeLabel(value) })), wire }

@@ -12,7 +12,9 @@
  */
 import type { CSSProperties, ReactNode } from "react";
 import { Icon, Pair, Sep } from "./frame";
+import { SubmissionChecklist, SubmissionChecklistDialogs, type SubmissionChecklistData, type SubmissionChecklistDialogsData } from "./matter-submissions-checklist";
 import { Avatar, type SidebarPerson } from "./sidebar";
+import { IssuerList, type IssuerListData } from "./letter-form";
 
 const css = (style: Record<string, string>) => style as CSSProperties;
 
@@ -104,6 +106,8 @@ export type MatterSubmissionsData = {
   /** Live only: why Record submission is disabled (its title). */
   recordWhy?: string | null;
   earlier: SubmissionRecord[];
+  /** Live only (GOV-01, GOV-03): the Submission checklist card and the pinned package manifest. */
+  checklist?: SubmissionChecklistData | null;
 };
 
 function RecordRow({ row, index }: { row: SubmissionRecord; index: number }) {
@@ -255,6 +259,7 @@ export function MatterSubmissions({ data }: { data: MatterSubmissionsData }) {
           </div>
         </div>
       )}
+      {data.checklist ? <SubmissionChecklist data={data.checklist} index={index++} /> : null}
       <h3 className={"sub rv"} style={css({ "--i": String(index++) })}>
         {"Submission records"}
       </h3>
@@ -315,6 +320,10 @@ export type GovLetterRow = {
   attach?: GovWire | null;
   /** The Designer's sample letter thumbnail; never set from real data. */
   thumb?: string | null;
+  /** Live only (GOV-04): who sent it, with its official source when it came from the firm's list. */
+  issuer?: string[] | null;
+  /** Live only (GOV-04): one line per task the letter created. */
+  tasks?: string[];
 };
 
 export type FollowUpRow = { title: string; note: string; owner: SidebarPerson; urgent?: boolean; wire?: GovWire | null };
@@ -357,6 +366,8 @@ export type MatterDecisionsData = {
   /** The empty state offers Record a government letter. */
   letter: boolean;
   letters: GovLetterRow[];
+  /** Live only (GOV-04): the firm's issuer list, under the letters. */
+  issuers?: IssuerListData | null;
 };
 
 function Seg({ selected }: { selected: string }) {
@@ -557,6 +568,14 @@ function LetterRows({ letters, start }: { letters: GovLetterRow[]; start: number
               <small>
                 <Joined parts={letter.parts} />
               </small>
+              {letter.issuer ? (
+                <small>
+                  <Joined parts={letter.issuer} />
+                </small>
+              ) : null}
+              {(letter.tasks ?? []).map((line, n) => (
+                <small key={n}>{line}</small>
+              ))}
             </div>
             <span className={"r"}>
               {letter.verify ? (
@@ -663,6 +682,7 @@ export function MatterDecisionsLive({ data }: { data: MatterDecisionsData }) {
           </div>
         )}
         <LetterRows letters={data.letters} start={index} />
+        {data.issuers ? <IssuerList data={data.issuers} start={index + data.letters.length + 2} /> : null}
       </>
     );
   }
@@ -701,6 +721,7 @@ export function MatterDecisionsLive({ data }: { data: MatterDecisionsData }) {
       ) : null}
       {/* Letters stay listed (with Verify and Attach) after a decision, for the next one that arrives. */}
       {data.letters.length ? <LetterRows letters={data.letters} start={index} /> : null}
+      {data.issuers ? <IssuerList data={data.issuers} start={index + data.letters.length + 2} /> : null}
     </>
   );
 }
@@ -718,6 +739,8 @@ export type GovDialogsData = {
   /** `now` is the firm's wall time in `timezone`; the time typed is read back in that zone. */
   submit: { wire: GovWire; representatives: { id: string; name: string }[]; now: string; timezone?: string } | null;
   receipt: { wire: GovWire; today: string } | null;
+  /** Live only (GOV-01): the checklist's dialogs. */
+  checklist?: SubmissionChecklistDialogsData | null;
 };
 
 function DlgHead({ id, title }: { id: string; title: string }) {
@@ -830,17 +853,17 @@ export function GovDialogs({ data }: { data: GovDialogsData }) {
                 </select>
               </label>
               <label className={"fl"}>
-                {"Where the receipt is kept (if no file)"}
+                {"Where the original is kept (optional)"}
                 <input id={"srL"} placeholder={"For example: confirmation page, saved 12 Oct"} autoComplete={"off"} />
               </label>
               <label className={"fl"}>
-                {"Acknowledged on (optional)"}
+                {"Acknowledged on (with the confirmation)"}
                 <input id={"srA"} type={"date"} />
               </label>
             </div>
             <p className={"lock"} style={{ fontSize: "13.5px", marginTop: "10px" }}>
               <Icon name={"info"} cls={"ic s"} />
-              {"Without a receipt it shows as “Submission unverified”. The submission and acknowledgement dates are kept apart."}
+              {"Without the confirmation file and its acknowledgement date it shows as “Submission unverified”. The submission and acknowledgement dates are kept apart."}
             </p>
           </div>
           <DlgFoot label={"Record submission"} wire={data.submit.wire} />
@@ -853,21 +876,22 @@ export function GovDialogs({ data }: { data: GovDialogsData }) {
             <ReceiptDrop />
             <div className={"g2"}>
               <label className={"fl"}>
-                {"Where the receipt is kept (if no file)"}
+                {"Where the original is kept (optional)"}
                 <input id={"rcL"} placeholder={"For example: confirmation page, saved 12 Oct"} autoComplete={"off"} />
               </label>
               <label className={"fl"}>
-                {"Acknowledged on (optional)"}
+                {"Acknowledged on"}
                 <input id={"rcA"} type={"date"} max={data.receipt.today} />
               </label>
             </div>
             <p className={"mu"} style={{ fontSize: "13px", marginTop: "8px" }}>
-              {"The receipt verifies the submission and becomes the evidence for the Submitted stage."}
+              {"Upload the government confirmation and enter its acknowledgement date. Only then does it read “Submitted to government”; the confirmation becomes the evidence for the Submitted stage."}
             </p>
           </div>
           <DlgFoot label={"Verify submission"} wire={data.receipt.wire} />
         </dialog>
       ) : null}
+      {data.checklist ? <SubmissionChecklistDialogs data={data.checklist} /> : null}
     </>
   );
 }

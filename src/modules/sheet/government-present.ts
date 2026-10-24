@@ -36,6 +36,8 @@ import { estimateTableRow, letterProvenance, statusDialogs, submissionProvenance
 import { dayMonth } from "@/modules/sheet/home-present";
 import { dayMonthYear, firstName, longDate, taskDue } from "@/modules/sheet/matter-present";
 import { isoDateInTimeZone, MATTER_OUTCOMES, outcomeLabel, stageLabel } from "@/modules/sheet/present";
+import type { IssuerRow } from "@/modules/government/letters";
+import { issuerList, letterIssuerParts, letterTaskLines, type LetterTaskRow } from "@/modules/sheet/letter-present";
 
 export type HandoffRow = {
   id: string;
@@ -58,7 +60,14 @@ export type HandoffRow = {
   created_by: string | null;
   created_at: string;
   version: number;
+  /** GOV-03: the manifest pinned at release (20261025170000). */
+  manifest_sha256?: string | null;
+  manifest_file_count?: number | null;
+  manifest_pinned_at?: string | null;
 };
+
+/** GOV-01: the checklist's verdict for Record submission, and IRCC's official channel names. */
+export type SubmissionGate = { blocked: string[] | null; why: string | null; channelName?: (channel: string) => string };
 
 export type LetterRow = {
   id: string;
@@ -76,6 +85,9 @@ export type LetterRow = {
   created_by: string | null;
   created_at: string;
   version: number;
+  /** GOV-04: who sent it, as recorded, and the approved issuer it names (null when typed). */
+  issuer?: string | null;
+  issuer_id?: string | null;
 };
 
 export type DecisionRow = {
@@ -121,6 +133,10 @@ export type GovernmentRecords = {
   representation: boolean;
   documents: { total: number; open: number };
   expiring: ExpiringDocument[];
+  /** GOV-04 (matter page only): the tasks each letter created, the firm's issuer list, client names. */
+  letterTasks?: LetterTaskRow[];
+  issuers?: IssuerRow[];
+  people?: Map<string, string>;
   /** GOV-05: IRCC processing-time estimates entered on this matter. */
   estimates?: EstimateRow[];
 };
@@ -194,7 +210,7 @@ function latestSubmitted(handoffs: HandoffRow[]) {
 
 /* ------------------------------------------------------------ submissions */
 
-export function buildSubmissions(records: GovernmentRecords, ctx: GovernmentContext): { tab: MatterSubmissionsData; dialogs: GovDialogsData } {
+export function buildSubmissions(records: GovernmentRecords, ctx: GovernmentContext, gate?: SubmissionGate): { tab: MatterSubmissionsData; dialogs: GovDialogsData } {
   const open = latestOpen(records.handoffs);
   const submitted = latestSubmitted(records.handoffs);
   const current = open ?? submitted;
@@ -250,7 +266,10 @@ export function buildSubmissions(records: GovernmentRecords, ctx: GovernmentCont
 
   const submittedRow = (row: HandoffRow): SubmissionRecord => {
     const at = row.submitted_at ? whenFull(row.submitted_at, ctx.timezone, ctx.today) : "—";
-    const parts = [`Submitted ${at}`, `by ${ctx.memberName(row.submitted_by_membership_id)}`, `${channelLabel(row.channel)}`];
+    const parts = [`Submitted ${at}`, `by ${ctx.memberName(row.submitted_by_membership_id)}`, gate?.channelName ? gate.channelName(row.channel) : channelLabel(row.channel)];
+    if (row.manifest_sha256) {
+      parts.push(`manifest ${row.manifest_file_count ?? 0} ${row.manifest_file_count === 1 ? "file" : "files"}, ${shortHash(row.manifest_sha256)}`);
+    }
     if (row.status === "submission_verified") {
       parts.push(row.acknowledged_on ? `acknowledged ${dayMonth(row.acknowledged_on)}` : "receipt on file");
     } else {
@@ -275,7 +294,9 @@ export function buildSubmissions(records: GovernmentRecords, ctx: GovernmentCont
       badge: handoffBadge("cancelled"),
     }));
 
-  const record = open?.status === "authorized" && canSubmit ? { "data-open": "dSubRec" } : null;
+  // GOV-01: Record submission opens only when the database's checklist has nothing blocking.
+  const gatesClear = !gate || (gate.blocked !== null && gate.blocked.length === 0);
+  const record = open?.status === "authorized" && canSubmit && gatesClear ? { "data-open": "dSubRec" } : null;
   const start = !current && canPrepare ? { "data-open": "dSubPrep" } : null;
   // Why Record submission is not open yet, said on the disabled button.
   const recordWhy = record
@@ -284,7 +305,9 @@ export function buildSubmissions(records: GovernmentRecords, ctx: GovernmentCont
       ? "An owner, consultant or case manager records the submission."
       : open?.status === "awaiting_signoff"
         ? "Opens once a licensed consultant signs off the package."
-        : current
+        : open?.status === "authorized" && !gatesClear
+          ? (gate?.why ?? "The submission checklist couldn’t load, so Record submission stays closed. Reload the page to try again.")
+          : current
           ? null
           : "Start a submission handoff first. A licensed consultant signs it off, then the submission is recorded.";
   const tab: MatterSubmissionsData = { package: pkg, start, records: records_, record, recordWhy, earlier };
@@ -316,8 +339,10 @@ function letterRows(records: GovernmentRecords, ctx: GovernmentContext): GovLett
     const hasEvidence = Boolean(letter.evidence_version_id || letter.evidence_locator);
     const deadlines = records.deadlines.filter((link) => link.correspondence_id === letter.id && link.due_on);
     const parts = [`Received ${dayMonth(letter.received_on)} by ${channelLabel(letter.channel)}`, `recorded by ${firstName(ctx.userName(letter.created_by))}`];
+    if (letter.document_date) parts.splice(1, 0, `dated ${dayMonthYear(letter.document_date, ctx.today)}`);
     for (const link of deadlines) parts.push(`created the ${dayMonth(link.due_on as string)} deadline`);
     if (letter.stated_deadline) parts.push(`letter says: ${statedDeadline(letter.stated_deadline, ctx.today)}`);
+    const tasks = (records.letterTasks ?? []).filter((task) => task.correspondence_id === letter.id);
     const urgent = letter.kind === "request" || letter.kind === "procedural_fairness" || letter.kind === "decision";
     return {
       dot: urgent ? "#0075DE" : "#2e9d5b",
@@ -330,6 +355,8 @@ function letterRows(records: GovernmentRecords, ctx: GovernmentContext): GovLett
           : null,
       // A letter recorded without its evidence: attach it, then it can be verified.
       attach: !letter.verified_at && !hasEvidence && STAFF.has(ctx.role) ? wire("attach-letter", ctx, { id: letter.id, version: String(letter.version) }) : null,
+      issuer: letterIssuerParts(letter.issuer, letter.issuer_id, records.issuers ?? []),
+      tasks: letterTaskLines(tasks, { member: ctx.memberName, person: (id) => (id ? records.people?.get(id) : undefined) ?? "the client" }, ctx.today),
     };
   });
 }
@@ -454,12 +481,17 @@ function decisionView(records: GovernmentRecords, ctx: GovernmentContext, decisi
 export function buildDecisions(records: GovernmentRecords, ctx: GovernmentContext): MatterDecisionsData {
   const latest = records.decisions[0] ?? null;
   const letters = letterRows(records, ctx);
-  if (latest) return { decision: decisionView(records, ctx, latest), letter: STAFF.has(ctx.role), letters };
+  // GOV-04: the firm's issuer list, on the matter page only (the loader reads it there).
+  const issuers = records.issuers
+    ? issuerList({ organizationId: ctx.organizationId, today: ctx.today, issuers: records.issuers, canAdd: STAFF.has(ctx.role), canReview: ctx.licensed })
+    : null;
+  if (latest) return { decision: decisionView(records, ctx, latest), letter: STAFF.has(ctx.role), letters, issuers };
   const verifiedDecision = records.letters.find((row) => row.kind === "decision" && row.verified_at) ?? null;
   return {
     decision: null,
     letter: STAFF.has(ctx.role),
     letters,
+    issuers,
     recordForm:
       verifiedDecision && VERIFIERS.has(ctx.role)
         ? {
@@ -500,7 +532,8 @@ export function buildGovernmentPage(records: GovernmentRecords, ctx: GovernmentC
   if (submitted?.status === "submission_unverified") {
     alert = {
       copy: `A submission was recorded${submitted.submitted_at ? ` on ${dayMonth(isoDateInTimeZone(new Date(submitted.submitted_at), ctx.timezone))}` : ""}, but no confirmation is on file. Upload the confirmation to verify it.`,
-      upload: VERIFIERS.has(ctx.role) ? wire("receipt-file", ctx, { id: submitted.id, version: String(submitted.version) }) : { "data-nav": submissionsTab },
+      // GOV-03: the confirmation needs its acknowledgement date too, so both open the receipt dialog.
+      upload: { "data-nav": VERIFIERS.has(ctx.role) ? `${submissionsTab}&dlg=receipt` : submissionsTab },
       manual: { "data-nav": `${submissionsTab}&dlg=receipt` },
     };
   } else if (SUBMITTED_STAGES.has(ctx.stage) && !submitted) {

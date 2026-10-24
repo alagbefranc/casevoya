@@ -613,6 +613,18 @@ Found in the live test-mode run of FIN-13 (#214). `app.apply_stripe_reversal_eve
 
 Tested in `tests/finance-stripe-disputes-credits.rls.test.ts`, `tests/finance-refunds.rls.test.ts` and `tests/finance-refund-webhook.test.ts`.
 
+## Government letters: issuer list, issuer and tasks on a letter (`20261025180000`, not applied on the live project)
+
+GOV-04 (gap #181), branch `feat/gov-correspondence`.
+
+* `government_issuers` (per firm): `name`, `source_url` (allowlisted Government of Canada host via `app.host_is_allowlisted(app.official_url_host(...))`), `checked_on` (not in the firm's future, within a year), `retrieved_at` + `snapshot_sha256` (both or neither: the server's own read of the page), `page_modified_on`, `name_on_page`, `status` pending_review / approved / rejected / retired, reviewer, `review_note`. One live (pending or approved) row per name (case-insensitive partial unique index). Never deleted (`app.reject_governed_delete`), row-audited. Read by the firm's staff with MFA (`app.gov_staff_roles`); clients and other firms read nothing. Nothing seeded.
+* `government_correspondence.issuer_id` (FK `(issuer_id, organization_id)` to `government_issuers`, indexed): the approved issuer the letter names; `issuer` still stores the text.
+* **Redefines** `app.gov_correspondence_immutable` (latest `20261020130000_work_pages_fixes.sql`): `issuer_id` is immutable too, except that it may be set once from null to the approved issuer whose name equals the letter's `issuer`. Nothing else changed.
+* `public.propose_government_issuer(org, name, url, checked_on, retrieved_at, sha256, modified_on, name_on_page)`: gov staff roles; audited `government.issuer_proposed`.
+* `public.review_government_issuer(id, version, decision, note)`: licensed member with a fresh step-up (`app.require_licensed_staff(org, true)`); approve or reject a pending row, retire an approved one; a note to reject or retire; version conflict `PT409`. Audited `government.issuer_<decision>`.
+* `public.record_government_letter(matter, kind, issuer_id, issuer, channel, document_date, received_on, action_requested, stated_deadline, evidence_version_id, tasks)`: calls the unchanged `app.record_government_correspondence` (every matter, role, sample-mode, date and evidence check), pins the approved issuer (same firm only), then for each `{title, owner: staff|client, owner_id, due_on}` (at most 10; due today or later in the firm's timezone) calls the unchanged `app.create_task` and links it in `correspondence_work_links`, all in one transaction. Audited `government.letter_tasks_created`.
+
+Tested in `tests/government-letters.rls.test.ts`.
 ## Government status provenance (`20261025190000`, not applied on the live project)
 
 GOV-05, branch `feat/gov-status-provenance`.
@@ -638,3 +650,20 @@ Tested in `tests/gov-status-provenance.rls.test.ts` and `tests/gov-status-proven
 * External tamper-evident audit sink (DB owner can still disable triggers).
 * Majority review still enqueues `person.majority_review_due`. T026 also opens one internal task titled `Majority review` when `is_minor` changes from true to false and a date of birth is on file. The birth date is not copied onto the task. Francis confirmed `age_of_majority_years` defaults to 19 and is firm-configurable from 18 to 21.
 * T018 firm onboarding, sample mode, and manual licence checks are in `20261017140600` and `20261017140700` and are not applied on the live project. There is no register scraper. Client invitation rows remain T021. An approved professional review is still not a verified licence until a manual register check is recorded.
+
+## Submission checklist, manifest and official steps (`20261025170000`, not applied on the live project)
+
+GOV-01 and GOV-03 (gap #181), on the manual submission handoff (`20261019202100`).
+
+* `submission_handoffs` gains `manifest_sha256`, `manifest_file_count`, `manifest_pinned_at` (all set together, check constraint).
+* `submission_manifest_files` (append-only): the files pinned at release: handoff, position, document, document version, file name, purpose, byte size, `file_sha256`, review state.
+* `submission_requirements`: a firm's official outside steps and channel names per program (null: every program) and `submission_channel`: label, `source_id` (firm `official_sources` row), `snapshot_id` (`source_snapshots`), `source_url` (allowlisted, trigger), section, form number and date modified, `checked_on`, `current_to`, `snapshot_sha256`, status pending_review / approved / rejected / retired with reviewer. One approved channel name per program and channel (partial unique index). Entered values are immutable (trigger); status changes only through the functions (`app.gov_guard_update` nonce).
+* `submission_checklist_events` (append-only): per handoff, an outside step ticked or unticked, the fee handling confirmed (with a note), a gate overridden by the firm owner (with a reason). The latest event per item is its state.
+* `public.submission_checklist(matter)` (matter staff): the gates from `app.submission_gates_for` (representation, package, deadlines, signatures, fees, outside_steps; state ok / blocked / overridden / none) and the blocked keys.
+* `public.tick_submission_step`, `public.confirm_submission_fees` (owner, consultant, case manager), `public.override_submission_gate` (firm owner, step-up, reason; never the package gate).
+* `public.propose_submission_requirement` (owner, consultant, case manager; canada.ca or gc.ca URL with anchor or section; date checked within the last year; optional snapshot JSON from the server's fetch), `public.review_submission_requirement` and `public.retire_submission_requirement` (licensed member, step-up; approval needs a snapshot hash).
+* **Redefines** `app.sign_off_submission_handoff` (latest `20261023090000_version_conflicts_not_retried.sql`): also pins the manifest (`app.gov_pin_manifest`; refuses with no stored files) and audits its hash and file count.
+* **Redefines** `app.record_submission` (latest `20261023090000_version_conflicts_not_retried.sql`): refuses while a gate blocks; the audit event carries the package label, manifest hash, each pinned file with its hash, and the overridden gates.
+* **Redefines** `app.gov_finish_verification` (latest `20261019216100_firm_today_rules.sql`): needs the confirmation file on the matter and the acknowledgement date.
+
+Forced RLS on every new table; reads only (matter staff through `app.gov_staff_can_read`; requirements to the firm's staff at aal2). Audit: `submission.step_done`, `_step_undone`, `_fees_confirmed`, `_fees_unconfirmed`, `_gate_overridden`, `_requirement_entered`, `_requirement_approved`, `_requirement_rejected`, `_requirement_retired`. Tested in `tests/gov-submission-checklist.rls.test.ts` and `tests/government-handoff.rls.test.ts`.
