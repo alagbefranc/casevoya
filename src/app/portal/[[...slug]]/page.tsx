@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { DemoPortal, PORTAL_SLUGS } from "@/components/portal/demo";
-import { EmptyPortal, LivePortal } from "@/components/portal/live";
+import { EmptyPortal, LivePortal, PortalLoading } from "@/components/portal/live";
 import { PortalScreen } from "@/components/portal/screen";
+import { PORTAL_MATTER_COOKIE, RememberMatter } from "@/components/portal/remember-matter";
 import { signInLocation } from "@/lib/auth/redirect";
 import { loadPortalAgreements } from "@/modules/agreements/load";
 import { loadPortalDocuments } from "@/modules/documents/load";
@@ -56,9 +58,13 @@ async function Body({
       </PortalScreen>
     );
   }
-  // My matters → Open: ?matter= puts that matter first, so Home and the pill show it.
+  // The current matter: My matters → Open (?matter=), else the one the client opened last (a
+  // cookie), else the most recently updated. It goes first, so Home and the pill show it.
   const matterValue = Array.isArray(query.matter) ? query.matter[0] : query.matter;
-  const chosen = isUuid(matterValue) ? access.viewer.matters.find((matter) => matter.id === matterValue) : undefined;
+  const remembered = (await cookies()).get(PORTAL_MATTER_COOKIE)?.value;
+  const pick = (id: string | undefined) => (isUuid(id) ? access.viewer.matters.find((matter) => matter.id === id) : undefined);
+  const opened = pick(matterValue);
+  const chosen = opened ?? pick(remembered);
   if (chosen) access.viewer.matters = [chosen, ...access.viewer.matters.filter((matter) => matter !== chosen)];
   const documents = page === "documents" || page === "upload" ? await loadPortalDocuments(access.viewer) : null;
   const agreements = page === "agreements" ? await loadPortalAgreements(access.viewer) : null;
@@ -107,6 +113,7 @@ async function Body({
         logo={logo}
         matters={matters}
       />
+      {opened ? <RememberMatter id={opened.id} /> : null}
     </PortalScreen>
   );
 }
@@ -119,7 +126,7 @@ export default function PortalPage({
   searchParams: Promise<{ state?: string | string[]; invoice?: string | string[]; thread?: string | string[]; response?: string | string[]; field?: string | string[]; matter?: string | string[] }>;
 }) {
   return (
-    <Suspense fallback={<PortalScreen page="home"><EmptyPortal /></PortalScreen>}>
+    <Suspense fallback={<PortalScreen page="home"><PortalLoading /></PortalScreen>}>
       <Body params={params} searchParams={searchParams} />
     </Suspense>
   );
