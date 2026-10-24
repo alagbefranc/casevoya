@@ -9,12 +9,15 @@ import { Badge, type MatterBadge } from "./matters";
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair, Sep } from "./frame";
 import { PersonEditDialog, personEditProps, type PersonEditDialogData } from "./person-edit";
+import { PersonHistoryList } from "./person-history";
 import { PolicyMissingAlert } from "./portal-policies";
 import { MatterDecisionsLive, MatterSubmissions, type MatterDecisionsData, type MatterSubmissionsData } from "./matter-government";
 import { MatterDocumentReview, type MatterDocumentReviewData } from "./vo-doc-review";
 import { DOC_REQUEST_DIALOG, DocRequestDialog, type DocRequestDialogData } from "./doc-request";
 import { MatterIntake, type MatterIntakeData } from "./matter-intake";
+import { InboundAddress, type InboundAddressData } from "./inbound-filing";
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
+import type { PersonHistoryPanel } from "@/modules/sheet/person-history-present";
 import type { PersonEditData } from "@/modules/sheet/edit-person";
 import { ChatError, ChatView } from "@/components/messages/chat";
 import { TaskEditDialog, TasksDialog, type TaskEditDialogData, type TasksDialogData } from "./tasks";
@@ -452,6 +455,8 @@ export type MatterRbarData = {
   representation?: { title: string; note: string } | null;
   /** A staff-only pinned note. Absent until notes are stored. */
   note?: { text: string; parts: string[] } | null;
+  /** Live only (OPS-06): the matter's inbound email address, with a Copy button. */
+  inbound?: InboundAddressData | null;
 };
 
 function MatterVo({ draft, sources }: { draft: string; sources: string }) {
@@ -540,6 +545,14 @@ export function MatterRbar({ data }: { data: MatterRbarData }) {
             <small>
               <Joined parts={data.note.parts} />
             </small>
+          </div>
+        </>
+      ) : null}
+      {data.inbound ? (
+        <>
+          <h4>{"Email into this matter"}</h4>
+          <div className={"card"}>
+            <InboundAddress data={data.inbound} />
           </div>
         </>
       ) : null}
@@ -1172,7 +1185,7 @@ function manageProps(card: MatterPersonCard) {
 }
 export type MatterRelationship = { from: string; relation: string; to: string; evidence: string; sharing: MatterBadge | null };
 
-export function MatterPeople({ cards, relationships }: { cards: MatterPersonCard[]; relationships: MatterRelationship[] }) {
+export function MatterPeople({ cards, relationships, history }: { cards: MatterPersonCard[]; relationships: MatterRelationship[]; history?: PersonHistoryPanel[] }) {
   if (cards.length === 0) {
     return (
       <Panel>
@@ -1239,6 +1252,7 @@ export function MatterPeople({ cards, relationships }: { cards: MatterPersonCard
           </div>
         </>
       ) : null}
+      {history?.length ? <PersonHistoryList panels={history} /> : null}
     </>
   );
 }
@@ -1953,6 +1967,52 @@ function StillOpen({ index }: { index: number }) {
   );
 }
 
+/* -------------------------------------------------------------- timeline */
+
+/**
+ * The Designer's Timeline tab (`tab-timeline`): its search-and-chips bar, then one `.li` row per
+ * event (the Overview's event rows). Live (OPS-06) it shows the matter's inbound email records:
+ * the bar is left out (its chips filter the audit trail, which this tab doesn't read yet) and a
+ * plain line says what is shown.
+ */
+export type MatterTimelineData = {
+  /** The Designer's filter chips; live omits the bar. */
+  filters?: string[];
+  /** Live only: what the rows are. */
+  note?: string;
+  events: MatterEvent[];
+};
+
+export function MatterTimeline({ data }: { data: MatterTimelineData }) {
+  return (
+    <>
+      {data.filters ? (
+        <div className={"bar rv"} style={css({ "--i": "0" })}>
+          <Icon name={"search"} cls={"ic s"} />
+          <input placeholder={"Search the audit trail"} aria-label={"Search the audit trail"} />
+          {data.filters.map((label, index) => (
+            <span key={label} className={index === 0 ? "fchip on" : "fchip"}>
+              {label}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {data.note ? (
+        <p className={"mu rv"} style={css({ "--i": "0", fontSize: "13px", margin: "0 0 8px" })}>
+          {data.note}
+        </p>
+      ) : null}
+      {data.events.length === 0 && !data.filters ? (
+        <Panel>
+          <Empty art={"inbox-empty"} title={"No email on this matter yet"} copy={"Email sent to this matter’s address, or filed to it from Email to triage, appears here."} />
+        </Panel>
+      ) : (
+        data.events.map((event, index) => <EventRow key={index} event={event} index={1 + index} />)
+      )}
+    </>
+  );
+}
+
 /** Tabs whose records are not stored yet: the Designer's empty-state panel, never sample rows. */
 export const MATTER_TAB_EMPTY: Partial<Record<MatterTab, { art: string; title: string; copy: string }>> = {
   // The Intake tab reads live forms and answers; this shows only when that read failed.
@@ -1968,7 +2028,8 @@ export const MATTER_TAB_EMPTY: Partial<Record<MatterTab, { art: string; title: s
 export type MatterPageData = {
   tab: MatterTab;
   overview: MatterOverviewData;
-  people: { cards: MatterPersonCard[]; relationships: MatterRelationship[] };
+  /** `history`, live only (INT-05): each client's names, passports and addresses, and their flags. */
+  people: { cards: MatterPersonCard[]; relationships: MatterRelationship[]; history?: PersonHistoryPanel[] };
   /** `vo`: Vo's reading of one document, in the Designer's review panel (`#ocr`). */
   /** `request` (live): the person may request documents, so the empty tab offers it (#dReq). */
   documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[]; vo?: MatterDocumentReviewData | null; filter?: boolean; request?: boolean };
@@ -1989,6 +2050,8 @@ export type MatterPageData = {
   decisions?: MatterDecisionsData | null;
   /** Intake delivery: the people's intake forms and answers; absent, the tab keeps its empty state. */
   intake?: MatterIntakeData | null;
+  /** OPS-06: the Timeline tab's inbound email records; absent, the tab keeps its empty state. */
+  timeline?: MatterTimelineData | null;
 };
 
 /** The open tab's content. */
@@ -1997,7 +2060,7 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
     case "overview":
       return <MatterOverview data={data.overview} />;
     case "people":
-      return <MatterPeople cards={data.people.cards} relationships={data.people.relationships} />;
+      return <MatterPeople cards={data.people.cards} relationships={data.people.relationships} history={data.people.history} />;
     case "documents":
       return (
         <MatterDocuments
@@ -2027,6 +2090,8 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
     case "messages":
       if (data.messages === undefined) return <MatterTabEmpty tab={data.tab} />;
       return data.messages ? <ChatView data={data.messages} /> : <ChatError />;
+    case "timeline":
+      return data.timeline ? <MatterTimeline data={data.timeline} /> : <MatterTabEmpty tab={data.tab} />;
     default:
       return <MatterTabEmpty tab={data.tab} />;
   }

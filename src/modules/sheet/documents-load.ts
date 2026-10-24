@@ -39,7 +39,7 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
     loadSheetChrome(staff, "/sheet/documents"),
     supabase
       .from("document_versions")
-      .select("id, document_id, version_number, original_filename, declared_media_type, upload_state, scan_result, review_state, expires_on, superseded_at, intent_expires_at, completed_at, created_at, version")
+      .select("id, document_id, version_number, original_filename, declared_media_type, upload_state, scan_result, scan_engine, review_state, expires_on, superseded_at, intent_expires_at, completed_at, created_at, version")
       .eq("organization_id", org)
       .order("created_at", { ascending: false })
       .limit(READ),
@@ -56,6 +56,7 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
     versionNumber: row.version_number,
     uploadState: row.upload_state as string,
     scanResult: row.scan_result,
+    scanEngine: row.scan_engine ?? null,
     reviewState: row.review_state as string,
     declaredMediaType: row.declared_media_type,
     expiresOn: row.expires_on,

@@ -70,8 +70,10 @@ import {
 } from "./corrections-acts";
 import { openDocReview, reopenDocReview, runDocFile, runDocOpen, runDocReview } from "./documents-acts";
 import { restoreDocRequest, runDocRequest } from "./doc-request-act";
-import { armIntakeReview, runIntakeFreeze, runIntakeSend } from "./intake-delivery-acts";
-import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
+import { runUploadLimit } from "./upload-limit-act";
+import { armIntakeReview, runIntakeFreeze, runIntakeReuse, runIntakeSend } from "./intake-delivery-acts";
+import { runFlagResolve, runPersonAdd, runPersonRemove } from "./person-history-acts";
+import { openInboxPick, runInboxDismiss, runInboxFile, runInboxFileGo, runInboxMove, runInboxSearch } from "./inbox-acts";
 import { runInboxCompose, runInboxMessage, runInboxNote, runInboxReply } from "./inbox-reply-acts";
 import { mountDocOpen, mountDrafts, mountInboxFilters, mountRecordsCrumb } from "./records-acts";
 import { bindGovControls } from "./gov-acts";
@@ -179,6 +181,8 @@ const FILTER_TOKEN: Record<string, string> = {
   Overdue: "overdue",
   Blocked: "blocked",
   "High priority": "high",
+  // OPS-01: tasks the viewer watches (live only).
+  Watching: "watching",
   Applicants: "applicant",
   Sponsors: "sponsor",
   Dependants: "dependant",
@@ -836,10 +840,42 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(intakeSend, () => runIntakeSend(intakeSend, router));
         return;
       }
+      // Settings > Security: the per-file upload limit (DOC-02).
+      const uploadLimit = target.closest<HTMLElement>("[data-upload-limit]");
+      if (uploadLimit && root.contains(uploadLimit)) {
+        event.preventDefault();
+        busyRun(uploadLimit, () => runUploadLimit(uploadLimit, router));
+        return;
+      }
       const intakeFreeze = target.closest<HTMLElement>("[data-intake-freeze]");
       if (intakeFreeze && root.contains(intakeFreeze)) {
         event.preventDefault();
         busyRun(intakeFreeze, () => runIntakeFreeze(intakeFreeze, router));
+        return;
+      }
+      // INT-05: a person's names, passports and addresses, and resolving a review flag.
+      const personAdd = target.closest<HTMLElement>("[data-ph-add]");
+      if (personAdd && root.contains(personAdd)) {
+        event.preventDefault();
+        busyRun(personAdd, () => runPersonAdd(personAdd, router));
+        return;
+      }
+      const personRemove = target.closest<HTMLElement>("[data-ph-remove]");
+      if (personRemove && root.contains(personRemove)) {
+        event.preventDefault();
+        busyRun(personRemove, () => runPersonRemove(personRemove, router));
+        return;
+      }
+      const flagResolve = target.closest<HTMLElement>("[data-ph-resolve]");
+      if (flagResolve && root.contains(flagResolve)) {
+        event.preventDefault();
+        busyRun(flagResolve, () => runFlagResolve(flagResolve, router));
+        return;
+      }
+      const intakeReuse = target.closest<HTMLElement>("[data-intake-reuse]");
+      if (intakeReuse && root.contains(intakeReuse)) {
+        event.preventDefault();
+        busyRun(intakeReuse, () => runIntakeReuse(intakeReuse, router));
         return;
       }
       const intakeReview = target.closest<HTMLElement>("[data-intake-review] .k2-fb-idle");
@@ -874,6 +910,25 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (inboxDismiss && root.contains(inboxDismiss)) {
         event.preventDefault();
         busyRun(inboxDismiss, () => runInboxDismiss(inboxDismiss, router));
+        return;
+      }
+      // Email to triage › File to matter (OPS-06): open the dialog, search matters, file.
+      const inboxPick = target.closest<HTMLElement>("[data-inbox-pick]");
+      if (inboxPick && root.contains(inboxPick)) {
+        event.preventDefault();
+        openInboxPick(inboxPick, root, openDialog);
+        return;
+      }
+      const inboxSearch = target.closest<HTMLElement>("[data-inbox-search]");
+      if (inboxSearch && root.contains(inboxSearch)) {
+        event.preventDefault();
+        busyRun(inboxSearch, () => runInboxSearch(inboxSearch, root));
+        return;
+      }
+      const inboxFileGo = target.closest<HTMLElement>("[data-inbox-file-go]");
+      if (inboxFileGo && root.contains(inboxFileGo)) {
+        event.preventDefault();
+        busyRun(inboxFileGo, () => runInboxFileGo(inboxFileGo, root, router));
         return;
       }
       // Inbox, Conversations and New message: send a reply or a new email to a person on a matter.

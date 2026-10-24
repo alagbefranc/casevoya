@@ -11,7 +11,8 @@ import type { Database, Json } from "@/types/database.types";
  * functions decide: public.send_intake_request (staff on the matter, aal2), public.save_intake_answer
  * and public.submit_intake_response (the response's own person, or staff), public.request_intake_correction
  * (the person, after submitting), public.review_intake_answer (staff on the matter, aal2) and
- * public.freeze_intake_response (staff, step-up).
+ * public.freeze_intake_response (staff, step-up). INT-04: public.reuse_approved_facts (staff on the
+ * matter, aal2) and public.confirm_reused_fact (the person the form is for).
  */
 
 type Presence = Database["public"]["Enums"]["answer_presence"];
@@ -34,6 +35,7 @@ function staffError(message: string): string {
   if (/sample mode/i.test(message)) return "This firm is in sample mode: only sample matters accept new work.";
   if (/newer answer/i.test(message)) return "A newer answer replaced this one. Review the newer version.";
   if (/once the client sends/i.test(message)) return "Review answers once the client sends them.";
+  if (/before the client sends/i.test(message)) return "Reuse earlier answers before the client sends this form.";
   if (/message under/i.test(message)) return "Keep the message under 2,000 characters.";
   if (/denied/i.test(message)) return "You can’t do that on this matter.";
   return safeAccessError(message);
@@ -169,4 +171,23 @@ export async function freezeIntakeSnapshot(input: { organizationId: string; resp
   if (!supabase) return { error: "Sign in first." };
   const { error } = await supabase.rpc("freeze_intake_response", { p_response_id: input.responseId });
   return error ? { error: staffError(error.message) } : { ok: true };
+}
+
+/** INT-04: copies the person's reviewed answers from their earlier forms into this draft form, each waiting for their reconfirmation. */
+export async function reuseApprovedFacts(input: { organizationId: string; responseId: string }): Promise<{ ok: true; count: number } | { error: string }> {
+  if (!isUuid(input.responseId)) return { error: "Choose a form." };
+  const supabase = await signedIn(input.organizationId);
+  if (!supabase) return { error: "Sign in first." };
+  const { data, error } = await supabase.rpc("reuse_approved_facts", { p_response_id: input.responseId });
+  if (error) return { error: staffError(error.message) };
+  return { ok: true, count: typeof data === "number" ? data : 0 };
+}
+
+/** INT-04: the client confirms one answer copied from their earlier matter. */
+export async function confirmReusedFact(input: { organizationId: string; reuseId: string }): Promise<{ ok: true } | { error: string }> {
+  if (!isUuid(input.reuseId)) return { error: "Choose an answer." };
+  const supabase = await signedIn(input.organizationId);
+  if (!supabase) return { error: "Sign in again to confirm your answer." };
+  const { error } = await supabase.rpc("confirm_reused_fact", { p_reuse_id: input.reuseId });
+  return error ? { error: intakeError(error.message) } : { ok: true };
 }
