@@ -51,3 +51,5 @@
 .fp-cards{grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))}
 /* AU14 offboarding checklist (final pass) */
 .ofl{list-style:none;padding:0;margin:16px 0;display:grid;gap:12px}.ofl li{display:grid;grid-template-columns:22px 1fr;gap:12px;align-items:start}.ofl b{font-weight:500;display:block}.ofl small{color:var(--t2);font-size:13.5px;line-height:1.45}
+/* ORG-06: firm transfers on Settings > Team (live only). */
+.xfer{border-top:1px solid var(--line);padding:14px 0}.xfer:first-of-type{border-top:0;padding-top:0}.xfer-h{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.xfer-h b{font-weight:500;display:block}.xfer-h small,.xfer-f small,.xfer-note{color:var(--t2);font-size:13px}.xfer-note{display:block;margin-top:4px;max-width:44ch}.xfer-f{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}.xfer-pick{display:grid;gap:6px;max-height:240px;overflow:auto;padding:2px}
