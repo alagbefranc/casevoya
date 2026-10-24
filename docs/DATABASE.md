@@ -520,6 +520,55 @@ PRD OPS-04 (#179).
 * Trigger `message_thread_people_external_portal` (`app.guard_thread_external_person`): a signed-in caller can't add an employer or sponsor without a portal account to a conversation. `send_matter_message` is unchanged.
 
 Tested in `tests/ops-messaging.rls.test.ts` (template roles, versions, merge fields, tenant isolation; audience counts; owner sends, case manager refused, client and other firm refused; portal notice, seen and dismiss; EX19 context has no text; rate limit audited; sample mode; external participant refused without portal, allowed with it, never reads other threads or staff notes).
+## Billing: time, drafts, tax rates, write-offs, quotes, instalments, government fees (`20261025140000`, not applied on the live project)
+
+FIN-06. No existing function is redefined.
+
+* `tax_rates`: the firm's rates (name, `rate_percent` numeric(7,4), `effective_from`/`effective_to`, `approved_by`, `source_note`). `public.add_tax_rate`, `public.end_tax_rate` (firm owner or finance user, step-up; no overlap per name; never edited). `app.tax_rate_on(org, name, date)`.
+* `time_entries`: matter, membership, `worked_on`, `minutes` (null while a timer runs), `rate_cents` per hour, description, billable, `discarded_at`. One running timer per membership (partial unique index). `public.log_time_entry`, `public.start_timer`, `public.stop_timer`, `public.discard_time_entry`; `app.time_amount_cents` (minutes × rate ÷ 60, rounded half away from zero). `public.matter_time_invoices(matter)` says which invoice each entry is on.
+* `invoice_lines`: lines of a draft-built invoice (category professional_fee / disbursement / government_fee, minutes and rate for time, amount, tax name/rate/cents, links to the time entry, quote line, instalment item or fee reference, and a government fee's `source_url`, `source_checked_on`, `source_retrieved_at`, `source_sha256`). Change only while the invoice is a draft (trigger). Clients read the lines of invoices they can read.
+* `invoices` gains `written_off_cents` (part of `credited_cents`) and `discarded_at`, `discarded_by`, `discard_reason` (a discarded draft stays a draft).
+* `public.create_time_invoice`, `public.create_quote_invoice`, `public.invoice_instalment` make drafts (billing staff, idempotency key, number from `app.next_invoice_number` under the same advisory lock as `create_invoice`); `public.add_invoice_government_fee`, `public.remove_invoice_line`, `public.issue_invoice_draft` (rate in effect on the firm's today; the existing draft-to-issued mail trigger sends the approved invoice email), `public.discard_invoice_draft`.
+* `invoice_write_offs` (append-only) and `public.write_off_invoice` (billing staff, step-up, up to what is owed less credit-note drafts; adds to `credited_cents` and `written_off_cents`; status by `app.invoice_settled_status`).
+* `instalment_plans`, `instalment_plan_items` (one active plan per quote; a due date and an internal reminder task per quote instalment). `public.create_instalment_plan`, `public.cancel_instalment_plan` (cancels open reminder tasks through `app.open_task_write`).
+* `government_fee_references`: the firm's catalogue read from IRCC's fee list (name, amount, URL with anchor, `retrieved_at`, `snapshot_sha256`, status pending_review / approved / rejected / superseded). `public.record_government_fee_snapshot` (owner, licensed consultant or finance user; allowlisted host; a known hash records nothing), `public.review_government_fee_snapshot` (licensed member, step-up). Nothing seeded.
+
+Forced RLS on every new table; no insert, update or delete grants. Tested in `tests/finance-billing.rls.test.ts`.
+## Task detail, recurrence and task notifications (`20261025100000`, `20261025100100`, not applied on the live project)
+
+OPS-01 (gap #179). Apply in this order.
+
+* `20261025100000_task_detail.sql`: `tasks.recurrence` (`weekly` / `monthly` / null, check constraint) and `tasks.recurrence_parent_id` (FK to the completed occurrence, indexed with `organization_id`). New definer functions with security-invoker public wrappers, revoked from `anon`: `update_task_details(task, version, estimated_minutes, due_time, due_timezone, recurrence)` (estimate, due instant from the due date and time in the chosen zone, timezone, repeat; audited `task.details_updated`), `set_task_checklist(task, version, checklist)` (up to 50 `{text, done}` items; audited `task.checklist_updated`), `remove_task_watcher(task, membership)` and `remove_task_dependency(task, depends_on)` (same checks as the add functions; row audit on delete). Redefined from their latest definitions: `app.set_task_status` (completing a recurring task creates the next occurrence once, stepped with `app.firm_today`; audited `task.recurred`) and `app.escalate_overdue_work` (every overdue open task, not only critical).
+* `20261025100100_task_notifications.sql`: `app.staff_notification_items` copied from `20261020180100` with a `task` branch from `task_events` (status, reassigned, escalated) for the owner at the time, watchers, the new owner and the matter's responsible consultant, readable tasks only, never the actor.
+
+Tested in `tests/task-detail.rls.test.ts`.
+## Inbound email filing (`20261025120000`, not applied on the live project)
+
+OPS-06, branch `feat/ops-inbound-filing`.
+
+* `inbound_inbox_items.file_audience` (`document_audience`, null means `subject`), `skipped_at`, `skipped_by` (indexed): what staff chose for each file when filing its email. A left-out file is never copied.
+* `email_deliveries.follow_up_task_id` (FK `(follow_up_task_id, organization_id)` to `tasks`, indexed): the follow-up task a critical bounce opened or joined.
+* `public.matter_inbound_address(matter, domain)` (authenticated; staff who can read the matter, `app.require_active_staff`): the matter's `slug+token@domain` address through `app.firm_reply_address` (128-bit random token, made on first use), with `matter_tag = false` when a long slug falls back to the firm address.
+* `public.file_inbound_email_to_matter(email, matter, person, files)` (authenticated): calls `public.file_inbound_email` unchanged (every access, role, step-up, matter and person check), then records `[{item_id, save, audience}]` (`subject` or `staff`) for files of that email not yet copied, in one transaction. Audited `email.files_chosen`. Returns the files still to copy.
+* Redefined `public.assign_unsorted_email_file` (from `20261019200000`): refuses a left-out file; the document's audience is the file's choice (`subject` when none, as before); the audit entry names it.
+* Redefined `public.finish_email_delivery` (from `20261018190100`): a critical bounce on a matter joins the firm's already-open follow-up task (one per firm, `tasks_email_delivery_failure_open_uidx`) instead of being recorded nowhere, the task is stored on the delivery, and `email.bounced` names it. A task still needs a matter (`tasks_check`), so a critical bounce with no matter still gets none; Delivery problems says so.
+
+Tested in `tests/inbound-filing.rls.test.ts`.
+
+## Stripe Connect status, disputes, failed refunds and client credits (`20261025130000`, not applied on the live project)
+
+PRD FIN-02 and FIN-13, test mode only.
+
+* `firm_payment_accounts` gains `requirements` (Stripe's open requirements as last read: description, how soon, who must act), `fees_collector` and `losses_collector` (Stripe's `defaults.responsibilities`; null until read). `public.sync_firm_payment_account_status(org, account, card, payouts, requirements, fees_collector?, losses_collector?)`: the firm owner at aal2 stores what Stripe reported; unknown keys are dropped, `requirements_due` is the list's length. `public.sync_firm_payment_account` is left as it was.
+* `public.invoice_card_checkout_check(invoice)`: for the client who is a party, `{allowed, reason}`; only `professional_fee`, `disbursement` and `consultation_fee` (`app.is_card_payable_category`). Trigger `invoice_payments_earned_fee_only` refuses a card payment on any other invoice.
+* `app.create_finance_task(org, matter, title, priority, due_on, task_key)`: an internal task for the firm's first active owner (null when there is none), with its `created` task event. Not granted to API roles.
+* `app.apply_stripe_reversal_event` redefined (copied from `20261019110100`, its only definition): a new open dispute makes a `card_dispute` task (critical, due on the evidence deadline in the firm's timezone) stored in `invoice_disputes.task_id`; a refund that fails or is canceled makes a `refund_failed` task (high, due the firm's today) stored in `invoice_refunds.task_id`. Once per dispute or refund. Nothing else changed.
+* `invoice_disputes` gains `task_id`, `evidence_submitted_at`, `evidence_submitted_by`; `invoice_refunds` gains `task_id`.
+* `invoice_dispute_evidence`: append-only, one row per file sent to Stripe (Stripe file id, name, type PDF/JPEG/PNG, size up to 4.5 MB, explanation, submitted). Billing staff of the matter read it; clients don't. `public.dispute_evidence_context(dispute)` (billing access through `app.require_refund_access`, recent step-up, dispute still `needs_response` or `warning_needs_response`, before its deadline, on the firm's account) and `public.record_dispute_evidence(...)` (test mode only; sets `evidence_submitted_at/by` when submitted). Audited `invoice.dispute_evidence_submitted` / `invoice.dispute_evidence_added`.
+* `client_credits`: one per source invoice (CR-0001 per firm), opened, reopened and settled by trigger `invoices_client_credit` from `app.invoice_overpaid_cents` (paid less refunded plus credited over the amount; everything kept on a voided invoice). What is left is computed (`app.client_credit_available_cents`: the overpayment less card refunds of that invoice still pending at Stripe), never stored.
+* `client_credit_allocations`: append-only links, kind `invoice` (target invoice), `card_refund` (an `invoice_refunds` row, unique) or `bank_refund` (method e_transfer/cheque/wire, reference, date). `public.apply_client_credit(credit, target, amount, key)` moves the amount from the source invoice's `paid_cents` to the target's (same client: same matter or a shared applicant; open; same currency; at most what is left and what the target owes); `public.client_credit_refund_context(credit)` names the card payment to refund; `public.link_client_credit_refund(credit, refund)`; `public.record_client_credit_bank_refund(credit, amount, method, reference, date, key)` lowers the source invoice's `paid_cents` and is refused while a card refund of the invoice is pending at Stripe. All need billing access to the matter and a recent step-up, are idempotent on the key and audited (`invoice.client_credit_*`). Billing staff read credits and links; clients don't.
+
+Tested in `tests/finance-stripe-disputes-credits.rls.test.ts` and `tests/finance-stripe-connect-credits.test.tsx`.
 
 ## Known gaps (next tasks)
 

@@ -23,6 +23,7 @@ import {
 } from "./agreement-acts";
 import { editQuoteTable, reopenQuoteDialogs, runClauseSave, runQuoteConvert, runQuoteNew, runQuoteSave, runQuoteSend } from "./quote-acts";
 import { openRefund, reopenInvoiceDialog, reopenRefundDialog, runNewInvoice, runRefund } from "./finance-acts";
+import { openCredit, reopenCreditDialog, reopenEvidenceDialog, runCredit, runEvidence, syncCreditMode } from "./credit-acts";
 import {
   openFunds,
   openReview,
@@ -68,10 +69,13 @@ import {
   runRecSign,
   runVoid,
 } from "./corrections-acts";
+import { openBillingDialog, runBillingAct } from "./billing-acts";
 import { openDocReview, reopenDocReview, runDocFile, runDocOpen, runDocReview } from "./documents-acts";
 import { restoreDocRequest, runDocRequest } from "./doc-request-act";
-import { armIntakeReview, runIntakeFreeze, runIntakeSend } from "./intake-delivery-acts";
-import { runInboxDismiss, runInboxFile, runInboxMove } from "./inbox-acts";
+import { runUploadLimit } from "./upload-limit-act";
+import { armIntakeReview, runIntakeFreeze, runIntakeReuse, runIntakeSend } from "./intake-delivery-acts";
+import { runFlagResolve, runPersonAdd, runPersonRemove } from "./person-history-acts";
+import { openInboxPick, runInboxDismiss, runInboxFile, runInboxFileGo, runInboxMove, runInboxSearch } from "./inbox-acts";
 import { runInboxCompose, runInboxMessage, runInboxNote, runInboxReply } from "./inbox-reply-acts";
 import { mountMessagingInputs, runAnnouncementSend, runTemplateApprove, runTemplateArchive, runTemplateSave } from "./messaging-acts";
 import { mountDocOpen, mountDrafts, mountInboxFilters, mountRecordsCrumb } from "./records-acts";
@@ -180,6 +184,8 @@ const FILTER_TOKEN: Record<string, string> = {
   Overdue: "overdue",
   Blocked: "blocked",
   "High priority": "high",
+  // OPS-01: tasks the viewer watches (live only).
+  Watching: "watching",
   Applicants: "applicant",
   Sponsors: "sponsor",
   Dependants: "dependant",
@@ -405,6 +411,23 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (refund.getAttribute("aria-busy") === "true" || refund.hasAttribute("disabled")) return;
         refund.setAttribute("aria-busy", "true");
         void runRefund(refund, router).finally(() => refund.removeAttribute("aria-busy"));
+        return;
+      }
+      // The Refunds and disputes tab (FIN-13): a credit's Refund or apply fills #dlgCredit; its
+      // Save and Add evidence's Submit to Stripe each run once at a time.
+      const creditOpen = target.closest<HTMLElement>("[data-credit-open]");
+      if (creditOpen && root.contains(creditOpen)) {
+        event.preventDefault();
+        openCredit(creditOpen, root, openDialog);
+        return;
+      }
+      const creditSubmit = target.closest<HTMLElement>("[data-credit-submit], [data-evidence-submit]");
+      if (creditSubmit && root.contains(creditSubmit)) {
+        event.preventDefault();
+        if (creditSubmit.getAttribute("aria-busy") === "true" || creditSubmit.hasAttribute("disabled")) return;
+        creditSubmit.setAttribute("aria-busy", "true");
+        const run = creditSubmit.hasAttribute("data-credit-submit") ? runCredit(creditSubmit, router) : runEvidence(creditSubmit, router);
+        void run.finally(() => creditSubmit.removeAttribute("aria-busy"));
         return;
       }
       // The Client funds tab: openers fill and open its dialogs; each submit is keyed by its own attribute.
@@ -724,6 +747,20 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         button.setAttribute("aria-busy", "true");
         void run().finally(() => button.removeAttribute("aria-busy"));
       };
+      // FIN-06 billing: a row's button fills a dialog and opens it, or runs an action.
+      const billingOpen = target.closest<HTMLElement>("[data-billing-open]");
+      if (billingOpen && root.contains(billingOpen)) {
+        event.preventDefault();
+        openBillingDialog(billingOpen, root, openDialog);
+        return;
+      }
+      const billingAct = target.closest<HTMLElement>("[data-billing-act]");
+      if (billingAct && root.contains(billingAct)) {
+        event.preventDefault();
+        if (billingAct.hasAttribute("disabled")) return;
+        busyRun(billingAct, () => runBillingAct(billingAct, router));
+        return;
+      }
       // Settings > Retention (firm owner): Save stores the slider's period as a new policy version.
       const retentionSave = target.closest<HTMLElement>("[data-retention-save]");
       if (retentionSave && root.contains(retentionSave)) {
@@ -837,10 +874,42 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(intakeSend, () => runIntakeSend(intakeSend, router));
         return;
       }
+      // Settings > Security: the per-file upload limit (DOC-02).
+      const uploadLimit = target.closest<HTMLElement>("[data-upload-limit]");
+      if (uploadLimit && root.contains(uploadLimit)) {
+        event.preventDefault();
+        busyRun(uploadLimit, () => runUploadLimit(uploadLimit, router));
+        return;
+      }
       const intakeFreeze = target.closest<HTMLElement>("[data-intake-freeze]");
       if (intakeFreeze && root.contains(intakeFreeze)) {
         event.preventDefault();
         busyRun(intakeFreeze, () => runIntakeFreeze(intakeFreeze, router));
+        return;
+      }
+      // INT-05: a person's names, passports and addresses, and resolving a review flag.
+      const personAdd = target.closest<HTMLElement>("[data-ph-add]");
+      if (personAdd && root.contains(personAdd)) {
+        event.preventDefault();
+        busyRun(personAdd, () => runPersonAdd(personAdd, router));
+        return;
+      }
+      const personRemove = target.closest<HTMLElement>("[data-ph-remove]");
+      if (personRemove && root.contains(personRemove)) {
+        event.preventDefault();
+        busyRun(personRemove, () => runPersonRemove(personRemove, router));
+        return;
+      }
+      const flagResolve = target.closest<HTMLElement>("[data-ph-resolve]");
+      if (flagResolve && root.contains(flagResolve)) {
+        event.preventDefault();
+        busyRun(flagResolve, () => runFlagResolve(flagResolve, router));
+        return;
+      }
+      const intakeReuse = target.closest<HTMLElement>("[data-intake-reuse]");
+      if (intakeReuse && root.contains(intakeReuse)) {
+        event.preventDefault();
+        busyRun(intakeReuse, () => runIntakeReuse(intakeReuse, router));
         return;
       }
       const intakeReview = target.closest<HTMLElement>("[data-intake-review] .k2-fb-idle");
@@ -875,6 +944,25 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (inboxDismiss && root.contains(inboxDismiss)) {
         event.preventDefault();
         busyRun(inboxDismiss, () => runInboxDismiss(inboxDismiss, router));
+        return;
+      }
+      // Email to triage › File to matter (OPS-06): open the dialog, search matters, file.
+      const inboxPick = target.closest<HTMLElement>("[data-inbox-pick]");
+      if (inboxPick && root.contains(inboxPick)) {
+        event.preventDefault();
+        openInboxPick(inboxPick, root, openDialog);
+        return;
+      }
+      const inboxSearch = target.closest<HTMLElement>("[data-inbox-search]");
+      if (inboxSearch && root.contains(inboxSearch)) {
+        event.preventDefault();
+        busyRun(inboxSearch, () => runInboxSearch(inboxSearch, root));
+        return;
+      }
+      const inboxFileGo = target.closest<HTMLElement>("[data-inbox-file-go]");
+      if (inboxFileGo && root.contains(inboxFileGo)) {
+        event.preventDefault();
+        busyRun(inboxFileGo, () => runInboxFileGo(inboxFileGo, root, router));
         return;
       }
       // Inbox, Conversations and New message: send a reply or a new email to a person on a matter.
@@ -1374,6 +1462,16 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     if (root.querySelector(CORRECTIONS_SUBMIT)) window.setTimeout(() => reopenCorrectionsDialog(root, openDialog), 300);
     // ?dlg=refund (back from step-up) reopens Refund for the same payment with what was typed.
     if (root.querySelector("dialog#dlgRefund [data-refund-submit]")) window.setTimeout(() => reopenRefundDialog(root, openDialog), 300);
+    // FIN-13: ?dlg=client-credit / ?dlg=evidence (back from step-up) reopen Refund or apply and Add evidence;
+    // the credit dialog shows only the fields its choice needs.
+    const creditDialog = root.querySelector<HTMLDialogElement>("dialog#dlgCredit");
+    if (creditDialog) {
+      window.setTimeout(() => reopenCreditDialog(root, openDialog), 300);
+      creditDialog.addEventListener("change", (event) => {
+        if ((event.target as Element | null)?.matches("#crM")) syncCreditMode(creditDialog);
+      }, listen);
+    }
+    if (root.querySelector("dialog#dlgEvidence")) window.setTimeout(() => reopenEvidenceDialog(root, openDialog), 300);
     // ?dlg=funds (back from step-up) reopens the Client funds dialog with what was typed; the
     // chosen client ledger narrows the invoices a transfer can pay.
     if (root.querySelector(FUNDS_SUBMIT)) {

@@ -8,6 +8,7 @@ import { announcementCard, audienceLine, audienceOptions } from "@/modules/sheet
 import { loadSheetChrome, memberNames } from "@/modules/sheet/chrome-load";
 import {
   attachment,
+  bouncedFollowUp,
   DELIVERY_PROBLEM_STATUSES,
   deliveryProblem,
   deliveryProblemsPill,
@@ -23,6 +24,7 @@ import {
   snippet,
   suggest,
   templateLabel,
+  withFileToMatter,
   type Candidate,
 } from "@/modules/sheet/inbox-present";
 import {
@@ -91,7 +93,7 @@ async function loadTriage(supabase: Client, staff: SheetStaff): Promise<NonNulla
   const senders = [...new Set(rows.map((row) => row.from_email.toLowerCase()))];
   const [items, byEmail] = await Promise.all([
     ids.length
-      ? supabase.from("inbound_inbox_items").select("inbound_email_id, filename, media_type, upload_state, created_at").eq("organization_id", org).in("inbound_email_id", ids).order("created_at")
+      ? supabase.from("inbound_inbox_items").select("id, inbound_email_id, filename, media_type, upload_state, created_at").eq("organization_id", org).in("inbound_email_id", ids).order("created_at")
       : null,
     senders.length ? supabase.from("persons").select("id, display_name, email").eq("organization_id", org).in("email", senders) : null,
   ]);
@@ -129,11 +131,14 @@ async function loadTriage(supabase: Client, staff: SheetStaff): Promise<NonNulla
           .map((party) => ({ personId: person.id, name: person.display_name, matterId: party.matter_id, matter: labels.get(party.matter_id) ?? "Matter", email: person.email })),
       );
     const suggestion = suggest({ emailId: row.id, organizationId: org, from, ready: row.attachments_done, verified: row.sender_verified, addressMatter, byEmail: candidates });
+    const files = filesOf.get(row.id) ?? [];
     return {
       from: row.from_email,
       subject: row.subject || "(no subject)",
-      attachments: (filesOf.get(row.id) ?? []).map((item) => attachment(item.filename, item.upload_state, item.media_type)),
+      attachments: files.map((item) => attachment(item.filename, item.upload_state, item.media_type)),
       ...suggestion,
+      // OPS-06: File to matter, with a matter search and a choice per file.
+      actions: withFileToMatter(suggestion.actions, { emailId: row.id, organizationId: org, ready: row.attachments_done, files }),
     };
   });
 
@@ -149,7 +154,8 @@ async function loadTriage(supabase: Client, staff: SheetStaff): Promise<NonNulla
 
 /** Filed emails whose clean files did not all become documents: they stay here until they move. */
 async function loadUnmoved(supabase: Client, org: string): Promise<TriageRow[]> {
-  const pending = await supabase.from("inbound_inbox_items").select("inbound_email_id").eq("organization_id", org).eq("upload_state", "clean").limit(READ);
+  // A file staff left out when filing (skipped_at) never moves, so it doesn't keep the email here.
+  const pending = await supabase.from("inbound_inbox_items").select("inbound_email_id").eq("organization_id", org).eq("upload_state", "clean").is("skipped_at", null).limit(READ);
   const ids = [...new Set((pending.data ?? []).map((row) => row.inbound_email_id))];
   if (!ids.length) return [];
   const emails = await supabase
@@ -162,7 +168,7 @@ async function loadUnmoved(supabase: Client, org: string): Promise<TriageRow[]> 
   const rows = (emails.data ?? []).filter((row) => row.matter_id && row.person_id);
   if (!rows.length) return [];
   const [items, people, labels] = await Promise.all([
-    supabase.from("inbound_inbox_items").select("inbound_email_id, filename, media_type, upload_state").eq("organization_id", org).in("inbound_email_id", rows.map((row) => row.id)).neq("upload_state", "assigned"),
+    supabase.from("inbound_inbox_items").select("inbound_email_id, filename, media_type, upload_state").eq("organization_id", org).in("inbound_email_id", rows.map((row) => row.id)).neq("upload_state", "assigned").is("skipped_at", null),
     supabase.from("persons").select("id, display_name").eq("organization_id", org).in("id", rows.map((row) => row.person_id!)),
     matterLabels(supabase, org, rows.map((row) => row.matter_id!)),
   ]);
@@ -389,40 +395,54 @@ async function loadBounced(supabase: Client, staff: SheetStaff, now: Date): Prom
   const [deliveries, tasks, members] = await Promise.all([
     supabase
       .from("email_deliveries")
-      .select("id, recipient_email, template, status, critical, matter_id, attempt_count, created_at")
+      .select("id, recipient_email, template, status, critical, matter_id, attempt_count, created_at, follow_up_task_id")
       .eq("organization_id", org)
       .in("status", [...DELIVERY_PROBLEM_STATUSES])
       .gte("created_at", deliveryProblemsSince(now))
       .order("created_at", { ascending: false })
       .limit(READ),
-    supabase.from("tasks").select("id, matter_id, owner_membership_id").eq("organization_id", org).eq("task_key", "email_delivery_failure").in("status", ["open", "blocked"]).limit(1),
+    // The firm's open follow-up task: bounces recorded before follow_up_task_id existed match it by matter.
+    supabase.from("tasks").select("id, matter_id, owner_membership_id, status").eq("organization_id", org).eq("task_key", "email_delivery_failure").in("status", ["open", "blocked"]).limit(1),
     memberNames(supabase, org),
   ]);
   const rows = deliveries.data ?? [];
   const addresses = [...new Set(rows.map((row) => row.recipient_email))];
-  const people = addresses.length ? await supabase.from("persons").select("display_name, email").eq("organization_id", org).in("email", addresses) : null;
+  const linkedIds = [...new Set(rows.map((row) => row.follow_up_task_id).filter((id): id is string => Boolean(id)))];
+  const [people, linked] = await Promise.all([
+    addresses.length ? supabase.from("persons").select("display_name, email").eq("organization_id", org).in("email", addresses) : null,
+    linkedIds.length ? supabase.from("tasks").select("id, matter_id, owner_membership_id, status").eq("organization_id", org).in("id", linkedIds) : null,
+  ]);
   const nameOf = new Map((people?.data ?? []).map((row) => [row.email?.toLowerCase() ?? "", row.display_name]));
-  const task = tasks.data?.[0] ?? null;
-  const owner = task?.owner_membership_id ? members.get(task.owner_membership_id) : undefined;
+  const openTask = tasks.data?.[0] ?? null;
+  const taskOf = new Map((linked?.data ?? []).map((row) => [row.id, row]));
+  const followUpOf = (row: (typeof rows)[number]) => {
+    if (row.follow_up_task_id) return taskOf.get(row.follow_up_task_id) ?? null;
+    return openTask && row.critical && row.status === "bounced" && row.matter_id && row.matter_id === openTask.matter_id ? openTask : null;
+  };
+  const ownerOf = (task: { owner_membership_id: string | null } | null) => (task?.owner_membership_id ? members.get(task.owner_membership_id) ?? null : null);
 
   const table: BouncedRow[] = rows.map((row) => {
-    const followed = task && row.critical && row.status === "bounced" && row.matter_id && row.matter_id === task.matter_id;
+    const task = followUpOf(row);
     return {
       sent: sentWhen(row.created_at, staff.timezone),
       to: nameOf.get(row.recipient_email) ?? row.recipient_email,
       notice: noticeLabel(row.template, row.critical),
       problem: deliveryProblem(row.status, row.attempt_count),
-      followUp: followed ? [owner ?? "Unassigned", "task open"] : "—",
+      followUp: bouncedFollowUp({ status: row.status, critical: row.critical, matterId: row.matter_id, task: task ? { status: task.status, owner: ownerOf(task) } : null }),
       state: deliveryState(row.status),
     };
   });
   const critical = rows.find((row) => row.critical && row.status === "bounced");
+  const task = critical ? followUpOf(critical) : null;
+  const owner = ownerOf(task);
   const alert = critical
     ? {
         title: `${templateLabel(critical.template)} to ${nameOf.get(critical.recipient_email) ?? critical.recipient_email} didn’t arrive`,
         parts: [
           "address bounced",
-          `${sentWhen(critical.created_at, staff.timezone)}. ${task ? `A follow-up task is open${owner ? ` for ${owner}` : ""}.` : "No follow-up task is open."}`,
+          `${sentWhen(critical.created_at, staff.timezone)}. ${
+            task ? `A follow-up task is ${task.status === "open" || task.status === "blocked" ? "open" : task.status}${owner ? ` for ${owner}` : ""}.` : "No follow-up task is open."
+          }`,
         ],
         href: task?.matter_id ? `/sheet/matters/${task.matter_id}?tab=tasks` : "/sheet/tasks",
       }

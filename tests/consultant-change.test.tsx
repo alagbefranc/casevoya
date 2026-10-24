@@ -104,7 +104,7 @@ describe("the client's notice", () => {
       {
         id: "n1",
         title: "Your consultant has changed",
-        body: "Dana Second at Test Firm is now the consultant responsible for your Spousal sponsorship matter. Questions about the change go to Test Firm.",
+        body: "Dana Second at Test Firm is now the consultant responsible for your Spousal sponsorship matter. Your file stays with Test Firm. Test Firm may ask you to sign an updated service agreement and, if your previous consultant is your representative with IRCC, a new Use of a Representative form (IMM 5476). If you have questions or don't agree with this change, contact Test Firm.",
       },
     ]);
     const html = renderToStaticMarkup(createElement(LivePortal, { page: "home", viewer, notices } as never));
@@ -112,7 +112,7 @@ describe("the client's notice", () => {
     expect(html).toContain(">Got it</button>");
     expect(renderToStaticMarkup(createElement(LivePortal, { page: "home", viewer } as never))).not.toContain("Your consultant has changed");
     expect(portalNotices([{ id: "n3", kind: "consultant_changed", consultant_name: null }], "Test Firm")[0].body).toBe(
-      "A different consultant at Test Firm is now responsible for your file. Questions about the change go to Test Firm.",
+      "A different consultant at Test Firm is now responsible for your file. Your file stays with Test Firm. Test Firm may ask you to sign an updated service agreement and, if your previous consultant is your representative with IRCC, a new Use of a Representative form (IMM 5476). If you have questions or don't agree with this change, contact Test Firm.",
     );
   });
 
@@ -123,5 +123,9 @@ describe("the client's notice", () => {
     expect(email.text).toContain("Your consultant has changed");
     expect(email.html).toContain("/portal");
     expect(email.html + email.text).not.toMatch(/Dana|Spousal/);
+    // The firm is named three times in the body (responsible, stays with, contact), every one filled.
+    expect(email.text).toContain("A different consultant at Test Firm is now responsible for your file, and your file stays with Test Firm.");
+    expect(email.text).toContain("If you have questions or don't agree with this change, contact Test Firm.");
+    expect(email.text + email.html).not.toContain("{firm_name}");
   });
 });
