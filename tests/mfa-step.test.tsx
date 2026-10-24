@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { mfaActiveStep } from "@/lib/auth/mfa-step";
+import { EXPORT_STEP_UP_LEAD, mfaActiveStep, stepUpLead } from "@/lib/auth/mfa-step";
 import { AcceptClientMarkup } from "@/components/port/markup/accept-client";
 import { AcceptFamilyMarkup } from "@/components/port/markup/accept-family";
 import { AcceptSponsorMarkup } from "@/components/port/markup/accept-sponsor";
@@ -75,5 +75,22 @@ describe("auth screens keep a step visible", () => {
       const html = renderToStaticMarkup(createElement(Screen));
       expect(html).toMatch(/<section\b(?=[^>]*\bdata-step="0")(?=[^>]*\bclass="on")/);
     }
+  });
+});
+
+describe("step-up wording (#214)", () => {
+  it("names what the person was doing", () => {
+    expect(stepUpLead("/sheet/finance?tab=reconciliation&dlg=recon")).toBe("Signing a reconciliation needs a fresh check, even when you’re already signed in.");
+    expect(stepUpLead("/sheet/finance?dlg=recon")).toMatch(/^Signing a reconciliation/);
+    expect(stepUpLead("/sheet/exports?matter=x")).toBe(EXPORT_STEP_UP_LEAD);
+    expect(stepUpLead("/sheet/finance?tab=invoices&dlg=refund")).toBe("This needs a fresh check, even when you’re already signed in.");
+    expect(stepUpLead(undefined)).toBe("This needs a fresh check, even when you’re already signed in.");
+    expect(stepUpLead("http://[bad")).toBe("This needs a fresh check, even when you’re already signed in.");
+  });
+
+  it("puts the line on the step-up panel", () => {
+    const html = renderToStaticMarkup(<TwoStepMarkup activeStep={6} stepUpLead={stepUpLead("/sheet/finance?tab=reconciliation")} />);
+    expect(html).toContain('<p class="lead">Signing a reconciliation needs a fresh check, even when you’re already signed in.</p>');
+    expect(html).not.toContain("Exporting a whole client file");
   });
 });
