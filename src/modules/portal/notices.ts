@@ -1,6 +1,6 @@
 /**
- * ORG-06: the client's portal notices (public.portal_notices_for_me). Today one kind: their
- * consultant changed. Pure parsing and wording; the page loads them and Home shows them.
+ * ORG-06: the client's portal notices (public.portal_notices_for_me): their consultant changed,
+ * and (OPS-04) the firm's announcements, shown as the firm wrote them. Pure parsing and wording; the page loads them and Home shows them.
  */
 export type PortalNotice = { id: string; title: string; body: string };
 
@@ -15,7 +15,13 @@ export function portalNotices(raw: unknown, firmName: string): PortalNotice[] {
     if (!row || typeof row !== "object") return [];
     const item = row as Record<string, unknown>;
     const id = text(item.id);
-    if (!id || item.kind !== "consultant_changed") return [];
+    if (!id) return [];
+    if (item.kind === "announcement") {
+      const title = text(item.title);
+      const body = text(item.body);
+      return title && body ? [{ id, title, body }] : [];
+    }
+    if (item.kind !== "consultant_changed") return [];
     const matter = text(item.matter_title);
     const name = text(item.consultant_name);
     const where = matter ? `your ${matter} matter` : "your file";

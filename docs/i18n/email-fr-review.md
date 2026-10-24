@@ -71,6 +71,7 @@ Subjects and preheaders must not reveal a program, document name, amount or deci
 | EX08 | Payment failed | machine_draft | — | — | No (not_approved) |
 | EX09 | Refund started | machine_draft | — | — | No (not_approved) |
 | EX10 | Refund complete | machine_draft | — | — | No (not_approved) |
+| EX19 | New notice (announcement) | machine_draft | — | — | No (not_approved) |
 | EX18 | New enquiry (staff) | machine_draft | — | — | No (not_approved) |
 | EX17 | Consultant changed | machine_draft | — | — | No (not_approved) |
 | EX16 | Signing code | machine_draft | — | — | No (not_approved) |
@@ -618,6 +619,20 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:5609f6110cb
 | `heading` | Your refund is complete | Votre remboursement est complet | Machine draft |
 | `body` | {firm_name}’s refund has been sent. The details are in your portal. | Le remboursement de {firm_name} a été envoyé. Les détails se trouvent dans votre portail. | Machine draft. Keep {firm_name} |
 | `cta` | View payments | Afficher les paiements | Machine draft. Same English as another template; same French reused. |
+
+## EX19: New notice (announcement)
+
+Staff with permission send an announcement from an approved firm template (send_announcement; outbox announcement.sent, template announcement), to each chosen client with a portal account. Honours email_notices. Never for a sample-mode firm. Firm name only: the announcement itself is in the portal (OPS-04). Audience: client. [French preview](../email/previews/fr/EX19.html)
+
+Status `machine_draft` · drafted 2026-10-24 · English hash `sha256:1a45496c2bab…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject` | A new notice from {firm_name} | Un nouvel avis de {firm_name} | Hand draft. EX19 hand draft (OPS-04, #179). Not reviewed. Keep {firm_name} |
+| `preheader` | Read it in your portal. | Lisez-le dans votre portail. | Hand draft. EX19 hand draft (OPS-04, #179). Not reviewed. |
+| `heading` | You have a new notice from {firm_name} | Vous avez un nouvel avis de {firm_name} | Hand draft. EX19 hand draft (OPS-04, #179). Not reviewed. Keep {firm_name} |
+| `body` | {firm_name} posted a notice for its clients. For your privacy, it is in your portal. | {firm_name} a publié un avis pour ses clients. Pour protéger votre vie privée, il se trouve dans votre portail. | Hand draft. EX19 hand draft (OPS-04, #179). Not reviewed. Keep {firm_name} |
+| `cta` | Open your portal | Ouvrir votre portail | Hand draft. EX19 hand draft (OPS-04, #179). Not reviewed. |
 
 ## EX18: New enquiry (staff)
 

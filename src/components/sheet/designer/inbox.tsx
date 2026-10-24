@@ -4,6 +4,11 @@
  * and Announcements, and the New message dialog. Values and button attributes come from props:
  * live, the triage buttons carry `data-inbox-file` / `data-inbox-dismiss` (use-sheet saves them)
  * instead of the Designer's toasts.
+ *
+ * Live-only additions (OPS-04): Announcements gets a "New announcement" header button and its
+ * dialog (`AnnouncementDialog`, built from the Designer's dialog, field and alert classes); the
+ * New message dialog's template options carry their id and text (`templateValues`) so "Start from
+ * a template" fills the message, and each To option the values its merge fields need.
  */
 import type { ReactNode } from "react";
 import { Avatar, type SidebarPerson } from "./sidebar";
@@ -76,7 +81,13 @@ export type ComposeData = {
   to: [string, string][];
   /** Live only: each To option's value (matter and person), in the same order as `to`. */
   toValues?: string[];
+  /** Live only: each To option's merge values (first name, matter reference, consultant), as data attributes. */
+  toMerge?: Attrs[];
   templates: string[];
+  /** Live only: the firm's name, for a template's {firm_name} (as `data-firm` on the dialog). */
+  firmName?: string;
+  /** Live only: each template option's value and text, in the same order as `templates` ("None" has an empty value). */
+  templateValues?: { value: string; body: string }[];
   /** The Designer's toast, or live: the Send button's attributes (use-sheet sends the email). */
   send: { toast: string; kind: string; sub?: string } | { attrs: Attrs };
 };
@@ -126,7 +137,7 @@ function PartText({ first, text }: { first: boolean; text: string }) {
   );
 }
 
-export function InboxHeader({ tab, pills }: { tab: InboxTab; pills: string[] }) {
+export function InboxHeader({ tab, pills, announce }: { tab: InboxTab; pills: string[]; announce?: boolean }) {
   const tabs: [InboxTab, string][] = [
     ["conv", "Conversations"],
     ["triage", "Email to triage"],
@@ -154,6 +165,12 @@ export function InboxHeader({ tab, pills }: { tab: InboxTab; pills: string[] }) 
           </span>
         ))}
         <span className={"acts"}>
+          {announce ? (
+            <button className={"btn sm"} data-dlg={"dlgAnn"}>
+              <Icon name={"plus"} cls={"ic s"} />
+              {"New announcement"}
+            </button>
+          ) : null}
           <button className={"btn p sm"} data-dlg={"dlgMsg"} data-fpd={"1"}>
             <Icon name={"edit"} cls={"ic s"} />
             {"Compose"}
@@ -576,7 +593,7 @@ export function SheetInbox({ data }: { data: InboxData }) {
  */
 export function ComposeDialog({ data }: { data: ComposeData }) {
   return (
-    <dialog className={"dlg"} id={"dlgMsg"} aria-labelledby={"dlgMsgH"}>
+    <dialog className={"dlg"} id={"dlgMsg"} aria-labelledby={"dlgMsgH"} data-firm={data.firmName}>
       <div className={"dh"}>
         <h2 id={"dlgMsgH"}>{"New message"}</h2>
         <button className={"x"} aria-label={"Close"} data-close={"dlgMsg"}>
@@ -588,7 +605,7 @@ export function ComposeDialog({ data }: { data: ComposeData }) {
           <label htmlFor={"nmT"}>{"To"}</label>
           <select className={"sel"} id={"nmT"}>
             {data.to.map(([name, matter], index) => (
-              <option key={index} value={data.toValues?.[index]}>
+              <option key={index} value={data.toValues?.[index]} {...data.toMerge?.[index]}>
                 {`${name} `}
                 <Sep />
                 {` ${matter}`}
@@ -601,8 +618,10 @@ export function ComposeDialog({ data }: { data: ComposeData }) {
           <div className={"fld"}>
             <label htmlFor={"nmTp"}>{"Start from a template"}</label>
             <select className={"sel"} id={"nmTp"}>
-              {data.templates.map((label) => (
-                <option key={label}>{label}</option>
+              {data.templates.map((label, index) => (
+                <option key={`${label}-${index}`} value={data.templateValues?.[index]?.value} data-body={data.templateValues?.[index]?.body || undefined}>
+                  {label}
+                </option>
               ))}
             </select>
           </div>
@@ -632,6 +651,111 @@ export function ComposeDialog({ data }: { data: ComposeData }) {
             {"Send"}
           </button>
         )}
+      </div>
+    </dialog>
+  );
+}
+
+export type AnnouncementTemplate = { id: string; version: number; name: string; title: string; body: string };
+export type AnnouncementAudience = { value: string; label: string; line: string; recipients: number };
+
+export type AnnouncementDialogData = {
+  organizationId: string;
+  timezone: string;
+  templates: AnnouncementTemplate[];
+  audiences: AnnouncementAudience[];
+  /** Firm owner or licensed consultant. Others see the dialog, with Send off and why. */
+  canSend: boolean;
+};
+
+/**
+ * Live only (OPS-04): "New announcement", from an approved announcement template, to all active
+ * clients or one program's, with who it reaches shown before sending. Send carries
+ * `data-ann-send` (announcement-acts.ts sends it); the choices update the preview and the audience
+ * line in place. Built from the Designer's dialog, field and alert classes.
+ */
+export function AnnouncementDialog({ data }: { data: AnnouncementDialogData }) {
+  const first = data.templates[0] ?? null;
+  const audience = data.audiences[0] ?? null;
+  return (
+    <dialog className={"dlg"} id={"dlgAnn"} aria-labelledby={"dlgAnnH"}>
+      <div className={"dh"}>
+        <h2 id={"dlgAnnH"}>{"New announcement"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={"dlgAnn"}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        {first ? (
+          <>
+            <div className={"fld"}>
+              <label htmlFor={"anT"}>{"Approved template"}</label>
+              <select className={"sel"} id={"anT"}>
+                {data.templates.map((template) => (
+                  <option key={template.id} value={template.id} data-v={String(template.version)} data-title={template.title} data-body={template.body}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className={"fld"}>
+              <label htmlFor={"anP"}>{"What clients see"}</label>
+              <div className={"fp-mail"} id={"anP"}>
+                <b id={"anPt"}>{first.title}</b>
+                <p id={"anPb"} style={{ marginTop: "4px", whiteSpace: "pre-wrap" }}>
+                  {first.body}
+                </p>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className={"alert info"}>
+            <Icon name={"templates"} />
+            <div>
+              <b>{"No approved announcement template yet"}</b>
+              {"Write one in Templates > Message templates. A firm owner or licensed consultant approves it before it can be sent. "}
+              <a href={"/sheet/templates?tab=messages"}>{"Open message templates"}</a>
+            </div>
+          </div>
+        )}
+        <div className={"fld"}>
+          <label htmlFor={"anA"}>{"Audience"}</label>
+          <select className={"sel"} id={"anA"}>
+            {data.audiences.map((option) => (
+              <option key={option.value || "all"} value={option.value} data-line={option.line} data-n={String(option.recipients)}>
+                {`${option.label} (${option.recipients})`}
+              </option>
+            ))}
+          </select>
+          <small style={{ color: "var(--t2)", display: "block", marginTop: "6px" }}>{"By office isn’t available: matters aren’t linked to an office yet."}</small>
+        </div>
+        <div className={"alert info"}>
+          <Icon name={"users"} />
+          <div>
+            <b>{"Audience shown before you send"}</b>
+            <span id={"anL"}>{audience?.line ?? ""}</span>
+          </div>
+        </div>
+        {data.canSend ? null : (
+          <p className={"fp-note"} role={"note"}>
+            {"Only a firm owner or licensed consultant can send announcements."}
+          </p>
+        )}
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={"dlgAnn"}>
+          {"Cancel"}
+        </button>
+        <button
+          className={"btn p"}
+          data-ann-send={"1"}
+          data-org={data.organizationId}
+          data-tz={data.timezone}
+          data-can-send={data.canSend ? undefined : "0"}
+          disabled={!data.canSend || !first || !audience?.recipients ? true : undefined}
+        >
+          {"Send"}
+        </button>
       </div>
     </dialog>
   );

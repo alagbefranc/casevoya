@@ -502,6 +502,25 @@ The private link runs the designed flow (spec `docs/specs/consultation-agreement
 
 Tested in `tests/booking-agreements.rls.test.ts`.
 
+## Messaging: templates, announcements, external participants (`20261025110000`, `20261025110100`, not applied on the live project)
+
+PRD OPS-04 (#179).
+
+* `20261025110000`: enum value `email_template` `announcement` (EX19), in its own migration.
+* `message_templates`: the firm's own templates. `use_for` `message` or `announcement` (`title` required for an announcement only); `body` 1 to 4,000; `status` `draft` / `approved` / `archived`; `version`; who approved and when. Forced RLS: firm staff at staff MFA read; writes only through the functions below.
+* `public.save_message_template(org, id, use_for, name, title, body, expected_version)`: firm owner, licensed consultant, case manager. New, or an edit (always back to `draft`, version + 1). Unknown merge fields refused (`app.message_template_fields_ok`). Audited `message_template.saved` without the text.
+* `public.approve_message_template(org, id, expected_version)`: firm owner or licensed consultant; a draft at that version. Audited. `public.archive_message_template(org, id)`: writers. Audited.
+* `announcements` (append-only, trigger `app.reject_message_change`) and `announcement_deliveries` (one per person: `emailed`, `seen_at`, `dismissed_at`). Forced RLS: case staff (owner, licensed consultant, case manager, assistant) at staff MFA read; clients only through `portal_notices_for_me`.
+* `app.announcement_candidates(org)`: people on the firm's non-closed matters (applicant, dependant, sponsor, employer, guardian), sample matters only while the firm is in sample mode, with program key, portal account and whether they'd be emailed (address, email notices on, firm not in sample mode).
+* `public.announcement_audiences(org)`: case staff; counts for all active clients and each program (portal recipients, emailed, left out without a portal account).
+* `public.send_announcement(org, template, version, program_key)`: firm owner or licensed consultant; an approved announcement template at that version; one per firm every 10 minutes (advisory lock; refusal returned as `{rate_limited, retry_at}` and audited `announcement.rate_limited`); refuses an empty audience; stores the text with `{firm_name}` merged, a delivery per portal person, queues `announcement.sent` when anyone is emailed. Audited `announcement.sent` with counts.
+* `public.mark_portal_announcements_seen(org)`: the signed-in client's announcements are seen (portal Home).
+* Redefined from `20261024120100`: `portal_notices_for_me` (+ announcements, kind `announcement`, title and body, last 60 days) and `dismiss_portal_notice` (+ an announcement delivery of the caller; marks it seen too).
+* Redefined from `20261024150100`: `claim_mail_events` (+ `announcement.sent`) and `prepare_email_delivery` (+ EX19 to each emailed delivery, firm name only; skipped for a sample-mode announcement or when Email notices is now off). Nothing else in them changes.
+* Trigger `message_thread_people_external_portal` (`app.guard_thread_external_person`): a signed-in caller can't add an employer or sponsor without a portal account to a conversation. `send_matter_message` is unchanged.
+
+Tested in `tests/ops-messaging.rls.test.ts` (template roles, versions, merge fields, tenant isolation; audience counts; owner sends, case manager refused, client and other firm refused; portal notice, seen and dismiss; EX19 context has no text; rate limit audited; sample mode; external participant refused without portal, allowed with it, never reads other threads or staff notes).
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.

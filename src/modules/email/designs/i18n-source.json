@@ -331,5 +331,12 @@
     "heading": "You have a new enquiry",
     "body": "Someone sent {firm_name} an enquiry from your enquiry page or website form. For their privacy, the details are in the Pipeline.",
     "cta": "Open the Pipeline"
+  },
+  "EX19": {
+    "subject": "A new notice from {firm_name}",
+    "preheader": "Read it in your portal.",
+    "heading": "You have a new notice from {firm_name}",
+    "body": "{firm_name} posted a notice for its clients. For your privacy, it is in your portal.",
+    "cta": "Open your portal"
   }
 }
