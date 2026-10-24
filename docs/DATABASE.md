@@ -604,6 +604,19 @@ PRD FIN-02 and FIN-13, test mode only.
 
 Tested in `tests/finance-stripe-disputes-credits.rls.test.ts` and `tests/finance-stripe-connect-credits.test.tsx`.
 
+## Government letters: issuer list, issuer and tasks on a letter (`20261025180000`, not applied on the live project)
+
+GOV-04 (gap #181), branch `feat/gov-correspondence`.
+
+* `government_issuers` (per firm): `name`, `source_url` (allowlisted Government of Canada host via `app.host_is_allowlisted(app.official_url_host(...))`), `checked_on` (not in the firm's future, within a year), `retrieved_at` + `snapshot_sha256` (both or neither: the server's own read of the page), `page_modified_on`, `name_on_page`, `status` pending_review / approved / rejected / retired, reviewer, `review_note`. One live (pending or approved) row per name (case-insensitive partial unique index). Never deleted (`app.reject_governed_delete`), row-audited. Read by the firm's staff with MFA (`app.gov_staff_roles`); clients and other firms read nothing. Nothing seeded.
+* `government_correspondence.issuer_id` (FK `(issuer_id, organization_id)` to `government_issuers`, indexed): the approved issuer the letter names; `issuer` still stores the text.
+* **Redefines** `app.gov_correspondence_immutable` (latest `20261020130000_work_pages_fixes.sql`): `issuer_id` is immutable too, except that it may be set once from null to the approved issuer whose name equals the letter's `issuer`. Nothing else changed.
+* `public.propose_government_issuer(org, name, url, checked_on, retrieved_at, sha256, modified_on, name_on_page)`: gov staff roles; audited `government.issuer_proposed`.
+* `public.review_government_issuer(id, version, decision, note)`: licensed member with a fresh step-up (`app.require_licensed_staff(org, true)`); approve or reject a pending row, retire an approved one; a note to reject or retire; version conflict `PT409`. Audited `government.issuer_<decision>`.
+* `public.record_government_letter(matter, kind, issuer_id, issuer, channel, document_date, received_on, action_requested, stated_deadline, evidence_version_id, tasks)`: calls the unchanged `app.record_government_correspondence` (every matter, role, sample-mode, date and evidence check), pins the approved issuer (same firm only), then for each `{title, owner: staff|client, owner_id, due_on}` (at most 10; due today or later in the firm's timezone) calls the unchanged `app.create_task` and links it in `correspondence_work_links`, all in one transaction. Audited `government.letter_tasks_created`.
+
+Tested in `tests/government-letters.rls.test.ts`.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.

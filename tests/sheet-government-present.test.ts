@@ -173,7 +173,7 @@ describe("government present: letters and decisions (T037, T038)", () => {
     });
     const built = buildDecisions(data, ctx());
     expect(built.letters).toHaveLength(2);
-    expect(built.letters[1].parts).toEqual(["Received 12 Oct by portal message", "recorded by Daniel", "created the 12 Nov deadline"]);
+    expect(built.letters[1].parts).toEqual(["Received 12 Oct by portal message", "dated 8 Oct", "recorded by Daniel", "created the 12 Nov deadline"]);
     expect(built.letters[1].verify).toMatchObject({ "data-gov": "verify-letter", "data-id": "l1" });
     expect(buildDecisions(data, ctx({ role: "assistant" })).letters[1].verify).toBeNull();
     const page = buildGovernmentPage(data, ctx());

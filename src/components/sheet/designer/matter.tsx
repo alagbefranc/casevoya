@@ -22,6 +22,7 @@ import type { PersonHistoryPanel } from "@/modules/sheet/person-history-present"
 import type { PersonEditData } from "@/modules/sheet/edit-person";
 import { ChatError, ChatView } from "@/components/messages/chat";
 import { TaskEditDialog, TasksDialog, type TaskEditDialogData, type TasksDialogData } from "./tasks";
+import { LetterFormFields, type LetterFormData } from "./letter-form";
 import type { ChatData } from "@/modules/messages/present";
 
 export const MATTER_TABS = [
@@ -737,6 +738,8 @@ export type MatterDialogsData = {
   task?: TaskEditDialogData | null;
   /** Live only (ORG-06): Change consultant (`#dCons`), opened from the responsible consultant's card. */
   consultant?: ConsultantDialogData | null;
+  /** Live only (GOV-04): Record a government letter's issuer, letter date, filed-email file and tasks. */
+  letterForm?: LetterFormData | null;
 };
 
 /**
@@ -1014,6 +1017,7 @@ export function MatterDialogs({ data }: { data: MatterDialogsData }) {
               {data.wire ? <input id={"ltD"} type={"date"} /> : <input placeholder={"Type exactly as written"} />}
             </label>
           </div>
+          {data.wire && data.letterForm ? <LetterFormFields data={data.letterForm} /> : null}
           <p className={"mu"} style={{ fontSize: "13px", marginTop: "8px" }}>
             {"Vo can read the date, but a person confirms it before it becomes a deadline. A decision letter also needs a consultant to confirm the outcome."}
           </p>

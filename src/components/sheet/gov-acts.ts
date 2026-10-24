@@ -19,6 +19,8 @@ import {
   verifySubmission,
 } from "@/modules/government/actions";
 import { letterChannel, letterKind, submittedInstant } from "@/modules/government/present";
+import { recordGovernmentLetter } from "@/modules/government/letter-actions";
+import { readLetterForm } from "./letter-acts";
 import { needsStepUp, stepUpLocation, withoutDialog, type MatterDialog } from "@/modules/sheet/matter-wire";
 import { setTaskStatus } from "@/modules/tasks/actions";
 
@@ -96,12 +98,29 @@ export async function recordLetter(scope: ParentNode, dialog: Element | null, re
   const receivedOn = value(scope, 'input[type="date"]');
   if (!kind || !channel) return { error: "Choose the letter type and how it arrived." };
   if (!receivedOn) return { error: "Add the date the firm received it." };
+  // GOV-04: the live dialog's issuer, letter date, filed-email file and tasks, checked before any upload.
+  const live = readLetterForm(scope);
+  if (live && "error" in live) return live;
   const file = pickedFile(dialog?.querySelector(".drop button") ?? null);
   let evidenceVersionId: string | null = null;
   if (file) {
     const uploaded = await uploadEvidence({ ...ref, file, purpose: `Government letter received ${receivedOn}` });
     if ("error" in uploaded) return uploaded;
     evidenceVersionId = uploaded.versionId;
+  }
+  if (live) {
+    return recordGovernmentLetter({
+      ...ref,
+      kind,
+      channel,
+      receivedOn,
+      documentDate: live.documentDate,
+      issuerId: live.issuerId,
+      issuer: live.issuer,
+      statedDeadline: value(scope, "#ltD") || null,
+      evidenceVersionId: evidenceVersionId ?? live.filedVersionId,
+      tasks: live.tasks,
+    });
   }
   return recordCorrespondence({
     ...ref,

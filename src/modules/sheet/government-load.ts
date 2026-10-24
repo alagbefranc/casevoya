@@ -17,13 +17,14 @@ import {
   type GovernmentRecords,
 } from "@/modules/sheet/government-present";
 import { governmentLabel, type SheetQuery } from "@/modules/sheet/present";
+import { loadLetterExtras } from "@/modules/sheet/letter-load";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
 const HANDOFF_COLUMNS =
   "id, package_label, package_sha256, channel, status, signoff_membership_id, signed_off_at, submitted_by_membership_id, external_reference, submitted_at, receipt_version_id, receipt_locator, acknowledged_on, verified_by_membership_id, verified_at, cancel_reason, cancelled_at, created_by, created_at, version";
 const LETTER_COLUMNS =
-  "id, kind, channel, received_on, document_date, action_requested, stated_deadline, evidence_version_id, evidence_locator, verified_by_membership_id, verified_at, shared_with_client_at, created_by, created_at, version";
+  "id, kind, channel, received_on, document_date, action_requested, stated_deadline, evidence_version_id, evidence_locator, verified_by_membership_id, verified_at, shared_with_client_at, created_by, created_at, version, issuer, issuer_id";
 const DECISION_COLUMNS =
   "id, correspondence_id, outcome, milestone, decided_on, authority_reasons, state, consultant_interpretation, next_steps, confirmed_by_membership_id, confirmed_at, created_by, created_at, version";
 
@@ -127,9 +128,14 @@ export async function loadMatterGovernment(supabase: Client, input: MatterGovern
     representatives(supabase, org, input.members),
     userNames(supabase, org, input.members),
   ]);
+  // GOV-04: each letter's tasks, the firm's issuer list, and files from emails filed to the matter.
+  const extras = await loadLetterExtras(supabase, org, input.matter.id, records.letters.map((row) => row.id), input.staff.timezone);
+  Object.assign(records, { letterTasks: extras.letterTasks, issuers: extras.issuers, people: extras.people });
   const ctx = context(input, people, userName);
   const submissions = buildSubmissions(records, ctx);
   return {
+    issuers: extras.issuers,
+    filed: extras.filed,
     submissions: submissions.tab,
     decisions: buildDecisions(records, ctx),
     dialogs: submissions.dialogs,
