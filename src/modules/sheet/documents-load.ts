@@ -1,5 +1,7 @@
 import "server-only";
-import type { CustodyRow, DocCard, DocumentReviewDialogData, DocumentsData, ReviewRow } from "@/components/sheet/designer/documents";
+import type { CustodyRow, DocCard, DocChip, DocumentReviewDialogData, DocumentsData, ReviewRow } from "@/components/sheet/designer/documents";
+import { WAITING_LABEL, type RequestWaiting } from "@/modules/sheet/reports-ops-more";
+import { loadOpenRequests, sampleMatterIds } from "@/modules/sheet/reports-ops-more-load";
 import { createClient } from "@/lib/supabase/server";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import {
@@ -148,7 +150,9 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
 
   if (tab === "review") data.review = { rows: queue, filterEmpty: true };
 
-  if (tab === "all") {
+  if (tab === "all" && query.view === "requests") {
+    data.all = await loadRequestsView(supabase, staff, today);
+  } else if (tab === "all") {
     const cards: DocCard[] = [];
     const shown: { id: string; person_id: string; purpose: string; matterId: string | undefined }[] = [];
     for (const [documentId, version] of [...current.entries()].sort((a, b) => b[1].createdAt.localeCompare(a[1].createdAt))) {
@@ -187,6 +191,45 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
 }
 
 type Client = Awaited<ReturnType<typeof createClient>>;
+
+const WAITING_TONE: Record<RequestWaiting, DocChip["tone"]> = { missing: "chg", review: "rev", changes: "chg", expired: "bad" };
+
+/**
+ * REP-01: All documents narrowed to the open document requests (`?tab=all&view=requests`), one
+ * card per request, read by the same loader as the Reports page's Outstanding documents card so
+ * the list and the figure are the same rows. Each card carries where it waits, in the report's words.
+ */
+async function loadRequestsView(supabase: Client, staff: SheetStaff, today: string): Promise<NonNullable<DocumentsData["all"]>> {
+  const org = staff.organizationId;
+  const sample = await sampleMatterIds(supabase, org, !staff.sampleMode);
+  const cap = { capped: false };
+  const requests = await loadOpenRequests(supabase, org, today, sample, cap);
+  const personIds = [...new Set(requests.map((row) => row.personId))];
+  const matterIds = [...new Set(requests.map((row) => row.matterId))];
+  const [people, matters] = await Promise.all([
+    personIds.length ? supabase.from("persons").select("id, display_name").eq("organization_id", org).in("id", personIds) : null,
+    matterIds.length ? supabase.from("matters").select("id, reference, title").eq("organization_id", org).in("id", matterIds) : null,
+  ]);
+  const personName = new Map((people?.data ?? []).map((row) => [row.id, row.display_name]));
+  const matterLabel = new Map((matters?.data ?? []).map((row) => [row.id, row.reference || row.title]));
+  const cards: DocCard[] = requests.map((request) => ({
+    title: request.purpose,
+    thumb: { icon: "file" },
+    meta: {
+      parts: [matterLabel.get(request.matterId) ?? "Matter", firstName(personName.get(request.personId) ?? "Person")],
+      when: request.dueOn ? `Due ${dayMonth(request.dueOn)}` : undefined,
+    },
+    states: [{ tone: WAITING_TONE[request.waiting], label: WAITING_LABEL[request.waiting] }],
+  }));
+  const n = cards.length;
+  return {
+    cards,
+    filter: {
+      text: `Showing ${n} open document ${n === 1 ? "request" : "requests"}, the rows the Reports page counts.${staff.sampleMode ? "" : " Requests on sample matters are left out."}${cap.capped ? " More requests exist than this page reads, so the list is partial." : ""}`,
+      clear: "/sheet/documents?tab=all",
+    },
+  };
+}
 
 async function loadCustody(
   supabase: Client,

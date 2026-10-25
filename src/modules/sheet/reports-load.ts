@@ -6,7 +6,9 @@ import { ledgerTotals, type FundEntry } from "@/modules/finance/client-funds-pre
 import { loadSheetChrome, memberNames } from "@/modules/sheet/chrome-load";
 import { isoDate, localNow } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
-import { MATTER_STAGES, STAFF_ROLES, isoDateInTimeZone, type SheetQuery } from "@/modules/sheet/present";
+import { MATTER_STAGES, STAFF_ROLES, isoDateInTimeZone, stageLabel, type SheetQuery } from "@/modules/sheet/present";
+import { REPORT_LINKS, requestBars, stageHref } from "@/modules/sheet/reports-ops-more";
+import { loadOpenRequests, loadOpsMore, sampleMatterIds } from "@/modules/sheet/reports-ops-more-load";
 import { loadOutcomeSegments } from "@/modules/sheet/reports-outcomes-load";
 import { NO_PROGRAM, programFilter, programName } from "@/modules/sheet/reports-outcomes";
 import {
@@ -19,7 +21,6 @@ import {
   localMidnightIso,
   monthLabel,
   monthsBetween,
-  outstandingDocuments,
   rangeLabel,
   rangeStart,
   receivablesAgeing,
@@ -87,45 +88,39 @@ export async function loadOps(ctx: ReportContext, cap: Capped): Promise<ReportsO
     .limit(REPORT_READ);
   if (live) bookingsQuery = bookingsQuery.eq("is_sample", false);
 
-  const [matters, bookings, tasks, requests, members, staffRows, sampleMatters] = await Promise.all([
+  const [matters, bookings, tasks, members, staffRows, sample] = await Promise.all([
     mattersQuery,
     bookingsQuery,
     supabase
       .from("tasks")
-      .select("owner_membership_id, matter_id, due_on, status")
+      .select("owner_membership_id, matter_id, due_on, due_at, status")
       .eq("organization_id", org)
       .eq("audience", "internal")
       .in("status", ["open", "blocked"])
       .limit(REPORT_READ),
-    supabase.from("document_requests").select("matter_id, status, expires_on, document_id").eq("organization_id", org).eq("status", "open").limit(REPORT_READ),
     memberNames(supabase, org),
     supabase.from("memberships").select("id, role").eq("organization_id", org).eq("status", "active").in("role", [...STAFF_ROLES]),
-    live ? supabase.from("matters").select("id").eq("organization_id", org).eq("is_sample", true).limit(REPORT_READ) : null,
+    sampleMatterIds(supabase, org, live),
   ]);
-  const sample = new Set((sampleMatters?.data ?? []).map((row) => row.id));
   const notSample = (matterId: string | null) => !matterId || !sample.has(matterId);
   const openMatters = rows(matters, cap);
   const bookingRows = rows(bookings, cap);
   const taskRows = rows(tasks, cap).filter((row) => notSample(row.matter_id));
-  const requestRows = rows(requests, cap).filter((row) => notSample(row.matter_id));
 
   // When each open matter entered its current stage.
   const matterIds = openMatters.map((row) => row.id);
   const bookingIds = bookingRows.map((row) => row.id);
   const linked = [...new Set(bookingRows.map((row) => row.matter_id).filter((id): id is string => Boolean(id)))];
-  const documentIds = [...new Set(requestRows.map((row) => row.document_id).filter((id): id is string => Boolean(id)))];
-  const [transitions, events, engagedRows, documents] = await Promise.all([
+  // REP-01: the open requests (the same rows as the Documents page's requests list) and the added cards.
+  const [transitions, events, engagedRows, requests, more] = await Promise.all([
     matterIds.length
       ? supabase.from("matter_stage_transitions").select("matter_id, to_stage, created_at").eq("organization_id", org).in("matter_id", matterIds).order("created_at", { ascending: false }).limit(REPORT_READ)
       : null,
     bookingIds.length ? supabase.from("booking_events").select("booking_id").eq("organization_id", org).eq("kind", "rescheduled").in("booking_id", bookingIds).limit(REPORT_READ) : null,
     linked.length ? supabase.from("matters").select("id").eq("organization_id", org).eq("engagement_status", "engaged").in("id", linked) : null,
-    documentIds.length ? supabase.from("documents").select("id, current_version_id").eq("organization_id", org).in("id", documentIds) : null,
+    loadOpenRequests(supabase, org, today, sample, cap),
+    loadOpsMore(ctx, cap, sample),
   ]);
-  const versionIds = (documents?.data ?? []).map((row) => row.current_version_id).filter((id): id is string => Boolean(id));
-  const versions = versionIds.length ? await supabase.from("document_versions").select("id, review_state").eq("organization_id", org).in("id", versionIds) : null;
-  const reviewOfVersion = new Map((versions?.data ?? []).map((row) => [row.id, row.review_state]));
-  const versionOfDocument = new Map((documents?.data ?? []).map((row) => [row.id, row.current_version_id]));
 
   const since = new Map<string, string>();
   const stageOf = new Map(openMatters.map((row) => [row.id, row.stage]));
@@ -141,40 +136,42 @@ export async function loadOps(ctx: ReportContext, cap: Capped): Promise<ReportsO
   );
 
   const staffList = (staffRows.data ?? []).map((row) => ({ id: row.id, name: members.get(row.id) || "Unassigned" }));
-  const documentBars: ReportBar[] = outstandingDocuments(
-    requestRows.map((row) => {
-      const version = row.document_id ? versionOfDocument.get(row.document_id) : null;
-      return {
-        status: row.status,
-        expiresOn: row.expires_on,
-        hasDocument: Boolean(version),
-        reviewState: version ? (reviewOfVersion.get(version) ?? null) : null,
-      };
-    }),
-    today,
-  );
+  const documentBars: ReportBar[] = requestBars(requests);
+  const stageKey = new Map(MATTER_STAGES.map((stage) => [stageLabel(stage), stage]));
 
   return {
-    leads: { bars: funnel.bars, note: funnel.note, definition: DEFINITIONS.leads },
+    leads: { bars: funnel.bars, note: funnel.note, definition: DEFINITIONS.leads, link: REPORT_LINKS.leads },
     ageing: {
       rows: stageAgeing(
         openMatters.map((row) => ({ id: row.id, stage: row.stage, createdAt: row.created_at, stageSince: since.get(row.id) ?? null })),
         MATTER_STAGES,
         nowIso,
-      ),
+      ).map((row) => ({ ...row, href: stageHref(stageKey.get(row.stage) ?? "") })),
       definition: DEFINITIONS.ageing,
+      link: REPORT_LINKS.ageing,
     },
     workload: {
       rows: workload(
         staffList,
-        taskRows.map((row) => ({ ownerMembershipId: row.owner_membership_id, matterId: row.matter_id, dueOn: row.due_on, status: row.status })),
+        taskRows.map((row) => ({ ownerMembershipId: row.owner_membership_id, matterId: row.matter_id, dueOn: row.due_on, dueAt: row.due_at, status: row.status })),
         openMatters.map((row) => ({ id: row.id, consultantMembershipId: row.responsible_consultant_membership_id })),
         today,
+        new Date(nowIso),
       ),
       definition: DEFINITIONS.workload,
+      link: REPORT_LINKS.workload,
     },
-    documents: { bars: documentBars, definition: DEFINITIONS.documents },
-    attendance: { ...funnel.attendance, definition: DEFINITIONS.attendance },
+    documents: { bars: documentBars, definition: DEFINITIONS.documents, link: REPORT_LINKS.documents },
+    attendance: {
+      ...funnel.attendance,
+      cancelled: bookingRows.filter((row) => row.status === "cancelled").length,
+      definition: `${DEFINITIONS.attendance} Cancelled: cancelled after booking.`,
+      link: REPORT_LINKS.attendance,
+    },
+    more: {
+      ...more,
+      links: { overdue: REPORT_LINKS.overdue, intake: REPORT_LINKS.intake, readiness: REPORT_LINKS.readiness, renewals: REPORT_LINKS.renewals },
+    },
   };
 }
 
@@ -306,9 +303,10 @@ export async function loadMoney(ctx: ReportContext, cap: Capped): Promise<Report
         amount: formatAmount(buckets.reduce((sum, bucket) => sum + bucket.cents, 0), "CAD"),
       },
       definition: DEFINITIONS.receivables,
+      link: REPORT_LINKS.receivables,
     },
-    months: { rows: months, definition: DEFINITIONS.months },
-    balances: { rows: balances, definition: DEFINITIONS.balances },
+    months: { rows: months, definition: DEFINITIONS.months, link: REPORT_LINKS.months },
+    balances: { rows: balances, definition: DEFINITIONS.balances, link: REPORT_LINKS.balances },
     recon: { text, href: "/sheet/finance?tab=recon", definition: DEFINITIONS.recon },
   };
 }
@@ -332,7 +330,7 @@ function stamp(now: Date, timeZone: string): string {
 }
 
 const SOURCES: Record<ReportsTab, string> = {
-  ops: "matters, stage history, tasks, document requests and bookings",
+  ops: "matters, stage history, tasks, document requests, bookings, intake requests and recorded renewals",
   money: "invoices, card payments, client-account ledgers and reconciliations",
   outcomes: "matters, stage history, recorded outcomes and licensed-approved IRCC estimates",
   scheduled: "scheduled report settings",

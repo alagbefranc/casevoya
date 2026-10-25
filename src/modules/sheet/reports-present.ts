@@ -9,6 +9,7 @@ import type { ReportBar, ReportRange, ReportsTab } from "@/components/sheet/desi
 import { plusDays, stageLabel } from "@/modules/sheet/present";
 import { safeZone } from "@/modules/scheduling/format";
 import { localToUtc } from "@/modules/scheduling/slots";
+import { isOverdue } from "@/modules/sheet/tasks-present";
 
 export const REPORT_TABS: readonly ReportsTab[] = ["ops", "money", "outcomes", "scheduled"];
 
@@ -122,7 +123,7 @@ export function stageAgeing(matters: OpenMatterInput[], stageOrder: readonly str
     });
 }
 
-export type WorkloadTask = { ownerMembershipId: string | null; matterId: string | null; dueOn: string | null; status: string };
+export type WorkloadTask = { ownerMembershipId: string | null; matterId: string | null; dueOn: string | null; dueAt?: string | null; status: string };
 export type WorkloadMatter = { id: string; consultantMembershipId: string | null };
 
 /** Per active staff member: open internal tasks they own, how many are overdue, and their matters. */
@@ -131,7 +132,10 @@ export function workload(
   tasks: WorkloadTask[],
   openMatters: WorkloadMatter[],
   today: string,
+  /** With `now`, overdue follows the Tasks page's rule (a due time before now counts too). */
+  now?: Date,
 ) {
+  const late = (task: WorkloadTask) => (now ? isOverdue(task.dueOn, task.dueAt ?? null, today, now) : task.dueOn !== null && task.dueOn < today);
   return staff
     .map((person) => {
       const own = tasks.filter((task) => task.ownerMembershipId === person.id && (task.status === "open" || task.status === "blocked"));
@@ -141,7 +145,7 @@ export function workload(
       return {
         person: person.name,
         open: own.length,
-        overdue: own.filter((task) => task.dueOn !== null && task.dueOn < today).length,
+        overdue: own.filter(late).length,
         matters: matters.size,
       };
     })
@@ -196,14 +200,15 @@ export function receivablesAgeing(invoices: InvoiceInput[], today: string) {
     { age: "Not due", invoices: 0, cents: 0 },
     { age: "1–30 days overdue", invoices: 0, cents: 0 },
     { age: "31–60 days", invoices: 0, cents: 0 },
-    { age: "Over 60 days", invoices: 0, cents: 0 },
+    { age: "61–90 days", invoices: 0, cents: 0 },
+    { age: "Over 90 days", invoices: 0, cents: 0 },
   ];
   for (const invoice of invoices) {
     if (invoice.currency.toUpperCase() !== "CAD" || !OPEN_INVOICE.has(invoice.status)) continue;
     const owed = owedCents(invoice);
     if (owed <= 0) continue;
     const late = invoice.dueOn >= today ? 0 : daysBetween(invoice.dueOn, today);
-    const index = late === 0 ? 0 : late <= 30 ? 1 : late <= 60 ? 2 : 3;
+    const index = late === 0 ? 0 : late <= 30 ? 1 : late <= 60 ? 2 : late <= 90 ? 3 : 4;
     buckets[index].invoices++;
     buckets[index].cents += owed;
   }

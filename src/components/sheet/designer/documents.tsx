@@ -60,7 +60,8 @@ export type DocumentsData = {
   firmName: string;
   /** `filterEmpty` (live only): the hidden "Nothing matches" panel for the chips and search. */
   review?: { rows: ReviewRow[]; filterEmpty?: boolean };
-  all?: { cards: DocCard[] };
+  /** `filter` (live only, REP-01): the open-requests list a Reports card links to, and how to show everything. */
+  all?: { cards: DocCard[]; filter?: { text: string; clear: string } | null };
   custody?: { rows: CustodyRow[] };
 };
 
@@ -299,7 +300,7 @@ function MetaPart({ first, text }: { first: boolean; text: string }) {
   );
 }
 
-function All({ cards }: { cards: DocCard[] }) {
+function All({ cards, filter }: { cards: DocCard[]; filter?: { text: string; clear: string } | null }) {
   return (
     <>
       <div className={"ph rv"} style={i(0)}>
@@ -308,9 +309,21 @@ function All({ cards }: { cards: DocCard[] }) {
           <p>{"Every version is kept with its hash, owner and who can see it. The same document can serve several matters without copying it."}</p>
         </div>
       </div>
+      {filter ? (
+        <p className={"fp-note rv"} style={i(1)}>
+          {`${filter.text} `}
+          <a href={filter.clear} style={{ color: "var(--blue)" }}>
+            {"Show all documents"}
+          </a>
+        </p>
+      ) : null}
       {cards.length === 0 ? (
         <div className={"panel rv"} style={i(1)}>
-          <Empty art={"review-queue-empty"} title={"No documents yet"} copy={"Requests and uploads from every matter you can open appear here."} />
+          <Empty
+            art={"review-queue-empty"}
+            title={filter ? "No open requests" : "No documents yet"}
+            copy={filter ? "Document requests waiting on a client or a review appear here." : "Requests and uploads from every matter you can open appear here."}
+          />
         </div>
       ) : (
         <div className={"fp-cards rv"} style={i(1)}>
@@ -387,7 +400,7 @@ function Custody({ rows }: { rows: CustodyRow[] }) {
 }
 
 export function SheetDocuments({ data }: { data: DocumentsData }) {
-  if (data.tab === "all") return <All cards={data.all?.cards ?? []} />;
+  if (data.tab === "all") return <All cards={data.all?.cards ?? []} filter={data.all?.filter} />;
   if (data.tab === "custody") return <Custody rows={data.custody?.rows ?? []} />;
   return <Review rows={data.review?.rows ?? []} firmName={data.firmName} filterEmpty={data.review?.filterEmpty} />;
 }

@@ -160,6 +160,7 @@ import { reopenFirmDialog, runFirmSave } from "./settings-firm-acts";
 import { bindOffboardHold, mountMember, mountOffboard, reopenStaffAdmin, runContinuitySave, runMemberAct } from "./settings-staff-admin-acts";
 import { prepareTransferDialog, runFirmTransferAct } from "./firm-transfer-acts";
 import { stepUpHref } from "@/lib/auth/mfa-step";
+import { presetChipLabel } from "@/modules/sheet/filter-preset";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
 const NEW_MATTER = "/sheet/matters?new=1";
@@ -1479,6 +1480,16 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (filters?.contains(input)) {
         const preset = new URLSearchParams(window.location.search).get("q");
         if (preset && !input.value) input.value = preset;
+        // REP-01: `?f=overdue` (a Reports card's link) turns that chip on, as a click would.
+        const chips = [...filters.querySelectorAll<HTMLElement>(".fchip")];
+        const chipLabel = presetChipLabel(FILTER_TOKEN, chips.map((chip) => chip.textContent?.trim() ?? ""), new URLSearchParams(window.location.search).get("f"));
+        if (chipLabel) {
+          chips.forEach((chip) => {
+            const on = chip.textContent?.trim() === chipLabel;
+            chip.classList.toggle("on", on);
+            chip.setAttribute("aria-pressed", String(on));
+          });
+        }
         input.addEventListener("input", applyFilters, listen);
         applyFilters();
         return;
