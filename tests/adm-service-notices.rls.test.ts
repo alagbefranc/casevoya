@@ -117,6 +117,8 @@ describe("ADM-04 service notices", () => {
     await as(b.owner, b.orgId);
     const targetsB = await db.query(`select organization_id from public.service_notice_targets`);
     expect(targetsB.rows.filter((row) => (row as Row).organization_id === a.orgId)).toHaveLength(0);
+    // Another firm's staff can't probe which firms a notice reaches.
+    await expectDbError(() => db.query(`select app.service_notice_reaches($1, $2)`, [id, a.orgId]), /permission denied/);
 
     await asAnon(db);
     await expectDbError(() => db.query(`select id from public.service_notices`), /permission denied/);

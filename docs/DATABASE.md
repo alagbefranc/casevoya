@@ -920,3 +920,7 @@ ADM-04 (gap #186), branch `feat/adm-service-levels`. Additive; no existing funct
 * `public.service_level_report(firm, months)`: 1 to 24 months in the firm's timezone, newest first: received, answered, waiting, median and longest seconds to first reply; `uptime` is `{"measured": false}`. The firm's owner (aal2, current firm), a platform admin (aal2) or the service role; the latter two audited `service_level.report_read` on the firm.
 
 Ops wrapper: `scripts/ops/service-levels.mjs` (record, report). Tested in `tests/service-levels.rls.test.ts` and `tests/service-levels-present.test.tsx`.
+
+## Service notice reach check is private (`20261025440000`, not applied on the live project)
+
+ADM-04 follow-up. Revokes `authenticated`'s EXECUTE on `app.service_notice_reaches(uuid, uuid)`. It is only called inside the security-definer `app.can_read_service_notice` and `app.dismiss_service_notice`, so reads and dismissals are unchanged; a signed-in user can no longer ask whether a notice reaches a firm. Tested in `tests/adm-service-notices.rls.test.ts`.

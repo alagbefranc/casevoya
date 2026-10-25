@@ -39,9 +39,13 @@ describe("REP-01 overdue tasks", () => {
 
   it("counts overdue open work by the Tasks page's rule, sample matters apart", () => {
     const result = overdueTasks(tasks, TODAY, NOW, new Set(["s1"]));
-    expect(result).toEqual({ open: 5, overdue: 2, sample: 1 });
-    expect(overdueNote(result)).toBe("2 of 5 open internal tasks are overdue. 1 more on sample matters is on the Tasks page but not counted here.");
-    expect(overdueNote({ open: 0, overdue: 0, sample: 0 })).toBe("No open internal tasks.");
+    expect(result).toEqual({ open: 5, overdue: 2, sampleOpen: 1, sample: 1 });
+    expect(overdueNote(result)).toBe("2 of 5 open internal tasks are overdue. 1 more open task on sample matters is on the Tasks page but not counted here (1 overdue).");
+    expect(overdueNote({ open: 0, overdue: 0, sampleOpen: 0, sample: 0 })).toBe("No open internal tasks.");
+    // Open work on sample matters that isn't late still explains the gap with the Tasks list.
+    expect(overdueNote({ open: 14, overdue: 2, sampleOpen: 2, sample: 0 })).toBe(
+      "2 of 14 open internal tasks are overdue. 2 more open tasks on sample matters are on the Tasks page but not counted here.",
+    );
   });
 
   it("matches the Tasks page's Overdue chip (the card equals the list)", () => {
@@ -201,7 +205,7 @@ describe("REP-01 receivables ageing", () => {
 
 describe("REP-01 report page and export", () => {
   const more = {
-    overdue: { open: 5, overdue: 2, sample: 0, note: "2 of 5 open internal tasks are overdue.", definition: MORE_DEFINITIONS.overdue },
+    overdue: { open: 5, overdue: 2, sampleOpen: 0, sample: 0, note: "2 of 5 open internal tasks are overdue.", definition: MORE_DEFINITIONS.overdue },
     intake: { ...intakeCompletion([{ submitted: true, dueOn: null }], TODAY), definition: MORE_DEFINITIONS.intake },
     readiness: { ...readiness([], 0), definition: MORE_DEFINITIONS.readiness },
     renewals: { ...renewalWorkload([], TODAY), definition: MORE_DEFINITIONS.renewals },
