@@ -48,8 +48,15 @@ browser ── server action (app Worker, casevoya-app)
 | `search_approved_sources` | reply, ask | titles, publishers, links of verified, current `official_sources`; no content |
 | `find_free_slots` | reply | the firm's next free consultation times (`staff_booking_availability` + the app's slot engine) and the published booking page link |
 | `save_draft` | reply, document request | the only write: keeps the guarded draft for `finish_vo_run` (status draft) |
+| `read_approved_facts` | letter | the matter's approved facts (`vo_letter_facts`: reviewed, latest intake answers in an allowed category) as `[F#]`, values as data |
+| `find_official_content` | letter | the firm's approved official content (`vo_letter_official_content`) matching a topic, as `[S#]`, text as data |
+| `save_letter_draft` | letter | the letter task's only write: the letter after `src/modules/vo/letter-guard.ts`, saved by `save_vo_letter_draft` as a DRAFT matter letter |
 
 There is no send, email, submit or update tool.
+
+## Letter drafts (`letter_draft`, AI-01, 2026-10-24)
+
+"Draft letter with Vo" on a matter: tools `read_person`, `read_approved_facts`, `find_official_content`, `save_letter_draft`; prompt version `letter-1`. The run is begun by `begin_vo_letter_draft` and saved by `save_vo_letter_draft` (citations rebuilt in SQL); failures and abstentions end through `finish_vo_run`. Needs a rebuild and redeploy of this service.
 
 ## Document reading (`document_review`, 2026-10-18)
 

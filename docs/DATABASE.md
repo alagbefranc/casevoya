@@ -722,3 +722,23 @@ DEC-02 (gap #182), branch `feat/dec-renewal`. No existing function redefined.
 * `public.portal_renewal_reminders(org)`: the signed-in client's set, uncancelled reminders while their reminder choice is on, with the official timing source and the fee from the currently approved snapshot (`app.renewal_current_fee`) or null.
 
 Tested in `tests/dec-renewal.rls.test.ts` and `tests/dec-renewal-present.test.tsx`.
+
+## Letters on a matter and Vo letter drafts (`20261025240000`, `20261025240100`, not applied on the live project)
+
+AI-01 (gap #183), branch `feat/ai-letter-drafts`. Apply in order: `20261025240000_vo_letter_enum.sql` (enum value, its own migration), then `20261025240100_vo_letter_drafts.sql`.
+
+* `vo_run_kind` gains `letter_draft`. `vo_runs_thread_kind_check` is replaced so a letter run, like Ask Vo and a document reading, has no conversation.
+* `vo_settings.letter_drafts` (boolean, default true): the owner's "First drafts of letters from approved facts" switch.
+* `matter_letters`: one letter on a matter: `letter_type` (cover_letter, explanation, other), title, `origin` (vo with its `run_id`, or staff), `status` draft / approved / discarded, `current_version`, `approved_version`, `approved_by_membership_id`, `approved_at`, `approved_self`, `discarded_by` / `discarded_at`, `is_sample`, `version` (optimistic lock).
+* `matter_letter_versions` (append-only, trigger): `version_number`, title, body (up to 12,000 characters, with `[F#]` / `[S#]` markers), `facts` (cited approved facts: answer, response, person, form, question key and type, label, value, reviewer membership, reviewed at), `official` (cited approved official content: kind, id, label, content, source URL, section, form number and date modified, checked on, current to, snapshot SHA-256, attested on, reviewed at), `left_out` (lines), `origin`, `created_by`.
+* Forced RLS on both; read by staff who may read the matter's messages (`app.message_staff_reads_matter`: owner, licensed consultant, case manager, assistant at staff assurance, on a matter they can read). No direct writes.
+* Helpers (SECURITY DEFINER, `search_path = ''`): `app.vo_fact_category(section, label)`, `app.matter_approved_facts(matter)` (the latest reviewed answer per question on the matter's submitted forms, text/date/country/choice only), `app.vo_letter_official_items(org, matter)` (approved `government_fee_references`, `submission_requirements`, `renewal_timings`, `approval_follow_up_steps` for the matter's program, and published current `rule_versions` with their latest evidence snapshot), `app.vo_letter_run(run)`, `app.reject_letter_version_change()`.
+* `public.set_vo_settings` REDEFINED from `20261019218100_vo_doc_review.sql`: the same, plus the `letter_drafts` key.
+* `public.begin_vo_letter_draft(org, matter, letter_type)`: staff with MFA who can read the matter; returns `off`, `capability_off`, `sample_only`, `no_facts` (no approved fact Vo may use, before any run is counted), `rate_limited` or `firm_rate_limited` (the shared Vo limits), else starts a `letter_draft` run. Audited `vo.run_started`.
+* `public.vo_letter_facts(run)` and `public.vo_letter_official_content(run)`: the run's own person while it runs: the facts Vo may use (and how many the category switches hide), and the approved official content.
+* `public.save_vo_letter_draft(run, …)`: the run's person within 10 minutes; every cited fact an approved fact of the matter in an allowed category, every cited official item approved content of the firm, every marker cited and every citation used, a money amount only with an official citation; citations rebuilt from the database. Creates the letter and version 1 and ends the run as drafted. Audited `vo.run_finished`. A failed or abstained letter run still ends through the unchanged `public.finish_vo_run`.
+* `public.create_matter_letter`, `public.revise_matter_letter` (new version; citations whose marker remains are kept), `public.discard_matter_letter`: owner, licensed consultant, case manager, assistant on the matter; sample-mode rule. Audited `letter.created`, `letter.revised`, `letter.discarded`.
+* `public.approve_matter_letter(letter, version)`: licensed member with a fresh step-up (`app.require_licensed_staff`), no "[needs ...]" placeholder, the GOV self-approval rule (`app.gov_check_self_approval`). Audited `letter.approved` / `letter.approved_self`.
+* `public.release_matter_letter(letter)`: approved letters only; the approved version's text without citation markers. Audited `letter.released`. Used by `GET /api/letters/[letterId]`.
+
+Tested in `tests/vo-letter-drafts.rls.test.ts`, `tests/vo-letter-service.test.ts`, `tests/vo-letter-app.test.ts`, `tests/vo-letter-guard.test.ts` and `tests/vo-letters-present.test.tsx`.

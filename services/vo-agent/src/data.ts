@@ -44,7 +44,40 @@ export interface VoData {
   documents(matterId: string): Promise<VoDocumentRow[]>;
   approvedSources(): Promise<VoSourceRow[]>;
   freeSlots(days: number): Promise<{ starts: string[]; bookingLink: string | null; timeZone: string }>;
-  rpc(name: "finish_vo_run", args: Record<string, unknown>): Promise<{ data: unknown; error: { message: string } | null }>;
+  /** AI-01 letter drafts (letter-tools.ts): the run's approved facts and approved official content. */
+  letterFacts?(runId: string): Promise<VoLetterFacts>;
+  officialContent?(runId: string): Promise<VoOfficialItem[]>;
+  rpc(name: "finish_vo_run" | "save_vo_letter_draft", args: Record<string, unknown>): Promise<{ data: unknown; error: { message: string } | null }>;
+}
+
+/** An approved fact of the matter (public.vo_letter_facts): reviewed, latest, in an allowed category. */
+export type VoLetterFact = { answerId: string; person: string; form: string; fieldType: string; label: string; value: string };
+export type VoLetterFacts = { facts: VoLetterFact[]; hidden: number };
+/** Approved official content (public.vo_letter_official_content): text and source, no page body. */
+export type VoOfficialItem = { kind: string; id: string; label: string; content: string; sourceUrl: string; checkedOn: string | null };
+
+function text(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+/** The database's answers, field by field; anything malformed is dropped. */
+export function parseLetterFacts(raw: unknown): VoLetterFacts {
+  const value = (raw ?? {}) as { facts?: unknown; hidden?: unknown };
+  const facts = Array.isArray(value.facts) ? value.facts : [];
+  return {
+    facts: facts
+      .map((row) => (row ?? {}) as Record<string, unknown>)
+      .filter((row) => text(row.answer_id) && text(row.value))
+      .map((row) => ({ answerId: text(row.answer_id), person: text(row.person), form: text(row.form), fieldType: text(row.field_type), label: text(row.label), value: text(row.value) })),
+    hidden: typeof value.hidden === "number" ? value.hidden : 0,
+  };
+}
+
+export function parseOfficialContent(raw: unknown): VoOfficialItem[] {
+  return (Array.isArray(raw) ? raw : [])
+    .map((row) => (row ?? {}) as Record<string, unknown>)
+    .filter((row) => text(row.id) && text(row.kind) && text(row.content))
+    .map((row) => ({ kind: text(row.kind), id: text(row.id), label: text(row.label), content: text(row.content), sourceUrl: text(row.source_url), checkedOn: text(row.checked_on) || null }));
 }
 
 export function supabaseVoData(input: { url: string; publishableKey: string; accessToken: string; organizationId: string }): VoData {
@@ -151,6 +184,16 @@ export function supabaseVoData(input: { url: string; publishableKey: string; acc
         bookingLink: type.is_published && firm?.slug ? `https://app.casevoya.ca/book/${firm.slug}/${type.slug}` : null,
         timeZone: zone,
       };
+    },
+    async letterFacts(runId) {
+      const { data, error } = await db.rpc("vo_letter_facts", { p_run_id: runId });
+      if (error) throw new Error("facts");
+      return parseLetterFacts(data);
+    },
+    async officialContent(runId) {
+      const { data, error } = await db.rpc("vo_letter_official_content", { p_run_id: runId });
+      if (error) throw new Error("official");
+      return parseOfficialContent(data);
     },
     async rpc(name, args) {
       const { data, error } = await db.rpc(name, args as never);
