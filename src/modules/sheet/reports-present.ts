@@ -5,8 +5,7 @@
  * government processing estimate is invented: firm work time and government processing are
  * measured separately, from the firm's own stage history.
  */
-import type { ReportBar, ReportRange, ReportsTab, OutcomeRow, FirmTimeRow } from "@/components/sheet/designer/reports";
-import { programLabel } from "@/modules/sheet/matters-present";
+import type { ReportBar, ReportRange, ReportsTab } from "@/components/sheet/designer/reports";
 import { plusDays, stageLabel } from "@/modules/sheet/present";
 import { safeZone } from "@/modules/scheduling/format";
 import { localToUtc } from "@/modules/scheduling/slots";
@@ -252,69 +251,7 @@ export function localMidnightIso(date: string, timeZone: string): string {
   return new Date(localToUtc(date, "00:00", safeZone(timeZone))).toISOString();
 }
 
-// ---------- Processing and outcomes ----------
-
-export type OutcomeMatterInput = {
-  program: string | null;
-  createdAt: string;
-  submittedAt: string | null;
-  decidedAt: string | null;
-  outcome: string | null;
-};
-
-/**
- * Government processing (submitted → decision review) and firm work time (opened → submitted),
- * grouped by program and the year the file was submitted. Pending files (no outcome) are
- * counted apart and never in a median. A median with fewer than MIN_DECIDED files is hidden.
- */
-export function processingRows(matters: OutcomeMatterInput[]): { rows: OutcomeRow[]; firm: FirmTimeRow[]; hidden: OutcomeRow[] } {
-  type Group = { program: string; year: string; decidedDays: number[]; decided: number; pending: number; firmDays: number[] };
-  const groups = new Map<string, Group>();
-  for (const matter of matters) {
-    if (!matter.submittedAt) continue;
-    const program = matter.program ? programLabel(matter.program) : "No program selected";
-    const year = matter.submittedAt.slice(0, 4);
-    const key = `${program}|${year}`;
-    const group = groups.get(key) ?? { program, year, decidedDays: [], decided: 0, pending: 0, firmDays: [] };
-    group.firmDays.push(daysBetween(matter.createdAt, matter.submittedAt));
-    if (matter.outcome) {
-      group.decided++;
-      if (matter.decidedAt && matter.decidedAt >= matter.submittedAt) group.decidedDays.push(daysBetween(matter.submittedAt, matter.decidedAt));
-    } else {
-      group.pending++;
-    }
-    groups.set(key, group);
-  }
-  const ordered = [...groups.values()].sort((a, b) => a.program.localeCompare(b.program) || b.year.localeCompare(a.year));
-  const rows: OutcomeRow[] = ordered.map((group) => {
-    const value = group.decided >= MIN_DECIDED ? median(group.decidedDays) : null;
-    return {
-      program: group.program,
-      cohort: `Submitted ${group.year}`,
-      decided: group.decided,
-      median: value === null ? "—" : String(value),
-      pending: group.pending,
-    };
-  });
-  const firm: FirmTimeRow[] = ordered.map((group) => ({
-    program: group.program,
-    cohort: `Submitted ${group.year}`,
-    files: group.firmDays.length,
-    median: String(median(group.firmDays) ?? 0),
-  }));
-  return { rows, firm, hidden: rows.filter((row) => row.decided < MIN_DECIDED) };
-}
-
-export function outcomesNote(hidden: OutcomeRow[], total: number): string {
-  const tail = "Outcomes by type are on the Decisions tab of each matter.";
-  if (!total) return `No file has been recorded as submitted yet. ${tail}`;
-  if (!hidden.length) return tail;
-  if (hidden.length === 1) {
-    const row = hidden[0];
-    return `${row.program} (${row.cohort.toLowerCase()}) has only ${row.decided} decided ${row.decided === 1 ? "file" : "files"}, so its median is hidden. ${tail}`;
-  }
-  return `${hidden.length} rows have fewer than ${MIN_DECIDED} decided files, so their medians are hidden. ${tail}`;
-}
+// ---------- Processing and outcomes: see reports-outcomes.ts ----------
 
 // ---------- Definitions shown on screen and in exports ----------
 
@@ -336,8 +273,6 @@ export const DEFINITIONS = {
   balances:
     "Definition: per client, held is verified deposits less approved transfers and refunds in the client-account ledger. Pending is deposits waiting for verification. This is the firm’s bookkeeping, not a bank statement.",
   recon: "Definition: signed client-account reconciliations that recorded exceptions, plus reconciliations still waiting for review.",
-  outcomes:
-    "Definition: government processing counts days from the move to Submitted to the move to Decision review, for files with a consultant-recorded outcome. Pending files are shown apart and never in the median. Cohort is the year of submission; the period chips don’t apply here.",
   firm:
     "Firm work time is measured separately: days from opening the matter to the move to Submitted. It is the firm’s own preparation time, not government processing.",
 } as const;
