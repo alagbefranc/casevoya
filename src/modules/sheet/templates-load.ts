@@ -10,6 +10,7 @@ import { isoDateInTimeZone } from "@/modules/sheet/present";
 import type { MessageTemplateDialogData } from "@/components/sheet/designer/templates";
 import { designUse, firmMessageRows, messageRows, programRows, templatesData, type CatalogRow, type RuleRow } from "@/modules/sheet/templates-present";
 import { claimAddData, claimFactsFor } from "@/modules/sheet/source-claims-load";
+import { partialAlert } from "@/modules/sheet/states-present";
 
 const READ = 200;
 
@@ -198,5 +199,12 @@ export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, v
     viewer: { organizationId: org, role: staff.role, today: isoDateInTimeZone(now, staff.timezone), timeZone: staff.timezone, now },
     addClaim: claimAddData(staff, isoDateInTimeZone(now, staff.timezone)),
   });
-  return { chrome, data, messageDialog };
+  // DES-04: a read that failed or hit its limit makes the lists and counts partial; say so.
+  const partial = partialAlert([
+    { label: "Program templates", count: (packs.data ?? []).length, cap: READ, failed: Boolean(packs.error) },
+    { label: "Rule versions", count: (versions.data ?? []).length, cap: READ, failed: Boolean(versions.error) },
+    { label: "Rule evidence", count: (evidence.data ?? []).length, cap: READ, failed: Boolean(evidence.error) },
+    { label: "Agreement templates", count: (agreementTemplates.data ?? []).length, cap: READ, failed: Boolean(agreementTemplates.error) },
+  ]);
+  return { chrome, data, messageDialog, partial };
 }

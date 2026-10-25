@@ -6,6 +6,7 @@ import { financeBilling, matterWork, taxChoices, unbilledTotals, type AcceptedQu
 import { formatMoney } from "@/modules/finance/money";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { plusDays } from "@/modules/sheet/present";
+import { newerReadingWaiting, type StateAlertData } from "@/modules/sheet/states-present";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -130,7 +131,7 @@ export async function loadMatterWork(supabase: Supabase, input: { staff: SheetSt
 export async function loadFinanceBilling(
   supabase: Supabase,
   input: { staff: SheetStaff; today: string; invoices: readonly AgeingInvoice[]; matterName: (matterId: string) => string },
-): Promise<FinanceBillingData> {
+): Promise<FinanceBillingData & { feesStale: StateAlertData | null }> {
   const { staff, today } = input;
   const org = staff.organizationId;
   const canBill = BILLING_ROLES.has(staff.role);
@@ -166,7 +167,16 @@ export async function loadFinanceBilling(
     .filter((row) => row.count > 0)
     .sort((a, b) => b.cents - a.cents);
 
-  return financeBilling({
+  const feeRows = (fees.data ?? []) as FeeReferenceRow[];
+  // DES-04: a newer reading of IRCC's fee list waits for review while the approved one is used.
+  const newest = (status: string) => feeRows.filter((row) => row.status === status).map((row) => row.retrieved_at).sort().pop() ?? null;
+  const feesStale = newerReadingWaiting({
+    what: "reading of IRCC’s fee list",
+    approvedAt: newest("approved"),
+    pendingAt: newest("pending_review"),
+    timeZone: staff.timezone,
+  });
+  const panels = financeBilling({
     organizationId: org,
     today,
     defaultDue: plusDays(today, 30),
@@ -179,8 +189,9 @@ export async function loadFinanceBilling(
     sampleMode: staff.sampleMode,
     unbilled,
     rates,
-    fees: (fees.data ?? []) as FeeReferenceRow[],
+    fees: feeRows,
   });
+  return { ...panels, feesStale };
 }
 
 /** One invoice's billing dialogs: write-off on an issued invoice with a balance, government fee and discard on a draft. */

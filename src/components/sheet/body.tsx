@@ -118,6 +118,10 @@ import { loadSheetLead, loadSheetPipeline } from "@/modules/leads/load";
 import { EnquiryShareDialog } from "@/components/sheet/designer/enquiry-share";
 import { loadEnquiryShare } from "@/modules/leads/share-load";
 import { loadLeadVo } from "@/modules/sheet/vo-crm-load";
+import { NoAccessPanel, StateAlert, StateAlerts } from "@/components/sheet/designer/state-views";
+import { financeAccess, grantsAccess, migrationAccess, recordNotOpen, subscriptionAccess, type NoAccessData } from "@/modules/sheet/states-present";
+import { loadSourceStaleness } from "@/modules/sheet/states-load";
+import type { SheetStaff } from "@/modules/sheet/load";
 
 const PUBLIC = new Set(["enquiry", "book"]);
 
@@ -306,10 +310,11 @@ export async function SheetBody({
   }
   // Team queue: open tasks, reviews, deadlines to verify and money waiting for a second person.
   if (page === "queue" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, queue } = await loadSheetQueue(access.staff);
+    const { chrome, queue, partial } = await loadSheetQueue(access.staff);
     return (
       <SheetScreen page={page}>
         <SheetFrame sidebar={chrome.sidebar} header={<QueueHeader counts={queue.counts} filter={{ "data-queue-filter": "1", "aria-controls": "ql", title: "Search and filter the queue" }} />} statusbar={chrome.statusbar}>
+          {partial && !queue.failed ? <StateAlert data={partial} /> : null}
           <SheetQueue data={queue} />
         </SheetFrame>
       </SheetScreen>
@@ -317,7 +322,7 @@ export async function SheetBody({
   }
   // Client-file exports (T040): export jobs for the matters the signed-in person can export.
   if (page === "exports" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, exports } = await loadSheetExports(access.staff, query);
+    const { chrome, exports, partial } = await loadSheetExports(access.staff, query);
     return (
       <SheetScreen page={page}>
         <SheetFrame
@@ -326,6 +331,7 @@ export async function SheetBody({
           statusbar={chrome.statusbar}
           after={<ExportsDialog data={exports.dialog} />}
         >
+          {partial ? <StateAlert data={partial} /> : null}
           <SheetExports data={exports} />
         </SheetFrame>
       </SheetScreen>
@@ -334,10 +340,11 @@ export async function SheetBody({
   // Compliance > Migration import (T044, PRD §25): the firm owner's CSV import with dry run and rollback.
   if (page === "migration" && (access.kind === "live" || access.kind === "sample")) {
     const loaded = await loadSheetMigration(access.staff, query);
+    const denied = migrationAccess(access.staff.role);
     return (
       <SheetScreen page={page}>
         <SheetFrame sidebar={loaded.chrome.sidebar} header={<MigrationHeader data={loaded.header} />} statusbar={loaded.chrome.statusbar}>
-          <SheetMigration data={loaded.page} />
+          {denied ? <NoAccessPanel data={denied} /> : <SheetMigration data={loaded.page} />}
         </SheetFrame>
       </SheetScreen>
     );
@@ -488,6 +495,18 @@ export async function SheetBody({
   // Settings > Subscription (ADM-02): the firm's stored subscription state and real usage counts.
   // Keyed per tab so the Sheet's scripts mount again when the tab changes.
   if (page === "settings" && query.tab === "billing" && (access.kind === "live" || access.kind === "sample")) {
+    // DES-04: the plan, usage, payment setup and bank accounts are for the firm owner and finance staff.
+    const denied = subscriptionAccess(access.staff.role);
+    if (denied) {
+      const chrome = await loadSheetChrome(access.staff, "/sheet/settings");
+      return (
+        <SheetScreen key={"settings-billing"} page={page}>
+          <SheetFrame sidebar={chrome.sidebar} header={<SettingsBillingHeader firmName={access.staff.organizationName} pill={"Firm owner and finance only"} tab={"billing"} />} statusbar={chrome.statusbar}>
+            <NoAccessPanel data={denied} />
+          </SheetFrame>
+        </SheetScreen>
+      );
+    }
     const loaded = await loadSheetSubscription(access.staff);
     return (
       <SheetScreen key={"settings-billing"} page={page}>
@@ -562,6 +581,7 @@ export async function SheetBody({
   if (page === "grants" && (access.kind === "live" || access.kind === "sample")) {
     const tab = query.tab === "support" || query.tab === "limits" ? query.tab : "grants";
     const loaded = await loadSheetGrants(access.staff, tab);
+    const grantsDenied = grantsAccess(access.staff.role, tab);
     return (
       <SheetScreen page={page}>
         <SheetFrame
@@ -576,7 +596,8 @@ export async function SheetBody({
             </>
           }
         >
-          <SheetGrants data={loaded.page} />
+          {/* DES-04: grants and support access answer the firm owner only; others see why, not empty lists. */}
+          {grantsDenied ? <NoAccessPanel data={grantsDenied} /> : <SheetGrants data={loaded.page} />}
         </SheetFrame>
       </SheetScreen>
     );
@@ -634,7 +655,12 @@ export async function SheetBody({
   // Practice > Templates: program and agreement templates, the approved email catalog, checklists, and the rule source register (read only).
   if (page === "templates" && (access.kind === "live" || access.kind === "sample")) {
     const tab = query.tab === "messages" || query.tab === "checklists" || query.tab === "sources" || query.tab === "rule" ? query.tab : "program";
-    const loaded = await loadSheetTemplates(access.staff, tab, query.view);
+    // DES-04: where official content shows (program templates, Source review, a rule), say when its source is stale.
+    const official = tab === "program" || tab === "sources" || tab === "rule";
+    const [loaded, stale] = await Promise.all([
+      loadSheetTemplates(access.staff, tab, query.view),
+      official ? loadSourceStaleness(access.staff, tab === "rule" && query.view ? { kind: "rule", ruleVersionId: query.view } : { kind: "firm" }) : null,
+    ]);
     return (
       <SheetScreen page={page}>
         <SheetFrame
@@ -656,6 +682,7 @@ export async function SheetBody({
             ) : undefined
           }
         >
+          <StateAlerts items={[stale && tab === "sources" ? { ...stale, action: null } : stale, loaded.partial]} />
           <SheetTemplates data={loaded.data} />
         </SheetFrame>
       </SheetScreen>
@@ -767,6 +794,9 @@ export async function SheetBody({
     const invoiceId = query.tab === "invoice" && query.view && isUuid(query.view) ? query.view : null;
     const tab =
       query.tab === "payments" || query.tab === "funds" || query.tab === "refunds" || query.tab === "recon" ? query.tab : invoiceId ? "invoice" : "invoices";
+    // DES-04: Finance is for the firm owner and finance staff; others see why instead of empty tables.
+    const denied = financeAccess(access.staff.role);
+    if (denied) return <NoAccessScreen page={page} staff={access.staff} path={"/sheet/finance"} denied={denied} />;
     const finance = await loadSheetFinance(access.staff, tab, invoiceId);
     return (
       <SheetScreen page={page}>
@@ -803,6 +833,7 @@ export async function SheetBody({
             </>
           }
         >
+          <StateAlerts items={finance.states} />
           {finance.invoiceView ? (
             <SheetFinanceInvoice data={finance.invoiceView.view} />
           ) : finance.recon ? (
@@ -876,10 +907,15 @@ export async function SheetBody({
   // Government status: one matter's record (`?view=<matter id>`) or the firm's matters on record (T036, T037).
   if (page === "government" && (access.kind === "live" || access.kind === "sample")) {
     const loaded = await loadSheetGovernment(access.staff, query);
-    if (!loaded) notFound();
+    // DES-04: a matter this person can't open says so (and who to ask), instead of a bare 404.
+    if (!loaded)
+      return (
+        <NoAccessScreen page={page} staff={access.staff} path={"/sheet/government"} denied={recordNotOpen("matter", access.staff.role, { label: "Government status", href: "/sheet/government" })} />
+      );
     return (
       <SheetScreen page={page}>
         <SheetFrame sidebar={loaded.chrome.sidebar} header={<GovernmentHeader data={loaded.header} />} styles={GOVERNMENT_CSS} statusbar={loaded.chrome.statusbar}>
+          {loaded.stale ? <StateAlert data={loaded.stale} /> : null}
           <SheetGovernment data={loaded.page} />
         </SheetFrame>
       </SheetScreen>
@@ -898,7 +934,10 @@ export async function SheetBody({
     // The Designer's + Lead goes to /sheet/lead?new=1: New lead is a dialog on the pipeline.
     if (!query.id) redirect("/sheet/pipeline?new=1");
     const [loaded, vo] = await Promise.all([loadSheetLead(access.staff, query.id, { conflict: query.dlg === "conflict" }), loadLeadVo(access.staff, query.id)]);
-    if (!loaded) notFound();
+    if (!loaded) {
+      if (!isUuid(query.id)) notFound();
+      return <NoAccessScreen page={page} staff={access.staff} path={"/sheet/pipeline"} denied={recordNotOpen("lead", access.staff.role, { label: "Pipeline", href: "/sheet/pipeline" })} />;
+    }
     return (
       <SheetScreen page={page}>
         <LeadScreen loaded={loaded} vo={vo} />
@@ -906,8 +945,16 @@ export async function SheetBody({
     );
   }
   if (page === "matter" && (access.kind === "live" || access.kind === "sample")) {
-    const loaded = matterId ? await loadSheetMatter(access.staff, matterId, query) : null;
-    if (!loaded) notFound();
+    // DES-04: the matter's official content (its program pack and the rules its deadlines came from) when stale.
+    const [loaded, stale] = await Promise.all([
+      matterId ? loadSheetMatter(access.staff, matterId, query) : null,
+      matterId && isUuid(matterId) ? loadSourceStaleness(access.staff, { kind: "matter", matterId }) : null,
+    ]);
+    if (!loaded) {
+      if (!matterId || !isUuid(matterId)) notFound();
+      return <NoAccessScreen page={page} staff={access.staff} path={"/sheet/matters"} denied={recordNotOpen("matter", access.staff.role, { label: "All matters", href: "/sheet/matters" })} />;
+    }
+    const officialTab = ["overview", "forms", "documents", "submissions", "tasks"].includes(loaded.page.tab);
     return (
       <SheetScreen page={page}>
         <SheetFrame
@@ -928,6 +975,7 @@ export async function SheetBody({
           }
           statusbar={loaded.chrome.statusbar}
         >
+          {stale && officialTab ? <StateAlert data={stale} /> : null}
           <SheetMatter data={loaded.page} />
         </SheetFrame>
       </SheetScreen>
@@ -954,6 +1002,21 @@ export async function SheetBody({
         title={PUBLIC.has(page) ? "This form isn’t available" : "No workspace yet"}
         copy={PUBLIC.has(page) ? "A published form appears here when your firm turns one on." : "This account isn’t a member of a firm workspace."}
       />
+    </SheetScreen>
+  );
+}
+
+/**
+ * DES-04: a page or a record this person's role can't open, in the firm's own frame: the shared
+ * permission-denied view says what's missing and who to ask, never a blank table or a bare 404.
+ */
+async function NoAccessScreen({ page, staff, path, denied }: { page: string; staff: SheetStaff; path: string; denied: NoAccessData }) {
+  const chrome = await loadSheetChrome(staff, path);
+  return (
+    <SheetScreen page={page}>
+      <SheetFrame sidebar={chrome.sidebar} top={chrome.top} statusbar={chrome.statusbar}>
+        <NoAccessPanel data={denied} />
+      </SheetFrame>
     </SheetScreen>
   );
 }

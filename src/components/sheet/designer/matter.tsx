@@ -25,6 +25,8 @@ import { ChatError, ChatView } from "@/components/messages/chat";
 import { TaskEditDialog, TasksDialog, type TaskEditDialogData, type TasksDialogData } from "./tasks";
 import { LetterFormFields, type LetterFormData } from "./letter-form";
 import type { ChatData } from "@/modules/messages/present";
+import { NoAccessPanel } from "./state-views";
+import { MATTER_BILLING_DENIED } from "@/modules/sheet/states-present";
 
 export const MATTER_TABS = [
   ["overview", "Overview"],
@@ -1693,7 +1695,10 @@ export type MatterBillingData = {
 
 export function MatterBilling({ data }: { data: MatterBillingData | null }) {
   if (!data || data.hidden || (data.invoices.length === 0 && data.held.count === 0)) {
-    const empty = (
+    // DES-04: a role that can't read this matter's billing gets the shared permission-denied view.
+    const empty = data?.hidden ? (
+      <NoAccessPanel data={MATTER_BILLING_DENIED} />
+    ) : (
       <Panel>
         <Empty
           art={"invoice-plain"}

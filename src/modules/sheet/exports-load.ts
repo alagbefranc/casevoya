@@ -6,6 +6,7 @@ import { loadSheetChrome, matterNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 import { byteSize, excludedWarning, exportState, jobSteps } from "@/modules/sheet/exports-present";
+import { partialAlert } from "@/modules/sheet/states-present";
 
 const EXPORT_ROLES = new Set(["firm_owner", "licensed_consultant", "case_manager"]);
 const MATTERS_OFFERED = 200;
@@ -136,5 +137,7 @@ export async function loadSheetExports(staff: SheetStaff, query: SheetQuery, now
       },
     },
   };
-  return { chrome, exports };
+  // DES-04: the history shows the newest jobs only, and a failed read is said, not shown as "none".
+  const partial = partialAlert([{ label: "Export history", count: jobRows.length, cap: HISTORY, failed: Boolean(jobs.error) }]);
+  return { chrome, exports, partial };
 }
