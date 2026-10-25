@@ -124,6 +124,7 @@ import { closeCrumbMenu, toggleCrumbMenu } from "./crumb-menu";
 import { runQueueReassign, syncQueuePicked } from "./queue-acts";
 import { runNewTask, syncNewTask } from "./new-task-act";
 import { runReportExport } from "./report-acts";
+import { runScheduledReportAct, syncScheduleDialog } from "./scheduled-report-acts";
 import { runExportAct } from "./export-acts";
 import { runMigrationAct, syncMigrationCheck } from "./migration-acts";
 import { inviteFromEdit, openPersonEdit, runPersonEdit } from "./person-edit-act";
@@ -787,6 +788,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         button.setAttribute("aria-busy", "true");
         void run().finally(() => button.removeAttribute("aria-busy"));
       };
+      // REP-03: Reports > Scheduled (New schedule, Edit, Save, Pause or Resume, Run now (test), Delete).
+      const schedAct = target.closest<HTMLElement>("[data-sched-act]");
+      if (schedAct && root.contains(schedAct)) {
+        event.preventDefault();
+        busyRun(schedAct, () => runScheduledReportAct(schedAct, root, router, openDialog));
+        return;
+      }
       // FIN-09 / FIN-12: manual payments, evidence files, reconciliation items and bank account records.
       const manualOpen = target.closest<HTMLElement>("[data-mp-open]");
       if (manualOpen && root.contains(manualOpen)) {
@@ -1734,6 +1742,9 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       }, listen);
     }
     bindPrivacyResponseControls(root, ac.signal);
+    // REP-03: the schedule dialog shows the right day field and only staff who see the chosen report.
+    const schedDialog = root.querySelector<HTMLDialogElement>("dialog#dlgSched");
+    if (schedDialog) schedDialog.addEventListener("change", () => syncScheduleDialog(schedDialog), listen);
     // ?dlg=review&doc= (back from step-up) reopens the document review with what was typed.
     if (root.querySelector("dialog#dlgDocRev")) window.setTimeout(() => reopenDocReview(root, openDialog), 300);
 

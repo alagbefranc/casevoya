@@ -10,6 +10,8 @@
  */
 import type { CSSProperties, ReactNode } from "react";
 import { Empty, Icon, Sep } from "./frame";
+import { ScheduledActionsHead, ScheduledNewButton, ScheduledNotes, ScheduledRowActions } from "./scheduled-reports";
+import type { ScheduledLive, ScheduledRowLive } from "@/modules/sheet/scheduled-reports-present";
 
 export type ReportsTab = "ops" | "money" | "outcomes" | "scheduled";
 export type ReportRange = "90d" | "month" | "year";
@@ -46,7 +48,12 @@ export type ReportsOutcomes = {
   intro?: string | null;
 };
 
-export type ReportsScheduled = { rows: { report: string; every: string; recipients: string; format: string; next: string }[] };
+export type ReportsScheduled = {
+  /** `live`: the row's id and what the signed-in person may do with it (REP-03). Absent in the capture. */
+  rows: { report: string; every: string; recipients: string; format: string; next: string; live?: ScheduledRowLive | null }[];
+  /** REP-03 live: New schedule, the last sends and the link-only note. Absent in the capture. */
+  live?: ScheduledLive | null;
+};
 
 export type ReportsExportDialog = {
   filters: [string, string, string];
@@ -557,6 +564,7 @@ function Outcomes({ data, outcomes }: { data: ReportsData; outcomes: ReportsOutc
 
 function Scheduled({ data, scheduled }: { data: ReportsData; scheduled: ReportsScheduled | null | undefined }) {
   const rows = scheduled?.rows ?? [];
+  const live = scheduled?.live ?? null;
   return (
     <>
       <div className={"ph rv"} style={i(0)}>
@@ -566,6 +574,11 @@ function Scheduled({ data, scheduled }: { data: ReportsData; scheduled: ReportsS
             {"Recipients are checked again when each report is sent. Confidential reports are never attached to general email; the email links back to Casevoya."}
           </p>
         </div>
+        {live && rows.length ? (
+          <div className={"acts"}>
+            <ScheduledNewButton live={live} />
+          </div>
+        ) : null}
       </div>
       {rows.length ? (
         <div className={"tw rv"} role={"region"} aria-label={"Scheduled reports"} tabIndex={0} style={i(1)}>
@@ -578,11 +591,12 @@ function Scheduled({ data, scheduled }: { data: ReportsData; scheduled: ReportsS
                 <th scope={"col"}>{"Recipients"}</th>
                 <th scope={"col"}>{"Format"}</th>
                 <th scope={"col"}>{"Next"}</th>
+                {live ? <ScheduledActionsHead /> : null}
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.report}>
+                <tr key={row.live?.id ?? row.report}>
                   <td>{row.report}</td>
                   <td>{row.every}</td>
                   <td>{row.recipients}</td>
@@ -590,6 +604,7 @@ function Scheduled({ data, scheduled }: { data: ReportsData; scheduled: ReportsS
                   <td>
                     <span className={"num"}>{row.next}</span>
                   </td>
+                  {live && row.live ? <ScheduledRowActions row={row.live} organizationId={live.organizationId} /> : live ? <td></td> : null}
                 </tr>
               ))}
             </tbody>
@@ -597,12 +612,28 @@ function Scheduled({ data, scheduled }: { data: ReportsData; scheduled: ReportsS
         </div>
       ) : (
         <div className={"panel rv"} style={i(1)}>
-          <NoRows
-            title={"No scheduled reports"}
-            copy={"Scheduled sending isn’t set up yet. Use Export on any tab to make a file with its filters and the time it was made."}
-          />
+          {live ? (
+            <Empty
+              art={"reports-empty"}
+              px={64}
+              title={"No scheduled reports"}
+              copy={
+                live.canCreate
+                  ? "Schedule a report to send its link to staff weekly or monthly. Use Export on any tab to make a file now."
+                  : "Your role doesn’t see a report that can be scheduled. Ask your firm owner if you need one."
+              }
+            >
+              {live.canCreate ? <ScheduledNewButton live={live} /> : null}
+            </Empty>
+          ) : (
+            <NoRows
+              title={"No scheduled reports"}
+              copy={"Scheduled sending isn’t set up yet. Use Export on any tab to make a file with its filters and the time it was made."}
+            />
+          )}
         </div>
       )}
+      {live ? <ScheduledNotes live={live} n={2} /> : null}
       <Freshness text={data.freshness} n={2} />
     </>
   );
