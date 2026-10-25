@@ -27,7 +27,8 @@ Use supported stable library versions pinned in a lockfile after checking offici
 flowchart TD
   Firm["Firm workspace"] --> API["Authenticated application API"]
   Client["Client portal"] --> API
-  Admin["Platform administration"] --> API
+  Admin["Platform admin portal (separate codebase)"] --> AdminFns["Named admin database functions (service role, audited)"]
+  AdminFns --> DB
   API --> Policy["Authorization and domain services"]
   Policy --> DB["PostgreSQL and transactional outbox"]
   Policy --> Files["Private evidence storage"]
@@ -44,7 +45,8 @@ The public marketing site reads approved public content only. It has no connecti
 
 ## 3 Repository layout
 
-- `apps/web`: marketing routes, firm routes, client routes, admin routes, and API transport handlers.
+- `apps/web`: marketing routes, firm routes, client routes, and API transport handlers. It has no platform-admin routes.
+- Platform administration is a separate codebase and deployment (Francis's admin portal, decided 2026-10-19; see `docs/DECISIONS.md` and `docs/integrations/support-access.md`). It has its own sign-in, and it reaches Casevoya data only through named, audited database functions (for example `create_support_access_request` and `support_read_matter`). It never gets RLS bypass on client content, and it has no "log in as this firm".
 - `apps/worker`: queue consumers, source monitoring, file processing, reconciliation, reminders and exports.
 - `packages/domain`: application services, state transitions, finance rules, source gates and permission policies.
 - `packages/db`: schema, migrations, transactions, tenant context and repositories.
