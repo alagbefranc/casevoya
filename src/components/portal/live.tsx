@@ -25,6 +25,7 @@ import type { PortalTask } from "@/modules/portal/tasks-load";
 import type { PortalNotice } from "@/modules/portal/notices";
 import { DismissNotice } from "./dismiss-notice";
 import { AcknowledgeDelivery } from "./acknowledge-delivery";
+import { PrivacyDownload } from "./privacy-download";
 
 export type PortalPayments = { data: PortalInvoices; invoiceId: string | null };
 
@@ -374,7 +375,12 @@ function LiveHome({ viewer, view, notices }: { viewer: PortalViewer; view: HomeV
             <b>{notice.title}</b>
             {notice.body}
           </div>
-          <DismissNotice organizationId={viewer.organizationId} noticeId={notice.id} />
+          {/* SEC-06: a privacy response to download, or an extension notice that stays while it applies. */}
+          {"download" in notice && notice.download ? (
+            <PrivacyDownload organizationId={viewer.organizationId} deliveryId={(notice.download as { deliveryId: string }).deliveryId} />
+          ) : "fixed" in notice ? null : (
+            <DismissNotice organizationId={viewer.organizationId} noticeId={notice.id} />
+          )}
         </div>
       ))}
       <section className={view.next.calm ? "next rv calm" : "next rv"} style={{ "--i": "1" } as CSSProperties}>
