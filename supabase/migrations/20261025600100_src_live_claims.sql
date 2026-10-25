@@ -988,7 +988,9 @@ begin
   if v_at is null or v_at > statement_timestamp() + interval '5 minutes' then
     return 'refused: no retrieval time, or one in the future';
   end if;
-  if v_modified > current_date or v_amended > current_date or v_current > current_date then
+  -- A date the page prints can't be later than the day it was retrieved (a day's slack across timezones).
+  if v_modified > (v_at at time zone 'America/Toronto')::date + 1 or v_amended > (v_at at time zone 'America/Toronto')::date + 1
+     or v_current > (v_at at time zone 'America/Toronto')::date + 1 then
     return 'refused: a date the page states is in the future';
   end if;
   if v_http is not null and v_http not between 100 and 599 then

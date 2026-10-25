@@ -106,10 +106,10 @@ export function parseLetterFacts(raw: unknown): VoLetterFacts {
  * official claim, as the database states them.
  */
 function attestation(row: Record<string, unknown>): Pick<VoOfficialItem, "attested" | "attestedBy" | "attestedOn" | "edit"> {
-  const edit = row.edited === true ? { by: text(row.edited_by) || null, licence: text(row.edited_licence) || null, on: text(row.edited_on) || null } : null;
+  const edit = row.edited === true ? { edit: { by: text(row.edited_by) || null, licence: text(row.edited_licence) || null, on: text(row.edited_on) || null } } : {};
   return row.attested === true
-    ? { attested: true, attestedBy: text(row.attested_by) || null, attestedOn: text(row.attested_on) || null, edit }
-    : { attested: false, attestedBy: null, attestedOn: null, edit };
+    ? { attested: true, attestedBy: text(row.attested_by) || null, attestedOn: text(row.attested_on) || null, ...edit }
+    : { attested: false, attestedBy: null, attestedOn: null, ...edit };
 }
 
 export function parseOfficialContent(raw: unknown): VoOfficialItem[] {
