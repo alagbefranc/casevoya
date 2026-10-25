@@ -233,14 +233,33 @@ describe("a Vo run", () => {
   it("answers Ask Vo from the records, with sources, honouring the per-document-kind switches", async () => {
     const rpcs: Rpc[] = [];
     const seen = { toolResults: [] as string[] };
-    const sdk = scriptedSdk({ calls: [{ name: "mcp__casevoya__read_matter_summary" }, { name: "mcp__casevoya__read_documents_index" }], result: "Nothing is overdue; the wedding photos are on file." }, seen);
-    const out = await runVoTask(request("ask"), { sdk, data: fakeData(rpcs), apiKey: "key", cwd: "/tmp/vo" });
+    const sdk = scriptedSdk(
+      { calls: [{ name: "mcp__casevoya__read_matter_summary" }, { name: "mcp__casevoya__read_documents_index" }], result: "Nothing is overdue [R1]. The wedding photos are on file [R2]." },
+      seen,
+    );
+    const docs = async () => [
+      { id: "d1", purpose: "Passport bio page", sensitivity: "ordinary", category: null, status: null, versionId: "aaaaaaaa-0000-4000-8000-000000000001" },
+      { id: "d2", purpose: "Wedding photos", sensitivity: "ordinary", category: null, status: null, versionId: "aaaaaaaa-0000-4000-8000-000000000002" },
+    ];
+    const out = await runVoTask(request("ask"), { sdk, data: fakeData(rpcs, { documents: docs }), apiKey: "key", cwd: "/tmp/vo" });
     expect(out.result).toBe("answered");
     // Relationship evidence may be read; identity documents are off: hidden, and counted.
     expect(seen.toolResults[1]).toContain("Wedding photos");
     expect(seen.toolResults[1]).not.toContain("Passport");
     expect(seen.toolResults[1]).toContain("1 document(s) hidden");
-    expect(rpcs[0].args).toMatchObject({ p_result: "answered", p_prompt_version: "ask-1" });
+    // SRC-09: each record carries its marker; the answer cites the matter and the document version.
+    expect(seen.toolResults[0]).toContain("[R1] Matter: Synthetic matter");
+    expect(seen.toolResults[1]).toContain("[R2] Wedding photos");
+    if (out.result !== "answered") return;
+    expect(out.sources.map((source) => [source.marker, source.kind, source.id])).toEqual([
+      ["R1", "matter", MATTER],
+      ["R2", "document_version", "aaaaaaaa-0000-4000-8000-000000000002"],
+    ]);
+    expect(rpcs[0].args).toMatchObject({ p_result: "answered", p_prompt_version: "ask-2" });
+    expect(rpcs[0].args.p_sources).toEqual([
+      { kind: "matter", id: MATTER, label: "SF-2026-0001" },
+      { kind: "document_version", id: "aaaaaaaa-0000-4000-8000-000000000002", label: "Document: Wedding photos" },
+    ]);
     expect(rpcs[0].args.p_body).toBeUndefined();
   });
 
@@ -248,7 +267,7 @@ describe("a Vo run", () => {
     const rpcs: Rpc[] = [];
     const sdk = scriptedSdk({ calls: [], result: "Spousal sponsorship takes 12 months." }, { toolResults: [] });
     const out = await runVoTask(request("ask"), { sdk, data: fakeData(rpcs), apiKey: "key", cwd: "/tmp/vo" });
-    expect(out.result).toBe("abstained");
+    expect(out).toMatchObject({ result: "abstained", reason: "unsupported" });
   });
 
   it("is offline without a model key, and records the run as unavailable", async () => {
@@ -286,7 +305,7 @@ describe("the service endpoint", () => {
     expect((await handleRun({ method: "POST", headers: await signed(body), body: tampered }, deps)).status).toBe(401);
     const ok = await handleRun({ method: "POST", headers: await signed(body), body }, deps);
     expect(ok.status).toBe(200);
-    expect(ok.body).toEqual({ result: "abstained" });
+    expect(ok.body).toEqual({ result: "abstained", reason: "consultant" });
     // The data layer is built from the staff member's own token, for their firm.
     expect(used).toEqual([{ accessToken: TOKEN, organizationId: ORG }]);
   });
