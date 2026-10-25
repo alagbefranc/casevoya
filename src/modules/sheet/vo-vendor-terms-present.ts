@@ -24,10 +24,24 @@ export type VendorTermsVendor = {
   service: string;
   usedFor: string;
   setup: string[];
+  /** "Signed agreement with Casevoya, effective …", or null when there is none. */
+  agreement: { title: string; text: string; precedence: string } | null;
+  /** The label over the published-terms rows. */
+  published: { term: string; text: string };
   rows: VendorTermsRow[];
   reviewed: string;
   terms: { label: string; href: string }[];
 };
+
+export type CommitmentData = {
+  key: string;
+  title: string;
+  quote: string;
+  cite: VendorCite;
+  commitment: string[];
+};
+
+export type CommitmentsData = { status: string; intro: string; items: CommitmentData[] };
 
 export type VendorTermsDialogData = {
   id: string;
@@ -44,6 +58,8 @@ export type AiVendorTermsData = {
   /** The owner's "Review and acknowledge" when the current version isn't acknowledged. */
   action: { label: string; attrs: Attrs } | null;
   vendors: VendorTermsVendor[];
+  /** Casevoya's own AI terms, written to the CICC Code (pending Francis's approval). */
+  commitments: CommitmentsData;
   note: string;
   dialog: VendorTermsDialogData | null;
   /** Whether the firm acknowledged the version shown (the firm switch asks first when not). */
@@ -116,6 +132,17 @@ export function vendorTermsPanel(input: {
     service: vendor.service,
     usedFor: vendor.usedFor,
     setup: vendor.setup,
+    agreement: vendor.agreement
+      ? {
+          title: vendor.agreement.title,
+          text: `Signed agreement with Casevoya, effective ${calendarDay(vendor.agreement.effectiveOn)}. ${vendor.agreement.note}`,
+          precedence: "It takes precedence over the vendor’s published terms below.",
+        }
+      : null,
+    published: {
+      term: vendor.agreement ? "Vendor’s published terms (for reference)" : "Vendor’s published terms",
+      text: vendor.agreement ? "Quoted from the vendor’s public pages. Where they differ, the signed agreement applies." : "Quoted from the vendor’s public pages.",
+    },
     rows: VENDOR_FIELDS.map((field) => ({
       term: VENDOR_FIELD_LABEL[field],
       quotes: vendor.fields[field].map((statement) => ({ text: statement.quote.split("\n"), cite: cite(statement.source) })),
@@ -129,22 +156,47 @@ export function vendorTermsPanel(input: {
   );
   const ownerCanAcknowledge = input.isOwner && !state.acknowledged;
   const turnOn = !input.enabled;
-  return {
+  const code = terms.commitments.source;
+  const agreements = terms.vendors.filter((vendor) => vendor.agreement);
+  const commitments: CommitmentsData = {
+    status: terms.commitments.status,
     intro:
-      "What each AI vendor Casevoya uses says about your data, quoted from its published terms. Each value names the page, section, page date and the day Casevoya retrieved it. A signed agreement with a vendor would take precedence over these published terms.",
+      "How Casevoya handles your clients’ information when Vo is used. Each term is written to an obligation in the College of Immigration and Citizenship Consultants’ Code of Professional Conduct, quoted from Justice Laws above it.",
+    items: terms.commitments.items.map((item) => ({
+      key: item.key,
+      title: `Section ${item.obligation.section}: ${item.obligation.heading}`,
+      quote: item.obligation.quote,
+      cite: {
+        label: code.title,
+        href: item.obligation.url,
+        detail: [`section ${item.obligation.section}`, `current to ${calendarDay(code.currentTo)}`, `retrieved ${calendarDay(code.retrievedOn)}`].join(" · "),
+        hash: code.sha256,
+      },
+      commitment: item.commitment,
+    })),
+  };
+  return {
+    intro: agreements.length
+      ? "Casevoya has a signed agreement with each AI vendor it uses; the agreement takes precedence. Each vendor’s published terms are quoted below it for reference, with the page, section, page date and the day Casevoya retrieved it."
+      : "What each AI vendor Casevoya uses says about your data, quoted from its published terms. Each value names the page, section, page date and the day Casevoya retrieved it.",
     status: { badge: state.badge, text: state.text },
     action: ownerCanAcknowledge ? { label: "Review and acknowledge", attrs: { "data-dlg": VO_TERMS_DIALOG } } : null,
     vendors,
+    commitments,
     note: `Terms version ${terms.version}, last reviewed ${reviewed}. Casevoya doesn’t sync these terms automatically: they are re-read from each vendor’s page and reviewed before a new version is published.`,
     acknowledged: state.acknowledged,
     dialog: ownerCanAcknowledge
       ? {
           id: VO_TERMS_DIALOG,
           title: turnOn ? "Acknowledge the AI vendor terms to turn Vo on" : "Acknowledge the AI vendor terms",
-          lead: `Vo sends the records it reads to the AI vendors below. Read what their published terms say about data use, retention, processing region, subprocessors and deletion in the AI vendor terms panel. Casevoya records that you acknowledged terms version ${terms.version}, and when.`,
+          lead: `Vo sends the records it reads to the AI vendors below. Read the AI vendor terms panel first: the signed agreements, each vendor’s published terms on data use, retention, processing region, subprocessors and deletion, and Casevoya’s commitments. Casevoya records that you acknowledged terms version ${terms.version}, and when.`,
           points: [
-            ...terms.vendors.map((vendor) => ({ title: `${vendor.vendor}: ${vendor.service}`, detail: vendor.usedFor })),
-            ...(unstated.length ? [{ title: NOT_STATED, detail: `${unstated.join("; ")}.` }] : []),
+            ...terms.vendors.map((vendor) => ({
+              title: `${vendor.vendor}: ${vendor.service}`,
+              detail: vendor.agreement ? `${vendor.usedFor} Signed agreement with Casevoya, effective ${calendarDay(vendor.agreement.effectiveOn)}. ${vendor.agreement.note}` : vendor.usedFor,
+            })),
+            ...(unstated.length ? [{ title: `${NOT_STATED} (vendor’s public pages)`, detail: `${unstated.join("; ")}.` }] : []),
+            { title: "Casevoya’s commitments", detail: `${terms.commitments.items.length} terms, each written to an obligation in the CICC Code of Professional Conduct. ${terms.commitments.status}.` },
           ],
           links: terms.vendors.flatMap((vendor) => vendor.terms.map((link) => ({ label: link.label, href: link.url }))),
           accept: {

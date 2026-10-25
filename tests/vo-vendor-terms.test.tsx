@@ -39,6 +39,23 @@ describe("reviewed vendor terms configuration", () => {
     }
   });
 
+  it("writes each of Casevoya's commitments to a quoted CICC Code section on Justice Laws, marked pending Francis's approval", () => {
+    const { commitments } = VO_VENDOR_TERMS;
+    expect(commitments.status).toBe("Casevoya’s terms, written to the CICC Code; pending Francis’s approval");
+    expect(commitments.source).toMatchObject({ currentTo: "2026-09-30", retrievedOn: "2026-10-25" });
+    expect(commitments.source.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(commitments.items.map((item) => item.obligation.section)).toEqual(["28(1)", "28(3)", "24(3)(q)", "38(2)", "19(2)(e)", "37"]);
+    for (const item of commitments.items) {
+      const url = new URL(item.obligation.url);
+      expect(`${url.host}${url.pathname}`).toBe("laws-lois.justice.gc.ca/eng/regulations/SOR-2022-128/FullText.html");
+      expect(url.hash).toMatch(/^#(s-\d+|\d{7})$/);
+      expect(item.obligation.quote.length).toBeGreaterThan(40);
+      expect(item.commitment.length).toBeGreaterThan(0);
+    }
+    // Only the signed agreement's existence and date are recorded, never its contents.
+    for (const vendor of VO_VENDOR_TERMS.vendors) expect(vendor.agreement).toMatchObject({ effectiveOn: "2026-10-20", note: "On file with Casevoya; available on request." });
+  });
+
   it("lists exactly what the vendors' published pages don't state", () => {
     expect(unstatedFields()).toEqual(["Cloudflare: Processing region"]);
   });
@@ -66,12 +83,25 @@ describe("AI vendor terms panel", () => {
       label: "Acknowledge and turn Vo on",
       attrs: { "data-vo-terms-ack": VO_VENDOR_TERMS.version, "data-turn-on": "1", "data-org": ORG },
     });
-    expect(panel.dialog?.points.map((point) => point.title)).toEqual(["Anthropic: Claude API", "Cloudflare: Workers AI", NOT_STATED]);
+    expect(panel.dialog?.points.map((point) => point.title)).toEqual([
+      "Anthropic: Claude API",
+      "Cloudflare: Workers AI",
+      `${NOT_STATED} (vendor’s public pages)`,
+      "Casevoya’s commitments",
+    ]);
+    expect(panel.dialog?.points[0].detail).toContain("Signed agreement with Casevoya, effective 20 Oct 2026. On file with Casevoya; available on request.");
     // Every vendor field is either quoted with its source or said to be not stated.
     for (const vendor of panel.vendors) {
       expect(vendor.rows.map((row) => row.term)).toEqual(["Data use (training)", "Retention", "Processing region", "Subprocessors", "Deletion"]);
       for (const row of vendor.rows) expect(row.quotes.length > 0 || row.unstated === NOT_STATED).toBe(true);
-      expect(vendor.reviewed).toBe("24 Oct 2026, Casevoya platform team");
+      expect(vendor.reviewed).toBe("25 Oct 2026, Casevoya platform team");
+      // Francis: a signed agreement with each vendor; its text isn't reproduced, only that it exists.
+      expect(vendor.agreement).toEqual({
+        title: `Signed agreement between ${vendor.vendor} and Casevoya`,
+        text: "Signed agreement with Casevoya, effective 20 Oct 2026. On file with Casevoya; available on request.",
+        precedence: "It takes precedence over the vendor’s published terms below.",
+      });
+      expect(vendor.published.term).toBe("Vendor’s published terms (for reference)");
     }
     const anthropic = panel.vendors[0].rows[0].quotes[0];
     expect(anthropic.cite).toMatchObject({ href: "https://www.anthropic.com/legal/commercial-terms#b-customer-content", detail: "B. Customer Content · Effective Jun 17, 2025 · retrieved 24 Oct 2026" });
@@ -132,5 +162,11 @@ describe("Settings > Vo", () => {
     expect(html).toContain(`data-vo-terms-ack="${VO_VENDOR_TERMS.version}"`);
     expect(html).toContain('<details class="src" open="">');
     expect(html).not.toContain("Pending the AI vendor review");
+    expect(html).toContain("Signed agreement between Anthropic and Casevoya");
+    expect(html).toContain("Vendor’s published terms (for reference)");
+    expect(html).toContain("Casevoya’s commitments");
+    expect(html).toContain("Casevoya’s terms, written to the CICC Code; pending Francis’s approval");
+    expect(html).toContain('href="https://laws-lois.justice.gc.ca/eng/regulations/SOR-2022-128/FullText.html#s-28"');
+    expect(html).toContain("section 28(1) · current to 30 Sep 2026 · retrieved 25 Oct 2026");
   });
 });

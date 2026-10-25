@@ -5,7 +5,7 @@
  * `dl`, external link) and the disclosure dialog's `.dlg` parts (`.dh`, `.db`, `ol.ofl`, `.df`).
  */
 import { Fragment } from "react";
-import type { AiVendorTermsData, VendorQuote, VendorTermsDialogData, VendorTermsVendor } from "@/modules/sheet/vo-vendor-terms-present";
+import type { AiVendorTermsData, CommitmentsData, VendorQuote, VendorTermsDialogData, VendorTermsVendor } from "@/modules/sheet/vo-vendor-terms-present";
 import { Icon, Sep } from "./frame";
 import { Badge } from "./matters";
 
@@ -60,6 +60,17 @@ function Vendor({ vendor }: { vendor: VendorTermsVendor }) {
             <div key={line}>{line}</div>
           ))}
         </dd>
+        {vendor.agreement ? (
+          <>
+            <dt>{vendor.agreement.title}</dt>
+            <dd>
+              <b style={{ fontWeight: "500" }}>{vendor.agreement.text}</b>
+              <div>{vendor.agreement.precedence}</div>
+            </dd>
+          </>
+        ) : null}
+        <dt>{vendor.published.term}</dt>
+        <dd>{vendor.published.text}</dd>
         {vendor.rows.map((row) => (
           <Fragment key={row.term}>
             <dt>{row.term}</dt>
@@ -80,6 +91,46 @@ function Vendor({ vendor }: { vendor: VendorTermsVendor }) {
         </dd>
       </dl>
     </details>
+  );
+}
+
+function Commitments({ data }: { data: CommitmentsData }) {
+  return (
+    <section className={"panel"} id={"voCommitments"}>
+      <h2>
+        <Icon name={"check-circle"} />
+        {"Casevoya’s commitments"}
+      </h2>
+      <div className={"fp-pad"}>
+        <div className={"fp-row"} style={{ marginBottom: "10px" }}>
+          <Badge badge={{ tone: "rev", label: data.status }} />
+        </div>
+        <p style={{ margin: "0 0 10px" }}>{data.intro}</p>
+        {data.items.map((item) => (
+          <details className={"src"} open key={item.key}>
+            <summary>
+              <Icon name={"link"} cls={"ic s"} />
+              <span>
+                <b style={{ fontWeight: "500" }}>{item.title}</b>
+              </span>
+              <Icon name={"chevron-down"} cls={"ic s ch"} />
+            </summary>
+            <dl>
+              <dt>{"The Code says"}</dt>
+              <dd>
+                <Quote quote={{ text: [item.quote], cite: item.cite }} />
+              </dd>
+              <dt>{"Casevoya’s commitment"}</dt>
+              <dd>
+                {item.commitment.map((line) => (
+                  <div key={line}>{line}</div>
+                ))}
+              </dd>
+            </dl>
+          </details>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -155,6 +206,7 @@ export function AiVendorTerms({ data }: { data: AiVendorTermsData }) {
           <p className={"fp-note"}>{data.note}</p>
         </div>
       </section>
+      <Commitments data={data.commitments} />
       {data.dialog ? <AiVendorTermsDialog data={data.dialog} /> : null}
     </div>
   );

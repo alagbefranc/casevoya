@@ -5,6 +5,12 @@
  * the Claude API; "Draft in French" calls Workers AI), the same for every firm, so the terms change
  * only when the code or a vendor's page changes, and every change is reviewed in a pull request.
  *
+ * Casevoya has a signed agreement with each vendor (Francis, 2026-10-24). Its text is on file with
+ * Casevoya and is not reproduced here; it takes precedence over the published terms, which stay
+ * quoted for reference. "Casevoya's commitments" are Casevoya's own AI data-handling terms, each
+ * written to an obligation in the CICC Code of Professional Conduct (SOR/2022-128, quoted from
+ * Justice Laws with section, anchor and "current to" date) and each something Casevoya's code does.
+ *
  * Rules for editing this file:
  * - Every `quote` is copied word for word from the page at `source.url` (the section is named, and
  *   the anchor is in the URL where the page has one), with the date the page shows (`pageDate`), the
@@ -55,6 +61,28 @@ export type VendorTerms = {
   fields: Record<VendorField, VendorStatement[]>;
   /** The full terms and DPA. */
   terms: { label: string; url: string }[];
+  /**
+   * The signed agreement between the vendor and Casevoya. Its text is on file with Casevoya and is
+   * not reproduced here: only that it exists and its effective date. It takes precedence over the
+   * vendor's published terms, which stay quoted for reference.
+   */
+  agreement: { title: string; effectiveOn: string; note: string } | null;
+};
+
+/** One of Casevoya's own AI data-handling terms, written to meet an obligation in the CICC Code. */
+export type CasevoyaCommitment = {
+  key: string;
+  /** The Code's own words for the obligation, with its section, anchor and "current to" date. */
+  obligation: { section: string; heading: string; quote: string; url: string };
+  /** Casevoya's commitment, in plain language (each line is something Casevoya's code does). */
+  commitment: string[];
+};
+
+export type CasevoyaCommitments = {
+  /** How the section is marked until Francis approves it. */
+  status: string;
+  source: { title: string; url: string; currentTo: string; retrievedOn: string; sha256: string };
+  items: CasevoyaCommitment[];
 };
 
 export type VoVendorTerms = {
@@ -64,7 +92,12 @@ export type VoVendorTerms = {
   reviewedOn: string;
   reviewedBy: string;
   vendors: VendorTerms[];
+  commitments: CasevoyaCommitments;
 };
+
+/** Francis, 2026-10-24: "last week Tuesday", recorded as 2026-10-20 (to be confirmed by Francis). */
+const AGREEMENT_EFFECTIVE = "2026-10-20";
+const AGREEMENT_NOTE = "On file with Casevoya; available on request.";
 
 const RETRIEVED = "2026-10-24";
 
@@ -72,6 +105,7 @@ const ANTHROPIC_COMMERCIAL_TERMS = "https://www.anthropic.com/legal/commercial-t
 const ANTHROPIC_DPA = "https://www.anthropic.com/legal/data-processing-addendum";
 const CLOUDFLARE_DPA = "https://www.cloudflare.com/cloudflare-customer-dpa/";
 const CLOUDFLARE_DEV_TERMS = "https://www.cloudflare.com/service-specific-terms-developer-platform/";
+const CICC_CODE = "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2022-128/FullText.html";
 
 const A_TERMS = { title: "Commercial Terms of Service", pageDate: "Effective Jun 17, 2025", retrievedOn: RETRIEVED, sha256: "8c357108c3c6fed9676d4eb336478d2cb93b8a5f2eb6d34ad7b4f961bc2e38b6" };
 const A_DPA = { title: "Data Processing Addendum", pageDate: "Effective Feb 24, 2025", retrievedOn: RETRIEVED, sha256: "4a8c123f79c35e8653a542a17b0ee1f5923164783fa8e7cca66c642477f258ab" };
@@ -95,20 +129,18 @@ const C_DPA = { title: "Cloudflare Data Processing Addendum", pageDate: "Version
 const C_SUBPROCESSORS = { title: "Cloudflare Sub-Processors: For Cloudflare services", pageDate: "Last Updated: October 1, 2025", retrievedOn: RETRIEVED, sha256: "48aa50d377968b337992d3867358bd52a06215608ea4c655ff1700f96f490aa4" };
 
 export const VO_VENDOR_TERMS: VoVendorTerms = {
-  version: "2026-10-24.1",
-  reviewedOn: "2026-10-24",
+  version: "2026-10-25.1",
+  reviewedOn: "2026-10-25",
   reviewedBy: "Casevoya platform team",
   vendors: [
     {
       key: "anthropic",
       vendor: "Anthropic",
       service: "Claude API",
-      usedFor: "Vo: reply drafts, staff answers and document readings. The records Vo reads for a run and its draft pass through the Claude API.",
-      setup: [
-        "Called by Casevoya’s Vo agent with Casevoya’s own API key, so Anthropic’s Commercial Terms and DPA apply.",
-        "Vo doesn’t choose an inference geography, so Anthropic’s default applies.",
-        "No zero data retention agreement is recorded in Casevoya: these are Anthropic’s standard published terms.",
-      ],
+      usedFor:
+        "Vo: reply drafts, staff answers, document readings, letter drafts, lead follow-up drafts and call-notes summaries. The records Vo reads for a run and its draft pass through the Claude API.",
+      setup: ["Called by Casevoya’s Vo agent with Casevoya’s own API key.", "Vo doesn’t choose an inference geography, so Anthropic’s default applies."],
+      agreement: { title: "Signed agreement between Anthropic and Casevoya", effectiveOn: AGREEMENT_EFFECTIVE, note: AGREEMENT_NOTE },
       fields: {
         dataUse: [
           { quote: "Anthropic may not train models on Customer Content from Services.", source: { ...A_TERMS, url: `${ANTHROPIC_COMMERCIAL_TERMS}#b-customer-content`, section: "B. Customer Content" } },
@@ -171,6 +203,7 @@ export const VO_VENDOR_TERMS: VoVendorTerms = {
         "Called through the Casevoya app’s Workers AI binding, without AI Gateway, so no gateway logging or caching is turned on.",
         "Running Casevoya and the Vo agent’s container is covered by Cloudflare’s DPA and Developer Platform terms; the Workers AI page below covers the French drafts only.",
       ],
+      agreement: { title: "Signed agreement between Cloudflare and Casevoya", effectiveOn: AGREEMENT_EFFECTIVE, note: AGREEMENT_NOTE },
       fields: {
         dataUse: [
           {
@@ -222,6 +255,104 @@ export const VO_VENDOR_TERMS: VoVendorTerms = {
       ],
     },
   ],
+  commitments: {
+    status: "Casevoya’s terms, written to the CICC Code; pending Francis’s approval",
+    source: {
+      title: "Code of Professional Conduct for College of Immigration and Citizenship Consultants Licensees (SOR/2022-128)",
+      url: CICC_CODE,
+      currentTo: "2026-09-30",
+      retrievedOn: "2026-10-25",
+      sha256: "de8ea36fdeacc7fbb13978c6d0d1426378466a259c2473a793e95daa21c43f8a",
+    },
+    items: [
+      {
+        key: "confidentiality",
+        obligation: {
+          section: "28(1)",
+          heading: "Obligation of confidentiality",
+          quote:
+            "A licensee must keep confidential all information in relation to a client or former client, or a client’s or former client’s business affairs, that was acquired in the course of their professional relationship with that client and take the measures that are necessary to maintain the confidentiality of that information indefinitely.",
+          url: `${CICC_CODE}#s-28`,
+        },
+        commitment: [
+          "Casevoya doesn’t use your clients’ information to train any AI model.",
+          "Vo reads a record only with the access of the staff member who asked, under the firm’s own permissions; it can’t read another firm’s records.",
+          "Identity numbers are removed from the records Vo reads for reply drafts, answers and letters before they reach the AI vendor.",
+          "Vo’s run log keeps who asked, the model, the prompt version and how many records were read, never the prompt or the client’s text. Vo’s “useful?” vote stays in Casevoya and isn’t sent to the vendor.",
+        ],
+      },
+      {
+        key: "minimum",
+        obligation: {
+          section: "28(3)",
+          heading: "Scope of disclosure",
+          quote: "If a licensee discloses confidential information under subsection (2), the licensee must not disclose more information than necessary to respond to the specific basis for the disclosure.",
+          url: `${CICC_CODE}#1354676`,
+        },
+        commitment: [
+          "Vo sends the AI vendor only what one task needs: the matter, conversation, lead, document or notes the staff member is working on, not the firm’s records at large.",
+          "Identity, relationship, financial, medical, criminal-history and narrative documents stay away from Vo until the firm owner switches each kind on; notes that mention medical or criminal details are kept from Vo the same way.",
+          "With Vo off for the firm, nothing is sent to the AI vendor for Vo.",
+        ],
+      },
+      {
+        key: "agreement",
+        obligation: {
+          section: "24(3)(q)",
+          heading: "Service agreement",
+          quote:
+            "The service agreement must include the following information: … a statement that the licensee has an obligation of confidentiality under this Code and a description of the manner in which the licensee will maintain the confidentiality of the client’s information and documents;",
+          url: `${CICC_CODE}#1354626`,
+        },
+        commitment: [
+          "This page says, in plain words, which AI vendors receive client information when Vo is used, for what, and on which terms, so the firm can describe it in its service agreements.",
+          "When these terms change, Casevoya publishes a new version and the firm owner acknowledges it before Vo can be turned on again.",
+        ],
+      },
+      {
+        key: "supervision",
+        obligation: {
+          section: "38(2)",
+          heading: "Professional responsibility",
+          quote:
+            "A licensee must supervise and assume professional responsibility for any work done by a person who assists in the provision of immigration or citizenship consulting services and ensure that the level of supervision is adequate for the type of work in question.",
+          url: `${CICC_CODE}#1354762`,
+        },
+        commitment: [
+          "Vo only drafts. Nothing Vo writes is sent, signed, submitted or recorded until a person accepts it.",
+          "A letter Vo drafts can be released only after a licensed member approves that exact version.",
+          "Vo doesn’t give advice or quote a rule, fee or deadline without a source the firm approved: it leaves it for a consultant and says so.",
+        ],
+      },
+      {
+        key: "technology",
+        obligation: {
+          section: "19(2)(e)",
+          heading: "Nature of competence",
+          quote: "To fulfill their professional obligations competently, a licensee must … be able to deliver the services to the client using technology that is appropriate and effective",
+          url: `${CICC_CODE}#1354546`,
+        },
+        commitment: [
+          "The firm owner can turn Vo off for the whole firm, for one capability or for a sensitive kind of document, and every workflow still works by hand.",
+          "If Vo is unavailable, staff draft by hand and nothing else stops.",
+        ],
+      },
+      {
+        key: "records",
+        obligation: {
+          section: "37",
+          heading: "Record keeping",
+          quote:
+            "A licensee must maintain a reliable system of office administration in relation to the immigration or citizenship consulting services that they provide and keep and preserve records in accordance with the by-laws made under the Act.",
+          url: `${CICC_CODE}#s-37`,
+        },
+        commitment: [
+          "Every Vo run is recorded with who asked, the model, the prompt version, the records it read and who reviewed the result (Vo and AI › Run log).",
+          "Every draft keeps what happened to it and who decided (Draft audit); turning Vo on or off and acknowledging these terms are in the firm’s audit trail.",
+        ],
+      },
+    ],
+  },
 };
 
 /** The vendors' fields a public page doesn't state, as "Vendor: Field" (for the report and the panel). */
