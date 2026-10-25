@@ -1,15 +1,16 @@
-import { federalHost, readPageDates, type PageDates } from "./claim-capture";
+import { federalHost, hashableBytes, readPageDates, type PageDates } from "./claim-capture";
 
 /**
- * Fetches the official page a claim cites, server side (SRC-01): the SHA-256 of the bytes, the
+ * Fetches the official page a claim cites, server side (SRC-01): the SHA-256 of the bytes (an HTML
+ * page without the CDN's per-request script, as `hashableBytes` in claim-capture.ts says), the
  * retrieval time and the dates the page prints. Only canada.ca or gc.ca over https; a redirect must
  * stay on one. Any failure returns no snapshot and the reason: the claim is still kept for review,
  * and a licensed reviewer approves it only after attesting they opened the page themselves.
  */
 export type ClaimSnapshot = { sha256: string; retrieved_at: string; final_url: string; http_status: number };
 
-async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(bytes));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
@@ -31,8 +32,10 @@ export async function captureClaimPage(
   const bytes = await response.arrayBuffer();
   if (bytes.byteLength === 0 || bytes.byteLength > 10_000_000) return { snapshot: null, reason: "The page didn’t answer as expected." };
   const html = new TextDecoder("utf-8").decode(bytes);
+  // Same hash as the capture script: without the CDN's per-request script (claim-capture.ts).
+  const hashed = hashableBytes(new Uint8Array(bytes), response.headers.get("content-type"));
   return {
-    snapshot: { sha256: await sha256Hex(bytes), retrieved_at: now().toISOString(), final_url: finalUrl, http_status: response.status },
+    snapshot: { sha256: await sha256Hex(hashed.bytes), retrieved_at: now().toISOString(), final_url: finalUrl, http_status: response.status },
     dates: readPageDates(html),
   };
 }
