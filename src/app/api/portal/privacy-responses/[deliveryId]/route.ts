@@ -4,14 +4,16 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { isUuid } from "@/lib/tenant/context";
 import { privacyResponseError } from "@/modules/compliance/privacy-response-format";
 
-function refuse(error: string, status: number) {
-  return NextResponse.json({ error }, { status });
+function refuse(error: string, status: number, twoStep?: "off" | "check") {
+  return NextResponse.json(twoStep ? { error, twoStep } : { error }, { status });
 }
 
 /**
  * SEC-06: the person downloads the privacy response their firm delivered. The database checks it is
  * theirs (their own portal login, still active in the firm) and within 30 days, records the
  * download with the package hash (the delivery proof) and audits it; then a 60-second signed link.
+ * It's a high-risk download (SEC-01): the person needs two-step sign-in on and checked in the last
+ * 15 minutes; `twoStep` tells the portal which of the two is missing.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ deliveryId: string }> }) {
   const { deliveryId } = await params;
@@ -24,7 +26,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ del
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) return refuse("Sign in first.", 401);
   const grant = await supabase.rpc("authorize_privacy_response_download", { p_delivery_id: deliveryId });
-  if (grant.error) return refuse(privacyResponseError(grant.error.message), 403);
+  if (grant.error) {
+    if (/two-step sign-in is required/i.test(grant.error.message)) return refuse("Turn on two-step sign-in in Account to download this.", 403, "off");
+    if (/client step-up required/i.test(grant.error.message)) return refuse("Confirm it’s you with your authenticator, then download.", 403, "check");
+    return refuse(privacyResponseError(grant.error.message), 403);
+  }
   const value = grant.data as { bucket?: unknown; storage_key?: unknown; seconds?: unknown } | null;
   if (typeof value?.bucket !== "string" || typeof value.storage_key !== "string" || typeof value.seconds !== "number") return refuse("That download isn’t available.", 404);
   let service: ReturnType<typeof createServiceClient>;

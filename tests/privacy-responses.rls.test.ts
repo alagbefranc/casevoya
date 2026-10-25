@@ -53,6 +53,12 @@ async function activeMembership(orgId: string, userId: string, role: string, cre
 const fresh = (userId: string, orgId: string) => asUser(db, { userId, aal: "aal2", orgId, totpAgeSeconds: 0 });
 const stale = (userId: string, orgId: string) => asUser(db, { userId, aal: "aal2", orgId, totpAgeSeconds: 3600 });
 
+/** The client turns on two-step sign-in (a verified authenticator), as /portal/account does. */
+async function twoStepOn(userId: string) {
+  await asMaintenance(db);
+  await db.query(`insert into auth.mfa_factors (id, user_id, factor_type, status) values ($1, $2, 'totp', 'verified')`, [randomUUID(), userId]);
+}
+
 /** A firm with a credentialed licensed consultant, a case manager, an assistant, and a client with a portal login. */
 async function firm(client?: string) {
   const owner = await createUser("owner");
@@ -363,6 +369,14 @@ describe("response package and delivery", () => {
     await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
     const mine = (await db.query<{ r: Record<string, unknown>[] }>(`select public.privacy_requests_for_me($1) as r`, [f.orgId])).rows[0].r;
     expect(mine[0]).toMatchObject({ delivery_id: delivery, file_count: 5, download_count: 0 });
+    // SEC-01: a high-risk download needs two-step on, then a check in the last 15 minutes.
+    await expectDbError(() => db.query(`select public.authorize_privacy_response_download($1)`, [delivery]), /two-step sign-in is required/);
+    await twoStepOn(f.client);
+    await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
+    await expectDbError(() => db.query(`select public.authorize_privacy_response_download($1)`, [delivery]), /client step-up required/);
+    await stale(f.client, f.orgId);
+    await expectDbError(() => db.query(`select public.authorize_privacy_response_download($1)`, [delivery]), /client step-up required/);
+    await fresh(f.client, f.orgId);
     const grant = (await db.query<{ g: Record<string, unknown> }>(`select public.authorize_privacy_response_download($1) as g`, [delivery])).rows[0].g;
     expect(grant).toMatchObject({ bucket: "matter-exports", seconds: 60, sha256: sha(`zip-${responseId}`) });
     await db.query(`select public.authorize_privacy_response_download($1)`, [delivery]);
@@ -442,7 +456,8 @@ describe("firms and logins", () => {
     const responseId = await readyPackage(f, id);
     await fresh(f.consultant, f.orgId);
     const delivery = (await db.query<{ id: string }>(`select public.deliver_privacy_response($1, $2, 'fulfilled', null) as id`, [id, responseId])).rows[0].id;
-    await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
+    await twoStepOn(f.client);
+    await fresh(f.client, f.orgId);
     await db.query(`select public.authorize_privacy_response_download($1)`, [delivery]);
 
     // The firm closes the login (membership revoked).
