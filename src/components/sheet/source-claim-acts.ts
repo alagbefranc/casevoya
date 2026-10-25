@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { addRuleClaim, resolveRuleApplicability, reviewRuleVersion, suspendRuleVersion } from "@/modules/content-governance/claim-actions";
 import { readAttestationFrom } from "@/modules/government/page-attestation";
@@ -139,7 +140,7 @@ export async function runClaimAct(button: HTMLElement, root: HTMLElement, router
   const error = result && "error" in result && typeof result.error === "string" ? result.error : null;
   if (error) {
     if (needsStepUp(error)) {
-      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null, "rule_approve"));
+      goStepUp(stepUpLocation(window.location.pathname, window.location.search, null, "rule_approve"));
       return;
     }
     toast2(error, { kind: "bad", sub: act === "add" ? "Nothing was saved. What you typed is still in the dialog." : "Nothing changed." });

@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { decideRuleUpgrade } from "@/modules/matters/rule-pin-actions";
 import { needsStepUp, stepUpLocation } from "@/modules/sheet/matter-wire";
@@ -46,7 +47,7 @@ export async function runRulePinAct(control: HTMLElement, router: Router) {
   });
   if ("error" in result) {
     if (needsStepUp(result.error)) {
-      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null, "matter_change"));
+      goStepUp(stepUpLocation(window.location.pathname, window.location.search, null, "matter_change"));
       return;
     }
     toast2(result.error, { kind: "bad", sub: "Nothing was saved." });

@@ -3,6 +3,7 @@
 import { useEffect, type RefObject } from "react";
 import { toast2 } from "@/components/port/kit";
 import { nextPrototypePayState } from "@/modules/portal/pay";
+import { noteStepUpTrigger, resumeStepUp, type ResumeNode } from "@/lib/auth/step-up-resume";
 
 const EMPTY: Record<string, [string, string, string, string?]> = {
   matters: ["matters-empty", "No matters yet", "When your firm opens an application for you, it appears here with its first step."],
@@ -129,6 +130,12 @@ export function usePortal(ref: RefObject<HTMLElement | null>, page: string) {
 
     const sum = root.querySelector<HTMLDetailsElement>("#sum");
     if (sum && window.matchMedia("(max-width:860px)").matches) sum.open = false;
+
+    // Bug 1 (2026-10-25): back from the client's step-up, the pressed action resumes (shared with the Sheet).
+    const noteTrigger = (event: Event) => noteStepUpTrigger(event.target, root as unknown as ResumeNode);
+    root.addEventListener("click", noteTrigger, { signal: ac.signal, capture: true });
+    root.addEventListener("change", noteTrigger, { signal: ac.signal, capture: true });
+    ac.signal.addEventListener("abort", resumeStepUp(root, (title, sub, kind) => toast2(title, { kind, sub })));
 
     // Clear the guard too: React runs an effect twice in development (StrictMode), and the second
     // run must attach the listeners the first run's cleanup removed.
