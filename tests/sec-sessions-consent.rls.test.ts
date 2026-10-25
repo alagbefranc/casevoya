@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { VO_VENDOR_TERMS } from "@/modules/vo/vendor-terms";
 
 /**
  * 20261025270000 / 20261025270100 (SEC-01, SEC-05) against the real migrations: the firm's idle
@@ -386,6 +387,8 @@ describe("SEC-05 Vo skips a client who declines AI drafting", () => {
       f.clientUser,
     ]);
     await staff(f, f.owner);
+    // AI-06: the owner acknowledges the AI vendor terms before Vo can be turned on.
+    await db.query(`select public.acknowledge_vo_vendor_terms($1, $2)`, [f.orgId, VO_VENDOR_TERMS.version]);
     await db.query(`select public.set_vo_settings($1, $2::jsonb)`, [f.orgId, JSON.stringify({ enabled: true })]);
 
     await client(f);
