@@ -1,6 +1,16 @@
 import type { Action, DlRow, Line, StateBadge, Step } from "@/components/sheet/designer/compliance";
 import { PRIVACY_DIALOG, type PrivacyData, type PrivacyDialogsData, type PrivacyHeaderData, type PrivacySelected, type Worklist } from "@/components/sheet/designer/privacy";
 import { CHANNEL_LABEL, CONSENT_LABEL, KIND_LABEL, OUTCOME_LABEL, REDACTION_LABEL, dayMonth, dayMonthYear, localDate } from "./format";
+import {
+  effectiveDue,
+  foundPanel,
+  limitsPanel,
+  responseActions,
+  responseDialogs,
+  responseRows,
+  type ExtensionFields,
+  type PrivacyExtras,
+} from "./privacy-response-present";
 
 /**
  * Privacy requests page (SEC-05, SEC-06) from the firm's rows. Pure: the loader reads the
@@ -8,7 +18,7 @@ import { CHANNEL_LABEL, CONSENT_LABEL, KIND_LABEL, OUTCOME_LABEL, REDACTION_LABE
  * own target; nothing here states a legal deadline.
  */
 
-export type PrivacyRequestRow = {
+export type PrivacyRequestRow = ExtensionFields & {
   id: string;
   reference: string;
   kind: string;
@@ -82,7 +92,8 @@ export function requestBadge(row: PrivacyRequestRow, today: string, timezone: st
     return { tone, label: `${OUTCOME_LABEL[row.outcome] ?? "Closed"} ${on}` };
   }
   const stage = STAGE[nextStep(row)];
-  if (row.due_on && row.due_on < today) return { tone: "bad", label: "Past target", detail: stage.label.toLowerCase() };
+  const due = effectiveDue(row);
+  if (due && due < today) return { tone: "bad", label: "Past target", detail: stage.label.toLowerCase() };
   return stage;
 }
 
@@ -235,22 +246,25 @@ export function canWork(row: PrivacyRequestRow, ctx: PrivacyContext): boolean {
   return ctx.isOwner || ctx.myMemberships.includes(row.assignee_membership_id);
 }
 
-function deadline(row: PrivacyRequestRow, ctx: PrivacyContext, lines: RedactionRow[]): { rows: DlRow[]; actions: Action[] } {
+function deadline(row: PrivacyRequestRow, ctx: PrivacyContext, lines: RedactionRow[], extras: PrivacyExtras | undefined): { rows: DlRow[]; actions: Action[] } {
   const rows: DlRow[] = [
     { term: "Firm target", value: row.due_on && row.target_days ? [`${row.target_days} days from receipt`, dayMonthYear(row.due_on)] : "None set" },
     { term: "Received", value: [dayMonthYear(row.received_on), `by ${CHANNEL_LABEL[row.channel] ?? row.channel}`] },
     { term: "Handled by", value: ctx.memberName(row.assignee_membership_id) },
   ];
+  // SEC-06: the legal time limit (when approved), the extension, the package and its delivery proof.
+  if (extras) rows.push(...responseRows(row, extras, ctx));
   if (row.closed_at) {
     rows.push({ term: "Outcome", value: closedSummary(row, ctx.timezone) });
     if (row.evidence_note) rows.push({ term: "Evidence", value: row.evidence_note });
-  } else {
+  } else if (!extras || row.kind !== "access") {
     rows.push({ term: "Delivery", value: "Recorded when the request closes" });
   }
   const actions: Action[] = [];
   if (!row.closed_at && canWork(row, ctx)) {
     const next = nextStep(row);
     if (next !== "close") actions.push({ label: STEP_BUTTON[next](row.kind), primary: true, attrs: { "data-dlg": PRIVACY_DIALOG.step } });
+    if (extras) actions.push(...responseActions(row, extras, ctx.organizationId));
     if (row.kind === "access" && row.scope_at && !row.redaction_at) actions.push({ label: "Add redaction line", attrs: { "data-redaction-new": "1" } });
     if (row.kind !== "deletion" || ctx.isOwner) actions.push({ label: "Close request", primary: next === "close", attrs: { "data-dlg": PRIVACY_DIALOG.close } });
     else rows.push({ term: "Closing", value: "Only the firm owner closes a deletion request" });
@@ -278,6 +292,8 @@ export function presentPrivacy(input: {
   lines: RedactionRow[];
   consents: ConsentRow[] | null;
   kept: KeptRecord[] | null;
+  /** SEC-06: legal time limits and the selected request's records found, packages and delivery. */
+  extras?: PrivacyExtras;
 }): { header: PrivacyHeaderData; page: PrivacyData; selectedRow: PrivacyRequestRow | null } {
   const { ctx } = input;
   const rows = input.rows;
@@ -285,6 +301,7 @@ export function presentPrivacy(input: {
   const open = rows ? rows.filter((row) => !row.closed_at).length : 0;
   const actions: Action[] = [];
   if (ctx.isOwner) actions.push({ label: "Response target", attrs: { "data-dlg": PRIVACY_DIALOG.settings } });
+  if (ctx.canRecord && input.extras) actions.push({ label: "Add legal time limit", attrs: { "data-dlg": "dlgPTL" } });
   if (ctx.canRecord) actions.push({ label: "Record a request", primary: true, attrs: { "data-dlg": PRIVACY_DIALOG.record } });
   const header: PrivacyHeaderData = {
     pills: [...(rows ? [`${open} open`] : []), `Privacy contact: ${ctx.privacyContact ?? "not set"}`],
@@ -299,7 +316,8 @@ export function presentPrivacy(input: {
       steps: requestSteps(selectedRow, ctx, lines),
       notes: notes(selectedRow),
       worklist: worklist(selectedRow, ctx, lines, input.consents, input.kept, editable),
-      deadline: deadline(selectedRow, ctx, lines),
+      deadline: deadline(selectedRow, ctx, lines, input.extras),
+      ...(input.extras ? { found: foundPanel(selectedRow, input.extras.items, !selectedRow.closed_at && !selectedRow.redaction_at && canWork(selectedRow, ctx)) } : {}),
     };
   }
   const page: PrivacyData = {
@@ -309,12 +327,13 @@ export function presentPrivacy(input: {
           person: row.requester_name,
           type: KIND_LABEL[row.kind] ?? row.kind,
           received: dayMonth(row.received_on),
-          due: row.closed_at || !row.due_on ? null : dayMonthYear(row.due_on),
+          due: row.closed_at || !effectiveDue(row) ? null : dayMonthYear(effectiveDue(row) as string),
           state: requestBadge(row, ctx.today, ctx.timezone),
           href: `/sheet/privacy?view=${row.id}`,
         }))
       : null,
     selected,
+    ...(input.extras && rows ? { limits: limitsPanel(input.extras.limits, input.extras.canReview, ctx) } : {}),
   };
   return { header, page, selectedRow };
 }
@@ -325,6 +344,9 @@ export function privacyDialogs(input: {
   record: PrivacyDialogsData["record"];
   consents: ConsentRow[] | null;
   settingsDays: number | null;
+  /** SEC-06 dialogs: extend, a record's decision, deliver, add and review a legal time limit. */
+  extras?: PrivacyExtras;
+  captured?: (readonly [string, string])[];
 }): PrivacyDialogsData {
   const { ctx, selectedRow: row } = input;
   const working = row && !row.closed_at && canWork(row, ctx) ? row : null;
@@ -364,5 +386,8 @@ export function privacyDialogs(input: {
           }
         : null,
     settings: ctx.isOwner ? { days: input.settingsDays === null ? "" : String(input.settingsDays) } : null,
+    ...(input.extras
+      ? { response: responseDialogs({ row, working: Boolean(working), extras: input.extras, canRecord: ctx.canRecord, today: ctx.today, captured: input.captured ?? [] }) }
+      : {}),
   };
 }

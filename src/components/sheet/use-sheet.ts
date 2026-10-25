@@ -114,6 +114,7 @@ import {
   runPrivacyStep,
   runRedaction,
 } from "./compliance-acts";
+import { bindPrivacyResponseControls, handlePrivacyResponseClick } from "./privacy-response-acts";
 import { runMatterAct } from "./matter-acts";
 import { bindWorkControls, wireMattersList } from "./work-acts";
 import { runNewMatter } from "./new-matter-act";
@@ -1115,6 +1116,11 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(inboxCompose, () => runInboxCompose(inboxCompose, root, router));
         return;
       }
+      // SEC-06: extend, records found, the response package, delivery and legal time limits.
+      if (handlePrivacyResponseClick(target, root, router, openDialog, busyRun)) {
+        event.preventDefault();
+        return;
+      }
       // Compliance: privacy requests, the complaints register and their settings.
       const redactionOpen = target.closest<HTMLElement>("[data-redaction-new], [data-redaction-edit]");
       if (redactionOpen && root.contains(redactionOpen)) {
@@ -1727,6 +1733,7 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if ((event.target as HTMLElement | null)?.id === linkId) fillLinkedName(linkDialog, linkId, nameId);
       }, listen);
     }
+    bindPrivacyResponseControls(root, ac.signal);
     // ?dlg=review&doc= (back from step-up) reopens the document review with what was typed.
     if (root.querySelector("dialog#dlgDocRev")) window.setTimeout(() => reopenDocReview(root, openDialog), 300);
 
