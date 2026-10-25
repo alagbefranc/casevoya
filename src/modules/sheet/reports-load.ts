@@ -29,6 +29,7 @@ import {
   stageAgeing,
   workload,
 } from "@/modules/sheet/reports-present";
+import { loadScheduledReports } from "@/modules/sheet/scheduled-reports-load";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -373,7 +374,11 @@ export async function loadSheetReports(staff: SheetStaff, query: SheetQuery, now
   const tab = reportsTab(query.tab);
   const range = reportRange(query.view);
   const program = tab === "outcomes" ? programFilter(query.program) : null;
-  const [chrome, loaded] = await Promise.all([loadSheetChrome(staff, "/sheet/reports"), loadReportTab(staff, tab, range, now, { program })]);
+  const [chrome, loaded, scheduled] = await Promise.all([
+    loadSheetChrome(staff, "/sheet/reports"),
+    loadReportTab(staff, tab, range, now, { program }),
+    tab === "scheduled" ? loadScheduledReports(staff) : null,
+  ]);
   const nav = (key: ReportRange) => `/sheet/reports?tab=${tab}&view=${key}`;
   const exportHref = `/api/reports/export?tab=${tab}&range=${range}${program ? `&program=${encodeURIComponent(program)}` : ""}`;
   // Export can't run on Scheduled (there is nothing scheduled to export) or on a tab the role
@@ -381,7 +386,7 @@ export async function loadSheetReports(staff: SheetStaff, query: SheetQuery, now
   const exportBlocked = !loaded.allowed
     ? "Your role can’t see this report, so there is nothing to export from it."
     : tab === "scheduled"
-      ? "Scheduled reports aren’t set up yet, so there is nothing to export here. Export from Operations, Money or Processing and outcomes."
+      ? "Scheduled reports send a link, not a file, so there is nothing to export here. Export from Operations, Money or Processing and outcomes."
       : null;
   const reports: ReportsData = {
     tab,
@@ -397,7 +402,7 @@ export async function loadSheetReports(staff: SheetStaff, query: SheetQuery, now
     outcomes: loaded.outcomes
       ? { ...loaded.outcomes, intro: "Descriptive history only. These numbers describe past files; they aren’t anyone’s chance of success." }
       : null,
-    scheduled: { rows: [] },
+    scheduled: scheduled ? { rows: scheduled.rows, live: scheduled.live } : { rows: [] },
     denied: loaded.allowed ? null : DENIED[tab as keyof typeof DENIED] ?? null,
     freshness: loaded.freshness,
     dialog: {
@@ -414,5 +419,5 @@ export async function loadSheetReports(staff: SheetStaff, query: SheetQuery, now
 
     },
   };
-  return { chrome, reports };
+  return { chrome, reports, scheduleDialog: scheduled?.dialog ?? null };
 }
