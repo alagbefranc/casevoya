@@ -24,12 +24,12 @@ type Open = (id: string) => void;
 
 const DRAFT = "cv-compliance-draft";
 
-function value(root: ParentNode, id: string): string {
+export function value(root: ParentNode, id: string): string {
   return root.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`#${id}`)?.value ?? "";
 }
 
 /** One key per dialog opening: a double click or a retry records one request or complaint. */
-function keyFor(button: HTMLElement, prefix: string): string {
+export function keyFor(button: HTMLElement, prefix: string): string {
   if (!button.dataset.key) button.dataset.key = `${prefix}-${crypto.randomUUID()}`;
   return button.dataset.key;
 }
@@ -61,7 +61,7 @@ export function fillLinkedName(dialog: ParentNode, linkId: string, nameId: strin
   else delete name.dataset.filledWith;
 }
 
-function done(dialog: HTMLDialogElement, router: Router, title: string, sub: string) {
+export function done(dialog: HTMLDialogElement, router: Router, title: string, sub: string) {
   for (const button of dialog.querySelectorAll<HTMLElement>("[data-key]")) delete button.dataset.key;
   resetDialogFields(dialog);
   dialog.close();
@@ -73,7 +73,7 @@ function done(dialog: HTMLDialogElement, router: Router, title: string, sub: str
   router.refresh();
 }
 
-function failed(dialog: HTMLDialogElement, button: HTMLElement, error: string, sub: string) {
+export function failed(dialog: HTMLDialogElement, button: HTMLElement, error: string, sub: string) {
   if (needsStepUp(error)) {
     const fields: Record<string, string | string[]> = {};
     for (const field of dialog.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input[id], select[id], textarea[id]")) {

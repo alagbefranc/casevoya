@@ -8733,6 +8733,7 @@ export type Database = {
           done_at: string | null
           done_by: string | null
           id: string
+          item_id: string | null
           organization_id: string
           record_label: string
           removed: string
@@ -8748,6 +8749,7 @@ export type Database = {
           done_at?: string | null
           done_by?: string | null
           id?: string
+          item_id?: string | null
           organization_id: string
           record_label: string
           removed: string
@@ -8763,6 +8765,7 @@ export type Database = {
           done_at?: string | null
           done_by?: string | null
           id?: string
+          item_id?: string | null
           organization_id?: string
           record_label?: string
           removed?: string
@@ -8787,6 +8790,17 @@ export type Database = {
           details: string
           due_on: string | null
           evidence_note: string | null
+          extended_at: string | null
+          extended_by: string | null
+          extended_due_on: string | null
+          extension_basis: string | null
+          extension_notice_channel: string | null
+          extension_notice_late: boolean | null
+          extension_notice_method: string | null
+          extension_notice_seen_at: string | null
+          extension_reason: string | null
+          extension_recourse: string | null
+          extension_time_limit_id: string | null
           id: string
           identity_method: string | null
           identity_verified_at: string | null
@@ -8830,6 +8844,17 @@ export type Database = {
           details: string
           due_on?: string | null
           evidence_note?: string | null
+          extended_at?: string | null
+          extended_by?: string | null
+          extended_due_on?: string | null
+          extension_basis?: string | null
+          extension_notice_channel?: string | null
+          extension_notice_late?: boolean | null
+          extension_notice_method?: string | null
+          extension_notice_seen_at?: string | null
+          extension_reason?: string | null
+          extension_recourse?: string | null
+          extension_time_limit_id?: string | null
           id?: string
           identity_method?: string | null
           identity_verified_at?: string | null
@@ -8873,6 +8898,17 @@ export type Database = {
           details?: string
           due_on?: string | null
           evidence_note?: string | null
+          extended_at?: string | null
+          extended_by?: string | null
+          extended_due_on?: string | null
+          extension_basis?: string | null
+          extension_notice_channel?: string | null
+          extension_notice_late?: boolean | null
+          extension_notice_method?: string | null
+          extension_notice_seen_at?: string | null
+          extension_reason?: string | null
+          extension_recourse?: string | null
+          extension_time_limit_id?: string | null
           id?: string
           identity_method?: string | null
           identity_verified_at?: string | null
@@ -8901,6 +8937,318 @@ export type Database = {
           scope_by?: string | null
           scope_note?: string | null
           target_days?: number | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      privacy_request_deliveries: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          delivered_at: string
+          delivered_by: string
+          download_count: number
+          expires_at: string
+          first_downloaded_at: string | null
+          id: string
+          last_downloaded_at: string | null
+          organization_id: string
+          person_id: string
+          request_id: string
+          response_id: string
+          sha256: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string
+          delivered_by: string
+          download_count?: number
+          expires_at: string
+          first_downloaded_at?: string | null
+          id?: string
+          last_downloaded_at?: string | null
+          organization_id: string
+          person_id: string
+          request_id: string
+          response_id: string
+          sha256: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string
+          delivered_by?: string
+          download_count?: number
+          expires_at?: string
+          first_downloaded_at?: string | null
+          id?: string
+          last_downloaded_at?: string | null
+          organization_id?: string
+          person_id?: string
+          request_id?: string
+          response_id?: string
+          sha256?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      privacy_request_items: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          decided_at: string | null
+          decided_by: string | null
+          decision: string
+          fields: string[]
+          id: string
+          label: string
+          matter_id: string | null
+          organization_id: string
+          reason: string | null
+          request_id: string
+          source: string
+          source_id: string
+          third_party: string | null
+          updated_at: string
+          version: number
+          withheld_fields: string[]
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          fields?: string[]
+          id?: string
+          label: string
+          matter_id?: string | null
+          organization_id: string
+          reason?: string | null
+          request_id: string
+          source: string
+          source_id: string
+          third_party?: string | null
+          updated_at?: string
+          version?: number
+          withheld_fields?: string[]
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          fields?: string[]
+          id?: string
+          label?: string
+          matter_id?: string | null
+          organization_id?: string
+          reason?: string | null
+          request_id?: string
+          source?: string
+          source_id?: string
+          third_party?: string | null
+          updated_at?: string
+          version?: number
+          withheld_fields?: string[]
+        }
+        Relationships: []
+      }
+      privacy_request_responses: {
+        Row: {
+          byte_size: number | null
+          contents: Json | null
+          created_at: string
+          created_by: string | null
+          excluded: Json | null
+          failed_reason: string | null
+          file_count: number | null
+          id: string
+          idempotency_key: string
+          manifest_sha256: string | null
+          organization_id: string
+          ready_at: string | null
+          record_count: number | null
+          request_id: string
+          requested_at: string
+          requested_by: string
+          sha256: string | null
+          status: string
+          storage_bucket: string | null
+          storage_key: string | null
+          updated_at: string
+          version: number
+          withheld_count: number | null
+        }
+        Insert: {
+          byte_size?: number | null
+          contents?: Json | null
+          created_at?: string
+          created_by?: string | null
+          excluded?: Json | null
+          failed_reason?: string | null
+          file_count?: number | null
+          id?: string
+          idempotency_key: string
+          manifest_sha256?: string | null
+          organization_id: string
+          ready_at?: string | null
+          record_count?: number | null
+          request_id: string
+          requested_at?: string
+          requested_by: string
+          sha256?: string | null
+          status?: string
+          storage_bucket?: string | null
+          storage_key?: string | null
+          updated_at?: string
+          version?: number
+          withheld_count?: number | null
+        }
+        Update: {
+          byte_size?: number | null
+          contents?: Json | null
+          created_at?: string
+          created_by?: string | null
+          excluded?: Json | null
+          failed_reason?: string | null
+          file_count?: number | null
+          id?: string
+          idempotency_key?: string
+          manifest_sha256?: string | null
+          organization_id?: string
+          ready_at?: string | null
+          record_count?: number | null
+          request_id?: string
+          requested_at?: string
+          requested_by?: string
+          sha256?: string | null
+          status?: string
+          storage_bucket?: string | null
+          storage_key?: string | null
+          updated_at?: string
+          version?: number
+          withheld_count?: number | null
+        }
+        Relationships: []
+      }
+      privacy_response_downloads: {
+        Row: {
+          created_at: string
+          delivery_id: string
+          downloaded_at: string
+          id: string
+          organization_id: string
+          sha256: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_id: string
+          downloaded_at?: string
+          id?: string
+          organization_id: string
+          sha256: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          delivery_id?: string
+          downloaded_at?: string
+          id?: string
+          organization_id?: string
+          sha256?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      privacy_time_limits: {
+        Row: {
+          checked_on: string
+          created_at: string
+          created_by: string | null
+          current_to: string | null
+          days: number | null
+          id: string
+          kind: string
+          law_name: string
+          organization_id: string
+          page_attested_at: string | null
+          page_attested_by_membership_id: string | null
+          page_attested_on: string | null
+          provision_text: string
+          retired_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by_membership_id: string | null
+          snapshot_id: string | null
+          snapshot_sha256: string | null
+          source_id: string
+          source_section: string
+          source_url: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          checked_on: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          days?: number | null
+          id?: string
+          kind: string
+          law_name: string
+          organization_id: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          provision_text: string
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id: string
+          source_section: string
+          source_url: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          checked_on?: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          days?: number | null
+          id?: string
+          kind?: string
+          law_name?: string
+          organization_id?: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          provision_text?: string
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id?: string
+          source_section?: string
+          source_url?: string
+          status?: string
           updated_at?: string
           version?: number
         }
@@ -13917,6 +14265,128 @@ export type Database = {
       preview_portal_invitation: {
         Args: { p_token: string }
         Returns: Json
+      }
+      authorize_privacy_response_download: {
+        Args: {
+          p_delivery_id: string
+        }
+        Returns: Json
+      }
+      authorize_privacy_response_preview: {
+        Args: {
+          p_response_id: string
+        }
+        Returns: Json
+      }
+      decide_privacy_item: {
+        Args: {
+          p_decision: string
+          p_fields: string[] | null
+          p_item_id: string
+          p_reason: string | null
+          p_third_party: string | null
+        }
+        Returns: undefined
+      }
+      deliver_privacy_response: {
+        Args: {
+          p_note: string | null
+          p_outcome: string
+          p_request_id: string
+          p_response_id: string
+        }
+        Returns: string
+      }
+      extend_privacy_request: {
+        Args: {
+          p_new_due_on: string
+          p_notice_method: string | null
+          p_reason: string
+          p_recourse: string | null
+          p_request_id: string
+          p_time_limit_id: string | null
+        }
+        Returns: undefined
+      }
+      mark_privacy_notices_seen: {
+        Args: {
+          p_org: string
+        }
+        Returns: number
+      }
+      privacy_requests_for_me: {
+        Args: {
+          p_org: string
+        }
+        Returns: Json
+      }
+      privacy_scope_search: {
+        Args: {
+          p_request_id: string
+        }
+        Returns: Json
+      }
+      propose_privacy_time_limit: {
+        Args: {
+          p_checked_on: string
+          p_current_to: string | null
+          p_days: number | null
+          p_kind: string
+          p_law_name: string
+          p_org: string
+          p_provision_text: string
+          p_snapshot: Json | null
+          p_source_section: string
+          p_source_url: string
+        }
+        Returns: string
+      }
+      retire_privacy_time_limit: {
+        Args: {
+          p_expected_version: number
+          p_limit_id: string
+          p_reason: string
+        }
+        Returns: number
+      }
+      review_privacy_time_limit: {
+        Args: {
+          p_decision: string
+          p_expected_version: number
+          p_limit_id: string
+          p_note: string | null
+          p_page_opened_on: string | null
+        }
+        Returns: number
+      }
+      service_complete_privacy_response: {
+        Args: {
+          p_byte_size: number
+          p_contents: Json
+          p_excluded: Json
+          p_file_count: number
+          p_manifest_sha256: string
+          p_record_count: number
+          p_response_id: string
+          p_sha256: string
+          p_storage_key: string
+          p_withheld_count: number
+        }
+        Returns: boolean
+      }
+      service_fail_privacy_response: {
+        Args: {
+          p_reason: string
+          p_response_id: string
+        }
+        Returns: undefined
+      }
+      start_privacy_response: {
+        Args: {
+          p_idempotency_key: string
+          p_request_id: string
+        }
+        Returns: string
       }
       privacy_request_kept_records: {
         Args: { p_request_id: string }

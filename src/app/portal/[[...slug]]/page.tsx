@@ -16,6 +16,7 @@ import { countPortalUnread, loadPortalMessages } from "@/modules/messages/load";
 import { firmLook } from "@/modules/firm-onboarding/public-logo";
 import { loadPortalHome, loadPortalMatters, loadPortalNotices } from "@/modules/portal/home-load";
 import { loadPortalAccess } from "@/modules/portal/load";
+import { loadPortalPrivacyNotices } from "@/modules/portal/privacy-load";
 import { payStateFromQuery } from "@/modules/portal/pay";
 import { loadPortalAppointments } from "@/modules/scheduling/portal-load";
 import { loadPortalIntake } from "@/modules/intake/portal-load";
@@ -96,7 +97,10 @@ async function Body({
     countPortalUnread(access.viewer).catch(() => 0),
     firmLook(access.viewer.organizationSlug),
     page === "home" ? loadPortalHome(access.viewer, null).catch(() => null) : null,
-    page === "home" ? loadPortalNotices(access.viewer) : null,
+    // SEC-06: privacy request notices (an extension, or records to download) come first.
+    page === "home"
+      ? Promise.all([loadPortalPrivacyNotices(access.viewer), loadPortalNotices(access.viewer)]).then(([privacy, other]) => [...privacy, ...other])
+      : null,
   ]);
   const matters = page === "matters" ? await loadPortalMatters(access.viewer).catch(() => null) : null;
   const receiptValue = Array.isArray(query.id) ? query.id[0] : query.id;
