@@ -43,6 +43,9 @@ import { FirmTransferDialogs, FirmTransfersPanel } from "@/components/sheet/desi
 import { PlanDialog, SettingsBillingHeader, SheetRetention, SheetSubscription } from "@/components/sheet/designer/settings-billing";
 import { BankAccountDialogs, ManualPaymentDialogs, ReconItemDialog, SettingsBankAccounts } from "@/components/sheet/designer/manual-pay";
 import { loadSheetRetention, loadSheetSubscription } from "@/modules/sheet/settings-billing-load";
+import { DeletionDialog, RetentionDeletionPanels } from "@/components/sheet/designer/sec-retention";
+import { CancelSubscriptionDialog, ContinuityPanel, EndArrangementDialog } from "@/components/sheet/designer/sec-continuity";
+import { loadRetentionDeletion } from "@/modules/sheet/sec-load";
 import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
 import { SheetTasks, TaskEditDialog, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
 import { ComposioDialog, IntegrationsSettingsHeader, SheetIntegrations, SheetNotificationPrefs, WhatsAppDialog } from "@/components/sheet/designer/settings-integrations";
@@ -474,10 +477,13 @@ export async function SheetBody({
             <>
               {loaded.page.dialog ? <PlanDialog data={loaded.page.dialog} /> : null}
               {loaded.accounts?.canAdd ? <BankAccountDialogs organizationId={loaded.accounts.organizationId} /> : null}
+              {loaded.continuity.cancel ? <CancelSubscriptionDialog data={loaded.continuity.cancel} /> : null}
+              {loaded.continuity.panel?.dialog ? <EndArrangementDialog data={loaded.continuity.panel.dialog} /> : null}
             </>
           }
         >
           <SheetSubscription data={loaded.page}>
+            {loaded.continuity.panel ? <ContinuityPanel data={loaded.continuity.panel} index={2} /> : null}
             <StripeConnectCard data={loaded.connect.data} card={loaded.connect.card} index={3} />
           </SheetSubscription>
           {loaded.accounts ? <SettingsBankAccounts data={loaded.accounts} index={4} /> : null}
@@ -487,15 +493,17 @@ export async function SheetBody({
   }
   // Settings > Retention (SEC-07): the firm's own retention period, its version and legal holds.
   if (page === "settings" && query.tab === "retention" && (access.kind === "live" || access.kind === "sample")) {
-    const loaded = await loadSheetRetention(access.staff);
+    const [loaded, deletion] = await Promise.all([loadSheetRetention(access.staff), loadRetentionDeletion(access.staff)]);
     return (
       <SheetScreen key={"settings-retention"} page={page}>
         <SheetFrame
           sidebar={loaded.chrome.sidebar}
           header={<SettingsBillingHeader firmName={access.staff.organizationName} pill={loaded.pill} tab={"retention"} />}
           statusbar={loaded.chrome.statusbar}
+          after={deletion ? <DeletionDialog organizationId={deletion.organizationId} /> : undefined}
         >
           <SheetRetention data={loaded.page} />
+          {deletion ? <RetentionDeletionPanels data={deletion} index={3} /> : null}
         </SheetFrame>
       </SheetScreen>
     );

@@ -7979,6 +7979,8 @@ export type Database = {
       organization_subscriptions: {
         Row: {
           archived_at: string | null
+          cancel_requested_at: string | null
+          cancel_requested_by: string | null
           billing_interval: Database["public"]["Enums"]["billing_interval"] | null
           cancel_at: string | null
           cancelled_at: string | null
@@ -7986,6 +7988,10 @@ export type Database = {
           created_by: string | null
           current_period_end: string | null
           duration_snapshot: Json | null
+          end_arrangement: string | null
+          end_arrangement_chosen_at: string | null
+          end_arrangement_chosen_by: string | null
+          end_transfer_id: string | null
           extra_seats: number
           last_webhook_event_id: string | null
           latest_invoice_status: string | null
@@ -8004,6 +8010,8 @@ export type Database = {
         }
         Insert: {
           archived_at?: string | null
+          cancel_requested_at?: string | null
+          cancel_requested_by?: string | null
           billing_interval?: Database["public"]["Enums"]["billing_interval"] | null
           cancel_at?: string | null
           cancelled_at?: string | null
@@ -8011,6 +8019,10 @@ export type Database = {
           created_by?: string | null
           current_period_end?: string | null
           duration_snapshot?: Json | null
+          end_arrangement?: string | null
+          end_arrangement_chosen_at?: string | null
+          end_arrangement_chosen_by?: string | null
+          end_transfer_id?: string | null
           extra_seats?: number
           last_webhook_event_id?: string | null
           latest_invoice_status?: string | null
@@ -8029,6 +8041,8 @@ export type Database = {
         }
         Update: {
           archived_at?: string | null
+          cancel_requested_at?: string | null
+          cancel_requested_by?: string | null
           billing_interval?: Database["public"]["Enums"]["billing_interval"] | null
           cancel_at?: string | null
           cancelled_at?: string | null
@@ -8036,6 +8050,10 @@ export type Database = {
           created_by?: string | null
           current_period_end?: string | null
           duration_snapshot?: Json | null
+          end_arrangement?: string | null
+          end_arrangement_chosen_at?: string | null
+          end_arrangement_chosen_by?: string | null
+          end_transfer_id?: string | null
           extra_seats?: number
           last_webhook_event_id?: string | null
           latest_invoice_status?: string | null
@@ -13515,6 +13533,41 @@ export type Database = {
         Returns: Json
       }
       firm_transfers_overview: { Args: { p_organization_id: string }; Returns: Json }
+      firm_export_index: { Args: { p_organization_id: string }; Returns: Json }
+      retention_deletion_overview: { Args: { p_organization_id: string }; Returns: Json }
+      approve_deletion_job: {
+        Args: { p_idempotency_key: string; p_matter_id: string; p_reason: string }
+        Returns: string
+      }
+      service_claim_deletion_job: { Args: never; Returns: Json }
+      service_deletion_item_ready: { Args: { p_item_id: string }; Returns: boolean }
+      service_record_deletion_item: {
+        Args: { p_item_id: string; p_outcome: string }
+        Returns: boolean
+      }
+      service_finish_deletion_job: { Args: { p_job_id: string }; Returns: string }
+      subscription_continuity: { Args: { p_organization_id: string }; Returns: Json }
+      subscription_cancel_allowed: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      service_record_subscription_cancel: {
+        Args: {
+          p_actor: string
+          p_cancel_at: string
+          p_organization_id: string
+          p_period_end: string | null
+        }
+        Returns: undefined
+      }
+      choose_subscription_end_arrangement: {
+        Args: {
+          p_arrangement: string
+          p_organization_id: string
+          p_transfer_id: string | null
+        }
+        Returns: undefined
+      }
       freeze_intake_response: {
         Args: { p_response_id: string }
         Returns: undefined

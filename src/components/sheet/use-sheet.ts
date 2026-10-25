@@ -135,6 +135,7 @@ import { runVoAccept, runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "
 import { runVoDocAccept, runVoDocDiscard, runVoDocReject, runVoRead } from "./vo-doc-acts";
 import { mountRetentionSlider, runRetentionSave } from "./retention-act";
 import { mountSubscription, runSubscriptionAct } from "./subscription-act";
+import { runSecAct } from "./sec-acts";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
 import {
   mountIntegrations,
@@ -843,6 +844,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (subscriptionAct && root.contains(subscriptionAct)) {
         event.preventDefault();
         busyRun(subscriptionAct, () => runSubscriptionAct(subscriptionAct, openDialog));
+        return;
+      }
+      // SEC-07 / SEC-10 (firm owner): Approve deletion, Cancel subscription, after the window, firm index.
+      const secAct = target.closest<HTMLElement>("[data-sec-act]");
+      if (secAct && root.contains(secAct)) {
+        event.preventDefault();
+        busyRun(secAct, () => runSecAct(secAct, root, router, openDialog));
         return;
       }
       const bookingSubmit = target.closest<HTMLElement>("[data-booking-submit]");
