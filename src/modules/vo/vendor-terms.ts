@@ -256,7 +256,7 @@ export const VO_VENDOR_TERMS: VoVendorTerms = {
     },
   ],
   commitments: {
-    status: "Casevoya’s terms, written to the CICC Code; pending Francis’s approval",
+    status: "Casevoya’s terms, written to the CICC Code; approved by Casevoya on 25 Oct 2026",
     source: {
       title: "Code of Professional Conduct for College of Immigration and Citizenship Consultants Licensees (SOR/2022-128)",
       url: CICC_CODE,

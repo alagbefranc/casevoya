@@ -58,7 +58,7 @@ export type AiVendorTermsData = {
   /** The owner's "Review and acknowledge" when the current version isn't acknowledged. */
   action: { label: string; attrs: Attrs } | null;
   vendors: VendorTermsVendor[];
-  /** Casevoya's own AI terms, written to the CICC Code (pending Francis's approval). */
+  /** Casevoya's own AI terms, written to the CICC Code (approved by Francis, 2026-10-25). */
   commitments: CommitmentsData;
   note: string;
   dialog: VendorTermsDialogData | null;

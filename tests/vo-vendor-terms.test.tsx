@@ -39,9 +39,9 @@ describe("reviewed vendor terms configuration", () => {
     }
   });
 
-  it("writes each of Casevoya's commitments to a quoted CICC Code section on Justice Laws, marked pending Francis's approval", () => {
+  it("writes each of Casevoya's commitments to a quoted CICC Code section on Justice Laws, marked approved by Casevoya", () => {
     const { commitments } = VO_VENDOR_TERMS;
-    expect(commitments.status).toBe("Casevoya’s terms, written to the CICC Code; pending Francis’s approval");
+    expect(commitments.status).toBe("Casevoya’s terms, written to the CICC Code; approved by Casevoya on 25 Oct 2026");
     expect(commitments.source).toMatchObject({ currentTo: "2026-09-30", retrievedOn: "2026-10-25" });
     expect(commitments.source.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(commitments.items.map((item) => item.obligation.section)).toEqual(["28(1)", "28(3)", "24(3)(q)", "38(2)", "19(2)(e)", "37"]);
@@ -165,7 +165,7 @@ describe("Settings > Vo", () => {
     expect(html).toContain("Signed agreement between Anthropic and Casevoya");
     expect(html).toContain("Vendor’s published terms (for reference)");
     expect(html).toContain("Casevoya’s commitments");
-    expect(html).toContain("Casevoya’s terms, written to the CICC Code; pending Francis’s approval");
+    expect(html).toContain("Casevoya’s terms, written to the CICC Code; approved by Casevoya on 25 Oct 2026");
     expect(html).toContain('href="https://laws-lois.justice.gc.ca/eng/regulations/SOR-2022-128/FullText.html#s-28"');
     expect(html).toContain("section 28(1) · current to 30 Sep 2026 · retrieved 25 Oct 2026");
   });
