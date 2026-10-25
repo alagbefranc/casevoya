@@ -3,7 +3,8 @@
  * register become the Designer components' data. Pure, so the copy and the switch rules are tested.
  */
 import type { AiAudit, AiData, AiRunRow, AiRules, AiSettings, AiSources, AiStates, AiSwitch, AiTab } from "@/components/sheet/designer/ai";
-import type { Attrs, DraftCard, DraftsData, DraftsHeaderData, DraftSwitch } from "@/components/sheet/designer/drafts";
+import type { Attrs, DraftCard, DraftsData, DraftsHeaderData, DraftSwitch, TimelineItem } from "@/components/sheet/designer/drafts";
+import { citationHref, isCitableOfficialUrl, VO_CANT_ANSWER } from "@/modules/vo/grounding";
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import type { VoSettingKey, VoSwitchKey } from "@/modules/vo/errors";
 import { MATTER_STAGES, stageLabel } from "@/modules/sheet/present";
@@ -57,9 +58,32 @@ export function effectiveSettings(row: Partial<VoSettingsRow> | null, sampleMode
   };
 }
 
-export type VoViewer = { organizationId: string; firmName: string; isOwner: boolean; sampleMode: boolean; agentReady: boolean; timeZone: string };
+export type VoViewer = {
+  organizationId: string;
+  firmName: string;
+  isOwner: boolean;
+  sampleMode: boolean;
+  agentReady: boolean;
+  timeZone: string;
+  /** A licensed member (licensed consultant or firm owner): may send advice-like drafts (SRC-09). */
+  licensed?: boolean;
+};
 
-export type VoSource = { kind: string; id: string; label: string };
+/** A cited record; official content also names what it is and its official page (SRC-09). */
+export type VoSource = { kind: string; id: string; label: string; sourceKind?: string; url?: string };
+
+/**
+ * A draft's or reading's citations as the sources list shows them: each linked to the matter tab
+ * that holds the record, or to the official page. An official source whose page isn't a deep
+ * federal official page is never linked.
+ */
+export function sourceItems(sources: VoSource[], at: { matterId: string; threadId?: string | null }): TimelineItem[] {
+  return sources.map((source) => {
+    const kind = source.kind as Parameters<typeof citationHref>[0]["kind"];
+    const href = kind === "official" && !isCitableOfficialUrl(source.url) ? null : citationHref({ kind, url: source.url }, at);
+    return { label: source.label, href };
+  });
+}
 
 export type VoDraftRow = {
   id: string;
@@ -80,6 +104,8 @@ export type VoDraftRow = {
   latencyMs: number | null;
   /** The matter or its conversation changed after Vo drafted this (see draftStale). */
   stale?: boolean;
+  /** SRC-09: advice-like (cites official content or reads as advice): a licensed member sends it. */
+  licensedReview?: boolean;
 };
 
 export type VoRunRow = {
@@ -182,12 +208,16 @@ export function draftStale(draftCreatedAt: string, changes: { threadLastMessageA
 function acceptAttrs(row: VoDraftRow, viewer: VoViewer): Attrs {
   if (row.needsRule) return { disabled: true, title: "It needs a sourced rule. Open it with Edit and replace the placeholder first." };
   if (row.stale) return { disabled: true, title: "Out of date: the matter changed after Vo drafted it. Open it with Edit and check it first." };
+  // SRC-09: advice-like material goes out only after a licensed member reviews it (the database checks too).
+  if (row.licensedReview && !viewer.licensed) return { disabled: true, title: "It reads as advice, so a licensed member of the firm reviews and sends it" };
+  if (row.licensedReview) return { "data-vo-accept": row.id, "data-org": viewer.organizationId, title: "Send this advice-like draft as written, as its licensed reviewer (needs a fresh two-step check)" };
   return { "data-vo-accept": row.id, "data-org": viewer.organizationId, title: "Send this draft to the client as written" };
 }
 
 function draftCard(row: VoDraftRow, names: VoNames, viewer: VoViewer): DraftCard {
   const sources = row.sources.map((source) => source.label);
   const meta = ["Drafted by Vo", "needs your review", KIND_LABEL[row.kind]];
+  if (row.licensedReview) meta.push("needs a licensed member’s review");
   if (row.needsRule) meta.push("needs a sourced rule");
   if (row.stale) meta.push("out of date: the matter changed since");
   if (row.isSample) meta.push("sample");
@@ -204,7 +234,7 @@ function draftCard(row: VoDraftRow, names: VoNames, viewer: VoViewer): DraftCard
       done: true,
       said: `Checked ${sources.length} ${sources.length === 1 ? "source" : "sources"} in ${seconds(row.latencyMs)}`,
       clock: "",
-      items: [...sources, "Run logged"],
+      items: [...sourceItems(row.sources, { matterId: row.matterId, threadId: row.threadId }), "Run logged"],
     },
     // Accept sends the draft as written; Edit opens it in the conversation's composer first.
     accept: acceptAttrs(row, viewer),
@@ -253,7 +283,7 @@ export function readingCard(row: VoReadingRow, names: VoNames, viewer: VoViewer)
       done: true,
       said: `Read ${sources.length === 1 ? "one document" : `${sources.length} documents`} in ${seconds(row.latencyMs)}`,
       clock: "",
-      items: [...sources, `${row.waiting} ${row.waiting === 1 ? "proposal" : "proposals"} to decide`, "Run logged"],
+      items: [...sourceItems(row.sources, { matterId: row.matterId }), `${row.waiting} ${row.waiting === 1 ? "proposal" : "proposals"} to decide`, "Run logged"],
     },
     // A reading has one decision per proposal, made on the matter's review panel (Edit opens it).
     accept: { disabled: true, title: "Accept each proposal on the matter’s Documents tab: choose Edit to open them" },
@@ -313,8 +343,8 @@ export function draftsPage(input: {
     abstain: input.abstained
       ? {
           meta: { left: "Vo didn’t draft this one", right: "needs a consultant" },
-          title: `${names.matter(input.abstained.matterId)}: the request needs a consultant`,
-          copy: "It asked for advice, an eligibility view or a rule Vo has no approved source for, so Vo won’t guess. Answer it yourself from the conversation.",
+          title: `${names.matter(input.abstained.matterId)}: ${VO_CANT_ANSWER.replace(/\.$/, "")}`,
+          copy: "It asked for advice, an eligibility view, or something nothing on the matter or in the firm’s approved official content supports, so Vo won’t guess. Answer it yourself.",
         }
       : null,
     empty: count === 0
