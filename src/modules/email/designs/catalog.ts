@@ -1293,7 +1293,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
     audience: "client",
     brand: "firm",
     trigger:
-      "Stripe reports a refund failed or canceled after the client was told it was on its way (refund.failed / refund.updated; invoice_refunds moves from pending, requires_action or succeeded to failed or canceled; outbox invoice.refund_failed, template refund_failed), to the same people as EX09. Once per refund, also when Stripe replays the event. Honours email_notices. A plain-words reason only for a closed, expired, lost or stolen card; never Stripe's code (engineering-built for bug #215 check 6, 2026-10-25; copy pending Francis)",
+      "Stripe reports a refund failed or canceled after the client was told it was on its way (refund.failed / refund.updated; invoice_refunds moves from pending, requires_action or succeeded to failed or canceled; outbox invoice.refund_failed, template refund_failed), to the same people as EX09. Once per refund, also when Stripe replays the event. Sent even when the client turned Email notices off (a money correction; Francis 2026-10-25); suppressed (bounced or complained) addresses are not. A plain-words reason only for a closed, expired, lost or stolen card; never Stripe's code (bug #215 check 6; copy approved by Francis 2026-10-25)",
     status: "wired",
     ctaTarget: PATHS.portalPayments,
     mergeFields: ["firm_name", "refund_reason"],

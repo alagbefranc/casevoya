@@ -623,7 +623,7 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:5609f6110cb
 
 ## EX20: Refund didn’t go through
 
-Stripe reports a refund failed or canceled after the client was told it was on its way (refund.failed / refund.updated; invoice_refunds moves from pending, requires_action or succeeded to failed or canceled; outbox invoice.refund_failed, template refund_failed), to the same people as EX09. Once per refund, also when Stripe replays the event. Honours email_notices. A plain-words reason only for a closed, expired, lost or stolen card; never Stripe's code (engineering-built for bug #215 check 6, 2026-10-25; copy pending Francis). Audience: client. [French preview](../email/previews/fr/EX20.html)
+Stripe reports a refund failed or canceled after the client was told it was on its way (refund.failed / refund.updated; invoice_refunds moves from pending, requires_action or succeeded to failed or canceled; outbox invoice.refund_failed, template refund_failed), to the same people as EX09. Once per refund, also when Stripe replays the event. Sent even when the client turned Email notices off (a money correction; Francis 2026-10-25); suppressed (bounced or complained) addresses are not. A plain-words reason only for a closed, expired, lost or stolen card; never Stripe's code (bug #215 check 6; copy approved by Francis 2026-10-25). Audience: client. [French preview](../email/previews/fr/EX20.html)
 
 Status `machine_draft` · drafted 2026-10-25 · English hash `sha256:34b3867edc59…`
 

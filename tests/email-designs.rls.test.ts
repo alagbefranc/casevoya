@@ -178,8 +178,8 @@ describe("invoice, payment and refund mail", () => {
     expect(await mailEvent(f.orgId, "invoice.refund_succeeded", "refund_id", refund)).toEqual([]);
   });
 
-  async function paidRefund() {
-    const f = await firm();
+  async function paidRefund(existing?: Awaited<ReturnType<typeof firm>>) {
+    const f = existing ?? (await firm());
     const invoice = await issue(f);
     const intent = `pi_Syn${tag()}`;
     await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
@@ -262,6 +262,52 @@ describe("invoice, payment and refund mail", () => {
     await db.query(`update public.invoice_refunds set status = 'canceled' where id = $1`, [silent]);
     expect(await mailEvent(f.orgId, "invoice.refund_started", "refund_id", silent)).toEqual([]);
     expect(await mailEvent(f.orgId, "invoice.refund_failed", "refund_id", silent)).toEqual([]);
+  });
+
+  it("sends the correction to a client who turned Email notices off, who got no 'on its way' email", async () => {
+    const f = await firm();
+    await asMaintenance(db);
+    await db.query(
+      `insert into public.person_contact_preferences (person_id, organization_id, email_notices, sms_notices, deadline_reminders) values ($1, $2, false, false, false)`,
+      [f.applicant, f.orgId],
+    );
+    const { intent, stripeRefund, refund } = await paidRefund(f);
+    const [started] = await mailEvent(f.orgId, "invoice.refund_started", "refund_id", refund);
+    expect(await prepare(started.id)).toMatchObject({ action: "done", messages: [] });
+    await asMaintenance(db);
+    expect((await db.query<{ status: string }>(`select status from public.email_deliveries where outbox_event_id = $1`, [started.id])).rows.map((row) => row.status)).toEqual(["skipped"]);
+
+    await stripeRefundEvent(f, `evt_${tag()}`, "refund.updated", stripeRefund, intent, "succeeded", null);
+    const failedEvent = `evt_${tag()}`;
+    await stripeRefundEvent(f, failedEvent, "refund.failed", stripeRefund, intent, "failed", "expired_or_canceled_card");
+    await stripeRefundEvent(f, failedEvent, "refund.failed", stripeRefund, intent, "failed", "expired_or_canceled_card");
+    const corrections = await mailEvent(f.orgId, "invoice.refund_failed", "refund_id", refund);
+    expect(corrections).toHaveLength(1);
+    const mail = await prepare(corrections[0].id);
+    expect(mail.action).toBe("send");
+    expect(mail.messages.map((message) => [message.to, message.template])).toEqual([[f.applicantEmail, "refund_failed"]]);
+    await asMaintenance(db);
+    const sent = await db.query<{ template: string; status: string }>(
+      `select d.template, d.status from public.email_deliveries d join public.outbox_events e on e.id = d.outbox_event_id
+       where d.organization_id = $1 and d.recipient_email = $2 and e.payload ->> 'refund_id' = $3 order by d.created_at`,
+      [f.orgId, f.applicantEmail, refund],
+    );
+    expect(sent.rows).toEqual([
+      { template: "refund_started", status: "skipped" },
+      { template: "refund_failed", status: "sending" },
+    ]);
+  });
+
+  it("still does not send the correction to a suppressed address", async () => {
+    const f = await firm();
+    await asMaintenance(db);
+    await db.query(`insert into public.email_suppressions (organization_id, recipient_email, reason) values ($1, $2, 'hard_bounce')`, [f.orgId, f.applicantEmail]);
+    const { intent, stripeRefund, refund } = await paidRefund(f);
+    await stripeRefundEvent(f, `evt_${tag()}`, "refund.failed", stripeRefund, intent, "failed", "unknown");
+    const [correction] = await mailEvent(f.orgId, "invoice.refund_failed", "refund_id", refund);
+    expect(await prepare(correction.id)).toMatchObject({ action: "done", messages: [] });
+    await asMaintenance(db);
+    expect((await db.query<{ status: string }>(`select status from public.email_deliveries where outbox_event_id = $1`, [correction.id])).rows.map((row) => row.status)).toEqual(["suppressed"]);
   });
 
   it("skips a 'refund complete' email still queued from before", async () => {

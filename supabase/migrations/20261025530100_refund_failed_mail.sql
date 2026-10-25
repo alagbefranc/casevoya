@@ -19,7 +19,9 @@
 -- 3. public.claim_mail_events and public.prepare_email_delivery (copied from
 --    20261025110100_ops_messaging.sql, their latest definitions): claim invoice.refund_failed;
 --    prepare sends it as template refund_failed (EX20) to the same people as the refund's other mail
---    (the payer, else the matter's applicants; honours email_notices) with the refund's failure
+--    (the payer, else the matter's applicants) even when they turned Email notices off (Francis,
+--    2026-10-25: a money correction, not a routine notice; EX09 still honours it). Suppressed
+--    (bounced or complained) and missing or invalid addresses are still not sent. With the refund's failure
 --    reason code, and skips (published, audited email.skipped refund_not_final) any
 --    invoice.refund_succeeded event still queued from before.
 -- app.apply_stripe_reversal_event is unchanged: it already moves the refund to failed and keeps
@@ -517,8 +519,12 @@ begin
         and case when payer_known then person.user_id = payer else party.role = 'applicant' end
       group by lower(person.email)
     loop
+      -- New (20261025530100, Francis 2026-10-25): the refund correction is a money correction, not
+      -- a routine notice, so it ignores the Email notices opt-out. Suppressed addresses (bounces,
+      -- complaints) and invalid addresses are still not sent (queue_email_delivery).
       perform app.queue_email_delivery(
-        event.id, event.organization_id, rec.email, template, matter, false, ctx, rec.email_notices
+        event.id, event.organization_id, rec.email, template, matter, false, ctx,
+        rec.email_notices or event.event_type = 'invoice.refund_failed'
       );
     end loop;
   -- scheduling: the booking's primary attendee, with the time in their own zone. A booking that
