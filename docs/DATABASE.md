@@ -1024,3 +1024,12 @@ DES-04 follow-up (#237 live checks), branch `fix/des-billing-call`. Additive; no
 * **Redefines** `public.rollback_migration_batch` (latest `20261025385200`): deletes the batch's matters' `matter_reply_addresses` rows before the matters. Otherwise unchanged.
 
 Tested in `tests/migration-import.rls.test.ts` (opening the matter then rolling back succeeds and removes the reply address; with mail received on the matter the rollback still refuses and keeps it).
+## Portal invitation: only an open counts toward its limit (`20261025510000`, not applied on the live project)
+
+Bug 3 (Francis's bug list 2026-10-25, #215 live checks), branch `fix/invite-accept-codes`. Additive; no table changes. The accept wizard ran `app.present_portal_invitation` on every step and retry, and each call counted toward the `present` limits (40 per token per hour, 30 per signed-in actor per 15 minutes), so a client hit them within a few tries.
+
+* New `app.portal_invite_limited(text, text, uuid, boolean)`: the latest 3-argument body (`20261017140800_portal_invitations.sql`) with `p_record`; false checks the same limits without inserting an attempt. The 3-argument form now calls it with true (unchanged behaviour for create and resend).
+* **Redefines** `app.present_portal_invitation(text)` (only definition `20261017140800`): counts the attempt only when `app.portal_invitation_open` is `'1'` for the transaction (then clears it) or the token matches no invitation; every other use only checks. Same signature and grants. So draft saves, sign-in re-reads, acceptance, decline and mismatch reports no longer add to the count, and a token already over its limit stays refused.
+* New `public.preview_portal_invitation(text, boolean)` (anon, authenticated): `p_open` true is an open (sets the flag, then returns `public.preview_portal_invitation(text)`, unchanged, latest `20261024100000_firm_default_locale.sql`). The 1-argument form on its own is now an uncounted read. The accept screen opens once per page load; the server's page render and `openPortalInvitee` read with false.
+
+Tested in `tests/portal-invites.rls.test.ts` ("counts only an open toward an invitation's limit").
