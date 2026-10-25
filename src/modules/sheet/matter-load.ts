@@ -1,4 +1,5 @@
 import "server-only";
+import { loadMatterRulePin } from "@/modules/sheet/rule-pin-load";
 import { loadMatterMessages } from "@/modules/messages/load";
 import { emailRuntimeConfig } from "@/lib/email/env";
 import { matterInboundAddress, timelineEmailEvents } from "@/modules/sheet/inbound-present";
@@ -789,6 +790,16 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     submissions: government.submissions,
     decisions: government.decisions,
   };
+  // SRC-05 / SRC-12: the pinned rule pack and IRCC form versions (or "No approved rule pack") on the Overview.
+  if (tab === "overview") {
+    page.overview.rules = await loadMatterRulePin(supabase, {
+      organizationId: org,
+      matterId: matter.id,
+      timeZone: staff.timezone,
+      role: staff.role,
+      closed: matter.stage === "closed",
+    }).catch(() => null);
+  }
   // DEC-02: Expiry and renewal on the Decisions tab (expiry reminders, IRCC timing, renewal reminder, fee).
   if (tab === "decisions" && page.decisions?.decision) {
     page.decisions.renewal = await loadRenewalPanel(supabase, {

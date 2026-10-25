@@ -880,3 +880,18 @@ ADM-04 (gap #186), branch `feat/adm-service-levels`. Additive; no existing funct
 * `public.service_level_report(firm, months)`: 1 to 24 months in the firm's timezone, newest first: received, answered, waiting, median and longest seconds to first reply; `uptime` is `{"measured": false}`. The firm's owner (aal2, current firm), a platform admin (aal2) or the service role; the latter two audited `service_level.report_read` on the firm.
 
 Ops wrapper: `scripts/ops/service-levels.mjs` (record, report). Tested in `tests/service-levels.rls.test.ts` and `tests/service-levels-present.test.tsx`.
+
+## Pinned rule versions and the support catalogue (`20261025410000`, not applied on the live project)
+
+SRC-05 and SRC-12 (gap #188), branch `feat/src-pins-scope`. Additive; no existing function is redefined (`app.select_matter_program`, `app.pack_is_selectable`, `public.create_client_matter` are called as they are). Nothing from IRCC is seeded.
+
+* `matter_rule_bindings.form_versions` (jsonb array): the pack's IRCC forms at pin time, each `{form_number, date_modified, source_url, retrieved_at, content_hash, snapshot_id}`, the date only from a snapshot a rule version in the pack cites (else null). Set by trigger `matter_rule_bindings_pin_forms` (`app.src_pin_binding`), never changed. The same trigger refuses another program's pack for a matter opened for an unsupported program.
+* `matter_exports` and `submission_handoffs`: `rule_binding_id`, `rule_pack_version_id`, `form_versions`, stamped by `app.src_stamp_package_pin` when the export is requested and when the handoff's manifest is pinned; never changed after.
+* Triggers `document_requests_src_pinned_rule`, `deadlines_src_pinned_rule` (`app.src_rule_from_pinned_pack`): a `rule_version_id` must belong to the pack pinned on the matter.
+* `matter_program_scopes`: the program a matter was opened for and whether it was supported (with the pack). Append-only; forced RLS; select for staff who can read the matter.
+* `matter_rule_upgrade_decisions`: accepted or declined, reason, the impact preview, old and new binding, who and when. Append-only; forced RLS; select for staff who can read the matter.
+* `support_catalogue_entries`: platform scope configuration (jurisdictions and case types seeded; programs added by a platform admin with an optional platform snapshot of their official page and official name). No delete; forced RLS; select for platform admins and the service role only.
+* Helpers: `app.src_deep_official_url`, `app.pack_is_sourced`, `app.current_program_pack`, `app.pack_form_pins`, `app.src_rule_kind`, `app.rule_pack_impact`, `app.newer_rule_pack`, `app.program_pack_for_new_matter`, `app.record_matter_program_scope` (only for a matter created in the same transaction).
+* RPCs: `public.matter_rule_state(matter)` (pin, scope, newer approved version with impact and last decision; staff at aal2 who can read the matter), `public.decide_matter_rule_upgrade(matter, to_pack, expected_version, accepted|declined, reason)` (licensed consultant or firm owner; step-up to accept; audited), `public.create_client_matter_for_program(..., program_key, ...)` (invoker), `public.support_catalogue(org default null)` (security definer, anon allowed; firm view only for that firm's staff), `public.save_support_catalogue_entry(...)` (`app.platform_ops_actor` plus step-up when signed in; audited `support_catalogue.saved`).
+
+Ops wrapper: `scripts/ops/support-catalogue.mjs` (capture, entry, list). Tested in `tests/src-pins-scope.rls.test.ts` and `tests/src-pins-scope.test.tsx`.

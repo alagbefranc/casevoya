@@ -6391,6 +6391,9 @@ export type Database = {
       }
       matter_exports: {
         Row: {
+          form_versions: Json | null
+          rule_binding_id: string | null
+          rule_pack_version_id: string | null
           byte_size: number | null
           cancelled_at: string | null
           cancelled_by: string | null
@@ -6425,6 +6428,9 @@ export type Database = {
           version: number
         }
         Insert: {
+          form_versions?: Json | null
+          rule_binding_id?: string | null
+          rule_pack_version_id?: string | null
           byte_size?: number | null
           cancelled_at?: string | null
           cancelled_by?: string | null
@@ -6459,6 +6465,9 @@ export type Database = {
           version?: number
         }
         Update: {
+          form_versions?: Json | null
+          rule_binding_id?: string | null
+          rule_pack_version_id?: string | null
           byte_size?: number | null
           cancelled_at?: string | null
           cancelled_by?: string | null
@@ -6766,6 +6775,54 @@ export type Database = {
           },
         ]
       }
+      matter_program_scopes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          matter_id: string
+          organization_id: string
+          program_key: string
+          rule_pack_version_id: string | null
+          supported: boolean
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id: string
+          organization_id: string
+          program_key: string
+          rule_pack_version_id?: string | null
+          supported: boolean
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          program_key?: string
+          rule_pack_version_id?: string | null
+          supported?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_program_scopes_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_program_scopes_rule_pack_version_id_fkey"
+            columns: ["rule_pack_version_id"]
+            isOneToOne: false
+            referencedRelation: "rule_pack_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       matter_program_changes: {
         Row: {
           actor_user_id: string | null
@@ -6874,6 +6931,7 @@ export type Database = {
       }
       matter_rule_bindings: {
         Row: {
+          form_versions: Json | null
           checked_at: string | null
           chosen_context: Json | null
           created_at: string
@@ -6890,6 +6948,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          form_versions?: Json | null
           checked_at?: string | null
           chosen_context?: Json | null
           created_at?: string
@@ -6906,6 +6965,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          form_versions?: Json | null
           checked_at?: string | null
           chosen_context?: Json | null
           created_at?: string
@@ -7233,6 +7293,79 @@ export type Database = {
           version?: number
         }
         Relationships: []
+      }
+      matter_rule_upgrade_decisions: {
+        Row: {
+          created_at: string
+          decided_at: string
+          decided_by: string
+          decided_membership_id: string
+          decision: string
+          from_binding_id: string
+          from_pack_id: string
+          id: string
+          impact: Json
+          matter_id: string
+          new_binding_id: string | null
+          organization_id: string
+          reason: string
+          to_pack_id: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string
+          decided_by: string
+          decided_membership_id: string
+          decision: string
+          from_binding_id: string
+          from_pack_id: string
+          id?: string
+          impact: Json
+          matter_id: string
+          new_binding_id?: string | null
+          organization_id: string
+          reason: string
+          to_pack_id: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string
+          decided_by?: string
+          decided_membership_id?: string
+          decision?: string
+          from_binding_id?: string
+          from_pack_id?: string
+          id?: string
+          impact?: Json
+          matter_id?: string
+          new_binding_id?: string | null
+          organization_id?: string
+          reason?: string
+          to_pack_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_rule_upgrade_decisions_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_rule_upgrade_decisions_from_pack_id_fkey"
+            columns: ["from_pack_id"]
+            isOneToOne: false
+            referencedRelation: "rule_pack_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matter_rule_upgrade_decisions_to_pack_id_fkey"
+            columns: ["to_pack_id"]
+            isOneToOne: false
+            referencedRelation: "rule_pack_versions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       matter_stage_evidence: {
         Row: {
@@ -10946,6 +11079,9 @@ export type Database = {
       }
       submission_handoffs: {
         Row: {
+          form_versions: Json | null
+          rule_binding_id: string | null
+          rule_pack_version_id: string | null
           acknowledged_on: string | null
           cancel_reason: string | null
           cancelled_at: string | null
@@ -10975,6 +11111,9 @@ export type Database = {
           version: number
         }
         Insert: {
+          form_versions?: Json | null
+          rule_binding_id?: string | null
+          rule_pack_version_id?: string | null
           acknowledged_on?: string | null
           cancel_reason?: string | null
           cancelled_at?: string | null
@@ -11004,6 +11143,9 @@ export type Database = {
           version?: number
         }
         Update: {
+          form_versions?: Json | null
+          rule_binding_id?: string | null
+          rule_pack_version_id?: string | null
           acknowledged_on?: string | null
           cancel_reason?: string | null
           cancelled_at?: string | null
@@ -11424,6 +11566,74 @@ export type Database = {
           version?: number
         }
         Relationships: []
+      }
+      support_catalogue_entries: {
+        Row: {
+          active: boolean
+          case_type_key: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          jurisdiction: string | null
+          label: string
+          note: string | null
+          official_name: string | null
+          position: number
+          scope_key: string
+          scope_kind: string
+          snapshot_id: string | null
+          source_section: string | null
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          active?: boolean
+          case_type_key?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          jurisdiction?: string | null
+          label: string
+          note?: string | null
+          official_name?: string | null
+          position?: number
+          scope_key: string
+          scope_kind: string
+          snapshot_id?: string | null
+          source_section?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          active?: boolean
+          case_type_key?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          jurisdiction?: string | null
+          label?: string
+          note?: string | null
+          official_name?: string | null
+          position?: number
+          scope_key?: string
+          scope_kind?: string
+          snapshot_id?: string | null
+          source_section?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_catalogue_entries_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "source_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       support_access_requests: {
         Row: {
@@ -13049,6 +13259,54 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_client_matter_for_program: {
+        Args: {
+          p_applicant_date_of_birth?: string | null
+          p_applicant_email: string | null
+          p_applicant_name: string
+          p_consultant_membership_id: string
+          p_program_key: string
+          p_sponsor_date_of_birth?: string | null
+          p_sponsor_email: string | null
+          p_sponsor_name: string | null
+        }
+        Returns: Json
+      }
+      decide_matter_rule_upgrade: {
+        Args: {
+          p_decision: string
+          p_expected_version: number
+          p_matter_id: string
+          p_reason: string
+          p_to_pack_id: string
+        }
+        Returns: Json
+      }
+      matter_rule_state: {
+        Args: { p_matter_id: string }
+        Returns: Json
+      }
+      save_support_catalogue_entry: {
+        Args: {
+          p_active?: boolean
+          p_acting_admin?: string | null
+          p_case_type_key?: string | null
+          p_jurisdiction?: string | null
+          p_label: string
+          p_note?: string | null
+          p_official_name?: string | null
+          p_position?: number | null
+          p_scope_key: string
+          p_scope_kind: string
+          p_snapshot_id?: string | null
+          p_source_section?: string | null
+        }
+        Returns: string
+      }
+      support_catalogue: {
+        Args: { p_org?: string | null }
+        Returns: Json
+      }
       accept_invitation: { Args: { token: string }; Returns: string }
       accept_portal_invitation: {
         Args: { p_payload: Json; p_token: string }
