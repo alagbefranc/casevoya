@@ -105,7 +105,7 @@ Navigation: Home, My matters, Tasks, Documents, Messages, Appointments, Agreemen
 
 ### Platform administration
 
-Navigation: Firms, Verification, Subscriptions, Usage, Service health, Support grants, Template releases, Incidents, Privacy requests, Audit, and Configuration. Platform employees normally see operational metadata only. Client files require an explicit time-limited support grant or a documented emergency procedure. There is no silent unrestricted impersonation button.
+It is a separate portal with its own codebase, deployment and sign-in (Francis, 2026-10-19; see `docs/DECISIONS.md` and `docs/integrations/support-access.md`), not part of the firm or client app. Navigation: Firms, Verification, Subscriptions, Usage, Service health, Support grants, Template releases, Incidents, Privacy requests, Audit, and Configuration. Platform employees normally see operational metadata only. Client files require an explicit time-limited support grant or a documented emergency procedure. There is no silent unrestricted impersonation button.
 
 ### Responsive design and accessibility
 
