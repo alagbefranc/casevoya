@@ -146,8 +146,8 @@ export class FakeEl {
   }
 
   closest(selector: string): FakeEl | null {
-    for (let node: FakeEl | null = this; node; node = node.parentElement) if (node.matches(selector)) return node;
-    return null;
+    if (this.matches(selector)) return this;
+    return this.parentElement?.closest(selector) ?? null;
   }
 
   contains(node: FakeEl | null): boolean {
