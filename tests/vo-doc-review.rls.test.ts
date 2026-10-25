@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { voDocumentCategory } from "@/modules/vo/vo-doc";
+import { VO_VENDOR_TERMS } from "@/modules/vo/vendor-terms";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 
 /**
@@ -113,6 +114,8 @@ const staff = (f: Firm, userId: string, totpAgeSeconds = 60) => asUser(db, { use
 
 async function settings(f: Firm, changes: Record<string, boolean>) {
   await staff(f, f.owner);
+  // AI-06: the owner acknowledges the AI vendor terms before Vo can be turned on.
+  if (changes.enabled) await db.query(`select public.acknowledge_vo_vendor_terms($1, $2)`, [f.orgId, VO_VENDOR_TERMS.version]);
   await db.query(`select public.set_vo_settings($1, $2::jsonb)`, [f.orgId, JSON.stringify(changes)]);
 }
 

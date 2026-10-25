@@ -59,6 +59,8 @@ describe("SEC-01 step-up names the action", () => {
     expect(stepUpLead("/sheet/settings?tab=team", "role")).toContain("to change a role");
     expect(stepUpAction("/sheet/settings?tab=team", "role")).toMatchObject({ title: "Change a role or access", icon: "users" });
     expect(stepUpLead("/sheet/x", "plan")).toContain("to change the firm’s plan");
+    expect(stepUpLead("/sheet/settings?tab=retention", "retention_delete")).toContain("to approve deleting a matter’s files");
+    expect(stepUpLead("/sheet/settings?tab=billing", "subscription_cancel")).toContain("to cancel the subscription");
     // The route-based text stays the fallback; an unknown key is ignored.
     expect(stepUpLead("/sheet/exports", null)).toBe(EXPORT_STEP_UP_LEAD);
     expect(stepUpLead("/sheet/exports", "role")).toContain("to change a role");

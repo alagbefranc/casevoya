@@ -8,6 +8,8 @@ import type { ReactNode } from "react";
 import { Empty, Icon, Pair, Sep } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
 import type { Attrs } from "./drafts";
+import { AiVendorTerms } from "./ai-vendor-terms";
+import type { AiVendorTermsData } from "@/modules/sheet/vo-vendor-terms-present";
 
 export type AiTab = "settings" | "runs" | "sources" | "states" | "rules" | "audit";
 
@@ -37,6 +39,8 @@ export type AiSettings = {
   dataUse: AiTerm[];
   /** A live-only note under the firm switches (sample mode, who may change them). */
   note?: string | null;
+  /** Live only (AI-06): the AI vendor terms panel and the owner's acknowledgement dialog. */
+  vendorTerms?: AiVendorTermsData;
 };
 
 export type AiRunRow = {
@@ -228,6 +232,7 @@ function SettingsTab({ data }: { data: AiSettings }) {
           </Panel>
         </div>
       </div>
+      {data.vendorTerms ? <AiVendorTerms data={data.vendorTerms} /> : null}
     </>
   );
 }

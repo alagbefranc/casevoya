@@ -6,6 +6,7 @@ import { stripeServer } from "@/lib/stripe/server";
 import { loadFirmAccount } from "@/modules/finance/account-load";
 import { connectCard, type ConnectCardData, type FinanceAccountData } from "@/modules/finance/connect-present";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
+import { loadContinuity } from "@/modules/sheet/sec-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import {
   readFirmSubscription,
@@ -43,6 +44,8 @@ export async function loadSheetSubscription(staff: SheetStaff): Promise<{
   page: SubscriptionData;
   connect: { data: FinanceAccountData; card: ConnectCardData };
   accounts: BankAccountsData | null;
+  /** SEC-10: the After cancelling panel and the Cancel subscription dialog. */
+  continuity: Awaited<ReturnType<typeof loadContinuity>>;
 }> {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
@@ -56,9 +59,10 @@ export async function loadSheetSubscription(staff: SheetStaff): Promise<{
   ]);
   const detail = firm && !firm.error ? readFirmSubscription(firm.data) : null;
   // After the clock moved the state, read the row again so the pill and the State row agree.
-  const subscription = await loadSubscription(supabase, org);
+  const [subscription, continuity] = await Promise.all([loadSubscription(supabase, org), loadContinuity(staff, detail)]);
   const now = new Date();
   return {
+    continuity,
     chrome,
     pill: subscriptionPill(subscription, now),
     page: subscriptionPage({

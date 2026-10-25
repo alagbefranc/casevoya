@@ -79,6 +79,10 @@ const ACTIONS = {
   agreement: { phrase: "change an agreement", icon: "signature", title: "Change an agreement", detail: "Terms the client signs" },
   countersign: { phrase: "countersign an agreement", icon: "signature", title: "Countersign an agreement", detail: "The firm’s signature on the client’s agreement" },
   quote: { phrase: "change a quote", icon: "invoice", title: "Change a quote", detail: "Fees offered to the client" },
+  retention_delete: { phrase: "approve deleting a matter’s files", icon: "trash", title: "Approve a deletion", detail: "Files of a matter whose retention has ended" },
+  subscription_cancel: { phrase: "cancel the subscription", icon: "credit-card", title: "Cancel the subscription", detail: "Ends at the close of the paid period; nothing is deleted" },
+  subscription_end: { phrase: "choose what happens after cancelling", icon: "archive", title: "Choose the archive or transfer", detail: "Where the firm’s records go after the export window" },
+  firm_index: { phrase: "download the firm export index", icon: "download", title: "Download the firm index", detail: "Every client-file package with its SHA-256" },
   letter_approve: { phrase: "approve a letter", icon: "file-check", title: "Approve a letter", detail: "The version that can be released to the client or the government" },
 } as const satisfies Record<string, { phrase: string } & StepUpAction>;
 

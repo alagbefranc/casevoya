@@ -754,6 +754,46 @@ SEC-01 and SEC-05 (gap #184), branch `feat/sec-sessions-consent`.
 * **Redefines** `public.begin_vo_document_review(uuid, uuid)` (latest `20261019218100_vo_doc_review.sql`): returns `{ok: false, error: 'client_ai_off'}` when the document's person declines AI drafting. Otherwise unchanged.
 
 Tested in `tests/sec-sessions-consent.rls.test.ts` and `tests/sec-sessions-consent.test.tsx`.
+## Retention deletion jobs and tombstones (`20261025290000`, not applied on the live project)
+
+SEC-07 (gap #184), branch `feat/sec-retention-cancellation`. Additive; redefines no function.
+
+* `deletion_jobs`: one approved deletion of one closed matter's files (matter, closure, reason, retention end, policy version, approver, idempotency key, status `approved` / `running` / `completed` / `blocked` / `failed`, lease and attempts). One open job per matter. Never deleted; who approved what is immutable. Forced RLS, no policies.
+* `deletion_job_items`: what the job removes (`document_file`, `inbox_file`, `export_file`, `vo_reading`, `vo_draft`) or keeps with a reason (`agreement_pdf`, a document also on another matter): opaque storage key, SHA-256, status `pending` / `deleted` / `missing` / `kept`. Forced RLS, no policies.
+* `deletion_tombstones`: append-only, one per completed job: matter reference, closed and retention dates, policy version and years, approver and approval time, reason, removed counts by kind (embeddings 0), kept items with reasons, and the removed storage keys (`objects`, for reapplying after a backup restore). Forced RLS, no policies.
+* `app.retention_end(matter)`: the later of the latest closure's `retention_on` and `matters.retention_on`. `app.deletion_ineligible_reason(matter)`, `app.matter_records_deleted(matter)`, `app.document_on_other_matter(document, matter)`.
+* `public.retention_deletion_overview(org)`: firm owner (MFA): eligible matters, the count past the end but on hold, jobs not completed, tombstones.
+* `public.approve_deletion_job(matter, reason, key)`: firm owner + step-up (`app.require_owner_step_up_for_matter`); plans the items; audited `retention.deletion_approved`.
+* Service role only: `public.service_claim_deletion_job()`, `public.service_deletion_item_ready(item)` (re-check; stops the job on a legal hold, keeps a document linked elsewhere), `public.service_record_deletion_item(item, outcome)` (performs the Vo redactions and removes download grants), `public.service_finish_deletion_job(job)` (tombstone). Audited `retention.deletion_started`, `retention.deletion_blocked`, `retention.deletion_failed`, `retention.deletion_completed`.
+* `app.kick_retention_runner()` and pg_cron job `casevoya-retention-runner` (every 5 minutes, only while a job waits): POSTs to `/api/retention/run` with the existing mail dispatch Vault secrets.
+
+Tested in `tests/sec-retention-deletion.rls.test.ts` and `tests/sec-retention-cancellation.test.tsx`.
+
+## Subscription cancellation, export window, custodial archive or transfer (`20261025290100`, not applied on the live project)
+
+SEC-10 (gap #184), branch `feat/sec-retention-cancellation`.
+
+* `organization_subscriptions`: new `cancel_requested_at`, `cancel_requested_by`, `end_arrangement` (`custodial_archive` / `transfer`), `end_transfer_id` (FK `(…, organization_id)` to `firm_transfers`), `end_arrangement_chosen_by`, `end_arrangement_chosen_at`; indexes on each FK.
+* **Redefines** `app.subscription_grace_days(text)` (latest `20261020160100_subscription_billing.sql`): `export_window_days` is never below 90.
+* **Redefines** `app.sync_subscription_state(uuid)` (latest `20261020160100_subscription_billing.sql`): a subscription whose `cancel_at` has passed becomes `cancelled` (`subscription.contract_period_ended`); `cancelled` becomes `archived` at `app.subscription_export_window_end` (the later of `cancelled_at` and `current_period_end`, plus the window) with `end_arrangement` `transfer` only when the chosen transfer is completed, else `custodial_archive`.
+* **Redefines** `public.firm_subscription(uuid)` (latest `20261020160100_subscription_billing.sql`): adds `continuity` and, in `subscription`, `cancel_requested_at` and `end_arrangement`.
+* New: `app.subscription_export_window_end(org)`, `app.firm_transfer_verified(transfer)`, `app.subscription_continuity_json(org, with_coverage)`, `public.subscription_continuity(org)` (any staff, MFA: banner), `public.subscription_cancel_allowed(org)` (owner + step-up; audited `subscription.cancel_requested`), `public.service_record_subscription_cancel(org, actor, cancel_at, period_end)` (service role; Stripe's date; audited `subscription.cancel_scheduled`), `public.choose_subscription_end_arrangement(org, arrangement, transfer)` (owner + step-up; audited `subscription.end_arrangement_chosen`), `public.firm_export_index(org)` (owner + step-up; audited `firm_export.index_downloaded`).
+
+Tested in `tests/sec-subscription-cancellation.rls.test.ts`, `tests/subscription-billing.rls.test.ts` and `tests/sec-retention-cancellation.test.tsx`.
+
+## AI vendor terms acknowledgement (`20261025260000`, not applied on the live project)
+
+AI-06, branch `feat/ai-vendor-terms`. Additive; no existing function is redefined.
+
+* `vo_vendor_terms_acknowledgements`: one row per firm and terms version (`unique (organization_id, terms_version)`): `terms_version`, `acknowledged_by` (FK `auth.users`, indexed), `acknowledged_at`. Forced RLS; read by the firm's staff with staff MFA (the same rule as `vo_settings`); no insert, update or delete grant.
+* `app.vo_vendor_terms_version()`: the current terms version; must equal `VO_VENDOR_TERMS.version` in `src/modules/vo/vendor-terms.ts` (tested). A content change ships with a new migration redefining it.
+* `app.vo_vendor_terms_acknowledged(org)`: whether the firm acknowledged the current version.
+* `public.acknowledge_vo_vendor_terms(org, version)`: firm owner with staff MFA; only the current version ("the AI vendor terms changed" otherwise); idempotent. Audited `vo.vendor_terms_acknowledged` with the version.
+* Trigger `vo_settings_require_vendor_terms` (`app.vo_settings_require_vendor_terms`, before insert or update of `enabled` on `vo_settings`): setting `enabled` to true when Vo was off (the saved switch, or with no row the sample-mode default from `app.vo_enabled`) is refused without the current version acknowledged. `set_vo_settings` and `set_composio_enabled` are unchanged.
+
+* `20261025260100_vo_vendor_terms_version_2.sql` **redefines** `app.vo_vendor_terms_version()` (latest `20261025260000_vo_vendor_terms_ack.sql`): returns `2026-10-25.1` (signed vendor agreements and Casevoya's commitments added to the panel). Nothing else changes; owners acknowledge the new version before Vo can next be turned on.
+
+Tested in `tests/vo-vendor-terms.rls.test.ts` and `tests/vo-vendor-terms.test.tsx`; `tests/vo-drafts.rls.test.ts`, `tests/vo-doc-review.rls.test.ts` and `tests/vo-lead-call.rls.test.ts` now acknowledge before turning Vo on.
 
 ## Letters on a matter and Vo letter drafts (`20261025240000`, `20261025240100`, not applied on the live project)
 
