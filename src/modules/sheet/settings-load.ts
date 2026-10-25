@@ -6,6 +6,7 @@ import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import { readSupportAccess } from "@/modules/sheet/grants-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { effectiveUploadLimit, planPill, securityData, SIGN_IN_EVENT_ACTIONS, teamData, type MemberSecurity } from "@/modules/sheet/settings-present";
+import { parseServiceLevelReport, serviceLevelRows } from "@/modules/sheet/service-levels-present";
 import { continuityDialog, memberDialog, offboardDialog, parseOffboardFacts, type OffboardFacts } from "@/modules/sheet/settings-staff-admin-present";
 import { transferViews, type FirmTransfersData } from "@/modules/sheet/firm-transfers-present";
 import { loadMembers } from "@/modules/sheet/staff-load";
@@ -136,7 +137,7 @@ export async function loadSheetSettingsSecurity(staff: SheetStaff, now: Date = n
   const org = staff.organizationId;
   const owner = staff.role === "firm_owner";
   const since = new Date(now.getTime() - 30 * 86_400_000).toISOString();
-  const [chrome, header, members, security, events, support, firmLimit, largeUploads] = await Promise.all([
+  const [chrome, header, members, security, events, support, firmLimit, largeUploads, serviceLevels] = await Promise.all([
     loadSheetChrome(staff, "/sheet/settings"),
     loadHeader(supabase, staff, "security"),
     loadMembers(supabase, org),
@@ -153,6 +154,8 @@ export async function loadSheetSettingsSecurity(staff: SheetStaff, now: Date = n
     // DOC-02: the per-file upload limit, and whether above 25 MB may be set yet.
     supabase.from("organizations").select("document_max_bytes, staff_idle_timeout_minutes").eq("id", org).maybeSingle(),
     supabase.from("product_settings").select("value").eq("key", "documents.large_uploads_enabled").maybeSingle(),
+    // ADM-04: the firm's monthly service-level report (firm owner).
+    owner ? supabase.rpc("service_level_report", { p_organization_id: org, p_months: 6 }) : null,
   ]);
   const largeAllowed = (largeUploads.data?.value as { enabled?: unknown } | null)?.enabled === true;
   const supportAccess = support && !support.error ? readSupportAccess(support.data) : null;
@@ -166,6 +169,7 @@ export async function loadSheetSettingsSecurity(staff: SheetStaff, now: Date = n
     support: supportAccess ? { active: supportAccess.alert ? { endsAt: supportAccess.alert.ends_at } : null, pending: supportAccess.pending } : null,
     upload: firmLimit.error ? null : { bytes: effectiveUploadLimit(firmLimit.data?.document_max_bytes ?? null, largeAllowed), largeAllowed },
     idleMinutes: firmLimit.error ? null : (firmLimit.data?.staff_idle_timeout_minutes ?? null),
+    serviceLevels: serviceLevelRows(serviceLevels && !serviceLevels.error ? parseServiceLevelReport(serviceLevels.data) : null),
   });
   return { chrome, header, page };
 }

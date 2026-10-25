@@ -841,3 +841,14 @@ Tested in `tests/rep-outcomes.rls.test.ts` (seeded decided matters, RLS scope, s
 ## Privacy response download needs the client's two-step (`20261025340000`, not applied on the live project)
 
 SEC-01 + SEC-06 follow-up. **Redefines** `app.authorize_privacy_response_download(uuid)` (only definition `20261025280000_sec_privacy_responses.sql`): after the ownership and expiry checks it raises `two-step sign-in is required for this download` when the person has no verified authenticator, and `client step-up required: enter your two-step code` when `app.client_step_up_satisfied()` is false. Otherwise unchanged. Tested in `tests/privacy-responses.rls.test.ts`.
+
+## Service-level report (`20261025360000`, not applied on the live project)
+
+ADM-04 (gap #186), branch `feat/adm-service-levels`. Additive; no existing function is redefined.
+
+* `support_response_records`: one support request a firm sent Casevoya (`ticket_ref`, unique per firm; `received_at`; `first_response_at`, null while waiting, never before `received_at`; `recorded_by_user_id`, a platform admin). Metadata only. Forced RLS; select for the firm's owners (`app.actor_is_firm_owner`) and platform admins (`app.is_platform_admin`, aal2); no direct writes; no delete or truncate; row-change audit.
+* `app.platform_ops_actor(uuid)`: a signed-in platform admin at aal2 (their id), or the service role naming a `platform_admins` user (that id); anyone else `42501`.
+* `public.record_support_response(firm, ticket_ref, received_at, first_response_at, recorded_by)`: records or corrects one request (not in the future, reply not before receipt); audited `service_level.support_response_recorded` / `.support_response_updated`.
+* `public.service_level_report(firm, months)`: 1 to 24 months in the firm's timezone, newest first: received, answered, waiting, median and longest seconds to first reply; `uptime` is `{"measured": false}`. The firm's owner (aal2, current firm), a platform admin (aal2) or the service role; the latter two audited `service_level.report_read` on the firm.
+
+Ops wrapper: `scripts/ops/service-levels.mjs` (record, report). Tested in `tests/service-levels.rls.test.ts` and `tests/service-levels-present.test.tsx`.
