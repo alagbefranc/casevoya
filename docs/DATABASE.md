@@ -985,3 +985,7 @@ SRC-01, SRC-02, SRC-03 (gap #188), branch `feat/src-claims-review`. Builds on th
 * `public.suspend_rule_version(version, expected_version, reason)`: licensed (aal2), live versions only, reason required; audited `rule.version_suspended`.
 
 Capture script: `scripts/ops/capture-official-claims.mjs` writes `src/modules/content-governance/captured-claims.json` (drafts offered in Add claim). Tested in `tests/src-claims-review.rls.test.ts` and `tests/src-claims-present.test.tsx`; `tests/source-governance.test.ts`, `tests/owner-licence-gates.rls.test.ts` and `tests/owner-full-access.rls.test.ts` now write approved reviews from a maintenance session.
+
+## Program selection accepts only a live pack (`20261025430000`, not applied on the live project)
+
+SRC follow-up (Francis, 2026-10-25). **Redefines** `app.pack_is_selectable(uuid, uuid)` (only definition `20261017170000_matter_lifecycle.sql`): the status test `status in (published, review_due)` becomes `app.rule_pack_is_live(pack.id)` (`20261025410100`), so `select_matter_program` and its callers refuse a review-due pack or one holding a rule version that is not live. Otherwise unchanged. Tested in `tests/src-pins-scope.rls.test.ts`.
