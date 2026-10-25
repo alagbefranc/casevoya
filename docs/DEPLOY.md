@@ -117,3 +117,21 @@ node scripts/ops/service-notice.mjs list
 ```
 
 `--firm` takes a firm's slug or id and repeats; `--dry-run` checks the arguments without sending. Notice text is plain text (title 3-120 characters, body up to 1000). Every post, update and resolve is audited (`service_notice.*`) with the acting admin.
+
+### Support catalogue (SRC-12)
+
+`scripts/ops/support-catalogue.mjs` keeps "What Casevoya supports" (`/supported`, and Practice › Templates in the Sheet). It never marks anything supported: a program is Supported only when an approved, sourced rule pack exists for it.
+
+```
+# A program from its own official page (a homepage or landing page is refused). Stores a platform
+# source and a draft snapshot (SHA-256, the page's "Date modified" as shown) and IRCC's name from
+# the page heading; the name and link show publicly once the snapshot is verified in source review.
+node scripts/ops/support-catalogue.mjs capture --by <admin-id> --key <program_key> --label "Working label" \
+  --jurisdiction CA --case-type ircc_application --url <official page URL> [--section <anchor>] [--dry-run]
+
+# A program without a source yet (shows "Source not captured"), or a jurisdiction or case type
+node scripts/ops/support-catalogue.mjs entry --by <admin-id> --kind program --key <program_key> --label "..." --jurisdiction CA
+node scripts/ops/support-catalogue.mjs list
+```
+
+If the page can't be fetched nothing is saved. Every save is audited (`support_catalogue.saved`) with the acting admin.
