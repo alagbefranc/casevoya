@@ -2,7 +2,7 @@
   "capturedAt": "2026-10-25T15:57:22.416Z",
   "capturedBy": "scripts/ops/capture-all-sources.mts, run from Francis's agent box (Node fetch, Chrome User-Agent, 2.5 s between requests); IRCC fee list and live Justice Laws dates read through WebFetch; law text from Justice Canada's official XML. Aligned to the #248 format by align-to-248.py.",
   "excluded": "Processing times (staff enter them). Provincial pages. Claims already on main: the 55 canada.ca claims shipped in #248 (captured-canada-ca.json) and the 20 in captured-claims.json.",
-  "status": "DRAFT — every claim needs a licensed reviewer's approval in the app before it goes live",
+  "status": "Loaded as live official claims by scripts/ops/load-official-claims.mjs (Francis, 2026-10-25 11:42/11:50 and 4:48 PM CDT); claims with \"refused\" are never loaded. The original capture said: DRAFT — every claim needs a licensed reviewer's approval in the app before it goes live",
   "alignedTo": "captured-canada-ca.json format on main 201a141 (#248): CA.PROGRAM.* keys, category form|checklist|program (plus guide, fee, law), formNumber, sha256Of, modifiedOn from <gcds-date-modified>",
   "pages": [
     {
