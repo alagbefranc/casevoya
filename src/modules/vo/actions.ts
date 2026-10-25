@@ -199,6 +199,6 @@ export async function saveVoSetting(input: { organizationId: string; setting: Vo
   if (!changes) return { error: "Choose a setting." };
   const supabase = await createClient({ organizationId: input.organizationId });
   const { error } = await supabase.rpc("set_vo_settings", { p_organization_id: input.organizationId, p_changes: changes });
-  if (error) return { error: voError("owner_only") };
+  if (error) return { error: voError(/AI vendor terms/i.test(error.message) ? "vendor_terms" : "owner_only") };
   return { ok: true };
 }
