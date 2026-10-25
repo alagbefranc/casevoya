@@ -46,8 +46,11 @@ function withTab(tab: string, batch: string): string {
   return `${window.location.pathname}?${params.toString()}`;
 }
 
-/** The mapping on Map columns: each column's field, the date order, the default consultant, and each value's choice. */
-function readMapping(root: HTMLElement): { mapping: Record<string, unknown> } | { error: string } {
+/**
+ * The mapping on Map columns: each column's field, the date order, the default consultant, and each
+ * value's choice. MIG-01: the sensitive columns, and for tasks and key dates their defaults.
+ */
+function readMapping(root: HTMLElement, kind: string): { mapping: Record<string, unknown> } | { error: string } {
   const columns: Record<string, number | null> = {};
   for (const select of root.querySelectorAll<HTMLSelectElement>("select[data-mig-col]")) {
     const field = select.value;
@@ -55,7 +58,16 @@ function readMapping(root: HTMLElement): { mapping: Record<string, unknown> } | 
     if (field in columns) return { error: "Each Casevoya field can come from one column only." };
     columns[field] = Number(select.dataset.migCol);
   }
-  if (!("name" in columns)) return { error: "Map a column to the person’s legal name." };
+  if (kind === "clients_matters" && !("name" in columns)) return { error: "Map a column to the person’s legal name." };
+  const sensitivity: Record<string, string> = {};
+  for (const select of root.querySelectorAll<HTMLSelectElement>("select[data-mig-sens]")) {
+    if (select.value) sensitivity[select.dataset.migSens ?? ""] = select.value;
+  }
+  const extra: Record<string, unknown> = { sensitivity };
+  const owner = root.querySelector<HTMLSelectElement>("select[data-mig-owner]");
+  if (owner) extra.default_owner = owner.value || null;
+  const dateKind = root.querySelector<HTMLSelectElement>("select[data-mig-datekind]");
+  if (dateKind) extra.default_date_kind = dateKind.value || null;
   const values: Record<string, Record<string, string>> = {};
   for (const select of root.querySelectorAll<HTMLSelectElement>("select[data-mig-val]")) {
     const field = select.dataset.migVal ?? "";
@@ -65,25 +77,45 @@ function readMapping(root: HTMLElement): { mapping: Record<string, unknown> } | 
   }
   const consultant = root.querySelector<HTMLSelectElement>("select[data-mig-default]")?.value || null;
   const order = root.querySelector<HTMLSelectElement>("select[data-mig-date]")?.value || "dmy";
-  return { mapping: { columns, date_order: order, default_consultant: consultant, values } };
+  return { mapping: { columns, date_order: order, default_consultant: consultant, values, ...extra } };
+}
+
+/** Opens a file picker on a hidden input (or a new one) and resolves with the chosen file. */
+function pick(input: HTMLInputElement | null, accept: string): Promise<File | null> {
+  const target = input ?? Object.assign(document.createElement("input"), { type: "file", accept, hidden: true });
+  return new Promise<File | null>((resolve) => {
+    target.value = "";
+    target.onchange = () => resolve(target.files?.[0] ?? null);
+    target.click();
+  });
 }
 
 async function upload(button: HTMLElement, root: HTMLElement, router: Router) {
   const input = root.querySelector<HTMLInputElement>("input[data-mig-file]");
   if (!input) return;
-  const file = await new Promise<File | null>((resolve) => {
-    input.value = "";
-    input.onchange = () => resolve(input.files?.[0] ?? null);
-    input.click();
-  });
+  const kind = root.querySelector<HTMLSelectElement>("select[data-mig-kind]")?.value || "clients_matters";
+  const file = await pick(input, ".csv,text/csv");
   if (!file) return;
   if (file.size > 5 * 1024 * 1024) {
     toast2("The file is too large", { kind: "warn", sub: "Import up to 5 MB at a time. Split it and import each part." });
     return;
   }
+  // MIG-01: a documents import is a CSV manifest plus a ZIP of the files.
+  let zip: File | null = null;
+  if (kind === "documents") {
+    toast2("Now choose the ZIP", { sub: "The ZIP of the files your manifest names, up to 25 MB." });
+    zip = await pick(root.querySelector<HTMLInputElement>("input[data-mig-zip]"), ".zip,application/zip");
+    if (!zip) return;
+    if (zip.size > 25 * 1024 * 1024) {
+      toast2("The ZIP is too large", { kind: "warn", sub: "Import up to 25 MB of files at a time. Split them into smaller ZIPs." });
+      return;
+    }
+  }
   const form = new FormData();
   form.set("organizationId", button.dataset.org ?? "");
   form.set("file", file);
+  form.set("kind", kind);
+  if (zip) form.set("zip", zip);
   toast2("Checking the file", { sub: "Counting rows and checking the checksum." });
   const result = await send("/api/migration/upload", form, false);
   if (!result.ok) {
@@ -97,8 +129,24 @@ async function upload(button: HTMLElement, root: HTMLElement, router: Router) {
 async function commit(button: HTMLElement, router: Router) {
   const org = button.dataset.org ?? "";
   const batch = button.dataset.batch ?? "";
+  // MIG-01: a documents import sends the same ZIP again; its checksum must match the upload's.
+  let zip: File | null = null;
+  if (button.dataset.kind === "documents") {
+    toast2("Choose the same ZIP", { sub: "The files are stored from it; it must be the ZIP you uploaded." });
+    zip = await pick(null, ".zip,application/zip");
+    if (!zip) return;
+  }
   for (;;) {
-    const result = await post("commit", { org, batch });
+    let result: Reply;
+    if (zip) {
+      const form = new FormData();
+      form.set("org", org);
+      form.set("batch", batch);
+      form.set("zip", zip);
+      result = await send("/api/migration/commit-documents", form, false);
+    } else {
+      result = await post("commit", { org, batch });
+    }
     if (!result.ok) {
       if (result.data.stepUp) return stepUp(batch);
       toast2("Import stopped", { kind: "warn", sub: errorOf(result.data) });
@@ -107,7 +155,7 @@ async function commit(button: HTMLElement, router: Router) {
     }
     const remaining = n(result.data.remaining);
     if (remaining <= 0) break;
-    toast2("Importing", { sub: `${remaining.toLocaleString("en-CA")} matters to go.` });
+    toast2("Importing", { sub: button.dataset.kind && button.dataset.kind !== "clients_matters" ? "Still importing. Keep this page open." : `${remaining.toLocaleString("en-CA")} matters to go.` });
   }
   toast2("Import finished", { kind: "ok", sub: "A copy of the report is in the audit trail." });
   router.refresh();
@@ -151,8 +199,34 @@ export async function runMigrationAct(button: HTMLElement, root: HTMLElement, ro
 
   if (act === "upload") return upload(button, root, router);
 
+  if (act === "review-balance") {
+    // MIG-01: an imported opening balance, reviewed with a step-up. Nothing is posted either way.
+    const approve = button.dataset.approve === "1";
+    let note: string | null = null;
+    if (approve) {
+      if (!window.confirm("Approve this opening balance? Approval records your review only: nothing is posted to an invoice or a client account.")) return;
+    } else {
+      note = window.prompt("Why is this balance rejected? (3 to 500 characters)")?.trim() ?? null;
+      if (!note) return;
+    }
+    const result = await post("review", { org, id: button.dataset.id ?? "", approve, note });
+    if (!result.ok) {
+      if (result.data.stepUp) {
+        toast2("Confirm it’s you", { kind: "warn", sub: "Then choose the button again." });
+        const next = `${window.location.pathname}${window.location.search}`;
+        window.setTimeout(() => window.location.assign(stepUpHref(next, "import_signoff")), 900);
+        return;
+      }
+      toast2("Not saved", { kind: "warn", sub: errorOf(result.data) });
+      return;
+    }
+    toast2(approve ? "Opening balance approved" : "Opening balance rejected", { kind: "ok", sub: "Nothing was posted to invoices or client accounts." });
+    router.refresh();
+    return;
+  }
+
   if (act === "map") {
-    const read = readMapping(root);
+    const read = readMapping(root, button.dataset.kind ?? "clients_matters");
     if ("error" in read) {
       toast2("Check the mapping", { kind: "warn", sub: read.error });
       return;
@@ -176,7 +250,11 @@ export async function runMigrationAct(button: HTMLElement, root: HTMLElement, ro
       toast2("Not saved", { kind: "warn", sub: errorOf(result.data) });
       return;
     }
-    toast2(same ? "Marked as the same person" : "Marked as different people", { kind: "ok", sub: "Nothing is merged. The preview is updated." });
+    const people = !button.dataset.kind || button.dataset.kind === "clients_matters";
+    toast2(same ? (people ? "Marked as the same person" : "Marked as the same record") : people ? "Marked as different people" : "Marked as different", {
+      kind: "ok",
+      sub: "Nothing is merged. The preview is updated.",
+    });
     router.refresh();
     return;
   }

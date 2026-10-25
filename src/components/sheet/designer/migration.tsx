@@ -10,6 +10,11 @@
  * on Preview; an `alert ok` when no row has a problem; on Sign off, rows-checked and checksum lines,
  * the result after import, Roll back with the reasons it can't run, and the firm's earlier imports.
  * Buttons carry `data-mig-act` (use-sheet runs them against /api/migration).
+ *
+ * MIG-01 live-only additions, from the same Designer parts: a "What’s in the file" `.fld` picker and
+ * a hidden ZIP input on the upload empty state; Map columns settings for the default assignee and the
+ * kind of date; a Sensitive columns table (`.sel` per column); Preview column headings for the other
+ * kinds; and an Opening balances table with Approve / Reject on Sign off.
  */
 import type { CSSProperties } from "react";
 import { Empty, Icon, Sep } from "./frame";
@@ -34,12 +39,16 @@ export type MapRow = {
 
 export type ValueRow = { column: string; value: string; rows: string; select: SelectData };
 
+export type SensitivityRow = { column: string; select: SelectData };
+
 export type MapData = {
   rows: MapRow[];
   /** Designer: a link to Preview. Live: the button that saves the mapping and runs the dry run. */
   next: { href: string } | { attrs: Attrs };
-  settings?: { dateOrder: SelectData; consultant: SelectData } | null;
+  settings?: { dateOrder: SelectData; consultant?: SelectData | null; owner?: SelectData | null; dateKind?: SelectData | null } | null;
   values?: ValueRow[];
+  /** Live (MIG-01): each column's sensitivity class. */
+  sensitivity?: SensitivityRow[];
   discard?: Attrs | null;
 };
 
@@ -48,6 +57,7 @@ export type MatchRow = { row: string; person: string; existing: string; same: st
 export type ErrorRow = { row: string; column: string; problem: string; fix: string };
 export type SummaryRow = { term: string; value: string | Pair2 };
 export type HistoryRow = { key: string; file: string; when: string; rows: string; state: MigrationBadge; href: string };
+export type BalanceRow = { key: string; matter: string; kind: string; amount: string; asOf: string; state: MigrationBadge; actions: { label: string; attrs: Attrs }[] };
 
 export type SignoffData = {
   summary: SummaryRow[];
@@ -55,16 +65,19 @@ export type SignoffData = {
   action: { label: string; attrs: Attrs } | null;
   rollback?: { attrs: Attrs | null; reasons: string[] } | null;
   history?: HistoryRow[];
+  /** Live (MIG-01): an opening-balances import's balances, held for review. */
+  balances?: BalanceRow[];
 };
 
 export type MigrationData = {
   tab: MigrationTab;
-  /** Live: no import open, so Map columns shows the upload empty state. */
-  upload?: { attrs: Attrs } | null;
+  /** Live: no import open, so Map columns shows the upload empty state (MIG-01: with the kind picker). */
+  upload?: { attrs: Attrs; kinds?: SelectData; copy?: string } | null;
   /** Live: why there's nothing to show on this tab. */
   empty?: { title: string; copy: string } | null;
   map?: MapData | null;
-  preview?: { rows: PreviewRow[]; matches?: MatchRow[] } | null;
+  /** heads: live (MIG-01), the middle three column headings for a kind other than clients. */
+  preview?: { rows: PreviewRow[]; matches?: MatchRow[]; heads?: [string, string, string] } | null;
   errors?: { title: string; copy: string; ok?: boolean; rows: ErrorRow[] } | null;
   signoff?: SignoffData | null;
 };
@@ -206,12 +219,19 @@ function MapTab({ data }: { data: MigrationData }) {
         <EmptyPanel
           n={1}
           title={"No import in progress"}
-          copy={"Choose a CSV file of clients and matters, up to 5 MB and 5,000 rows. Nothing goes live until you sign off."}
+          copy={data.upload.copy ?? "Choose a CSV file of clients and matters, up to 5 MB and 5,000 rows. Nothing goes live until you sign off."}
         >
+          {data.upload.kinds ? (
+            <div className={"fld"}>
+              <label htmlFor={"migK"}>{"What’s in the file"}</label>
+              <Select data={data.upload.kinds} id={"migK"} />
+            </div>
+          ) : null}
           <button className={"btn p sm"} {...data.upload.attrs}>
             {"Choose a CSV file"}
           </button>
           <input type={"file"} accept={".csv,text/csv"} hidden data-mig-file={"1"} />
+          {data.upload.kinds ? <input type={"file"} accept={".zip,application/zip"} hidden data-mig-zip={"1"} /> : null}
         </EmptyPanel>
       ) : null}
       {!data.upload && data.empty ? <EmptyPanel n={1} title={data.empty.title} copy={data.empty.copy} /> : null}
@@ -247,12 +267,49 @@ function MapTab({ data }: { data: MigrationData }) {
                   <label htmlFor={"migD"}>{"Dates in your file"}</label>
                   <Select data={map.settings.dateOrder} id={"migD"} />
                 </div>
-                <div className={"fld"}>
-                  <label htmlFor={"migC"}>{"Responsible consultant when a row names none"}</label>
-                  <Select data={map.settings.consultant} id={"migC"} />
-                </div>
+                {map.settings.consultant ? (
+                  <div className={"fld"}>
+                    <label htmlFor={"migC"}>{"Responsible consultant when a row names none"}</label>
+                    <Select data={map.settings.consultant} id={"migC"} />
+                  </div>
+                ) : null}
+                {map.settings.owner ? (
+                  <div className={"fld"}>
+                    <label htmlFor={"migO"}>{"Assignee when a row names none"}</label>
+                    <Select data={map.settings.owner} id={"migO"} />
+                  </div>
+                ) : null}
+                {map.settings.dateKind ? (
+                  <div className={"fld"}>
+                    <label htmlFor={"migT"}>{"Kind of date when a row doesn’t say"}</label>
+                    <Select data={map.settings.dateKind} id={"migT"} />
+                  </div>
+                ) : null}
               </div>
             </section>
+          ) : null}
+          {map.sensitivity?.length ? (
+            <div className={"tw rv"} role={"region"} aria-label={"Sensitive columns"} tabIndex={0} style={{ marginTop: "12px", ...i(2) }}>
+              <table className={"t"}>
+                <caption className={"sr"}>{"Sensitive columns"}</caption>
+                <thead>
+                  <tr>
+                    <th scope={"col"}>{"Your column"}</th>
+                    <th scope={"col"}>{"Sensitivity"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {map.sensitivity.map((row, index) => (
+                    <tr key={`${index}-${row.column}`}>
+                      <td>{row.column}</td>
+                      <td>
+                        <Select data={row.select} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : null}
           {map.values?.length ? (
             <div className={"tw rv"} role={"region"} aria-label={"Value mapping"} tabIndex={0} style={{ marginTop: "12px", ...i(2) }}>
@@ -316,9 +373,9 @@ function PreviewTab({ data }: { data: MigrationData }) {
               <thead>
                 <tr>
                   <th scope={"col"}>{"Row"}</th>
-                  <th scope={"col"}>{"Person"}</th>
-                  <th scope={"col"}>{"Date of birth"}</th>
-                  <th scope={"col"}>{"Matter"}</th>
+                  <th scope={"col"}>{preview.heads?.[0] ?? "Person"}</th>
+                  <th scope={"col"}>{preview.heads?.[1] ?? "Date of birth"}</th>
+                  <th scope={"col"}>{preview.heads?.[2] ?? "Matter"}</th>
                   <th scope={"col"}>{"Result"}</th>
                 </tr>
               </thead>
@@ -344,7 +401,7 @@ function PreviewTab({ data }: { data: MigrationData }) {
                 <thead>
                   <tr>
                     <th scope={"col"}>{"Row"}</th>
-                    <th scope={"col"}>{"Person"}</th>
+                    <th scope={"col"}>{preview.heads?.[0] ?? "Person"}</th>
                     <th scope={"col"}>{"Possible match"}</th>
                     <th scope={"col"}>{"Same"}</th>
                     <th scope={"col"}>{"Decision"}</th>
@@ -491,6 +548,40 @@ function SignoffTab({ data }: { data: MigrationData }) {
                 </table>
               </div>
             </>
+          ) : null}
+          {signoff.balances?.length ? (
+            <div className={"tw rv"} role={"region"} aria-label={"Opening balances"} tabIndex={0} style={{ marginTop: "12px", ...i(3) }}>
+              <table className={"t"}>
+                <caption className={"sr"}>{"Opening balances"}</caption>
+                <thead>
+                  <tr>
+                    <th scope={"col"}>{"Matter"}</th>
+                    <th scope={"col"}>{"Kind"}</th>
+                    <th scope={"col"}>{"Amount"}</th>
+                    <th scope={"col"}>{"As of"}</th>
+                    <th scope={"col"}>{"Review"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {signoff.balances.map((row) => (
+                    <tr key={row.key}>
+                      <td>{row.matter}</td>
+                      <td>{row.kind}</td>
+                      <td>{row.amount}</td>
+                      <td>{row.asOf}</td>
+                      <td>
+                        <Badge badge={row.state} />
+                        {row.actions.map((action) => (
+                          <button key={action.label} className={"btn sm"} {...action.attrs}>
+                            {action.label}
+                          </button>
+                        ))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : null}
           {signoff.history?.length ? (
             <div className={"tw rv"} role={"region"} aria-label={"Imports"} tabIndex={0} style={{ marginTop: "12px", ...i(4) }}>

@@ -3687,6 +3687,90 @@ export type Database = {
         }
         Relationships: []
       }
+      opening_balances: {
+        Row: {
+          amount_cents: number
+          as_of: string
+          batch_id: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          description: string | null
+          id: string
+          imported_by: string
+          is_sample: boolean
+          kind: string
+          matter_id: string
+          organization_id: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source_system: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          amount_cents: number
+          as_of: string
+          batch_id: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          id?: string
+          imported_by: string
+          is_sample?: boolean
+          kind: string
+          matter_id: string
+          organization_id: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_system: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          amount_cents?: number
+          as_of?: string
+          batch_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          id?: string
+          imported_by?: string
+          is_sample?: boolean
+          kind?: string
+          matter_id?: string
+          organization_id?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_system?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opening_balances_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "opening_balances_batch_id_organization_id_fkey"
+            columns: ["batch_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "migration_batches"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
       renewal_timings: {
         Row: {
           applies_to: string
@@ -7078,6 +7162,8 @@ export type Database = {
           id: string
           matter_id: string
           organization_id: string
+          original_author_name: string | null
+          original_written_on: string | null
         }
         Insert: {
           author_membership_id: string
@@ -7087,6 +7173,8 @@ export type Database = {
           id?: string
           matter_id: string
           organization_id: string
+          original_author_name?: string | null
+          original_written_on?: string | null
         }
         Update: {
           author_membership_id?: string
@@ -7096,6 +7184,8 @@ export type Database = {
           id?: string
           matter_id?: string
           organization_id?: string
+          original_author_name?: string | null
+          original_written_on?: string | null
         }
         Relationships: []
       }
@@ -7682,6 +7772,10 @@ export type Database = {
       }
       migration_batches: {
         Row: {
+          attachment_bytes: number | null
+          attachment_files: number | null
+          attachment_name: string | null
+          attachment_sha256: string | null
           byte_size: number
           checked_at: string | null
           commit_started_at: string | null
@@ -7695,6 +7789,7 @@ export type Database = {
           headers: string[]
           id: string
           is_sample: boolean
+          kind: string
           mapping: Json
           organization_id: string
           parsed_digest: string
@@ -7705,6 +7800,7 @@ export type Database = {
           result_counts: Json | null
           rolled_back_at: string | null
           rolled_back_by: string | null
+          sensitivity: Json
           source_row_count: number
           source_sha256: string
           source_system: string
@@ -7717,6 +7813,10 @@ export type Database = {
           version: number
         }
         Insert: {
+          attachment_bytes?: number | null
+          attachment_files?: number | null
+          attachment_name?: string | null
+          attachment_sha256?: string | null
           byte_size: number
           checked_at?: string | null
           commit_started_at?: string | null
@@ -7730,6 +7830,7 @@ export type Database = {
           headers: string[]
           id?: string
           is_sample?: boolean
+          kind?: string
           mapping?: Json
           organization_id: string
           parsed_digest: string
@@ -7740,6 +7841,7 @@ export type Database = {
           result_counts?: Json | null
           rolled_back_at?: string | null
           rolled_back_by?: string | null
+          sensitivity?: Json
           source_row_count: number
           source_sha256: string
           source_system?: string
@@ -7752,6 +7854,10 @@ export type Database = {
           version?: number
         }
         Update: {
+          attachment_bytes?: number | null
+          attachment_files?: number | null
+          attachment_name?: string | null
+          attachment_sha256?: string | null
           byte_size?: number
           checked_at?: string | null
           commit_started_at?: string | null
@@ -7765,6 +7871,7 @@ export type Database = {
           headers?: string[]
           id?: string
           is_sample?: boolean
+          kind?: string
           mapping?: Json
           organization_id?: string
           parsed_digest?: string
@@ -7775,6 +7882,7 @@ export type Database = {
           result_counts?: Json | null
           rolled_back_at?: string | null
           rolled_back_by?: string | null
+          sensitivity?: Json
           source_row_count?: number
           source_sha256?: string
           source_system?: string
@@ -7796,19 +7904,69 @@ export type Database = {
           },
         ]
       }
+      migration_files: {
+        Row: {
+          batch_id: string
+          base_name: string
+          byte_size: number
+          created_at: string
+          id: string
+          media_type: string | null
+          organization_id: string
+          path: string
+          problem: string | null
+          sha256: string | null
+        }
+        Insert: {
+          batch_id: string
+          base_name: string
+          byte_size: number
+          created_at?: string
+          id?: string
+          media_type?: string | null
+          organization_id: string
+          path: string
+          problem?: string | null
+          sha256?: string | null
+        }
+        Update: {
+          batch_id?: string
+          base_name?: string
+          byte_size?: number
+          created_at?: string
+          id?: string
+          media_type?: string | null
+          organization_id?: string
+          path?: string
+          problem?: string | null
+          sha256?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "migration_files_batch_id_organization_id_fkey"
+            columns: ["batch_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "migration_batches"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
       migration_records: {
         Row: {
           batch_id: string
           created: boolean
           created_at: string
           id: string
+          imported_at: string
           imported_stage: Database["public"]["Enums"]["matter_stage"] | null
           organization_id: string
+          original_on: string | null
           record_id: string
           record_table: string
           removed_at: string | null
           row_number: number
           source_reference: string | null
+          source_system: string | null
           version_at_import: number
         }
         Insert: {
@@ -7816,13 +7974,16 @@ export type Database = {
           created: boolean
           created_at?: string
           id?: string
+          imported_at?: string
           imported_stage?: Database["public"]["Enums"]["matter_stage"] | null
           organization_id: string
+          original_on?: string | null
           record_id: string
           record_table: string
           removed_at?: string | null
           row_number: number
           source_reference?: string | null
+          source_system?: string | null
           version_at_import: number
         }
         Update: {
@@ -7830,13 +7991,16 @@ export type Database = {
           created?: boolean
           created_at?: string
           id?: string
+          imported_at?: string
           imported_stage?: Database["public"]["Enums"]["matter_stage"] | null
           organization_id?: string
+          original_on?: string | null
           record_id?: string
           record_table?: string
           removed_at?: string | null
           row_number?: number
           source_reference?: string | null
+          source_system?: string | null
           version_at_import?: number
         }
         Relationships: [
@@ -7865,6 +8029,8 @@ export type Database = {
           is_applicant: boolean
           match_detail: string[] | null
           match_person_id: string | null
+          match_record_id: string | null
+          match_record_table: string | null
           match_row_number: number | null
           matter_id: string | null
           normalized: Json | null
@@ -7872,6 +8038,7 @@ export type Database = {
           person_id: string | null
           plan: Database["public"]["Enums"]["migration_row_plan"] | null
           problems: Json
+          record_id: string | null
           row_number: number
           row_sha256: string
         }
@@ -7890,6 +8057,8 @@ export type Database = {
           is_applicant?: boolean
           match_detail?: string[] | null
           match_person_id?: string | null
+          match_record_id?: string | null
+          match_record_table?: string | null
           match_row_number?: number | null
           matter_id?: string | null
           normalized?: Json | null
@@ -7897,6 +8066,7 @@ export type Database = {
           person_id?: string | null
           plan?: Database["public"]["Enums"]["migration_row_plan"] | null
           problems?: Json
+          record_id?: string | null
           row_number: number
           row_sha256: string
         }
@@ -7915,6 +8085,8 @@ export type Database = {
           is_applicant?: boolean
           match_detail?: string[] | null
           match_person_id?: string | null
+          match_record_id?: string | null
+          match_record_table?: string | null
           match_row_number?: number | null
           matter_id?: string | null
           normalized?: Json | null
@@ -7922,6 +8094,7 @@ export type Database = {
           person_id?: string | null
           plan?: Database["public"]["Enums"]["migration_row_plan"] | null
           problems?: Json
+          record_id?: string | null
           row_number?: number
           row_sha256?: string
         }
@@ -13305,9 +13478,29 @@ export type Database = {
         Args: { p_letter_type: string; p_matter_id: string; p_organization_id: string }
         Returns: Json
       }
+      commit_migration_kind_chunk: {
+        Args: { p_batch: string; p_limit?: number; p_org: string }
+        Returns: Json
+      }
       create_matter_letter: {
         Args: { p_body: string; p_letter_type: string; p_matter_id: string; p_organization_id: string; p_title: string }
         Returns: string
+      }
+      imported_record_provenance: {
+        Args: { p_ids: string[]; p_org: string; p_table: string }
+        Returns: Json
+      }
+      migration_document_rows: {
+        Args: { p_batch: string; p_limit?: number; p_org: string }
+        Returns: Json
+      }
+      record_migration_document: {
+        Args: { p_batch: string; p_org: string; p_row: number; p_version: string }
+        Returns: Json
+      }
+      review_opening_balance: {
+        Args: { p_approve: boolean; p_id: string; p_note: string; p_org: string }
+        Returns: Json
       }
       revise_matter_letter: {
         Args: { p_body: string; p_expected_version: number; p_letter_id: string; p_title: string }
@@ -13324,6 +13517,21 @@ export type Database = {
       release_matter_letter: {
         Args: { p_letter_id: string }
         Returns: Json
+      }
+      set_migration_kind: {
+        Args: { p_batch: string; p_kind: string; p_org: string }
+        Returns: undefined
+      }
+      stage_migration_files: {
+        Args: {
+          p_batch: string
+          p_bytes: number
+          p_files: Json
+          p_name: string
+          p_org: string
+          p_sha256: string
+        }
+        Returns: number
       }
       vo_letter_facts: {
         Args: { p_run_id: string }

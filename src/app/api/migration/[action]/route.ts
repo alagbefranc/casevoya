@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { isMigrationAction, runMigrationAction, uploadMigrationFile, type MigrationResult } from "@/modules/migration/actions";
-
+import { commitMigrationDocuments, isMigrationAction, runMigrationAction, uploadMigrationFile, type MigrationResult } from "@/modules/migration/actions";
 /**
  * Migration import (T044): `/api/migration/upload` takes the CSV as multipart form data and parses
  * it here (5 MB, 5,000 rows); `map`, `decide`, `commit`, `rollback` and `discard` take JSON. The
@@ -21,8 +20,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
   }
   const { action } = await params;
   if (action === "upload") {
+    // MIG-01: a documents import sends its ZIP (up to 25 MB) with the manifest CSV.
     const length = Number(request.headers.get("content-length") ?? 0);
-    if (length > 6 * 1024 * 1024) return NextResponse.json({ error: "The file is larger than 5 MB. Split it and import each part." }, { status: 413 });
+    if (length > 32 * 1024 * 1024) return NextResponse.json({ error: "The files are too large. Split them and import each part." }, { status: 413 });
     let form: FormData;
     try {
       form = await request.formData();
@@ -31,7 +31,33 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
     }
     const org = form.get("organizationId");
     const file = form.get("file");
-    return reply(await uploadMigrationFile(typeof org === "string" ? org : "", file instanceof File ? file : null));
+    const kind = form.get("kind");
+    const zip = form.get("zip");
+    if (!(zip instanceof File) && file instanceof File && file.size > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: "The file is larger than 5 MB. Split it and import each part." }, { status: 413 });
+    }
+    return reply(
+      await uploadMigrationFile(
+        typeof org === "string" ? org : "",
+        file instanceof File ? file : null,
+        typeof kind === "string" && kind ? kind : "clients_matters",
+        zip instanceof File ? zip : null,
+      ),
+    );
+  }
+  if (action === "commit-documents") {
+    const length = Number(request.headers.get("content-length") ?? 0);
+    if (length > 26 * 1024 * 1024) return NextResponse.json({ error: "The ZIP is larger than 25 MB." }, { status: 413 });
+    let form: FormData;
+    try {
+      form = await request.formData();
+    } catch {
+      return NextResponse.json({ error: "Choose the same ZIP you uploaded." }, { status: 400 });
+    }
+    const org = form.get("org");
+    const batch = form.get("batch");
+    const zip = form.get("zip");
+    return reply(await commitMigrationDocuments(typeof org === "string" ? org : "", typeof batch === "string" ? batch : "", zip instanceof File ? zip : null));
   }
   if (!isMigrationAction(action)) return NextResponse.json({ error: "Not found." }, { status: 404 });
   let body: unknown;
