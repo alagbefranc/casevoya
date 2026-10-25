@@ -5,7 +5,9 @@
  * and publication stay in the source-governance workflow (T013).
  *
  * Live-only addition: `data-nav` on New template (it opens the Agreements page's template
- * dialog, where firm templates are made).
+ * dialog, where firm templates are made). On Message templates (OPS-04) it opens the firm's own
+ * message template dialog instead (`newTemplateDialog`, `MessageTemplateDialog`), and the firm's
+ * templates are rows above the email catalog.
  */
 import { Empty, Icon, Pair } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
@@ -39,6 +41,8 @@ export type TemplatesData = {
   newTemplateHref?: string;
   /** Live: the button's honest label ("New agreement template": it can only make those). */
   newTemplateLabel?: string;
+  /** Live (OPS-04): the dialog New template opens instead of a toast or a page. */
+  newTemplateDialog?: string;
   program: { rows: ProgramRow[]; note: string };
   messages: { rows: MessageRow[] };
   checklists: { cards: ChecklistCard[] };
@@ -86,10 +90,11 @@ export function TemplatesHeader({ data }: { data: TemplatesData }) {
         <span className={"acts"}>
           <button
             className={"btn p sm"}
-            data-toast={"New template"}
-            data-sub={"Starts as a draft. A licensed reviewer approves it before use."}
+            data-toast={data.newTemplateDialog ? undefined : "New template"}
+            data-sub={data.newTemplateDialog ? undefined : "Starts as a draft. A licensed reviewer approves it before use."}
             data-fpb={"1"}
-            data-nav={data.newTemplateHref}
+            data-nav={data.newTemplateDialog ? undefined : data.newTemplateHref}
+            data-dlg={data.newTemplateDialog}
           >
             <Icon name={"plus"} cls={"ic s"} />
             {data.newTemplateLabel ?? "New template"}
@@ -530,3 +535,97 @@ export function SheetTemplates({ data }: { data: TemplatesData }) {
   return <Program data={data} />;
 }
 
+
+export type MessageTemplateEdit = {
+  id: string;
+  version: number;
+  useFor: "message" | "announcement";
+  name: string;
+  title: string;
+  body: string;
+  status: "draft" | "approved";
+};
+
+export type MessageTemplateDialogData = {
+  organizationId: string;
+  /** The template opened from its row (?view=), or null for a new one. */
+  edit: MessageTemplateEdit | null;
+  /** Firm owner or licensed consultant: may approve a draft. */
+  canApprove: boolean;
+  /** Firm owner, licensed consultant or case manager: may write templates. */
+  canWrite: boolean;
+};
+
+const FIELD_HELP = "Fields: {client_first_name}, {matter_reference}, {firm_name}, {consultant_name}. An announcement can use {firm_name} only. A field Casevoya has no value for stays in the text for the sender to fill.";
+
+/**
+ * Live only (OPS-04): write or edit one of the firm's message templates (a message the composer can
+ * insert, or an announcement). Saving makes it a draft; a firm owner or licensed consultant
+ * approves it. Built from the Designer's dialog and field classes; buttons carry `data-mt-*`
+ * (message-template-acts.ts). Opened by New template, or straight away for `?view=<template>`.
+ */
+export function MessageTemplateDialog({ data }: { data: MessageTemplateDialogData }) {
+  const edit = data.edit;
+  const announcement = edit?.useFor === "announcement";
+  const ids = { "data-org": data.organizationId, "data-id": edit?.id ?? "", "data-v": edit ? String(edit.version) : "" };
+  return (
+    <dialog className={"dlg"} id={"dlgMt"} aria-labelledby={"dlgMtH"} data-autoopen={edit ? "1" : undefined}>
+      <div className={"dh"}>
+        <h2 id={"dlgMtH"}>{edit ? (edit.status === "approved" ? "Message template (approved)" : "Message template (draft)") : "New message template"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={"dlgMt"}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <div className={"fld"}>
+          <label htmlFor={"mtU"}>{"Use"}</label>
+          <select className={"sel"} id={"mtU"} defaultValue={edit?.useFor ?? "message"}>
+            <option value={"message"}>{"Message (the composer inserts it)"}</option>
+            <option value={"announcement"}>{"Announcement (to many clients)"}</option>
+          </select>
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"mtN"}>{"Name"}</label>
+          <input className={"inp"} id={"mtN"} maxLength={120} defaultValue={edit?.name ?? ""} />
+        </div>
+        <div className={"fld"} id={"mtTf"} hidden={announcement ? undefined : true}>
+          <label htmlFor={"mtT"}>{"Title clients see"}</label>
+          <input className={"inp"} id={"mtT"} maxLength={120} defaultValue={edit?.title ?? ""} />
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"mtB"}>{"Text"}</label>
+          <textarea className={"ta"} id={"mtB"} maxLength={4000} defaultValue={edit?.body ?? ""}></textarea>
+          <small style={{ color: "var(--t2)", display: "block", marginTop: "6px" }}>{FIELD_HELP}</small>
+        </div>
+        {edit?.status === "approved" ? (
+          <p className={"fp-note"} role={"note"}>
+            {"Saving a change makes it a draft again until it is approved."}
+          </p>
+        ) : null}
+        {data.canWrite ? null : (
+          <p className={"fp-note"} role={"note"}>
+            {"Only a firm owner, licensed consultant or case manager can write templates."}
+          </p>
+        )}
+      </div>
+      <div className={"df"}>
+        {edit && data.canWrite ? (
+          <button className={"btn"} data-mt-archive={"1"} {...ids}>
+            {"Archive"}
+          </button>
+        ) : null}
+        <button className={"btn"} data-close={"dlgMt"}>
+          {"Cancel"}
+        </button>
+        {edit?.status === "draft" && data.canApprove ? (
+          <button className={"btn"} data-mt-approve={"1"} {...ids}>
+            {"Approve"}
+          </button>
+        ) : null}
+        <button className={"btn p"} data-mt-save={"1"} {...ids} disabled={data.canWrite ? undefined : true}>
+          {"Save draft"}
+        </button>
+      </div>
+    </dialog>
+  );
+}

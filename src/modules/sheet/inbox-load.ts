@@ -1,9 +1,14 @@
 import "server-only";
-import type { BouncedRow, ComposeData, InboxData, ThreadItem, ThreadMail, TriageRow } from "@/components/sheet/designer/inbox";
+import type { AnnouncementDialogData, BouncedRow, ComposeData, InboxData, ThreadItem, ThreadMail, TriageRow } from "@/components/sheet/designer/inbox";
 import { createClient } from "@/lib/supabase/server";
+import { readState } from "@/modules/messages/present";
+import { approvedTemplates, consultantNames, messageTemplateOptions } from "@/modules/messages/templates-load";
+import { firstNameOf } from "@/modules/messages/templates";
+import { announcementCard, audienceLine, audienceOptions } from "@/modules/sheet/announcements-present";
 import { loadSheetChrome, memberNames } from "@/modules/sheet/chrome-load";
 import {
   attachment,
+  bouncedFollowUp,
   DELIVERY_PROBLEM_STATUSES,
   deliveryProblem,
   deliveryProblemsPill,
@@ -19,6 +24,7 @@ import {
   snippet,
   suggest,
   templateLabel,
+  withFileToMatter,
   type Candidate,
 } from "@/modules/sheet/inbox-present";
 import {
@@ -87,7 +93,7 @@ async function loadTriage(supabase: Client, staff: SheetStaff): Promise<NonNulla
   const senders = [...new Set(rows.map((row) => row.from_email.toLowerCase()))];
   const [items, byEmail] = await Promise.all([
     ids.length
-      ? supabase.from("inbound_inbox_items").select("inbound_email_id, filename, media_type, upload_state, created_at").eq("organization_id", org).in("inbound_email_id", ids).order("created_at")
+      ? supabase.from("inbound_inbox_items").select("id, inbound_email_id, filename, media_type, upload_state, created_at").eq("organization_id", org).in("inbound_email_id", ids).order("created_at")
       : null,
     senders.length ? supabase.from("persons").select("id, display_name, email").eq("organization_id", org).in("email", senders) : null,
   ]);
@@ -125,11 +131,14 @@ async function loadTriage(supabase: Client, staff: SheetStaff): Promise<NonNulla
           .map((party) => ({ personId: person.id, name: person.display_name, matterId: party.matter_id, matter: labels.get(party.matter_id) ?? "Matter", email: person.email })),
       );
     const suggestion = suggest({ emailId: row.id, organizationId: org, from, ready: row.attachments_done, verified: row.sender_verified, addressMatter, byEmail: candidates });
+    const files = filesOf.get(row.id) ?? [];
     return {
       from: row.from_email,
       subject: row.subject || "(no subject)",
-      attachments: (filesOf.get(row.id) ?? []).map((item) => attachment(item.filename, item.upload_state, item.media_type)),
+      attachments: files.map((item) => attachment(item.filename, item.upload_state, item.media_type)),
       ...suggestion,
+      // OPS-06: File to matter, with a matter search and a choice per file.
+      actions: withFileToMatter(suggestion.actions, { emailId: row.id, organizationId: org, ready: row.attachments_done, files }),
     };
   });
 
@@ -145,7 +154,8 @@ async function loadTriage(supabase: Client, staff: SheetStaff): Promise<NonNulla
 
 /** Filed emails whose clean files did not all become documents: they stay here until they move. */
 async function loadUnmoved(supabase: Client, org: string): Promise<TriageRow[]> {
-  const pending = await supabase.from("inbound_inbox_items").select("inbound_email_id").eq("organization_id", org).eq("upload_state", "clean").limit(READ);
+  // A file staff left out when filing (skipped_at) never moves, so it doesn't keep the email here.
+  const pending = await supabase.from("inbound_inbox_items").select("inbound_email_id").eq("organization_id", org).eq("upload_state", "clean").is("skipped_at", null).limit(READ);
   const ids = [...new Set((pending.data ?? []).map((row) => row.inbound_email_id))];
   if (!ids.length) return [];
   const emails = await supabase
@@ -158,7 +168,7 @@ async function loadUnmoved(supabase: Client, org: string): Promise<TriageRow[]> 
   const rows = (emails.data ?? []).filter((row) => row.matter_id && row.person_id);
   if (!rows.length) return [];
   const [items, people, labels] = await Promise.all([
-    supabase.from("inbound_inbox_items").select("inbound_email_id, filename, media_type, upload_state").eq("organization_id", org).in("inbound_email_id", rows.map((row) => row.id)).neq("upload_state", "assigned"),
+    supabase.from("inbound_inbox_items").select("inbound_email_id, filename, media_type, upload_state").eq("organization_id", org).in("inbound_email_id", rows.map((row) => row.id)).neq("upload_state", "assigned").is("skipped_at", null),
     supabase.from("persons").select("id, display_name").eq("organization_id", org).in("id", rows.map((row) => row.person_id!)),
     matterLabels(supabase, org, rows.map((row) => row.matter_id!)),
   ]);
@@ -194,7 +204,7 @@ async function loadConversations(supabase: Client, staff: SheetStaff, query: She
       .limit(READ * 2),
     supabase
       .from("matter_messages")
-      .select("id, thread_id, matter_id, author_kind, author_person_id, author_name, body, requires_ack, channel, created_at")
+      .select("id, thread_id, matter_id, author_kind, author_user_id, author_person_id, author_name, body, requires_ack, channel, created_at")
       .eq("organization_id", org)
       .order("created_at", { ascending: false })
       .limit(READ * 2),
@@ -209,7 +219,7 @@ async function loadConversations(supabase: Client, staff: SheetStaff, query: She
   type Item =
     | { kind: "in"; id: string; matter_id: string | null; person_id: string; created_at: string; subject: string | null; text: string | null }
     | { kind: "out"; id: string; matter_id: string; person_id: string; created_at: string; author: string; text: string; sample: boolean; event: string }
-    | { kind: "msg"; id: string; matter_id: string; person_id: string; created_at: string; author: string; text: string; channel: MessageChannel; thread: string; ack: boolean };
+    | { kind: "msg"; id: string; matter_id: string; person_id: string; created_at: string; author: string; text: string; channel: MessageChannel; thread: string; ack: boolean; staff: boolean; authorUser: string | null };
   // A message belongs to the conversation of every person its thread is addressed to.
   const messageItems: Item[] = messages.flatMap((row) => {
     const people = peopleOf.get(row.thread_id) ?? (row.author_person_id ? [row.author_person_id] : []);
@@ -225,6 +235,8 @@ async function loadConversations(supabase: Client, staff: SheetStaff, query: She
         channel: row.channel === "whatsapp" ? "whatsapp" : "portal",
         thread: row.thread_id,
         ack: row.requires_ack,
+        staff: row.author_kind === "staff",
+        authorUser: row.author_user_id,
       }),
     );
   });
@@ -289,6 +301,11 @@ async function loadConversations(supabase: Client, staff: SheetStaff, query: She
     ? await supabase.from("email_deliveries").select("outbox_event_id, status").eq("organization_id", org).in("outbox_event_id", sent.map((mail) => mail.event))
     : null;
   const deliveryOf = new Map((deliveries?.data ?? []).map((row) => [row.outbox_event_id, row.status as string]));
+  // OPS-04: who read and acknowledged the staff messages shown (receipts: staff on the matter).
+  const staffMessages = all.filter((mail) => mail.kind === "msg" && mail.staff);
+  const receipts = staffMessages.length
+    ? await supabase.from("matter_message_receipts").select("message_id, user_id, person_id, acknowledged_at").eq("organization_id", org).in("message_id", staffMessages.map((mail) => mail.id))
+    : null;
   const files = ids.length
     ? await supabase.from("inbound_attachment_files").select("inbound_email_id, version_id, inbox_item_id").eq("organization_id", org).in("inbound_email_id", ids)
     : null;
@@ -305,7 +322,19 @@ async function loadConversations(supabase: Client, staff: SheetStaff, query: She
   const role = partyRoleLabel((parties?.data ?? []).find((party) => party.person_id === selected && party.matter_id === latestMatter)?.role);
   const threadMails: ThreadMail[] = all.map((mail) => {
     const when = mailWhen(mail.created_at, staff.timezone, today);
-    if (mail.kind === "msg") return messageMail({ author: mail.author, when, body: mail.text, channel: mail.channel, ack: mail.ack });
+    if (mail.kind === "msg") {
+      const readers = mail.staff ? (receipts?.data ?? []).filter((row) => row.message_id === mail.id && row.user_id !== mail.authorUser && row.person_id) : [];
+      const nameOf = (row: { person_id: string | null }) => name.get(row.person_id ?? "") ?? "Client";
+      return messageMail({
+        author: mail.author,
+        when,
+        body: mail.text,
+        channel: mail.channel,
+        ack: mail.ack,
+        acked: readers.filter((row) => row.acknowledged_at).map(nameOf),
+        state: mail.staff ? readState(readers.map(nameOf)) : null,
+      });
+    }
     if (mail.kind === "out") {
       return outboundMail({ author: mail.author, when, body: mail.text, status: outboundStatus(deliveryOf.get(mail.event), mail.sample).label });
     }
@@ -366,40 +395,54 @@ async function loadBounced(supabase: Client, staff: SheetStaff, now: Date): Prom
   const [deliveries, tasks, members] = await Promise.all([
     supabase
       .from("email_deliveries")
-      .select("id, recipient_email, template, status, critical, matter_id, attempt_count, created_at")
+      .select("id, recipient_email, template, status, critical, matter_id, attempt_count, created_at, follow_up_task_id")
       .eq("organization_id", org)
       .in("status", [...DELIVERY_PROBLEM_STATUSES])
       .gte("created_at", deliveryProblemsSince(now))
       .order("created_at", { ascending: false })
       .limit(READ),
-    supabase.from("tasks").select("id, matter_id, owner_membership_id").eq("organization_id", org).eq("task_key", "email_delivery_failure").in("status", ["open", "blocked"]).limit(1),
+    // The firm's open follow-up task: bounces recorded before follow_up_task_id existed match it by matter.
+    supabase.from("tasks").select("id, matter_id, owner_membership_id, status").eq("organization_id", org).eq("task_key", "email_delivery_failure").in("status", ["open", "blocked"]).limit(1),
     memberNames(supabase, org),
   ]);
   const rows = deliveries.data ?? [];
   const addresses = [...new Set(rows.map((row) => row.recipient_email))];
-  const people = addresses.length ? await supabase.from("persons").select("display_name, email").eq("organization_id", org).in("email", addresses) : null;
+  const linkedIds = [...new Set(rows.map((row) => row.follow_up_task_id).filter((id): id is string => Boolean(id)))];
+  const [people, linked] = await Promise.all([
+    addresses.length ? supabase.from("persons").select("display_name, email").eq("organization_id", org).in("email", addresses) : null,
+    linkedIds.length ? supabase.from("tasks").select("id, matter_id, owner_membership_id, status").eq("organization_id", org).in("id", linkedIds) : null,
+  ]);
   const nameOf = new Map((people?.data ?? []).map((row) => [row.email?.toLowerCase() ?? "", row.display_name]));
-  const task = tasks.data?.[0] ?? null;
-  const owner = task?.owner_membership_id ? members.get(task.owner_membership_id) : undefined;
+  const openTask = tasks.data?.[0] ?? null;
+  const taskOf = new Map((linked?.data ?? []).map((row) => [row.id, row]));
+  const followUpOf = (row: (typeof rows)[number]) => {
+    if (row.follow_up_task_id) return taskOf.get(row.follow_up_task_id) ?? null;
+    return openTask && row.critical && row.status === "bounced" && row.matter_id && row.matter_id === openTask.matter_id ? openTask : null;
+  };
+  const ownerOf = (task: { owner_membership_id: string | null } | null) => (task?.owner_membership_id ? members.get(task.owner_membership_id) ?? null : null);
 
   const table: BouncedRow[] = rows.map((row) => {
-    const followed = task && row.critical && row.status === "bounced" && row.matter_id && row.matter_id === task.matter_id;
+    const task = followUpOf(row);
     return {
       sent: sentWhen(row.created_at, staff.timezone),
       to: nameOf.get(row.recipient_email) ?? row.recipient_email,
       notice: noticeLabel(row.template, row.critical),
       problem: deliveryProblem(row.status, row.attempt_count),
-      followUp: followed ? [owner ?? "Unassigned", "task open"] : "—",
+      followUp: bouncedFollowUp({ status: row.status, critical: row.critical, matterId: row.matter_id, task: task ? { status: task.status, owner: ownerOf(task) } : null }),
       state: deliveryState(row.status),
     };
   });
   const critical = rows.find((row) => row.critical && row.status === "bounced");
+  const task = critical ? followUpOf(critical) : null;
+  const owner = ownerOf(task);
   const alert = critical
     ? {
         title: `${templateLabel(critical.template)} to ${nameOf.get(critical.recipient_email) ?? critical.recipient_email} didn’t arrive`,
         parts: [
           "address bounced",
-          `${sentWhen(critical.created_at, staff.timezone)}. ${task ? `A follow-up task is open${owner ? ` for ${owner}` : ""}.` : "No follow-up task is open."}`,
+          `${sentWhen(critical.created_at, staff.timezone)}. ${
+            task ? `A follow-up task is ${task.status === "open" || task.status === "blocked" ? "open" : task.status}${owner ? ` for ${owner}` : ""}.` : "No follow-up task is open."
+          }`,
         ],
         href: task?.matter_id ? `/sheet/matters/${task.matter_id}?tab=tasks` : "/sheet/tasks",
       }
@@ -409,8 +452,19 @@ async function loadBounced(supabase: Client, staff: SheetStaff, now: Date): Prom
 
 async function loadCompose(supabase: Client, staff: SheetStaff): Promise<ComposeData> {
   const org = staff.organizationId;
-  const matters = await supabase.from("matters").select("id, reference, title").eq("organization_id", org).neq("stage", "closed").order("updated_at", { ascending: false }).limit(30);
+  const [matters, templates] = await Promise.all([
+    supabase
+      .from("matters")
+      .select("id, reference, title, responsible_consultant_membership_id")
+      .eq("organization_id", org)
+      .neq("stage", "closed")
+      .order("updated_at", { ascending: false })
+      .limit(30),
+    messageTemplateOptions(supabase, org),
+  ]);
   const label = new Map((matters.data ?? []).map((row) => [row.id, row.reference || row.title]));
+  const reference = new Map((matters.data ?? []).map((row) => [row.id, row.reference]));
+  const consultant = await consultantNames(supabase, org, matters.data ?? []);
   const everyone = await participants(supabase, org, [...label.keys()]);
   const personIds = [...new Set(everyone.map((person) => person.personId))];
   const addresses = [...new Set(everyone.map((person) => person.email?.trim().toLowerCase()).filter((email): email is string => Boolean(email)))];
@@ -426,9 +480,79 @@ async function loadCompose(supabase: Client, staff: SheetStaff): Promise<Compose
   return {
     to: people.map((person) => [person.name, label.get(person.matterId) ?? "Matter"]),
     toValues: people.map((person) => composeValue(person.matterId, person.personId)),
-    // No approved message templates exist yet, so the template choice is not shown.
-    templates: [],
+    // OPS-04: what "Start from a template" fills in; an empty value stays a {field} to fill.
+    toMerge: people.map((person) => ({
+      "data-first": firstNameOf(person.name) ?? "",
+      "data-ref": reference.get(person.matterId) ?? "",
+      "data-consultant": consultant.get(person.matterId) ?? "",
+    })),
+    firmName: staff.organizationName,
+    // The firm's approved message templates; with none, the template choice is not shown.
+    templates: templates.length ? ["None", ...templates.map((row) => row.name)] : [],
+    templateValues: templates.length ? [{ value: "", body: "" }, ...templates.map((row) => ({ value: row.id, body: row.body }))] : undefined,
     send: { attrs: composeSendAttrs(org) },
+  };
+}
+
+/** Inbox > Announcements: the firm's sent announcements, and the New announcement dialog. */
+async function loadNotes(supabase: Client, staff: SheetStaff): Promise<{ notes: NonNullable<InboxData["notes"]>; announce: AnnouncementDialogData }> {
+  const org = staff.organizationId;
+  const [sent, templates, audiences] = await Promise.all([
+    supabase
+      .from("announcements")
+      .select("id, title, audience_kind, program_key, recipient_count, emailed_count, is_sample, created_at")
+      .eq("organization_id", org)
+      .order("created_at", { ascending: false })
+      .limit(30),
+    approvedTemplates(supabase, org, "announcement"),
+    supabase.rpc("announcement_audiences", { p_organization_id: org }),
+  ]);
+  const rows = sent.data ?? [];
+  const seen = rows.length
+    ? await supabase.from("announcement_deliveries").select("announcement_id").eq("organization_id", org).in("announcement_id", rows.map((row) => row.id)).not("seen_at", "is", null)
+    : null;
+  const seenOf = new Map<string, number>();
+  for (const row of seen?.data ?? []) seenOf.set(row.announcement_id, (seenOf.get(row.announcement_id) ?? 0) + 1);
+  const firm = staff.organizationName;
+  return {
+    notes: {
+      cards: rows.map((row) =>
+        announcementCard(
+          {
+            title: row.title,
+            audienceKind: row.audience_kind,
+            programKey: row.program_key,
+            recipients: row.recipient_count,
+            emailed: row.emailed_count,
+            seen: seenOf.get(row.id) ?? 0,
+            sample: row.is_sample,
+            createdAt: row.created_at,
+          },
+          staff.timezone,
+        ),
+      ),
+    },
+    announce: {
+      organizationId: org,
+      timezone: staff.timezone,
+      // What clients will read: the firm's name merged, exactly as send_announcement does.
+      templates: templates.map((row) => ({
+        id: row.id,
+        version: row.version,
+        name: row.name,
+        title: (row.title ?? "").replaceAll("{firm_name}", firm),
+        body: row.body.replaceAll("{firm_name}", firm),
+      })),
+      audiences: audiences.error
+        ? []
+        : audienceOptions(audiences.data).map((option) => ({
+            value: option.value,
+            label: option.label,
+            recipients: option.count.recipients,
+            line: audienceLine(option.count, staff.sampleMode),
+          })),
+      canSend: staff.role === "firm_owner" || staff.role === "licensed_consultant",
+    },
   };
 }
 
@@ -440,7 +564,7 @@ export async function loadSheetInbox(staff: SheetStaff, query: SheetQuery, now: 
   const tab = inboxTab(query.tab);
   const count = { count: "exact" as const, head: true };
 
-  const [chrome, triageCount, problemCount, compose, conv, triage, bounced] = await Promise.all([
+  const [chrome, triageCount, problemCount, compose, conv, triage, bounced, notes] = await Promise.all([
     loadSheetChrome(staff, "/sheet/inbox"),
     supabase.from("inbound_emails").select("id", count).eq("organization_id", org).eq("triage_state", "open"),
     // The same rows as the Delivery problems tab (deliveryProblemsSince): one definition.
@@ -449,8 +573,9 @@ export async function loadSheetInbox(staff: SheetStaff, query: SheetQuery, now: 
     tab === "conv" ? loadConversations(supabase, staff, query, today) : undefined,
     tab === "triage" ? loadTriage(supabase, staff) : undefined,
     tab === "bounced" ? loadBounced(supabase, staff, now) : undefined,
+    tab === "notes" ? loadNotes(supabase, staff) : undefined,
   ]);
   const pills = [`${triageCount.count ?? 0} to triage`, deliveryProblemsPill(problemCount.count ?? 0)];
-  const inbox: InboxData = { tab, conv, triage, bounced, notes: tab === "notes" ? { cards: [] } : undefined };
-  return { chrome, pills, inbox, compose };
+  const inbox: InboxData = { tab, conv, triage, bounced, notes: notes?.notes };
+  return { chrome, pills, inbox, compose, announce: notes?.announce ?? null };
 }

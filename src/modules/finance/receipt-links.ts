@@ -15,3 +15,8 @@ export function invoicePdfHref(invoiceId: string, organizationId: string): strin
 export function creditNoteHref(creditNoteId: string, organizationId: string): string {
   return `/api/invoices/credit-notes/${creditNoteId}?organizationId=${organizationId}`;
 }
+
+/** Download link for a client-account reconciliation's PDF report (FIN-12). The route reads it through RLS and audits the export. */
+export function reconciliationPdfHref(reconciliationId: string, organizationId: string): string {
+  return `/api/client-funds/reconciliations/${reconciliationId}?organizationId=${organizationId}`;
+}

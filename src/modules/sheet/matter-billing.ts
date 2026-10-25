@@ -20,6 +20,8 @@ export type BillingInvoice = {
   fee_category: string;
   currency: string;
   is_sample: boolean;
+  /** FIN-09: manual payments on it still waiting for verification, in cents. */
+  pending_cents?: number;
 };
 
 export type BillingEntry = { kind: string; status: string; direction: string; amount_cents: number };
@@ -91,7 +93,7 @@ export function matterBilling(input: {
     invoices: [...input.invoices]
       .sort((a, b) => (b.issued_on ?? "").localeCompare(a.issued_on ?? "") || b.number.localeCompare(a.number))
       .map((row) => {
-        const state = invoiceState(row.status, row.due_on, input.today);
+        const state = invoiceState(row.status, row.due_on, input.today, false, null, null, row.pending_cents ? formatMoney(row.pending_cents, row.currency) : null);
         return {
           number: `${row.number}${row.is_sample ? " (sample)" : ""}`,
           categories: [CATEGORY[row.fee_category] ?? row.fee_category],

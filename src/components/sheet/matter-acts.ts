@@ -1,7 +1,8 @@
 "use client";
 
 import { toast2 } from "@/components/port/kit";
-import { changeMatterStage, confirmMatterOutcome, holdMatter, recordMatterDeadline, resumeMatter } from "@/modules/sheet/actions";
+import { changeMatterConsultant, changeMatterStage, confirmMatterOutcome, holdMatter, recordMatterDeadline, resumeMatter } from "@/modules/sheet/actions";
+import { consultantChangeDone } from "@/modules/sheet/consultant-change";
 import { linkLetterDeadline } from "@/modules/government/actions";
 import { needsStepUp, stageAt, stepUpLocation, withoutDialog, type MatterDialog } from "@/modules/sheet/matter-wire";
 import { recordLetter } from "./gov-acts";
@@ -15,7 +16,7 @@ function text(root: ParentNode, selector: string): string {
   return (el?.value ?? "").trim();
 }
 
-const DIALOG: Record<string, MatterDialog | null> = { stage: "stage", hold: "hold", letter: "letter", deadline: "deadline", resume: null, outcome: null };
+const DIALOG: Record<string, MatterDialog | null> = { stage: "stage", hold: "hold", letter: "letter", deadline: "deadline", consultant: "consultant", resume: null, outcome: null };
 const DONE: Record<string, string> = {
   stage: "Stage changed",
   hold: "Matter put on hold",
@@ -23,6 +24,7 @@ const DONE: Record<string, string> = {
   resume: "Matter resumed",
   outcome: "Outcome recorded",
   deadline: "Deadline recorded",
+  consultant: "Consultant changed",
 };
 const DONE_SUB: Record<string, string> = {
   deadline: "Tentative until a licensed consultant confirms it. Reminders are proposed.",
@@ -64,6 +66,16 @@ export async function runMatterAct(button: HTMLElement, root: HTMLElement, route
     // follows only once a staff member verifies it against the evidence.
     result = await recordLetter(scope, dialog, { organizationId: ref.organizationId, matterId: ref.matterId });
     sub = "Kept as received. It counts once a staff member verifies it against the evidence.";
+    // GOV-04: the tasks it created, each linked to the letter.
+    const made = result && "tasks" in result && typeof result.tasks === "number" ? result.tasks : 0;
+    if (made) sub = `Kept as received, with ${made === 1 ? "1 task" : `${made} tasks`} linked to it. It counts once a staff member verifies it.`;
+  } else if (act === "consultant") {
+    const membershipId = text(scope, "#consSel");
+    const current = scope.querySelector<HTMLSelectElement>("#consSel")?.dataset.current ?? "";
+    if (!membershipId) return void toast2("Choose a consultant", { kind: "warn", sub: "Nothing was changed." });
+    if (membershipId === current) return void toast2("They’re already the consultant", { kind: "warn", sub: "Choose someone else, or cancel." });
+    result = await changeMatterConsultant({ ...ref, membershipId });
+    if (result && !("error" in result)) sub = consultantChangeDone(result as { told?: number; emailed?: number });
   } else if (act === "resume") {
     result = await resumeMatter(ref);
   } else if (act === "outcome") {

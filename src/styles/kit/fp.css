@@ -51,6 +51,8 @@
 .fp-cards{grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))}
 /* AU14 offboarding checklist (final pass) */
 .ofl{list-style:none;padding:0;margin:16px 0;display:grid;gap:12px}.ofl li{display:grid;grid-template-columns:22px 1fr;gap:12px;align-items:start}.ofl b{font-weight:500;display:block}.ofl small{color:var(--t2);font-size:13.5px;line-height:1.45}
+/* ORG-06: Change consultant, who will be told (live only). */
+.cons-aud{list-style:none;padding:0;margin:4px 0 0;display:grid;gap:8px}.cons-aud b{font-weight:500;display:block}.cons-aud small{color:var(--t2);font-size:13px}
 /* INT-04: an answer's provenance on the Intake tab (live only). */
 .prov{margin-top:6px}.prov summary{cursor:pointer;color:var(--blue,#0075de);font-size:13px}.prov dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;margin:8px 0 0;font-size:13px;color:var(--ink)}.prov dt{color:var(--t2)}.prov dd{margin:0;overflow-wrap:anywhere}.prov ul{margin:0;padding-left:16px}
 /* ORG-06: per-item handover in the Offboard dialog (live only). */

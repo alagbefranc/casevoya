@@ -9,6 +9,7 @@ import { invoiceState } from "@/modules/sheet/finance-present";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
 import { paymentReceiptFromRpc } from "@/modules/finance/payment-receipt";
 import { receiptView, type ReceiptView } from "@/modules/finance/portal-receipt";
+import { isCardPayableCategory } from "@/modules/finance/connect-present";
 
 export type PortalInvoice = {
   id: string;
@@ -27,11 +28,15 @@ export type PortalInvoice = {
   dueOn: string;
   open: boolean;
   processing: boolean;
+  /** An earned fee or incurred cost the client may pay by card; an advance never is (FIN-02). Absent means payable. */
+  cardPayable?: boolean;
   state: { tone: string; label: string; detail?: string };
   /** Receipts for the client's own payments of this invoice ("PR-0001", CICC Code s. 33(3)), oldest first. */
   receipts: { id: string; number: string }[];
   /** Issued credit notes on this invoice ("CN-0001"), oldest first; each has a PDF. */
   creditNotes: { id: string; number: string; amountCents: number }[];
+  /** FIN-09: payments the firm recorded by hand that wait for verification. Not paid yet. */
+  pendingCents?: number;
 };
 
 /** One entry of the client's own client-account ledger that counts (verified, approved or recorded). */
@@ -71,7 +76,7 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
   const today = isoDateInTimeZone(new Date(), viewer.timezone);
   const { data } = await supabase
     .from("invoices")
-    .select("id, matter_id, number, description, amount_cents, paid_cents, refunded_cents, credited_cents, currency, status, issued_on, due_on")
+    .select("id, matter_id, number, description, fee_category, amount_cents, paid_cents, refunded_cents, credited_cents, currency, status, issued_on, due_on")
     .eq("organization_id", viewer.organizationId)
     .neq("status", "draft")
     .order("created_at", { ascending: false })
@@ -82,6 +87,13 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
     ? await supabase.from("invoice_payments").select("invoice_id").eq("organization_id", viewer.organizationId).eq("status", "processing").in("invoice_id", ids)
     : null;
   const busy = new Set((processing?.data ?? []).map((row) => row.invoice_id));
+  // FIN-09: manual payments the firm recorded (e-transfer, cheque, wire, cash) still waiting for
+  // verification: the invoice reads "Pending verification", never "Paid".
+  const manual = ids.length ? await supabase.rpc("invoice_manual_payment_summary", { p_invoice_ids: ids }) : null;
+  const pendingOf = new Map<string, number>();
+  for (const row of manual?.data ?? []) {
+    if (row.status === "pending_verification") pendingOf.set(row.invoice_id, (pendingOf.get(row.invoice_id) ?? 0) + Number(row.amount_cents));
+  }
   // RLS: only receipts for payments this client made (card) or that came from their client-account money.
   const paymentReceipts = ids.length
     ? await supabase
@@ -159,6 +171,7 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
         busy.has(row.id),
         row.refunded_cents > 0 ? formatMoney(row.refunded_cents, row.currency) : null,
         row.credited_cents > 0 && row.status !== "credited" ? formatMoney(row.credited_cents, row.currency) : null,
+        pendingOf.get(row.id) ? formatMoney(pendingOf.get(row.id) ?? 0, row.currency) : null,
       );
       return {
         id: row.id,
@@ -175,9 +188,11 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
         dueOn: row.due_on,
         open: row.status === "issued" || row.status === "partially_paid",
         processing: busy.has(row.id),
+        cardPayable: isCardPayableCategory(row.fee_category),
         state: { tone: state.tone, label: state.label, ...(state.detail ? { detail: state.detail } : {}) },
         receipts: receiptsOf.get(row.id) ?? [],
         creditNotes: creditsOf.get(row.id) ?? [],
+        pendingCents: pendingOf.get(row.id) ?? 0,
       };
     }),
   };

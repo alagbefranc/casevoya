@@ -96,6 +96,33 @@ describe("inbound email worker", () => {
   });
 });
 
+describe("inbound email worker: no automatic replies (OPS-06)", () => {
+  it("never replies to or forwards mail from an unknown sender; it only posts the signed webhook", async () => {
+    const { message, setReject } = fakeMessage({ from: "stranger@unknown.example" });
+    const reply = vi.fn();
+    const forward = vi.fn();
+    // Cloudflare's ForwardableEmailMessage also has reply() and forward(); the worker must use neither.
+    Object.assign(message, { reply, forward });
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response("{}", { status: 200 }));
+    await handleInboundEmail(
+      message,
+      { INBOUND_WEBHOOK_URL: "https://app.example/api/email/inbound", INBOUND_WEBHOOK_SECRET: "hook-secret", INBOUND_EMAIL_DOMAIN: "docs.casevoya.ca" },
+      fetchImpl,
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(String(fetchImpl.mock.calls[0][0])).toBe("https://app.example/api/email/inbound");
+    expect(reply).not.toHaveBeenCalled();
+    expect(forward).not.toHaveBeenCalled();
+    expect(setReject).not.toHaveBeenCalled();
+  });
+
+  it("rejects a wrong domain with a reason that names no firm, matter or file", async () => {
+    const { message, setReject } = fakeMessage({ to: "northline+0123456789abcdef0123456789abcdef@other.example" });
+    await handleInboundEmail(message, { INBOUND_WEBHOOK_URL: "https://app.example/api/email/inbound", INBOUND_WEBHOOK_SECRET: "hook-secret" });
+    expect(setReject).toHaveBeenCalledWith("Unknown recipient domain");
+  });
+});
+
 describe("sender verification", () => {
   const stamped = (value: string) => [
     { key: "authentication-results", value },

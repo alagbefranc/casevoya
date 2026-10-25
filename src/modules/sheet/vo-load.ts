@@ -75,10 +75,11 @@ function draftRow(row: DraftDb, latency: Map<string, number | null>): VoDraftRow
 
 type RunDb = {
   id: string;
-  kind: "message_reply" | "document_request" | "ask" | "document_review";
+  kind: VoRunRow["kind"];
   version_id?: string | null;
   result: "running" | "drafted" | "answered" | "abstained" | "failed";
-  matter_id: string;
+  /** Null for a run on a lead (lead follow-up, or a call summary kept on a lead). */
+  matter_id: string | null;
   thread_id: string | null;
   user_id: string;
   model: string | null;
@@ -99,7 +100,7 @@ function runRow(row: RunDb, drafts: Map<string, NonNullable<VoRunRow["draft"]>>)
     id: row.id,
     kind: row.kind,
     result: row.result,
-    matterId: row.matter_id,
+    matterId: row.matter_id ?? "",
     threadId: row.thread_id,
     userId: row.user_id,
     model: row.model,
@@ -172,10 +173,20 @@ export async function loadSheetDrafts(staff: SheetStaff) {
       .eq("organization_id", org)
       .eq("user_id", me)
       .eq("result", "running")
+      // Matter runs only: a lead follow-up or call summary shows on its own page.
+      .not("matter_id", "is", null)
       .gte("created_at", new Date(Date.now() - 2 * 60_000).toISOString())
       .order("created_at", { ascending: false })
       .limit(1),
-    supabase.from("vo_runs").select(RUN_COLUMNS).eq("organization_id", org).eq("result", "abstained").gte("created_at", weekAgo).order("created_at", { ascending: false }).limit(1),
+    supabase
+      .from("vo_runs")
+      .select(RUN_COLUMNS)
+      .eq("organization_id", org)
+      .eq("result", "abstained")
+      .not("matter_id", "is", null)
+      .gte("created_at", weekAgo)
+      .order("created_at", { ascending: false })
+      .limit(1),
     askMatters(supabase, org),
     // Vo document readings waiting for review (vo_doc_drafts).
     loadVoReadings(supabase, org).catch(() => []),
@@ -203,8 +214,8 @@ export async function loadSheetDrafts(staff: SheetStaff) {
     [
       ...waitingRows.map((row) => row.matter_id),
       ...readings.map((row) => row.matterId),
-      ...(runningRow ? [runningRow.matter_id] : []),
-      ...(abstainedRow ? [abstainedRow.matter_id] : []),
+      ...(runningRow?.matter_id ? [runningRow.matter_id] : []),
+      ...(abstainedRow?.matter_id ? [abstainedRow.matter_id] : []),
     ],
     [],
   );
@@ -243,14 +254,17 @@ export async function loadSheetAi(staff: SheetStaff, tab: AiTab) {
     const rows = (data ?? []) as RunDb[];
     const ids = rows.map((row) => row.id);
     const docIds = rows.filter((row) => row.kind === "document_review").map((row) => row.id);
-    const [linked, readings] = await Promise.all([
+    const crmIds = rows.filter((row) => row.kind === "lead_follow_up" || row.kind === "call_summary").map((row) => row.id);
+    const [linked, readings, crm] = await Promise.all([
       ids.length ? supabase.from("vo_drafts").select("run_id, status, edited").in("run_id", ids) : null,
       docIds.length ? supabase.from("vo_doc_drafts").select("run_id, status").in("run_id", docIds) : null,
+      crmIds.length ? supabase.from("vo_crm_drafts").select("run_id, status, edited").in("run_id", crmIds) : null,
     ]);
     const byRun = new Map<string, NonNullable<VoRunRow["draft"]>>((linked?.data ?? []).map((row) => [row.run_id, { status: row.status as VoDraftRow["status"], edited: row.edited }]));
     for (const row of readings?.data ?? []) byRun.set(row.run_id, { status: row.status as NonNullable<VoRunRow["draft"]>["status"], edited: null });
+    for (const row of crm?.data ?? []) byRun.set(row.run_id, { status: row.status as NonNullable<VoRunRow["draft"]>["status"], edited: row.edited });
     runs = rows.map((row) => runRow(row, byRun));
-    nm = await names(supabase, org, rows.map((row) => row.matter_id), rows.map((row) => row.user_id));
+    nm = await names(supabase, org, rows.map((row) => row.matter_id ?? "").filter(Boolean), rows.map((row) => row.user_id));
   }
   if (tab === "audit") {
     const [{ data }, docs] = await Promise.all([

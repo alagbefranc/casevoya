@@ -332,18 +332,21 @@ describe("refunding a card payment", () => {
     const f = await firm();
     const { invoiceId, paymentId, intent } = await paidInvoice(f);
     const a = await requestRefund(f, paymentId, 20_000);
-    // Succeeded arrives before created (pending): the late pending, and a late failure, change nothing.
+    // Succeeded arrives before created (pending): the late pending changes nothing.
     expect((await reversal(f, { type: "refund.updated", object: a.refund, intent, amount: 20_000, status: "succeeded" })).outcome).toBe("applied");
     expect(await reversal(f, { type: "refund.created", object: a.refund, intent, amount: 20_000, status: "pending" })).toMatchObject({ outcome: "unchanged", refund_status: "succeeded" });
-    expect(await reversal(f, { type: "refund.failed", object: a.refund, intent, amount: 20_000, status: "failed" })).toMatchObject({ outcome: "unchanged", refund_status: "succeeded" });
     expect((await refundRow(a.id)).status).toBe("succeeded");
     expect(await invoiceRow(invoiceId)).toMatchObject({ status: "paid", refunded: 20_000 });
+    // A refund Stripe fails after it succeeded is reversed (20261025160000), then stays failed.
+    expect(await reversal(f, { type: "refund.failed", object: a.refund, intent, amount: 20_000, status: "failed" })).toMatchObject({ outcome: "applied", refund_status: "failed" });
+    expect(await reversal(f, { type: "refund.updated", object: a.refund, intent, amount: 20_000, status: "succeeded" })).toMatchObject({ outcome: "unchanged", refund_status: "failed" });
+    expect(await invoiceRow(invoiceId)).toMatchObject({ status: "paid", refunded: 0 });
 
     // A failed refund stays failed.
     const b = await requestRefund(f, paymentId, 5_000);
     expect((await reversal(f, { type: "refund.failed", object: b.refund, intent, amount: 5_000, status: "failed" })).outcome).toBe("applied");
     expect(await reversal(f, { type: "refund.updated", object: b.refund, intent, amount: 5_000, status: "succeeded" })).toMatchObject({ outcome: "unchanged", refund_status: "failed" });
-    expect(await invoiceRow(invoiceId)).toMatchObject({ refunded: 20_000 });
+    expect(await invoiceRow(invoiceId)).toMatchObject({ refunded: 0 });
 
     // Account, amount and currency must match.
     const c = await requestRefund(f, paymentId, 7_000);

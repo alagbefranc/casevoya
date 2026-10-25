@@ -6,8 +6,10 @@
  * dialogs carry data attributes in place of the Designer's toasts.
  *
  * Live differences from the capture, all in the Designer's own anatomy:
- *   * `#dlgPay` asks whose money it is (client and matter), takes a typed evidence note instead of
- *     an upload (files are not stored yet) and has no Reviewer: any billing person may verify.
+ *   * `#dlgPay` asks whose money it is (client and matter). Its evidence is the Designer's upload
+ *     button (the file is stored staff-only on the matter) with a typed note beside it, and its
+ *     Reviewer lists the firm owners and the chosen matter's finance users (FIN-09). The external
+ *     reference is required.
  *   * `#dlgVer` adds a Reject with a reason for a payment that isn't on the statement, and says
  *     why the person who recorded a payment can't verify it (the firm owner may verify their own,
  *     after a fresh step-up, shown as "Verified by owner (own entry)"). Verifying issues the receipt (CICC Code s. 32(b)),
@@ -231,6 +233,24 @@ export function Options({ options }: { options: FundsOption[] }) {
 
 export type Blocked = { title: string; copy: string } | null;
 
+/** The evidence picker: the Designer's `#dlgPay` upload button, with the chosen file's name after it. */
+export function EvidencePicker({ id, note }: { id: string; note: string }) {
+  return (
+    <Field id={id} label={"Evidence"} hint={note}>
+      <div className={"fp-row"}>
+        <button type={"button"} className={"btn sm"} data-mp-file={id}>
+          <Icon name={"upload"} cls={"ic s"} />
+          {"Upload a statement line or screenshot"}
+        </button>
+        <span className={"fp-note"} id={`${id}F`} style={{ margin: "0" }}>
+          {"No file chosen"}
+        </span>
+      </div>
+      <textarea className={"ta"} id={id} aria-describedby={`${id}-h`} maxLength={500} rows={2} placeholder={"Or describe it: statement line, cheque number, who received the cash"}></textarea>
+    </Field>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Record a bank payment (#dlgPay)
 // ---------------------------------------------------------------------------
@@ -244,6 +264,8 @@ export type RecordPaymentDialogData = {
     sampleMode: boolean;
     parties: FundsOption[];
     accounts: FundsOption[];
+    /** Who may review it: value = user id, data-matters = the matter ids they review ("*" for a firm owner). */
+    reviewers?: FundsOption[];
     blocked: Blocked;
   };
 };
@@ -288,9 +310,14 @@ export function RecordPaymentDialog({ data }: { data: RecordPaymentDialogData })
                 <Options options={live.accounts} />
               </select>
             </Field>
-            <Field id={"mpE"} label={"Evidence"} hint={"What you’ll match it against: a statement line, a screenshot, a cheque number. Files aren’t stored here yet."}>
-              <textarea className={"ta"} id={"mpE"} aria-describedby={"mpE-h"} maxLength={500} rows={2}></textarea>
-            </Field>
+            <EvidencePicker id={"mpE"} note={"What you’ll match it against: a statement line, a screenshot, a cheque number. A file is stored with the matter, staff only."} />
+            {live.reviewers ? (
+              <Field id={"mpV"} label={"Reviewer"} hint={"Someone other than you, when the firm has anyone else who can"}>
+                <select className={"sel"} id={"mpV"} aria-describedby={"mpV-h"} data-reviewers={"1"}>
+                  <Options options={live.reviewers} />
+                </select>
+              </Field>
+            ) : null}
             {live.sampleMode ? (
               <Alert tone={"warn"} icon={"info"} title={"This firm is in sample mode"}>
                 {"Only sample matters take client funds until sample mode is turned off. Nothing here moves real money."}
@@ -410,6 +437,7 @@ export function VerifyPaymentDialog({ data }: { data: VerifyDialogData }) {
         { term: "Received", parts: ["—"], id: "vD" },
         { term: "Evidence", parts: ["—"], id: "vE" },
         { term: "Recorded by", parts: ["—"], id: "vB" },
+        { term: "Reviewer", parts: ["—"], id: "vV" },
         { term: "Destination", parts: ["—"], id: "vT" },
       ]
     : (data.designer?.rows ?? []);
@@ -418,6 +446,13 @@ export function VerifyPaymentDialog({ data }: { data: VerifyDialogData }) {
       <DialogHead id={"dlgVer"} title={live ? "Verify a payment" : (data.designer?.title ?? "")} />
       <div className={"db"}>
         <Dl rows={rows} />
+        {live ? (
+          <div className={"fp-row"} style={{ marginTop: "8px" }}>
+            <button type={"button"} className={"btn sm"} data-mp-evidence={""} data-org={live.organizationId} hidden>
+              {"Open the evidence file"}
+            </button>
+          </div>
+        ) : null}
         <label className={"check"} style={{ marginTop: "12px" }}>
           <input type={"checkbox"} id={"vOk"} />
           <span>{"The amount, date and reference match the bank statement"}</span>
@@ -427,8 +462,8 @@ export function VerifyPaymentDialog({ data }: { data: VerifyDialogData }) {
             <div className={"alert warn"} id={"vSelf"} hidden>
               <Icon name={"info"} />
               <div>
-                <b>{"You recorded this payment"}</b>
-                {"A second person verifies it against the bank statement: the firm owner or another finance user on this matter. You can still reject it if it was recorded by mistake."}
+                <b>{"Someone else verifies it"}</b>
+                {"A second person verifies it against the bank statement: the reviewer named on it, or the firm owner. You can still reject it if it was recorded by mistake."}
               </div>
             </div>
             <div className={"alert info"} id={"vOwn"} hidden>
