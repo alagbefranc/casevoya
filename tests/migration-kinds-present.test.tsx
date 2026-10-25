@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { SheetMigration } from "@/components/sheet/designer/migration";
+import { runReportFile, runReportLines, type RunReport } from "@/modules/migration/report";
 import {
   hiddenValue,
   isMigrationKind,
@@ -229,5 +230,31 @@ describe("the live page's MIG-01 parts", () => {
     expect(signoff).toContain('aria-label="Opening balances"');
     expect(signoff).toContain("$1,250.50 CAD");
     expect(signoff).toContain('data-mig-act="review-balance"');
+  });
+});
+
+describe("MIG-01 kinds in MIG-02's run report", () => {
+  const report: RunReport = {
+    generated_at: "2026-10-25T18:00:00Z",
+    kind: "documents",
+    source: { file_name: "synthetic-manifest.csv", rows_in_file: 4, rows_staged: 4, sha256: "a".repeat(64), checksum_matches: true },
+    records: { documents: { created: 2, linked: 0 } },
+    totals: { records_created: 2, records_linked: 0, files_held: 1 },
+    rows: { rows: 4, imported: 2, created: 2, linked: 0, duplicates_found: 1, duplicates_same: 1, duplicates_different: 0, review: 0, error: 1, skipped: 0, exception_lines: 2 },
+    pilot: { size: 1, counts: { records_created: 1, records_linked: 0 }, signed_off_at: "2026-10-25T17:30:00Z", note: "Synthetic file checked" },
+  };
+
+  it("counts records, not matters and people, and lists held files", () => {
+    const lines = runReportLines(report, "America/Toronto");
+    expect(lines.map((line) => line.term)).toEqual(["Source counts", "Checksum (SHA-256)", "Documents", "Possible duplicates", "Not imported", "Files held", "Pilot"]);
+    expect(lines[3].value).toEqual(["1 found", "1 same record, 0 different"]);
+    expect(lines[4].value).toEqual(["1 with errors, 0 needing review", "0 skipped"]);
+    expect(lines[6].value).toEqual(["1 of 1 records", "signed off 25 Oct 2026, 13:30"]);
+    const file = runReportFile({ report, exceptions: [], firm: "Synthetic Firm", timeZone: "America/Toronto", generated: "now", madeBy: "Test Owner", signedOffBy: null });
+    expect(file.sections[0].rows[0]).toEqual(["Kind", "Documents"]);
+    expect(file.sections.find((section) => section.title === "Pilot and sign-off")?.rows.slice(0, 2)).toEqual([
+      ["Pilot size (records)", "1"],
+      ["Pilot created", "1 new, 0 kept as existing"],
+    ]);
   });
 });
