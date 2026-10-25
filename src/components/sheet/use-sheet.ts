@@ -100,6 +100,7 @@ import { bindApprovalControls } from "./approval-acts";
 import { bindSubmissionControls } from "./submission-acts";
 import { mountClaimInputs, runClaimAct } from "./source-claim-acts";
 import { bindRenewalControls } from "./renewal-acts";
+import { bindRulePinControls } from "./rule-pin-acts";
 import { bindVoCrmControls } from "./vo-crm-acts";
 import { bindLetterControls } from "./letter-acts";
 import { bindGovStatusControls } from "./gov-status-acts";
@@ -276,6 +277,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     bindSubmissionControls(root, router, listen);
     // DEC-02: the Decisions tab's Expiry and renewal card (`data-ren`).
     bindRenewalControls(root, router, listen);
+    // SRC-05: the Overview's Review upgrade dialog (`data-pin`).
+    bindRulePinControls(root, router, listen);
     // AI-01: Vo lead follow-ups and call-notes summaries (`data-vo-crm`).
     bindVoCrmControls(root, router, listen);
     // DEC-02: the Decisions tab's approval follow-up (`data-dec`).
