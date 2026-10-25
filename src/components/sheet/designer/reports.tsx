@@ -5,7 +5,8 @@
  * Live-only additions (absent from the capture, so absent when the Designer's own values are
  * given): each panel's metric definition (`definition`, a `.fp-note` in the panel, the same
  * note the Workload panel already has), the source freshness line at the foot of the content,
- * the range chips' `data-nav`, the outcomes tab's firm-work-time table, empty states (`.emp`)
+ * the range chips' `data-nav`, the outcomes tab's firm-work-time table, its range / outcome-count
+ * columns, IRCC-estimate column, program links and segment note (REP-02), empty states (`.emp`)
  * for a panel without rows, and a "no permission" panel for a tab the role cannot see.
  */
 import type { CSSProperties, ReactNode } from "react";
@@ -33,7 +34,18 @@ export type ReportsMoney = {
   recon: { text: string; href: string; definition?: string };
 };
 
-export type OutcomeRow = { program: string; cohort: string; decided: number; median: string; pending: number };
+export type OutcomeRow = {
+  program: string;
+  cohort: string;
+  decided: number;
+  median: string;
+  pending: number;
+  /** Live only (REP-02): shortest–longest days with n timed, recorded outcome counts, IRCC's approved estimate, the program's filter link. */
+  range?: string;
+  outcomes?: string;
+  estimate?: { text: string; href: string; source: string } | null;
+  programHref?: string | null;
+};
 export type FirmTimeRow = { program: string; cohort: string; files: number; median: string };
 
 export type ReportsOutcomes = {
@@ -44,6 +56,12 @@ export type ReportsOutcomes = {
   firm?: { rows: FirmTimeRow[]; definition: string } | null;
   /** Live: the heading's line, in plain words (no requirement codes). */
   intro?: string | null;
+  /** Live (REP-02): show the range and outcome-count columns. */
+  detail?: boolean;
+  /** Live: the IRCC estimate column's note (shown apart from the firm's figures), when no row has one. */
+  estimateNote?: string | null;
+  /** Live: the program the table is narrowed to, and the link back to all programs. */
+  segment?: { label: string; clearHref: string } | null;
 };
 
 export type ReportsScheduled = { rows: { report: string; every: string; recipients: string; format: string; next: string }[] };
@@ -448,6 +466,7 @@ function Money({ data, money }: { data: ReportsData; money: ReportsMoney | null 
 }
 
 function Outcomes({ data, outcomes }: { data: ReportsData; outcomes: ReportsOutcomes | null | undefined }) {
+  const estimates = Boolean(outcomes?.rows.some((row) => row.estimate));
   return (
     <>
       <div className={"ph rv"} style={i(0)}>
@@ -484,16 +503,53 @@ function Outcomes({ data, outcomes }: { data: ReportsData; outcomes: ReportsOutc
                     <th scope={"col"} style={R}>
                       {"Still pending (not counted)"}
                     </th>
+                    {outcomes.detail ? (
+                      <>
+                        <th scope={"col"} style={R}>
+                          {"Range in days (n timed)"}
+                        </th>
+                        <th scope={"col"}>{"Outcomes recorded (counts)"}</th>
+                      </>
+                    ) : null}
+                    {estimates ? <th scope={"col"}>{"IRCC’s estimate, checked (not the firm’s figure)"}</th> : null}
                   </tr>
                 </thead>
                 <tbody>
                   {outcomes.rows.map((row) => (
                     <tr key={`${row.program}|${row.cohort}`}>
-                      <td>{row.program}</td>
+                      <td>
+                        {row.programHref ? (
+                          <a href={row.programHref} style={{ color: "var(--blue)" }} title={"Show only this program"}>
+                            {row.program}
+                          </a>
+                        ) : (
+                          row.program
+                        )}
+                      </td>
                       <td>{row.cohort}</td>
                       <Num>{String(row.decided)}</Num>
                       <Num>{row.median}</Num>
                       <Num>{String(row.pending)}</Num>
+                      {outcomes.detail ? (
+                        <>
+                          <Num>{row.range ?? "—"}</Num>
+                          <td>{row.outcomes ?? "—"}</td>
+                        </>
+                      ) : null}
+                      {estimates ? (
+                        <td>
+                          {row.estimate ? (
+                            <>
+                              {row.estimate.text}{" "}
+                              <a href={row.estimate.href} target={"_blank"} rel={"noopener noreferrer"} style={{ color: "var(--blue)" }} title={row.estimate.source}>
+                                {"Source"}
+                              </a>
+                            </>
+                          ) : (
+                            "Not entered"
+                          )}
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
@@ -501,12 +557,25 @@ function Outcomes({ data, outcomes }: { data: ReportsData; outcomes: ReportsOutc
             </div>
           ) : (
             <div className={"panel rv"} style={i(2)}>
-              <NoRows title={"No submitted files yet"} copy={"Once a matter is recorded as submitted, its processing time appears here by program and year."} />
+              <NoRows title={"No submitted files yet"} copy={"Once a matter is recorded as submitted, its processing time appears here by program and quarter submitted."} />
             </div>
           )}
+          {outcomes.segment ? (
+            <p className={"fp-note rv"} style={i(3)}>
+              {`${outcomes.segment.label}. `}
+              <a href={outcomes.segment.clearHref} style={{ color: "var(--blue)" }}>
+                {"Show all programs"}
+              </a>
+            </p>
+          ) : null}
           <p className={"fp-note rv"} style={i(3)}>
             {outcomes.note}
           </p>
+          {outcomes.estimateNote ? (
+            <p className={"fp-note rv"} style={i(3)}>
+              {outcomes.estimateNote}
+            </p>
+          ) : null}
           {outcomes.definition ? (
             <p className={"fp-note rv"} style={i(3)}>
               {outcomes.definition}

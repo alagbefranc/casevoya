@@ -173,6 +173,8 @@ export type SheetQuery = {
   vo?: string;
   /** Where the page was opened from ("settings": Vo and AI reached from Settings › AI keeps that trail). */
   from?: string;
+  /** Reports › Processing and outcomes: one program (a program key, or "none"). */
+  program?: string;
 };
 
 export function sheetVariant(page: string, query: SheetQuery): string {
