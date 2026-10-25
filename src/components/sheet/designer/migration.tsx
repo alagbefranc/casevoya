@@ -60,7 +60,17 @@ export type MatchRow = { row: string; person: string; existing: string; same: st
 export type ErrorRow = { row: string; column: string; problem: string; fix: string };
 export type SummaryRow = { term: string; value: string | Pair2 };
 export type HistoryRow = { key: string; file: string; when: string; rows: string; state: MigrationBadge; href: string };
-export type BalanceRow = { key: string; matter: string; kind: string; amount: string; asOf: string; state: MigrationBadge; actions: { label: string; attrs: Attrs }[] };
+export type BalanceRow = {
+  key: string;
+  matter: string;
+  kind: string;
+  amount: string;
+  asOf: string;
+  state: MigrationBadge;
+  actions: { label: string; attrs: Attrs }[];
+  /** Live (MIG follow-ups): "Imported from <system> on <date>" under the matter. */
+  imported?: string | null;
+};
 
 export type SignoffField = {
   id: string;
@@ -88,6 +98,8 @@ export type SignoffData = {
   fields?: SignoffField[];
   /** Live (MIG-02): where the pilot stands. */
   notice?: SignoffNotice | null;
+  /** Live (MIG decision 7): a documents import can't be undone, said before each step that stores files. */
+  undo?: SignoffNotice | null;
   /** Live (MIG-02): the records the pilot created, to check before signing off. */
   pilot?: { rows: PilotRecordRow[]; more: string | null } | null;
   /** Live (MIG-02): the run report once the import is done, with its downloads. */
@@ -592,6 +604,15 @@ function SignoffTab({ data }: { data: MigrationData }) {
               </div>
             </div>
           ) : null}
+          {signoff.undo ? (
+            <div className={`alert ${signoff.undo.tone} rv`} role={"note"} data-mig-undo={""} style={{ marginTop: "12px", ...i(2) }}>
+              <Icon name={"alert"} />
+              <div>
+                <b>{signoff.undo.title}</b>
+                {signoff.undo.copy}
+              </div>
+            </div>
+          ) : null}
           {signoff.pilot ? (
             <div className={"tw rv"} role={"region"} aria-label={"Pilot records"} tabIndex={0} style={{ marginTop: "12px", ...i(2) }}>
               <table className={"t"}>
@@ -693,7 +714,14 @@ function SignoffTab({ data }: { data: MigrationData }) {
                 <tbody>
                   {signoff.balances.map((row) => (
                     <tr key={row.key}>
-                      <td>{row.matter}</td>
+                      <td>
+                        {row.matter}
+                        {row.imported ? (
+                          <span className={"mu"} style={{ display: "block", fontSize: "12px" }}>
+                            {row.imported}
+                          </span>
+                        ) : null}
+                      </td>
                       <td>{row.kind}</td>
                       <td>{row.amount}</td>
                       <td>{row.asOf}</td>

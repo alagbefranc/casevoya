@@ -51,3 +51,34 @@ export function withImport<T extends { action: string }>(
   if (!provenance) return { rows: [...rows], imported: false };
   return { rows: rows.filter((row) => !creationActions.includes(row.action)), imported: true };
 }
+
+// ---------------------------------------------------------------------------
+// MIG follow-ups (gap #187): key dates, documents, relationships and opening balances read
+// "Imported from <system> on <date>" too, from the same source (imported_record_provenance).
+// ---------------------------------------------------------------------------
+
+/** A key date's origin on the matter's Deadlines tab, with where it came from when imported. */
+export function importedOrigin(origin: string, provenance: Provenance | null | undefined, timeZone: string): string {
+  return provenance ? `${origin} ${importedLine(provenance, timeZone)}.` : origin;
+}
+
+/** The small line under a document's name: where an imported document came from, else as it was. */
+export function importedDocumentKind(kind: string, provenance: Provenance | null | undefined, timeZone: string): string {
+  return provenance ? importedLine(provenance, timeZone) : kind;
+}
+
+/** A matter's relationship row's Evidence cell: an imported relationship says where it came from. */
+export function importedEvidence(evidence: string, provenance: Provenance | null | undefined, timeZone: string): string {
+  return provenance ? importedLine(provenance, timeZone) : evidence;
+}
+
+/** A person's relationship label on the Clients page: the relationship, then where it came from. */
+export function importedRelationship(label: string, provenance: Provenance | null | undefined, timeZone: string): string | { left: string; right: string } {
+  return provenance ? { left: label, right: importedLine(provenance, timeZone) } : label;
+}
+
+/** The provenance line of one record (opening balance, document card), or nothing. */
+export function importedNote(imports: ReadonlyMap<string, Provenance>, id: string, timeZone: string): string | null {
+  const provenance = imports.get(id);
+  return provenance ? importedLine(provenance, timeZone) : null;
+}

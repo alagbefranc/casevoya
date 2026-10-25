@@ -100,12 +100,12 @@ export async function uploadMigrationFile(
   });
   if (staged.error || !staged.data) return refused(staged.error?.message ?? "");
   const batch = staged.data;
-  if (kind !== "clients_matters") {
-    const kindSet = await supabase.rpc("set_migration_kind", { p_org: organizationId, p_batch: batch, p_kind: kind });
-    if (kindSet.error) {
-      await supabase.rpc("discard_migration_batch", { p_org: organizationId, p_batch: batch });
-      return refused(kindSet.error.message);
-    }
+  // MIG decision 2: set for every kind, clients and matters too, so the database refuses a file
+  // whose columns match more than one kind before any row is taken.
+  const kindSet = await supabase.rpc("set_migration_kind", { p_org: organizationId, p_batch: batch, p_kind: kind });
+  if (kindSet.error) {
+    await supabase.rpc("discard_migration_batch", { p_org: organizationId, p_batch: batch });
+    return refused(kindSet.error.message);
   }
   for (let start = 0; start < read.rows.length; start += MIGRATION_CHUNK) {
     const appended = await supabase.rpc("append_migration_rows", {

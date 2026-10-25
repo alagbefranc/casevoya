@@ -89,7 +89,7 @@ import { loadMatterIntake } from "@/modules/sheet/matter-intake-load";
 import { loadPersonHistory } from "@/modules/sheet/person-history-load";
 import { importedLine } from "@/modules/migration/provenance";
 import { loadImportProvenance } from "@/modules/migration/provenance-load";
-import { importedEvent, importedTask, withImport } from "@/modules/sheet/imported-present";
+import { importedDocumentKind, importedEvent, importedEvidence, importedOrigin, importedTask, withImport } from "@/modules/sheet/imported-present";
 import { docRequestPersonLabel, mayRequestDocuments } from "@/modules/sheet/doc-request";
 import {
   governmentLabel,
@@ -261,7 +261,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
           .order("signing_order", { ascending: true })
       : null,
     personIds.length
-      ? supabase.from("person_relationships").select("from_person_id, to_person_id, relationship_type").eq("organization_id", org).in("from_person_id", personIds).in("to_person_id", personIds)
+      ? supabase.from("person_relationships").select("id, from_person_id, to_person_id, relationship_type").eq("organization_id", org).in("from_person_id", personIds).in("to_person_id", personIds)
       : null,
     // The e-sign consent the portal shows, for the countersign dialog.
     supabase.from("product_settings").select("value").eq("key", "agreements.esign_consent").maybeSingle(),
@@ -312,9 +312,15 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
 
   // Vo's reading of one document waiting for review: the Designer's review panel (`#ocr`).
   const voReading = matterTab(query.tab) === "documents" ? await loadVoReadingPanel(supabase, org, matter.id, query.vo ?? null).catch(() => null) : null;
+  // MIG follow-ups: documents, relationships and key dates an import brought in say so.
+  const [documentImports, relationImports, deadlineImports] = await Promise.all([
+    loadImportProvenance(supabase, org, "documents", checklist.map((row) => row.documentId)),
+    loadImportProvenance(supabase, org, "person_relationships", (relationships?.data ?? []).map((row) => row.id)),
+    loadImportProvenance(supabase, org, "deadlines", deadlineRows.map((row) => row.id)),
+  ]);
   const documentTable: MatterDocumentRow[] = checklist.map((row) => ({
     title: row.title,
-    kind: row.kind,
+    kind: importedDocumentKind(row.kind, row.documentId ? documentImports.get(row.documentId) : null, staff.timezone),
     person: { name: personName(row.personId) },
     upload: row.state.upload,
     review: row.state.review,
@@ -420,7 +426,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     from: firstName(personName(row.from_person_id)),
     relation: relationLabel(row.relationship_type),
     to: firstName(personName(row.to_person_id)),
-    evidence: "—",
+    evidence: importedEvidence("—", relationImports.get(row.id), staff.timezone),
     sharing: null,
   }));
 
@@ -536,7 +542,11 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
           ? ({ tone: "ok", label: row.verifying_membership_id ? `Verified by ${memberName(row.verifying_membership_id)}` : "Verified" } as MatterBadge)
           : ({ tone: "chg", label: "Not verified yet" } as MatterBadge),
       source: deadlineSource(row.evidence_locator, row.source_url, row.source_retrieved_on ? dayMonthYear(row.source_retrieved_on, today) : null),
-      origin: `${row.rule_version_id ? "Derived from a program rule." : "Not derived from a rule."}${row.calculation_note ? ` ${row.calculation_note}` : ""}`,
+      origin: importedOrigin(
+        `${row.rule_version_id ? "Derived from a program rule." : "Not derived from a rule."}${row.calculation_note ? ` ${row.calculation_note}` : ""}`,
+        deadlineImports.get(row.id),
+        staff.timezone,
+      ),
       reminders: (reminders?.data ?? [])
         .filter((reminder) => reminder.deadline_id === row.id && reminder.status !== "cancelled")
         .slice(0, 8)

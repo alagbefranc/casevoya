@@ -22,6 +22,8 @@ import { dayMonth } from "@/modules/sheet/home-present";
 import { voReadOffered } from "@/modules/sheet/vo-doc-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone, type SheetQuery } from "@/modules/sheet/present";
+import { loadImportProvenance } from "@/modules/migration/provenance-load";
+import { importedNote } from "@/modules/sheet/imported-present";
 
 /** How many versions, documents and requests the page reads. RLS decides which are visible. */
 const READ = 400;
@@ -87,6 +89,8 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
   const matterName = (id: string | undefined) => (id ? matterLabel.get(id) ?? "Matter" : "No matter");
 
   const current = currentVersions(versions, now);
+  // MIG follow-ups: a document an import brought in says "Imported from <system> on <date>".
+  const imports = await loadImportProvenance(supabase, org, "documents", [...current.keys()]);
   const canReview = (REVIEW_ROLES as readonly string[]).includes(staff.role);
 
   // The last firm review of each version, for the reason shown when a replacement arrives.
@@ -135,7 +139,7 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
       flags: [entry.flag],
       person,
       matter,
-      uploaded: whenLabel(version.createdAt, staff.timezone, today),
+      uploaded: importedNote(imports, doc.id, staff.timezone) ?? whenLabel(version.createdAt, staff.timezone, today),
       scan: entry.scan,
       review: entry.review,
     });
@@ -162,7 +166,11 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
       cards.push({
         title: doc.purpose,
         thumb: { icon: fileIcon(version.declaredMediaType) },
-        meta: { parts: [matterName(matterOf.get(doc.id)), firstName(nameOf(doc.person_id))], version: `v${version.versionNumber}`, when: whenLabel(version.createdAt, staff.timezone, today) },
+        meta: {
+          parts: [matterName(matterOf.get(doc.id)), firstName(nameOf(doc.person_id)), ...[importedNote(imports, doc.id, staff.timezone)].filter((part): part is string => Boolean(part))],
+          version: `v${version.versionNumber}`,
+          when: whenLabel(version.createdAt, staff.timezone, today),
+        },
         states: cardStates(version as VersionFacts, today),
         // An accepted, clean file opens through a short-lived signed link after a fresh access check.
         ...(cardOpenable(version) ? { open: { "data-doc-open": version.id, "data-org": org } } : {}),

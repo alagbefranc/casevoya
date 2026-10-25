@@ -1006,3 +1006,12 @@ DES-04 (stale-source state, client portal), branch `feat/des-states-portal`. Red
 ## Program selection accepts only a live pack (`20261025430000`, not applied on the live project)
 
 SRC follow-up (Francis, 2026-10-25). **Redefines** `app.pack_is_selectable(uuid, uuid)` (only definition `20261017170000_matter_lifecycle.sql`): the status test `status in (published, review_due)` becomes `app.rule_pack_is_live(pack.id)` (`20261025410100`), so `select_matter_program` and its callers refuse a review-due pack or one holding a rule version that is not live. Otherwise unchanged. Tested in `tests/src-pins-scope.rls.test.ts`.
+
+## Migration import: one kind per file (`20261025460000`, not applied on the live project)
+
+MIG follow-ups (gap #187, Francis's MIG decision 2), branch `feat/mig-followups`. Additive; nothing seeded. Applies after the MIG migrations (`20261025385100` is where both redefined functions were last defined).
+
+* New `app.migration_kinds_in_headers(text[])` (immutable SQL): the import kinds a file's headings point to, by labels in the upload picker's order, from headings distinctive to each kind only. New `app.migration_refuse_mixed(text[])`: raises 22023 "this file holds more than one kind of record: <kind>; <kind>" when two or more are found. Both revoked from public, anon and authenticated (called inside the definer functions).
+* **Redefines** `public.set_migration_kind` and `public.save_migration_mapping` (latest `20261025385100_mig_import_kinds_evaluate.sql`), each copied unchanged except for one `perform app.migration_refuse_mixed(b.headers)` after its state check. The upload (`src/modules/migration/actions.ts`) now calls `set_migration_kind` for every kind, clients and matters included, and discards the staged batch when it refuses.
+
+Tested in `tests/migration-followups.rls.test.ts` (the detection, refusal at staging for every kind chosen with nothing taken, refusal at mapping, a one-kind file through; and `imported_record_provenance` for imported key dates, relationships and opening balances, staff only, no values, no other firm) and `tests/migration-followups-present.test.tsx`.

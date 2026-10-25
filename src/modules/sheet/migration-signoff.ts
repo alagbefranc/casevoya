@@ -5,6 +5,7 @@ import { memberNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { kindLabel, pilotDefault, pilotState, readRunReport, runReportLines, when } from "@/modules/migration/report";
 import { balanceRows, kindSummary } from "@/modules/sheet/migration-kinds-load";
+import { documentsIrreversibleNotice } from "@/modules/migration/irreversible";
 import type { Batch } from "@/modules/sheet/migration-load";
 import { plural, shortHash, type PlanCounts } from "@/modules/sheet/migration-present";
 
@@ -303,7 +304,7 @@ async function kindSignoff(
     data.notice = {
       tone: "warn",
       title: "A pilot comes first",
-      copy: `The pilot creates the first records in your file. You check them and sign off before the rest can be imported, or roll the pilot back.${zipCopy}`,
+      copy: `The pilot creates the first records in your file. You check them and sign off before the rest can be imported${zip ? "" : ", or roll the pilot back"}.${zipCopy}`,
     };
     data.action = { label: "Run the pilot", attrs: { "data-mig-act": "pilot", ...wire, ...(ready ? {} : { disabled: "" }) } };
   } else if (state === "pilot") {
@@ -326,7 +327,9 @@ async function kindSignoff(
     data.notice = {
       tone: "warn",
       title: "The full import waits for your sign-off",
-      copy: "Open the pilot’s records below and check them. If something is wrong, roll the pilot back, fix your file and upload it again.",
+      copy: zip
+        ? "Open the pilot’s records below and check their files. If something is wrong, don’t sign off: fix your file and upload it again. The pilot’s documents stay; unlink any you don’t want from their matter."
+        : "Open the pilot’s records below and check them. If something is wrong, roll the pilot back, fix your file and upload it again.",
     };
     data.action = { label: "Sign off the pilot", attrs: { "data-mig-act": "signoff", ...wire } };
     data.pilot = await pilotRecords(supabase, staff.organizationId, batch.id);
@@ -375,6 +378,18 @@ async function kindSignoff(
     const reasons = Array.isArray(check.data) ? (check.data as string[]) : [];
     const pilotOnly = state === "pilot" || state === "review" || state === "signed";
     data.rollback = { attrs: reasons.length ? null : { "data-mig-act": "rollback", ...wire }, reasons, ...(pilotOnly ? { label: "Roll back the pilot" } : {}) };
+  }
+  // MIG decision 7: a documents import can't be undone; said plainly before each step that stores files.
+  if (zip) {
+    const step =
+      batch.status === "staged" || batch.status === "checked" || state === "pilot"
+        ? "pilot"
+        : state === "review"
+          ? "signoff"
+          : state === "signed" || state === "full" || state === "legacy"
+            ? "full"
+            : null;
+    if (step) data.undo = documentsIrreversibleNotice(step);
   }
   if (batch.kind === "opening_balances" && batch.status !== "staged" && batch.status !== "checked") data.balances = await balanceRows(supabase, staff, batch);
   return data;
