@@ -318,6 +318,20 @@ describe("A single press resumes on its own, once", () => {
     expect(onDispatch).toHaveBeenCalledTimes(1);
   });
 
+  it("only points when the control now at the saved position reads differently (a list re-rendered)", () => {
+    const button = h("button", { type: "button" }, "Approve");
+    const root = h("div", {}, h("div", { "data-rows": "list" }, button, h("button", { type: "button" }, "Decline")));
+    goTo("/sheet/grants");
+    const record = capturePending(node(button), node(root), stepUpHref("/sheet/grants", "go_live"), Date.now());
+    expect(record?.trigger).toEqual({ tag: "BUTTON", anchor: { data: { rows: "list" } }, index: 0 });
+    const neighbour = h("button", { type: "button" }, "Decline");
+    const page = h("div", {}, h("div", { "data-rows": "list" }, neighbour, h("button", { type: "button" }, "Approve")));
+    const onDispatch = vi.fn();
+    expect(applyPending(node(page), record as PendingStepUp, vi.fn(), onDispatch)).toBe("pointed");
+    expect(neighbour.clicks).toBe(0);
+    expect(onDispatch).not.toHaveBeenCalled();
+  });
+
   it("never resumes an older press: a click elsewhere forgets it", () => {
     goTo("/portal");
     const page = downloadPage();

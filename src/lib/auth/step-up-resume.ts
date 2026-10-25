@@ -458,7 +458,9 @@ export function applyPending(root: ResumeNode, record: PendingStepUp, notify: No
   if (!trigger) return "wait";
   const { form } = scopeOf(trigger, root);
   if (form) restoreFields(form, record.fields);
-  if (record.attempt > 1 || record.fileChosen) {
+  // Only repeat a press on the same control: a list that re-rendered in another order could put a
+  // neighbour at the saved position, so a different label only points the person at the control.
+  if (record.attempt > 1 || record.fileChosen || labelOf(trigger) !== record.label) {
     trigger.focus?.();
     notify("Check done", pressSub(record), "ok");
     return "pointed";
