@@ -15711,10 +15711,15 @@ export type Database = {
         Args: { p_token: string }
         Returns: string | null
       }
-      preview_portal_invitation: {
-        Args: { p_token: string }
-        Returns: Json
-      }
+      preview_portal_invitation:
+        | {
+            Args: { p_token: string }
+            Returns: Json
+          }
+        | {
+            Args: { p_open: boolean; p_token: string }
+            Returns: Json
+          }
       authorize_privacy_response_download: {
         Args: {
           p_delivery_id: string

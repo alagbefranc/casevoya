@@ -1028,3 +1028,12 @@ Bug 8, branch `fix/stripe-account-unlink`. Additive; test mode only; nothing see
 * **Redefines** `app.record_firm_payment_account` (latest `20261019100100_stripe_connect_invoices.sql`): unchanged except it also refuses an account in another firm's history (23505 "this Stripe account belongs to another firm").
 
 Tested in `tests/stripe-account-unlink.rls.test.ts` (owner-only, fresh step-up, typed confirmation and reason, refusals listing open items, history kept and append-only, single active link, relink and move, open requests returned and their results recorded, the failure task, a later webhook on the old account still recorded) and `tests/stripe-account-unlink-requests.test.ts` (mocked Stripe: cancels on the old account's Stripe-Account header, already-finished left alone, a failure keeps the unlink and is listed).
+## Portal invitation: only an open counts toward its limit (`20261025510000`, not applied on the live project)
+
+Bug 3 (Francis's bug list 2026-10-25, #215 live checks), branch `fix/invite-accept-codes`. Additive; no table changes. The accept wizard ran `app.present_portal_invitation` on every step and retry, and each call counted toward the `present` limits (40 per token per hour, 30 per signed-in actor per 15 minutes), so a client hit them within a few tries.
+
+* New `app.portal_invite_limited(text, text, uuid, boolean)`: the latest 3-argument body (`20261017140800_portal_invitations.sql`) with `p_record`; false checks the same limits without inserting an attempt. The 3-argument form now calls it with true (unchanged behaviour for create and resend).
+* **Redefines** `app.present_portal_invitation(text)` (only definition `20261017140800`): counts the attempt only when `app.portal_invitation_open` is `'1'` for the transaction (then clears it) or the token matches no invitation; every other use only checks. Same signature and grants. So draft saves, sign-in re-reads, acceptance, decline and mismatch reports no longer add to the count, and a token already over its limit stays refused.
+* New `public.preview_portal_invitation(text, boolean)` (anon, authenticated): `p_open` true is an open (sets the flag, then returns `public.preview_portal_invitation(text)`, unchanged, latest `20261024100000_firm_default_locale.sql`). The 1-argument form on its own is now an uncounted read. The accept screen opens once per page load; the server's page render and `openPortalInvitee` read with false.
+
+Tested in `tests/portal-invites.rls.test.ts` ("counts only an open toward an invitation's limit").
