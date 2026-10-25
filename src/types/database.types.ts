@@ -15407,10 +15407,15 @@ export type Database = {
         Args: { p_note: string; p_request_id: string; p_step: string }
         Returns: undefined
       }
-      record_report_export: {
-        Args: { p_format: string; p_organization_id: string; p_range: string; p_tab: string }
-        Returns: string
-      }
+      record_report_export:
+        | {
+            Args: { p_format: string; p_organization_id: string; p_range: string; p_tab: string }
+            Returns: string
+          }
+        | {
+            Args: { p_format: string; p_organization_id: string; p_range: string; p_segment: string | null; p_tab: string }
+            Returns: string
+          }
       record_representation_authority: {
         Args: {
           p_agreement_id: string | null

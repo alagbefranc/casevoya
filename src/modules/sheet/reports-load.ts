@@ -7,6 +7,8 @@ import { loadSheetChrome, memberNames } from "@/modules/sheet/chrome-load";
 import { isoDate, localNow } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { MATTER_STAGES, STAFF_ROLES, isoDateInTimeZone, type SheetQuery } from "@/modules/sheet/present";
+import { loadOutcomeSegments } from "@/modules/sheet/reports-outcomes-load";
+import { NO_PROGRAM, programFilter, programName } from "@/modules/sheet/reports-outcomes";
 import {
   DEFINITIONS,
   MONEY_ROLES,
@@ -17,9 +19,7 @@ import {
   localMidnightIso,
   monthLabel,
   monthsBetween,
-  outcomesNote,
   outstandingDocuments,
-  processingRows,
   rangeLabel,
   rangeStart,
   receivablesAgeing,
@@ -45,6 +45,8 @@ export type ReportContext = {
   nowIso: string;
   /** Leave sample records out unless the firm is exploring in sample mode. */
   live: boolean;
+  /** Processing and outcomes: one program (a key, or "none"), or every program. */
+  program?: string | null;
 };
 
 const DENIED = {
@@ -313,45 +315,15 @@ export async function loadMoney(ctx: ReportContext, cap: Capped): Promise<Report
 }
 
 export async function loadOutcomes(ctx: ReportContext, cap: Capped): Promise<ReportsOutcomes> {
-  const { supabase, staff, live } = ctx;
-  const org = staff.organizationId;
-  const transitions = await supabase
-    .from("matter_stage_transitions")
-    .select("matter_id, to_stage, created_at")
-    .eq("organization_id", org)
-    .in("to_stage", ["submitted", "decision_review"])
-    .order("created_at", { ascending: true })
-    .limit(REPORT_READ);
-  const submitted = new Map<string, string>();
-  const decided = new Map<string, string>();
-  for (const row of rows(transitions, cap)) {
-    if (row.to_stage === "submitted" && !submitted.has(row.matter_id)) submitted.set(row.matter_id, row.created_at);
-    if (row.to_stage === "decision_review" && !decided.has(row.matter_id)) decided.set(row.matter_id, row.created_at);
-  }
-  const ids = [...submitted.keys()];
-  let mattersQuery = ids.length
-    ? supabase.from("matters").select("id, created_at, outcome, program_pack_id, is_sample").eq("organization_id", org).in("id", ids)
-    : null;
-  if (mattersQuery && live) mattersQuery = mattersQuery.eq("is_sample", false);
-  const matters = mattersQuery ? await mattersQuery : null;
-  const packIds = [...new Set((matters?.data ?? []).map((row) => row.program_pack_id).filter((id): id is string => Boolean(id)))];
-  const packs = packIds.length ? await supabase.from("rule_pack_versions").select("id, program_key").in("id", packIds) : null;
-  const programOf = new Map((packs?.data ?? []).map((row) => [row.id, row.program_key]));
-  const result = processingRows(
-    (matters?.data ?? []).map((row) => ({
-      program: row.program_pack_id ? (programOf.get(row.program_pack_id) ?? null) : null,
-      createdAt: row.created_at,
-      submittedAt: submitted.get(row.id) ?? null,
-      decidedAt: decided.get(row.id) ?? null,
-      outcome: row.outcome,
-    })),
-  );
-  return {
-    rows: result.rows,
-    note: outcomesNote(result.hidden, result.rows.length),
-    definition: DEFINITIONS.outcomes,
-    firm: { rows: result.firm, definition: DEFINITIONS.firm },
-  };
+  return loadOutcomeSegments({
+    supabase: ctx.supabase,
+    organizationId: ctx.staff.organizationId,
+    timeZone: ctx.staff.timezone,
+    live: ctx.live,
+    program: ctx.program ?? null,
+    limit: REPORT_READ,
+    cap,
+  });
 }
 
 function stamp(now: Date, timeZone: string): string {
@@ -363,17 +335,17 @@ function stamp(now: Date, timeZone: string): string {
 const SOURCES: Record<ReportsTab, string> = {
   ops: "matters, stage history, tasks, document requests and bookings",
   money: "invoices, card payments, client-account ledgers and reconciliations",
-  outcomes: "matters, stage history and recorded outcomes",
+  outcomes: "matters, stage history, recorded outcomes and licensed-approved IRCC estimates",
   scheduled: "scheduled report settings",
 };
 
 /** Everything one tab shows, as the signed-in staff member reads it (RLS decides the rows). */
-export async function loadReportTab(staff: SheetStaff, tab: ReportsTab, range: ReportRange, now: Date = new Date()) {
+export async function loadReportTab(staff: SheetStaff, tab: ReportsTab, range: ReportRange, now: Date = new Date(), options: { program?: string | null } = {}) {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const local = localNow(staff.timezone, now);
   const today = isoDate(local.year, local.month, local.day);
   const from = rangeStart(range, today);
-  const ctx: ReportContext = { supabase, staff, today, from, fromIso: localMidnightIso(from, staff.timezone), nowIso: now.toISOString(), live: !staff.sampleMode };
+  const ctx: ReportContext = { supabase, staff, today, from, fromIso: localMidnightIso(from, staff.timezone), nowIso: now.toISOString(), live: !staff.sampleMode, program: tab === "outcomes" ? programFilter(options.program) : null };
   const cap: Capped = { capped: false };
   const allowed = canSeeTab(staff.role, tab);
   const [ops, money, outcomes] = await Promise.all([
@@ -403,13 +375,14 @@ export async function loadReportTab(staff: SheetStaff, tab: ReportsTab, range: R
 export async function loadSheetReports(staff: SheetStaff, query: SheetQuery, now: Date = new Date()) {
   const tab = reportsTab(query.tab);
   const range = reportRange(query.view);
+  const program = tab === "outcomes" ? programFilter(query.program) : null;
   const [chrome, loaded, scheduled] = await Promise.all([
     loadSheetChrome(staff, "/sheet/reports"),
-    loadReportTab(staff, tab, range, now),
+    loadReportTab(staff, tab, range, now, { program }),
     tab === "scheduled" ? loadScheduledReports(staff) : null,
   ]);
   const nav = (key: ReportRange) => `/sheet/reports?tab=${tab}&view=${key}`;
-  const exportHref = `/api/reports/export?tab=${tab}&range=${range}`;
+  const exportHref = `/api/reports/export?tab=${tab}&range=${range}${program ? `&program=${encodeURIComponent(program)}` : ""}`;
   // Export can't run on Scheduled (there is nothing scheduled to export) or on a tab the role
   // can't see: the dialog says why instead of offering a dead button.
   const exportBlocked = !loaded.allowed
@@ -435,7 +408,10 @@ export async function loadSheetReports(staff: SheetStaff, query: SheetQuery, now
     denied: loaded.allowed ? null : DENIED[tab as keyof typeof DENIED] ?? null,
     freshness: loaded.freshness,
     dialog: {
-      filters: [RANGE_LABEL[range], loaded.scope.toLowerCase(), "all owners"],
+      filters:
+        tab === "outcomes"
+          ? [program ? programName(program === NO_PROGRAM ? null : program) : "All programs, by quarter submitted", loaded.scope.toLowerCase(), "all owners"]
+          : [RANGE_LABEL[range], loaded.scope.toLowerCase(), "all owners"],
       timezone: staff.timezone,
       currency: "CAD",
       note: exportBlocked ?? "The file downloads to this device. Its first lines record the filters, when it was made, who made it and who can see this report.",

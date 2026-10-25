@@ -829,6 +829,15 @@ SEC-06 (gap #184), branch `feat/sec-privacy-requests`. No existing function rede
 
 Tested in `tests/privacy-responses.rls.test.ts` and `tests/privacy-responses-present.test.ts`.
 
+## Report export segment (`20261025310000`, not applied on the live project)
+
+REP-02 / REP-03 (gap #185), branch `feat/rep-outcomes-exports`. Additive; no existing function is redefined.
+
+* New overload `public.record_report_export(uuid, text, text, text, p_segment text)`, its body copied from the four-argument function in `20261019205100_matter_records_exports_closure.sql` (its only definition): the same checks (signed in, current firm, active membership, staff MFA, a role that can see the tab); `p_segment` is null, or a program key / `none` and only on the `outcomes` tab (else `22023`). The `report.exported` audit row's context gains `segment`. Revoked from public and anon; granted to authenticated. The four-argument function is unchanged.
+* Processing and outcomes reads reuse `matter_stage_transitions`, `matters` (`outcome`, `program_pack_id`), `rule_pack_versions.program_key` and approved `government_processing_estimates` (GOV-05) under their existing RLS. No new table.
+
+Tested in `tests/rep-outcomes.rls.test.ts` (seeded decided matters, RLS scope, segment audit) and `tests/rep-outcomes-exports.test.ts`.
+
 ## Privacy response download needs the client's two-step (`20261025340000`, not applied on the live project)
 
 SEC-01 + SEC-06 follow-up. **Redefines** `app.authorize_privacy_response_download(uuid)` (only definition `20261025280000_sec_privacy_responses.sql`): after the ownership and expiry checks it raises `two-step sign-in is required for this download` when the person has no verified authenticator, and `client step-up required: enter your two-step code` when `app.client_step_up_satisfied()` is false. Otherwise unchanged. Tested in `tests/privacy-responses.rls.test.ts`.
