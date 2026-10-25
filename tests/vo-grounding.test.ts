@@ -125,7 +125,7 @@ function request(): VoTaskRequest {
 }
 
 function official(id: string, url: string, content: string): VoOfficialSource {
-  return { kind: "fee", id, label: "Study permit", content, sourceUrl: url, checkedOn: "2026-10-25", section: "Study permits", formNumber: null, formModifiedOn: null, currentTo: null, sha256: "c".repeat(64) };
+  return { kind: "fee", id, label: "Study permit", content, sourceUrl: url, checkedOn: "2026-10-25", section: "Study permits", formNumber: null, formModifiedOn: null, currentTo: null, sha256: "c".repeat(64), attested: false, attestedBy: null, attestedOn: null };
 }
 
 function data(rpcs: Rpc[], reads: string[]): VoData {

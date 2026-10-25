@@ -58,7 +58,18 @@ export interface VoData {
 export type VoLetterFact = { answerId: string; person: string; form: string; fieldType: string; label: string; value: string };
 export type VoLetterFacts = { facts: VoLetterFact[]; hidden: number };
 /** Approved official content (public.vo_letter_official_content): text and source, no page body. */
-export type VoOfficialItem = { kind: string; id: string; label: string; content: string; sourceUrl: string; checkedOn: string | null };
+export type VoOfficialItem = {
+  kind: string;
+  id: string;
+  label: string;
+  content: string;
+  sourceUrl: string;
+  checkedOn: string | null;
+  /** The page wasn't captured by Casevoya; a licensed reviewer attested it (who, the date they opened it). */
+  attested: boolean;
+  attestedBy: string | null;
+  attestedOn: string | null;
+};
 /** Approved official content with its source as Ask Vo shows it (SRC-01/02 dates, as stored; null when the page didn't say). */
 export type VoOfficialSource = VoOfficialItem & {
   section: string | null;
@@ -85,11 +96,26 @@ export function parseLetterFacts(raw: unknown): VoLetterFacts {
   };
 }
 
+/** The attestation of a page Casevoya didn't capture, as the database states it. */
+function attestation(row: Record<string, unknown>): Pick<VoOfficialItem, "attested" | "attestedBy" | "attestedOn"> {
+  return row.attested === true
+    ? { attested: true, attestedBy: text(row.attested_by) || null, attestedOn: text(row.attested_on) || null }
+    : { attested: false, attestedBy: null, attestedOn: null };
+}
+
 export function parseOfficialContent(raw: unknown): VoOfficialItem[] {
   return (Array.isArray(raw) ? raw : [])
     .map((row) => (row ?? {}) as Record<string, unknown>)
     .filter((row) => text(row.id) && text(row.kind) && text(row.content))
-    .map((row) => ({ kind: text(row.kind), id: text(row.id), label: text(row.label), content: text(row.content), sourceUrl: text(row.source_url), checkedOn: text(row.checked_on) || null }));
+    .map((row) => ({
+      kind: text(row.kind),
+      id: text(row.id),
+      label: text(row.label),
+      content: text(row.content),
+      sourceUrl: text(row.source_url),
+      checkedOn: text(row.checked_on) || null,
+      ...attestation(row),
+    }));
 }
 
 export function parseOfficialSources(raw: unknown): VoOfficialSource[] {
@@ -108,6 +134,7 @@ export function parseOfficialSources(raw: unknown): VoOfficialSource[] {
       formModifiedOn: text(row.form_modified_on) || null,
       currentTo: text(row.current_to) || null,
       sha256: text(row.snapshot_sha256) || null,
+      ...attestation(row),
     }));
 }
 

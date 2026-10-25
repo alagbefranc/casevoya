@@ -38,6 +38,8 @@ function sources(value: unknown): VoSource[] {
           label: String(item.label ?? ""),
           ...(typeof item.source_kind === "string" ? { sourceKind: item.source_kind } : {}),
           ...(typeof item.url === "string" ? { url: item.url } : {}),
+          // Attested official content (finish_vo_run keeps the reviewer and the date with the source).
+          ...(item.attested === true ? { attested: true, attestedBy: typeof item.attested_by === "string" ? item.attested_by : null, attestedOn: typeof item.attested_on === "string" ? item.attested_on : null } : {}),
         }))
         .filter((item) => item.label)
     : [];

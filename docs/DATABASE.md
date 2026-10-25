@@ -943,6 +943,19 @@ SRC-09 on top of the SRC-03 publication gate. Additive.
 
 * Redefined `app.vo_citable_official_url` (from `20261025420000`): also false whenever `app.official_claim_url` refuses the URL (SRC-01 homepage rule); still federal-only.
 * Redefined `app.vo_letter_official_items` (from `20261025420000`): rule versions through `app.rule_version_is_live` instead of the inline status and date check (same semantics, one definition). Register rows keep `status = 'approved'`.
+
+### Vo cites attested claims (`20261025450000`, not applied on the live project; apply after `20261025400000`, `20261025420000` and `20261025420100`)
+
+Francis's decision 2026-10-25 (gap #188): Vo may cite a claim approved by attestation without a page capture, only with the attestation shown next to the citation. Additive; seeds nothing.
+
+* New `app.vo_official_attestation(org, kind, id, sha256, attested_on)` (internal): `{attested: true, attested_by, attested_on}` for an official item with no capture that a licensed reviewer attested (rule versions from `rule_evidence`; submission steps, renewal timings and steps after approval from their own `page_attested_*` columns), the name from the reviewer's profile ("a licensed member" when empty); null otherwise.
+* Redefined `app.vo_letter_official_items` (from `20261025420100`): a live rule version whose evidence has no snapshot is listed when that evidence carries the attestation (reviewer and date opened), the attesting reviewer recorded the approval (`professional_reviews`), and its `source_url` passes `app.official_claim_url` and `app.vo_citable_official_url`; `attested_on` and `checked_on` come from the evidence. A captured page is still preferred. Any item with neither a capture nor an attestation is left out.
+* Redefined `public.vo_run_official_content` (from `20261025420000`) and `public.vo_letter_official_content` (from `20261025240100`): each item adds `attested`, `attested_by`, `attested_on`.
+* Redefined `public.finish_vo_run` (from `20261025420000`, same signature): an official citation records `attested` (and `attested_by`, `attested_on` when true) in `vo_runs.citations`, and the attested ones in the short form on `vo_drafts.sources`; an uncaptured item without an attestation refuses the save. Whatever the service sends about an attestation is ignored.
+* Redefined `public.save_vo_letter_draft` (from `20261025240100`, same signature): each cited official item in `matter_letter_versions.official` adds `attested` and `attested_by` (it already kept `attested_on`).
+
+Tested in `tests/vo-grounded.rls.test.ts`, `tests/vo-letter-drafts.rls.test.ts`, `tests/vo-attested-citations.test.tsx` and `tests/vo-app.test.ts`.
+
 ## Pinned rule versions and the support catalogue (`20261025410000`, not applied on the live project)
 
 SRC-05 and SRC-12 (gap #188), branch `feat/src-pins-scope`. Additive; no existing function is redefined (`app.select_matter_program`, `app.pack_is_selectable`, `public.create_client_matter` are called as they are). Nothing from IRCC is seeded.

@@ -49,6 +49,13 @@ export type VoSourceRef = {
   /** official only: the official page (a deep canada.ca or gc.ca URL), and its dates and fingerprint in words. */
   url?: string;
   detail?: string;
+  /**
+   * official only: Casevoya didn't capture the page; a licensed reviewer attested it (Francis's
+   * decision 2026-10-25). Who and the date they opened the page, as the database states it.
+   */
+  attested?: boolean;
+  attestedBy?: string;
+  attestedOn?: string;
 };
 
 /** Why Vo didn't answer (SRC-09): the request needs a consultant, or nothing on file or approved supports it. */

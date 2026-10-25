@@ -255,7 +255,7 @@ describe("a Vo run", () => {
       ["R1", "matter", MATTER],
       ["R2", "document_version", "aaaaaaaa-0000-4000-8000-000000000002"],
     ]);
-    expect(rpcs[0].args).toMatchObject({ p_result: "answered", p_prompt_version: "ask-2" });
+    expect(rpcs[0].args).toMatchObject({ p_result: "answered", p_prompt_version: "ask-3" });
     expect(rpcs[0].args.p_sources).toEqual([
       { kind: "matter", id: MATTER, label: "SF-2026-0001" },
       { kind: "document_version", id: "aaaaaaaa-0000-4000-8000-000000000002", label: "Document: Wedding photos" },

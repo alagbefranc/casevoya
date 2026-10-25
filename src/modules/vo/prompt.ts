@@ -20,15 +20,22 @@ export const VO_MODEL = "claude-opus-5-5";
 export const VO_PROMPT_VERSION: Record<VoTask, string> = {
   message_reply: "reply-1",
   document_request: "docreq-1",
-  ask: "ask-2",
+  ask: "ask-3",
   document_review: "docread-1",
-  letter_draft: "letter-1",
+  letter_draft: "letter-2",
 };
 
 /** What a draft says where it would need an immigration rule, fee, deadline or processing time. */
 export const NEEDS_RULE = "[needs a sourced rule]";
 /** What Vo answers when the request needs a consultant (advice, eligibility, a determination). */
 export const NEEDS_CONSULTANT = "[needs a consultant]";
+
+/**
+ * Official content whose page Casevoya didn't capture, attested by a licensed reviewer (decided
+ * 2026-10-25): the tool line says so, and Vo is told what that means.
+ */
+export const ATTESTED_SOURCES =
+  "Some official content says “Page not captured by Casevoya, checked by <name> on <date>”: Casevoya couldn't capture that official page, and the licensed reviewer named there opened it and attested it on that date. You may cite it like any [S#], but never call it captured or verified by Casevoya. The attestation is shown with the citation; don't restate it.";
 
 /** Breaks up anything that could close or open a data block, and drops control characters. */
 export function neutralize(text: string, max: number): string {
@@ -82,6 +89,7 @@ const TASK: Record<VoTask, string> = {
     "Task: answer the staff member's question about this matter, for the staff member only (nothing goes to a client).",
     "Your tools return the matter's records with markers [R1], [R2]..., its approved facts (reviewed intake answers) with [F1]..., and the firm's approved official content with [S1].... End every sentence with the marker(s) of what supports it, exactly as given, for example: The passport copy is still requested [R3]. A sentence you can't support with a marker must not be written; markers you weren't given don't count.",
     "A fee, form, program requirement, eligibility point or processing time may appear only if read_official_content returned it: quote it as given with its [S#] marker.",
+    ATTESTED_SOURCES,
     `If the records, approved facts and approved official content don't answer the question, or it needs legal advice, an eligibility assessment or a judgement, answer with exactly ${NEEDS_CONSULTANT} and nothing else. Keep the answer under 150 words.`,
   ].join("\n"),
   // The document reading has its own prompt and output schema (vo-doc-prompt.ts).
@@ -91,6 +99,7 @@ const TASK: Record<VoTask, string> = {
     "Task: write a first draft of a letter on this matter for a licensed consultant to review. The letter type is given below.",
     "Call read_approved_facts first. Those are the ONLY facts about the people you may use: every sentence that states one ends with its marker, exactly as given, for example [F2]. Never use a fact that isn't listed, and don't guess a missing one: write around it.",
     "A fee, date, deadline, processing time, form or program requirement may appear only if find_official_content returns it: then quote it as given and end the sentence with its marker, for example [S1]. If it returns nothing for something the letter would need, leave it out of the letter and name it in left_out. Rule 3 still applies: nothing from your own knowledge.",
+    ATTESTED_SOURCES,
     "No links, no email addresses, no phone numbers, no signature block with a name: the consultant adds that. Plain paragraphs, at most 400 words, in English unless the facts are in French.",
     `If the letter would need legal advice or an assessment of eligibility or chances, don't write it: answer with exactly ${NEEDS_CONSULTANT}.`,
     "Call save_letter_draft once with the title, the text and left_out. Then answer DONE.",

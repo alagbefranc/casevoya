@@ -10,7 +10,7 @@
  */
 import { z } from "zod";
 import { factText } from "../../../src/modules/vo/letter";
-import { isCitableOfficialUrl, officialDetail, officialKindLabel } from "../../../src/modules/vo/grounding";
+import { attestationLine, isCitableOfficialUrl, officialDetail, officialKindLabel } from "../../../src/modules/vo/grounding";
 import { dataBlock, oneLine } from "../../../src/modules/vo/prompt";
 import { cite } from "./cite";
 import type { RunContext, ToolResult, ToolSpec } from "./tools";
@@ -58,16 +58,26 @@ export const GROUNDED_TOOL_SPECS: Record<GroundedToolName, ToolSpec> = {
         .split(/\W+/)
         .filter((word) => word.length > 3);
       const rows = all
-        // Approved content from a deep federal official page only (the database checks it too).
-        .filter((row) => isCitableOfficialUrl(row.sourceUrl))
+        // Approved content from a deep federal official page only (the database checks it too); a
+        // page Casevoya didn't capture only with the reviewer's attestation to show next to it.
+        .filter((row) => isCitableOfficialUrl(row.sourceUrl) && (!row.attested || attestationLine(row.attestedBy, row.attestedOn)))
         .filter((row) => !words.length || words.some((word) => `${row.kind} ${officialKindLabel(row.kind)} ${row.label} ${row.content}`.toLowerCase().includes(word)))
         .slice(0, 8);
       if (!rows.length) return text("No approved official content covers this. Don't answer it from memory: answer with the consultant marker instead.");
       const lines: string[] = [];
       for (const row of rows) {
         const detail = officialDetail({ section: row.section, formNumber: row.formNumber, formModifiedOn: row.formModifiedOn, checkedOn: row.checkedOn, currentTo: row.currentTo, sha256: row.sha256 });
-        const mark = cite(ctx, { kind: "official", id: row.id, sourceKind: row.kind, url: row.sourceUrl, detail, label: `${officialKindLabel(row.kind)}: ${row.label}` });
-        lines.push(`${mark}${officialKindLabel(row.kind)}${row.checkedOn ? `, official page checked ${oneLine(row.checkedOn, 10)}` : ""}:`);
+        const attested = row.attested ? attestationLine(row.attestedBy, row.attestedOn) : null;
+        const mark = cite(ctx, {
+          kind: "official",
+          id: row.id,
+          sourceKind: row.kind,
+          url: row.sourceUrl,
+          detail,
+          label: `${officialKindLabel(row.kind)}: ${row.label}`,
+          ...(attested ? { attested: true, attestedBy: row.attestedBy ?? undefined, attestedOn: row.attestedOn ?? undefined } : {}),
+        });
+        lines.push(`${mark}${officialKindLabel(row.kind)}${row.checkedOn ? `, official page checked ${oneLine(row.checkedOn, 10)}` : ""}${attested ? `. ${oneLine(attested, 200)}` : ""}:`);
         lines.push(dataBlock(ctx.nonce, row.content, 600));
       }
       return text(lines.join("\n"));

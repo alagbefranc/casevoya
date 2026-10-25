@@ -97,6 +97,9 @@ type SourceJson = {
   current_to?: string | null;
   snapshot_sha256?: string | null;
   attested_on?: string | null;
+  /** The reviewer who attested a page Casevoya didn't capture (save_vo_letter_draft, 20261025450000). */
+  attested?: boolean;
+  attested_by?: string | null;
   reviewed_at?: string | null;
 };
 
@@ -152,7 +155,7 @@ export function sourceRows(value: unknown, timeZone: string): LetterSourceRow[] 
       source.snapshot_sha256
         ? `page fingerprint (SHA-256) ${source.snapshot_sha256.slice(0, 12)}…`
         : attested
-          ? `page not captured by Casevoya; the reviewer checked it on ${attested}`
+          ? `Page not captured by Casevoya, checked by ${source.attested_by?.trim() || "a licensed member"} on ${attested}`
           : null,
       reviewed ? `approved by a licensed member on ${reviewed}` : null,
     ].filter((part): part is string => Boolean(part));
