@@ -454,6 +454,16 @@ export function migrationError(message: string): string {
   if (/finish or discard the open import/i.test(message)) return "Finish or discard the import in progress first.";
   if (/larger than 5 MB/i.test(message)) return "The file is larger than 5 MB. Split it and import each part.";
   if (/up to 5,000 rows/i.test(message)) return "Import up to 5,000 rows at a time.";
+  // MIG-02: the pilot and its sign-off.
+  if (/run a pilot first/i.test(message)) return "Run a pilot first. The full import waits for your sign-off of the pilot.";
+  if (/needs the firm owner'?s sign-off|needs the firm owner’s sign-off/i.test(message)) return "Sign off the pilot first. The full import waits for it.";
+  const pilotMax = /a pilot is 1 to (\d+) matters/i.exec(message);
+  if (pilotMax) return `A pilot is 1 to ${pilotMax[1]} matters.`;
+  if (/note of 3 to 1,000/i.test(message)) return "Add a note of 3 to 1,000 characters saying what you checked.";
+  if (/pilot is not finished/i.test(message)) return "The pilot isn’t finished yet. Continue it first.";
+  if (/already signed off/i.test(message)) return "The pilot is already signed off. Reload the page.";
+  if (/no pilot to sign off/i.test(message)) return "This import has no pilot to sign off. Reload the page.";
+  if (/source system in 120/i.test(message)) return "Name the system the file came from in 120 characters or fewer.";
   if (/decide every possible match/i.test(message)) return "Decide every possible match on Preview first.";
   if (/no row is ready/i.test(message)) return "No row is ready to import yet. Fix the row errors first.";
   if (/run the dry run|can't be checked now|can’t be checked now/i.test(message)) return "Check the preview before signing off.";

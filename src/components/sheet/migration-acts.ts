@@ -126,27 +126,35 @@ async function upload(button: HTMLElement, root: HTMLElement, router: Router) {
   router.push(withTab("map", typeof result.data.id === "string" ? result.data.id : ""));
 }
 
-async function commit(button: HTMLElement, router: Router) {
+type Files = { zip: File; pilot?: { size: number; system: string } };
+
+async function commit(button: HTMLElement, router: Router, first?: Reply, files?: Files) {
   const org = button.dataset.org ?? "";
   const batch = button.dataset.batch ?? "";
-  // MIG-01: a documents import sends the same ZIP again; its checksum must match the upload's.
-  let zip: File | null = null;
-  if (button.dataset.kind === "documents") {
+  const kind = button.dataset.kind || "clients_matters";
+  // MIG-01: a documents import sends the same ZIP again, at the pilot and at the full run; its
+  // checksum must match the upload's. MIG-02's pilot and sign-off apply to it as to every kind.
+  let zip = files?.zip ?? null;
+  if (kind === "documents" && !zip && !first) {
     toast2("Choose the same ZIP", { sub: "The files are stored from it; it must be the ZIP you uploaded." });
     zip = await pick(null, ".zip,application/zip");
     if (!zip) return;
   }
+  let result = first;
   for (;;) {
-    let result: Reply;
-    if (zip) {
+    if (!result && zip) {
       const form = new FormData();
       form.set("org", org);
       form.set("batch", batch);
       form.set("zip", zip);
+      if (files?.pilot) {
+        form.set("step", "pilot");
+        form.set("size", String(files.pilot.size));
+        if (files.pilot.system) form.set("system", files.pilot.system);
+      }
       result = await send("/api/migration/commit-documents", form, false);
-    } else {
-      result = await post("commit", { org, batch });
     }
+    result ??= await post("commit", { org, batch });
     if (!result.ok) {
       if (result.data.stepUp) return stepUp(batch);
       toast2("Import stopped", { kind: "warn", sub: errorOf(result.data) });
@@ -155,9 +163,61 @@ async function commit(button: HTMLElement, router: Router) {
     }
     const remaining = n(result.data.remaining);
     if (remaining <= 0) break;
-    toast2("Importing", { sub: button.dataset.kind && button.dataset.kind !== "clients_matters" ? "Still importing. Keep this page open." : `${remaining.toLocaleString("en-CA")} matters to go.` });
+    toast2("Importing", { sub: kind !== "clients_matters" ? "Still importing. Keep this page open." : `${remaining.toLocaleString("en-CA")} matters to go.` });
+    result = undefined;
   }
-  toast2("Import finished", { kind: "ok", sub: "A copy of the report is in the audit trail." });
+  // MIG-02: a pilot stops at its last matter and waits for the firm owner's sign-off.
+  if (result.data.status === "pilot_done") toast2("Pilot finished", { kind: "ok", sub: "Check its records below, then sign off. The full import waits for it." });
+  else toast2("Import finished", { kind: "ok", sub: "The run report is on Sign off. A copy is in the audit trail." });
+  router.refresh();
+}
+
+/** MIG-02: run the pilot with the size and source system on Sign off. */
+async function pilot(button: HTMLElement, root: HTMLElement, router: Router) {
+  const org = button.dataset.org ?? "";
+  const batch = button.dataset.batch ?? "";
+  const kind = button.dataset.kind || "clients_matters";
+  const matters = kind === "clients_matters";
+  const sizeInput = root.querySelector<HTMLInputElement>("input[data-mig-pilot]");
+  const size = Number(sizeInput?.value ?? "");
+  const max = Number(sizeInput?.max || 50);
+  if (!Number.isInteger(size) || size < 1 || size > max) {
+    toast2("Check the pilot size", { kind: "warn", sub: `A pilot is 1 to ${max} ${matters ? "matters" : "records"}.` });
+    return;
+  }
+  const system = root.querySelector<HTMLInputElement>("input[data-mig-system]")?.value.trim() ?? "";
+  const what = matters ? (size === 1 ? "matter" : "matters") : size === 1 ? "record" : "records";
+  const creates = matters ? "real matters and people" : "real records";
+  if (!window.confirm(`Run a pilot of the first ${size} ${what}?\n\nThe pilot creates ${creates}. You check them and sign off before the rest can be imported, or roll the pilot back.`)) return;
+  // MIG-01: a documents pilot stores its files from the same ZIP as the upload.
+  if (kind === "documents") {
+    toast2("Choose the same ZIP", { sub: "The pilot’s files are stored from it; it must be the ZIP you uploaded." });
+    const zip = await pick(null, ".zip,application/zip");
+    if (!zip) return;
+    return commit(button, router, undefined, { zip, pilot: { size, system } });
+  }
+  const result = await post("pilot", { org, batch, size, ...(system ? { system } : {}) });
+  return commit(button, router, result);
+}
+
+/** MIG-02: the firm owner signs the pilot off, with a note. */
+async function signoff(button: HTMLElement, root: HTMLElement, router: Router) {
+  const org = button.dataset.org ?? "";
+  const batch = button.dataset.batch ?? "";
+  const note = root.querySelector<HTMLTextAreaElement>("textarea[data-mig-note]")?.value.trim() ?? "";
+  if (note.length < 3 || note.length > 1000) {
+    toast2("Add a note", { kind: "warn", sub: "Say what you checked in the pilot’s records (3 to 1,000 characters)." });
+    return;
+  }
+  const rest = !button.dataset.kind || button.dataset.kind === "clients_matters" ? "matters" : "records";
+  if (!window.confirm(`Sign off the pilot? The full import can then create the rest of the ${rest}.`)) return;
+  const result = await post("signoff", { org, batch, note });
+  if (!result.ok) {
+    if (result.data.stepUp) return stepUp(batch);
+    toast2("Not signed off", { kind: "warn", sub: errorOf(result.data) });
+    return;
+  }
+  toast2("Pilot signed off", { kind: "ok", sub: "Run the full import next." });
   router.refresh();
 }
 
@@ -198,6 +258,8 @@ export async function runMigrationAct(button: HTMLElement, root: HTMLElement, ro
   const batch = button.dataset.batch ?? "";
 
   if (act === "upload") return upload(button, root, router);
+  if (act === "pilot") return pilot(button, root, router);
+  if (act === "signoff") return signoff(button, root, router);
 
   if (act === "review-balance") {
     // MIG-01: an imported opening balance, reviewed with a step-up. Nothing is posted either way.
@@ -262,12 +324,15 @@ export async function runMigrationAct(button: HTMLElement, root: HTMLElement, ro
   if (act === "commit") {
     // Signing off creates real matters and people: it asks first, like Roll back and Discard.
     const summary = [...root.querySelectorAll<HTMLElement>(".fp-dl dt")].map((term) => `${term.textContent}: ${term.nextElementSibling?.textContent ?? ""}`).slice(0, 3).join("\n");
-    if (!window.confirm(`Sign off and import these records?${summary ? `\n\n${summary}` : ""}\n\nThe import creates the matters and people above. You can roll it back while no one has changed them.`)) return;
+    const label = button.textContent?.trim() || "Continue the import";
+    const creates = !button.dataset.kind || button.dataset.kind === "clients_matters" ? "matters and people" : "records";
+    if (!window.confirm(`${label}?${summary ? `\n\n${summary}` : ""}\n\nThis creates ${creates}. You can roll the import back while no one has changed them.`)) return;
     return commit(button, router);
   }
 
   if (act === "rollback") {
-    if (!window.confirm("Roll back this import? Every matter and person it created is removed. Records someone changed since stop the rollback.")) return;
+    const removed = !button.dataset.kind || button.dataset.kind === "clients_matters" ? "Every matter and person it created is removed." : "Every record it created is removed.";
+    if (!window.confirm(`Roll back this import? ${removed} Records someone changed since stop the rollback.`)) return;
     const result = await post("rollback", { org, batch });
     if (!result.ok) {
       if (result.data.stepUp) return stepUp(batch);

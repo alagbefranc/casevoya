@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { commitMigrationDocuments, isMigrationAction, runMigrationAction, uploadMigrationFile, type MigrationResult } from "@/modules/migration/actions";
+import { migrationReportResponse } from "@/modules/migration/report-download";
+
 /**
  * Migration import (T044): `/api/migration/upload` takes the CSV as multipart form data and parses
- * it here (5 MB, 5,000 rows); `map`, `decide`, `commit`, `rollback` and `discard` take JSON. The
+ * it here (5 MB, 5,000 rows); `map`, `decide`, `pilot`, `signoff`, `commit`, `rollback` and `discard` take JSON. The
  * database functions decide every write as the signed-in firm owner.
  */
 function reply(result: MigrationResult) {
@@ -11,6 +13,14 @@ function reply(result: MigrationResult) {
     return NextResponse.json(result, { status });
   }
   return NextResponse.json(result);
+}
+
+/** MIG-02: `/api/migration/report?batch=<id>&format=csv|pdf`, a finished import's run report (firm owner). */
+export async function GET(request: Request, { params }: { params: Promise<{ action: string }> }) {
+  const { action } = await params;
+  if (action !== "report") return NextResponse.json({ error: "Not found." }, { status: 404 });
+  const url = new URL(request.url);
+  return migrationReportResponse(url.searchParams.get("batch") ?? "", url.searchParams.get("format") === "pdf" ? "pdf" : "csv");
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ action: string }> }) {
@@ -57,7 +67,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
     const org = form.get("org");
     const batch = form.get("batch");
     const zip = form.get("zip");
-    return reply(await commitMigrationDocuments(typeof org === "string" ? org : "", typeof batch === "string" ? batch : "", zip instanceof File ? zip : null));
+    // MIG-02: the pilot of a documents import sends the pilot size (and source system) with the ZIP.
+    const step = form.get("step");
+    const size = form.get("size");
+    const system = form.get("system");
+    const pilot =
+      step === "pilot"
+        ? { size: Number(typeof size === "string" ? size : ""), ...(typeof system === "string" && system.trim() ? { system: system.trim() } : {}) }
+        : null;
+    return reply(
+      await commitMigrationDocuments(typeof org === "string" ? org : "", typeof batch === "string" ? batch : "", zip instanceof File ? zip : null, pilot),
+    );
   }
   if (!isMigrationAction(action)) return NextResponse.json({ error: "Not found." }, { status: 404 });
   let body: unknown;

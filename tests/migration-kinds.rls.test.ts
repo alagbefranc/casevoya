@@ -109,27 +109,45 @@ async function dryRun(ctx: Firm, batch: string, mapping: Record<string, unknown>
   return rpc<Record<string, number | string>>(`public.run_migration_dry_run($1, $2)`, [ctx.orgId, batch]);
 }
 
-/**
- * The one place every test signs a batch off (begin_migration_commit as on main). With MIG-02's
- * pilot merged, this is where the pilot (begin_migration_pilot, its chunks, sign_off_migration_pilot)
- * goes before the full run.
- */
-async function begin(ctx: Firm, batch: string) {
+async function batchPlan(batch: string) {
   await asMaintenance(db);
-  const hash = (await db.query<{ plan_hash: string }>(`select plan_hash from public.migration_batches where id = $1`, [batch])).rows[0].plan_hash;
+  return (await db.query<{ plan_hash: string; kind: string }>(`select plan_hash, kind from public.migration_batches where id = $1`, [batch])).rows[0];
+}
+
+/** One commit chunk: clients and matters through commit_migration_chunk, every other kind through commit_migration_kind_chunk. */
+async function chunk(ctx: Firm, batch: string, kind: string, limit = 2) {
   await as(ctx);
+  return kind === "clients_matters"
+    ? rpc<{ remaining: number; status: string }>(`public.commit_migration_chunk($1, $2, $3)`, [ctx.orgId, batch, limit])
+    : rpc<{ remaining: number; status: string }>(`public.commit_migration_kind_chunk($1, $2, $3)`, [ctx.orgId, batch, limit]);
+}
+
+async function chunks(ctx: Firm, batch: string, kind: string) {
+  let left = 1;
+  while (left > 0) left = (await chunk(ctx, batch, kind)).remaining;
+}
+
+/**
+ * The one place every test signs a batch off, as MIG-02's commit() helper in
+ * migration-import.rls.test.ts does: a pilot of the first record (or matter), its chunks, the firm
+ * owner's sign-off with a note, then the full run's start (begin_migration_commit). The caller
+ * runs the full run's chunks.
+ */
+async function begin(ctx: Firm, batch: string, size = 1) {
+  const { plan_hash: hash, kind } = await batchPlan(batch);
+  await as(ctx);
+  const piloted = await rpc<{ ok: boolean; reason?: string }>(`public.begin_migration_pilot($1, $2, $3, $4)`, [ctx.orgId, batch, hash, size]);
+  if (!piloted.ok) return piloted;
+  await chunks(ctx, batch, kind);
+  await as(ctx);
+  await rpc(`public.sign_off_migration_pilot($1, $2, 'Synthetic pilot checked')`, [ctx.orgId, batch]);
   return rpc<{ ok: boolean; reason?: string }>(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]);
 }
 
 async function commitKind(ctx: Firm, batch: string) {
   const begun = await begin(ctx, batch);
   expect(begun.ok).toBe(true);
-  let left = 1;
-  while (left > 0) {
-    await as(ctx);
-    const chunk = await rpc<{ remaining: number }>(`public.commit_migration_kind_chunk($1, $2, 2)`, [ctx.orgId, batch]);
-    left = chunk.remaining;
-  }
+  await chunks(ctx, batch, (await batchPlan(batch)).kind);
 }
 
 async function rows(batch: string) {
@@ -157,11 +175,7 @@ async function withClients(ctx: Firm) {
   ]);
   await rpc(`public.run_migration_dry_run($1, $2)`, [ctx.orgId, batch]);
   expect((await begin(ctx, batch)).ok).toBe(true);
-  let left = 1;
-  while (left > 0) {
-    await as(ctx);
-    left = (await rpc<{ remaining: number }>(`public.commit_migration_chunk($1, $2, 5)`, [ctx.orgId, batch])).remaining;
-  }
+  await chunks(ctx, batch, "clients_matters");
   await asMaintenance(db);
   const matters = await db.query<{ id: string; source_reference: string }>(
     `select record_id as id, source_reference from public.migration_records where batch_id = $1 and record_table = 'matters'`,
@@ -455,16 +469,18 @@ describe("MIG-01 documents (ZIP + manifest)", () => {
     expect(planned[2].problems[0].problem).toBe("The file’s contents don’t match its name");
     expect(planned[3].problems[0].problem).toBe("This person isn’t on that matter");
 
-    expect((await begin(ctx, batch)).ok).toBe(true);
+    // MIG-02's pilot of the first file (the app sends the same ZIP again for it).
+    const { plan_hash: hash } = await batchPlan(batch);
     await as(ctx);
+    expect(await rpc(`public.begin_migration_pilot($1, $2, $3, 1)`, [ctx.orgId, batch, hash])).toMatchObject({ ok: true, matters: 1 });
     const next = await rpc<{ zip_sha256: string; rows: { row: number; person_id: string; matter_id: string; purpose: string; file_name: string; file_bytes: number }[] }>(
       `public.migration_document_rows($1, $2, 10)`,
       [ctx.orgId, batch],
     );
     expect(next.zip_sha256).toBe("d".repeat(64));
     expect(next.rows).toEqual([expect.objectContaining({ row: 2, person_id: clients.applicantA, matter_id: clients.matter1, file_name: "passport.pdf", file_bytes: 2048 })]);
-    // The batch can't finish while a file waits.
-    expect(await rpc<{ remaining: number }>(`public.commit_migration_kind_chunk($1, $2, 5)`, [ctx.orgId, batch])).toMatchObject({ remaining: 1 });
+    // The pilot can't finish while its file waits.
+    expect(await rpc<{ remaining: number }>(`public.commit_migration_kind_chunk($1, $2, 5)`, [ctx.orgId, batch])).toMatchObject({ remaining: 1, phase: "pilot" });
 
     // The app's upload path: an intent as the owner, the stored object, the server's check.
     const intent = await rpc<{ version_id: string; storage_key: string }>(
@@ -482,8 +498,25 @@ describe("MIG-01 documents (ZIP + manifest)", () => {
     await expectDbError(() => rpc(`public.record_migration_document($1, $2, 2, $3)`, [ctx.orgId, batch, intent.version_id]), /step-up is required/);
     await as(ctx);
     expect(await rpc(`public.record_migration_document($1, $2, 2, $3)`, [ctx.orgId, batch, intent.version_id])).toMatchObject({ document_id: expect.any(String) });
+    expect(await rpc(`public.commit_migration_kind_chunk($1, $2, 5)`, [ctx.orgId, batch])).toMatchObject({ remaining: 0, status: "pilot_done" });
+    // Nothing more until the firm owner signs the pilot off; then the full run (the ZIP again) finishes it.
+    await expectDbError(() => rpc(`public.commit_migration_kind_chunk($1, $2, 5)`, [ctx.orgId, batch]), /sign-off before the full import/);
+    await expectDbError(() => rpc(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]), /needs the firm owner's sign-off/);
+    await rpc(`public.sign_off_migration_pilot($1, $2, 'Synthetic pilot file checked')`, [ctx.orgId, batch]);
+    expect(await rpc(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash])).toMatchObject({ ok: true, matters: 0 });
+    expect(await rpc(`public.migration_document_rows($1, $2, 10)`, [ctx.orgId, batch])).toMatchObject({ rows: [] });
     expect(await rpc(`public.commit_migration_kind_chunk($1, $2, 5)`, [ctx.orgId, batch])).toMatchObject({ remaining: 0, status: "committed" });
     await asMaintenance(db);
+    // The run report (MIG-02's shape, in records), with the ZIP's checksum beside the manifest's.
+    const report = await db.query<{ run_report: Record<string, unknown> }>(`select run_report from public.migration_batches where id = $1`, [batch]);
+    expect(report.rows[0].run_report).toMatchObject({
+      kind: "documents",
+      source: { checksum_matches: true, attachment_sha256: "d".repeat(64), rows_in_file: 4 },
+      records: { documents: { created: 1, linked: 0 } },
+      totals: { records_created: 1, records_linked: 0, files_held: 0 },
+      rows: { rows: 4, imported: 1, error: 3 },
+      pilot: { size: 1, counts: { records_created: 1 }, note: "Synthetic pilot file checked" },
+    });
     expect((await db.query(`select 1 from public.migration_files where batch_id = $1`, [batch])).rows).toHaveLength(0);
     // The file's date is kept as original_at: the start of that day in the firm's timezone.
     const record = await db.query<{ original_day: string; record_table: string }>(
@@ -496,6 +529,92 @@ describe("MIG-01 documents (ZIP + manifest)", () => {
     const refused = await rpc<{ ok: boolean; reasons: string[] }>(`public.rollback_migration_batch($1, $2)`, [ctx.orgId, batch]);
     expect(refused.ok).toBe(false);
     expect(refused.reasons[0]).toMatch(/never deletes a document/);
+  });
+});
+
+describe("MIG-01 kinds through MIG-02's pilot, sign-off and run report", () => {
+  it("creates only the pilot's records, waits for the sign-off, then writes the run report", async () => {
+    const ctx = await firm();
+    await withClients(ctx);
+    const batch = await stage(ctx, "tasks", ["Matter", "Task", "Due"], [
+      ["SYN-1", "Synthetic pilot task one", "2026-11-02"],
+      ["SYN-1", "Synthetic pilot task two", "2026-11-03"],
+      ["SYN-2", "Synthetic full-run task", "2026-11-04"],
+      ["SYN-9", "Synthetic task with a bad matter", "2026-11-05"],
+    ]);
+    await dryRun(ctx, batch, { columns: { reference: 0, title: 1, due_on: 2 }, default_owner: ctx.managerMembership });
+    const { plan_hash: hash } = await batchPlan(batch);
+    // The full run is refused before a pilot.
+    await as(ctx);
+    await expectDbError(() => rpc(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]), /run a pilot first/);
+    // The pilot needs the firm owner's step-up.
+    await as(ctx, "owner", false);
+    await expectDbError(() => rpc(`public.begin_migration_pilot($1, $2, $3, 2)`, [ctx.orgId, batch, hash]), /step-up is required/);
+    await as(ctx);
+    expect(await rpc(`public.begin_migration_pilot($1, $2, $3, 2, 'Synthetic Old System')`, [ctx.orgId, batch, hash])).toEqual({ ok: true, matters: 2 });
+    expect(await chunk(ctx, batch, "tasks", 50)).toMatchObject({ remaining: 0, status: "pilot_done", phase: "pilot" });
+    await asMaintenance(db);
+    const titles = async () =>
+      (await db.query<{ title: string }>(`select title from public.tasks where organization_id = $1 order by title`, [ctx.orgId])).rows.map((row) => row.title);
+    expect(await titles()).toEqual(["Synthetic pilot task one", "Synthetic pilot task two"]);
+    const pilot = await db.query<{ pilot_counts: Record<string, unknown>; pilot_completed_at: string | null }>(
+      `select pilot_counts, pilot_completed_at from public.migration_batches where id = $1`,
+      [batch],
+    );
+    expect(pilot.rows[0]).toMatchObject({ pilot_counts: { kind: "tasks", records_created: 2, records_linked: 0 }, pilot_completed_at: expect.anything() });
+    expect((await db.query(`select 1 from public.audit_log where object_id = $1 and action = 'migration.pilot_completed'`, [batch])).rows).toHaveLength(1);
+    // Nothing more until the sign-off.
+    await as(ctx);
+    await expectDbError(() => chunk(ctx, batch, "tasks"), /sign-off before the full import/);
+    await expectDbError(() => rpc(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]), /needs the firm owner's sign-off/);
+    await as(ctx);
+    await rpc(`public.sign_off_migration_pilot($1, $2, 'Synthetic tasks checked on both matters')`, [ctx.orgId, batch]);
+    expect(await rpc(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash])).toEqual({ ok: true, matters: 1 });
+    expect(await chunk(ctx, batch, "tasks", 50)).toMatchObject({ remaining: 0, status: "committed" });
+    await asMaintenance(db);
+    expect(await titles()).toEqual(["Synthetic full-run task", "Synthetic pilot task one", "Synthetic pilot task two"]);
+    const done = await db.query<{ run_report: Record<string, unknown>; result_counts: Record<string, unknown>; exceptions: unknown[] }>(
+      `select run_report, result_counts, exceptions from public.migration_batches where id = $1`,
+      [batch],
+    );
+    expect(done.rows[0].result_counts).toMatchObject({ kind: "tasks", records_created: 3, records_linked: 0, not_imported: 1 });
+    expect(done.rows[0].exceptions).toHaveLength(1);
+    expect(done.rows[0].run_report).toMatchObject({
+      kind: "tasks",
+      source: { source_system: "Synthetic Old System", rows_in_file: 4, rows_staged: 4, checksum_matches: true, verified_at_commit: expect.anything() },
+      records: { tasks: { created: 3, linked: 0 } },
+      totals: { records_created: 3, records_linked: 0 },
+      rows: { rows: 4, imported: 3, created: 3, error: 1, exception_lines: 1 },
+      pilot: { size: 2, counts: { records_created: 2 }, note: "Synthetic tasks checked on both matters" },
+      full_run_started_at: expect.anything(),
+    });
+    // The report holds no value from the file.
+    expect(JSON.stringify(done.rows[0].run_report)).not.toContain("SYN-9");
+    // The firm owner can download it (audited).
+    await as(ctx);
+    await rpc(`public.record_migration_report_download($1, $2, 'csv')`, [ctx.orgId, batch]);
+    await asMaintenance(db);
+    expect((await db.query(`select 1 from public.audit_log where object_id = $1 and action = 'migration.report_downloaded'`, [batch])).rows).toHaveLength(1);
+  });
+
+  it("rolls a key dates pilot back before its sign-off", async () => {
+    const ctx = await firm();
+    await withClients(ctx);
+    const batch = await stage(ctx, "key_dates", ["Matter", "What", "When"], [
+      ["SYN-1", "Synthetic pilot date", "2027-02-01"],
+      ["SYN-2", "Synthetic later date", "2027-03-01"],
+    ]);
+    await dryRun(ctx, batch, { columns: { reference: 0, label: 1, date: 2 }, default_date_kind: "internal" });
+    const { plan_hash: hash } = await batchPlan(batch);
+    await as(ctx);
+    expect(await rpc(`public.begin_migration_pilot($1, $2, $3, 1)`, [ctx.orgId, batch, hash])).toEqual({ ok: true, matters: 1 });
+    expect(await chunk(ctx, batch, "key_dates", 50)).toMatchObject({ status: "pilot_done" });
+    await as(ctx);
+    expect(await rpc(`public.migration_rollback_check($1, $2)`, [ctx.orgId, batch])).toEqual([]);
+    expect(await rpc(`public.rollback_migration_batch($1, $2)`, [ctx.orgId, batch])).toMatchObject({ ok: true, records: 1 });
+    await asMaintenance(db);
+    expect((await db.query(`select 1 from public.deadlines where organization_id = $1`, [ctx.orgId])).rows).toHaveLength(0);
+    expect((await db.query<{ status: string }>(`select status::text from public.migration_batches where id = $1`, [batch])).rows[0].status).toBe("rolled_back");
   });
 });
 
