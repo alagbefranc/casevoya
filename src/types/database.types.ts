@@ -3687,6 +3687,90 @@ export type Database = {
         }
         Relationships: []
       }
+      opening_balances: {
+        Row: {
+          amount_cents: number
+          as_of: string
+          batch_id: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          description: string | null
+          id: string
+          imported_by: string
+          is_sample: boolean
+          kind: string
+          matter_id: string
+          organization_id: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source_system: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          amount_cents: number
+          as_of: string
+          batch_id: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          id?: string
+          imported_by: string
+          is_sample?: boolean
+          kind: string
+          matter_id: string
+          organization_id: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_system: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          amount_cents?: number
+          as_of?: string
+          batch_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          id?: string
+          imported_by?: string
+          is_sample?: boolean
+          kind?: string
+          matter_id?: string
+          organization_id?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_system?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opening_balances_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "opening_balances_batch_id_organization_id_fkey"
+            columns: ["batch_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "migration_batches"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
       renewal_timings: {
         Row: {
           applies_to: string
@@ -7138,6 +7222,8 @@ export type Database = {
           id: string
           matter_id: string
           organization_id: string
+          original_author_name: string | null
+          original_written_on: string | null
         }
         Insert: {
           author_membership_id: string
@@ -7147,6 +7233,8 @@ export type Database = {
           id?: string
           matter_id: string
           organization_id: string
+          original_author_name?: string | null
+          original_written_on?: string | null
         }
         Update: {
           author_membership_id?: string
@@ -7156,6 +7244,8 @@ export type Database = {
           id?: string
           matter_id?: string
           organization_id?: string
+          original_author_name?: string | null
+          original_written_on?: string | null
         }
         Relationships: []
       }
@@ -7815,6 +7905,10 @@ export type Database = {
       }
       migration_batches: {
         Row: {
+          attachment_bytes: number | null
+          attachment_files: number | null
+          attachment_name: string | null
+          attachment_sha256: string | null
           byte_size: number
           checked_at: string | null
           commit_started_at: string | null
@@ -7831,6 +7925,7 @@ export type Database = {
           headers: string[]
           id: string
           is_sample: boolean
+          kind: string
           mapping: Json
           organization_id: string
           parsed_digest: string
@@ -7850,6 +7945,7 @@ export type Database = {
           rolled_back_at: string | null
           rolled_back_by: string | null
           run_report: Json | null
+          sensitivity: Json
           source_row_count: number
           source_sha256: string
           source_system: string
@@ -7862,6 +7958,10 @@ export type Database = {
           version: number
         }
         Insert: {
+          attachment_bytes?: number | null
+          attachment_files?: number | null
+          attachment_name?: string | null
+          attachment_sha256?: string | null
           byte_size: number
           checked_at?: string | null
           commit_started_at?: string | null
@@ -7878,6 +7978,7 @@ export type Database = {
           headers: string[]
           id?: string
           is_sample?: boolean
+          kind?: string
           mapping?: Json
           organization_id: string
           parsed_digest: string
@@ -7897,6 +7998,7 @@ export type Database = {
           rolled_back_at?: string | null
           rolled_back_by?: string | null
           run_report?: Json | null
+          sensitivity?: Json
           source_row_count: number
           source_sha256: string
           source_system?: string
@@ -7909,6 +8011,10 @@ export type Database = {
           version?: number
         }
         Update: {
+          attachment_bytes?: number | null
+          attachment_files?: number | null
+          attachment_name?: string | null
+          attachment_sha256?: string | null
           byte_size?: number
           checked_at?: string | null
           commit_started_at?: string | null
@@ -7925,6 +8031,7 @@ export type Database = {
           headers?: string[]
           id?: string
           is_sample?: boolean
+          kind?: string
           mapping?: Json
           organization_id?: string
           parsed_digest?: string
@@ -7944,6 +8051,7 @@ export type Database = {
           rolled_back_at?: string | null
           rolled_back_by?: string | null
           run_report?: Json | null
+          sensitivity?: Json
           source_row_count?: number
           source_sha256?: string
           source_system?: string
@@ -7962,6 +8070,53 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      migration_files: {
+        Row: {
+          batch_id: string
+          base_name: string
+          byte_size: number
+          created_at: string
+          id: string
+          media_type: string | null
+          organization_id: string
+          path: string
+          problem: string | null
+          sha256: string | null
+        }
+        Insert: {
+          batch_id: string
+          base_name: string
+          byte_size: number
+          created_at?: string
+          id?: string
+          media_type?: string | null
+          organization_id: string
+          path: string
+          problem?: string | null
+          sha256?: string | null
+        }
+        Update: {
+          batch_id?: string
+          base_name?: string
+          byte_size?: number
+          created_at?: string
+          id?: string
+          media_type?: string | null
+          organization_id?: string
+          path?: string
+          problem?: string | null
+          sha256?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "migration_files_batch_id_organization_id_fkey"
+            columns: ["batch_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "migration_batches"
+            referencedColumns: ["id", "organization_id"]
           },
         ]
       }
@@ -8038,6 +8193,8 @@ export type Database = {
           is_applicant: boolean
           match_detail: string[] | null
           match_person_id: string | null
+          match_record_id: string | null
+          match_record_table: string | null
           match_row_number: number | null
           matter_id: string | null
           normalized: Json | null
@@ -8045,6 +8202,7 @@ export type Database = {
           person_id: string | null
           plan: Database["public"]["Enums"]["migration_row_plan"] | null
           problems: Json
+          record_id: string | null
           row_number: number
           row_sha256: string
         }
@@ -8064,6 +8222,8 @@ export type Database = {
           is_applicant?: boolean
           match_detail?: string[] | null
           match_person_id?: string | null
+          match_record_id?: string | null
+          match_record_table?: string | null
           match_row_number?: number | null
           matter_id?: string | null
           normalized?: Json | null
@@ -8071,6 +8231,7 @@ export type Database = {
           person_id?: string | null
           plan?: Database["public"]["Enums"]["migration_row_plan"] | null
           problems?: Json
+          record_id?: string | null
           row_number: number
           row_sha256: string
         }
@@ -8090,6 +8251,8 @@ export type Database = {
           is_applicant?: boolean
           match_detail?: string[] | null
           match_person_id?: string | null
+          match_record_id?: string | null
+          match_record_table?: string | null
           match_row_number?: number | null
           matter_id?: string | null
           normalized?: Json | null
@@ -8097,6 +8260,7 @@ export type Database = {
           person_id?: string | null
           plan?: Database["public"]["Enums"]["migration_row_plan"] | null
           problems?: Json
+          record_id?: string | null
           row_number?: number
           row_sha256?: string
         }
@@ -10098,6 +10262,17 @@ export type Database = {
       }
       rule_evidence: {
         Row: {
+          checked_on: string | null
+          current_to: string | null
+          form_modified_on: string | null
+          form_number: string | null
+          last_amended_on: string | null
+          modified_on: string | null
+          page_attested_at: string | null
+          page_attested_by_membership_id: string | null
+          page_attested_on: string | null
+          published_on: string | null
+          source_url: string | null
           created_at: string
           created_by: string | null
           evidence_excerpt: string | null
@@ -10106,13 +10281,24 @@ export type Database = {
           locator: string | null
           organization_id: string | null
           rule_version_id: string
-          snapshot_id: string
+          snapshot_id: string | null
           source_language: string | null
           source_section: string | null
           updated_at: string
           version: number
         }
         Insert: {
+          checked_on?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          last_amended_on?: string | null
+          modified_on?: string | null
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          published_on?: string | null
+          source_url?: string | null
           created_at?: string
           created_by?: string | null
           evidence_excerpt?: string | null
@@ -10121,13 +10307,24 @@ export type Database = {
           locator?: string | null
           organization_id?: string | null
           rule_version_id: string
-          snapshot_id: string
+          snapshot_id?: string | null
           source_language?: string | null
           source_section?: string | null
           updated_at?: string
           version?: number
         }
         Update: {
+          checked_on?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          last_amended_on?: string | null
+          modified_on?: string | null
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          published_on?: string | null
+          source_url?: string | null
           created_at?: string
           created_by?: string | null
           evidence_excerpt?: string | null
@@ -10136,7 +10333,7 @@ export type Database = {
           locator?: string | null
           organization_id?: string | null
           rule_version_id?: string
-          snapshot_id?: string
+          snapshot_id?: string | null
           source_language?: string | null
           source_section?: string | null
           updated_at?: string
@@ -10373,6 +10570,9 @@ export type Database = {
           organization_id: string | null
           output_value: Json | null
           status: Database["public"]["Enums"]["rule_publication_status"]
+          status_changed_at: string | null
+          status_changed_by_membership_id: string | null
+          status_reason: string | null
           structured_condition: Json | null
           supersedes_version_id: string | null
           test_case_ids: string[]
@@ -10398,6 +10598,9 @@ export type Database = {
           organization_id?: string | null
           output_value?: Json | null
           status?: Database["public"]["Enums"]["rule_publication_status"]
+          status_changed_at?: string | null
+          status_changed_by_membership_id?: string | null
+          status_reason?: string | null
           structured_condition?: Json | null
           supersedes_version_id?: string | null
           test_case_ids?: string[]
@@ -10423,6 +10626,9 @@ export type Database = {
           organization_id?: string | null
           output_value?: Json | null
           status?: Database["public"]["Enums"]["rule_publication_status"]
+          status_changed_at?: string | null
+          status_changed_by_membership_id?: string | null
+          status_reason?: string | null
           structured_condition?: Json | null
           supersedes_version_id?: string | null
           test_case_ids?: string[]
@@ -13665,9 +13871,25 @@ export type Database = {
         Args: { p_letter_type: string; p_matter_id: string; p_organization_id: string }
         Returns: Json
       }
+      commit_migration_kind_chunk: {
+        Args: { p_batch: string; p_limit?: number; p_org: string }
+        Returns: Json
+      }
       create_matter_letter: {
         Args: { p_body: string; p_letter_type: string; p_matter_id: string; p_organization_id: string; p_title: string }
         Returns: string
+      }
+      migration_document_rows: {
+        Args: { p_batch: string; p_limit?: number; p_org: string }
+        Returns: Json
+      }
+      record_migration_document: {
+        Args: { p_batch: string; p_org: string; p_row: number; p_version: string }
+        Returns: Json
+      }
+      review_opening_balance: {
+        Args: { p_approve: boolean; p_id: string; p_note: string; p_org: string }
+        Returns: Json
       }
       revise_matter_letter: {
         Args: { p_body: string; p_expected_version: number; p_letter_id: string; p_title: string }
@@ -13684,6 +13906,21 @@ export type Database = {
       release_matter_letter: {
         Args: { p_letter_id: string }
         Returns: Json
+      }
+      set_migration_kind: {
+        Args: { p_batch: string; p_kind: string; p_org: string }
+        Returns: undefined
+      }
+      stage_migration_files: {
+        Args: {
+          p_batch: string
+          p_bytes: number
+          p_files: Json
+          p_name: string
+          p_org: string
+          p_sha256: string
+        }
+        Returns: number
       }
       vo_letter_facts: {
         Args: { p_run_id: string }
@@ -13859,6 +14096,51 @@ export type Database = {
       person_consent_overview: {
         Args: { p_organization_id: string; p_person_id: string }
         Returns: Json
+      }
+      // SRC-01/02/03 claims and the review workbench (20261025400000_src_claims_review.sql).
+      add_rule_claim: {
+        Args: {
+          p_applicability_note: string
+          p_checked_on: string
+          p_claim: string
+          p_current_to: string
+          p_effective_from: string
+          p_effective_to: string
+          p_excerpt: string
+          p_form_modified_on: string
+          p_form_number: string
+          p_jurisdiction: string
+          p_last_amended_on: string
+          p_modified_on: string
+          p_org: string
+          p_program_key: string
+          p_published_on: string
+          p_snapshot: Json
+          p_source_section: string
+          p_source_url: string
+          p_stable_key: string
+          p_value: string
+        }
+        Returns: string
+      }
+      resolve_rule_applicability: {
+        Args: { p_expected_version: number; p_note: string; p_resolution: string; p_version_id: string }
+        Returns: number
+      }
+      review_rule_version: {
+        Args: {
+          p_decision: string
+          p_expected_version: number
+          p_next_review_on: string
+          p_note: string
+          p_page_opened_on: string
+          p_version_id: string
+        }
+        Returns: number
+      }
+      suspend_rule_version: {
+        Args: { p_expected_version: number; p_reason: string; p_version_id: string }
+        Returns: number
       }
       propose_submission_requirement: {
         Args: {

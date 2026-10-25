@@ -28,7 +28,7 @@ export type ReportLink = { href: string; label: string };
 
 /** Live only (REP-01): the Operations cards added to the Designer's five. */
 export type ReportsOpsMore = {
-  overdue: { open: number; overdue: number; sample: number; note: string; definition?: string };
+  overdue: { open: number; overdue: number; sampleOpen: number; sample: number; note: string; definition?: string };
   intake: { bars: ReportBar[]; note: string; definition?: string };
   readiness: { matters: number; median: string; longest: string; note: string; recorded: boolean; definition?: string };
   renewals: { bars: ReportBar[]; note: string; definition?: string };

@@ -37,7 +37,15 @@ export type AnalyticsField = (typeof ANALYTICS_ALLOWED_FIELDS)[number];
 export type OperationalEvent = Partial<Record<AnalyticsField, string | number | boolean>>;
 
 /** What product analytics must never carry, in the words the Settings copy uses. */
-export const ANALYTICS_EXCLUDED = ["immigration narratives", "identity numbers", "uploaded documents", "message bodies"] as const;
+export const ANALYTICS_EXCLUDED = [
+  "immigration narratives",
+  "identity numbers",
+  "uploaded documents",
+  "message bodies",
+  "names",
+  "contact details",
+  "free text",
+] as const;
 
 /** Known analytics / telemetry SDKs and beacons. Any of these in the code must import this module. */
 export const ANALYTICS_SDKS = [

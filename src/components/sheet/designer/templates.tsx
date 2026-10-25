@@ -1,16 +1,21 @@
 /**
  * The Designer's Templates page (`markup/templates.tsx`): Program templates (default), Message
  * templates, Checklists, Source review and Rule detail tabs. Same DOM, classes and order; the
- * rows come from the firm's records and the approved email catalog. Read only here: rule review
- * and publication stay in the source-governance workflow (T013).
+ * rows come from the firm's records and the approved email catalog.
  *
  * Live-only addition: `data-nav` on New template (it opens the Agreements page's template
  * dialog, where firm templates are made). On Message templates (OPS-04) it opens the firm's own
  * message template dialog instead (`newTemplateDialog`, `MessageTemplateDialog`), and the firm's
  * templates are rows above the email catalog.
+ *
+ * Live-only additions (SRC-01/02/03, source-claims.tsx): Add claim on Source review
+ * (`sources.addClaim`), and on Rule detail the claim's evidence with every date on its own
+ * (`rule.evidence`) and the review panel (`rule.review`). The Designer's demo "Actions for your
+ * role" panel (`rule.actions`) stays demo-only; live data leaves it null.
  */
 import { Empty, Icon, Pair } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
+import { AddClaimButton, ClaimEvidenceList, ClaimReviewPanel, type AddClaimData, type ClaimEvidenceItem, type ClaimReviewData } from "./source-claims";
 
 export type TemplatesTab = "program" | "messages" | "checklists" | "sources" | "rule";
 
@@ -32,6 +37,10 @@ export type RuleDetail = {
   tests: { case: string; expected: string; result: string | MatterBadge }[] | null;
   source: { publisher: string; url: string; linkText: string; appliesTo: string; version: string; checked: string; reviewer: Text; state: MatterBadge } | null;
   actions: { role: string } | null;
+  /** Live only (SRC-01/02): each piece of evidence with its capture and every date on its own. */
+  evidence?: ClaimEvidenceItem[];
+  /** Live only (SRC-03): the review workbench panel for this version. */
+  review?: ClaimReviewData;
 };
 
 export type TemplatesData = {
@@ -47,7 +56,8 @@ export type TemplatesData = {
   program: { rows: ProgramRow[]; note: string; supportHref?: string };
   messages: { rows: MessageRow[] };
   checklists: { cards: ChecklistCard[] };
-  sources: { kpis: SourceKpi[]; rows: SourceRow[] };
+  /** `addClaim` (live only, SRC-01): the Add claim button and dialog. */
+  sources: { kpis: SourceKpi[]; rows: SourceRow[]; addClaim?: AddClaimData };
   rule: RuleDetail | null;
 };
 
@@ -295,6 +305,7 @@ function Sources({ data }: { data: TemplatesData }) {
           <p>{"The official sources behind every rule in your templates. If a source is missing or stale, the rule shows “Review required” and who owns it, never a made-up answer."}</p>
         </div>
       </div>
+      {data.sources.addClaim ? <AddClaimButton data={data.sources.addClaim} /> : null}
       <div className={"fp-kpi rv"} style={i(1)}>
         {data.sources.kpis.map((kpi) => (
           <a key={kpi.label} className={kpi.warn ? "fp-k warn k2-spot" : "fp-k k2-spot"} href={kpi.href} data-spot={"1"}>
@@ -411,6 +422,7 @@ function Rule({ rule }: { rule: RuleDetail | null }) {
               {rule.note ? <p className={"fp-note"}>{rule.note}</p> : null}
             </div>
           </section>
+          {rule.evidence ? <ClaimEvidenceList items={rule.evidence} /> : null}
           {rule.diff ? (
             <section className={"panel"}>
               <h2>
@@ -528,6 +540,7 @@ function Rule({ rule }: { rule: RuleDetail | null }) {
               </div>
             </div>
           ) : null}
+          {rule.review ? <ClaimReviewPanel review={rule.review} /> : null}
         </div>
       </div>
     </>

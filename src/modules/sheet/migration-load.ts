@@ -17,8 +17,20 @@ import { loadSheetChrome, memberNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { loadNewMatterDialog } from "@/modules/sheet/matters-load";
 import {
+  fieldSensitivity,
+  kindMapData,
+  kindPreviewData,
+  problemColumnSensitive,
+  sensitivityOf,
+  sensitivityRows,
+} from "@/modules/sheet/migration-kinds-load";
+import {
   guessDateOrder,
+  hiddenValue,
+  kindLabel,
+  maskProblem,
   MIGRATION_FIELDS,
+  MIGRATION_KINDS,
   planCounts,
   plural,
   ROLE_LABELS,
@@ -40,8 +52,13 @@ const PREVIEW_ROWS = 50;
 const ERROR_ROWS = 200;
 const MATCH_ROWS = 100;
 
-type Batch = {
+export type Batch = {
   id: string;
+  kind: string;
+  sensitivity: unknown;
+  attachment_name: string | null;
+  attachment_sha256: string | null;
+  attachment_files: number | null;
   file_name: string;
   status: string;
   is_sample: boolean;
@@ -70,7 +87,7 @@ type Batch = {
   run_report: unknown;
 };
 
-type Row = {
+export type Row = {
   row_number: number;
   normalized: Record<string, unknown> | null;
   plan: string | null;
@@ -80,6 +97,8 @@ type Row = {
   match_detail: string[] | null;
   decision: string | null;
   decision_target: string | null;
+  match_record_id?: string | null;
+  match_record_table?: string | null;
 };
 
 const STATE: Record<string, { tone: "ok" | "chg" | "bad" | "unv" | "blue"; label: string }> = {
@@ -91,7 +110,7 @@ const STATE: Record<string, { tone: "ok" | "chg" | "bad" | "unv" | "blue"; label
   discarded: { tone: "unv", label: "Discarded" },
 };
 
-const DATE_ORDERS: [string, string][] = [
+export const DATE_ORDERS: [string, string][] = [
   ["dmy", "Day / month / year (09/03/1984)"],
   ["mdy", "Month / day / year (03/09/1984)"],
   ["ymd", "Year-month-day only (1984-03-09)"],
@@ -141,7 +160,7 @@ export async function loadSheetMigration(staff: SheetStaff, query: SheetQuery) {
   const all = await supabase
     .from("migration_batches")
     .select(
-      "id, file_name, status, is_sample, source_sha256, source_row_count, staged_row_count, verified_at, headers, mapping, plan_counts, result_counts, exceptions, created_at, committed_at, rolled_back_at, discarded_at, staging_purged_at, source_system, pilot_size, pilot_completed_at, pilot_counts, pilot_signed_off_at, pilot_signed_off_by, pilot_signoff_note, full_run_started_at, run_report",
+      "id, kind, sensitivity, attachment_name, attachment_sha256, attachment_files, file_name, status, is_sample, source_sha256, source_row_count, staged_row_count, verified_at, headers, mapping, plan_counts, result_counts, exceptions, created_at, committed_at, rolled_back_at, discarded_at, staging_purged_at, source_system, pilot_size, pilot_completed_at, pilot_counts, pilot_signed_off_at, pilot_signed_off_by, pilot_signoff_note, full_run_started_at, run_report",
     )
     .eq("organization_id", org)
     .order("created_at", { ascending: true })
@@ -154,12 +173,12 @@ export async function loadSheetMigration(staff: SheetStaff, query: SheetQuery) {
     tab,
     pill: current ? [`Import ${batches.indexOf(current) + 1} of ${batches.length}`, current.file_name] : null,
   };
-  const wire: Record<string, string> = current ? { "data-org": org, "data-batch": current.id } : { "data-org": org };
+  const wire: Record<string, string> = current ? { "data-org": org, "data-batch": current.id, "data-kind": current.kind ?? "clients_matters" } : { "data-org": org };
   const history: HistoryRow[] = [...batches].reverse().map((batch) => ({
     key: batch.id,
     file: batch.file_name,
     when: day(batch.created_at, staff.timezone),
-    rows: plural(batch.source_row_count, "row"),
+    rows: batch.kind && batch.kind !== "clients_matters" ? `${plural(batch.source_row_count, "row")} · ${kindLabel(batch.kind).toLowerCase()}` : plural(batch.source_row_count, "row"),
     state: STATE[batch.status] ?? STATE.staged,
     href: `/sheet/migration?tab=signoff&id=${batch.id}`,
   }));
@@ -171,11 +190,18 @@ export async function loadSheetMigration(staff: SheetStaff, query: SheetQuery) {
 
   if (tab === "map") {
     if (!open) {
-      page.upload = { attrs: { "data-mig-act": "upload", "data-org": org } };
+      // MIG-01: the kind picker; clients and matters stays the default.
+      page.upload = {
+        attrs: { "data-mig-act": "upload", "data-org": org },
+        kinds: { attrs: { "data-mig-kind": "1" }, value: "clients_matters", options: MIGRATION_KINDS.map((entry) => [entry.kind, entry.label] as [string, string]) },
+        copy: "Choose what the file holds, then a CSV file up to 5 MB and 5,000 rows. Documents come as a CSV manifest, then a ZIP of the files up to 25 MB. Nothing goes live until you sign off.",
+      };
     } else if (current?.id !== open.id) {
       page.empty = { title: "Another import is open", copy: "Its columns are on this tab once you open it. Finish or discard it before starting another." };
     } else if (open.status === "committing" || open.staging_purged_at) {
       page.empty = { title: "This import is being created", copy: "Go to Sign off to continue it, or to roll back what was created." };
+    } else if (open.kind && open.kind !== "clients_matters") {
+      page.map = await kindMapData(supabase, staff, open, wire);
     } else {
       page.map = await mapData(supabase, staff, open, wire);
     }
@@ -195,7 +221,7 @@ export async function loadSheetMigration(staff: SheetStaff, query: SheetQuery) {
         : { title: "The preview isn’t kept", copy: "Staged rows are removed once an import is done. Sign off shows what was created." };
       return { chrome, header, page };
     }
-    page.preview = await previewData(supabase, org, current, wire);
+    page.preview = current.kind && current.kind !== "clients_matters" ? await kindPreviewData(supabase, org, current, wire) : await previewData(supabase, org, current, wire);
     return { chrome, header, page };
   }
 
@@ -214,7 +240,7 @@ export async function loadSheetMigration(staff: SheetStaff, query: SheetQuery) {
   return { chrome, header, page };
 }
 
-type Client = Awaited<ReturnType<typeof createClient>>;
+export type Client = Awaited<ReturnType<typeof createClient>>;
 
 async function valueOptions(supabase: Client, staff: SheetStaff) {
   const [dialog, members, names] = await Promise.all([
@@ -237,7 +263,8 @@ async function mapData(supabase: Client, staff: SheetStaff, batch: Batch, wire: 
     valueOptions(supabase, staff),
   ]);
   const samples = (firstRows.data ?? []).map((row) => row.cells as string[]);
-  const sampleOf = (index: number) => samples.map((cells) => (cells[index] ?? "").trim()).find(Boolean) ?? "—";
+  const sens = sensitivityOf(batch);
+  const sampleOf = (index: number) => (sens[String(index)] ? hiddenValue(sens[String(index)]) : samples.map((cells) => (cells[index] ?? "").trim()).find(Boolean) ?? "—");
   const saved = readMapping(batch.mapping);
   const suggested = suggestColumns(batch.headers);
   const columns: Partial<Record<MigrationField, number | null>> = saved?.columns ?? suggested;
@@ -322,6 +349,7 @@ async function mapData(supabase: Client, staff: SheetStaff, batch: Batch, wire: 
     next: { attrs: { "data-mig-act": "map", ...wire } },
     settings,
     values,
+    sensitivity: sensitivityRows(batch, sens),
     discard: { "data-mig-act": "discard", ...wire },
   };
 }
@@ -343,11 +371,13 @@ async function previewData(supabase: Client, org: string, batch: Batch, wire: Re
   const personIds = [...new Set(matches.map((row) => row.match_person_id).filter((id): id is string => Boolean(id)))];
   const people = personIds.length ? await supabase.from("persons").select("id, display_name, created_at").eq("organization_id", org).in("id", personIds) : null;
   const personName = new Map((people?.data ?? []).map((row) => [row.id, `${row.display_name} (client since ${row.created_at.slice(0, 4)})`]));
-  const name = (row: Row) => text(row.normalized?.name) ?? "—";
+  const nameClass = fieldSensitivity(batch, "name");
+  const birthClass = fieldSensitivity(batch, "date_of_birth");
+  const name = (row: Row) => (nameClass ? hiddenValue(nameClass) : text(row.normalized?.name) ?? "—");
   const previewRows: PreviewRow[] = rows.map((row) => ({
     row: String(row.row_number),
     person: name(row),
-    birth: text(row.normalized?.date_of_birth) ?? "—",
+    birth: birthClass && row.normalized?.date_of_birth ? hiddenValue(birthClass) : text(row.normalized?.date_of_birth) ?? "—",
     matter: text(row.normalized?.reference) ?? "—",
     result: rowResult(row.plan, row.decision_target?.startsWith("row:") ? "row" : row.decision_target ? "person" : null),
   }));
@@ -384,8 +414,14 @@ async function errorsData(supabase: Client, batch: Batch, staging: Batch | null,
       .in("plan", ["error", "review", "skip"])
       .order("row_number")
       .limit(ERROR_ROWS);
+    // MIG-01: a value quoted from a sensitive column is not echoed.
     const rows: ErrorRow[] = ((problem.data ?? []) as Pick<Row, "row_number" | "problems">[]).flatMap((row) =>
-      (row.problems ?? []).map((item) => ({ row: String(row.row_number), column: item.column ?? "—", problem: item.problem ?? "", fix: item.fix ?? "" })),
+      (row.problems ?? []).map((item) => ({
+        row: String(row.row_number),
+        column: item.column ?? "—",
+        problem: maskProblem(item.problem ?? "", problemColumnSensitive(batch, item.column)),
+        fix: item.fix ?? "",
+      })),
     );
     const ready = counts.create + counts.link;
     const waiting = counts.confirm ? ` ${plural(counts.confirm, "row")} wait for a decision on Preview.` : "";

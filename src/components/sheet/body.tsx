@@ -84,6 +84,7 @@ import { loadSheetGrants } from "@/modules/sheet/grants-load";
 import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder } from "@/components/sheet/designer/intake-builder";
 import { loadSheetIntakeBuilder } from "@/modules/sheet/intake-builder-load";
 import { MessageTemplateDialog, SheetTemplates, TemplatesHeader } from "@/components/sheet/designer/templates";
+import { AddClaimDialog, ClaimReviewDialogs } from "@/components/sheet/designer/source-claims";
 import { OpenOnLoad } from "@/components/sheet/open-on-load";
 import { loadSheetTemplates } from "@/modules/sheet/templates-load";
 import { loadSheetSupportCatalogue } from "@/modules/sheet/support-catalogue-load";
@@ -658,6 +659,12 @@ export async function SheetBody({
               <>
                 <MessageTemplateDialog data={loaded.messageDialog} />
                 {loaded.messageDialog.edit ? <OpenOnLoad key={loaded.messageDialog.edit.id} id={"dlgMt"} /> : null}
+              </>
+            ) : tab === "sources" || tab === "rule" ? (
+              // SRC-01/03: Add claim, and the review dialogs for the chosen version.
+              <>
+                {loaded.data.sources.addClaim ? <AddClaimDialog data={loaded.data.sources.addClaim} /> : null}
+                {loaded.data.rule?.review ? <ClaimReviewDialogs review={loaded.data.rule.review} /> : null}
               </>
             ) : undefined
           }

@@ -174,6 +174,236 @@ export function rowResult(plan: string | null, linkedTo: "person" | "row" | null
   }
 }
 
+// ---------------------------------------------------------------------------
+// MIG-01: the other kinds of import and the sensitivity classification
+// ---------------------------------------------------------------------------
+
+export type MigrationKind = "clients_matters" | "relationships" | "notes" | "tasks" | "key_dates" | "documents" | "opening_balances";
+export type OtherKind = Exclude<MigrationKind, "clients_matters">;
+
+/** What a file can hold, in the order the upload picker lists them. */
+export const MIGRATION_KINDS: { kind: MigrationKind; label: string }[] = [
+  { kind: "clients_matters", label: "Clients and matters" },
+  { kind: "relationships", label: "People relationships" },
+  { kind: "notes", label: "Notes" },
+  { kind: "tasks", label: "Tasks" },
+  { kind: "key_dates", label: "Key dates" },
+  { kind: "documents", label: "Documents (CSV manifest and a ZIP of the files)" },
+  { kind: "opening_balances", label: "Financial opening balances" },
+];
+
+export function isMigrationKind(value: unknown): value is MigrationKind {
+  return typeof value === "string" && MIGRATION_KINDS.some((entry) => entry.kind === value);
+}
+
+export function kindLabel(kind: string): string {
+  return MIGRATION_KINDS.find((entry) => entry.kind === kind)?.label.replace(/ \(.*\)$/, "") ?? "Clients and matters";
+}
+
+export type KindField = { field: string; label: [string, string]; required?: boolean };
+
+/** Each kind's Casevoya fields, in the order Map columns offers them (database: app.migration_kind_columns). */
+export const KIND_FIELDS: Record<OtherKind, KindField[]> = {
+  relationships: [
+    { field: "person", label: ["Person", "name or email"], required: true },
+    { field: "person_birth", label: ["Person", "date of birth (tells people apart)"] },
+    { field: "related", label: ["Related person", "name or email"], required: true },
+    { field: "related_birth", label: ["Related person", "date of birth"] },
+    { field: "relationship", label: ["Relationship", "type"], required: true },
+    { field: "recorded_on", label: ["Relationship", "date recorded"] },
+  ],
+  notes: [
+    { field: "reference", label: ["Matter", "reference"] },
+    { field: "person", label: ["Person", "name or email (when there is no matter column)"] },
+    { field: "person_birth", label: ["Person", "date of birth"] },
+    { field: "body", label: ["Note", "text"], required: true },
+    { field: "author", label: ["Note", "original author"] },
+    { field: "written_on", label: ["Note", "original date"] },
+  ],
+  tasks: [
+    { field: "reference", label: ["Matter", "reference"], required: true },
+    { field: "title", label: ["Task", "title"], required: true },
+    { field: "due_on", label: ["Task", "due date"] },
+    { field: "assignee", label: ["Task", "assignee’s staff email"] },
+    { field: "status", label: ["Task", "status"] },
+    { field: "priority", label: ["Task", "priority"] },
+    { field: "created_on", label: ["Task", "original creation date"] },
+  ],
+  key_dates: [
+    { field: "reference", label: ["Matter", "reference"], required: true },
+    { field: "label", label: ["Date", "what it is"], required: true },
+    { field: "date", label: ["Date", "day"], required: true },
+    { field: "date_kind", label: ["Date", "kind"] },
+    { field: "recorded_on", label: ["Date", "date recorded"] },
+  ],
+  documents: [
+    { field: "file", label: ["Document", "file name in the ZIP"], required: true },
+    { field: "person", label: ["Person", "name or email"], required: true },
+    { field: "person_birth", label: ["Person", "date of birth"] },
+    { field: "reference", label: ["Matter", "reference"], required: true },
+    { field: "document_type", label: ["Document", "type"], required: true },
+    { field: "dated_on", label: ["Document", "original date"] },
+  ],
+  opening_balances: [
+    { field: "reference", label: ["Matter", "reference"], required: true },
+    { field: "balance_kind", label: ["Balance", "kind"], required: true },
+    { field: "amount", label: ["Balance", "amount"], required: true },
+    { field: "currency", label: ["Balance", "currency"] },
+    { field: "as_of", label: ["Balance", "as-of date"], required: true },
+    { field: "description", label: ["Balance", "description"] },
+  ],
+};
+
+/** Fields whose source values map to configured values, per kind (app.migration_kind_values). */
+export const KIND_VALUE_FIELDS: Record<OtherKind, string[]> = {
+  relationships: ["relationship"],
+  notes: [],
+  tasks: ["status", "priority"],
+  key_dates: ["date_kind"],
+  documents: [],
+  opening_balances: ["balance_kind"],
+};
+
+/** The values a source value can map to. The relationship types are public.person_relationship_type's own. */
+export const KIND_VALUE_OPTIONS: Record<string, [string, string][]> = {
+  relationship: [
+    ["spouse", "Spouse"],
+    ["parent", "Parent"],
+    ["child", "Child"],
+    ["payer", "Payer"],
+    ["sponsor", "Sponsor"],
+    ["household", "Household"],
+    ["other", "Other"],
+    ["none", "Not imported"],
+  ],
+  status: [
+    ["open", "Open"],
+    ["done", "Done"],
+    ["cancelled", "Cancelled"],
+  ],
+  priority: [
+    ["low", "Low"],
+    ["normal", "Normal"],
+    ["high", "High"],
+    ["critical", "Critical"],
+  ],
+  date_kind: [
+    ["legal", "Legal deadline"],
+    ["correspondence", "Correspondence"],
+    ["internal", "Internal"],
+  ],
+  balance_kind: [
+    ["receivable", "Receivable (the client owes it)"],
+    ["advance", "Advance (held for the client)"],
+    ["none", "Not imported"],
+  ],
+};
+
+const KIND_HINTS: Record<string, RegExp> = {
+  reference: /file ?#|file (no|number|ref)|^ref|reference|case ?(#|no|number|id)|^matter( ?(#|no|number|id|ref))?$/i,
+  person: /^(client|person|name|full name|applicant|client name|person name|client email|email|e-?mail)$/i,
+  person_birth: /^(dob|d\.o\.b\.?|date of birth|birth ?date|client dob)$/i,
+  related: /^(related( person)?|other person|related to|relative|family member|linked person)$/i,
+  related_birth: /^(related|relative|other) (dob|date of birth)$/i,
+  relationship: /^(relationship|relation|relationship type|type)$/i,
+  recorded_on: /^(recorded|recorded on|date recorded|created|created on|entered)$/i,
+  body: /^(note|notes|text|body|comment|comments|content|details)$/i,
+  author: /^(author|by|written by|staff|user|created by)$/i,
+  written_on: /^(date|note date|written|written on|created|created on|timestamp)$/i,
+  title: /^(task|title|task title|subject|description|to ?do)$/i,
+  due_on: /^(due|due date|due on|deadline)$/i,
+  assignee: /assign|owner|responsible|staff email/i,
+  status: /^(status|state|done)$/i,
+  priority: /^(priority|importance|urgency)$/i,
+  created_on: /^(created|created on|date created|opened)$/i,
+  label: /^(what|label|event|description|name|type of date)$/i,
+  date: /^(date|when|day|expiry|expires|expiry date|due)$/i,
+  date_kind: /^(kind|type|category)$/i,
+  file: /^(file|file ?name|filename|path|document|attachment)$/i,
+  document_type: /^(type|document type|doc type|category|kind|description)$/i,
+  dated_on: /^(date|dated|document date|issued|issue date)$/i,
+  balance_kind: /^(type|kind|balance type|account)$/i,
+  amount: /amount|balance|total|owing|owed/i,
+  currency: /^(currency|cur|ccy)$/i,
+  as_of: /^(as of|as-of|as at|date|balance date|statement date)$/i,
+  description: /^(description|memo|note|details)$/i,
+};
+
+/** Which column each of a kind's fields likely comes from, by heading. Each column is used once; the owner confirms. */
+export function suggestKindColumns(kind: OtherKind, headers: readonly string[]): Record<string, number> {
+  const used = new Set<number>();
+  const result: Record<string, number> = {};
+  for (const { field } of KIND_FIELDS[kind]) {
+    const hint = KIND_HINTS[field];
+    if (!hint) continue;
+    const index = headers.findIndex((header, i) => !used.has(i) && hint.test(header.trim()));
+    if (index >= 0) {
+      used.add(index);
+      result[field] = index;
+    }
+  }
+  return result;
+}
+
+/** A configured value for a source value of a kind's value field, only when it is that value's exact word or label. */
+export function suggestKindValue(field: string, key: string): string | null {
+  for (const [value, label] of KIND_VALUE_OPTIONS[field] ?? []) {
+    if (value === "none") continue;
+    if (key === value || key === valueKey(label.replace(/ \(.*\)$/, ""))) return value;
+  }
+  return null;
+}
+
+export type Sensitivity = "identity" | "narrative" | "health" | "financial";
+
+export const SENSITIVITY_LABELS: Record<Sensitivity, string> = {
+  identity: "Identity number",
+  narrative: "Immigration narrative",
+  health: "Health",
+  financial: "Financial",
+};
+
+const SENSITIVITY_HINTS: [Sensitivity, RegExp][] = [
+  ["identity", /passport|\buci\b|client id|\bsin\b|social insurance|national id|id (no|number|#)|identity|(permit|visa|document|licen[cs]e) ?(no|number|#)/i],
+  ["health", /medical|health|diagnos|condition|disabilit|illness|treatment/i],
+  ["narrative", /narrative|story|background|persecution|refusal|reason for|explanation|personal statement|^notes?$/i],
+  ["financial", /amount|balance|bank|income|salary|\bfunds?\b|payment|\bfees?\b|retainer|trust|invoice|owing|owed/i],
+];
+
+/** Columns whose heading suggests sensitive values, by zero-based index. A suggestion the owner confirms on Map columns. */
+export function suggestSensitivity(headers: readonly string[]): Record<string, Sensitivity> {
+  const result: Record<string, Sensitivity> = {};
+  headers.forEach((header, index) => {
+    const match = SENSITIVITY_HINTS.find(([, hint]) => hint.test(header.trim()));
+    if (match) result[String(index)] = match[0];
+  });
+  return result;
+}
+
+export function readSensitivity(value: unknown): Record<string, Sensitivity> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const result: Record<string, Sensitivity> = {};
+  for (const [key, cls] of Object.entries(value as Record<string, unknown>)) {
+    if (/^\d{1,2}$/.test(key) && typeof cls === "string" && cls in SENSITIVITY_LABELS) result[key] = cls as Sensitivity;
+  }
+  return result;
+}
+
+/** What shows instead of a sensitive value: its class, never the value. */
+export function hiddenValue(cls: Sensitivity): string {
+  return `Hidden · ${SENSITIVITY_LABELS[cls].toLowerCase()}`;
+}
+
+/** A row problem with any quoted value from a sensitive column taken out. */
+export function maskProblem(problem: string, sensitive: boolean): string {
+  return sensitive ? problem.replace(/“[^”]*”/g, "This value") : problem;
+}
+
+/** Cents as the firm reads money: "$1,250.50 CAD". */
+export function money(cents: number, currency: string): string {
+  return `$${(cents / 100).toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+}
+
 export type PlanCounts = {
   rows: number;
   create: number;
@@ -185,6 +415,8 @@ export type PlanCounts = {
   matters: number;
   matters_waiting: number;
   problem_rows: number;
+  /** Records ready to import (create + link); for clients and matters, the matters. */
+  ready: number;
 };
 
 export function planCounts(value: unknown): PlanCounts | null {
@@ -202,6 +434,7 @@ export function planCounts(value: unknown): PlanCounts | null {
     matters: n("matters"),
     matters_waiting: n("matters_waiting"),
     problem_rows: n("problem_rows"),
+    ready: record.ready === undefined ? n("matters") : n("ready"),
   };
 }
 
@@ -254,6 +487,28 @@ export function migrationError(message: string): string {
   if (/no possible match/i.test(message)) return "That row has no possible match any more. Reload the page.";
   if (/migration batch not found/i.test(message)) return "That import isn’t there any more. Reload the page.";
   if (/matched person is no longer there/i.test(message)) return "A matched client record was removed, so the import stopped. Check the preview again.";
+  // MIG-01: the other kinds.
+  const required = /required field \((\w+)\)/i.exec(message);
+  if (required) {
+    const field = Object.values(KIND_FIELDS).flat().find((entry) => entry.field === required[1]);
+    return `Map a column to each required field${field ? `: ${field.label[0].toLowerCase()} ${field.label[1]}` : ""}.`;
+  }
+  if (/map a column to each required field/i.test(message)) return "Map a column to each required field.";
+  if (/choose what the file holds/i.test(message)) return "Choose what the file holds.";
+  if (/kind can't change now|kind can’t change now|doesn't take a ZIP now|doesn’t take a ZIP now/i.test(message)) return "This import has moved on. Reload the page.";
+  if (/add the ZIP of files first/i.test(message)) return "Add the ZIP of files first.";
+  if (/ZIP is larger than 25 MB|file list is not valid/i.test(message)) return "The ZIP is larger than 25 MB or couldn’t be read. Split the files into smaller ZIPs.";
+  if (/stored file doesn't match|stored file doesn’t match|file was not stored for this import|hasn't been checked yet|hasn’t been checked yet/i.test(message)) {
+    return "A file couldn’t be stored as the preview showed, so the import stopped. Sign off again to continue.";
+  }
+  if (/matched record is no longer there/i.test(message)) return "A matched record was removed, so the import stopped. Check the preview again.";
+  if (/the matter is no longer there|the person is no longer there/i.test(message)) return "A matter or person in the file was removed, so the import stopped. Check the preview again.";
+  if (/an internal task needs an active staff owner/i.test(message)) return "An assignee left the team, so the import stopped. Check the preview again.";
+  if (/sample mode; only sample matters/i.test(message)) return "Sample mode changed since the upload. Discard this import and upload the file again.";
+  if (/already reviewed/i.test(message)) return "That opening balance was already reviewed. Reload the page.";
+  if (/a reason is required|note must be 3 to 500/i.test(message)) return "Give a reason of 3 to 500 characters.";
+  if (/importer cannot review/i.test(message)) return "Someone else must review a balance you imported.";
+  if (/billing access denied/i.test(message)) return "Only billing staff of the matter can review opening balances.";
   return safeAccessError(message);
 }
 

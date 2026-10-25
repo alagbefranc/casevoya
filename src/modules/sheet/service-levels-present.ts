@@ -107,12 +107,13 @@ export function serviceLevelRows(report: ServiceLevelReport | null): SecurityRow
     ? null
     : {
         title: "Uptime",
-        detail: "Casevoya doesn’t record uptime monitoring yet, so no uptime figure is shown",
+        detail: "Casevoya doesn’t monitor uptime yet. A figure appears once an external monitor checks the live site",
         badge: { tone: "gr", label: UPTIME_NOT_MEASURED },
       };
   const span = report.months.length;
   const withRequests = report.months.filter((row) => row.received > 0);
-  const lead = "Time from your request reaching Casevoya support to its first reply, by month in your timezone";
+  // ADM-04 decision (2026-10-25): the support response target.
+  const lead = "Time from your request reaching Casevoya support to its first reply, by month in your timezone. Target: first response within 1 business day";
   let support: SecurityRow;
   if (!withRequests.length) {
     support = {
