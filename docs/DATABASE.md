@@ -921,6 +921,28 @@ ADM-04 (gap #186), branch `feat/adm-service-levels`. Additive; no existing funct
 
 Ops wrapper: `scripts/ops/service-levels.mjs` (record, report). Tested in `tests/service-levels.rls.test.ts` and `tests/service-levels-present.test.tsx`.
 
+## Grounded Vo outputs (`20261025420000`, not applied on the live project)
+
+SRC-09 (gap #188), branch `feat/src-grounded-vo`. Additive.
+
+* `vo_runs.citations` (jsonb array, at most 40, 64 kB): the run's checked citations, rebuilt by `finish_vo_run` (`kind`, `id`, `label`; official ones add `source_kind`, `url`, `section`, `form_number`, `form_modified_on`, `checked_on`, `current_to`, `snapshot_sha256`). Never the answer text.
+* `vo_drafts.licensed_review_required` (boolean): the draft cites official content or reads as advice; only a licensed member with a fresh step-up can send it.
+* `app.vo_citable_official_url(url)`: https, allowlisted federal official host (canada.ca, *.canada.ca, *.gc.ca), not a site root or landing page.
+* `app.vo_advice_like(text)`: the advice-like word test (mirrored in `src/modules/vo/grounding.ts`).
+* `app.vo_letter_official_items(org, matter)`: REDEFINED from `20261025240100_vo_letter_drafts.sql`: the same rows, kept only when `app.vo_citable_official_url(source_url)`.
+* `app.vo_ask_run(run)`: the caller's own running Ask Vo run on a matter they can read (MFA, active firm), else `vo denied`.
+* `public.vo_run_facts(run)`, `public.vo_run_official_content(run)`: Ask Vo's approved facts (with how many the firm's category switches hide) and approved official content with its source, for the run's own person while it runs.
+* `public.finish_vo_run`: REDEFINED from `20261019207100_vo_drafts.sql` (same signature): also accepts `document_version` (linked, not removed, on the run's matter), `fact` (an approved fact of the matter in an allowed category) and `official` (`source_kind` + id in `app.vo_letter_official_items`) citations; anything else refuses the save; stores the rebuilt citations on the run (and a short form on the draft); sets `licensed_review_required`; audit `vo.run_finished` adds `official_sources` and `licensed_review_required`.
+* `public.send_vo_draft`: REDEFINED from `20261019207100_vo_drafts.sql`: a flagged draft, or text that reads as advice, needs `app.actor_is_licensed` and `app.require_licensed_staff(org, true)` (step-up); audit `vo.draft_sent` adds `licensed_review`.
+
+Tested in `tests/vo-grounded.rls.test.ts`, `tests/vo-grounding.test.ts`, `tests/vo-grounded-present.test.tsx`.
+
+### Vo cites live rule versions and refuses claims-rule homepages (`20261025420100`, not applied on the live project; apply after `20261025400000` and `20261025420000`)
+
+SRC-09 on top of the SRC-03 publication gate. Additive.
+
+* Redefined `app.vo_citable_official_url` (from `20261025420000`): also false whenever `app.official_claim_url` refuses the URL (SRC-01 homepage rule); still federal-only.
+* Redefined `app.vo_letter_official_items` (from `20261025420000`): rule versions through `app.rule_version_is_live` instead of the inline status and date check (same semantics, one definition). Register rows keep `status = 'approved'`.
 ## Pinned rule versions and the support catalogue (`20261025410000`, not applied on the live project)
 
 SRC-05 and SRC-12 (gap #188), branch `feat/src-pins-scope`. Additive; no existing function is redefined (`app.select_matter_program`, `app.pack_is_selectable`, `public.create_client_matter` are called as they are). Nothing from IRCC is seeded.
@@ -963,3 +985,7 @@ SRC-01, SRC-02, SRC-03 (gap #188), branch `feat/src-claims-review`. Builds on th
 * `public.suspend_rule_version(version, expected_version, reason)`: licensed (aal2), live versions only, reason required; audited `rule.version_suspended`.
 
 Capture script: `scripts/ops/capture-official-claims.mjs` writes `src/modules/content-governance/captured-claims.json` (drafts offered in Add claim). Tested in `tests/src-claims-review.rls.test.ts` and `tests/src-claims-present.test.tsx`; `tests/source-governance.test.ts`, `tests/owner-licence-gates.rls.test.ts` and `tests/owner-full-access.rls.test.ts` now write approved reviews from a maintenance session.
+
+## Program selection accepts only a live pack (`20261025430000`, not applied on the live project)
+
+SRC follow-up (Francis, 2026-10-25). **Redefines** `app.pack_is_selectable(uuid, uuid)` (only definition `20261017170000_matter_lifecycle.sql`): the status test `status in (published, review_due)` becomes `app.rule_pack_is_live(pack.id)` (`20261025410100`), so `select_matter_program` and its callers refuse a review-due pack or one holding a rule version that is not live. Otherwise unchanged. Tested in `tests/src-pins-scope.rls.test.ts`.

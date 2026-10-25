@@ -43,9 +43,11 @@ browser ── server action (app Worker, casevoya-app)
 | --- | --- | --- |
 | `read_matter_summary` | reply, document request, ask | matter, open tasks, deadlines (verified or tentative), open document requests (explanations as data) |
 | `read_person` | all | display names and roles on the matter only |
-| `read_documents_index` | ask | document purposes, filtered by the owner's per-kind switches; no contents |
+| `read_documents_index` | ask | document purposes, filtered by the owner's per-kind switches; no contents; each cited by its current version as `[R#]` |
 | `read_messages_thread` | reply, document request | the run's own conversation (12 latest), only if "Client messages" is on |
-| `search_approved_sources` | reply, ask | titles, publishers, links of verified, current `official_sources`; no content |
+| `search_approved_sources` | reply | titles, publishers, links of verified, current `official_sources` on deep federal official pages; no content |
+| `read_intake_facts` | ask | the matter's approved facts (`vo_run_facts`) as `[F#]`, values as data |
+| `read_official_content` | ask | the firm's approved official content from deep canada.ca / gc.ca pages (`vo_run_official_content`) as `[S#]`, text as data |
 | `find_free_slots` | reply | the firm's next free consultation times (`staff_booking_availability` + the app's slot engine) and the published booking page link |
 | `save_draft` | reply, document request | the only write: keeps the guarded draft for `finish_vo_run` (status draft) |
 | `read_approved_facts` | letter | the matter's approved facts (`vo_letter_facts`: reviewed, latest intake answers in an allowed category) as `[F#]`, values as data |
@@ -53,6 +55,10 @@ browser ── server action (app Worker, casevoya-app)
 | `save_letter_draft` | letter | the letter task's only write: the letter after `src/modules/vo/letter-guard.ts`, saved by `save_vo_letter_draft` as a DRAFT matter letter |
 
 There is no send, email, submit or update tool.
+
+## Grounded answers (SRC-09, 2026-10-25)
+
+Ask Vo (prompt version `ask-2`): every record, approved fact and approved official item a tool returns carries a marker (`[R#]`, `[F#]`, `[S#]`); those markers are the run's allowed set. `src/modules/vo/grounding.ts` keeps only answer sentences that cite one, drops markers the run never handed out, needs an `[S#]` for a fee, eligibility point, processing time or rule, and abstains ("Vo can't answer this from the file or approved sources") when nothing is left. `finish_vo_run` checks each citation again and keeps them on `vo_runs.citations`. Advice-like reply drafts are sent only by a licensed member (`send_vo_draft`). Needs a rebuild and redeploy of this service.
 
 ## Letter drafts (`letter_draft`, AI-01, 2026-10-24)
 

@@ -693,8 +693,14 @@ describe("SRC-05 / SRC-12 on the SRC-03 gate: one definition of live, one homepa
   it("does not count a review-due pack, as review-due rule versions are not live", async () => {
     const w = await world();
     await asMaintenance(db);
+    const selectable = async () =>
+      (await db.query<{ ok: boolean }>(`select app.pack_is_selectable($1, $2) as ok`, [w.packV1, w.ctx.orgId])).rows[0].ok;
+    expect(await selectable()).toBe(true);
     await db.query(`update public.rule_pack_versions set status = 'review_due' where id = $1`, [w.packV1]);
     expect((await firmCatalogue(w.ctx)).programs.find((row) => row.key === w.program)).toBeUndefined();
+    // The direct program-selection path follows the same rule (Francis, 2026-10-25).
+    await asMaintenance(db);
+    expect(await selectable()).toBe(false);
   });
 
   it("refuses the same homepages as app.official_claim_url, and keeps provincial deep pages", async () => {
