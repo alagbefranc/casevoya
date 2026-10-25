@@ -10336,6 +10336,108 @@ export type Database = {
         }
         Relationships: []
       }
+      service_notice_dismissals: {
+        Row: {
+          dismissed_at: string
+          notice_id: string
+          organization_id: string
+          user_id: string
+        }
+        Insert: {
+          dismissed_at?: string
+          notice_id: string
+          organization_id: string
+          user_id: string
+        }
+        Update: {
+          dismissed_at?: string
+          notice_id?: string
+          organization_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      service_notice_targets: {
+        Row: {
+          created_at: string
+          notice_id: string
+          organization_id: string
+        }
+        Insert: {
+          created_at?: string
+          notice_id: string
+          organization_id: string
+        }
+        Update: {
+          created_at?: string
+          notice_id?: string
+          organization_id?: string
+        }
+        Relationships: []
+      }
+      service_notices: {
+        Row: {
+          audience: string
+          body: string
+          created_at: string
+          created_by: string
+          ends_at: string | null
+          id: string
+          kind: string
+          published_at: string | null
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          starts_at: string
+          status: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          audience: string
+          body: string
+          created_at?: string
+          created_by: string
+          ends_at?: string | null
+          id?: string
+          kind: string
+          published_at?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          starts_at?: string
+          status?: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          audience?: string
+          body?: string
+          created_at?: string
+          created_by?: string
+          ends_at?: string | null
+          id?: string
+          kind?: string
+          published_at?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          starts_at?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
       session_revocations: {
         Row: {
           created_at: string
@@ -14174,6 +14276,38 @@ export type Database = {
         Returns: undefined
       }
       dismiss_portal_notice: { Args: { p_notice_id: string }; Returns: undefined }
+      dismiss_service_notice: { Args: { p_notice_id: string }; Returns: boolean }
+      post_service_notice: {
+        Args: {
+          p_acting_admin?: string | null
+          p_body: string
+          p_ends_at?: string | null
+          p_kind: string
+          p_organization_ids?: string[] | null
+          p_publish?: boolean
+          p_severity: string
+          p_starts_at?: string | null
+          p_title: string
+        }
+        Returns: string
+      }
+      resolve_service_notice: {
+        Args: { p_acting_admin?: string | null; p_notice_id: string; p_resolution_note: string }
+        Returns: string
+      }
+      update_service_notice: {
+        Args: {
+          p_acting_admin?: string | null
+          p_body?: string | null
+          p_ends_at?: string | null
+          p_notice_id: string
+          p_publish?: boolean
+          p_severity?: string | null
+          p_starts_at?: string | null
+          p_title?: string | null
+        }
+        Returns: string
+      }
       dispute_evidence_context: {
         Args: {
           p_dispute_id: string
