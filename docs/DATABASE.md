@@ -769,7 +769,7 @@ Tested in `tests/sec-subscription-cancellation.rls.test.ts`, `tests/subscription
 
 ## Letters on a matter and Vo letter drafts (`20261025240000`, `20261025240100`, not applied on the live project)
 
-AI-01 (gap #183), branch `feat/ai-letter-drafts`. Apply in order: `20261025240000_vo_letter_enum.sql` (enum value, its own migration), then `20261025240100_vo_letter_drafts.sql`.
+AI-01 (gap #183), branch `feat/ai-letter-drafts`. Apply in order: `20261025240000_vo_letter_enum.sql` (enum value, its own migration), then `20261025240100_vo_letter_drafts.sql`. Then `20261025240200_vo_settings_keep_read_on_upload.sql`, in the same go: it redefines `set_vo_settings` from DOC-05's body (`20261025000000`, live on prod) plus `letter_drafts`, and adds `vo_settings.read_on_upload` if missing, so neither switch is dropped.
 
 * `vo_run_kind` gains `letter_draft`. `vo_runs_thread_kind_check` is replaced so a letter run, like Ask Vo and a document reading, has no conversation.
 * `vo_settings.letter_drafts` (boolean, default true): the owner's "First drafts of letters from approved facts" switch.
