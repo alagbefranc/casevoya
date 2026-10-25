@@ -10,6 +10,7 @@ import { parseServiceLevelReport, serviceLevelRows } from "@/modules/sheet/servi
 import { continuityDialog, memberDialog, offboardDialog, parseOffboardFacts, type OffboardFacts } from "@/modules/sheet/settings-staff-admin-present";
 import { transferViews, type FirmTransfersData } from "@/modules/sheet/firm-transfers-present";
 import { loadMembers } from "@/modules/sheet/staff-load";
+import { loadServiceNoticeSecurityRow } from "@/modules/sheet/service-notices-load";
 import { EXPIRED_SHOWN_DAYS, type PendingInvitation } from "@/modules/sheet/staff-present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
@@ -137,7 +138,7 @@ export async function loadSheetSettingsSecurity(staff: SheetStaff, now: Date = n
   const org = staff.organizationId;
   const owner = staff.role === "firm_owner";
   const since = new Date(now.getTime() - 30 * 86_400_000).toISOString();
-  const [chrome, header, members, security, events, support, firmLimit, largeUploads, serviceLevels] = await Promise.all([
+  const [chrome, header, members, security, events, support, firmLimit, largeUploads, serviceLevels, noticeRow] = await Promise.all([
     loadSheetChrome(staff, "/sheet/settings"),
     loadHeader(supabase, staff, "security"),
     loadMembers(supabase, org),
@@ -156,6 +157,8 @@ export async function loadSheetSettingsSecurity(staff: SheetStaff, now: Date = n
     supabase.from("product_settings").select("value").eq("key", "documents.large_uploads_enabled").maybeSingle(),
     // ADM-04: the firm's monthly service-level report (firm owner).
     owner ? supabase.rpc("service_level_report", { p_organization_id: org, p_months: 6 }) : null,
+    // ADM-04: Service notices from Casevoya, with the link to their history.
+    loadServiceNoticeSecurityRow(supabase, now),
   ]);
   const largeAllowed = (largeUploads.data?.value as { enabled?: unknown } | null)?.enabled === true;
   const supportAccess = support && !support.error ? readSupportAccess(support.data) : null;
@@ -171,5 +174,6 @@ export async function loadSheetSettingsSecurity(staff: SheetStaff, now: Date = n
     idleMinutes: firmLimit.error ? null : (firmLimit.data?.staff_idle_timeout_minutes ?? null),
     serviceLevels: serviceLevelRows(serviceLevels && !serviceLevels.error ? parseServiceLevelReport(serviceLevels.data) : null),
   });
+  page.rows.push(noticeRow);
   return { chrome, header, page };
 }

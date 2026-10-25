@@ -10,6 +10,7 @@ import { FIRM_SETTINGS } from "@/modules/sheet/home-controls";
 import { voDraftsWaiting } from "@/modules/sheet/vo-present";
 import { loadSheetSetup } from "@/modules/sheet/setup-load";
 import { loadContinuityBanner } from "@/modules/sheet/sec-load";
+import { loadServiceNoticeBanner } from "@/modules/sheet/service-notices-read";
 
 export type SheetChrome = { sidebar: SidebarData; top: TopBarData; statusbar: StatusbarData };
 
@@ -54,9 +55,11 @@ export async function memberNames(supabase: Client, org: string): Promise<Map<st
  * member. Features without a backend yet (leads, finance exceptions) show no count; Vo drafts count those waiting.
  */
 export async function loadSheetChrome(staff: SheetStaff, active: string): Promise<SheetChrome> {
-  const [chrome, notifications] = await Promise.all([baseChrome(staff, active), unreadNotifications(staff)]);
+  const [chrome, notifications, notice] = await Promise.all([baseChrome(staff, active), unreadNotifications(staff), loadServiceNoticeBanner(staff)]);
   // The sidebar's Notifications badge on every page, not only on Notifications.
   chrome.sidebar.counts = { ...chrome.sidebar.counts, notifications };
+  // ADM-04: Casevoya's current service notice, on every staff page until the person dismisses it.
+  chrome.statusbar.notice = notice;
   return chrome;
 }
 

@@ -48,6 +48,8 @@ import { DeletionDialog, RetentionDeletionPanels } from "@/components/sheet/desi
 import { CancelSubscriptionDialog, ContinuityPanel, EndArrangementDialog } from "@/components/sheet/designer/sec-continuity";
 import { loadRetentionDeletion } from "@/modules/sheet/sec-load";
 import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
+import { SheetServiceNotices } from "@/components/sheet/designer/service-notices";
+import { loadServiceNoticeHistory } from "@/modules/sheet/service-notices-load";
 import { SheetTasks, TaskEditDialog, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
 import { ComposioDialog, IntegrationsSettingsHeader, SheetIntegrations, SheetNotificationPrefs, WhatsAppDialog } from "@/components/sheet/designer/settings-integrations";
 import { loadSheetSettingsIntegrations } from "@/modules/sheet/settings-integrations-load";
@@ -423,6 +425,17 @@ export async function SheetBody({
         >
           {loaded.integrations ? <SheetIntegrations data={loaded.integrations} /> : null}
           {loaded.notifications ? <SheetNotificationPrefs data={loaded.notifications} /> : null}
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Settings > Service notices (ADM-04): Casevoya's notices to this firm, current and past (reached from Security and the banner).
+  if (page === "settings" && query.tab === "notices" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadServiceNoticeHistory(access.staff);
+    return (
+      <SheetScreen key={"settings-notices"} page={page}>
+        <SheetFrame sidebar={loaded.chrome.sidebar} header={<SettingsHeader data={loaded.header} />} statusbar={loaded.chrome.statusbar}>
+          <SheetServiceNotices data={loaded.page} />
         </SheetFrame>
       </SheetScreen>
     );

@@ -144,6 +144,7 @@ import { runLetterApprove, runLetterDiscard, runLetterNew, runLetterRevise, runV
 import { mountRetentionSlider, runRetentionSave } from "./retention-act";
 import { mountSubscription, runSubscriptionAct } from "./subscription-act";
 import { runSecAct } from "./sec-acts";
+import { runServiceNoticeDismiss } from "./service-notice-act";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
 import {
   mountIntegrations,
@@ -863,6 +864,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (subscriptionAct && root.contains(subscriptionAct)) {
         event.preventDefault();
         busyRun(subscriptionAct, () => runSubscriptionAct(subscriptionAct, openDialog));
+        return;
+      }
+      // ADM-04 (any staff): Dismiss on Casevoya's service notice banner, for this person only.
+      const noticeDismiss = target.closest<HTMLElement>("[data-notice-dismiss]");
+      if (noticeDismiss && root.contains(noticeDismiss)) {
+        event.preventDefault();
+        busyRun(noticeDismiss, () => runServiceNoticeDismiss(noticeDismiss, router));
         return;
       }
       // SEC-07 / SEC-10 (firm owner): Approve deletion, Cancel subscription, after the window, firm index.
