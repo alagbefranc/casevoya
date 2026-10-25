@@ -1,5 +1,5 @@
 -- MIG-01 (gap #187): the staged import takes more kinds of record, and the mapping step classifies
--- sensitive columns. Schema only; the functions are in 20261025370100 and 20261025370200.
+-- sensitive columns. Schema only; the functions are in 20261025385100 and 20261025385200.
 -- Additive: new columns, two new tables, and one widened check.
 --
 -- Kinds (migration_batches.kind). One file holds one kind. Every kind goes through the same pipeline

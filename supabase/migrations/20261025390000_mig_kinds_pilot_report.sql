@@ -4,10 +4,10 @@
 -- Order: this runs after 20261025380000_mig_pilot_signoff_report.sql because it reads and writes
 -- the pilot and report columns that migration adds to migration_batches (pilot_size,
 -- pilot_completed_at, pilot_counts, full_run_started_at, commit_verified_at, run_report) and
--- migration_rows.in_pilot, by name. MIG-01's own migrations (20261025370000 to 20261025370200)
+-- migration_rows.in_pilot, by name. MIG-01's own migrations (20261025385000 to 20261025385200)
 -- don't need them and apply before it.
 --
--- Redefines (each copied from its latest definition, 20261025370200_mig_import_kinds_commit.sql):
+-- Redefines (each copied from its latest definition, 20261025385200_mig_import_kinds_commit.sql):
 --   app.migration_kind_after_chunk  the pilot of a non-client batch ends here, counted in records
 --                                   (it no longer hands that to app.migration_after_chunk, which
 --                                   counts matters and people and would set the clients' reference
@@ -168,7 +168,7 @@ end;
 $$;
 revoke all on function app.migration_kind_after_chunk(uuid, uuid) from public, anon, authenticated;
 
--- Latest definition: 20261025370200_mig_import_kinds_commit.sql. Changed: MIG-02's pilot gate
+-- Latest definition: 20261025385200_mig_import_kinds_commit.sql. Changed: MIG-02's pilot gate
 -- (only a pilot's file during the pilot; nothing between the pilot's end and the full run).
 create or replace function public.record_migration_document(p_org uuid, p_batch uuid, p_row integer, p_version uuid)
 returns jsonb

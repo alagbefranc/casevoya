@@ -206,7 +206,7 @@ describe("app.firm_today", () => {
       "app.gov_finish_verification",
       "app.record_government_correspondence",
       "app.record_decision",
-      // app.migration_evaluate dispatches by kind since MIG-01 (20261025370100): its clients body
+      // app.migration_evaluate dispatches by kind since MIG-01 (20261025385100): its clients body
       // moved unchanged to migration_evaluate_clients; the other kinds use migration_evaluate_kind.
       "app.migration_evaluate_clients",
       "app.migration_evaluate_kind",
