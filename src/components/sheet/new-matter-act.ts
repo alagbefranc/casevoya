@@ -40,9 +40,15 @@ export async function runNewMatter(button: HTMLElement, router: Router) {
     toast2(result.error, { kind: "bad", sub: "Nothing was saved." });
     return;
   }
+  // SRC-12: an unsupported program opens with no rule pack, checklist or rules; say so plainly.
+  const unsupported = result.supported === false;
   toast2(result.reference ? `Matter ${result.reference} created` : "Matter created", {
-    kind: "ok",
-    sub: result.isSample ? "Saved as a sample (practice) matter while the firm is in sample mode. Stage: Engagement pending." : "Stage: Engagement pending.",
+    kind: unsupported ? "warn" : "ok",
+    sub: unsupported
+      ? "This program isn’t supported yet: no approved rule pack, so no checklist or rules were added and none came from another program."
+      : result.isSample
+        ? "Saved as a sample (practice) matter while the firm is in sample mode. Stage: Engagement pending."
+        : "Stage: Engagement pending.",
   });
   router.push(`/sheet/matters/${result.id}`);
 }

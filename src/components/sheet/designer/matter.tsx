@@ -18,6 +18,8 @@ import { MatterIntake, type MatterIntakeData } from "./matter-intake";
 import { MatterWork, type MatterWorkData } from "./billing-live";
 import { InboundAddress, type InboundAddressData } from "./inbound-filing";
 import { MatterLetters, type LetterAttrs, type MatterLettersData } from "./matter-letters";
+import { MatterRulePin } from "./matter-rule-pin";
+import type { MatterRulePinData } from "@/modules/sheet/rule-pin-present";
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
 import type { PersonHistoryPanel } from "@/modules/sheet/person-history-present";
 import type { PersonEditData } from "@/modules/sheet/edit-person";
@@ -228,6 +230,8 @@ export type MatterOverviewData = {
   events: MatterEvent[];
   /** Live: events come from the firm's audit log, which only the firm owner can read. */
   eventsOwnerOnly?: boolean;
+  /** Live only (SRC-05, SRC-12): the pinned rule pack and IRCC form versions, or the honest "No approved rule pack". */
+  rules?: MatterRulePinData | null;
 };
 
 const GROW = "@keyframes grow{from{transform:scaleX(0)}}";
@@ -427,6 +431,7 @@ export function MatterOverview({ data }: { data: MatterOverviewData }) {
           </div>
         </div>
       </div>
+      {data.rules ? <MatterRulePin data={data.rules} /> : null}
       <h3 className={"sub rv"} style={css({ "--i": "5" })}>
         <Icon name={"history"} cls={"ic s"} />
         {" Recent events"}

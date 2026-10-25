@@ -87,6 +87,8 @@ import { MessageTemplateDialog, SheetTemplates, TemplatesHeader } from "@/compon
 import { AddClaimDialog, ClaimReviewDialogs } from "@/components/sheet/designer/source-claims";
 import { OpenOnLoad } from "@/components/sheet/open-on-load";
 import { loadSheetTemplates } from "@/modules/sheet/templates-load";
+import { loadSheetSupportCatalogue } from "@/modules/sheet/support-catalogue-load";
+import { SheetSupportCatalogue } from "@/components/sheet/designer/support-catalogue";
 import { AutomationsDialog, AutomationsHeader, AutomationsSettings, SheetAutomations } from "@/components/sheet/designer/automations";
 import { loadSheetAutomations } from "@/modules/sheet/automations-load";
 import { SheetScreen } from "@/components/sheet/screen";
@@ -648,6 +650,19 @@ export async function SheetBody({
       <SheetScreen page={page}>
         <SheetFrame sidebar={loaded.chrome.sidebar} header={<AiHeader data={loaded.data} fromSettings={query.from === "settings"} />} statusbar={loaded.chrome.statusbar}>
           <SheetAi data={loaded.data} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
+  // Practice > Templates > What Casevoya supports (SRC-12): jurisdictions, programs and case types, supported only with an approved, sourced pack.
+  if (page === "templates" && query.tab === "support" && (access.kind === "live" || access.kind === "sample")) {
+    // DES-04: the catalogue cites program packs and their official pages; say when one is stale.
+    const [loaded, stale] = await Promise.all([loadSheetSupportCatalogue(access.staff), loadSourceStaleness(access.staff, { kind: "firm" })]);
+    return (
+      <SheetScreen key={"templates-support"} page={page}>
+        <SheetFrame sidebar={loaded.chrome.sidebar} header={<TemplatesHeader data={loaded.header} />} statusbar={loaded.chrome.statusbar}>
+          {stale ? <StateAlert data={stale} /> : null}
+          <SheetSupportCatalogue data={loaded.page} />
         </SheetFrame>
       </SheetScreen>
     );
