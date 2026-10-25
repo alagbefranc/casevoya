@@ -9,6 +9,9 @@
  * columns; Discard beside Continue; a Possible matches table with Same person / Different people
  * on Preview; an `alert ok` when no row has a problem; on Sign off, rows-checked and checksum lines,
  * the result after import, Roll back with the reasons it can't run, and the firm's earlier imports.
+ * MIG-02 (live only, from Designer parts): `.fld` fields in the summary panel (pilot size and the
+ * system the file came from, or the pilot sign-off note), an `.alert` saying where the pilot
+ * stands, a table of the pilot's records, and a Run report panel with its downloads.
  * Buttons carry `data-mig-act` (use-sheet runs them against /api/migration).
  */
 import type { CSSProperties } from "react";
@@ -49,12 +52,34 @@ export type ErrorRow = { row: string; column: string; problem: string; fix: stri
 export type SummaryRow = { term: string; value: string | Pair2 };
 export type HistoryRow = { key: string; file: string; when: string; rows: string; state: MigrationBadge; href: string };
 
+export type SignoffField = {
+  id: string;
+  label: string;
+  hint?: string;
+  kind: "number" | "text" | "textarea";
+  attrs: Attrs;
+  value: string;
+  min?: number;
+  max?: number;
+  maxLength?: number;
+};
+export type PilotRecordRow = { kind: string; name: string; row: string; reference: string; href: string | null };
+export type SignoffNotice = { tone: "ok" | "warn" | "bad"; title: string; copy: string };
+
 export type SignoffData = {
   summary: SummaryRow[];
   /** Designer: the data-run button. Live: Sign off and import, or nothing once imported. */
   action: { label: string; attrs: Attrs } | null;
-  rollback?: { attrs: Attrs | null; reasons: string[] } | null;
+  rollback?: { attrs: Attrs | null; reasons: string[]; label?: string } | null;
   history?: HistoryRow[];
+  /** Live (MIG-02): the pilot's size and source system, or the pilot sign-off note. */
+  fields?: SignoffField[];
+  /** Live (MIG-02): where the pilot stands. */
+  notice?: SignoffNotice | null;
+  /** Live (MIG-02): the records the pilot created, to check before signing off. */
+  pilot?: { rows: PilotRecordRow[]; more: string | null } | null;
+  /** Live (MIG-02): the run report once the import is done, with its downloads. */
+  report?: { rows: SummaryRow[]; downloads: { label: string; href: string }[] } | null;
 };
 
 export type MigrationData = {
@@ -426,6 +451,36 @@ function ErrorsTab({ data }: { data: MigrationData }) {
   );
 }
 
+function Field({ field }: { field: SignoffField }) {
+  const described = field.hint ? `${field.id}-h` : undefined;
+  return (
+    <div className={"fld"}>
+      <label htmlFor={field.id}>{field.label}</label>
+      {field.hint ? (
+        <small className={"hint"} id={described}>
+          {field.hint}
+        </small>
+      ) : null}
+      {field.kind === "textarea" ? (
+        <textarea className={"ta"} id={field.id} rows={3} maxLength={field.maxLength} aria-describedby={described} defaultValue={field.value} {...field.attrs}></textarea>
+      ) : (
+        <input
+          className={"inp"}
+          id={field.id}
+          type={field.kind}
+          min={field.min}
+          max={field.max}
+          maxLength={field.maxLength}
+          aria-describedby={described}
+          defaultValue={field.value}
+          autoComplete={"off"}
+          {...field.attrs}
+        />
+      )}
+    </div>
+  );
+}
+
 function SignoffTab({ data }: { data: MigrationData }) {
   const signoff = data.signoff;
   return (
@@ -447,6 +502,13 @@ function SignoffTab({ data }: { data: MigrationData }) {
                   </div>
                 ))}
               </dl>
+              {signoff.fields?.length ? (
+                <div style={{ marginTop: "12px" }}>
+                  {signoff.fields.map((field) => (
+                    <Field key={field.id} field={field} />
+                  ))}
+                </div>
+              ) : null}
               {signoff.action || signoff.rollback?.attrs ? (
                 <div className={"fp-row"} style={{ marginTop: "12px" }}>
                   {signoff.action ? (
@@ -457,13 +519,79 @@ function SignoffTab({ data }: { data: MigrationData }) {
                   ) : null}
                   {signoff.rollback?.attrs ? (
                     <button className={"btn sm"} {...signoff.rollback.attrs}>
-                      {"Roll back this import"}
+                      {signoff.rollback.label ?? "Roll back this import"}
                     </button>
                   ) : null}
                 </div>
               ) : null}
             </div>
           </section>
+          {signoff.notice ? (
+            <div className={`alert ${signoff.notice.tone} rv`} style={{ marginTop: "12px", ...i(2) }}>
+              <Icon name={signoff.notice.tone === "ok" ? "check-circle" : "alert"} />
+              <div>
+                <b>{signoff.notice.title}</b>
+                {signoff.notice.copy}
+              </div>
+            </div>
+          ) : null}
+          {signoff.pilot ? (
+            <div className={"tw rv"} role={"region"} aria-label={"Pilot records"} tabIndex={0} style={{ marginTop: "12px", ...i(2) }}>
+              <table className={"t"}>
+                <caption className={"sr"}>{"Pilot records"}</caption>
+                <thead>
+                  <tr>
+                    <th scope={"col"}>{"Record"}</th>
+                    <th scope={"col"}>{"Kind"}</th>
+                    <th scope={"col"}>{"Row"}</th>
+                    <th scope={"col"}>{"Old reference"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {signoff.pilot.rows.map((row, index) => (
+                    <tr key={`${index}-${row.kind}-${row.row}`}>
+                      <td>{row.href ? <a href={row.href}>{row.name}</a> : row.name}</td>
+                      <td>{row.kind}</td>
+                      <td>{row.row}</td>
+                      <td>{row.reference}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {signoff.pilot.more ? (
+                <p className={"mu"} style={{ fontSize: "13px", margin: "8px 0 0" }}>
+                  {signoff.pilot.more}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {signoff.report ? (
+            <section className={"panel rv"} style={{ marginTop: "12px", ...i(2) }}>
+              <h2>
+                <Icon name={"signature"} />
+                {"Run report"}
+              </h2>
+              <div className={"fp-pad"}>
+                <dl className={"fp-dl"}>
+                  {signoff.report.rows.map((row) => (
+                    <div key={row.term}>
+                      <dt>{row.term}</dt>
+                      <dd>{typeof row.value === "string" ? row.value : <Pair value={row.value} />}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {signoff.report.downloads.length ? (
+                  <div className={"fp-row"} style={{ marginTop: "12px" }}>
+                    {signoff.report.downloads.map((link) => (
+                      <a key={link.href} className={"btn sm"} href={link.href} download>
+                        {link.label}
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
           {signoff.rollback?.reasons.length ? (
             <>
               <div className={"alert bad rv"} style={{ marginTop: "12px", ...i(2) }}>

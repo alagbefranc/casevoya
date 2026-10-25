@@ -94,11 +94,12 @@ async function upload(button: HTMLElement, root: HTMLElement, router: Router) {
   router.push(withTab("map", typeof result.data.id === "string" ? result.data.id : ""));
 }
 
-async function commit(button: HTMLElement, router: Router) {
+async function commit(button: HTMLElement, router: Router, first?: Reply) {
   const org = button.dataset.org ?? "";
   const batch = button.dataset.batch ?? "";
+  let result = first;
   for (;;) {
-    const result = await post("commit", { org, batch });
+    result ??= await post("commit", { org, batch });
     if (!result.ok) {
       if (result.data.stepUp) return stepUp(batch);
       toast2("Import stopped", { kind: "warn", sub: errorOf(result.data) });
@@ -108,8 +109,48 @@ async function commit(button: HTMLElement, router: Router) {
     const remaining = n(result.data.remaining);
     if (remaining <= 0) break;
     toast2("Importing", { sub: `${remaining.toLocaleString("en-CA")} matters to go.` });
+    result = undefined;
   }
-  toast2("Import finished", { kind: "ok", sub: "A copy of the report is in the audit trail." });
+  // MIG-02: a pilot stops at its last matter and waits for the firm owner's sign-off.
+  if (result.data.status === "pilot_done") toast2("Pilot finished", { kind: "ok", sub: "Check its records below, then sign off. The full import waits for it." });
+  else toast2("Import finished", { kind: "ok", sub: "The run report is on Sign off. A copy is in the audit trail." });
+  router.refresh();
+}
+
+/** MIG-02: run the pilot with the size and source system on Sign off. */
+async function pilot(button: HTMLElement, root: HTMLElement, router: Router) {
+  const org = button.dataset.org ?? "";
+  const batch = button.dataset.batch ?? "";
+  const sizeInput = root.querySelector<HTMLInputElement>("input[data-mig-pilot]");
+  const size = Number(sizeInput?.value ?? "");
+  const max = Number(sizeInput?.max || 50);
+  if (!Number.isInteger(size) || size < 1 || size > max) {
+    toast2("Check the pilot size", { kind: "warn", sub: `A pilot is 1 to ${max} matters.` });
+    return;
+  }
+  const system = root.querySelector<HTMLInputElement>("input[data-mig-system]")?.value.trim() ?? "";
+  if (!window.confirm(`Run a pilot of the first ${size} ${size === 1 ? "matter" : "matters"}?\n\nThe pilot creates real matters and people. You check them and sign off before the rest can be imported, or roll the pilot back.`)) return;
+  const result = await post("pilot", { org, batch, size, ...(system ? { system } : {}) });
+  return commit(button, router, result);
+}
+
+/** MIG-02: the firm owner signs the pilot off, with a note. */
+async function signoff(button: HTMLElement, root: HTMLElement, router: Router) {
+  const org = button.dataset.org ?? "";
+  const batch = button.dataset.batch ?? "";
+  const note = root.querySelector<HTMLTextAreaElement>("textarea[data-mig-note]")?.value.trim() ?? "";
+  if (note.length < 3 || note.length > 1000) {
+    toast2("Add a note", { kind: "warn", sub: "Say what you checked in the pilot’s records (3 to 1,000 characters)." });
+    return;
+  }
+  if (!window.confirm("Sign off the pilot? The full import can then create the rest of the matters.")) return;
+  const result = await post("signoff", { org, batch, note });
+  if (!result.ok) {
+    if (result.data.stepUp) return stepUp(batch);
+    toast2("Not signed off", { kind: "warn", sub: errorOf(result.data) });
+    return;
+  }
+  toast2("Pilot signed off", { kind: "ok", sub: "Run the full import next." });
   router.refresh();
 }
 
@@ -150,6 +191,8 @@ export async function runMigrationAct(button: HTMLElement, root: HTMLElement, ro
   const batch = button.dataset.batch ?? "";
 
   if (act === "upload") return upload(button, root, router);
+  if (act === "pilot") return pilot(button, root, router);
+  if (act === "signoff") return signoff(button, root, router);
 
   if (act === "map") {
     const read = readMapping(root);
@@ -184,7 +227,8 @@ export async function runMigrationAct(button: HTMLElement, root: HTMLElement, ro
   if (act === "commit") {
     // Signing off creates real matters and people: it asks first, like Roll back and Discard.
     const summary = [...root.querySelectorAll<HTMLElement>(".fp-dl dt")].map((term) => `${term.textContent}: ${term.nextElementSibling?.textContent ?? ""}`).slice(0, 3).join("\n");
-    if (!window.confirm(`Sign off and import these records?${summary ? `\n\n${summary}` : ""}\n\nThe import creates the matters and people above. You can roll it back while no one has changed them.`)) return;
+    const label = button.textContent?.trim() || "Continue the import";
+    if (!window.confirm(`${label}?${summary ? `\n\n${summary}` : ""}\n\nThis creates matters and people. You can roll the import back while no one has changed them.`)) return;
     return commit(button, router);
   }
 

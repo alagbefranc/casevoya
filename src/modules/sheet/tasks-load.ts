@@ -31,6 +31,8 @@ import {
 } from "@/modules/sheet/tasks-present";
 import { isLicensedMembership } from "@/lib/tenant/roles";
 import { zoneOptions } from "@/modules/sheet/task-detail";
+import { loadImportProvenance } from "@/modules/migration/provenance-load";
+import { importedTask } from "@/modules/sheet/imported-present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -78,10 +80,12 @@ async function loadInternal(supabase: Client, staff: SheetStaff, today: string, 
     : [null, null];
   const watching = new Set((watched?.data ?? []).map((row) => row.task_id));
   const earlierIds = [...new Set((deps?.data ?? []).map((row) => row.depends_on_task_id))];
-  const [earlier, matter, members] = await Promise.all([
+  const [earlier, matter, members, imports] = await Promise.all([
     earlierIds.length ? supabase.from("tasks").select("id, title, status").eq("organization_id", org).in("id", earlierIds) : null,
     matterLabels(supabase, org, rows.map((row) => row.matter_id)),
     memberNames(supabase, org),
+    // MIG-02: tasks an import brought in say so, with their original date.
+    loadImportProvenance(supabase, org, "tasks", ids),
   ]);
   // A dependency the viewer cannot read is left out rather than named.
   const earlierTask = new Map((earlier?.data ?? []).map((row) => [row.id, row]));
@@ -115,6 +119,7 @@ async function loadInternal(supabase: Client, staff: SheetStaff, today: string, 
       dependsOn: dependsOnLabel(dependsOn.get(row.id) ?? []),
       state: internalState(row.status, row.escalated_at),
       manage: TASK_STAFF_ROLES.includes(staff.role) ? taskManageWire(row) : null,
+      ...importedTask(imports, row.id, staff.timezone),
     };
   });
 
@@ -147,9 +152,10 @@ async function loadClient(supabase: Client, staff: SheetStaff, today: string): P
   const rows = tasks.data ?? [];
   const ids = rows.map((row) => row.id);
   const personIds = [...new Set(rows.map((row) => row.owner_person_id).filter((id): id is string => Boolean(id)))];
-  const [people, reminders] = await Promise.all([
+  const [people, reminders, imports] = await Promise.all([
     personIds.length ? supabase.from("persons").select("id, display_name").eq("organization_id", org).in("id", personIds) : null,
     ids.length ? supabase.from("reminder_schedules").select("task_id, offset_days").eq("organization_id", org).in("task_id", ids).neq("status", "cancelled") : null,
+    loadImportProvenance(supabase, org, "tasks", ids),
   ]);
   const person = new Map((people?.data ?? []).map((row) => [row.id, row.display_name]));
   const offsets = new Map<string, (number | null)[]>();
@@ -174,6 +180,7 @@ async function loadClient(supabase: Client, staff: SheetStaff, today: string): P
       reminders: days.length ? { offsets: days, quietHours: false } : null,
       state: clientState(row.status),
       manage: row.status !== "done" && TASK_STAFF_ROLES.includes(staff.role) ? taskManageWire(row) : null,
+      ...importedTask(imports, row.id, staff.timezone),
     };
   });
   return { rows: table, failed: Boolean(tasks.error) };

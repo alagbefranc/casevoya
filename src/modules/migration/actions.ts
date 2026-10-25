@@ -5,6 +5,7 @@ import { isUuid } from "@/lib/tenant/context";
 import { loadSheetAccess } from "@/modules/sheet/load";
 import { migrationError, needsMigrationStepUp, planCounts, type PlanCounts } from "@/modules/sheet/migration-present";
 import { MIGRATION_CHUNK, MIGRATION_MAX_BYTES, readMigrationFile } from "./csv";
+import { pilotState } from "./report";
 
 /**
  * Migration import writes (T044), as the signed-in firm owner. Each step is a database function
@@ -28,6 +29,9 @@ const SCHEMAS = {
   map: z.object({ org: uuid, batch: uuid, mapping: mappingSchema }),
   decide: z.object({ org: uuid, batch: uuid, row: z.number().int().min(2).max(5001), same: z.boolean() }),
   commit: z.object({ org: uuid, batch: uuid }),
+  // MIG-02: the pilot (first matters, firm owner + step-up) and its sign-off with a note.
+  pilot: z.object({ org: uuid, batch: uuid, size: z.number().int().min(1).max(50), system: z.string().trim().max(120).optional() }),
+  signoff: z.object({ org: uuid, batch: uuid, note: z.string().trim().min(3).max(1000) }),
   rollback: z.object({ org: uuid, batch: uuid }),
   discard: z.object({ org: uuid, batch: uuid }),
 } as const;
@@ -129,31 +133,72 @@ export async function runMigrationAction(action: MigrationAction, body: unknown)
       if (!result.ok) return { error: "This import can’t be rolled back.", reasons: result.reasons ?? [] };
       return { ok: true };
     }
-    case "commit": {
-      const batch = await supabase.from("migration_batches").select("status, plan_hash").eq("organization_id", input.org).eq("id", input.batch).maybeSingle();
+    case "pilot": {
+      const v = SCHEMAS.pilot.parse(body);
+      const batch = await supabase.from("migration_batches").select("status, plan_hash").eq("organization_id", v.org).eq("id", v.batch).maybeSingle();
       if (!batch.data) return { error: "That import isn’t there any more. Reload the page." };
-      if (batch.data.status === "checked") {
+      if (batch.data.status !== "checked") return { error: "This import has moved on. Reload the page." };
+      const begun = await supabase.rpc("begin_migration_pilot", {
+        p_org: v.org,
+        p_batch: v.batch,
+        p_plan_hash: batch.data.plan_hash ?? "",
+        p_size: v.size,
+        ...(v.system ? { p_source_system: v.system } : {}),
+      });
+      if (begun.error) return refused(begun.error.message);
+      const result = (begun.data ?? {}) as { ok?: boolean; reason?: string };
+      if (!result.ok) return { error: beginRefusal(result.reason) };
+      return chunks(supabase, v.org, v.batch);
+    }
+    case "signoff": {
+      const v = SCHEMAS.signoff.parse(body);
+      const run = await supabase.rpc("sign_off_migration_pilot", { p_org: v.org, p_batch: v.batch, p_note: v.note });
+      if (run.error) return refused(run.error.message);
+      return { ok: true };
+    }
+    case "commit": {
+      const batch = await supabase
+        .from("migration_batches")
+        .select("status, plan_hash, pilot_size, pilot_completed_at, pilot_signed_off_at, full_run_started_at")
+        .eq("organization_id", input.org)
+        .eq("id", input.batch)
+        .maybeSingle();
+      if (!batch.data) return { error: "That import isn’t there any more. Reload the page." };
+      const state = pilotState(batch.data);
+      if (state === "ready") return { error: "Run a pilot first. The full import waits for your sign-off of the pilot." };
+      if (state === "review") return { error: "Sign off the pilot first. The full import waits for it." };
+      if (state === "other") return { error: "This import has moved on. Reload the page." };
+      if (state === "signed") {
         const begun = await supabase.rpc("begin_migration_commit", { p_org: input.org, p_batch: input.batch, p_plan_hash: batch.data.plan_hash ?? "" });
         if (begun.error) return refused(begun.error.message);
         const result = (begun.data ?? {}) as { ok?: boolean; reason?: string };
-        if (!result.ok) return { error: "Something changed since the preview. Check Preview and Row errors again, then sign off." };
-      } else if (batch.data.status !== "committing") {
-        return { error: "This import has moved on. Reload the page." };
+        if (!result.ok) return { error: beginRefusal(result.reason) };
       }
-      const started = Date.now();
-      for (;;) {
-        const chunk = await supabase.rpc("commit_migration_chunk", { p_org: input.org, p_batch: input.batch, p_limit: 25 });
-        if (chunk.error) {
-          if (!needsMigrationStepUp(chunk.error.message)) {
-            await supabase.rpc("note_migration_commit_failure", { p_org: input.org, p_batch: input.batch, p_reason: chunk.error.message.slice(0, 120) });
-          }
-          return refused(chunk.error.message);
-        }
-        const state = (chunk.data ?? {}) as { remaining?: number; status?: string };
-        const remaining = Number(state.remaining ?? 0);
-        if (remaining <= 0) return { ok: true, remaining: 0, status: "committed" };
-        if (Date.now() - started > COMMIT_BUDGET_MS) return { ok: true, remaining, status: "committing" };
-      }
+      return chunks(supabase, input.org, input.batch);
     }
+  }
+}
+
+function beginRefusal(reason: string | undefined): string {
+  return reason === "checksum_changed"
+    ? "The staged rows no longer match the checksum taken at upload, so nothing was created. Discard or roll back this import and upload the file again."
+    : "Something changed since the preview. Check Preview and Row errors again, then sign off.";
+}
+
+/** Commit chunks for up to COMMIT_BUDGET_MS; the page asks again for the rest. A pilot stops at its last matter. */
+async function chunks(supabase: Awaited<ReturnType<typeof createClient>>, org: string, batch: string): Promise<MigrationResult> {
+  const started = Date.now();
+  for (;;) {
+    const chunk = await supabase.rpc("commit_migration_chunk", { p_org: org, p_batch: batch, p_limit: 25 });
+    if (chunk.error) {
+      if (!needsMigrationStepUp(chunk.error.message)) {
+        await supabase.rpc("note_migration_commit_failure", { p_org: org, p_batch: batch, p_reason: chunk.error.message.slice(0, 120) });
+      }
+      return refused(chunk.error.message);
+    }
+    const state = (chunk.data ?? {}) as { remaining?: number; status?: string };
+    const remaining = Number(state.remaining ?? 0);
+    if (remaining <= 0) return { ok: true, remaining: 0, status: state.status === "pilot_done" ? "pilot_done" : "committed" };
+    if (Date.now() - started > COMMIT_BUDGET_MS) return { ok: true, remaining, status: "committing" };
   }
 }
