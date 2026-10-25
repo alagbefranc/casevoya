@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loadSheetChrome, matterNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { voAgentConfigured } from "@/modules/vo/agent-client";
+import { isLicensedMembership } from "@/lib/tenant/roles";
 import { loadVoReadings } from "@/modules/sheet/vo-doc-load";
 import { loadVendorTermsAcks } from "@/modules/sheet/vo-vendor-terms-load";
 import { vendorTermsPanel } from "@/modules/sheet/vo-vendor-terms-present";
@@ -25,13 +26,19 @@ import {
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
-const DRAFT_COLUMNS = "id, run_id, kind, title, body, sources, matter_id, thread_id, status, edited, needs_rule, is_sample, created_at, reviewed_at, reviewed_by";
+const DRAFT_COLUMNS = "id, run_id, kind, title, body, sources, matter_id, thread_id, status, edited, needs_rule, licensed_review_required, is_sample, created_at, reviewed_at, reviewed_by";
 
 function sources(value: unknown): VoSource[] {
   return Array.isArray(value)
     ? value
         .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
-        .map((item) => ({ kind: String(item.kind ?? ""), id: String(item.id ?? ""), label: String(item.label ?? "") }))
+        .map((item) => ({
+          kind: String(item.kind ?? ""),
+          id: String(item.id ?? ""),
+          label: String(item.label ?? ""),
+          ...(typeof item.source_kind === "string" ? { sourceKind: item.source_kind } : {}),
+          ...(typeof item.url === "string" ? { url: item.url } : {}),
+        }))
         .filter((item) => item.label)
     : [];
 }
@@ -48,6 +55,7 @@ type DraftDb = {
   status: "draft" | "sent" | "discarded";
   edited: boolean | null;
   needs_rule: boolean;
+  licensed_review_required?: boolean;
   is_sample: boolean;
   created_at: string;
   reviewed_at: string | null;
@@ -67,6 +75,7 @@ function draftRow(row: DraftDb, latency: Map<string, number | null>): VoDraftRow
     status: row.status,
     edited: row.edited,
     needsRule: row.needs_rule,
+    licensedReview: row.licensed_review_required === true,
     isSample: row.is_sample,
     createdAt: row.created_at,
     reviewedAt: row.reviewed_at,
@@ -145,6 +154,7 @@ async function viewerAndSettings(supabase: Client, staff: SheetStaff) {
     sampleMode: staff.sampleMode,
     agentReady: voAgentConfigured(),
     timeZone: staff.timezone,
+    licensed: isLicensedMembership(staff.role),
   };
   return { viewer, settings: effectiveSettings(data ?? null, staff.sampleMode) };
 }
