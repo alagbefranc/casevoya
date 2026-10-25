@@ -20,6 +20,10 @@ export type CapturedOption = {
   sourceUrl: string;
   section: string;
   excerpt: string;
+  /** "IMM 5476" for a form, its edition or a checklist item. */
+  formNumber?: string | null;
+  /** The page's printed "Date modified" (YYYY-MM-DD) when the capture has it. */
+  modifiedOn?: string | null;
   /** "IRCC fee list, captured 25 Oct 2026, SHA-256 1d31…" */
   note: string;
 };
@@ -211,7 +215,7 @@ export function AddClaimDialog({ data }: { data: AddClaimData }) {
     <dialog className={"dlg"} id={"dlgClaim"} aria-labelledby={"dlgClaimH"}>
       <DialogHead id={"dlgClaim"} title={"Add claim"} />
       <div className={"db"}>
-        <Field id={"clK"} label={"Start from captured official content"} help={"Captured from IRCC’s fee list and Justice Laws. Casevoya fetches the page again when you save."}>
+        <Field id={"clK"} label={"Start from captured official content"} help={"Captured from IRCC’s fee list, Justice Laws and IRCC’s form, checklist and program pages on canada.ca. Casevoya fetches the page again when you save."}>
           <select className={"sel"} id={"clK"} defaultValue={""}>
             <option value={""}>{"None: I’ll type it from the official page"}</option>
             {data.captured.map((option) => (
@@ -224,6 +228,8 @@ export function AddClaimDialog({ data }: { data: AddClaimData }) {
                 data-url={option.sourceUrl}
                 data-section={option.section}
                 data-excerpt={option.excerpt}
+                data-form={option.formNumber ?? ""}
+                data-modified={option.modifiedOn ?? ""}
                 data-note={option.note}
               >
                 {option.label}

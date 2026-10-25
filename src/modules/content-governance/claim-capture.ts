@@ -5,9 +5,16 @@
  * returns null and nothing is captured for it.
  *
  * Dates read, exactly as the page shows them:
- *   - "Date modified" (canada.ca and Justice Laws footers: `<time property="dateModified">`);
+ *   - "Date modified": `<time property="dateModified">` (Justice Laws and the older canada.ca
+ *     footer), or `<gcds-date-modified>YYYY-MM-DD</gcds-date-modified>` (current canada.ca pages,
+ *     shown to readers as "Date modified");
  *   - Justice Laws "… current to YYYY-MM-DD and last amended on YYYY-MM-DD".
  * A page's hidden metadata (for example `dcterms:issued`) is not shown to readers and isn't used.
+ *
+ * Page hash: `hashableBytes` removes the script a CDN injects into every response (canada.ca's
+ * Akamai mPulse/boomerang loader carries per-request `ak.rid`, `ak.t` and `ak.ak` values), so two
+ * fetches of an unchanged page hash the same. Nothing else is removed: an HTML page without such a
+ * script, and any PDF, is hashed exactly as the bytes received.
  */
 
 export type PageDates = { modifiedOn: string | null; lastAmendedOn: string | null; currentTo: string | null };
@@ -23,9 +30,35 @@ function validDate(value: string | undefined | null): string | null {
 
 export function readPageDates(html: string): PageDates {
   const modified = /<time\b[^>]*property=["']dateModified["'][^>]*>\s*(?:﻿)?\s*(\d{4}-\d{2}-\d{2})\s*<\/time>/i.exec(html)?.[1];
+  const gcdsModified = /<gcds-date-modified\b[^>]*>\s*(?:﻿)?\s*(\d{4}-\d{2}-\d{2})\s*<\/gcds-date-modified>/i.exec(html)?.[1];
   const currentTo = /\bcurrent to\s+(\d{4}-\d{2}-\d{2})\b/i.exec(html)?.[1];
   const amended = /\blast amended(?:\s*<\/a>)?\s+on\s+(\d{4}-\d{2}-\d{2})\b/i.exec(html)?.[1];
-  return { modifiedOn: validDate(modified), lastAmendedOn: validDate(amended), currentTo: validDate(currentTo) };
+  return { modifiedOn: validDate(modified) ?? validDate(gcdsModified), lastAmendedOn: validDate(amended), currentTo: validDate(currentTo) };
+}
+
+/** A script a CDN injects per request: Akamai mPulse (boomerang) and its per-request ak.* values. */
+const INJECTED_SCRIPT = /BOOMR|go-mpulse\.net|["']ak\.(?:rid|ak|t)["']/;
+
+/** What a page's SHA-256 was taken over (stored with each captured page as `sha256Of`). */
+export type HashBasis = "bytes" | "html-without-injected-scripts";
+
+/**
+ * The bytes to hash for a fetched page: an HTML page with the CDN's per-request scripts removed (see
+ * the header), otherwise the bytes received, unchanged. The capture script and the server's Add claim
+ * fetch both hash through this, so their hashes compare.
+ */
+export function hashableBytes(bytes: Uint8Array, contentType: string | null): { bytes: Uint8Array; basis: HashBasis } {
+  const type = (contentType ?? "").toLowerCase();
+  const start = new TextDecoder("utf-8").decode(bytes.subarray(0, 256)).trimStart().toLowerCase();
+  const html = type.includes("html") || (!type && (start.startsWith("<!doctype html") || start.startsWith("<html")));
+  if (!html) return { bytes, basis: "bytes" };
+  let removed = 0;
+  const kept = new TextDecoder("utf-8").decode(bytes).replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, (script) => {
+    if (!INJECTED_SCRIPT.test(script)) return script;
+    removed += 1;
+    return "";
+  });
+  return removed === 0 ? { bytes, basis: "bytes" } : { bytes: new TextEncoder().encode(kept), basis: "html-without-injected-scripts" };
 }
 
 const LANGUAGE_OR_INDEX = /^(en|fr|eng|fra|english|francais|index|home|default|accueil|welcome)$/;

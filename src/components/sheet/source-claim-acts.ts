@@ -43,6 +43,8 @@ export function mountClaimInputs(root: HTMLElement, signal: AbortSignal) {
       set(dialog, "#clU", option.dataset.url ?? "");
       set(dialog, "#clS", option.dataset.section ?? "");
       set(dialog, "#clX", option.dataset.excerpt ?? "");
+      set(dialog, "#clF", option.dataset.form ?? "");
+      set(dialog, "#clDm", option.dataset.modified ?? "");
       if (note) {
         note.textContent = option.dataset.note ?? "";
         note.hidden = false;
