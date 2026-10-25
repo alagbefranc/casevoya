@@ -97,18 +97,32 @@ export function claimAddData(staff: Pick<SheetStaff, "organizationId" | "role">,
     today,
     captured: CAPTURED_CLAIMS.map((claim) => {
       const page = capturedPage(claim.page);
-      const where = claim.page.includes("justice.gc.ca") ? "Justice Laws" : "IRCC fee list";
+      const where = claimSourceName(claim);
+      const edition = claim.editionSource ? ` Edition read from: ${claim.editionSource}.` : "";
       return {
         key: claim.key,
-        label: `${claim.claim.replace(/\.$/, "")}${claim.value ? ` (${claim.value})` : ""}`,
+        label: `${claim.claim.replace(/\.$/, "")}${claim.value && !claim.claim.includes(claim.value) ? ` (${claim.value})` : ""}`,
         program: claim.program,
         claim: claim.claim,
         value: claim.value,
         sourceUrl: claim.sourceUrl,
         section: claim.section,
         excerpt: claim.excerpt,
-        note: page ? `${where}, captured ${longDate(page.retrievedAt.slice(0, 10))}, SHA-256 ${page.sha256}. A draft until a licensed reviewer approves it.` : `${where}. A draft until a licensed reviewer approves it.`,
+        formNumber: claim.formNumber ?? null,
+        modifiedOn: page?.modifiedOn ?? null,
+        note: page
+          ? `${where}, captured ${longDate(page.retrievedAt.slice(0, 10))}, SHA-256 ${page.sha256}.${page.modifiedOn ? ` Date modified ${longDate(page.modifiedOn)}.` : ""}${edition} A draft until a licensed reviewer approves it.`
+          : `${where}.${edition} A draft until a licensed reviewer approves it.`,
       };
     }),
   };
+}
+
+/** Where a captured claim comes from, in the words staff know. */
+function claimSourceName(claim: { page: string; category?: string }): string {
+  if (claim.page.includes("justice.gc.ca")) return "Justice Laws";
+  if (claim.page.startsWith("https://ircc.canada.ca/")) return "IRCC fee list";
+  if (claim.category === "program") return "IRCC program page on canada.ca";
+  if (claim.page.endsWith(".pdf")) return claim.category === "checklist" ? "IRCC document checklist PDF on canada.ca" : "IRCC form PDF on canada.ca";
+  return "IRCC form page on canada.ca";
 }
