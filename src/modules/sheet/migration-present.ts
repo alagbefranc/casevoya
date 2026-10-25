@@ -4,6 +4,7 @@
  * refusal reads. The database plans and decides every row (app.migration_evaluate).
  */
 import { safeAccessError } from "@/lib/auth/step-up";
+import { mixedFileMessage } from "@/modules/migration/one-kind";
 
 export type MigrationField =
   | "name"
@@ -487,6 +488,9 @@ export function migrationError(message: string): string {
   if (/no possible match/i.test(message)) return "That row has no possible match any more. Reload the page.";
   if (/migration batch not found/i.test(message)) return "That import isn’t there any more. Reload the page.";
   if (/matched person is no longer there/i.test(message)) return "A matched client record was removed, so the import stopped. Check the preview again.";
+  // MIG decision 2: one kind per file.
+  const mixed = mixedFileMessage(message);
+  if (mixed) return mixed;
   // MIG-01: the other kinds.
   const required = /required field \((\w+)\)/i.exec(message);
   if (required) {

@@ -1,6 +1,8 @@
 import "server-only";
 import type { BalanceRow, MapRow, MatchRow, PreviewRow, SensitivityRow, SummaryRow, ValueRow } from "@/components/sheet/designer/migration";
 import { memberNames } from "@/modules/sheet/chrome-load";
+import { loadImportProvenance } from "@/modules/migration/provenance-load";
+import { importedNote } from "@/modules/sheet/imported-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { DATE_ORDERS, type Batch, type Client, type Row } from "@/modules/sheet/migration-load";
 import {
@@ -311,9 +313,12 @@ export async function balanceRows(supabase: Client, staff: SheetStaff, batch: Ba
   const matterIds = [...new Set(balances.map((row) => row.matter_id))];
   const matters = matterIds.length ? await supabase.from("matters").select("id, reference, title").eq("organization_id", staff.organizationId).in("id", matterIds) : null;
   const matterName = new Map((matters?.data ?? []).map((row) => [row.id, row.reference ?? row.title]));
+  // MIG follow-ups: each balance says where it came from, with its as-of date as the original date.
+  const imports = await loadImportProvenance(supabase, staff.organizationId, "opening_balances", balances.map((row) => row.id));
   return balances.map((row) => ({
     key: row.id,
     matter: matterName.get(row.matter_id) ?? "—",
+    imported: importedNote(imports, row.id, staff.timezone),
     kind: KIND_VALUE_OPTIONS.balance_kind.find(([value]) => value === row.kind)?.[1] ?? row.kind,
     amount: money(Number(row.amount_cents), row.currency),
     asOf: row.as_of,

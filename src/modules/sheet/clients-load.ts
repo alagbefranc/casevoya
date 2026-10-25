@@ -33,7 +33,7 @@ import { firstName } from "@/modules/sheet/tasks-present";
 import { leadRow } from "@/modules/sheet/clients-present";
 import { loadPersonConsent } from "@/modules/sheet/person-consent-load";
 import { loadImportProvenance } from "@/modules/migration/provenance-load";
-import { importedFacts } from "@/modules/sheet/imported-present";
+import { importedFacts, importedRelationship } from "@/modules/sheet/imported-present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -89,7 +89,7 @@ async function loadPerson(
   const [relationships, openTasks, consent, imports] = await Promise.all([
     supabase
       .from("person_relationships")
-      .select("from_person_id, to_person_id, relationship_type")
+      .select("id, from_person_id, to_person_id, relationship_type")
       .eq("organization_id", org)
       .or(`from_person_id.eq.${person.id},to_person_id.eq.${person.id}`)
       .limit(100),
@@ -106,6 +106,8 @@ async function loadPerson(
   ]);
   const imported = imports.get(person.id) ?? null;
   const links = relationships.data ?? [];
+  // MIG follow-ups: a relationship an import brought in says where it came from.
+  const relationImports = await loadImportProvenance(supabase, org, "person_relationships", links.map((row) => row.id));
   const related = await morePeople(
     supabase,
     org,
@@ -116,7 +118,9 @@ async function loadPerson(
   const rows: RelationshipRow[] = links.flatMap((row) => {
     const fromHere = row.from_person_id === person.id;
     const other = related.get(fromHere ? row.to_person_id : row.from_person_id);
-    return other ? [{ person: { name: other.display_name }, label: relationshipLabel(row.relationship_type, fromHere) }] : [];
+    return other
+      ? [{ person: { name: other.display_name }, label: importedRelationship(relationshipLabel(row.relationship_type, fromHere), relationImports.get(row.id), timeZone) }]
+      : [];
   });
 
   const visible = parties.filter((party) => matter.has(party.matterId));

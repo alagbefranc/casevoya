@@ -2,6 +2,7 @@
 
 import { toast2 } from "@/components/port/kit";
 import { stepUpHref } from "@/lib/auth/mfa-step";
+import { documentsIrreversibleConfirm } from "@/modules/migration/irreversible";
 
 type Router = { refresh(): void; push(href: string): void };
 type Reply = { ok: boolean; data: Record<string, unknown> };
@@ -188,7 +189,12 @@ async function pilot(button: HTMLElement, root: HTMLElement, router: Router) {
   const system = root.querySelector<HTMLInputElement>("input[data-mig-system]")?.value.trim() ?? "";
   const what = matters ? (size === 1 ? "matter" : "matters") : size === 1 ? "record" : "records";
   const creates = matters ? "real matters and people" : "real records";
-  if (!window.confirm(`Run a pilot of the first ${size} ${what}?\n\nThe pilot creates ${creates}. You check them and sign off before the rest can be imported, or roll the pilot back.`)) return;
+  // MIG decision 7: a documents pilot can't be rolled back; the dialog says so before the owner confirms.
+  const after =
+    kind === "documents"
+      ? `You check them and sign off before the rest can be imported.\n\n${documentsIrreversibleConfirm("pilot")}`
+      : "You check them and sign off before the rest can be imported, or roll the pilot back.";
+  if (!window.confirm(`Run a pilot of the first ${size} ${what}?\n\nThe pilot creates ${creates}. ${after}`)) return;
   // MIG-01: a documents pilot stores its files from the same ZIP as the upload.
   if (kind === "documents") {
     toast2("Choose the same ZIP", { sub: "The pilot’s files are stored from it; it must be the ZIP you uploaded." });
@@ -210,7 +216,8 @@ async function signoff(button: HTMLElement, root: HTMLElement, router: Router) {
     return;
   }
   const rest = !button.dataset.kind || button.dataset.kind === "clients_matters" ? "matters" : "records";
-  if (!window.confirm(`Sign off the pilot? The full import can then create the rest of the ${rest}.`)) return;
+  const undo = button.dataset.kind === "documents" ? `\n\n${documentsIrreversibleConfirm("signoff")}` : "";
+  if (!window.confirm(`Sign off the pilot? The full import can then create the rest of the ${rest}.${undo}`)) return;
   const result = await post("signoff", { org, batch, note });
   if (!result.ok) {
     if (result.data.stepUp) return stepUp(batch);
@@ -326,7 +333,11 @@ export async function runMigrationAct(button: HTMLElement, root: HTMLElement, ro
     const summary = [...root.querySelectorAll<HTMLElement>(".fp-dl dt")].map((term) => `${term.textContent}: ${term.nextElementSibling?.textContent ?? ""}`).slice(0, 3).join("\n");
     const label = button.textContent?.trim() || "Continue the import";
     const creates = !button.dataset.kind || button.dataset.kind === "clients_matters" ? "matters and people" : "records";
-    if (!window.confirm(`${label}?${summary ? `\n\n${summary}` : ""}\n\nThis creates ${creates}. You can roll the import back while no one has changed them.`)) return;
+    const undo =
+      button.dataset.kind === "documents"
+        ? documentsIrreversibleConfirm(/pilot/i.test(label) ? "pilot" : "full")
+        : "You can roll the import back while no one has changed them.";
+    if (!window.confirm(`${label}?${summary ? `\n\n${summary}` : ""}\n\nThis creates ${creates}. ${undo}`)) return;
     return commit(button, router);
   }
 
