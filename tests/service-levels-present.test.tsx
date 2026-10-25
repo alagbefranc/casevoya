@@ -26,12 +26,12 @@ describe("Service-level report rows", () => {
     expect(rows.map((row) => row.title)).toEqual(["Uptime", "Support response time"]);
     expect(rows[0]).toEqual({
       title: "Uptime",
-      detail: "Casevoya doesn’t record uptime monitoring yet, so no uptime figure is shown",
+      detail: "Casevoya doesn’t monitor uptime yet. A figure appears once an external monitor checks the live site",
       badge: { tone: "gr", label: "Not measured yet" },
     });
     expect(rows[1].badge).toEqual({ tone: "gr", label: "None recorded" });
     expect(rows[1].detail).toBe(
-      "Time from your request reaching Casevoya support to its first reply, by month in your timezone. No support requests from your firm are recorded in the last 3 months",
+      "Time from your request reaching Casevoya support to its first reply, by month in your timezone. Target: first response within 1 business day. No support requests from your firm are recorded in the last 3 months",
     );
     expect(JSON.stringify(rows)).not.toMatch(/\d+(\.\d+)?\s*%/);
   });
@@ -48,7 +48,7 @@ describe("Service-level report rows", () => {
     });
     const [, support] = serviceLevelRows(report);
     expect(support.detail).toBe(
-      "Time from your request reaching Casevoya support to its first reply, by month in your timezone. " +
+      "Time from your request reaching Casevoya support to its first reply, by month in your timezone. Target: first response within 1 business day. " +
         "October 2026: 2 requests, none answered yet, 2 waiting · " +
         "September 2026: 4 requests, median 30 min, longest 3 h 10 min, 3 answered, 1 waiting · " +
         "July 2026: 1 request, median under 1 min, longest under 1 min, 1 answered",
@@ -83,7 +83,7 @@ describe("Service-level report rows", () => {
     expect(analytics?.title).toBe("Product analytics");
     expect(analytics?.badge).toEqual({ tone: "gr", label: "None" });
     expect(analytics?.detail).toBe(
-      "Casevoya runs no product analytics. If it ever does, it will use operational metadata only (actions, timings and counts, with pseudonymous ids), never immigration narratives, identity numbers, uploaded documents or message bodies",
+      "Casevoya runs no product analytics. If it ever does, it will use operational metadata only (actions, timings and counts, with pseudonymous ids), never immigration narratives, identity numbers, uploaded documents, message bodies, names, contact details or free text",
     );
   });
 });

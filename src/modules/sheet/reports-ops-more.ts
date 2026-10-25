@@ -44,28 +44,36 @@ export type OverdueTaskInput = { matterId: string | null; dueOn: string | null; 
 export function overdueTasks(tasks: OverdueTaskInput[], today: string, now: Date, sampleMatters: ReadonlySet<string> = new Set()) {
   let open = 0;
   let overdue = 0;
+  // Open work on sample matters is on the Tasks page but not counted here: all of it, and how much is late.
+  let sampleOpen = 0;
   let sample = 0;
   for (const task of tasks) {
     if (task.status !== "open" && task.status !== "blocked") continue;
     const onSample = Boolean(task.matterId && sampleMatters.has(task.matterId));
     const late = isOverdue(task.dueOn, task.dueAt, today, now);
     if (onSample) {
+      sampleOpen++;
       if (late) sample++;
       continue;
     }
     open++;
     if (late) overdue++;
   }
-  return { open, overdue, sample };
+  return { open, overdue, sampleOpen, sample };
 }
 
-export function overdueNote(result: { open: number; overdue: number; sample: number }): string {
+export function overdueNote(result: { open: number; overdue: number; sampleOpen: number; sample: number }): string {
   const parts = [
     result.open
       ? `${result.overdue} of ${result.open} open internal ${result.open === 1 ? "task is" : "tasks are"} overdue.`
       : "No open internal tasks.",
   ];
-  if (result.sample) parts.push(`${result.sample} more on sample matters ${result.sample === 1 ? "is" : "are"} on the Tasks page but not counted here.`);
+  if (result.sampleOpen) {
+    const late = result.sample ? ` (${result.sample} overdue)` : "";
+    parts.push(
+      `${result.sampleOpen} more open ${result.sampleOpen === 1 ? "task" : "tasks"} on sample matters ${result.sampleOpen === 1 ? "is" : "are"} on the Tasks page but not counted here${late}.`,
+    );
+  }
   return parts.join(" ");
 }
 
@@ -199,7 +207,7 @@ export const MORE_DEFINITIONS = {
 
 /** The added cards, as export sections (CSV and PDF keep the same figures and definitions). */
 export type OpsMore = {
-  overdue: { open: number; overdue: number; sample: number; note: string; definition: string };
+  overdue: { open: number; overdue: number; sampleOpen: number; sample: number; note: string; definition: string };
   intake: { bars: ReportBar[]; note: string; definition: string };
   readiness: { matters: number; median: string; longest: string; note: string; recorded: boolean; definition: string };
   renewals: { bars: ReportBar[]; note: string; definition: string };
