@@ -109,6 +109,11 @@ async function dryRun(ctx: Firm, batch: string, mapping: Record<string, unknown>
   return rpc<Record<string, number | string>>(`public.run_migration_dry_run($1, $2)`, [ctx.orgId, batch]);
 }
 
+/**
+ * The one place every test signs a batch off (begin_migration_commit as on main). With MIG-02's
+ * pilot merged, this is where the pilot (begin_migration_pilot, its chunks, sign_off_migration_pilot)
+ * goes before the full run.
+ */
 async function begin(ctx: Firm, batch: string) {
   await asMaintenance(db);
   const hash = (await db.query<{ plan_hash: string }>(`select plan_hash from public.migration_batches where id = $1`, [batch])).rows[0].plan_hash;
@@ -203,13 +208,17 @@ describe("MIG-01 tasks import (the spec's UI test)", () => {
     expect(tasks.rows.map((task) => task.title)).toEqual(["Synthetic task four", "Synthetic task one", "Synthetic task three", "Synthetic task two"]);
     expect(tasks.rows.find((task) => task.title === "Synthetic task two")).toMatchObject({ status: "done", owner_membership_id: ctx.consultantMembership, matter_id: clients.matter1 });
     expect(tasks.rows.find((task) => task.title === "Synthetic task three")).toMatchObject({ owner_membership_id: ctx.managerMembership, due_on: null, matter_id: clients.matter2 });
-    // Provenance: imported_at and source_system on each record; no invented task history.
-    const records = await db.query<{ record_id: string; imported_at: string | null; source_system: string | null; created: boolean }>(
-      `select record_id, imported_at, source_system, created from public.migration_records where batch_id = $1`,
+    // Provenance (what MIG-02's imported_record_provenance reads): one migration_records row per
+    // task, record_table "tasks", imported_at (created_at) and the batch's source system; no
+    // invented task history.
+    const records = await db.query<{ record_id: string; record_table: string; imported_at: string | null; source_system: string; created: boolean }>(
+      `select r.record_id, r.record_table, r.created_at as imported_at, b.source_system, r.created
+       from public.migration_records r join public.migration_batches b on b.id = r.batch_id where r.batch_id = $1`,
       [batch],
     );
     expect(records.rows).toHaveLength(4);
-    expect(records.rows.every((row) => row.created && row.imported_at && row.source_system === "spreadsheet")).toBe(true);
+    expect(records.rows.every((row) => row.created && row.record_table === "tasks" && row.imported_at && row.source_system === "spreadsheet")).toBe(true);
+    expect(records.rows.map((row) => row.record_id).sort()).toEqual(tasks.rows.map((task) => task.id).sort());
     expect((await db.query(`select 1 from public.task_events where task_id = any($1)`, [tasks.rows.map((task) => task.id)])).rows).toHaveLength(0);
     const batchRow = await db.query<{ status: string; result_counts: Record<string, number>; exceptions: { problem: string }[] }>(
       `select status::text, result_counts, exceptions from public.migration_batches where id = $1`,
@@ -218,19 +227,6 @@ describe("MIG-01 tasks import (the spec's UI test)", () => {
     expect(batchRow.rows[0]).toMatchObject({ status: "committed", result_counts: { records_created: 4, records_linked: 0, not_imported: 1 } });
     // The exception report keeps no value from the file.
     expect(JSON.stringify(batchRow.rows[0].exceptions)).not.toContain("SYN-9");
-
-    // Staff see the provenance; another firm can't ask.
-    await as(ctx, "manager");
-    const provenance = await rpc<{ record_id: string; source_system: string; imported_at: string }[]>(
-      `public.imported_record_provenance($1, 'tasks', $2)`,
-      [ctx.orgId, tasks.rows.map((task) => task.id)],
-    );
-    expect(provenance).toHaveLength(4);
-    expect(provenance.every((row) => row.source_system === "spreadsheet" && row.imported_at)).toBe(true);
-    const other = await firm();
-    await as(other);
-    await expectDbError(() => rpc(`public.imported_record_provenance($1, 'tasks', $2)`, [ctx.orgId, [tasks.rows[0].id]]), /staff access denied/);
-    expect(await rpc(`public.imported_record_provenance($1, 'tasks', $2)`, [other.orgId, [tasks.rows[0].id]])).toEqual([]);
 
     // Rollback removes the four tasks; a changed task would have stopped it.
     await as(ctx);
@@ -294,6 +290,14 @@ describe("MIG-01 notes, key dates and relationships", () => {
     );
     expect(notes.rows[0]).toMatchObject({ body: "Synthetic note line one.\nSynthetic line two.", original_author_name: "Former Staff Member", original_written_on: "2025-03-04", author_user_id: ctx.owner.id });
     expect(notes.rows[1].original_author_name).toBeNull();
+    const records = await db.query<{ record_table: string; original_day: string }>(
+      `select record_table, (original_at at time zone 'America/Toronto')::date::text as original_day from public.migration_records where batch_id = $1 order by row_number`,
+      [batch],
+    );
+    expect(records.rows).toEqual([
+      { record_table: "matter_staff_notes", original_day: "2025-03-04" },
+      { record_table: "matter_staff_notes", original_day: "2025-04-05" },
+    ]);
     // Still append-only outside a rollback.
     await expectDbError(() => db.query(`delete from public.matter_staff_notes where id = $1`, [notes.rows[0].id]), /append-only/);
     await as(ctx);
@@ -481,8 +485,12 @@ describe("MIG-01 documents (ZIP + manifest)", () => {
     expect(await rpc(`public.commit_migration_kind_chunk($1, $2, 5)`, [ctx.orgId, batch])).toMatchObject({ remaining: 0, status: "committed" });
     await asMaintenance(db);
     expect((await db.query(`select 1 from public.migration_files where batch_id = $1`, [batch])).rows).toHaveLength(0);
-    const record = await db.query<{ original_on: string }>(`select original_on::text from public.migration_records where batch_id = $1`, [batch]);
-    expect(record.rows).toEqual([{ original_on: "2024-01-02" }]);
+    // The file's date is kept as original_at: the start of that day in the firm's timezone.
+    const record = await db.query<{ original_day: string; record_table: string }>(
+      `select (original_at at time zone 'America/Toronto')::text as original_day, record_table from public.migration_records where batch_id = $1`,
+      [batch],
+    );
+    expect(record.rows).toEqual([{ original_day: "2024-01-02 00:00:00", record_table: "documents" }]);
     // Documents are never deleted, so a documents import isn't rolled back.
     await as(ctx);
     const refused = await rpc<{ ok: boolean; reasons: string[] }>(`public.rollback_migration_batch($1, $2)`, [ctx.orgId, batch]);

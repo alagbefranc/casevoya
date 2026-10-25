@@ -23,8 +23,9 @@
 -- narrative), health, or financial. The page hides those columns' values in samples, previews and
 -- row problems; audit events name counts only.
 --
--- Provenance: every record an import creates or links has a migration_records row with the source
--- system, the import time and the original date from the file (original_on). Imported history is
+-- Provenance: every record an import creates or links has a migration_records row (record_table is
+-- the record's own table) with the import time (created_at), the batch's source system and the
+-- original date from the file (original_at, the firm's midnight of that day). Imported history is
 -- not written as a native event: an imported task has no task_events row, an imported note keeps
 -- its original author and date apart from its own author (the importer) and created_at.
 
@@ -57,16 +58,12 @@ alter table public.migration_records drop constraint migration_records_record_ta
 alter table public.migration_records
   add constraint migration_records_record_table_check check (
     record_table in ('matters', 'persons', 'person_relationships', 'matter_staff_notes', 'tasks', 'deadlines', 'documents', 'opening_balances')
-  ),
-  add column source_system text check (source_system is null or length(btrim(source_system)) between 1 and 120),
-  add column original_on date,
-  add column imported_at timestamptz not null default now();
-comment on column public.migration_records.original_on is
-  'The record''s own date in the source file (a note''s date, a task''s creation date, a balance''s as-of date), when the file gives one.';
--- Records from earlier imports: imported when their row was written, from their batch's system.
-update public.migration_records rec set imported_at = rec.created_at, source_system = b.source_system
-from public.migration_batches b
-where b.id = rec.batch_id;
+  );
+-- The same column MIG-02 (20261025380000) adds, with the same type: either migration may run first.
+alter table public.migration_records
+  add column if not exists original_at timestamptz;
+comment on column public.migration_records.original_at is
+  'The item''s original date in the source system, when the file gave one. created_at is when it was imported.';
 
 alter table public.matter_staff_notes
   add column original_author_name text check (original_author_name is null or length(btrim(original_author_name)) between 1 and 200),

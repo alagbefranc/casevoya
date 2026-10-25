@@ -7957,16 +7957,14 @@ export type Database = {
           created: boolean
           created_at: string
           id: string
-          imported_at: string
           imported_stage: Database["public"]["Enums"]["matter_stage"] | null
           organization_id: string
-          original_on: string | null
+          original_at: string | null
           record_id: string
           record_table: string
           removed_at: string | null
           row_number: number
           source_reference: string | null
-          source_system: string | null
           version_at_import: number
         }
         Insert: {
@@ -7974,16 +7972,14 @@ export type Database = {
           created: boolean
           created_at?: string
           id?: string
-          imported_at?: string
           imported_stage?: Database["public"]["Enums"]["matter_stage"] | null
           organization_id: string
-          original_on?: string | null
+          original_at?: string | null
           record_id: string
           record_table: string
           removed_at?: string | null
           row_number: number
           source_reference?: string | null
-          source_system?: string | null
           version_at_import: number
         }
         Update: {
@@ -7991,16 +7987,14 @@ export type Database = {
           created?: boolean
           created_at?: string
           id?: string
-          imported_at?: string
           imported_stage?: Database["public"]["Enums"]["matter_stage"] | null
           organization_id?: string
-          original_on?: string | null
+          original_at?: string | null
           record_id?: string
           record_table?: string
           removed_at?: string | null
           row_number?: number
           source_reference?: string | null
-          source_system?: string | null
           version_at_import?: number
         }
         Relationships: [
@@ -13532,10 +13526,6 @@ export type Database = {
       create_matter_letter: {
         Args: { p_body: string; p_letter_type: string; p_matter_id: string; p_organization_id: string; p_title: string }
         Returns: string
-      }
-      imported_record_provenance: {
-        Args: { p_ids: string[]; p_org: string; p_table: string }
-        Returns: Json
       }
       migration_document_rows: {
         Args: { p_batch: string; p_limit?: number; p_org: string }

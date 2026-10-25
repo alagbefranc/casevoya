@@ -1,5 +1,5 @@
--- MIG-01 (gap #187): committing and rolling back the new import kinds, opening-balance review, and
--- the provenance read for imported records. Additive. New functions, and these redefinitions (each
+-- MIG-01 (gap #187): committing and rolling back the new import kinds, and opening-balance review.
+-- Additive. New functions, and these redefinitions (each
 -- copied from its latest definition with only the change named):
 --
 -- * app.migration_purge_staging (latest: 20261019208100_migration_import.sql): also removes the
@@ -18,7 +18,13 @@
 -- documents batch's files are stored by the app through the existing upload path (one
 -- public.create_upload_intent per file, the bytes put in storage, the server's checks and
 -- public.finish_verified_document_upload), then public.record_migration_document ties each file to
--- its row; commit_migration_kind_chunk then finishes the batch.
+-- its row; commit_migration_kind_chunk then finishes the batch. Rows are taken through
+-- app.migration_next_groups, as matters are (each row of another kind is its own group, flagged
+-- is_applicant), and a committed row's migration_rows.matter_id holds the record it became, so
+-- MIG-02's pilot gates there apply to every kind; while a pilot runs, app.migration_kind_after_chunk
+-- hands the pilot's end to app.migration_after_chunk. Each record's migration_records row has its
+-- own table as record_table and original_at (the file's date, at the firm's midnight), which
+-- MIG-02's public.imported_record_provenance reads for "Imported from <system> on <date>".
 --
 -- Opening balances: an import creates them pending review. public.review_opening_balance (billing
 -- staff of the matter: the firm owner or its assigned finance user, with a fresh step-up) approves
@@ -50,6 +56,20 @@ begin
 end;
 $$;
 revoke all on function app.migration_rollback_deletes_record(text, uuid) from public, anon, authenticated;
+
+-- An original date from the file as a time: the start of that day in the firm's timezone.
+create function app.migration_firm_midnight(p_org uuid, p_day date)
+returns timestamptz
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select case when p_day is null then null else
+    (p_day::timestamp) at time zone app.usable_timezone(coalesce((select o.timezone from public.organizations o where o.id = p_org), 'America/Toronto'))
+  end;
+$$;
+revoke all on function app.migration_firm_midnight(uuid, date) from public, anon, authenticated;
 
 create or replace function app.reject_message_change()
 returns trigger
@@ -150,9 +170,14 @@ begin
   if b.id is null or b.status <> 'committing' then
     raise exception 'this import is not being committed' using errcode = '22023';
   end if;
+  -- MIG-02's pilot (its columns exist once 20261025380000 is applied; read by name so this works
+  -- with or without them): while a pilot runs, its end and sign-off are app.migration_after_chunk's.
+  if (to_jsonb(b) ->> 'pilot_size') is not null and (to_jsonb(b) ->> 'full_run_started_at') is null then
+    return app.migration_after_chunk(p_org, p_batch);
+  end if;
   update public.migration_batches set references_at_import = app.migration_kind_reference_counts(p_batch) where id = p_batch;
   select count(*) into remaining from public.migration_rows
-  where batch_id = p_batch and plan in ('create', 'link') and committed_at is null;
+  where batch_id = p_batch and is_applicant and plan in ('create', 'link') and matter_id is null;
   if remaining > 0 then
     return jsonb_build_object('remaining', remaining, 'status', 'committing');
   end if;
@@ -224,6 +249,7 @@ declare
   v_target uuid;
   v_table text;
   done integer := 0;
+  g jsonb;
 begin
   perform app.migration_owner(p_org, true);
   select * into b from public.migration_batches where id = p_batch and organization_id = p_org for update;
@@ -244,18 +270,16 @@ begin
     when 'relationships' then 'person_relationships' when 'notes' then 'matter_staff_notes' when 'tasks' then 'tasks'
     when 'key_dates' then 'deadlines' when 'documents' then 'documents' else 'opening_balances' end;
 
-  for r in
-    select * from public.migration_rows
-    where batch_id = p_batch and plan in ('create', 'link') and committed_at is null
-      and not (b.kind = 'documents' and plan = 'create')
-    order by row_number
-    limit greatest(1, least(coalesce(p_limit, 50), 200))
-  loop
+  -- The rows come from app.migration_next_groups, as matters do, so its gates (a pilot's rows only
+  -- during a pilot, nothing more until the pilot is signed off) apply to every kind.
+  for g in select value from jsonb_array_elements(app.migration_next_groups(p_org, p_batch, greatest(1, least(coalesce(p_limit, 50), 100)))) loop
+    select * into r from public.migration_rows where batch_id = p_batch and row_number = (g ->> 'row')::integer;
+    continue when r.id is null or r.committed_at is not null or (b.kind = 'documents' and r.plan = 'create');
     if r.plan = 'link' then
       if r.decision_target like 'record:%' then
         v_target := split_part(r.decision_target, ':', 2)::uuid;
-        insert into public.migration_records (organization_id, batch_id, record_table, record_id, created, row_number, version_at_import, source_system, original_on)
-        values (p_org, p_batch, v_table, v_target, false, r.row_number, 1, b.source_system, (r.normalized ->> 'original_on')::date);
+        insert into public.migration_records (organization_id, batch_id, record_table, record_id, created, row_number, version_at_import, original_at)
+        values (p_org, p_batch, v_table, v_target, false, r.row_number, 1, app.migration_firm_midnight(p_org, (r.normalized ->> 'original_on')::date));
       else
         select other.record_id into v_target from public.migration_rows other
         where other.batch_id = p_batch and other.row_number = split_part(r.decision_target, ':', 2)::integer;
@@ -263,7 +287,7 @@ begin
       if v_target is null then
         raise exception 'migration row %: the matched record is no longer there', r.row_number using errcode = '22023';
       end if;
-      update public.migration_rows set record_id = v_target, committed_at = now() where id = r.id;
+      update public.migration_rows set record_id = v_target, matter_id = v_target, committed_at = now() where id = r.id;
       done := done + 1;
       continue;
     end if;
@@ -326,9 +350,9 @@ begin
       returning id, version into v_id, v_version;
     end if;
 
-    update public.migration_rows set record_id = v_id, committed_at = now() where id = r.id;
-    insert into public.migration_records (organization_id, batch_id, record_table, record_id, created, row_number, version_at_import, source_system, original_on)
-    values (p_org, p_batch, v_table, v_id, true, r.row_number, v_version, b.source_system, (r.normalized ->> 'original_on')::date);
+    update public.migration_rows set record_id = v_id, matter_id = v_id, committed_at = now() where id = r.id;
+    insert into public.migration_records (organization_id, batch_id, record_table, record_id, created, row_number, version_at_import, original_at)
+    values (p_org, p_batch, v_table, v_id, true, r.row_number, v_version, app.migration_firm_midnight(p_org, (r.normalized ->> 'original_on')::date));
     done := done + 1;
   end loop;
   return app.migration_kind_after_chunk(p_org, p_batch) || jsonb_build_object('done', done);
@@ -351,6 +375,7 @@ begin
   if b.id is null or b.status <> 'committing' or b.kind <> 'documents' then
     raise exception 'this import is not being committed' using errcode = '22023';
   end if;
+  -- Through app.migration_next_groups, so a pilot's gates apply to files too.
   select coalesce(jsonb_agg(jsonb_build_object(
     'row', x.row_number, 'person_id', x.normalized ->> 'person_id', 'matter_id', x.normalized ->> 'matter_id',
     'purpose', x.normalized ->> 'purpose', 'file_path', x.normalized ->> 'file_path', 'file_name', x.normalized ->> 'file_name',
@@ -358,9 +383,10 @@ begin
   ) order by x.row_number), '[]'::jsonb)
   into result
   from (
-    select * from public.migration_rows
-    where batch_id = p_batch and plan = 'create' and committed_at is null
-    order by row_number
+    select mr.* from public.migration_rows mr
+    join jsonb_array_elements(app.migration_next_groups(p_org, p_batch, 100)) g on (g.value ->> 'row')::integer = mr.row_number
+    where mr.batch_id = p_batch and mr.plan = 'create' and mr.committed_at is null
+    order by mr.row_number
     limit greatest(1, least(coalesce(p_limit, 10), 50))
   ) x;
   return jsonb_build_object('zip_sha256', b.attachment_sha256, 'rows', result);
@@ -412,9 +438,9 @@ begin
   if ver.checksum_sha256 is distinct from r.normalized ->> 'file_sha256' then
     raise exception 'the stored file doesn''t match the ZIP' using errcode = '22023';
   end if;
-  update public.migration_rows set record_id = doc.id, committed_at = now() where id = r.id;
-  insert into public.migration_records (organization_id, batch_id, record_table, record_id, created, row_number, version_at_import, source_system, original_on)
-  values (p_org, p_batch, 'documents', doc.id, true, r.row_number, doc.version, b.source_system, (r.normalized ->> 'original_on')::date);
+  update public.migration_rows set record_id = doc.id, matter_id = doc.id, committed_at = now() where id = r.id;
+  insert into public.migration_records (organization_id, batch_id, record_table, record_id, created, row_number, version_at_import, original_at)
+  values (p_org, p_batch, 'documents', doc.id, true, r.row_number, doc.version, app.migration_firm_midnight(p_org, (r.normalized ->> 'original_on')::date));
   return jsonb_build_object('document_id', doc.id, 'upload_state', ver.upload_state);
 end;
 $$;
@@ -716,57 +742,11 @@ begin
 end;
 $$;
 
--- ---------------------------------------------------------------------------
--- Provenance of imported records ("Imported from <system> on <date>")
--- ---------------------------------------------------------------------------
-
--- For staff of the firm: which of these records came from an import, from which system, when, and
--- with what original date. Names no content. Reads the records the caller names only.
-create function public.imported_record_provenance(p_org uuid, p_table text, p_ids uuid[])
-returns jsonb
-language plpgsql
-stable
-security definer
-set search_path = ''
-as $$
-declare
-  result jsonb;
-begin
-  if p_org is null or p_org is distinct from app.current_organization_id()
-     or app.is_org_staff(p_org) is distinct from true or app.staff_mfa_satisfied() is distinct from true then
-    raise exception 'staff access denied' using errcode = '42501';
-  end if;
-  if p_table is null or p_table not in ('matters', 'persons', 'person_relationships', 'matter_staff_notes', 'tasks', 'deadlines', 'documents', 'opening_balances') then
-    raise exception 'unknown record table' using errcode = '22023';
-  end if;
-  if p_ids is null or cardinality(p_ids) > 500 then
-    raise exception 'ask for up to 500 records at a time' using errcode = '22023';
-  end if;
-  select coalesce(jsonb_agg(jsonb_build_object(
-    'record_id', x.record_id, 'source_system', x.source_system, 'imported_at', x.imported_at,
-    'original_on', x.original_on, 'created', x.created
-  ) order by x.record_id), '[]'::jsonb)
-  into result
-  from (
-    select distinct on (r.record_id) r.record_id, coalesce(r.source_system, b.source_system) as source_system,
-           r.imported_at, r.original_on, r.created
-    from public.migration_records r
-    join public.migration_batches b on b.id = r.batch_id
-    where r.organization_id = p_org and r.record_table = p_table and r.record_id = any(p_ids)
-      and r.removed_at is null and b.status in ('committed', 'committing')
-    order by r.record_id, r.created desc, r.imported_at
-  ) x;
-  return result;
-end;
-$$;
-
 revoke all on function public.commit_migration_kind_chunk(uuid, uuid, integer) from public, anon;
 revoke all on function public.migration_document_rows(uuid, uuid, integer) from public, anon;
 revoke all on function public.record_migration_document(uuid, uuid, integer, uuid) from public, anon;
 revoke all on function public.review_opening_balance(uuid, uuid, boolean, text) from public, anon;
-revoke all on function public.imported_record_provenance(uuid, text, uuid[]) from public, anon;
 grant execute on function public.commit_migration_kind_chunk(uuid, uuid, integer) to authenticated;
 grant execute on function public.migration_document_rows(uuid, uuid, integer) to authenticated;
 grant execute on function public.record_migration_document(uuid, uuid, integer, uuid) to authenticated;
 grant execute on function public.review_opening_balance(uuid, uuid, boolean, text) to authenticated;
-grant execute on function public.imported_record_provenance(uuid, text, uuid[]) to authenticated;

@@ -1150,8 +1150,10 @@ begin
         else 'create'
       end::public.migration_row_plan,
       group_key = 'row:' || r.row_number,
+      -- Each row is its own group and stands for it, so the commit takes it through
+      -- app.migration_next_groups like a matter (and a pilot can take the first rows).
       group_first = r.row_number,
-      is_applicant = false,
+      is_applicant = true,
       match_person_id = null,
       match_row_number = null,
       match_detail = null,
