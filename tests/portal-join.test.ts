@@ -26,6 +26,7 @@ const state = vi.hoisted(() => ({
   verifyArgs: null as unknown,
   resendArgs: null as unknown,
   requests: [] as { purpose: string }[],
+  previewArgs: [] as unknown[],
 }));
 
 vi.mock("@/lib/env", () => ({ hasPublicSupabaseEnv: () => true }));
@@ -62,9 +63,12 @@ vi.mock("@/lib/supabase/server", () => ({
         },
       },
       from: () => query,
-      rpc: async (name: string) => {
+      rpc: async (name: string, args?: Record<string, unknown>) => {
         state.calls.push(name);
-        if (name === "preview_portal_invitation") return { data: state.preview, error: null };
+        if (name === "preview_portal_invitation") {
+          state.previewArgs.push(args);
+          return { data: state.preview, error: null };
+        }
         if (name === "accept_portal_invitation") {
           return { data: { ok: true, organization_id: ORG, person_id: PERSON, role: "client" }, error: null };
         }
@@ -86,12 +90,14 @@ describe("joinPortalInvite validation", () => {
     state.preview = { status: "open", role: "client", invitee: { email: "Client@Example.test", display_name: "Ana Client" } };
     state.claims = null;
     state.signUp = { session: null, user: { id: "u1", identities: [{ id: "i1" }] }, error: null };
-    state.signIn = null;
+    // No account with this email and password yet (Create a password signs in first).
+    state.signIn = { message: "Invalid login credentials", code: "invalid_credentials" };
     state.verify = null;
     state.calls = [];
     state.signUpArgs = null;
     state.verifyArgs = null;
     state.requests = [];
+    state.previewArgs = [];
   });
 
   it("refuses a malformed token before touching Supabase", async () => {
@@ -162,11 +168,45 @@ describe("joinPortalInvite validation", () => {
     expect(state.calls).toContain("accept_portal_invitation");
   });
 
-  it("signs in instead when the email already has an account", async () => {
-    state.signUp.user = { id: "u1", identities: [] };
+  it("signs in instead when the email already has an account with that password", async () => {
+    state.signIn = null;
     const result = await joinPortalInvite({ token: TOKEN, mode: "create", password: GOOD, payload: PAYLOAD });
     expect(result).toEqual({ ok: true, firstRequest: null });
-    expect(state.calls).toEqual(["preview_portal_invitation", "signUp", "signIn", "accept_portal_invitation"]);
+    expect(state.calls).toEqual(["preview_portal_invitation", "signIn", "accept_portal_invitation"]);
+  });
+
+  it("says to sign in when the email already has an account with another password", async () => {
+    state.signUp.user = { id: "u1", identities: [] };
+    const result = await joinPortalInvite({ token: TOKEN, mode: "create", password: GOOD, payload: PAYLOAD });
+    expect(result).toEqual({
+      ok: false,
+      message: "This email already has a Casevoya sign-in. Choose “Already have a Casevoya sign-in?” and use that password.",
+    });
+    expect(state.calls).not.toContain("accept_portal_invitation");
+    expect(state.calls).not.toContain("resend");
+  });
+
+  it("re-reads the invitation without counting it as an open", async () => {
+    await joinPortalInvite({ token: TOKEN, mode: "create", password: GOOD, payload: PAYLOAD });
+    expect(state.previewArgs).toEqual([{ p_token: TOKEN, p_open: false }]);
+  });
+
+  it("says to wait, not that the invitation is dead, when it is rate-limited", async () => {
+    state.preview = { status: "rate_limited" };
+    const result = await joinPortalInvite({ token: TOKEN, mode: "create", password: GOOD, payload: PAYLOAD });
+    expect(result).toEqual({ ok: false, message: "Too many tries. Please wait a few minutes and try again." });
+    expect(await confirmPortalInvite({ token: TOKEN, code: "123456", payload: PAYLOAD })).toEqual({
+      ok: false,
+      message: "Too many tries. Please wait a few minutes and try again.",
+    });
+  });
+
+  // Bug 5 (2026-10-25): each Continue emailed a new code, which made the one the client held stop working.
+  it("Continue again with an account still unconfirmed reuses the code already sent (Create a password)", async () => {
+    state.signIn = { message: "Email not confirmed", code: "email_not_confirmed" };
+    const result = await joinPortalInvite({ token: TOKEN, mode: "create", password: GOOD, payload: PAYLOAD });
+    expect(result).toEqual({ ok: true, confirm: true, reused: true });
+    expect(state.calls).toEqual(["preview_portal_invitation", "signIn"]);
   });
 
   it("signs in an existing account and says so when the password is wrong", async () => {
@@ -176,11 +216,12 @@ describe("joinPortalInvite validation", () => {
     expect(state.calls).not.toContain("signUp");
   });
 
-  it("sends a code to an existing account whose email was never confirmed", async () => {
+  it("asks an existing account whose email was never confirmed for the code already sent, without sending another", async () => {
     state.signIn = { message: "Email not confirmed", code: "email_not_confirmed" };
     const result = await joinPortalInvite({ token: TOKEN, mode: "existing", password: GOOD, payload: PAYLOAD });
-    expect(result).toEqual({ ok: true, confirm: true });
-    expect(state.calls).toContain("resend");
+    expect(result).toEqual({ ok: true, confirm: true, reused: true });
+    expect(state.calls).not.toContain("resend");
+    expect(state.calls).not.toContain("signUp");
   });
 
   it("accepts for a session already signed in as the invitee", async () => {
