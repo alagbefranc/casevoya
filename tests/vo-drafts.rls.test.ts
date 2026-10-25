@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { VO_VENDOR_TERMS } from "@/modules/vo/vendor-terms";
 
 /**
  * 20261019207100_vo_drafts.sql against the real migrations (PRD AI-01..AI-06, SRC-09, acceptance
@@ -101,6 +102,8 @@ const staff = (f: Firm, userId: string) => asUser(db, { userId, aal: "aal2", org
 
 async function turnOn(f: Firm, enabled = true, reply = true, messages = true) {
   await staff(f, f.owner);
+  // AI-06: the owner acknowledges the AI vendor terms before Vo can be turned on.
+  if (enabled) await db.query(`select public.acknowledge_vo_vendor_terms($1, $2)`, [f.orgId, VO_VENDOR_TERMS.version]);
   await db.query(`select public.set_vo_settings($1, $2::jsonb)`, [
     f.orgId,
     JSON.stringify({ enabled, reply_drafts: reply, read_client_messages: messages }),
@@ -332,11 +335,11 @@ describe("review", () => {
       `select action, context from public.audit_log where organization_id = $1 and action like 'vo.%' order by occurred_at`,
       [f.orgId],
     );
-    expect(audit.rows.map((r) => r.action)).toEqual(["vo.settings_changed", "vo.run_started", "vo.run_finished", "vo.draft_sent"]);
+    expect(audit.rows.map((r) => r.action)).toEqual(["vo.vendor_terms_acknowledged", "vo.settings_changed", "vo.run_started", "vo.run_finished", "vo.draft_sent"]);
     const text = JSON.stringify(audit.rows);
     expect(text).not.toContain("Synthetic");
     expect(text).not.toContain("meet next week");
-    expect(audit.rows[3].context).toMatchObject({ edited: true, kind: "message_reply" });
+    expect(audit.rows[4].context).toMatchObject({ edited: true, kind: "message_reply" });
   });
 
   it("discards a draft once and rates a run", async () => {

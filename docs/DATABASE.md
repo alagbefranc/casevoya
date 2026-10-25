@@ -740,6 +740,20 @@ DEC-02 (gap #182), branch `feat/dec-renewal`. No existing function redefined.
 
 Tested in `tests/dec-renewal.rls.test.ts` and `tests/dec-renewal-present.test.tsx`.
 
+## AI vendor terms acknowledgement (`20261025260000`, not applied on the live project)
+
+AI-06, branch `feat/ai-vendor-terms`. Additive; no existing function is redefined.
+
+* `vo_vendor_terms_acknowledgements`: one row per firm and terms version (`unique (organization_id, terms_version)`): `terms_version`, `acknowledged_by` (FK `auth.users`, indexed), `acknowledged_at`. Forced RLS; read by the firm's staff with staff MFA (the same rule as `vo_settings`); no insert, update or delete grant.
+* `app.vo_vendor_terms_version()`: the current terms version; must equal `VO_VENDOR_TERMS.version` in `src/modules/vo/vendor-terms.ts` (tested). A content change ships with a new migration redefining it.
+* `app.vo_vendor_terms_acknowledged(org)`: whether the firm acknowledged the current version.
+* `public.acknowledge_vo_vendor_terms(org, version)`: firm owner with staff MFA; only the current version ("the AI vendor terms changed" otherwise); idempotent. Audited `vo.vendor_terms_acknowledged` with the version.
+* Trigger `vo_settings_require_vendor_terms` (`app.vo_settings_require_vendor_terms`, before insert or update of `enabled` on `vo_settings`): setting `enabled` to true when Vo was off (the saved switch, or with no row the sample-mode default from `app.vo_enabled`) is refused without the current version acknowledged. `set_vo_settings` and `set_composio_enabled` are unchanged.
+
+* `20261025260100_vo_vendor_terms_version_2.sql` **redefines** `app.vo_vendor_terms_version()` (latest `20261025260000_vo_vendor_terms_ack.sql`): returns `2026-10-25.1` (signed vendor agreements and Casevoya's commitments added to the panel). Nothing else changes; owners acknowledge the new version before Vo can next be turned on.
+
+Tested in `tests/vo-vendor-terms.rls.test.ts` and `tests/vo-vendor-terms.test.tsx`; `tests/vo-drafts.rls.test.ts`, `tests/vo-doc-review.rls.test.ts` and `tests/vo-lead-call.rls.test.ts` now acknowledge before turning Vo on.
+
 ## Letters on a matter and Vo letter drafts (`20261025240000`, `20261025240100`, not applied on the live project)
 
 AI-01 (gap #183), branch `feat/ai-letter-drafts`. Apply in order: `20261025240000_vo_letter_enum.sql` (enum value, its own migration), then `20261025240100_vo_letter_drafts.sql`. Then `20261025240200_vo_settings_keep_read_on_upload.sql`, in the same go: it redefines `set_vo_settings` from DOC-05's body (`20261025000000`, live on prod) plus `letter_drafts`, and adds `vo_settings.read_on_upload` if missing, so neither switch is dropped.
