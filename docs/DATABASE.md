@@ -937,6 +937,13 @@ SRC-09 (gap #188), branch `feat/src-grounded-vo`. Additive.
 
 Tested in `tests/vo-grounded.rls.test.ts`, `tests/vo-grounding.test.ts`, `tests/vo-grounded-present.test.tsx`.
 
+### Vo cites live rule versions and refuses claims-rule homepages (`20261025420100`, not applied on the live project; apply after `20261025400000` and `20261025420000`)
+
+SRC-09 on top of the SRC-03 publication gate. Additive.
+
+* Redefined `app.vo_citable_official_url` (from `20261025420000`): also false whenever `app.official_claim_url` refuses the URL (SRC-01 homepage rule); still federal-only.
+* Redefined `app.vo_letter_official_items` (from `20261025420000`): rule versions through `app.rule_version_is_live` instead of the inline status and date check (same semantics, one definition). Register rows keep `status = 'approved'`.
+
 ## Service notice reach check is private (`20261025440000`, not applied on the live project)
 
 ADM-04 follow-up. Revokes `authenticated`'s EXECUTE on `app.service_notice_reaches(uuid, uuid)`. It is only called inside the security-definer `app.can_read_service_notice` and `app.dismiss_service_notice`, so reads and dismissals are unchanged; a signed-in user can no longer ask whether a notice reaches a firm. Tested in `tests/adm-service-notices.rls.test.ts`.

@@ -70,6 +70,9 @@ const LANDING = new Set([
   "fra/reglements",
 ]);
 
+/** Language folders and index pages, which never make a page deep (as in app.official_claim_url). */
+const LANGUAGE_OR_INDEX = /^(en|fr|eng|fra|english|francais|index|home|default|accueil|welcome)$/;
+
 /** A deep page on a federal official host (the database's app.vo_citable_official_url decides). */
 export function isCitableOfficialUrl(value: unknown): boolean {
   if (typeof value !== "string") return false;
@@ -83,7 +86,14 @@ export function isCitableOfficialUrl(value: unknown): boolean {
   const host = url.hostname.toLowerCase().replace(/\.$/, "");
   if (!FEDERAL_SUFFIXES.some((suffix) => host === suffix || host.endsWith(`.${suffix}`))) return false;
   const page = url.pathname.replace(/^\/+|\/+$/g, "").toLowerCase();
-  return page !== "" && !LANDING.has(page);
+  if (page === "" || LANDING.has(page)) return false;
+  // SRC-01 homepage rule (app.official_claim_url, claimUrlProblem): at least two path segments
+  // besides language folders and index pages.
+  const meaningful = page
+    .split("/")
+    .map((part) => part.replace(/\.(html?|aspx?|php)$/, ""))
+    .filter((part) => part !== "" && !LANGUAGE_OR_INDEX.test(part));
+  return meaningful.length >= 2;
 }
 
 const ADVICE =

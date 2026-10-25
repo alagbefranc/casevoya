@@ -185,11 +185,21 @@ describe("what Vo may cite as official", () => {
       ["https://canada.ca.example.com/en/fees.html", false],
       ["https://register.college-ic.ca/Public-Register-EN/Licensee/Profile.aspx", false],
       ["https://www.welcomebc.ca/immigrate-to-b-c/about-the-bc-provincial-nominee-program", false],
+      // SRC-01 homepage rule (app.official_claim_url): one page segment besides language and index is a landing page.
+      ["https://www.canada.ca/en/services.html", false],
+      ["https://www.canada.ca/fr/index.html", false],
+      ["https://laws-lois.justice.gc.ca/eng/index.html", false],
+      ["https://ircc.canada.ca/english/home.asp", false],
     ];
     for (const [url, expected] of cases) {
-      const row = await db.query<{ ok: boolean }>(`select app.vo_citable_official_url($1) as ok`, [url]);
+      const row = await db.query<{ ok: boolean; claim: boolean }>(
+        `select app.vo_citable_official_url($1) as ok, app.official_claim_url($1) is not null as claim`,
+        [url],
+      );
       expect([url, row.rows[0].ok]).toEqual([url, expected]);
       expect([url, isCitableOfficialUrl(url)]).toEqual([url, expected]);
+      // Never citable where the claims rule refuses the page.
+      if (!row.rows[0].claim) expect([url, row.rows[0].ok]).toEqual([url, false]);
     }
   });
 
@@ -233,6 +243,79 @@ describe("Ask Vo's grounded reads", () => {
     // A reply run is not an Ask Vo run.
     const reply = await beginReply(f);
     await expectDbError(() => db.query(`select public.vo_run_facts($1)`, [reply]), /vo denied/);
+  });
+
+  it("cites a rule version only while it is live (app.rule_version_is_live, the SRC-03 definition)", async () => {
+    const f = await firm();
+    // A firm snapshot of a synthetic deep IRCC page, cited as evidence by each rule version.
+    await staff(f.owner, f.orgId, true);
+    const page = `https://www.canada.ca/en/immigration-refugees-citizenship/services/synthetic-${tag()}.html`;
+    const source = (
+      await db.query<{ id: string }>(
+        `insert into public.official_sources (organization_id, publisher, canonical_url, jurisdiction, content_kind)
+         values ($1, 'Immigration, Refugees and Citizenship Canada', $2, 'CA', 'program_guidance') returning id`,
+        [f.orgId, page],
+      )
+    ).rows[0].id;
+    const snapshot = (
+      await db.query<{ id: string }>(
+        `insert into public.source_snapshots (source_id, final_url, publisher, retrieved_at, content_hash, retrieval_result)
+         values ($1, $2, 'Immigration, Refugees and Citizenship Canada', '2026-10-20T12:00:00Z', $3, 'success') returning id`,
+        [source, page, "b".repeat(64)],
+      )
+    ).rows[0].id;
+    await asMaintenance(db);
+    const ownerMembership = (
+      await db.query<{ id: string }>(`select id from public.memberships where organization_id = $1 and user_id = $2 and role = 'firm_owner'`, [f.orgId, f.owner])
+    ).rows[0].id;
+
+    /** A rule version of its own claim, approved and published from a maintenance session (the SRC-03 gate). */
+    async function rule(label: string, effectiveFrom: string) {
+      await staff(f.owner, f.orgId, true);
+      const definition = (
+        await db.query<{ id: string }>(
+          `insert into public.rule_definitions (organization_id, stable_key, category, jurisdiction) values ($1, $2, 'immigration_requirement', 'CA') returning id`,
+          [f.orgId, `CA.SYNTHETIC.${label}${tag().toUpperCase().replace(/[^A-Z0-9]/g, "X")}`],
+        )
+      ).rows[0].id;
+      const id = (
+        await db.query<{ id: string }>(
+          `insert into public.rule_versions (definition_id, version_number, claim, output_value, effective_from, next_review_at, test_case_ids)
+           values ($1, 1, $2, '{"kind": "rule"}'::jsonb, $3, '2027-11-01T00:00:00Z', array['synthetic-case']) returning id`,
+          [definition, `Synthetic claim ${label}. Not an immigration requirement.`, effectiveFrom],
+        )
+      ).rows[0].id;
+      await db.query(`insert into public.rule_evidence (rule_version_id, snapshot_id, source_section) values ($1, $2, 'synthetic-section')`, [id, snapshot]);
+      await asMaintenance(db);
+      await db.query(
+        `insert into public.professional_reviews (organization_id, rule_version_id, reviewer_membership_id, decision, decided_at, rule_content_revision)
+         values ($1, $2, $3, 'approved', '2026-10-16T15:00:00Z', 1)`,
+        [f.orgId, id, ownerMembership],
+      );
+      await db.query(`update public.rule_versions set status = 'published' where id = $1`, [id]);
+      return id;
+    }
+
+    const live = await rule("LIVE", "2020-01-01T00:00:00Z");
+    const suspended = await rule("SUSPENDED", "2020-01-01T00:00:00Z");
+    const superseded = await rule("SUPERSEDED", "2020-01-01T00:00:00Z");
+    const reviewDue = await rule("REVIEWDUE", "2020-01-01T00:00:00Z");
+    const notYet = await rule("NOTYET", "2999-01-01T00:00:00Z");
+    await db.query(`update public.rule_versions set status = 'suspended' where id = $1`, [suspended]);
+    await db.query(`update public.rule_versions set status = 'superseded' where id = $1`, [superseded]);
+    await db.query(`update public.rule_versions set status = 'review_due' where id = $1`, [reviewDue]);
+
+    const run = await beginAsk(f);
+    const official = (await db.query<{ r: { kind: string; id: string; source_url: string }[] }>(`select public.vo_run_official_content($1) as r`, [run])).rows[0].r;
+    expect(official.filter((row) => row.kind === "rule_version").map((row) => row.id)).toEqual([live]);
+    expect(official.find((row) => row.id === live)?.source_url).toBe(page);
+    for (const id of [suspended, superseded, reviewDue, notYet]) {
+      await expectDbError(
+        () => answer(run, [{ kind: "official", source_kind: "rule_version", id, label: "Synthetic rule" }]),
+        /not approved official content/,
+      );
+    }
+    await answer(run, [{ kind: "official", source_kind: "rule_version", id: live, label: "Synthetic rule" }]);
   });
 });
 
