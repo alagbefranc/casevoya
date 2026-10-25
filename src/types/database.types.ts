@@ -10201,6 +10201,63 @@ export type Database = {
         }
         Relationships: []
       }
+      rule_claim_overrides: {
+        Row: {
+          action: string
+          base_version_id: string
+          claim_text: string | null
+          created_at: string
+          created_by: string | null
+          definition_id: string
+          editor_licence_id: string
+          editor_licence_number: string
+          editor_membership_id: string
+          editor_name: string
+          id: string
+          organization_id: string
+          output_value: Json | null
+          reason: string
+          step_up_at: string
+          step_up_session_id: string | null
+        }
+        Insert: {
+          action: string
+          base_version_id: string
+          claim_text?: string | null
+          created_at?: string
+          created_by?: string | null
+          definition_id: string
+          editor_licence_id: string
+          editor_licence_number: string
+          editor_membership_id: string
+          editor_name: string
+          id?: string
+          organization_id: string
+          output_value?: Json | null
+          reason: string
+          step_up_at: string
+          step_up_session_id?: string | null
+        }
+        Update: {
+          action?: string
+          base_version_id?: string
+          claim_text?: string | null
+          created_at?: string
+          created_by?: string | null
+          definition_id?: string
+          editor_licence_id?: string
+          editor_licence_number?: string
+          editor_membership_id?: string
+          editor_name?: string
+          id?: string
+          organization_id?: string
+          output_value?: Json | null
+          reason?: string
+          step_up_at?: string
+          step_up_session_id?: string | null
+        }
+        Relationships: []
+      }
       rule_definitions: {
         Row: {
           applicant_context: string | null
@@ -10214,6 +10271,7 @@ export type Database = {
           owner_label: string | null
           program_key: string | null
           required_facts: string[]
+          source_category: string | null
           stable_key: string
           updated_at: string
           version: number
@@ -10230,6 +10288,7 @@ export type Database = {
           owner_label?: string | null
           program_key?: string | null
           required_facts?: string[]
+          source_category?: string | null
           stable_key: string
           updated_at?: string
           version?: number
@@ -10246,6 +10305,7 @@ export type Database = {
           owner_label?: string | null
           program_key?: string | null
           required_facts?: string[]
+          source_category?: string | null
           stable_key?: string
           updated_at?: string
           version?: number
@@ -10551,6 +10611,39 @@ export type Database = {
           },
         ]
       }
+      rule_step_up_uses: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          object_id: string
+          organization_id: string
+          session_id: string | null
+          step_up_at: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          object_id: string
+          organization_id: string
+          session_id?: string | null
+          step_up_at: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          object_id?: string
+          organization_id?: string
+          session_id?: string | null
+          step_up_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       rule_versions: {
         Row: {
           applicability: Json | null
@@ -10568,6 +10661,7 @@ export type Database = {
           id: string
           next_review_at: string | null
           organization_id: string | null
+          origin: Database["public"]["Enums"]["rule_origin"]
           output_value: Json | null
           status: Database["public"]["Enums"]["rule_publication_status"]
           status_changed_at: string | null
@@ -10596,6 +10690,7 @@ export type Database = {
           id?: string
           next_review_at?: string | null
           organization_id?: string | null
+          origin?: Database["public"]["Enums"]["rule_origin"]
           output_value?: Json | null
           status?: Database["public"]["Enums"]["rule_publication_status"]
           status_changed_at?: string | null
@@ -10624,6 +10719,7 @@ export type Database = {
           id?: string
           next_review_at?: string | null
           organization_id?: string | null
+          origin?: Database["public"]["Enums"]["rule_origin"]
           output_value?: Json | null
           status?: Database["public"]["Enums"]["rule_publication_status"]
           status_changed_at?: string | null
@@ -14152,6 +14248,37 @@ export type Database = {
         }
         Returns: number
       }
+      edit_rule_claim: {
+        Args: {
+          p_action: string
+          p_definition_id: string
+          p_expected_base_version_id: string
+          p_reason: string
+          p_text: string
+          p_value: string
+        }
+        Returns: string
+      }
+      unsuspend_rule_version: {
+        Args: { p_expected_version: number; p_reason: string; p_version_id: string }
+        Returns: number
+      }
+      official_claims: {
+        Args: { p_limit?: number; p_offset?: number; p_program?: string; p_query?: string }
+        Returns: Json
+      }
+      official_claim: {
+        Args: { p_definition_id: string }
+        Returns: Json
+      }
+      rule_claim_history: {
+        Args: { p_definition_id: string }
+        Returns: Json
+      }
+      matter_official_claims: {
+        Args: { p_category?: string; p_matter_id: string }
+        Returns: Json
+      }
       suspend_rule_version: {
         Args: { p_expected_version: number; p_reason: string; p_version_id: string }
         Returns: number
@@ -17602,6 +17729,7 @@ export type Database = {
         | "acknowledged"
         | "reassessed"
         | "dismissed"
+      rule_origin: "official_capture" | "firm_entry"
       rule_publication_status:
         | "draft"
         | "evidence_captured"
@@ -18106,6 +18234,7 @@ export const Constants = {
         "reassessed",
         "dismissed",
       ],
+      rule_origin: ["official_capture", "firm_entry"],
       rule_publication_status: [
         "draft",
         "evidence_captured",

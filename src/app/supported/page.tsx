@@ -32,6 +32,11 @@ function Section({ title, rows, empty }: { title: string; rows: CatalogueRow[]; 
               </div>
               {row.facts.length ? <div style={{ fontSize: "13px", color: "#615d59" }}>{row.facts.join(" · ")}</div> : null}
               <p style={{ margin: "4px 0 0", fontSize: "14px", lineHeight: 1.5 }}>{row.detail}</p>
+              {row.flags?.map((flag, n) => (
+                <p key={n} data-flag={"1"} style={{ margin: "4px 0 0", fontSize: "14px", lineHeight: 1.5, color: "#8a5a00" }}>
+                  {flag}
+                </p>
+              ))}
             </li>
           ))}
         </ul>
@@ -70,7 +75,7 @@ async function Body() {
         <main id="m" style={{ display: "block", maxWidth: "760px" }}>
           <h1>What Casevoya supports</h1>
           <p className="lead">{data.intro}</p>
-          <Section title="Programs" rows={data.programs} empty="No programs are catalogued yet. Nothing is supported until an approved, sourced rule pack exists." />
+          <Section title="Programs" rows={data.programs} empty="No programs are listed yet. A program is supported once Casevoya has live official claims for its forms or checklists." />
           <Section title="Jurisdictions" rows={data.jurisdictions} empty="No jurisdictions are listed." />
           <Section title="Case types" rows={data.caseTypes} empty="No case types are listed." />
           <div style={{ marginTop: "28px", display: "grid", gap: "8px", color: "#615d59", fontSize: "14px", lineHeight: 1.5 }}>
@@ -90,7 +95,7 @@ async function Body() {
   );
 }
 
-/** SRC-12: the public support catalogue. Read only; support is derived from approved, sourced rule packs. */
+/** SRC-12: the public support catalogue. Read only; support is derived from live official claims (#188) and live, sourced rule packs. */
 export default function SupportedPage() {
   return (
     <Suspense fallback={<SheetScreen page="book" tone="public"><QuietSheet title="What Casevoya supports" copy="Loading…" /></SheetScreen>}>

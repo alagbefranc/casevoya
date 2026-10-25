@@ -27,6 +27,10 @@ async function rulesAndSources(supabase: Supabase, versionIds: string[] | null):
   if (versionIds) {
     if (!versionIds.length) return { rules: [], sources: [] };
     query = query.in("id", versionIds);
+  } else {
+    // Firm scope: the firm's own rule versions. Live official claims show their own overdue flag
+    // in Source review's Live official claims list (#188).
+    query = query.eq("origin", "firm_entry");
   }
   const versions = (await query).data ?? [];
   if (!versions.length) return { rules: [], sources: [] };

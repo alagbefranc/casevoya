@@ -188,14 +188,16 @@ describe("Review workbench", () => {
     expect(renderToStaticMarkup(createElement(SheetTemplates, { data: manager }))).toContain("A firm owner or licensed consultant resolves applicability");
   });
 
-  it("puts versions waiting for review first, and offers Add claim with the captured drafts to staff who may add", () => {
+  it("puts versions waiting for review first, and offers Add claim to staff who may add, without the captured files (they load as live official claims)", () => {
     const data = templatesData({ tab: "sources", program: [], messages: [], rules: [rule("published"), rule("evidence_captured")], packs: 0, selected: null, today: "2026-10-25", viewer: viewer("case_manager"), addClaim: claimAddData({ organizationId: "o", role: "case_manager" }, "2026-10-25") });
     expect(data.sources.rows.map((row) => row.state.label)).toEqual(["Unresolved", "Approved, live"]);
     expect(data.sources.addClaim?.canAdd).toBe(true);
     expect(claimAddData({ organizationId: "o", role: "assistant" }, "2026-10-25").canAdd).toBe(false);
     const html = renderToStaticMarkup(createElement(AddClaimDialog, { data: data.sources.addClaim! }));
     expect(html).toContain('data-claim-act="add"');
-    expect(html).toContain(CAPTURED_CLAIMS[0].key);
+    expect(html).not.toContain(CAPTURED_CLAIMS[0].key);
+    expect(html).not.toContain("A draft until a licensed reviewer approves it");
+    expect(html).not.toContain('id="clK"');
     expect(renderToStaticMarkup(createElement(SheetTemplates, { data }))).toContain('data-dlg="dlgClaim"');
   });
 

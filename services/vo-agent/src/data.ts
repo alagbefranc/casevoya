@@ -69,6 +69,8 @@ export type VoOfficialItem = {
   attested: boolean;
   attestedBy: string | null;
   attestedOn: string | null;
+  /** #188: the firm's licensed edit of a live official claim (Vo cites the firm's wording with this stamp). */
+  edit?: { by: string | null; licence: string | null; on: string | null } | null;
 };
 /** Approved official content with its source as Ask Vo shows it (SRC-01/02 dates, as stored; null when the page didn't say). */
 export type VoOfficialSource = VoOfficialItem & {
@@ -77,6 +79,9 @@ export type VoOfficialSource = VoOfficialItem & {
   formModifiedOn: string | null;
   currentTo: string | null;
   sha256: string | null;
+  /** #188 stale block: Vo can't cite it (its source is overdue for a re-check); the reason, to say why. */
+  stale?: boolean;
+  staleReason?: string;
 };
 
 function text(value: unknown): string {
@@ -96,11 +101,15 @@ export function parseLetterFacts(raw: unknown): VoLetterFacts {
   };
 }
 
-/** The attestation of a page Casevoya didn't capture, as the database states it. */
-function attestation(row: Record<string, unknown>): Pick<VoOfficialItem, "attested" | "attestedBy" | "attestedOn"> {
+/**
+ * The attestation of a page Casevoya didn't capture, and (#188) the firm's edit stamp of a live
+ * official claim, as the database states them.
+ */
+function attestation(row: Record<string, unknown>): Pick<VoOfficialItem, "attested" | "attestedBy" | "attestedOn" | "edit"> {
+  const edit = row.edited === true ? { by: text(row.edited_by) || null, licence: text(row.edited_licence) || null, on: text(row.edited_on) || null } : null;
   return row.attested === true
-    ? { attested: true, attestedBy: text(row.attested_by) || null, attestedOn: text(row.attested_on) || null }
-    : { attested: false, attestedBy: null, attestedOn: null };
+    ? { attested: true, attestedBy: text(row.attested_by) || null, attestedOn: text(row.attested_on) || null, edit }
+    : { attested: false, attestedBy: null, attestedOn: null, edit };
 }
 
 export function parseOfficialContent(raw: unknown): VoOfficialItem[] {
@@ -135,6 +144,8 @@ export function parseOfficialSources(raw: unknown): VoOfficialSource[] {
       currentTo: text(row.current_to) || null,
       sha256: text(row.snapshot_sha256) || null,
       ...attestation(row),
+      // #188 stale block: an official claim Vo can't cite, because its source is overdue for a re-check.
+      ...(row.stale === true ? { stale: true, staleReason: text(row.stale_reason) || "Its source is due for a re-check" } : {}),
     }));
 }
 
