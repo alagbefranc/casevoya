@@ -4,6 +4,7 @@ import { emailRuntimeConfig } from "@/lib/email/env";
 import { matterInboundAddress, timelineEmailEvents } from "@/modules/sheet/inbound-present";
 import { loadVoComposer } from "@/modules/sheet/vo-load";
 import { loadVoReadingPanel } from "@/modules/sheet/vo-doc-load";
+import { loadMatterLetters } from "@/modules/sheet/letters-load";
 import {
   matterTab,
   type MatterAgreementRow,
@@ -566,6 +567,12 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
   // the caller can read the matter; a refusal just leaves the card out.
   const inbound = await supabase.rpc("matter_inbound_address", { p_matter_id: matterId, p_domain: emailRuntimeConfig().inboundDomain });
   rbar.inbound = inbound.error ? null : matterInboundAddress(inbound.data);
+  // AI-01: the matter's letters, Vo's letter draft in Assist, and their dialogs. A failed read leaves them out.
+  const letters = await loadMatterLetters(supabase, { staff, matterId, licensed: licensedHere, memberName }).catch(() => null);
+  if (letters) {
+    rbar.letters = letters.rbar;
+    rbar.vo = letters.assist;
+  }
 
   const hold = matter.on_hold
     ? {
@@ -855,5 +862,5 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
         };
   }
 
-  return { chrome, header, rbar, dialogs, page, countersign, governmentDialogs: government.dialogs };
+  return { chrome, header, rbar, dialogs, page, countersign, governmentDialogs: government.dialogs, letterDialogs: letters?.dialogs ?? null };
 }

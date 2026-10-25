@@ -6859,6 +6859,123 @@ export type Database = {
           },
         ]
       }
+      matter_letters: {
+        Row: {
+          approved_at: string | null
+          approved_by_membership_id: string | null
+          approved_self: boolean | null
+          approved_version: number | null
+          created_at: string
+          created_by: string
+          current_version: number
+          discarded_at: string | null
+          discarded_by: string | null
+          id: string
+          is_sample: boolean
+          letter_type: string
+          matter_id: string
+          organization_id: string
+          origin: string
+          run_id: string | null
+          status: string
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          approved_self?: boolean | null
+          approved_version?: number | null
+          created_at?: string
+          created_by: string
+          current_version?: number
+          discarded_at?: string | null
+          discarded_by?: string | null
+          id?: string
+          is_sample?: boolean
+          letter_type: string
+          matter_id: string
+          organization_id: string
+          origin: string
+          run_id?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          approved_self?: boolean | null
+          approved_version?: number | null
+          created_at?: string
+          created_by?: string
+          current_version?: number
+          discarded_at?: string | null
+          discarded_by?: string | null
+          id?: string
+          is_sample?: boolean
+          letter_type?: string
+          matter_id?: string
+          organization_id?: string
+          origin?: string
+          run_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      matter_letter_versions: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string
+          facts: Json
+          id: string
+          left_out: Json
+          letter_id: string
+          matter_id: string
+          official: Json
+          organization_id: string
+          origin: string
+          title: string
+          version_number: number
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by: string
+          facts?: Json
+          id?: string
+          left_out?: Json
+          letter_id: string
+          matter_id: string
+          official?: Json
+          organization_id: string
+          origin: string
+          title: string
+          version_number: number
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string
+          facts?: Json
+          id?: string
+          left_out?: Json
+          letter_id?: string
+          matter_id?: string
+          official?: Json
+          organization_id?: string
+          origin?: string
+          title?: string
+          version_number?: number
+        }
+        Relationships: []
+      }
       matter_staff_notes: {
         Row: {
           author_membership_id: string
@@ -11402,6 +11519,57 @@ export type Database = {
         }
         Relationships: []
       }
+      video_sessions: {
+        Row: {
+          booking_id: string
+          created_at: string
+          created_by: string | null
+          ended_at: string | null
+          ended_by_host_at: string | null
+          id: string
+          is_sample: boolean
+          organization_id: string
+          room_created_at: string | null
+          room_name: string
+          started_at: string | null
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          created_by?: string | null
+          ended_at?: string | null
+          ended_by_host_at?: string | null
+          id?: string
+          is_sample?: boolean
+          organization_id: string
+          room_created_at?: string | null
+          room_name: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          created_by?: string | null
+          ended_at?: string | null
+          ended_by_host_at?: string | null
+          id?: string
+          is_sample?: boolean
+          organization_id?: string
+          room_created_at?: string | null
+          room_name?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       vo_drafts: {
         Row: {
           body: string
@@ -11476,6 +11644,7 @@ export type Database = {
       }
       vo_runs: {
         Row: {
+          booking_id: string | null
           cost_usd: number | null
           created_at: string
           failure: string | null
@@ -11485,7 +11654,8 @@ export type Database = {
           is_sample: boolean
           kind: Database["public"]["Enums"]["vo_run_kind"]
           latency_ms: number | null
-          matter_id: string
+          lead_id: string | null
+          matter_id: string | null
           model: string | null
           organization_id: string
           output_tokens: number | null
@@ -11499,6 +11669,7 @@ export type Database = {
           version_id: string | null
         }
         Insert: {
+          booking_id?: string | null
           cost_usd?: number | null
           created_at?: string
           failure?: string | null
@@ -11508,7 +11679,8 @@ export type Database = {
           is_sample?: boolean
           kind: Database["public"]["Enums"]["vo_run_kind"]
           latency_ms?: number | null
-          matter_id: string
+          lead_id?: string | null
+          matter_id?: string | null
           model?: string | null
           organization_id: string
           output_tokens?: number | null
@@ -11522,6 +11694,7 @@ export type Database = {
           version_id?: string | null
         }
         Update: {
+          booking_id?: string | null
           cost_usd?: number | null
           created_at?: string
           failure?: string | null
@@ -11531,7 +11704,8 @@ export type Database = {
           is_sample?: boolean
           kind?: Database["public"]["Enums"]["vo_run_kind"]
           latency_ms?: number | null
-          matter_id?: string
+          lead_id?: string | null
+          matter_id?: string | null
           model?: string | null
           organization_id?: string
           output_tokens?: number | null
@@ -11543,6 +11717,90 @@ export type Database = {
           useful?: boolean | null
           user_id?: string
           version_id?: string | null
+        }
+        Relationships: []
+      }
+      vo_crm_drafts: {
+        Row: {
+          body: string
+          booking_id: string | null
+          created_at: string
+          created_by: string
+          edited: boolean | null
+          id: string
+          is_sample: boolean
+          kind: Database["public"]["Enums"]["vo_draft_kind"]
+          lead_id: string | null
+          lead_note_id: string | null
+          left_out: number
+          marketing_consent: boolean | null
+          matter_id: string | null
+          matter_note_id: string | null
+          model: string
+          needs_rule: boolean
+          organization_id: string
+          prompt_version: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          run_id: string
+          sources: Json
+          status: Database["public"]["Enums"]["vo_draft_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          booking_id?: string | null
+          created_at?: string
+          created_by: string
+          edited?: boolean | null
+          id?: string
+          is_sample?: boolean
+          kind: Database["public"]["Enums"]["vo_draft_kind"]
+          lead_id?: string | null
+          lead_note_id?: string | null
+          left_out?: number
+          marketing_consent?: boolean | null
+          matter_id?: string | null
+          matter_note_id?: string | null
+          model: string
+          needs_rule?: boolean
+          organization_id: string
+          prompt_version: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id: string
+          sources: Json
+          status?: Database["public"]["Enums"]["vo_draft_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          booking_id?: string | null
+          created_at?: string
+          created_by?: string
+          edited?: boolean | null
+          id?: string
+          is_sample?: boolean
+          kind?: Database["public"]["Enums"]["vo_draft_kind"]
+          lead_id?: string | null
+          lead_note_id?: string | null
+          left_out?: number
+          marketing_consent?: boolean | null
+          matter_id?: string | null
+          matter_note_id?: string | null
+          model?: string
+          needs_rule?: boolean
+          organization_id?: string
+          prompt_version?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id?: string
+          sources?: Json
+          status?: Database["public"]["Enums"]["vo_draft_status"]
+          title?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -11709,8 +11967,10 @@ export type Database = {
           inconsistency_flags: boolean
           missing_fields: boolean
           ocr_normalisation: boolean
+          letter_drafts: boolean
         }
         Insert: {
+          letter_drafts?: boolean
           composio_accepted_at?: string | null
           composio_accepted_by?: string | null
           composio_enabled?: boolean
@@ -11733,6 +11993,7 @@ export type Database = {
           updated_by: string
         }
         Update: {
+          letter_drafts?: boolean
           doc_classification?: boolean
           inconsistency_flags?: boolean
           missing_fields?: boolean
@@ -12443,9 +12704,68 @@ export type Database = {
         }
         Returns: Json
       }
+      begin_vo_call_summary: {
+        Args: { p_booking_id: string; p_organization_id: string }
+        Returns: Json
+      }
       begin_vo_document_review: {
         Args: { p_organization_id: string; p_version_id: string }
         Returns: Json
+      }
+      begin_vo_lead_follow_up: {
+        Args: { p_lead_id: string; p_organization_id: string }
+        Returns: Json
+      }
+      begin_vo_letter_draft: {
+        Args: { p_letter_type: string; p_matter_id: string; p_organization_id: string }
+        Returns: Json
+      }
+      create_matter_letter: {
+        Args: { p_body: string; p_letter_type: string; p_matter_id: string; p_organization_id: string; p_title: string }
+        Returns: string
+      }
+      revise_matter_letter: {
+        Args: { p_body: string; p_expected_version: number; p_letter_id: string; p_title: string }
+        Returns: number
+      }
+      approve_matter_letter: {
+        Args: { p_expected_version: number; p_letter_id: string }
+        Returns: Json
+      }
+      discard_matter_letter: {
+        Args: { p_expected_version: number; p_letter_id: string }
+        Returns: undefined
+      }
+      release_matter_letter: {
+        Args: { p_letter_id: string }
+        Returns: Json
+      }
+      vo_letter_facts: {
+        Args: { p_run_id: string }
+        Returns: Json
+      }
+      vo_letter_official_content: {
+        Args: { p_run_id: string }
+        Returns: Json
+      }
+      save_vo_letter_draft: {
+        Args: {
+          p_body: string
+          p_cost_usd?: number | null
+          p_facts: Json
+          p_input_tokens?: number | null
+          p_latency_ms?: number | null
+          p_left_out: Json
+          p_letter_type: string
+          p_model: string
+          p_official: Json
+          p_output_tokens?: number | null
+          p_prompt_version: string
+          p_run_id: string
+          p_title: string
+          p_tools?: string[] | null
+        }
+        Returns: string
       }
       begin_vo_run: {
         Args: {
@@ -13329,6 +13649,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      discard_vo_crm_draft: { Args: { p_draft_id: string }; Returns: undefined }
       discard_vo_doc_draft: { Args: { p_draft_id: string }; Returns: undefined }
       discard_vo_draft: { Args: { p_draft_id: string }; Returns: undefined }
       disconnect_firm_whatsapp: {
@@ -13437,6 +13758,26 @@ export type Database = {
           p_version_id: string
         }
         Returns: Json
+      }
+      finish_vo_crm_run: {
+        Args: {
+          p_body?: string | null
+          p_cost_usd?: number | null
+          p_failure?: string | null
+          p_input_tokens?: number | null
+          p_latency_ms?: number | null
+          p_left_out?: number
+          p_model?: string | null
+          p_needs_rule?: boolean
+          p_output_tokens?: number | null
+          p_prompt_version?: string | null
+          p_result: Database["public"]["Enums"]["vo_run_result"]
+          p_run_id: string
+          p_sources?: Json | null
+          p_title?: string | null
+          p_tools?: string[] | null
+        }
+        Returns: string | null
       }
       finish_vo_document_review: {
         Args: {
@@ -13748,6 +14089,10 @@ export type Database = {
       mark_staff_notifications_read: {
         Args: { p_ids?: string[] | null; p_organization_id: string }
         Returns: number
+      }
+      mark_vo_lead_follow_up_sent: {
+        Args: { p_body: string; p_draft_id: string }
+        Returns: string
       }
       matter_closure_check: {
         Args: { p_matter_id: string }
@@ -14788,6 +15133,10 @@ export type Database = {
         }
         Returns: string
       }
+      save_vo_call_summary: {
+        Args: { p_body: string; p_draft_id: string }
+        Returns: string
+      }
       save_staff_connection: {
         Args: {
           p_connected_account_id?: string | null
@@ -15803,11 +16152,23 @@ export type Database = {
       task_audience: "internal" | "client"
       task_priority: "low" | "normal" | "high" | "critical"
       task_status: "open" | "blocked" | "done" | "cancelled"
-      vo_draft_kind: "message_reply" | "document_request" | "document_review"
+      vo_draft_kind:
+        | "message_reply"
+        | "document_request"
+        | "document_review"
+        | "lead_follow_up"
+        | "call_summary"
       vo_draft_status: "draft" | "sent" | "discarded" | "reviewed"
       vo_proposal_kind: "classification" | "field" | "missing_field" | "inconsistency" | "deadline" | "needs_rule"
       vo_proposal_status: "proposed" | "accepted" | "rejected"
-      vo_run_kind: "message_reply" | "document_request" | "ask" | "document_review"
+      vo_run_kind:
+        | "message_reply"
+        | "document_request"
+        | "ask"
+        | "document_review"
+        | "letter_draft"
+        | "lead_follow_up"
+        | "call_summary"
       vo_run_result: "running" | "drafted" | "answered" | "abstained" | "failed"
       webhook_inbox_status:
         | "received"
@@ -16270,11 +16631,25 @@ export const Constants = {
         "review_due",
         "suspended",
       ],
-      vo_draft_kind: ["message_reply", "document_request", "document_review"],
+      vo_draft_kind: [
+        "message_reply",
+        "document_request",
+        "document_review",
+        "lead_follow_up",
+        "call_summary",
+      ],
       vo_draft_status: ["draft", "sent", "discarded", "reviewed"],
       vo_proposal_kind: ["classification", "field", "missing_field", "inconsistency", "deadline", "needs_rule"],
       vo_proposal_status: ["proposed", "accepted", "rejected"],
-      vo_run_kind: ["message_reply", "document_request", "ask", "document_review"],
+      vo_run_kind: [
+        "message_reply",
+        "document_request",
+        "ask",
+        "document_review",
+        "letter_draft",
+        "lead_follow_up",
+        "call_summary",
+      ],
       vo_run_result: ["running", "drafted", "answered", "abstained", "failed"],
       webhook_inbox_status: [
         "received",

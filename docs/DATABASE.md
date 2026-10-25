@@ -663,6 +663,23 @@ DEC-02 follows the GOV review rules (2026-10-24), branch `fix/dec-review-rules`.
 
 Tested in `tests/dec-approval-follow-up.rls.test.ts`, `tests/dec-renewal.rls.test.ts` and `tests/dec-review-rules-present.test.tsx`.
 
+## Vo lead follow-ups and call-notes summaries (`20261025250000`–`20261025250100`, not applied on the live project)
+
+AI-01 (gap #183) criteria 2 to 4, branch `feat/ai-lead-call-drafts`. Additive; no existing function is redefined.
+
+* `20261025250000_vo_lead_call_enums.sql`: `vo_run_kind` and `vo_draft_kind` gain `lead_follow_up` and `call_summary`.
+* `vo_runs`: `matter_id` may be null (lead runs only); new `lead_id` (FK `(lead_id, organization_id)` to `leads`, indexed) and `booking_id` (FK to `bookings`, indexed). `vo_runs_thread_kind_check` is restated under the same name: only `message_reply` and `document_request` carry a conversation. New checks: every run has a matter or (these kinds) a lead; `lead_id` only on these kinds; a lead follow-up has a lead and no matter; `booking_id` exactly on call summaries; a call summary is kept on a lead or a matter, not both. Policy `vo_runs_select` (altered): staff who read the matter, or lead staff (`app.can_read_leads`) for a run with no matter and a lead.
+* `vo_crm_drafts` (forced RLS, select only; read by staff who read the matter, or lead staff for a lead): the draft (`kind`, `lead_id`, `matter_id`, `booking_id`, `title`, `body`, `sources` [{kind: lead, lead_note, booking or matter; id; label}], `model`, `prompt_version`, `needs_rule`), `marketing_consent` (lead follow-up: the lead's marketing answer when Vo drafted), `left_out` (notes kept from Vo for a switched-off sensitive category) and its review: `sent` (lead follow-up; `lead_note_id`), `reviewed` (call summary; `lead_note_id` or `matter_note_id`) or `discarded`, `edited`, `reviewed_by`, `reviewed_at`. One waiting draft per lead and per consultation (partial unique indexes). Every FK indexed.
+* `app.vo_lead_consent(org, lead, purpose)`: the latest answer, no row is no. `app.vo_rate_limited(org)`: the limits `begin_vo_run` uses (20/hour, 100/day per person, 300/day per firm, advisory lock per firm). `app.vo_crm_target_readable(org, lead, matter)`.
+* `public.begin_vo_lead_follow_up(org, lead)`: lead staff with MFA; `off`, `capability_off` (Administrative reply drafts or Client messages off), `converted`, `no_contact`, `no_consent` (no current enquiry-reply consent), `sample_only`, `already_drafted`, rate limits; audited `vo.run_started`.
+* `public.begin_vo_call_summary(org, booking)`: lead staff roles, scheduling read; the summary is kept on the linked lead, else the booking's matter (`no_target`); `off`, `capability_off` (Matter summaries for staff off), `not_video`, `no_call` (not completed and no started `video_sessions` row), `sample_only`, `already_drafted`, rate limits; audited `vo.run_started`.
+* `public.finish_vo_crm_run(...)`: the run's own user within 10 minutes; drafted (sources must be the run's lead, its notes, its consultation or linked consultations, or its matter; a lead follow-up re-checks consent), abstained or failed (`refused` allowed). Audited `vo.run_finished` (ids, counts; no text).
+* `public.mark_vo_lead_follow_up_sent(draft, body)`: lead staff; no placeholder; consent still given; records the text as a lead note through `public.add_lead_note`. Audited `vo.draft_sent`.
+* `public.save_vo_call_summary(draft, body)`: no placeholder; a lead note (`add_lead_note`) or a matter staff note (`add_matter_staff_note`). Audited `vo.draft_saved`.
+* `public.discard_vo_crm_draft(draft)`: audited `vo.draft_discarded`.
+
+The pasted call notes are never stored (they go to the Vo service in the signed request). Tested in `tests/vo-lead-call.rls.test.ts`; the service in `tests/vo-lead-call-service.test.ts`; the app in `tests/vo-lead-call-app.test.ts` and `tests/vo-lead-call-present.test.tsx`.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.
@@ -734,3 +751,23 @@ AI-06, branch `feat/ai-vendor-terms`. Additive; no existing function is redefine
 * Trigger `vo_settings_require_vendor_terms` (`app.vo_settings_require_vendor_terms`, before insert or update of `enabled` on `vo_settings`): setting `enabled` to true when Vo was off (the saved switch, or with no row the sample-mode default from `app.vo_enabled`) is refused without the current version acknowledged. `set_vo_settings` and `set_composio_enabled` are unchanged.
 
 Tested in `tests/vo-vendor-terms.rls.test.ts` and `tests/vo-vendor-terms.test.tsx`; `tests/vo-drafts.rls.test.ts` and `tests/vo-doc-review.rls.test.ts` now acknowledge before turning Vo on.
+
+## Letters on a matter and Vo letter drafts (`20261025240000`, `20261025240100`, not applied on the live project)
+
+AI-01 (gap #183), branch `feat/ai-letter-drafts`. Apply in order: `20261025240000_vo_letter_enum.sql` (enum value, its own migration), then `20261025240100_vo_letter_drafts.sql`. Then `20261025240200_vo_settings_keep_read_on_upload.sql`, in the same go: it redefines `set_vo_settings` from DOC-05's body (`20261025000000`, live on prod) plus `letter_drafts`, and adds `vo_settings.read_on_upload` if missing, so neither switch is dropped.
+
+* `vo_run_kind` gains `letter_draft`. `vo_runs_thread_kind_check` is replaced so a letter run, like Ask Vo and a document reading, has no conversation.
+* `vo_settings.letter_drafts` (boolean, default true): the owner's "First drafts of letters from approved facts" switch.
+* `matter_letters`: one letter on a matter: `letter_type` (cover_letter, explanation, other), title, `origin` (vo with its `run_id`, or staff), `status` draft / approved / discarded, `current_version`, `approved_version`, `approved_by_membership_id`, `approved_at`, `approved_self`, `discarded_by` / `discarded_at`, `is_sample`, `version` (optimistic lock).
+* `matter_letter_versions` (append-only, trigger): `version_number`, title, body (up to 12,000 characters, with `[F#]` / `[S#]` markers), `facts` (cited approved facts: answer, response, person, form, question key and type, label, value, reviewer membership, reviewed at), `official` (cited approved official content: kind, id, label, content, source URL, section, form number and date modified, checked on, current to, snapshot SHA-256, attested on, reviewed at), `left_out` (lines), `origin`, `created_by`.
+* Forced RLS on both; read by staff who may read the matter's messages (`app.message_staff_reads_matter`: owner, licensed consultant, case manager, assistant at staff assurance, on a matter they can read). No direct writes.
+* Helpers (SECURITY DEFINER, `search_path = ''`): `app.vo_fact_category(section, label)`, `app.matter_approved_facts(matter)` (the latest reviewed answer per question on the matter's submitted forms, text/date/country/choice only), `app.vo_letter_official_items(org, matter)` (approved `government_fee_references`, `submission_requirements`, `renewal_timings`, `approval_follow_up_steps` for the matter's program, and published current `rule_versions` with their latest evidence snapshot), `app.vo_letter_run(run)`, `app.reject_letter_version_change()`.
+* `public.set_vo_settings` REDEFINED from `20261019218100_vo_doc_review.sql`: the same, plus the `letter_drafts` key.
+* `public.begin_vo_letter_draft(org, matter, letter_type)`: staff with MFA who can read the matter; returns `off`, `capability_off`, `sample_only`, `no_facts` (no approved fact Vo may use, before any run is counted), `rate_limited` or `firm_rate_limited` (the shared Vo limits), else starts a `letter_draft` run. Audited `vo.run_started`.
+* `public.vo_letter_facts(run)` and `public.vo_letter_official_content(run)`: the run's own person while it runs: the facts Vo may use (and how many the category switches hide), and the approved official content.
+* `public.save_vo_letter_draft(run, …)`: the run's person within 10 minutes; every cited fact an approved fact of the matter in an allowed category, every cited official item approved content of the firm, every marker cited and every citation used, a money amount only with an official citation; citations rebuilt from the database. Creates the letter and version 1 and ends the run as drafted. Audited `vo.run_finished`. A failed or abstained letter run still ends through the unchanged `public.finish_vo_run`.
+* `public.create_matter_letter`, `public.revise_matter_letter` (new version; citations whose marker remains are kept), `public.discard_matter_letter`: owner, licensed consultant, case manager, assistant on the matter; sample-mode rule. Audited `letter.created`, `letter.revised`, `letter.discarded`.
+* `public.approve_matter_letter(letter, version)`: licensed member with a fresh step-up (`app.require_licensed_staff`), no "[needs ...]" placeholder, the GOV self-approval rule (`app.gov_check_self_approval`). Audited `letter.approved` / `letter.approved_self`.
+* `public.release_matter_letter(letter)`: approved letters only; the approved version's text without citation markers. Audited `letter.released`. Used by `GET /api/letters/[letterId]`.
+
+Tested in `tests/vo-letter-drafts.rls.test.ts`, `tests/vo-letter-service.test.ts`, `tests/vo-letter-app.test.ts`, `tests/vo-letter-guard.test.ts` and `tests/vo-letters-present.test.tsx`.

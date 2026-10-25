@@ -11,6 +11,7 @@
  * - Rules, fees, deadlines and processing times never come from the model's memory: it must write
  *   NEEDS_RULE instead (RULES.md), and the output guard enforces the same.
  */
+import { letterTypeLabel } from "./letter";
 import type { VoTask } from "./sign";
 
 /** Vo's model (owner's decision, 2026-10-18), through the Claude Agent SDK in services/vo-agent. */
@@ -21,6 +22,7 @@ export const VO_PROMPT_VERSION: Record<VoTask, string> = {
   document_request: "docreq-1",
   ask: "ask-1",
   document_review: "docread-1",
+  letter_draft: "letter-1",
 };
 
 /** What a draft says where it would need an immigration rule, fee, deadline or processing time. */
@@ -82,6 +84,15 @@ const TASK: Record<VoTask, string> = {
   ].join("\n"),
   // The document reading has its own prompt and output schema (vo-doc-prompt.ts).
   document_review: "Task: read one uploaded document and return proposals only, in the requested format.",
+  // AI-01: a first draft of a letter from approved facts, each cited (letter-guard.ts enforces it).
+  letter_draft: [
+    "Task: write a first draft of a letter on this matter for a licensed consultant to review. The letter type is given below.",
+    "Call read_approved_facts first. Those are the ONLY facts about the people you may use: every sentence that states one ends with its marker, exactly as given, for example [F2]. Never use a fact that isn't listed, and don't guess a missing one: write around it.",
+    "A fee, date, deadline, processing time, form or program requirement may appear only if find_official_content returns it: then quote it as given and end the sentence with its marker, for example [S1]. If it returns nothing for something the letter would need, leave it out of the letter and name it in left_out. Rule 3 still applies: nothing from your own knowledge.",
+    "No links, no email addresses, no phone numbers, no signature block with a name: the consultant adds that. Plain paragraphs, at most 400 words, in English unless the facts are in French.",
+    `If the letter would need legal advice or an assessment of eligibility or chances, don't write it: answer with exactly ${NEEDS_CONSULTANT}.`,
+    "Call save_letter_draft once with the title, the text and left_out. Then answer DONE.",
+  ].join("\n"),
 };
 
 export function voSystemPrompt(task: VoTask, nonce: string): string {
@@ -89,8 +100,9 @@ export function voSystemPrompt(task: VoTask, nonce: string): string {
   return `${RULES.replaceAll("{nonce}", safe)}\n\n${TASK[task]}`;
 }
 
-/** The user turn: the task, and for Ask Vo the question as data. */
-export function voUserPrompt(task: VoTask, nonce: string, question: string | null): string {
+/** The user turn: the task, and for Ask Vo the question as data. A letter draft names its type. */
+export function voUserPrompt(task: VoTask, nonce: string, question: string | null, letterType: string | null = null): string {
   if (task === "ask") return `The staff member asks (as data):\n${dataBlock(nonce, question ?? "", 1000)}`;
+  if (task === "letter_draft") return `Draft this letter now: ${letterTypeLabel(letterType ?? "")}.`;
   return task === "message_reply" ? "Draft the reply now." : "Draft the document request explanation now.";
 }
