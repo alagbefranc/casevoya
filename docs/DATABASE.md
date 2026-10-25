@@ -841,3 +841,15 @@ Tested in `tests/rep-outcomes.rls.test.ts` (seeded decided matters, RLS scope, s
 ## Privacy response download needs the client's two-step (`20261025340000`, not applied on the live project)
 
 SEC-01 + SEC-06 follow-up. **Redefines** `app.authorize_privacy_response_download(uuid)` (only definition `20261025280000_sec_privacy_responses.sql`): after the ownership and expiry checks it raises `two-step sign-in is required for this download` when the person has no verified authenticator, and `client step-up required: enter your two-step code` when `app.client_step_up_satisfied()` is false. Otherwise unchanged. Tested in `tests/privacy-responses.rls.test.ts`.
+
+## Service notices (`20261025350000`, not applied on the live project)
+
+ADM-04 (gap #186), branch `feat/adm-service-notices`. No existing function redefined; nothing seeded.
+
+* `service_notices`: `kind` maintenance / incident / info, `severity` info / minor / major, `title` (3-120), `body` (plain text, up to 1000), `starts_at`, `ends_at` (required for maintenance; after the start), `status` draft / published / resolved, `audience` all_firms / listed_firms, `published_at`, `resolved_at` / `resolved_by` / `resolution_note`, `created_by` / `updated_by` (the platform admin). Never deleted (trigger).
+* `service_notice_targets` (notice, organization; PK both): the firms a listed_firms notice reaches. Never deleted.
+* `service_notice_dismissals` (notice, organization, user; PK all three): a staff member hid the banner for themselves in one firm. The notice stays in the history.
+* RLS forced on all three; select only. Notices: platform admins, or staff (aal2) of the workspace in use for a published or resolved notice that reaches it (`app.can_read_service_notice`, `app.service_notice_reaches`); client users and other firms read nothing. Targets: platform admins, or staff of that firm. Dismissals: the person, in the workspace in use.
+* Functions (`app.` with `public.` invoker wrappers): `post_service_notice`, `update_service_notice` (wording, severity, times, publish a draft; the audience is fixed), `resolve_service_notice` (note required): a signed-in platform admin at aal2 with a recent step-up, or the service role naming a `platform_admins` user (`app.service_notice_actor`, like the CICC list import). `dismiss_service_notice`: firm staff. Audited: `service_notice.drafted`, `.published`, `.updated`, `.resolved` (organization null, `acting_admin` in context), `.dismissed` (the firm).
+
+Tested in `tests/adm-service-notices.rls.test.ts` and `tests/adm-service-notices.test.tsx`.
