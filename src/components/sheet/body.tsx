@@ -958,5 +958,6 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     owner: one("owner"),
     vo: one("vo"),
     from: one("from"),
+    program: one("program"),
   };
 }
