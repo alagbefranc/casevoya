@@ -23,6 +23,7 @@ import { recordGovernmentLetter } from "@/modules/government/letter-actions";
 import { readLetterForm } from "./letter-acts";
 import { needsStepUp, stepUpLocation, withoutDialog, type MatterDialog } from "@/modules/sheet/matter-wire";
 import { setTaskStatus } from "@/modules/tasks/actions";
+import { acceptChosen, failUpload } from "./upload-failure";
 import { type StepUpActionKey } from "@/lib/auth/mfa-step";
 
 /**
@@ -57,6 +58,11 @@ export function chooseFile(): Promise<File | null> {
 export async function pickInto(holder: Element, label: Element | null) {
   const file = await chooseFile();
   if (!file) return;
+  // DES-04: a wrong type, empty or too large file is refused here with a next step and a retry.
+  if (!acceptChosen(holder, file, "evidence", () => void pickInto(holder, label))) {
+    picked.delete(holder);
+    return;
+  }
   picked.set(holder, file);
   if (label) label.textContent = file.name;
   if (holder instanceof HTMLInputElement) holder.value = file.name;
@@ -106,7 +112,11 @@ export async function recordLetter(scope: ParentNode, dialog: Element | null, re
   let evidenceVersionId: string | null = null;
   if (file) {
     const uploaded = await uploadEvidence({ ...ref, file, purpose: `Government letter received ${receivedOn}` });
-    if ("error" in uploaded) return uploaded;
+    if ("error" in uploaded) {
+      const drop = dialog?.querySelector<HTMLElement>(".drop button") ?? null;
+      if (drop) failUpload(drop, uploaded.error, "evidence", () => void pickInto(drop, drop.closest(".drop")?.querySelector("b") ?? null));
+      return uploaded;
+    }
     evidenceVersionId = uploaded.versionId;
   }
   if (live) {
@@ -277,7 +287,10 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
     let receiptVersionId: string | null = null;
     if (file) {
       const uploaded = await upload({ ...ref, file, purpose: "Submission receipt" });
-      if ("error" in uploaded) return void toast2(uploaded.error, { kind: "bad", sub: "Nothing was saved." });
+      if ("error" in uploaded) {
+        const holder = dialog?.querySelector<HTMLElement>("[data-gov-pick]") ?? button;
+        return void failUpload(holder, uploaded.error, "evidence", () => void pickInto(holder, holder.closest(".drop")?.querySelector("[data-gov-name]") ?? null));
+      }
       receiptVersionId = uploaded.versionId;
     }
     if (act === "submit") {
@@ -306,8 +319,10 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
   } else if (act === "receipt-file") {
     const file = await chooseFile();
     if (!file) return;
+    const again = () => void runGovAct(button, root, router);
+    if (!acceptChosen(button, file, "evidence", again)) return;
     const uploaded = await upload({ ...ref, file, purpose: "Submission receipt" });
-    if ("error" in uploaded) return void toast2(uploaded.error, { kind: "bad", sub: "Nothing was saved." });
+    if ("error" in uploaded) return void failUpload(button, uploaded.error, "evidence", again);
     result = await verifySubmission({ organizationId: ref.organizationId, handoffId: data.id ?? "", version, receiptVersionId: uploaded.versionId });
   } else if (act === "verify-letter") {
     result = await verifyCorrespondence({ organizationId: ref.organizationId, correspondenceId: data.id ?? "", version });
@@ -315,8 +330,10 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
     // A letter recorded without its evidence: choose the file, store it on the matter, attach it.
     const file = await chooseFile();
     if (!file) return;
+    const again = () => void runGovAct(button, root, router);
+    if (!acceptChosen(button, file, "evidence", again)) return;
     const uploaded = await upload({ ...ref, file, purpose: "Government letter" });
-    if ("error" in uploaded) return void toast2(uploaded.error, { kind: "bad", sub: "Nothing was attached." });
+    if ("error" in uploaded) return void failUpload(button, uploaded.error, "evidence", again);
     result = await attachCorrespondenceEvidence({ organizationId: ref.organizationId, correspondenceId: data.id ?? "", version, evidenceVersionId: uploaded.versionId });
   } else if (act === "status") {
     const kind = value(scope, "select");
@@ -327,7 +344,7 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
       const file = pickedFile(holder);
       if (!file) return void toast2("Attach the evidence", { kind: "warn", sub: "Click Evidence to choose the letter or screenshot." });
       const uploaded = await upload({ ...ref, file, purpose: "Government status evidence" });
-      if ("error" in uploaded) return void toast2(uploaded.error, { kind: "bad", sub: "Nothing was saved." });
+      if ("error" in uploaded) return void failUpload(holder ?? button, uploaded.error, "evidence", () => (holder ? void pickInto(holder, null) : undefined));
       result = await recordCorrespondence({ ...ref, kind, channel: "other", receivedOn: data.today || today(), evidenceVersionId: uploaded.versionId });
     }
   } else if (act === "decision") {

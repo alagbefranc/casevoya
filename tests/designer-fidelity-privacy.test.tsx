@@ -181,8 +181,8 @@ describe("Designer fidelity: Compliance", () => {
     }
     expect(complaints).toContain("Complaints about Maple Immigration’s professional service.");
     // Staff outside the register see why, not rows.
-    expect(renderToStaticMarkup(createElement(SheetComplaints, { data: { firmName: "Maple", rows: null, selected: null } }))).toContain("Only designated staff see complaints");
-    expect(renderToStaticMarkup(createElement(SheetPrivacy, { data: { rows: null, selected: null } }))).toContain("Privacy requests are limited");
+    expect(renderToStaticMarkup(createElement(SheetComplaints, { data: { firmName: "Maple", rows: null, selected: null } }))).toContain("You don’t have access to Complaints");
+    expect(renderToStaticMarkup(createElement(SheetPrivacy, { data: { rows: null, selected: null } }))).toContain("You don’t have access to Privacy requests");
   });
 
   it("wires live rows, buttons and dialogs by data attributes, with no Designer toast", () => {
