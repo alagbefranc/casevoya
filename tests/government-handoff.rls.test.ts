@@ -134,6 +134,40 @@ async function handoff(ctx: Firm) {
   return prepared.rows[0].id;
 }
 
+/** A stored, clean file on the matter (GOV-03: a release pins the matter's files). Returns the version id. */
+async function storedFile(ctx: Firm, name: string) {
+  await asMaintenance(db);
+  const doc = await db.query<{ id: string }>(
+    `insert into public.documents (organization_id, person_id, purpose, audience, created_by) values ($1, $2, $3, 'matter', $4) returning id`,
+    [ctx.orgId, ctx.personId, `Synthetic ${name}`, ctx.owner],
+  );
+  await db.query(`insert into public.document_matter_refs (organization_id, document_id, matter_id, created_by) values ($1, $2, $3, $4)`, [
+    ctx.orgId,
+    doc.rows[0].id,
+    ctx.matterId,
+    ctx.owner,
+  ]);
+  const version = await db.query<{ id: string }>(
+    `insert into public.document_versions (organization_id, document_id, version_number, storage_key, original_filename, declared_media_type,
+       declared_byte_size, upload_state, intent_expires_at, created_by)
+     values ($1, $2, 1, $3, $4, 'application/pdf', 2048, 'clean', now() + interval '15 minutes', $5) returning id`,
+    [ctx.orgId, doc.rows[0].id, `${ctx.orgId}/files/${randomUUID()}`, name, ctx.owner],
+  );
+  return version.rows[0].id;
+}
+
+/** GOV-01 gates other than the package: a signed service agreement and the fee handling confirmed. */
+async function checklistReady(ctx: Firm, handoffId: string) {
+  await asMaintenance(db);
+  await db.query(`insert into public.agreements (organization_id, matter_id, kind, title, status, created_by) values ($1, $2, 'service', 'Synthetic service agreement', 'completed', $3)`, [
+    ctx.orgId,
+    ctx.matterId,
+    ctx.owner,
+  ]);
+  await stale(ctx.manager, ctx.orgId);
+  await db.query(`select public.confirm_submission_fees($1, true, 'Synthetic: fee paid in the portal')`, [handoffId]);
+}
+
 async function versionOf(table: string, id: string) {
   await asMaintenance(db);
   const row = await db.query<{ version: number }>(`select version from public.${table} where id = $1`, [id]);
@@ -179,7 +213,10 @@ describe("T036 manual submission handoff", () => {
     await expectDbError(() => db.query(`select public.sign_off_submission_handoff($1, 1)`, [id]), /step-up/);
     await fresh(ctx.consultant, ctx.orgId);
     await expectDbError(() => db.query(`select public.sign_off_submission_handoff($1, 9)`, [id]), /version conflict/);
+    await storedFile(ctx, "synthetic-form.pdf");
+    await fresh(ctx.consultant, ctx.orgId);
     await db.query(`select public.sign_off_submission_handoff($1, 1)`, [id]);
+    await checklistReady(ctx, id);
 
     // The submitting representative must be licensed; no receipt means "submission unverified".
     await fresh(ctx.manager, ctx.orgId);
@@ -214,8 +251,9 @@ describe("T036 manual submission handoff", () => {
 
     // A receipt verifies it and writes the stage-entry evidence; the matter can then move.
     const unverified = await versionOf("submission_handoffs", id);
+    const receipt = await storedFile(ctx, "synthetic-confirmation.pdf");
     await fresh(ctx.manager, ctx.orgId);
-    await db.query(`select public.verify_submission_receipt($1, $2, null, 'Synthetic confirmation page', $3::date)`, [id, unverified, firmDay()]);
+    await db.query(`select public.verify_submission_receipt($1, $2, $3, 'Synthetic confirmation page', $4::date)`, [id, unverified, receipt, firmDay()]);
     expect(await stageEvidence(ctx.matterId, "submission_confirmation")).toBe(1);
     await fresh(ctx.consultant, ctx.orgId);
     const latest = await db.query<{ version: number; government_status: string }>(

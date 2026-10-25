@@ -8,6 +8,7 @@ import { NEEDS_CONSULTANT, newNonce, voSystemPrompt, voUserPrompt, VO_MODEL, VO_
 import { guardVoOutput } from "../../../src/modules/vo/guard";
 import type { VoTaskRequest, VoTaskResponse } from "../../../src/modules/vo/sign";
 import type { VoData } from "./data";
+import { finishLetterRun } from "./letter-tools";
 import { agentOptions, MCP_SERVER, type ToolLog } from "./policy";
 import { TASK_TOOLS, TOOL_SPECS, type RunContext, type ToolResult } from "./tools";
 
@@ -97,7 +98,7 @@ export async function runVoTask(request: VoTaskRequest, deps: RunDeps): Promise<
   let usage = { input: 0, output: 0, cost: 0 };
   try {
     const stream = deps.sdk.query({
-      prompt: voUserPrompt(request.task, ctx.nonce, request.question),
+      prompt: voUserPrompt(request.task, ctx.nonce, request.question, request.letterType ?? null),
       options: agentOptions({
         task: request.task,
         systemPrompt: voSystemPrompt(request.task, ctx.nonce),
@@ -128,6 +129,13 @@ export async function runVoTask(request: VoTaskRequest, deps: RunDeps): Promise<
   };
   const sources = [...ctx.sources.values()];
   const abstained = ctx.abstainedByDraft || resultText.trim().toLowerCase().startsWith(NEEDS_CONSULTANT);
+
+  // AI-01: a letter is saved as a matter letter draft (letter-tools.ts), not as a vo_drafts row.
+  if (request.task === "letter_draft") {
+    const latencyMs = Math.min(600000, Math.max(0, Math.round(now() - started)));
+    const outcome = await finishLetterRun(ctx, { metrics, latencyMs, success, abstained, finish });
+    return { ...outcome, log, tools: ctx.calls };
+  }
 
   if (request.task === "ask") {
     if (!success && !resultText) return failed("failed", metrics);

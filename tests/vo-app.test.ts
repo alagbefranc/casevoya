@@ -213,7 +213,9 @@ describe("presentation", () => {
     const settings = present.effectiveSettings({ enabled: true }, false);
     const owner = present.aiSettings(viewer, settings);
     expect(owner.firm[0].attrs).toEqual({ "data-vo-setting": "enabled", "data-org": ORG });
-    expect(owner.firm.find((s) => s.label === "First drafts of letters from approved facts")).toMatchObject({ on: false, attrs: { disabled: true } });
+    // AI-01 letter drafts are built: on by default once Vo is on, the owner's to switch.
+    expect(owner.firm.find((s) => s.label === "First drafts of letters from approved facts")).toMatchObject({ on: true, attrs: { "data-vo-setting": "letter_drafts" } });
+    expect(present.aiSettings(viewer, present.effectiveSettings({ enabled: true, letter_drafts: false }, false)).firm.find((s) => s.label === "First drafts of letters from approved facts")).toMatchObject({ on: false });
     // Document reading's capabilities are built: on by default, the owner's to switch.
     expect(owner.firm.find((s) => s.label === "Document classification")).toMatchObject({ on: true, attrs: { "data-vo-setting": "doc_classification" } });
     const staff = present.aiSettings({ ...viewer, isOwner: false }, settings);

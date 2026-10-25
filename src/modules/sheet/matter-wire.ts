@@ -2,7 +2,7 @@
 import { safeAccessError } from "@/lib/auth/step-up";
 import { MATTER_STAGES } from "@/modules/sheet/present";
 
-export type MatterDialog = "stage" | "hold" | "letter" | "deadline" | "handoff" | "submission" | "receipt" | "request";
+export type MatterDialog = "stage" | "hold" | "letter" | "deadline" | "handoff" | "submission" | "receipt" | "request" | "consultant";
 
 /** The `<dialog>` each `?dlg=` value reopens. */
 export const DIALOG_ID: Record<MatterDialog, string> = {
@@ -16,6 +16,8 @@ export const DIALOG_ID: Record<MatterDialog, string> = {
   receipt: "dSubRcpt",
   // Request a document (doc-request).
   request: "dReq",
+  // ORG-06: Change consultant (People tab).
+  consultant: "dCons",
 };
 
 export function dialogId(value: string | null | undefined): string | null {

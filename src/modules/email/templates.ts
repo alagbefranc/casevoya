@@ -79,6 +79,9 @@ type Wired =
   | "EX07"
   | "EX15"
   | "EX16"
+  | "EX17"
+  | "EX18"
+  | "EX19"
   | "EX11"
   | "EM17";
 
@@ -133,6 +136,15 @@ export function designFor(context: Context): Wired | "generic" {
     // Signing flow (20261023230100): the six-digit code the worker opened from its sealed form.
     case "signing_code":
       return "EX16";
+    // ORG-06 (20261024120100): the matter's responsible consultant changed. Firm name only.
+    case "consultant_changed":
+      return "EX17";
+    // CRM-01 (20261024150100): a new web enquiry, to the firm's owners. Firm name only.
+    case "enquiry_received":
+      return "EX18";
+    // OPS-04 (20261025110100): an announcement to many clients. Firm name only.
+    case "announcement":
+      return "EX19";
     default:
       return "generic";
   }
@@ -191,6 +203,9 @@ function contextFor(design: Wired, context: Context, firm: string): EmailContext
     case "EX09":
     case "EX10":
     case "EX07":
+    case "EX17":
+    case "EX18":
+    case "EX19":
       return { firmName: firm };
     case "EX16":
       return { firmName: firm, code: textOf(context.code) || null };

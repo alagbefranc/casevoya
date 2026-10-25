@@ -3,8 +3,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { stripeServer } from "@/lib/stripe/server";
 import { isUuid } from "@/lib/tenant/context";
-import { accountCreateParams, ACCOUNT_SESSION_COMPONENTS, retrieveAccountStatus } from "@/modules/finance/stripe-account";
+import { accountCreateParams, ACCOUNT_SESSION_COMPONENTS, retrieveAccountStatus, syncStatusArgs } from "@/modules/finance/stripe-account";
 import { financeError, readNewInvoice, readRefund, refundError, type NewInvoiceFields, type RefundFields } from "@/modules/sheet/finance-present";
+import { creditError, readCredit, type CreditFields } from "@/modules/finance/credits-present";
 
 /**
  * The Sheet's finance actions, run as the signed-in staff member. Who may do what is the
@@ -87,12 +88,22 @@ export async function refundPayment(
   }
   const session = await staffClient(input.organizationId);
   if ("error" in session) return { error: session.error ?? "Sign in first." };
-  const { supabase } = session;
-  const context = await supabase.rpc("invoice_refund_context", { p_payment_id: read.input.paymentId });
+  return refundCardPayment(session.supabase, input.organizationId, { ...read.input, idempotencyKey: input.idempotencyKey });
+}
+
+type StaffSupabase = Awaited<ReturnType<typeof createClient>>;
+
+/** The one card-refund path (Refund on the Payments tab, and a client credit's Refund to the card). */
+async function refundCardPayment(
+  supabase: StaffSupabase,
+  organizationId: string,
+  input: { paymentId: string; amountCents: number; reason: string | null; idempotencyKey: string },
+): Promise<{ id: string } | { error: string }> {
+  const context = await supabase.rpc("invoice_refund_context", { p_payment_id: input.paymentId });
   if (context.error) return { error: refundError(context.error.message) };
   if (!isRefundContext(context.data)) return { error: "The payment wasn’t found." };
   const payment = context.data;
-  if (read.input.amountCents > payment.refundable) return { error: refundError("refund exceeds the amount received") };
+  if (input.amountCents > payment.refundable) return { error: refundError("refund exceeds the amount received") };
   const stripe = stripeServer();
   if (!stripe) return { error: NOT_CONFIGURED };
   let refundId: string;
@@ -100,12 +111,12 @@ export async function refundPayment(
     const refund = await stripe.refunds.create(
       {
         payment_intent: payment.payment_intent_id,
-        amount: read.input.amountCents,
-        ...(read.input.reason ? { reason: read.input.reason as "duplicate" | "fraudulent" | "requested_by_customer" } : {}),
+        amount: input.amountCents,
+        ...(input.reason ? { reason: input.reason as "duplicate" | "fraudulent" | "requested_by_customer" } : {}),
         metadata: {
-          casevoya_organization_id: input.organizationId,
+          casevoya_organization_id: organizationId,
           casevoya_invoice_id: payment.invoice_id,
-          casevoya_payment_id: read.input.paymentId,
+          casevoya_payment_id: input.paymentId,
         },
       },
       { stripeAccount: payment.account_id, idempotencyKey: `casevoya-refund-${input.idempotencyKey}` },
@@ -115,11 +126,11 @@ export async function refundPayment(
     return { error: stripeRefundError(error) };
   }
   const recorded = await supabase.rpc("record_invoice_refund", {
-    p_payment_id: read.input.paymentId,
+    p_payment_id: input.paymentId,
     p_refund_id: refundId,
-    p_amount_cents: read.input.amountCents,
+    p_amount_cents: input.amountCents,
     p_currency: payment.currency,
-    p_reason: read.input.reason,
+    p_reason: input.reason,
     p_livemode: false,
     p_idempotency_key: input.idempotencyKey,
   });
@@ -128,6 +139,63 @@ export async function refundPayment(
     return { error: "Stripe accepted the refund, but it wasn’t recorded here yet. It shows on the Refunds and disputes tab when Stripe’s event arrives. Don’t refund it again." };
   }
   return { id: recorded.data };
+}
+
+/**
+ * A client credit (an overpayment, FIN-13): apply it to another open invoice of the same client,
+ * refund it to the card that paid (through the same Stripe refund path as the Payments tab, then
+ * linked to the credit), or record a bank refund made outside Casevoya. The database checks
+ * billing access, a recent step-up, the amount left and, for a bank refund, that no card refund of
+ * that invoice is still pending at Stripe. One idempotency key per dialog opening.
+ */
+export async function moveClientCredit(
+  input: { organizationId: string; idempotencyKey: string; today: string; maxCents: number | null } & CreditFields,
+): Promise<{ mode: string } | { error: string }> {
+  const read = readCredit(input, input.maxCents, input.today);
+  if ("error" in read) return { error: read.error };
+  if (typeof input.idempotencyKey !== "string" || input.idempotencyKey.length < 8 || input.idempotencyKey.length > 180) {
+    return { error: "Try again." };
+  }
+  const session = await staffClient(input.organizationId);
+  if ("error" in session) return { error: session.error ?? "Sign in first." };
+  const { supabase } = session;
+  const credit = read.input;
+  if (credit.mode === "apply") {
+    const { error } = await supabase.rpc("apply_client_credit", {
+      p_credit_id: credit.creditId,
+      p_target_invoice_id: credit.targetInvoiceId,
+      p_amount_cents: credit.amountCents,
+      p_idempotency_key: input.idempotencyKey,
+    });
+    return error ? { error: creditError(error.message) } : { mode: "apply" };
+  }
+  if (credit.mode === "bank") {
+    const { error } = await supabase.rpc("record_client_credit_bank_refund", {
+      p_credit_id: credit.creditId,
+      p_amount_cents: credit.amountCents,
+      p_method: credit.method,
+      p_reference: credit.reference,
+      p_refunded_on: credit.refundedOn,
+      p_idempotency_key: input.idempotencyKey,
+    });
+    return error ? { error: creditError(error.message) } : { mode: "bank" };
+  }
+  const context = await supabase.rpc("client_credit_refund_context", { p_credit_id: credit.creditId });
+  if (context.error) return { error: creditError(context.error.message) };
+  const row = (context.data ?? {}) as { payment_id?: unknown; refundable?: unknown; available?: unknown };
+  if (typeof row.payment_id !== "string") return { error: "No card payment on this invoice can take a refund. Record a bank refund instead." };
+  if (credit.amountCents > Number(row.available ?? 0)) return { error: creditError("amount is more than the credit available") };
+  if (credit.amountCents > Number(row.refundable ?? 0)) return { error: refundError("refund exceeds the amount received") };
+  const refunded = await refundCardPayment(supabase, input.organizationId, {
+    paymentId: row.payment_id,
+    amountCents: credit.amountCents,
+    reason: "requested_by_customer",
+    idempotencyKey: input.idempotencyKey,
+  });
+  if ("error" in refunded) return refunded;
+  const linked = await supabase.rpc("link_client_credit_refund", { p_credit_id: credit.creditId, p_refund_id: refunded.id });
+  if (linked.error) return { error: "The card refund was sent to Stripe, but it wasn’t linked to the credit. It still counts against the credit once Stripe confirms it." };
+  return { mode: "card" };
 }
 
 /**
@@ -192,13 +260,7 @@ export async function refreshStripeAccount(input: { organizationId: string }): P
   try {
     const status = await retrieveAccountStatus(stripe, row.data.account_id);
     if (status.livemode) return { error: "Only a Stripe test-mode account can be connected." };
-    const { error } = await session.supabase.rpc("sync_firm_payment_account", {
-      p_org: input.organizationId,
-      p_account_id: row.data.account_id,
-      p_card_payments_status: status.cardPayments,
-      p_payouts_status: status.payouts,
-      p_requirements_due: status.requirementsDue,
-    });
+    const { error } = await session.supabase.rpc("sync_firm_payment_account_status", syncStatusArgs(input.organizationId, row.data.account_id, status));
     if (error) return { error: financeError(error.message) };
     return { cardPayments: status.cardPayments };
   } catch {

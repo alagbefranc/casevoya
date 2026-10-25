@@ -9,6 +9,9 @@ import { supabaseVoData, type VoData } from "./data";
 import { runVoTask, type AgentSdk } from "./task";
 import { supabaseVoDocData, type VoDocData } from "./vo-doc-data";
 import { runDocumentReview, type DocModel } from "./vo-doc-read";
+import { isVoCrmTask, parseVoCrmRequest, type VoCrmResponse } from "../../../src/modules/vo/crm";
+import { supabaseVoCrmData, type VoCrmData } from "./vo-crm-data";
+import { runVoCrmDraft } from "./vo-crm";
 
 export type ServiceEnv = {
   VO_AGENT_SECRET?: string;
@@ -30,12 +33,14 @@ export type HandlerDeps = {
   docModel?: DocModel | null;
   docDataFor?: (input: { accessToken: string; organizationId: string }) => VoDocData;
   classifyError?: (error: unknown) => "unavailable" | "failed";
+  /** Lead follow-ups and call summaries: their data layer (tests replace it). */
+  crmDataFor?: (input: { accessToken: string; organizationId: string }) => VoCrmData;
 };
 
 export async function handleRun(
   request: { method: string; headers: Record<string, string | undefined>; body: string },
   deps: HandlerDeps,
-): Promise<{ status: number; body: VoTaskResponse | { error: string } }> {
+): Promise<{ status: number; body: VoTaskResponse | VoCrmResponse | { error: string } }> {
   if (request.method !== "POST") return { status: 405, body: { error: "method" } };
   const now = deps.now ?? Date.now;
   const secret = deps.env.VO_AGENT_SECRET ?? "";
@@ -46,6 +51,28 @@ export async function handleRun(
     parsed = JSON.parse(request.body);
   } catch {
     return { status: 400, body: { error: "body" } };
+  }
+  // Lead follow-ups and call summaries: one Messages API call, like the document reading.
+  if (isVoCrmTask(parsed)) {
+    const crm = parseVoCrmRequest(parsed, now());
+    if (!crm) return { status: 400, body: { error: "body" } };
+    const crmDataFor =
+      deps.crmDataFor ??
+      ((input: { accessToken: string; organizationId: string }) => {
+        if (!deps.env.SUPABASE_URL || !deps.env.SUPABASE_PUBLISHABLE_KEY) throw new Error("not configured");
+        return supabaseVoCrmData({ url: deps.env.SUPABASE_URL, publishableKey: deps.env.SUPABASE_PUBLISHABLE_KEY, ...input });
+      });
+    let crmData: VoCrmData;
+    try {
+      crmData = crmDataFor({ accessToken: crm.accessToken, organizationId: crm.organizationId });
+    } catch {
+      return { status: 503, body: { result: "failed", failure: "unavailable" } };
+    }
+    const drafted = await runVoCrmDraft(crm, { model: deps.docModel ?? null, data: crmData, apiKey: deps.env.ANTHROPIC_API_KEY || null, now, classifyError: deps.classifyError });
+    // Only the outcome goes back to the app.
+    const { tools: _crmTools, ...crmBody } = drafted;
+    void _crmTools;
+    return { status: 200, body: crmBody };
   }
   const task = parseVoTaskRequest(parsed, now());
   if (!task) return { status: 400, body: { error: "body" } };

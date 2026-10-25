@@ -71,6 +71,9 @@ Subjects and preheaders must not reveal a program, document name, amount or deci
 | EX08 | Payment failed | machine_draft | — | — | No (not_approved) |
 | EX09 | Refund started | machine_draft | — | — | No (not_approved) |
 | EX10 | Refund complete | machine_draft | — | — | No (not_approved) |
+| EX19 | New notice (announcement) | machine_draft | — | — | No (not_approved) |
+| EX18 | New enquiry (staff) | machine_draft | — | — | No (not_approved) |
+| EX17 | Consultant changed | machine_draft | — | — | No (not_approved) |
 | EX16 | Signing code | machine_draft | — | — | No (not_approved) |
 | EX11 | Support access requested | machine_draft | — | — | No (not_approved) |
 | EX12 | Licence check attention | machine_draft | — | — | No (not_approved) |
@@ -616,6 +619,48 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:5609f6110cb
 | `heading` | Your refund is complete | Votre remboursement est complet | Machine draft |
 | `body` | {firm_name}’s refund has been sent. The details are in your portal. | Le remboursement de {firm_name} a été envoyé. Les détails se trouvent dans votre portail. | Machine draft. Keep {firm_name} |
 | `cta` | View payments | Afficher les paiements | Machine draft. Same English as another template; same French reused. |
+
+## EX19: New notice (announcement)
+
+Staff with permission send an announcement from an approved firm template (send_announcement; outbox announcement.sent, template announcement), to each chosen client with a portal account. Honours email_notices. Never for a sample-mode firm. Firm name only: the announcement itself is in the portal (OPS-04). Audience: client. [French preview](../email/previews/fr/EX19.html)
+
+Status `machine_draft` · drafted 2026-10-24 · English hash `sha256:1a45496c2bab…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject` | A new notice from {firm_name} | Un nouvel avis de {firm_name} | Hand draft. EX19 hand draft (OPS-04, #179). Not reviewed. Keep {firm_name} |
+| `preheader` | Read it in your portal. | Lisez-le dans votre portail. | Hand draft. EX19 hand draft (OPS-04, #179). Not reviewed. |
+| `heading` | You have a new notice from {firm_name} | Vous avez un nouvel avis de {firm_name} | Hand draft. EX19 hand draft (OPS-04, #179). Not reviewed. Keep {firm_name} |
+| `body` | {firm_name} posted a notice for its clients. For your privacy, it is in your portal. | {firm_name} a publié un avis pour ses clients. Pour protéger votre vie privée, il se trouve dans votre portail. | Hand draft. EX19 hand draft (OPS-04, #179). Not reviewed. Keep {firm_name} |
+| `cta` | Open your portal | Ouvrir votre portail | Hand draft. EX19 hand draft (OPS-04, #179). Not reviewed. |
+
+## EX18: New enquiry (staff)
+
+Someone sends an enquiry from the firm's hosted page or website form (trigger leads_enquiry_notice; outbox lead.enquiry_received, template enquiry_received), to the firm's active owners and the lead's owner when set. Not for sample (practice) enquiries. Firm name only: never the enquirer's name or what they wrote (CRM-01). Audience: staff. [French preview](../email/previews/fr/EX18.html)
+
+Status `machine_draft` · drafted 2026-10-24 · English hash `sha256:05b5307ba082…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject` | New enquiry for {firm_name} | Nouvelle demande pour {firm_name} | Hand draft. EX18 hand draft (CRM-01, #176). Keep {firm_name} |
+| `preheader` | Open the Pipeline in Casevoya to read it. | Ouvrez le pipeline dans Casevoya pour la lire. | Hand draft. EX18 hand draft (CRM-01, #176). |
+| `heading` | You have a new enquiry | Vous avez une nouvelle demande | Hand draft. EX18 hand draft (CRM-01, #176). |
+| `body` | Someone sent {firm_name} an enquiry from your enquiry page or website form. For their privacy, the details are in the Pipeline. | Quelqu’un a envoyé une demande à {firm_name} depuis votre page de demande ou le formulaire de votre site. Pour protéger sa vie privée, les détails sont dans le pipeline. | Hand draft. EX18 hand draft (CRM-01, #176). Keep {firm_name} |
+| `cta` | Open the Pipeline | Ouvrir le pipeline | Hand draft. EX18 hand draft (CRM-01, #176). |
+
+## EX17: Consultant changed
+
+Staff change a matter's responsible consultant from the matter's People tab (change_responsible_consultant; outbox matter.consultant_changed, template consultant_changed), to each person on the matter with a portal account. Honours email_notices. Firm name only: the new consultant's name is in the portal, not the email (ORG-06). Audience: client. [French preview](../email/previews/fr/EX17.html)
+
+Status `machine_draft` · drafted 2026-10-24 · English hash `sha256:aec282098709…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject` | An update on your file from {firm_name} | Une mise à jour de votre dossier de {firm_name} | Hand draft. EX17 hand draft (ORG-06, #175). Keep {firm_name} |
+| `preheader` | Your consultant has changed. See who in your portal. | Votre consultant a changé. Voyez qui dans votre portail. | Hand draft. EX17 hand draft (ORG-06, #175). |
+| `heading` | Your consultant has changed | Votre consultant a changé | Hand draft. EX17 hand draft (ORG-06, #175). |
+| `body` | A different consultant at {firm_name} is now responsible for your file, and your file stays with {firm_name}. For your privacy, their name is in your portal, along with anything you may need to sign. If you have questions or don't agree with this change, contact {firm_name}. | Un autre consultant de {firm_name} est maintenant responsable de votre dossier, qui reste chez {firm_name}. Pour protéger votre vie privée, son nom figure dans votre portail, avec tout document que vous pourriez avoir à signer. Si vous avez des questions ou n'êtes pas d'accord avec ce changement, communiquez avec {firm_name}. | Hand draft. EX17 hand draft (ORG-06, #175). Keep {firm_name} |
+| `cta` | Open your portal | Ouvrir votre portail | Hand draft. EX17 hand draft (ORG-06, #175). |
 
 ## EX16: Signing code
 

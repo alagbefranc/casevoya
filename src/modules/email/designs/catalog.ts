@@ -50,6 +50,7 @@ export const PATHS = {
   sheetSettings: "/sheet/settings",
   sheetExports: "/sheet/exports",
   sheetLicence: "/sheet/licence",
+  sheetPipeline: "/sheet/pipeline",
 } as const;
 
 type FirmContext = { firmName: string };
@@ -115,6 +116,9 @@ export type EmailContexts = {
   EX15: FirmContext & { senderName?: string | null; body?: string | null; subject?: string | null; portal?: boolean };
   /** code: the six-digit signing code, opened by the mail worker from its sealed form. */
   EX16: FirmContext & { code?: string | null };
+  EX17: FirmContext;
+  EX18: FirmContext;
+  EX19: FirmContext;
 };
 
 export type TemplateId = keyof EmailContexts;
@@ -1203,6 +1207,78 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
           ? `Enter this code to confirm it’s you and sign your consultation agreement from ${firmName}. It works for 10 minutes. If you didn’t ask for it, you can ignore this email.`
           : `Your code from ${firmName} couldn’t be added to this email. Go back to the signing page and ask for a new code.`,
         spot: "sign-in-code",
+        brand: firmBrand(context),
+      });
+    },
+  },
+  EX17: {
+    id: "EX17",
+    name: "Consultant changed",
+    audience: "client",
+    brand: "firm",
+    trigger:
+      "Staff change a matter's responsible consultant from the matter's People tab (change_responsible_consultant; outbox matter.consultant_changed, template consultant_changed), to each person on the matter with a portal account. Honours email_notices. Firm name only: the new consultant's name is in the portal, not the email (ORG-06)",
+    status: "wired",
+    ctaTarget: PATHS.portal,
+    mergeFields: ["firm_name"],
+    sample: { firmName: SYNTHETIC_FIRM },
+    build(context, origin) {
+      const firmName = firm(context);
+      return copy({
+        subject: `An update on your file from ${firmName}`,
+        preheader: "Your consultant has changed. See who in your portal.",
+        heading: "Your consultant has changed",
+        body: `A different consultant at ${firmName} is now responsible for your file, and your file stays with ${firmName}. For your privacy, their name is in your portal, along with anything you may need to sign. If you have questions or don't agree with this change, contact ${firmName}.`,
+        cta: cta("Open your portal", appLink(origin, PATHS.portal)),
+        spot: "reminder",
+        brand: firmBrand(context),
+      });
+    },
+  },
+  EX18: {
+    id: "EX18",
+    name: "New enquiry (staff)",
+    audience: "staff",
+    brand: "platform",
+    trigger:
+      "Someone sends an enquiry from the firm's hosted page or website form (trigger leads_enquiry_notice; outbox lead.enquiry_received, template enquiry_received), to the firm's active owners and the lead's owner when set. Not for sample (practice) enquiries. Firm name only: never the enquirer's name or what they wrote (CRM-01)",
+    status: "wired",
+    ctaTarget: PATHS.sheetPipeline,
+    mergeFields: ["firm_name"],
+    sample: { firmName: SYNTHETIC_FIRM },
+    build(context, origin) {
+      const firmName = firm(context);
+      return copy({
+        subject: `New enquiry for ${firmName}`,
+        preheader: "Open the Pipeline in Casevoya to read it.",
+        heading: "You have a new enquiry",
+        body: `Someone sent ${firmName} an enquiry from your enquiry page or website form. For their privacy, the details are in the Pipeline.`,
+        cta: cta("Open the Pipeline", appLink(origin, PATHS.sheetPipeline)),
+        spot: "reminder",
+        brand: PLATFORM,
+      });
+    },
+  },
+  EX19: {
+    id: "EX19",
+    name: "New notice (announcement)",
+    audience: "client",
+    brand: "firm",
+    trigger:
+      "Staff with permission send an announcement from an approved firm template (send_announcement; outbox announcement.sent, template announcement), to each chosen client with a portal account. Honours email_notices. Never for a sample-mode firm. Firm name only: the announcement itself is in the portal (OPS-04)",
+    status: "wired",
+    ctaTarget: PATHS.portal,
+    mergeFields: ["firm_name"],
+    sample: { firmName: SYNTHETIC_FIRM },
+    build(context, origin) {
+      const firmName = firm(context);
+      return copy({
+        subject: `A new notice from ${firmName}`,
+        preheader: "Read it in your portal.",
+        heading: `You have a new notice from ${firmName}`,
+        body: `${firmName} posted a notice for its clients. For your privacy, it is in your portal.`,
+        cta: cta("Open your portal", appLink(origin, PATHS.portal)),
+        spot: "reminder",
         brand: firmBrand(context),
       });
     },

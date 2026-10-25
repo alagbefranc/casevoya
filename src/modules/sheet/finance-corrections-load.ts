@@ -2,6 +2,7 @@ import "server-only";
 import type Stripe from "stripe";
 import type { CreditNoteDialogData, CreditNoteRow, FinanceKpi } from "@/components/sheet/designer/finance";
 import type { AllocationRow, CreditReviewDialogData, InvoiceAction, InvoiceCreditRow, InvoiceViewData, LineRow, Step, VoidDialogData } from "@/components/sheet/designer/invoice";
+import type { ManualPaymentDialogsData, ReconItemDialogData } from "@/components/sheet/designer/manual-pay";
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import type { PayoutRow, ReconAction, ReconData, ReconDialogsData, ReconItem } from "@/components/sheet/designer/recon";
 import type { createClient } from "@/lib/supabase/server";
@@ -16,12 +17,16 @@ import {
   reconHistoryTitle,
   signedAmount,
 } from "@/modules/finance/corrections-present";
+import { MANUAL_METHODS, manualMethodLabel, manualPaymentState, pendingManualCents, reviewersFor } from "@/modules/finance/manual-payments-present";
 import { formatAmount, formatMoney } from "@/modules/finance/money";
 import { cardBrandName } from "@/modules/finance/payment-receipt";
-import { creditNoteHref, invoicePdfHref } from "@/modules/finance/receipt-links";
+import { creditNoteHref, invoicePdfHref, reconciliationPdfHref } from "@/modules/finance/receipt-links";
 import { longDate } from "@/modules/finance/receipt-pdf";
 import { balanceLine, billedTo, FEE_CATEGORY_LABEL, invoiceState, paymentState, shortStripeId } from "@/modules/sheet/finance-present";
 import { dayMonth } from "@/modules/sheet/home-present";
+import { billingInvoiceState, durationLabel, percentLabel, rateLabel } from "@/modules/billing/present";
+
+const LINE_CATEGORY: Record<string, string> = { professional_fee: "Professional fee", disbursement: "Disbursement", government_fee: "Government fee" };
 import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
 
@@ -35,6 +40,10 @@ import { isoDateInTimeZone } from "@/modules/sheet/present";
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
 const READ = 500;
+
+function capitalize(text: string): string {
+  return text ? `${text[0].toUpperCase()}${text.slice(1)}` : text;
+}
 
 function short(text: string, max = 60): string {
   const clean = text.replace(/\s+/g, " ").trim();
@@ -125,10 +134,14 @@ export async function loadCreditNoteRows(supabase: Supabase, staff: SheetStaff, 
 
 export type InvoiceViewPage = {
   number: string;
+  /** What the FIN-06 dialogs (write-off, government fee, discard) need. */
+  billing: { id: string; number: string; status: string; discarded: boolean; owedCents: number; draftCreditCents: number };
   view: InvoiceViewData;
   creditDialog: CreditNoteDialogData;
   reviewDialog: CreditReviewDialogData | null;
   voidDialog: VoidDialogData | null;
+  /** FIN-09: record, verify and reverse manual payments (billing staff). */
+  manualDialogs: ManualPaymentDialogsData | null;
 };
 
 export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, canBill: boolean, invoiceId: string, today: string): Promise<InvoiceViewPage | null> {
@@ -136,13 +149,15 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
   const isOwner = staff.role === "firm_owner";
   const found = await supabase
     .from("invoices")
-    .select("id, matter_id, number, description, fee_category, amount_cents, currency, paid_cents, refunded_cents, credited_cents, client_funds_paid_cents, status, issued_on, due_on, is_sample, voided_at, voided_by, void_reason, created_at")
+    .select(
+      "id, matter_id, number, description, fee_category, amount_cents, currency, paid_cents, refunded_cents, credited_cents, written_off_cents, client_funds_paid_cents, status, issued_on, due_on, is_sample, voided_at, voided_by, void_reason, discarded_at, discarded_by, discard_reason, created_at",
+    )
     .eq("organization_id", org)
     .eq("id", invoiceId)
     .maybeSingle();
   const invoice = found.data;
   if (!invoice) return null;
-  const [viewer, matter, clients, payments, transfers, receipts, notes, name, refunds, billing] = await Promise.all([
+  const [viewer, matter, clients, payments, transfers, receipts, notes, name, refunds, billing, invoiceLines, writeOffs, manual, operating, reviewerRows] = await Promise.all([
     viewerId(supabase),
     supabase.from("matters").select("id, reference, title, is_sample").eq("organization_id", org).eq("id", invoice.matter_id).maybeSingle(),
     clientNames(supabase, org, [invoice.matter_id]),
@@ -175,8 +190,30 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
       .eq("invoice_id", invoice.id)
       .order("created_at", { ascending: true }),
     billingNames(supabase, org),
+    // FIN-06: the lines of an invoice drafted from time, a quote, an instalment or a government fee.
+    supabase
+      .from("invoice_lines")
+      .select("id, position, category, description, minutes, rate_cents, amount_cents, tax_name, tax_rate_percent, tax_cents, source_url, source_checked_on")
+      .eq("organization_id", org)
+      .eq("invoice_id", invoice.id)
+      .order("position"),
+    supabase.from("invoice_write_offs").select("id, amount_cents, reason, written_off_by, created_at").eq("organization_id", org).eq("invoice_id", invoice.id).order("created_at"),
+    // FIN-09: manual payments (billing staff, RLS), the operating accounts and who may review.
+    supabase
+      .from("invoice_manual_payments")
+      .select("id, number, method, external_reference, received_on, operating_account_id, evidence_version_id, evidence_note, amount_cents, currency, status, reviewer_user_id, recorded_by, verified_by, verified_at, self_verified, reversed_at, reversal_reason, created_at")
+      .eq("organization_id", org)
+      .eq("invoice_id", invoice.id)
+      .order("number", { ascending: true }),
+    canBill ? supabase.from("firm_operating_accounts").select("id, label, account_last4, is_active").eq("organization_id", org).order("created_at") : null,
+    canBill ? supabase.rpc("list_payment_reviewers", { p_org: org }) : null,
   ]);
+  const manualRows = manual.data ?? [];
+  const pendingManual = pendingManualCents(manualRows);
+  const operatingRows = (operating?.data ?? []).filter((row) => row.is_active);
+  const operatingLabel = new Map((operating?.data ?? []).map((row) => [row.id, `${row.label} ••• ${row.account_last4}`]));
   const currency = invoice.currency;
+  const isDraft = invoice.status === "draft" && !invoice.discarded_at;
   // A finance user can't read the matter row; the billing projection still names it.
   const matterTitle = matter.data?.title || billing.get(invoice.matter_id)?.title || "Matter";
   const money = (minor: number) => formatMoney(minor, currency);
@@ -200,28 +237,69 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
   const due = amountDue(moneyState);
   const balance = creditBalance(moneyState);
   const left = creditable(moneyState, drafts);
-  const state = invoiceState(
-    invoice.status,
-    invoice.due_on,
-    today,
-    listed.some((row) => row.status === "processing"),
-    invoice.refunded_cents > 0 ? money(invoice.refunded_cents) : null,
-    invoice.credited_cents > 0 && invoice.status !== "credited" ? money(invoice.credited_cents) : null,
+  const noteCredits = invoice.credited_cents - invoice.written_off_cents;
+  const state = billingInvoiceState(
+    invoice,
+    invoiceState(
+      invoice.status,
+      invoice.due_on,
+      today,
+      listed.some((row) => row.status === "processing"),
+      invoice.refunded_cents > 0 ? money(invoice.refunded_cents) : null,
+      noteCredits > 0 && invoice.status !== "credited" ? money(noteCredits) : null,
+      pendingManual > 0 ? money(pendingManual) : null,
+    ),
   );
   const label = `${invoice.number}${invoice.is_sample ? " (sample)" : ""}`;
 
-  // Lines: the invoice line, the total, what was paid and credited, the balance due.
-  const lines: LineRow[] = [
-    {
-      key: "line",
-      category: { text: FEE_CATEGORY_LABEL[invoice.fee_category] ?? "Fee" },
-      description: { parts: [invoice.description] },
-      qty: "1",
-      tax: "—",
-      amount: { text: amount(invoice.amount_cents) },
-    },
-    { key: "total", category: null, description: { bold: true, parts: ["Total"] }, qty: null, tax: null, amount: { bold: true, text: amount(invoice.amount_cents) } },
-  ];
+  // Lines: the invoice's lines (or its one line), the total, what was paid and credited, the balance due.
+  const lineRows = invoiceLines.data ?? [];
+  const lines: LineRow[] = lineRows.length
+    ? [
+        ...lineRows.map(
+          (line): LineRow => ({
+            key: line.id,
+            category: { text: LINE_CATEGORY[line.category] ?? "Fee" },
+            description: {
+              parts: [
+                line.description,
+                ...(line.minutes !== null && line.rate_cents !== null ? [`${durationLabel(line.minutes)} at ${rateLabel(line.rate_cents, currency)}`] : []),
+                ...(line.category === "government_fee" && line.source_url ? [`Source ${line.source_url}`, `checked ${line.source_checked_on ? dayMonth(line.source_checked_on) : "—"}`] : []),
+              ],
+            },
+            qty: line.minutes !== null ? durationLabel(line.minutes) : "1",
+            tax: line.tax_name ? `${line.tax_name} ${line.tax_rate_percent !== null ? percentLabel(line.tax_rate_percent) : ""}`.trim() + (line.tax_cents ? ` · ${amount(line.tax_cents)}` : "") : "—",
+            amount: { text: amount(line.amount_cents) },
+            ...(isDraft && canBill && lineRows.length > 1
+              ? { remove: { "data-billing-act": "line-remove", "data-org": org, "data-line": line.id } }
+              : {}),
+          }),
+        ),
+        ...(lineRows.some((line) => line.tax_cents > 0)
+          ? [
+              {
+                key: "tax",
+                category: null,
+                description: { parts: ["Tax"] },
+                qty: null,
+                tax: null,
+                amount: { text: amount(lineRows.reduce((sum, line) => sum + line.tax_cents, 0)) },
+              } satisfies LineRow,
+            ]
+          : []),
+        { key: "total", category: null, description: { bold: true, parts: ["Total"] }, qty: null, tax: null, amount: { bold: true, text: amount(invoice.amount_cents) } },
+      ]
+    : [
+        {
+          key: "line",
+          category: { text: FEE_CATEGORY_LABEL[invoice.fee_category] ?? "Fee" },
+          description: { parts: [invoice.description] },
+          qty: "1",
+          tax: "—",
+          amount: { text: amount(invoice.amount_cents) },
+        },
+        { key: "total", category: null, description: { bold: true, parts: ["Total"] }, qty: null, tax: null, amount: { bold: true, text: amount(invoice.amount_cents) } },
+      ];
   for (const payment of received) {
     const receipt = receiptOf.get(payment.id);
     const card = payment.card_last4 ? `${cardBrandName(payment.card_brand)} ••••${payment.card_last4}` : "card";
@@ -245,6 +323,16 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
       amount: { text: signedAmount(-entry.amount_cents, amount) },
     });
   }
+  for (const payment of manualRows.filter((row) => row.status === "verified")) {
+    lines.push({
+      key: payment.id,
+      category: null,
+      description: { parts: [`Paid ${dayMonth(payment.received_on)}`, manualMethodLabel(payment.method), payment.number] },
+      qty: null,
+      tax: null,
+      amount: { text: signedAmount(-payment.amount_cents, amount) },
+    });
+  }
   for (const note of noteRows.filter((row) => row.status === "issued")) {
     lines.push({
       key: note.id,
@@ -253,6 +341,16 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
       qty: null,
       tax: null,
       amount: { text: signedAmount(-note.amount_cents, amount) },
+    });
+  }
+  for (const writeOff of writeOffs.data ?? []) {
+    lines.push({
+      key: writeOff.id,
+      category: null,
+      description: { parts: [`Written off ${day(writeOff.created_at)}`, short(writeOff.reason, 48)] },
+      qty: null,
+      tax: null,
+      amount: { text: signedAmount(-writeOff.amount_cents, amount) },
     });
   }
   lines.push({
@@ -295,6 +393,15 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
         state,
       };
     }),
+    // FIN-09: manual payments. Only a verified one counts as paid.
+    ...manualRows.map((payment) => ({
+      key: payment.id,
+      date: dayMonth(payment.received_on),
+      source: `${capitalize(manualMethodLabel(payment.method))} to ${operatingLabel.get(payment.operating_account_id) ?? "the firm’s operating account"}`,
+      evidence: [payment.number, payment.external_reference, payment.evidence_version_id ? "file attached" : short(payment.evidence_note ?? "", 32)],
+      amount: amount(payment.amount_cents),
+      state: manualPaymentState(payment.status, payment.self_verified),
+    })),
   ];
 
   const creditRows: InvoiceCreditRow[] = noteRows.map((note) => {
@@ -324,37 +431,51 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
 
   // History: issued, credits, then where it stands.
   const history: Step[] = [];
-  const closed = invoice.status !== "issued" && invoice.status !== "partially_paid";
-  const anyMoney = received.length > 0 || transferRows.some((row) => row.status === "approved");
-  history.push({
-    key: "issued",
-    state: invoice.status === "issued" && !anyMoney && !noteRows.some((row) => row.status === "issued") ? "now" : "done",
-    title: "Issued",
-    note: [invoice.issued_on ? dayMonth(invoice.issued_on) : "—", "in the client’s portal"],
-  });
-  for (const note of noteRows.filter((row) => row.status === "issued")) {
-    history.push({ key: note.id, state: "done", title: `Credit note ${note.number}`, note: [day(note.issued_at ?? note.created_at), `${money(note.amount_cents)} by ${name(note.issued_by)}`] });
-  }
-  // Card refunds: succeeded ones are history; pending ones say so.
-  for (const refund of (refunds.data ?? []).filter((row) => row.status === "succeeded" || row.status === "pending" || row.status === "requires_action")) {
-    const done = refund.status === "succeeded";
+  const closed = invoice.status !== "issued" && invoice.status !== "partially_paid" && invoice.status !== "draft";
+  if (invoice.status === "draft") {
     history.push({
-      key: refund.id,
-      state: "done",
-      title: `Refund ${refund.number}`,
-      note: [day(refund.succeeded_at ?? refund.created_at), `${formatMoney(refund.amount_cents, refund.currency)} to the card${done ? "" : ", waiting for Stripe"}`],
+      key: "draft",
+      state: "now",
+      title: invoice.discarded_at ? "Discarded draft" : "Draft",
+      note: invoice.discarded_at
+        ? [day(invoice.discarded_at), `by ${name(invoice.discarded_by)}: ${short(invoice.discard_reason ?? "", 80)}`]
+        : [day(invoice.created_at), "not sent to the client"],
     });
+  } else {
+    const anyMoney = received.length > 0 || transferRows.some((row) => row.status === "approved");
+    history.push({
+      key: "issued",
+      state: invoice.status === "issued" && !anyMoney && !noteRows.some((row) => row.status === "issued") && !(writeOffs.data ?? []).length ? "now" : "done",
+      title: "Issued",
+      note: [invoice.issued_on ? dayMonth(invoice.issued_on) : "—", "in the client’s portal"],
+    });
+    for (const writeOff of writeOffs.data ?? []) {
+      history.push({ key: writeOff.id, state: "done", title: "Written off", note: [day(writeOff.created_at), `${money(writeOff.amount_cents)} by ${name(writeOff.written_off_by)}`] });
+    }
+    for (const note of noteRows.filter((row) => row.status === "issued")) {
+      history.push({ key: note.id, state: "done", title: `Credit note ${note.number}`, note: [day(note.issued_at ?? note.created_at), `${money(note.amount_cents)} by ${name(note.issued_by)}`] });
+    }
+    // Card refunds: succeeded ones are history; pending ones say so.
+    for (const refund of (refunds.data ?? []).filter((row) => row.status === "succeeded" || row.status === "pending" || row.status === "requires_action")) {
+      const done = refund.status === "succeeded";
+      history.push({
+        key: refund.id,
+        state: "done",
+        title: `Refund ${refund.number}`,
+        note: [day(refund.succeeded_at ?? refund.created_at), `${formatMoney(refund.amount_cents, refund.currency)} to the card${done ? "" : ", waiting for Stripe"}`],
+      });
+    }
+    if (invoice.status === "voided") {
+      history.push({ key: "voided", state: "now", title: "Voided", note: [day(invoice.voided_at ?? invoice.created_at), `by ${name(invoice.voided_by)}: ${short(invoice.void_reason ?? "", 80)}`] });
+    } else if (invoice.status === "partially_paid") {
+      history.push({ key: "partial", state: "now", title: "Partially paid", note: [`${money(invoice.paid_cents)} allocated`] });
+    } else if (closed) {
+      history.push({ key: "closed", state: "now", title: state.label, note: [invoice.status === "credited" ? `${money(invoice.credited_cents)} credited` : `${money(invoice.paid_cents)} allocated`] });
+    } else if (history.length > 1) {
+      history.push({ key: "open", state: "now", title: "Issued", note: [`${money(due)} due`] });
+    }
   }
-  if (invoice.status === "voided") {
-    history.push({ key: "voided", state: "now", title: "Voided", note: [day(invoice.voided_at ?? invoice.created_at), `by ${name(invoice.voided_by)}: ${short(invoice.void_reason ?? "", 80)}`] });
-  } else if (invoice.status === "partially_paid") {
-    history.push({ key: "partial", state: "now", title: "Partially paid", note: [`${money(invoice.paid_cents)} allocated`] });
-  } else if (closed) {
-    history.push({ key: "closed", state: "now", title: state.label, note: [invoice.status === "credited" ? `${money(invoice.credited_cents)} credited` : `${money(invoice.paid_cents)} allocated`] });
-  } else if (history.length > 1) {
-    history.push({ key: "open", state: "now", title: "Issued", note: [`${money(due)} due`] });
-  }
-  if (!closed) history.push({ key: "paid", state: "", title: "Paid", note: ["When the balance is allocated"] });
+  if (!closed && !invoice.discarded_at) history.push({ key: "paid", state: "", title: invoice.status === "draft" ? "Issued" : "Paid", note: [invoice.status === "draft" ? "When billing staff issue it" : "When the balance is allocated"] });
 
   const blockers = {
     payments: listed.filter((row) => row.status === "processing" || row.status === "succeeded").length,
@@ -362,13 +483,68 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
     receipts: (receipts.data ?? []).length,
     creditNotes: noteRows.filter((row) => row.status !== "declined").length,
   };
-  const voidable = canBill && canVoid(moneyState, blockers);
+  const manualHeld = manualRows.filter((row) => row.status === "pending_verification" || row.status === "verified").length;
+  const voidable = canBill && manualHeld === 0 && canVoid(moneyState, blockers);
   const creditOk = canBill && canCredit(invoice.status) && left > 0;
   const actions: InvoiceAction[] = [];
+  if (isDraft && canBill) {
+    actions.push({ label: "Issue invoice", primary: true, run: true, attrs: { "data-billing-act": "issue", "data-org": org, "data-invoice": invoice.id } });
+    actions.push({ label: "Add a government fee", attrs: { "data-dlg": "dlgGovFee" } });
+    actions.push({ label: "Discard draft", attrs: { "data-dlg": "dlgDiscard" } });
+  }
+  if (canBill && (invoice.status === "issued" || invoice.status === "partially_paid") && due - drafts > 0) actions.push({ label: "Write off", attrs: { "data-dlg": "dlgWO" } });
   if (creditOk) actions.push({ label: "Issue a credit note", attrs: { "data-dlg": "dlgCN" } });
   if (voidable) actions.push({ label: "Void invoice", attrs: { "data-dlg": "dlgVoid" } });
+  // FIN-09: record an e-transfer, cheque, wire or cash payment; verify it; mark it reversed or failed.
+  const open = invoice.status === "issued" || invoice.status === "partially_paid";
+  const manualMax = Math.max(0, due - pendingManual);
+  if (canBill && open && manualMax > 0) actions.push({ label: "Record a manual payment", attrs: { "data-dlg": "dlgMP" } });
+  if (canBill) {
+    for (const payment of manualRows) {
+      const recordedByViewer = payment.recorded_by === viewer;
+      if (payment.status === "pending_verification") {
+        const named = payment.reviewer_user_id === viewer;
+        actions.push({
+          label: `Verify ${payment.number}`,
+          primary: true,
+          attrs: {
+            "data-mp-open": "verify",
+            "data-payment": payment.id,
+            "data-number": payment.number,
+            "data-amount": money(payment.amount_cents),
+            "data-method": `${manualMethodLabel(payment.method)} · ${payment.external_reference}`,
+            "data-received": longDate(payment.received_on),
+            "data-dest": operatingLabel.get(payment.operating_account_id) ?? "Operating account",
+            "data-evidence": payment.evidence_version_id ? `File attached${payment.evidence_note ? ` · ${short(payment.evidence_note, 80)}` : ""}` : (payment.evidence_note ?? "—"),
+            ...(payment.evidence_version_id ? { "data-evidence-file": payment.evidence_version_id } : {}),
+            "data-by": `${name(payment.recorded_by)}${recordedByViewer ? " (you)" : ""}, ${day(payment.created_at)}`,
+            "data-reviewer": `${name(payment.reviewer_user_id)}${named ? " (you)" : ""}`,
+            // The named reviewer or a firm owner; the database also checks the second person.
+            "data-can-verify": named || isOwner ? "1" : "0",
+          },
+        });
+      }
+      if (payment.status === "pending_verification" || payment.status === "verified") {
+        actions.push({
+          label: `Mark ${payment.number} reversed or failed`,
+          attrs: {
+            "data-mp-open": "reverse",
+            "data-payment": payment.id,
+            "data-verified": payment.status === "verified" ? "1" : "0",
+            "data-summary": `${payment.number} · ${money(payment.amount_cents)} · ${manualMethodLabel(payment.method)} ${payment.external_reference} · ${payment.status === "verified" ? "verified, counted as paid" : "pending verification"}`,
+          },
+        });
+      }
+    }
+  }
   // The invoice as a PDF, drawn from the invoice as it stands (the receipts' layout).
   if (invoice.status !== "draft") actions.push({ label: "Download PDF", attrs: {}, href: invoicePdfHref(invoice.id, org) });
+  const tags = isDraft || invoice.discarded_at
+    ? [{ label: "Due", value: longDate(invoice.due_on) }]
+    : [
+        { label: "Issued", value: invoice.issued_on ? longDate(invoice.issued_on) : "—" },
+        { label: due > 0 || invoice.status === "issued" || invoice.status === "partially_paid" ? "Balance due" : "Was due", value: longDate(invoice.due_on) },
+      ];
 
   const fromFunds = invoice.client_funds_paid_cents > 0;
   const view: InvoiceViewData = {
@@ -376,15 +552,19 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
     client,
     intro: [`Matter ${reference}${matter.data?.is_sample ? " (sample)" : ""}`, `${matterTitle}. Billed to ${client}. Payee: ${staff.organizationName}.`],
     badge: { tone: state.tone, label: state.label, ...(state.detail ? { detail: state.detail } : {}) },
-    tags: [
-      { label: "Issued", value: invoice.issued_on ? longDate(invoice.issued_on) : "—" },
-      { label: due > 0 || invoice.status === "issued" || invoice.status === "partially_paid" ? "Balance due" : "Was due", value: longDate(invoice.due_on) },
-    ],
-    lock: invoice.status === "voided" ? ["Voided", "can’t be paid or edited"] : ["Issued", "can’t be edited"],
+    tags,
+    lock: invoice.discarded_at
+      ? ["Discarded", "never sent"]
+      : isDraft
+        ? ["Draft", "not sent to the client"]
+        : invoice.status === "voided"
+          ? ["Voided", "can’t be paid or edited"]
+          : ["Issued", "can’t be edited"],
     lines,
     allocations,
     allocationsEmpty: "Nothing is allocated to this invoice yet.",
-    allocationsNote: "A successful checkout page isn’t proof of payment. Only Stripe’s signed event or an approved transfer from the client account counts. A credit note reduces what’s owed; it isn’t a payment.",
+    allocationsNote:
+      "A successful checkout page isn’t proof of payment. Only Stripe’s signed event, an approved transfer from the client account or a manual payment its reviewer verified counts. A credit note reduces what’s owed; it isn’t a payment.",
     creditNotes: { rows: creditRows, empty: canBill ? "No credit notes. Correct an issued invoice with a credit note; it can’t be edited." : "No credit notes." },
     creditBalance:
       balance > 0
@@ -414,10 +594,32 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
   };
   return {
     number: label,
+    billing: { id: invoice.id, number: label, status: invoice.status, discarded: Boolean(invoice.discarded_at), owedCents: due, draftCreditCents: drafts },
     view,
     creditDialog,
     reviewDialog: canBill && noteRows.some((row) => row.status === "draft") ? { organizationId: org } : null,
     voidDialog: voidable ? { organizationId: org, invoiceId: invoice.id, invoice: label, blocked: null } : null,
+    manualDialogs: canBill
+      ? {
+          organizationId: org,
+          today,
+          invoiceId: invoice.id,
+          invoice: label,
+          matterId: invoice.matter_id,
+          maxCents: manualMax,
+          hint: manualMax > 0 ? `${currency}. Up to ${money(manualMax)}${pendingManual > 0 ? `, counting ${money(pendingManual)} waiting for verification` : ""}` : "Nothing left to pay",
+          methods: MANUAL_METHODS,
+          accounts: operatingRows.length
+            ? operatingRows.map((row) => ({ value: row.id, label: `${row.label} ••• ${row.account_last4} (operating)` }))
+            : [{ value: "", label: "No operating account yet" }],
+          reviewers: reviewersFor(reviewerRows?.data ?? [], invoice.matter_id, viewer),
+          blocked: !operatingRows.length
+            ? { title: "Add the operating account first", copy: "The firm owner records the firm’s operating account (bank and last four digits) in Settings > Subscription > Bank accounts." }
+            : !open || manualMax <= 0
+              ? { title: "Nothing to record", copy: "This invoice has nothing left to pay, counting payments waiting for verification." }
+              : null,
+        }
+      : null,
   };
 }
 
@@ -488,7 +690,13 @@ async function loadPayouts(stripe: Stripe, accountId: string, supabase: Supabase
   }
 }
 
-export type ReconPage = { data: ReconData; dialogs: ReconDialogsData };
+export type ReconPage = { data: ReconData; dialogs: ReconDialogsData; /** FIN-12: Add an outstanding deposit or cheque. */ itemDialog: ReconItemDialogData | null };
+
+/** FIN-12: the accountant and practice reviewer validate before the figures are relied on. */
+export const RECON_VALIDATION_BANNER = {
+  title: "Not yet validated for production financial use",
+  copy: "Your accountant and the practice reviewer must validate the chart of accounts, these figures and this report before the firm relies on them for its client account. Casevoya records what the firm enters; it is not an accounting system and reads no bank feed.",
+};
 
 export async function loadReconciliation(
   supabase: Supabase,
@@ -525,6 +733,7 @@ export async function loadReconciliation(
 
   let pending: ReconData["pending"] = null;
   let summary: string[] = [];
+  let adjustedDifference = 0;
   if (pendingRow) {
     const account = accountById.get(pendingRow.client_account_id);
     const items = (Array.isArray(pendingRow.items) ? pendingRow.items : []) as ItemJson[];
@@ -537,7 +746,23 @@ export async function loadReconciliation(
       const person = personOf.get(entryId);
       return (person && personName.get(person)) || "a client on a matter you don’t bill";
     };
-    const difference = Number(pendingRow.difference_cents);
+    // FIN-12: the bank side's outstanding items (deposits in transit, outstanding cheques).
+    const adjustments = await supabase
+      .from("client_reconciliation_adjustments")
+      .select("id, kind, description, reference, item_date, amount_cents")
+      .eq("organization_id", org)
+      .eq("reconciliation_id", pendingRow.id)
+      .is("removed_at", null)
+      .order("item_date", { ascending: true })
+      .order("created_at", { ascending: true });
+    const adjustmentRows = adjustments.data ?? [];
+    const inTransit = adjustmentRows.filter((row) => row.kind === "deposit_in_transit").reduce((sum, row) => sum + Number(row.amount_cents), 0);
+    const cheques = adjustmentRows.filter((row) => row.kind === "outstanding_cheque").reduce((sum, row) => sum + Number(row.amount_cents), 0);
+    const statement = Number(pendingRow.statement_balance_cents);
+    const ledgerBalance = Number(pendingRow.ledger_balance_cents);
+    const adjusted = statement + inTransit - cheques;
+    const difference = adjusted - ledgerBalance;
+    adjustedDifference = difference;
     const deposits = items.filter((item) => item.kind === "deposit_pending_verification");
     const notSent = items.filter((item) => item.kind === "transfer_not_sent");
     const sumOf = (list: ItemJson[]) => list.reduce((sum, item) => sum + Number(item.amount_cents ?? 0), 0);
@@ -558,7 +783,18 @@ export async function loadReconciliation(
             action: canBill ? { label: "Record bank transfer", href: "?tab=funds" } : null,
           };
     });
-    const count = items.length;
+    for (const row of adjustmentRows) {
+      const transit = row.kind === "deposit_in_transit";
+      itemRows.push({
+        key: row.id,
+        item: [transit ? "Deposit in transit" : "Outstanding cheque", short(row.description, 60), ...(row.reference ? [row.reference] : [])],
+        bank: transit ? "—" : dayMonth(row.item_date),
+        ledger: transit ? dayMonth(row.item_date) : "—",
+        amount: transit ? formatAmount(Number(row.amount_cents), "CAD") : signedAmount(-Number(row.amount_cents), (minor) => formatAmount(minor, "CAD")),
+        action: canBill ? { label: "Remove", attrs: { "data-rec-item-remove": row.id, "data-org": org } } : null,
+      });
+    }
+    const count = itemRows.length;
     const countLabel = `${count} outstanding ${count === 1 ? "item" : "items"}`;
     const own = pendingRow.prepared_by === viewer;
     const canSign = canBill && (!own || isOwner);
@@ -571,12 +807,16 @@ export async function loadReconciliation(
     ]
       .filter(Boolean)
       .join(" ");
+    const adjustmentNote = inTransit || cheques
+      ? `, ${[inTransit ? `+ ${formatMoney(inTransit, "CAD")} in transit` : "", cheques ? `− ${formatMoney(cheques, "CAD")} in outstanding cheques` : ""].filter(Boolean).join(" ")}`
+      : "";
     pending = {
       cards: [
         {
-          title: "Bank statement balance",
-          value: signedAmount(Number(pendingRow.statement_balance_cents), (minor) => formatMoney(minor, "CAD")),
-          note: `Statement to ${dayMonth(pendingRow.statement_date)}, bank ••• ${account?.account_last4 ?? "—"}`,
+          title: "Adjusted bank balance",
+          value: signedAmount(adjusted, (minor) => formatMoney(minor, "CAD")),
+          note: `Statement ${signedAmount(statement, (minor) => formatMoney(minor, "CAD"))} to ${dayMonth(pendingRow.statement_date)}, bank ••• ${account?.account_last4 ?? "—"}${adjustmentNote}`,
+          ...(difference !== 0 ? { tone: "bad" as const } : {}),
         },
         {
           title: "Control ledger",
@@ -593,18 +833,20 @@ export async function loadReconciliation(
         difference === 0
           ? {
               tone: "info",
-              title: ["The statement matches the control ledger", countLabel],
+              title: ["The adjusted bank balance matches the control ledger", countLabel],
               copy: count ? explain : "Nothing is outstanding. It can be signed as reconciled.",
               action: null,
             }
           : {
               tone: "warn",
               title: [`${signedAmount(difference, (minor) => formatMoney(minor, "CAD"))} difference`, countLabel],
-              copy: `The statement and the control ledger don’t agree as of ${dayMonth(pendingRow.statement_date)}. ${explain} Verify what’s outstanding and prepare it again, or sign it with exceptions that explain the difference.`.replace(/\s+/g, " "),
+              copy: `The adjusted bank balance and the control ledger don’t agree as of ${dayMonth(pendingRow.statement_date)}. ${explain} Add the deposits in transit and outstanding cheques the statement doesn’t show yet, verify what’s outstanding and prepare it again, or sign it with exceptions that explain the difference.`.replace(/\s+/g, " "),
               action: deposits.length && canBill ? { label: deposits.length === 1 ? "Verify the payment" : "Verify the payments", primary: true, href: "?tab=funds" } : null,
             },
       items: itemRows,
       itemsEmpty: "Nothing outstanding as of the statement date.",
+      addItem: canBill ? { label: "Add an outstanding deposit or cheque", attrs: { "data-dlg": "dlgRecItem" } } : null,
+      draftPdf: canBill ? reconciliationPdfHref(pendingRow.id, org) : undefined,
       steps: [
         { key: "prepared", state: "done", title: `Prepared by ${preparer}`, note: [day(pendingRow.prepared_at), ...(pendingRow.preparer_note ? [short(pendingRow.preparer_note, 80)] : [])] },
         {
@@ -632,6 +874,7 @@ export async function loadReconciliation(
     summary = [
       `As of ${longDate(pendingRow.statement_date)}${multiple && account ? ` (${account.label} ••• ${account.account_last4})` : ""}`,
       `statement ${formatMoney(Number(pendingRow.statement_balance_cents), "CAD")}`,
+      ...(adjusted !== statement ? [`adjusted ${signedAmount(adjusted, (minor) => formatMoney(minor, "CAD"))}`] : []),
       `control ledger ${formatMoney(Number(pendingRow.ledger_balance_cents), "CAD")}`,
       `difference ${signedAmount(difference, (minor) => formatMoney(minor, "CAD"))}`,
     ];
@@ -643,10 +886,12 @@ export async function loadReconciliation(
     return {
       key: row.id,
       month: `${monthLabel(row.statement_date)}${multiple && account ? ` · ••• ${account.account_last4}` : ""}`,
-      bank: signedAmount(Number(row.statement_balance_cents), (minor) => formatAmount(minor, "CAD")),
+      // The adjusted bank balance it was signed with (rows signed before FIN-12's workspace: the statement).
+      bank: signedAmount(Number(row.adjusted_balance_cents ?? row.statement_balance_cents), (minor) => formatAmount(minor, "CAD")),
       control: signedAmount(Number(row.ledger_balance_cents), (minor) => formatAmount(minor, "CAD")),
       clients: signedAmount(Number(row.client_ledgers_total_cents), (minor) => formatAmount(minor, "CAD")),
       signed: `${who}, ${row.signed_at ? day(row.signed_at) : "—"}${row.status === "exceptions" ? ", with exceptions" : ""}`,
+      pdf: reconciliationPdfHref(row.id, org),
     };
   });
 
@@ -683,6 +928,7 @@ export async function loadReconciliation(
     historyTitle: reconHistoryTitle(signed.map((row) => row.statement_date), today),
     historyEmpty: { title: "No signed reconciliations yet", copy: "Signed reconciliations are listed here, month by month. They can’t be changed once signed." },
     payouts,
+    banner: RECON_VALIDATION_BANNER,
   };
   const dialogs: ReconDialogsData = {
     organizationId: org,
@@ -694,14 +940,18 @@ export async function loadReconciliation(
     pending: pendingRow
       ? {
           id: pendingRow.id,
-          difference: Number(pendingRow.difference_cents),
+          difference: adjustedDifference,
           summary,
           canSign: canBill && (pendingRow.prepared_by !== viewer || isOwner),
           ownPreparation: pendingRow.prepared_by === viewer && isOwner,
         }
       : null,
   };
-  return { data, dialogs };
+  return {
+    data,
+    dialogs,
+    itemDialog: pendingRow && canBill ? { organizationId: org, reconciliationId: pendingRow.id, statementDate: pendingRow.statement_date } : null,
+  };
 }
 
 /** The Client funds tab's "Last reconciliation" tile (the Designer's fourth tile). */

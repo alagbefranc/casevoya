@@ -16,6 +16,7 @@ export const VO_SETTING_KEYS = [
   "missing_fields",
   "inconsistency_flags",
   "read_on_upload",
+  "letter_drafts",
 ] as const;
 
 export type VoSettingKey = (typeof VO_SETTING_KEYS)[number];
