@@ -43,6 +43,8 @@ export function pilotDefault(max: number, ready: number): number {
 
 export type RunReport = {
   generated_at?: string;
+  /** MIG-01: the kind of records the file held (absent on a clients and matters report written before it). */
+  kind?: string;
   source?: {
     file_name?: string;
     source_system?: string;
@@ -56,7 +58,7 @@ export type RunReport = {
     checksum_matches?: boolean;
   };
   records?: Record<string, { created?: number; linked?: number }>;
-  totals?: { matters?: number; people_created?: number; people_linked?: number };
+  totals?: { matters?: number; people_created?: number; people_linked?: number; records_created?: number; records_linked?: number; files_held?: number };
   rows?: {
     rows?: number;
     imported?: number;
@@ -72,7 +74,7 @@ export type RunReport = {
   };
   pilot?: {
     size?: number;
-    counts?: { matters?: number; people_created?: number; people_linked?: number } | null;
+    counts?: { matters?: number; people_created?: number; people_linked?: number; records_created?: number; records_linked?: number } | null;
     completed_at?: string | null;
     signed_off_at?: string | null;
     signed_off_by?: string | null;
@@ -93,7 +95,22 @@ const KIND_LABELS: Record<string, string> = {
   deadlines: "Key dates",
   documents: "Documents",
   person_relationships: "People relationships",
+  opening_balances: "Opening balances",
 };
+
+/** MIG-01: a report of another kind counts records (one per row), not matters and people. */
+function ofRecords(report: RunReport): boolean {
+  return Boolean(report.kind && report.kind !== "clients_matters");
+}
+
+function pilotWords(report: RunReport): [string, string] {
+  const pilot = report.pilot ?? {};
+  if (ofRecords(report)) {
+    const made = Number(pilot.counts?.records_created ?? 0) + Number(pilot.counts?.records_linked ?? 0);
+    return [`${n(made)} of ${n(pilot.size)} records`, `${n(pilot.counts?.records_created)} new, ${n(pilot.counts?.records_linked)} kept as existing`];
+  }
+  return [`${n(pilot.counts?.matters)} of ${n(pilot.size)} matters`, `${n(pilot.counts?.matters)} matters, ${n(pilot.counts?.people_created)} new people, ${n(pilot.counts?.people_linked)} linked`];
+}
 
 /** A record table's name for people: "matter_staff_notes" reads "Notes"; an unknown kind keeps its words. */
 export function kindLabel(table: string): string {
@@ -123,15 +140,21 @@ export function runReportLines(report: RunReport, timeZone: string): ReportLine[
   for (const [table, count] of Object.entries(report.records ?? {})) {
     lines.push({ term: kindLabel(table), value: [`${n(count.created)} created`, `${n(count.linked)} linked to existing`] });
   }
+  const records = ofRecords(report);
   lines.push(
-    { term: "Possible duplicates", value: [`${n(rows.duplicates_found)} found`, `${n(rows.duplicates_same)} same person, ${n(rows.duplicates_different)} different people`] },
-    { term: "Not imported", value: [`${n(rows.error)} with errors, ${n(rows.review)} needing review`, `${n(rows.skipped)} skipped with their matter`] },
+    {
+      term: "Possible duplicates",
+      value: records
+        ? [`${n(rows.duplicates_found)} found`, `${n(rows.duplicates_same)} same record, ${n(rows.duplicates_different)} different`]
+        : [`${n(rows.duplicates_found)} found`, `${n(rows.duplicates_same)} same person, ${n(rows.duplicates_different)} different people`],
+    },
+    { term: "Not imported", value: [`${n(rows.error)} with errors, ${n(rows.review)} needing review`, records ? `${n(rows.skipped)} skipped` : `${n(rows.skipped)} skipped with their matter`] },
   );
+  if (records && Number(report.totals?.files_held ?? 0) > 0) {
+    lines.push({ term: "Files held", value: `${n(report.totals?.files_held)} didn’t pass the upload checks; listed under exceptions` });
+  }
   if (report.pilot) {
-    lines.push({
-      term: "Pilot",
-      value: [`${n(report.pilot.counts?.matters)} of ${n(report.pilot.size)} matters`, `signed off ${when(report.pilot.signed_off_at, timeZone)}`],
-    });
+    lines.push({ term: "Pilot", value: [pilotWords(report)[0], `signed off ${when(report.pilot.signed_off_at, timeZone)}`] });
   }
   return lines;
 }
@@ -156,6 +179,7 @@ export function runReportFile(input: RunReportInput): ReportFile {
       title: "Source",
       head: ["Item", "Value"],
       rows: [
+        ...(ofRecords(report) ? [["Kind", kindLabel(report.kind ?? "")]] : []),
         ["File", source.file_name ?? "—"],
         ["Source system", source.source_system ?? "—"],
         ["Size (bytes)", n(source.bytes)],
@@ -186,8 +210,8 @@ export function runReportFile(input: RunReportInput): ReportFile {
       title: "Pilot and sign-off",
       head: ["Item", "Value"],
       rows: [
-        ["Pilot size (matters)", n(report.pilot.size)],
-        ["Pilot created", `${n(report.pilot.counts?.matters)} matters, ${n(report.pilot.counts?.people_created)} new people, ${n(report.pilot.counts?.people_linked)} linked`],
+        [ofRecords(report) ? "Pilot size (records)" : "Pilot size (matters)", n(report.pilot.size)],
+        ["Pilot created", pilotWords(report)[1]],
         ["Pilot finished", when(report.pilot.completed_at, timeZone)],
         ["Signed off", when(report.pilot.signed_off_at, timeZone)],
         ["Signed off by", input.signedOffBy ?? "—"],
