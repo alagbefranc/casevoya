@@ -869,3 +869,22 @@ REP-03 (gap #185), branch `feat/rep-scheduled-reports`.
 * `20261025320100_rep_report_notifications.sql` **redefines** `app.staff_notification_items(uuid, integer)` (latest `20261025100100_task_notifications.sql`): adds a `report` branch (a delivered link for the caller while a role of theirs sees the tab; subject the schedule's name, detail `scheduled` / `test`). Nothing else changes.
 
 Tested in `tests/scheduled-reports.rls.test.ts` and `tests/scheduled-reports.test.tsx`.
+
+## Migration pilot, sign-off and run report (`20261025380000`, not applied on the live project)
+
+MIG-02 (gap #187), branch `feat/mig-pilot-report`. Extends the migration import (`20261019208100`); no second importer, nothing seeded.
+
+* `migration_settings.pilot_max` (default 25, 1 to 50): the largest pilot, in matters. `public.set_migration_pilot_max(org, max)`: firm owner, step-up, audited `migration.settings_changed`.
+* `migration_batches`: `pilot_size` (1 to 50; null for an import begun before pilots), `pilot_started_at` / `_by`, `pilot_completed_at`, `pilot_counts` (matters, people created and linked), `pilot_signed_off_at` / `_by`, `pilot_signoff_note` (3 to 1,000), `full_run_started_at` / `_by`, `commit_verified_at` (staged rows last checked against the upload checksum), `run_report` (object). Checks: sign-off needs a finished pilot; a full run needs a signed-off pilot (or no pilot). FK indexes on the three `_by` columns.
+* `migration_rows.in_pilot`: the row belongs to one of the pilot's matters. `migration_records.original_at` (`add column if not exists`): an imported item's original date.
+* `app.migration_staged_intact(batch)`: each staged row's SHA-256 matches its cells, and the digest over the rows and their count match the upload's.
+* `public.begin_migration_pilot(org, batch, plan_hash, size default 10, source_system default null)`: firm owner, step-up; checks the staged rows (`{ok: false, reason: 'checksum_changed'}`, audited), evaluates the plan again (must hash to the dry run's), marks the first `size` matters, sets status `committing`. Audited `migration.pilot_started`.
+* `public.sign_off_migration_pilot(org, batch, note)`: firm owner, step-up, a finished pilot, once. Audited `migration.pilot_signed_off` (note length, not text).
+* `public.record_migration_report_download(org, batch, format)`: firm owner, a committed batch with a report, `csv` or `pdf`. Audited `migration.report_downloaded`.
+* `public.imported_record_provenance(org, table, ids)`: staff of the firm (MFA): source system, import date, original date, old reference, created or linked, version at import, for up to 500 records of one table that an import of this firm created or linked and that are still there.
+* **Redefines** (latest definitions in `20261019208100_migration_import.sql`):
+  * `public.begin_migration_commit`: now the full run only. A `staged` / `checked` batch is refused ("run a pilot first"); a pilot not signed off is refused; the staged rows are checked again; the plan is not evaluated again (the dry run's hash must match). Sets `full_run_started_at`; audited `migration.commit_started` once.
+  * `app.migration_next_groups`: during a pilot only `in_pilot` matters; once the pilot is done, refuses until the full run starts.
+  * `app.migration_after_chunk`: a finished pilot sets `pilot_completed_at` and `pilot_counts` (audited `migration.pilot_completed`) and returns status `pilot_done`; the end of the full run also writes `run_report`. The totals check, exception report and purge are unchanged.
+
+Tested in `tests/migration-pilot.rls.test.ts` (and `tests/migration-import.rls.test.ts`, whose sign-off now goes through a pilot) and `tests/migration-pilot-present.test.tsx`.

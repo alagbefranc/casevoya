@@ -26,7 +26,18 @@ export type InternalTaskRow = {
   state: TaskChip | string;
   /** Live only: Manage opens the Task dialog (edit, reassign, mark done). */
   manage?: TaskWire | null;
+  /** Live only (MIG-02): "Imported from <system> on <date>" under the title of an imported task. */
+  imported?: string | null;
 };
+
+/** Live only (MIG-02): an imported task's provenance under its title. */
+function Imported({ text }: { text?: string | null }) {
+  return text ? (
+    <span className={"mu"} style={{ display: "block", fontSize: "12px" }}>
+      {text}
+    </span>
+  ) : null;
+}
 
 /** `data-*` a live control carries to the Sheet's task and deadline acts. */
 export type TaskWire = Record<`data-${string}`, string>;
@@ -42,6 +53,8 @@ export type ClientTaskRow = {
   state: TaskChip;
   /** Live only: Manage opens the Task dialog (edit, mark done). */
   manage?: TaskWire | null;
+  /** Live only (MIG-02): "Imported from <system> on <date>" under the title of an imported task. */
+  imported?: string | null;
 };
 
 export type DeadlineRow = {
@@ -273,7 +286,10 @@ function Internal({ data }: { data: NonNullable<TasksData["internal"]> }) {
               <tbody>
                 {rows.map((row, index) => (
                   <tr key={index} data-href={row.href} data-f={row.flags?.length ? row.flags.join(" ") : undefined} style={row.href ? { cursor: "pointer" } : undefined}>
-                    <td>{row.title}</td>
+                    <td>
+                      {row.title}
+                      <Imported text={row.imported} />
+                    </td>
                     <td>{row.matter}</td>
                     <td>
                       {row.owner ? (
@@ -367,7 +383,10 @@ function Client({ data }: { data: NonNullable<TasksData["client"]> }) {
             <tbody>
               {data.rows.map((row, index) => (
                 <tr key={index} data-href={row.href} style={row.href ? { cursor: "pointer" } : undefined}>
-                  <td>{row.title}</td>
+                  <td>
+                      {row.title}
+                      <Imported text={row.imported} />
+                    </td>
                   <td>{row.person}</td>
                   <td>{typeof row.due === "string" ? row.due : <span className={"num"}>{row.due.num}</span>}</td>
                   <td>
