@@ -48,8 +48,15 @@ browser ── server action (app Worker, casevoya-app)
 | `search_approved_sources` | reply, ask | titles, publishers, links of verified, current `official_sources`; no content |
 | `find_free_slots` | reply | the firm's next free consultation times (`staff_booking_availability` + the app's slot engine) and the published booking page link |
 | `save_draft` | reply, document request | the only write: keeps the guarded draft for `finish_vo_run` (status draft) |
+| `read_approved_facts` | letter | the matter's approved facts (`vo_letter_facts`: reviewed, latest intake answers in an allowed category) as `[F#]`, values as data |
+| `find_official_content` | letter | the firm's approved official content (`vo_letter_official_content`) matching a topic, as `[S#]`, text as data |
+| `save_letter_draft` | letter | the letter task's only write: the letter after `src/modules/vo/letter-guard.ts`, saved by `save_vo_letter_draft` as a DRAFT matter letter |
 
 There is no send, email, submit or update tool.
+
+## Letter drafts (`letter_draft`, AI-01, 2026-10-24)
+
+"Draft letter with Vo" on a matter: tools `read_person`, `read_approved_facts`, `find_official_content`, `save_letter_draft`; prompt version `letter-1`. The run is begun by `begin_vo_letter_draft` and saved by `save_vo_letter_draft` (citations rebuilt in SQL); failures and abstentions end through `finish_vo_run`. Needs a rebuild and redeploy of this service.
 
 ## Document reading (`document_review`, 2026-10-18)
 
@@ -68,6 +75,19 @@ anything rule-based) → `finish_vo_document_review` as the staff member (checke
 The run log records the served model, `read_document_version` as the tool, tokens and an
 estimated cost, and the version id as the source. Client-, staff- and third-party-written text comes
 back inside per-run nonce delimiters; identity-number-like strings are removed first.
+
+## Lead follow-ups and call summaries (`lead_follow_up`, `call_summary`, 2026-10-24)
+
+Two more tasks without the tool loop (`src/vo-crm.ts`, `src/vo-crm-data.ts`; the pure rules are
+`src/modules/vo/crm.ts` in the app). The request is signed like every other; its body names the lead,
+or the consultation plus the notes the staff member pasted (never stored). Order: the firm's
+switches → consent to contact (lead) or the sensitive-category screen on the notes (medical,
+criminal history) → the lead's record, latest notes and linked consultations, or the consultation,
+read with the staff member's own token → ONE Messages API call (same model constant, adaptive
+thinking, refusal fallback, `max_tokens` 2000, no tools, no structured output) → the shared output
+guard (`guardVoOutput`) → `finish_vo_crm_run` as the staff member (sources and consent checked again
+in SQL). Run log: `read_lead` or `read_consultation` as the tool, tokens, estimated cost, how many
+notes were left out. **The container must be rebuilt and redeployed for these tasks to exist.**
 
 ## Locks
 
