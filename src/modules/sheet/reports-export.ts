@@ -6,6 +6,7 @@
  */
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { ReportsMoney, ReportsOps, ReportsOutcomes, ReportsTab } from "@/components/sheet/designer/reports";
+import { opsMoreSections } from "@/modules/sheet/reports-ops-more";
 
 export type ReportSection = { title: string; head: string[]; rows: string[][]; definition?: string; note?: string };
 
@@ -95,6 +96,8 @@ export function reportSections(tab: ReportsTab, data: { ops?: ReportsOps | null;
         rows: [[String(ops.attendance.booked), String(ops.attendance.attended), String(ops.attendance.rescheduled), String(ops.attendance.noShow)]],
         definition: ops.attendance.definition,
       },
+      // REP-01: the added Operations cards (reports-ops-more.ts).
+      ...opsMoreSections(ops.more),
     ];
   }
   if (tab === "money" && data.money) {
