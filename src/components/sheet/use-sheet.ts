@@ -98,6 +98,7 @@ import { mountDocOpen, mountDrafts, mountInboxFilters, mountRecordsCrumb } from 
 import { bindGovControls } from "./gov-acts";
 import { bindApprovalControls } from "./approval-acts";
 import { bindSubmissionControls } from "./submission-acts";
+import { mountClaimInputs, runClaimAct } from "./source-claim-acts";
 import { bindRenewalControls } from "./renewal-acts";
 import { bindVoCrmControls } from "./vo-crm-acts";
 import { bindLetterControls } from "./letter-acts";
@@ -1119,6 +1120,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(annSend, () => runAnnouncementSend(annSend, root, router));
         return;
       }
+      // SRC-01/02/03: Templates > Source review and Rule detail (Add claim, resolve, approve, reject, suspend).
+      const claimAct = target.closest<HTMLElement>("[data-claim-act]");
+      if (claimAct && root.contains(claimAct)) {
+        event.preventDefault();
+        busyRun(claimAct, () => runClaimAct(claimAct, root, router));
+        return;
+      }
       const mtAct = target.closest<HTMLElement>("[data-mt-save], [data-mt-approve], [data-mt-archive]");
       if (mtAct && root.contains(mtAct)) {
         event.preventDefault();
@@ -1442,6 +1450,7 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     mountRecordsCrumb(root, page, (group) => openPalette(root, (href) => router.push(href), group), ac.signal);
     if (page === "inbox") mountInboxFilters(root, ac.signal);
     if (page === "inbox" || page === "templates") mountMessagingInputs(root, ac.signal);
+    if (page === "templates") mountClaimInputs(root, ac.signal);
     if (page === "documents" || page === "government") mountDocOpen(root, runDocOpen, ac.signal);
     if (page === "drafts") mountDrafts(root, () => router.refresh(), ac.signal);
     // Back from a Composio Connect Link on Settings > Integrations.

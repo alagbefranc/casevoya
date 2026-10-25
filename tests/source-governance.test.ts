@@ -445,16 +445,20 @@ describe("source governance access and versions", () => {
     );
 
     // A firm owner is a regulated consultant (decision 2026-10-19): their approved review is accepted
-    // without a credential on file, as a licensed consultant's is.
-    await db.query(
-      `insert into public.professional_reviews (
-         organization_id, rule_version_id, reviewer_membership_id, decision,
-         decided_at, rule_content_revision
-       ) values ($1, $2, $3, 'approved', '2026-10-16T15:00:00Z', 1)`,
-      [orgId, versionId, ownerMembership],
-    );
-
-    await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    // without a credential on file, as a licensed consultant's is. SRC-03: signed-in staff record an
+    // approval and publish only through Source review (app.review_rule_version), so a direct write
+    // is refused; this fixture records them from a maintenance session, which the gate allows.
+    const ownerReview = () =>
+      db.query(
+        `insert into public.professional_reviews (
+           organization_id, rule_version_id, reviewer_membership_id, decision,
+           decided_at, rule_content_revision
+         ) values ($1, $2, $3, 'approved', '2026-10-16T15:00:00Z', 1)`,
+        [orgId, versionId, ownerMembership],
+      );
+    await expectDbError(ownerReview, /only in Source review/);
+    await asMaintenance(db);
+    await ownerReview();
     await db.query(
       `insert into public.professional_reviews (
          organization_id, rule_version_id, reviewer_membership_id, decision,
@@ -463,12 +467,19 @@ describe("source governance access and versions", () => {
          'FICTIONAL metadata review. Not a licence approval.', 1)`,
       [orgId, versionId, consultantMembership],
     );
+    await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    await expectDbError(
+      () => db.query(`update public.rule_versions set status = 'published' where id = $1`, [versionId]),
+      /publication blocked: approval_required/,
+    );
+    await asMaintenance(db);
     const published = await db.query<{ status: string; content_frozen: boolean }>(
       `update public.rule_versions set status = 'published' where id = $1
        returning status, content_frozen`,
       [versionId],
     );
     expect(published.rows[0]).toEqual({ status: "published", content_frozen: true });
+    await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
 
     const pack = await db.query<{ id: string }>(
       `insert into public.rule_pack_versions (

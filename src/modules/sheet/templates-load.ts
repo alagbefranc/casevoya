@@ -9,6 +9,7 @@ import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
 import type { MessageTemplateDialogData } from "@/components/sheet/designer/templates";
 import { designUse, firmMessageRows, messageRows, programRows, templatesData, type CatalogRow, type RuleRow } from "@/modules/sheet/templates-present";
+import { claimAddData, claimFactsFor } from "@/modules/sheet/source-claims-load";
 
 const READ = 200;
 
@@ -32,16 +33,25 @@ export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, v
     supabase.from("matters").select("program_pack_id").eq("organization_id", org).not("program_pack_id", "is", null).limit(1000),
     supabase.from("agreement_templates").select("id, name, kind, status, approved_at, approved_by, version").eq("organization_id", org).order("updated_at", { ascending: false }).limit(READ),
     supabase.from("agreements").select("template_id, matter_id").eq("organization_id", org).not("template_id", "is", null).limit(1000),
-    supabase.from("rule_versions").select("id, definition_id, version_number, status, effective_from, next_review_at, claim, applicability_note").order("updated_at", { ascending: false }).limit(READ),
+    supabase
+      .from("rule_versions")
+      .select("id, organization_id, definition_id, version_number, version, status, status_reason, effective_from, effective_to, next_review_at, claim, output_value, applicability, applicability_note")
+      .order("updated_at", { ascending: false })
+      .limit(READ),
     supabase.from("rule_definitions").select("id, stable_key, jurisdiction, program_key").limit(READ),
-    supabase.from("professional_reviews").select("rule_version_id, reviewer_membership_id, decided_at").eq("organization_id", org).order("decided_at", { ascending: false }).limit(READ),
-    supabase.from("rule_evidence").select("rule_version_id, snapshot_id, source_section").limit(READ),
+    supabase.from("professional_reviews").select("rule_version_id, reviewer_membership_id, decided_at, decision").eq("organization_id", org).order("decided_at", { ascending: false }).limit(READ),
+    supabase
+      .from("rule_evidence")
+      .select(
+        "rule_version_id, snapshot_id, source_section, source_url, evidence_excerpt, form_number, form_modified_on, published_on, modified_on, last_amended_on, current_to, checked_on, page_attested_on, page_attested_by_membership_id",
+      )
+      .limit(READ),
     supabase.from("rule_pack_items").select("pack_id, rule_version_id").limit(1000),
     memberNames(supabase, org),
   ]);
 
-  const snapshotIds = [...new Set((evidence.data ?? []).map((row) => row.snapshot_id))];
-  const snapshots = snapshotIds.length ? await supabase.from("source_snapshots").select("id, source_id, publisher, final_url, retrieved_at").in("id", snapshotIds) : null;
+  const snapshotIds = [...new Set((evidence.data ?? []).map((row) => row.snapshot_id).filter((id): id is string => Boolean(id)))];
+  const snapshots = snapshotIds.length ? await supabase.from("source_snapshots").select("id, source_id, publisher, final_url, retrieved_at, content_hash").in("id", snapshotIds) : null;
   const sourceIds = [...new Set((snapshots?.data ?? []).map((row) => row.source_id))];
   const sources = sourceIds.length ? await supabase.from("official_sources").select("id, title").in("id", sourceIds) : null;
 
@@ -50,8 +60,11 @@ export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, v
   const used = tally([...new Set((agreements.data ?? []).map((row) => `${row.template_id}|${row.matter_id}`))].map((key) => key.split("|")[0]));
   const definitionOf = new Map((definitions.data ?? []).map((row) => [row.id, row]));
   const reviewerOf = new Map<string, string>();
+  const approvedAt = new Map<string, string>();
   for (const review of reviews.data ?? []) {
+    if (review.decision !== "approved") continue;
     if (!reviewerOf.has(review.rule_version_id)) reviewerOf.set(review.rule_version_id, names.get(review.reviewer_membership_id) ?? "Licensed reviewer");
+    if (!approvedAt.has(review.rule_version_id)) approvedAt.set(review.rule_version_id, review.decided_at);
   }
   const snapshotOf = new Map((snapshots?.data ?? []).map((row) => [row.id, row]));
   const titleOf = new Map((sources?.data ?? []).map((row) => [row.id, row.title]));
@@ -62,7 +75,7 @@ export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, v
     const definition = definitionOf.get(row.definition_id);
     if (!definition) return [];
     const cited = (evidence.data ?? []).filter((item) => item.rule_version_id === row.id);
-    const captured = cited.map((item) => ({ item, snapshot: snapshotOf.get(item.snapshot_id) })).filter((pair) => pair.snapshot);
+    const captured = cited.map((item) => ({ item, snapshot: item.snapshot_id ? snapshotOf.get(item.snapshot_id) : undefined })).filter((pair) => pair.snapshot);
     const latest = [...captured].sort((a, b) => (b.snapshot?.retrieved_at ?? "").localeCompare(a.snapshot?.retrieved_at ?? ""))[0];
     return [
       {
@@ -88,6 +101,8 @@ export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, v
               section: latest.item.source_section,
             }
           : null,
+        // SRC-01/02/03: a firm's claim (the platform catalog stays read only here).
+        ...(row.organization_id ? { facts: claimFactsFor(row, cited, snapshotOf, approvedAt.get(row.id) ?? null, reviewerOf.get(row.id) ?? null, names) } : {}),
       },
     ];
   });
@@ -180,6 +195,8 @@ export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, v
     packs: packRows.length,
     selected,
     today: isoDateInTimeZone(now, staff.timezone),
+    viewer: { organizationId: org, role: staff.role, today: isoDateInTimeZone(now, staff.timezone), timeZone: staff.timezone, now },
+    addClaim: claimAddData(staff, isoDateInTimeZone(now, staff.timezone)),
   });
   return { chrome, data, messageDialog };
 }
