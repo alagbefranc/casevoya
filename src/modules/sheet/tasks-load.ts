@@ -13,6 +13,7 @@ import {
   deadlineState,
   deadlineTime,
   dependsOnLabel,
+  dueInZone,
   dueLabel,
   firstName,
   internalState,
@@ -21,6 +22,7 @@ import {
   reminderOffsets,
   deadlineConfirmable,
   TASK_CREATE_ROLES,
+  TASK_ESCALATE_ROLES,
   TASK_REASSIGN_ROLES,
   TASK_STAFF_ROLES,
   taskManageWire,
@@ -28,6 +30,7 @@ import {
   tasksTab,
 } from "@/modules/sheet/tasks-present";
 import { isLicensedMembership } from "@/lib/tenant/roles";
+import { zoneOptions } from "@/modules/sheet/task-detail";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -66,9 +69,14 @@ async function loadInternal(supabase: Client, staff: SheetStaff, today: string, 
   const rows = [...(tasks.data ?? [])].sort((a, b) => dayOf(a).localeCompare(dayOf(b)));
   const ids = rows.map((row) => row.id);
 
-  const deps = ids.length
-    ? await supabase.from("task_dependencies").select("task_id, depends_on_task_id").eq("organization_id", org).in("task_id", ids)
-    : null;
+  const [deps, watched] = ids.length
+    ? await Promise.all([
+        supabase.from("task_dependencies").select("task_id, depends_on_task_id").eq("organization_id", org).in("task_id", ids),
+        // OPS-01: the tasks the viewer watches, for the Watching chip.
+        supabase.from("task_watchers").select("task_id").eq("organization_id", org).eq("membership_id", staff.membershipId).in("task_id", ids),
+      ])
+    : [null, null];
+  const watching = new Set((watched?.data ?? []).map((row) => row.task_id));
   const earlierIds = [...new Set((deps?.data ?? []).map((row) => row.depends_on_task_id))];
   const [earlier, matter, members] = await Promise.all([
     earlierIds.length ? supabase.from("tasks").select("id, title, status").eq("organization_id", org).in("id", earlierIds) : null,
@@ -91,8 +99,10 @@ async function loadInternal(supabase: Client, staff: SheetStaff, today: string, 
     const flags = [
       row.owner_membership_id === staff.membershipId ? "mine" : "",
       isOverdue(row.due_on, row.due_at, today, now) ? "overdue" : "",
-      row.status === "blocked" ? "blocked" : "",
+      // Blocked: marked blocked, or waiting on a task that is still open (OPS-01).
+      row.status === "blocked" || (dependsOn.get(row.id) ?? []).some((dep) => !dep.done) ? "blocked" : "",
       row.priority === "high" || row.priority === "critical" ? "high" : "",
+      watching.has(row.id) ? "watching" : "",
     ].filter(Boolean);
     return {
       href: matterHref(row.matter_id),
@@ -100,7 +110,7 @@ async function loadInternal(supabase: Client, staff: SheetStaff, today: string, 
       title: row.title,
       matter: matter(row.matter_id),
       owner: owner ? { person: staffPerson(owner), label: firstName(owner) } : null,
-      due: dueLabel(row.due_on, row.due_at, row.due_timezone || staff.timezone, today),
+      due: dueInZone(row.due_on, row.due_at, row.due_timezone || staff.timezone, staff.timezone, today),
       priority: priorityChip(row.priority),
       dependsOn: dependsOnLabel(dependsOn.get(row.id) ?? []),
       state: internalState(row.status, row.escalated_at),
@@ -119,7 +129,7 @@ async function loadInternal(supabase: Client, staff: SheetStaff, today: string, 
         href: matterHref(escalated.matter_id) ?? "/sheet/tasks",
       }
     : null;
-  return { alert, rows: table, failed: Boolean(tasks.error) };
+  return { alert, rows: table, failed: Boolean(tasks.error), watching: true };
 }
 
 async function loadClient(supabase: Client, staff: SheetStaff, today: string): Promise<NonNullable<TasksData["client"]>> {
@@ -241,9 +251,11 @@ export async function loadSheetTasks(staff: SheetStaff, query: SheetQuery, now: 
           today,
           owners: (dialog.owners ?? []).filter((o) => o.kind === "internal" && o.value).map((o) => ({ value: o.value as string, label: o.label })),
           reassign: TASK_REASSIGN_ROLES.includes(staff.role),
+          zones: zoneOptions(staff.timezone),
         }
       : null,
     canCreate: TASK_CREATE_ROLES.includes(staff.role),
+    escalate: TASK_ESCALATE_ROLES.includes(staff.role) ? { "data-task-escalate": org } : null,
   };
   return { chrome, tasks };
 }

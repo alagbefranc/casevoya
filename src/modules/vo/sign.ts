@@ -9,11 +9,13 @@
  * never carries a service-role key.
  */
 
+import { isLetterType } from "./letter";
+
 export const VO_REQUEST_MAX_AGE_MS = 60_000;
 export const VO_SIGNATURE_HEADER = "x-vo-signature";
 export const VO_TIMESTAMP_HEADER = "x-vo-timestamp";
 
-export type VoTask = "message_reply" | "document_request" | "ask" | "document_review";
+export type VoTask = "message_reply" | "document_request" | "ask" | "document_review" | "letter_draft";
 
 export type VoTaskRequest = {
   v: 1;
@@ -28,15 +30,24 @@ export type VoTaskRequest = {
   question: string | null;
   /** document_review only: the document version Vo reads, downloaded with the staff member's own token. */
   versionId?: string | null;
+  /** letter_draft only (AI-01): the kind of letter Vo drafts (src/modules/vo/letter.ts). */
+  letterType?: string | null;
   /** The staff member's own Supabase access token (RLS applies to every tool). */
   accessToken: string;
   /** Epoch ms after which the service refuses the request. */
   expiresAt: number;
 };
 
-export type VoSourceRef = { kind: "message" | "matter" | "document_request" | "task" | "deadline" | "document_version"; id: string; label: string };
+export type VoSourceRef = {
+  kind: "message" | "matter" | "document_request" | "task" | "deadline" | "document_version" | "fact" | "official";
+  id: string;
+  label: string;
+};
 
-/** document_review answers "drafted" too: draftId is the vo_doc_drafts row, text its summary. */
+/**
+ * document_review answers "drafted" too: draftId is the vo_doc_drafts row, text its summary.
+ * letter_draft: draftId is the matter_letters row, sources the facts and official content cited.
+ */
 export type VoTaskResponse =
   | { result: "drafted"; draftId: string; text: string; needsRule: boolean; sources: VoSourceRef[] }
   | { result: "answered"; text: string; needsRule: boolean; sources: VoSourceRef[] }
@@ -87,11 +98,13 @@ export function parseVoTaskRequest(raw: unknown, now: number = Date.now()): VoTa
   const r = raw as Record<string, unknown>;
   const id = (value: unknown) => typeof value === "string" && UUID.test(value);
   if (r.v !== 1 || !id(r.runId) || !id(r.organizationId) || !id(r.membershipId) || !id(r.userId) || !id(r.matterId)) return null;
-  if (r.task !== "message_reply" && r.task !== "document_request" && r.task !== "ask" && r.task !== "document_review") return null;
+  if (r.task !== "message_reply" && r.task !== "document_request" && r.task !== "ask" && r.task !== "document_review" && r.task !== "letter_draft") return null;
+  // A letter draft (AI-01) names its letter type and has no conversation; no other task names one.
+  if (r.task === "letter_draft" ? !isLetterType(r.letterType) : r.letterType !== undefined && r.letterType !== null) return null;
   // A document reading has no conversation and no question, only the version it reads; no other
   // task names a version.
   if (r.task === "document_review" ? !id(r.versionId) : r.versionId !== undefined && r.versionId !== null) return null;
-  if (r.task === "ask" || r.task === "document_review" ? r.threadId !== null : !id(r.threadId)) return null;
+  if (r.task === "ask" || r.task === "document_review" || r.task === "letter_draft" ? r.threadId !== null : !id(r.threadId)) return null;
   if (r.task === "ask" ? typeof r.question !== "string" || !r.question.trim() || r.question.length > 1000 : r.question !== null) return null;
   if (typeof r.accessToken !== "string" || r.accessToken.length < 20 || r.accessToken.length > 8000) return null;
   if (typeof r.expiresAt !== "number" || r.expiresAt < now || r.expiresAt > now + 5 * 60_000) return null;

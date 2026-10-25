@@ -155,7 +155,8 @@ export function handoffBadge(status: string): GovBadge {
     case "submission_unverified":
       return { tone: "unv", label: "Submission unverified" };
     case "submission_verified":
-      return { tone: "ok", label: "Submission verified" };
+      // GOV-03: only with the government confirmation on file and its acknowledgement date.
+      return { tone: "ok", label: "Submitted to government" };
     default:
       return { tone: "gr", label: "Cancelled" };
   }
@@ -191,6 +192,11 @@ export function shortHash(hash: string | null | undefined): string | null {
 
 /** Database refusals the Government acts can hit, as the Sheet's own copy. Unknown messages get a safe line. */
 const GOV_ERRORS: [RegExp, string][] = [
+  // GOV-01 and GOV-03 (20261025170000): the checklist, the release and the receipt.
+  [/checklist is not complete/, "The submission checklist isn’t complete. Clear each blocking gate, or ask the firm owner to override it with a reason."],
+  [/no stored files to release/, "There are no stored files on this matter to release. Upload the package files to Documents first."],
+  [/upload the government confirmation/, "Upload the government confirmation as a file. A note of where it is kept isn’t enough on its own."],
+  [/acknowledgement date is required/, "Add the acknowledgement date, as shown on the confirmation."],
   [/representation authority/, "Record the representation authority on this matter before sign-off."],
   [/open submission handoff/, "This matter already has a handoff in progress."],
   [/only after consultant sign-off/, "A licensed consultant signs off the package before the submission is recorded."],

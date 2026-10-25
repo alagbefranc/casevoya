@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast2 } from "../kit";
+import { EXPORT_STEP_UP_ACTION, EXPORT_STEP_UP_LEAD, type StepUpAction } from "@/lib/auth/mfa-step";
 /** Converted from site/app-v2/auth/two-step.html. Same DOM, classes and copy. */
 
 function copyKey(button: HTMLElement) {
@@ -26,10 +27,14 @@ export function TwoStepMarkup({
   email,
   activeStep = 0,
   enrollment = null,
+  stepUpLead = EXPORT_STEP_UP_LEAD,
+  stepUpAction = EXPORT_STEP_UP_ACTION,
 }: {
   email?: string | null;
   activeStep?: number;
   enrollment?: TotpEnrollment | null;
+  stepUpLead?: string;
+  stepUpAction?: StepUpAction;
 } = {}) {
   const secret = (enrollment?.secret ?? "").replace(/\s/g, "").replace(/(.{4})/g, "$1 ").trim();
   // The first render's step only; see PortScreen. A refresh must not move `.on` to another panel.
@@ -65,8 +70,8 @@ export function TwoStepMarkup({
 <section data-step="5" className={stepOn(5)} data-title="Recovery code" data-vo="lock"><span className="au-art" aria-hidden="true"><img src="/assets/generated/b2/recovery-72@1x.webp" srcSet="/assets/generated/b2/recovery-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span><h1>Enter a recovery code</h1><p className="lead">Each code works once. After you’re in, we’ll ask you to set up two-step again.</p>
 <div className="fld" data-req="Enter one of your saved recovery codes"><label htmlFor="rc">Recovery code</label><input className="inp" id="rc" type="text" autoComplete="one-time-code" defaultValue="" placeholder="XXXX-XXXX" aria-describedby="rc-h rc-e" /><span className="emsg" id="rc-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter one of your saved recovery codes</span></span></div>
 <button className="btn p blk" data-href="/sheet"><span className="lab">Continue</span><span className="spin" aria-hidden="true"></span></button><p style={{ "marginTop": "14px" }}><button className="btn" data-go="1" data-novalidate="" data-instant=""><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-chevron-left" /></svg>Back</button></p></section>
-<section data-step="6" className={stepOn(6)} data-title="Confirm it’s you" data-vo="lock"><div className="au-vo" data-size="56" data-pose="lock"></div><h1>Confirm it’s you</h1><p className="lead">Exporting a whole client file needs a fresh check, even when you’re already signed in.</p>
-<div className="mail-card"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-download" /></svg><div><b style={{ "fontWeight": "500" }}>Export a client file</b><small>All documents, forms and the audit trail</small></div></div>
+<section data-step="6" className={stepOn(6)} data-title="Confirm it’s you" data-vo="lock"><div className="au-vo" data-size="56" data-pose="lock"></div><h1>Confirm it’s you</h1><p className="lead">{stepUpLead}</p>
+<div className="mail-card"><svg className="ic " aria-hidden="true"><use href={`/assets/icons-coreui/sprite.svg#i-${stepUpAction.icon}`} /></svg><div><b style={{ "fontWeight": "500" }}>{stepUpAction.title}</b><small>{stepUpAction.detail}</small></div></div>
 <fieldset className="fld" style={{ "border": "0" }}><legend className="sr">Six-digit code</legend><div className="otp" data-then="/sheet/matter?tab=documents"><input inputMode="numeric" autoComplete="one-time-code" maxLength={1} aria-label="Digit 1 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 2 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 3 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 4 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 5 of 6" /><input inputMode="numeric" autoComplete="off" maxLength={1} aria-label="Digit 6 of 6" /></div><span className="otp-msg" role="status" aria-live="polite"></span></fieldset><div className="otp-meta"><span>Or <a className="tl" href="#" onClick={(event) => { event.preventDefault(); toast2("Passkey check", { sub: "Your device would ask for Face ID or your PIN here." }); }}>use your passkey</a></span></div>
 <p style={{ "fontSize": "13.5px", "color": "var(--t2)" }}>Exports, payment settings, role changes and sensitive downloads always ask for this.</p></section>
 </div><footer className="au-foot"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/help">Help centre</a><a href="/status">Service status</a><span className="sp"><a href="#" aria-current="true">English</a> · <a href="#" onClick={(event) => { event.preventDefault(); toast2("Fran\u00e7ais arrive bient\u00f4t", { sub: "The French version of these screens is being designed." }); }}>Français</a></span></footer></main>

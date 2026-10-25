@@ -148,6 +148,30 @@ export function messageRows(catalog: readonly CatalogRow[], use: ReadonlyMap<str
   });
 }
 
+export type FirmMessageTemplateRow = { id: string; useFor: string; name: string; status: string; approvedAt: string | null; approvedBy: string | null };
+
+/**
+ * OPS-04: the firm's own message and announcement templates, as Message templates rows above the
+ * email catalog. Each opens its edit dialog (?view=). Written in English only.
+ */
+export function firmMessageRows(rows: readonly FirmMessageTemplateRow[], timeZone = "America/Toronto"): MessageRow[] {
+  return rows.map((row) => ({
+    template: row.name,
+    channel: row.useFor === "announcement" ? { left: "Announcement", right: "portal and email notice" } : "Portal message",
+    usedBy: row.useFor === "announcement" ? "Firm owner or licensed consultant" : "Staff composer",
+    languages: "English",
+    state:
+      row.status === "approved"
+        ? {
+            tone: "ok",
+            label: "Approved",
+            ...(row.approvedAt ? { detail: `${row.approvedBy ? `${row.approvedBy}, ` : ""}${dayMonth(isoDateInTimeZone(new Date(row.approvedAt), timeZone))}` } : {}),
+          }
+        : { tone: "rev", label: "Draft, needs approval" },
+    href: `/sheet/templates?tab=messages&view=${row.id}`,
+  }));
+}
+
 const NEEDS_REVIEW = new Set(["review_due", "evidence_captured", "professional_review", "draft"]);
 
 function day(iso: string | null): string {
@@ -229,7 +253,8 @@ export function templatesData(input: {
     pills: [review === 1 ? "1 source needs review" : `${review} sources need review`],
     reviewCount: review,
     newTemplateHref: "/sheet/agreements?dlg=template",
-    newTemplateLabel: "New agreement template",
+    newTemplateLabel: input.tab === "messages" ? "New message template" : "New agreement template",
+    ...(input.tab === "messages" ? { newTemplateDialog: "dlgMt" } : {}),
     program: { rows: input.program, note: "Firm templates are labelled so you can tell them apart from centrally reviewed content." },
     messages: { rows: input.messages },
     checklists: { cards: [] },

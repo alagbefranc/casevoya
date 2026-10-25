@@ -8,7 +8,7 @@ import { retrieveAccountStatus } from "@/modules/finance/stripe-account";
 
 export type InvoicePaymentResult =
   | { clientSecret: string; stripeAccount: string; amountCents: number; currency: string }
-  | { error: string; reason?: "not_configured" | "not_ready" | "processing" | "closed" };
+  | { error: string; reason?: "not_configured" | "not_ready" | "processing" | "closed" | "not_earned_fee" | "manual_payment_pending" };
 
 type Context = {
   invoice_id: string;
@@ -39,6 +39,19 @@ export async function createInvoicePayment(input: { organizationId: string; invo
   const supabase = await createClient({ organizationId: input.organizationId });
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) return { error: "Sign in first." };
+
+  // Earned fees only (FIN-02): an advance for the client (trust) account is refused before Stripe
+  // is asked for anything. A trigger on invoice_payments refuses it again.
+  const check = await supabase.rpc("invoice_card_checkout_check", { p_invoice_id: input.invoiceId });
+  if (check.error) return { error: "This invoice isn’t available." };
+  const answer = check.data as { allowed?: unknown; reason?: unknown } | null;
+  // FIN-09: a payment the firm recorded by hand waits for verification; don't take it twice.
+  if (answer?.allowed !== true && answer?.reason === "manual_payment_pending") {
+    return { error: "Your firm is checking a payment you already sent for this invoice. Nothing was charged.", reason: "manual_payment_pending" };
+  }
+  if (answer?.allowed !== true) {
+    return { error: "This invoice is an advance for the client (trust) account, which can’t be paid by card. Nothing was charged.", reason: "not_earned_fee" };
+  }
 
   const read = await supabase.rpc("invoice_payment_context", { p_invoice_id: input.invoiceId });
   if (read.error) {
@@ -100,4 +113,12 @@ export async function createInvoicePayment(input: { organizationId: string; invo
   } catch {
     return { error: "Stripe didn’t answer. Nothing was charged; try again." };
   }
+}
+
+/** ORG-06: hides one of the signed-in client's own portal notices (public.dismiss_portal_notice). */
+export async function dismissPortalNotice(input: { organizationId: string; noticeId: string }): Promise<{ ok: true } | { error: string }> {
+  if (!isUuid(input.organizationId) || !isUuid(input.noticeId)) return { error: "That notice couldn’t be found." };
+  const supabase = await createClient({ organizationId: input.organizationId });
+  const { error } = await supabase.rpc("dismiss_portal_notice", { p_notice_id: input.noticeId });
+  return error ? { error: "That notice couldn’t be dismissed. Try again." } : { ok: true };
 }

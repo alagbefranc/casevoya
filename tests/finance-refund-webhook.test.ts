@@ -227,6 +227,28 @@ describe("Stripe refund and dispute webhooks", () => {
     expect(failing.status).toBe(500);
   });
 
+  it("answers 500 for a dispute that arrives before its payment is applied, so Stripe retries it (#214)", async () => {
+    const { body, header } = await signed(event("charge.dispute.created", dispute({ status: "needs_response" }), { id: "evt_1SyntheticDisputeRace" }));
+    const db = fakeDatabase();
+    let applied = false;
+    const deps = {
+      ...db.deps,
+      // The database refuses it with SQLSTATE 55000 until payment_intent.succeeded is applied.
+      applyReversal: async (args: ReversalEventArgs) => {
+        if (!applied) throw new Error("apply_stripe_reversal_event failed");
+        return db.deps.applyReversal(args);
+      },
+    };
+    const first = await handleStripeWebhook(body, header, deps);
+    expect(first.status).toBe(500);
+    expect(db.reversals).toHaveLength(0);
+    applied = true;
+    const retry = await handleStripeWebhook(body, header, deps);
+    expect(retry).toEqual({ status: 200, body: { received: true, outcome: "applied" } });
+    // Stripe's `created` reaches the database, which decides whether the event is still "not yet".
+    expect(typeof db.reversals[0].p_event_created).toBe("number");
+  });
+
   it("maps nothing for a payment event", () => {
     const paymentEvent = event("payment_intent.succeeded", { id: "pi_3SyntheticIntent01", object: "payment_intent", amount: 1, currency: "cad" });
     expect(reversalEventArgs(paymentEvent as unknown as Stripe.Event)).toBeNull();
