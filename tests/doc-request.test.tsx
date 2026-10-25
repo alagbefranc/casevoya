@@ -66,7 +66,7 @@ describe("Request a document: what the dialog sends", () => {
 
   it("comes back to the dialog after a step-up, and reads the database's refusals in plain words", () => {
     expect(dialogId("request")).toBe("dReq");
-    expect(stepUpLocation("/sheet/matters/m-1", "?tab=documents", "request")).toBe(`/mfa?step=6&next=${encodeURIComponent("/sheet/matters/m-1?tab=documents&dlg=request")}`);
+    expect(stepUpLocation("/sheet/matters/m-1", "?tab=documents", "request")).toBe(`/mfa?step=6&next=${encodeURIComponent("/sheet/matters/m-1?tab=documents&dlg=request")}&for=document_request`);
     expect(needsStepUp(documentError("step-up is required"))).toBe(true);
     expect(documentError("step-up is required")).toBe(safeAccessError("step-up is required"));
     expect(documentError("this firm is in sample mode; only sample matters accept new work")).toBe("This firm is in sample mode. Only sample matters accept new work.");

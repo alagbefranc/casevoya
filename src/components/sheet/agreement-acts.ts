@@ -47,7 +47,7 @@ function keep(draft: Record<string, string>) {
 
 /** To the step-up screen, coming back to this page (and tab) with the dialog open again. */
 function stepUp(dialog: string | null) {
-  window.location.assign(agreementStepUpLocation(window.location.pathname, window.location.search, dialog));
+  window.location.assign(agreementStepUpLocation(window.location.pathname, window.location.search, dialog, {}, "agreement"));
 }
 
 /** A clean URL (no `?dlg=`, `?matter=`) so a refresh does not reopen the dialog. */
@@ -263,7 +263,7 @@ export async function runCountersign(button: HTMLElement, router: Router) {
   if ("error" in result) {
     if (needsStepUp(result.error)) {
       window.location.assign(
-        agreementStepUpLocation(window.location.pathname, window.location.search, COUNTERSIGN_DIALOG, { envelope: envelopeId }),
+        agreementStepUpLocation(window.location.pathname, window.location.search, COUNTERSIGN_DIALOG, { envelope: envelopeId }, "countersign"),
       );
       return;
     }

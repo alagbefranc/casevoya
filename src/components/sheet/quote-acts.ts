@@ -30,7 +30,7 @@ function keep(draft: Record<string, unknown>) {
 }
 
 function stepUp(dialog: string, extra: Record<string, string> = {}) {
-  window.location.assign(agreementStepUpLocation(window.location.pathname, window.location.search, dialog, extra));
+  window.location.assign(agreementStepUpLocation(window.location.pathname, window.location.search, dialog, extra, "quote"));
 }
 
 /** A clean URL (no `?dlg=`, `?clause=`) so a refresh does not reopen the dialog. */

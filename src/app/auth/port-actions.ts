@@ -169,8 +169,13 @@ export async function signInWithPassword(email: string, password: string, next: 
     return lockedMessage(error.message) ? fail(error.message, "locked") : fail("Email or password didn’t match", "error");
   }
   const dest = safeNext(next, "/app");
-  // Clients, sponsors and family sign in with a password only; two-step is for firm staff.
-  if ((await homeRoute()) === "/portal") return { ok: true, href: portalDestination(dest) };
+  // Clients, sponsors and family sign in with a password, plus their code when they turned on
+  // two-step on their Account page (SEC-01).
+  if ((await homeRoute()) === "/portal") {
+    const { data: factors } = await supabase.auth.mfa.listFactors();
+    const twoStep = (factors?.totp ?? []).some((factor) => factor.status === "verified");
+    return { ok: true, href: twoStep ? `/mfa?next=${encodeURIComponent(portalDestination(dest))}` : portalDestination(dest) };
+  }
   return { ok: true, href: `/mfa?next=${encodeURIComponent(dest)}` };
 }
 

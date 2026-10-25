@@ -7,7 +7,7 @@ import { needsStepUp, stepUpLocation } from "@/modules/sheet/matter-wire";
 type Router = { refresh: () => void };
 
 function stepUp() {
-  window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null));
+  window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null, "file_email"));
 }
 
 function filesLine(files: number, moved: number, problem: string | null): { kind: string; sub: string } {

@@ -4,6 +4,7 @@ import { toast2 } from "@/components/port/kit";
 import { readQuietHours, readReminderDays } from "@/modules/sheet/automations-present";
 import { needsStepUp } from "@/modules/sheet/staff-present";
 import { setFirmReminderOffsets, setQuietHours } from "@/modules/tasks/actions";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 type Router = { refresh: () => void };
 
@@ -29,7 +30,7 @@ export async function runAutomationSave(button: HTMLElement, router: Router) {
   const refused = (error: string | undefined) => {
     if (needsStepUp(error)) {
       toast2("Confirm it’s you first", { kind: "warn", sub: "Then save the reminder settings again." });
-      window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`), 900);
+      window.setTimeout(() => window.location.assign(stepUpHref(`${window.location.pathname}${window.location.search}`, "reminder_settings")), 900);
       return;
     }
     toast2(error ?? "That didn’t save.", { kind: "bad", sub: "Nothing more was changed." });

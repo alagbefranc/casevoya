@@ -8,6 +8,7 @@ import type { PortalInviteRole } from "@/modules/portal-invitations/types";
 import { readBirthDate, todayIso } from "@/modules/sheet/birth-date";
 import { dayMonth } from "@/modules/sheet/home-present";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 /** The Designer's "Their role" options, in its order. The option text is what the dialog reads. */
 export const PORTAL_ROLE_OPTIONS: readonly (readonly [PortalInviteRole, string])[] = [
@@ -111,7 +112,7 @@ export function inviteStepUpLocation(pathname: string, search: string, personId:
   const params = new URLSearchParams(search);
   params.set("dlg", "invite");
   params.set("pid", personId);
-  return `/mfa?step=6&next=${encodeURIComponent(`${pathname}?${params.toString()}`)}`;
+  return stepUpHref(`${pathname}?${params.toString()}`, "portal_invite");
 }
 
 /** The same URL without the reopen flags. */

@@ -1,6 +1,7 @@
 "use client";
 
 import { toast2 } from "@/components/port/kit";
+import { stepUpHref, type StepUpActionKey } from "@/lib/auth/mfa-step";
 import { approveDeletionJob, cancelSubscription, chooseEndArrangement, firmExportIndex } from "@/modules/settings/sec-actions";
 
 /**
@@ -11,10 +12,10 @@ import { approveDeletionJob, cancelSubscription, chooseEndArrangement, firmExpor
 type Router = { refresh: () => void };
 type Open = (id: string) => void;
 
-function stepUp() {
+function stepUp(action: StepUpActionKey) {
   toast2("Confirm it’s you", { kind: "warn", sub: "Then come back and try again." });
   const next = `${window.location.pathname}${window.location.search}`;
-  window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`), 900);
+  window.setTimeout(() => window.location.assign(stepUpHref(next, action)), 900);
 }
 
 function newKey(): string {
@@ -65,7 +66,7 @@ export async function runSecAct(button: HTMLElement, root: ParentNode, router: R
       key: dialog.dataset.key ?? newKey(),
     });
     if ("error" in result) {
-      if (result.stepUp) return stepUp();
+      if (result.stepUp) return stepUp("retention_delete");
       toast2(result.error, { kind: "bad", sub: "Nothing was deleted." });
       return;
     }
@@ -79,7 +80,7 @@ export async function runSecAct(button: HTMLElement, root: ParentNode, router: R
     const dialog = button.closest("dialog");
     const result = await cancelSubscription({ organizationId });
     if ("error" in result) {
-      if (result.stepUp) return stepUp();
+      if (result.stepUp) return stepUp("subscription_cancel");
       toast2(result.error, { kind: "bad", sub: "Your subscription is unchanged." });
       return;
     }
@@ -99,7 +100,7 @@ export async function runSecAct(button: HTMLElement, root: ParentNode, router: R
     const transferId = dialog.querySelector<HTMLSelectElement>("#earT")?.value || null;
     const result = await chooseEndArrangement({ organizationId, arrangement, transferId });
     if ("error" in result) {
-      if (result.stepUp) return stepUp();
+      if (result.stepUp) return stepUp("subscription_end");
       toast2(result.error, { kind: "bad", sub: "Nothing was changed." });
       return;
     }
@@ -112,7 +113,7 @@ export async function runSecAct(button: HTMLElement, root: ParentNode, router: R
   if (act === "firm-index") {
     const result = await firmExportIndex({ organizationId });
     if ("error" in result) {
-      if (result.stepUp) return stepUp();
+      if (result.stepUp) return stepUp("firm_index");
       toast2(result.error, { kind: "bad" });
       return;
     }

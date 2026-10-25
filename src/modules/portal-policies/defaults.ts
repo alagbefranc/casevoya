@@ -9,6 +9,8 @@
  * and meaningful consent (sources: docs/legal/portal-policy-sources.md).
  */
 
+import { stepUpHref } from "@/lib/auth/mfa-step";
+
 export const POLICY_KINDS = ["portal_terms", "privacy_notice"] as const;
 export type PolicyKind = (typeof POLICY_KINDS)[number];
 
@@ -255,5 +257,5 @@ export function policyStepUpLocation(pathname: string, search: string, kind: Pol
   const params = new URLSearchParams(search);
   params.set("tab", "portal");
   params.set("dlg", POLICY_DIALOG[kind].param);
-  return `/mfa?step=6&next=${encodeURIComponent(`${pathname}?${params.toString()}`)}`;
+  return stepUpHref(`${pathname}?${params.toString()}`, "portal_policy");
 }

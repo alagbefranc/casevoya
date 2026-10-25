@@ -12,6 +12,7 @@ import {
 } from "@/modules/compliance/actions";
 import { privacyCloseProblem } from "@/modules/compliance/checks";
 import { needsStepUp } from "@/modules/sheet/matter-wire";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 /**
  * Compliance > Privacy requests and Complaints. Each submit reads its dialog and calls a server
@@ -86,7 +87,7 @@ export function failed(dialog: HTMLDialogElement, button: HTMLElement, error: st
     }
     const params = new URLSearchParams(window.location.search);
     params.set("dlg", "compliance");
-    window.location.assign(`/mfa?step=6&next=${encodeURIComponent(`${window.location.pathname}?${params.toString()}`)}`);
+    window.location.assign(stepUpHref(`${window.location.pathname}?${params.toString()}`, "compliance"));
     return;
   }
   toast2(error, { kind: "bad", sub });

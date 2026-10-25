@@ -123,7 +123,7 @@ export async function runCredit(button: HTMLElement, router: Router) {
       } catch {
         // Storage can be unavailable; the person opens the credit again.
       }
-      window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, CREDIT_DIALOG));
+      window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, CREDIT_DIALOG, "credit_note"));
       return;
     }
     toast2(result.error, { kind: "bad", sub: "Nothing was moved." });
@@ -208,7 +208,7 @@ export async function runEvidence(button: HTMLElement, router: Router) {
   if (!result.ok) {
     const error = result.error ?? "Nothing was submitted; try again.";
     if (financeNeedsStepUp(error)) {
-      window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, EVIDENCE_DIALOG));
+      window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, EVIDENCE_DIALOG, "dispute_evidence"));
       return;
     }
     toast2(error, { kind: "bad", sub: "Check the dispute before trying again." });

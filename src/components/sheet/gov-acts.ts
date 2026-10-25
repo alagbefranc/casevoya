@@ -23,6 +23,7 @@ import { recordGovernmentLetter } from "@/modules/government/letter-actions";
 import { readLetterForm } from "./letter-acts";
 import { needsStepUp, stepUpLocation, withoutDialog, type MatterDialog } from "@/modules/sheet/matter-wire";
 import { setTaskStatus } from "@/modules/tasks/actions";
+import { type StepUpActionKey } from "@/lib/auth/mfa-step";
 
 /**
  * The Sheet's government acts (T036 to T039): `data-gov` controls on the Government status page
@@ -219,6 +220,22 @@ export function bindGovControls(root: HTMLElement, router: Router, listen: { sig
 
 /** Which dialog a step-up should reopen when the person comes back. */
 const REOPEN: Record<string, MatterDialog> = { prepare: "handoff", submit: "submission", receipt: "receipt" };
+/** SEC-01: what the step-up page says each act's check is for. */
+const GOV_ACTION: Record<string, StepUpActionKey | undefined> = {
+  prepare: "submission",
+  signoff: "submission",
+  submit: "submission",
+  receipt: "submission",
+  "receipt-file": "submission",
+  "verify-letter": "government_letter",
+  "attach-letter": "government_letter",
+  status: "government_status",
+  confirm: "government_status",
+  decision: "decision",
+  step: "decision",
+  "task-done": "task_change",
+  expiry: "renewal",
+};
 
 export async function runGovAct(button: HTMLElement, root: HTMLElement, router: Router) {
   const act = button.dataset.gov ?? "";
@@ -339,7 +356,7 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
   const error = result && "error" in result && typeof result.error === "string" ? result.error : null;
   if (error) {
     if (needsStepUp(error)) {
-      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, REOPEN[act] ?? null));
+      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, REOPEN[act] ?? null, GOV_ACTION[act]));
       return;
     }
     toast2(error, { kind: "bad", sub: "Nothing was saved." });

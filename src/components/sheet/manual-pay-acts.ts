@@ -64,7 +64,7 @@ function stepUp(dialog: HTMLDialogElement, button: HTMLElement, flag: string) {
   } catch {
     // Storage can be unavailable; the person opens the dialog again.
   }
-  window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, flag));
+  window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, flag, "manual_payment"));
 }
 
 function failed(dialog: HTMLDialogElement, button: HTMLElement, error: string, sub: string, flag = MANUAL_DIALOG): void {

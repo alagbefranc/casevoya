@@ -1635,6 +1635,39 @@ export type Database = {
         }
         Relationships: []
       }
+      client_mfa_resets: {
+        Row: {
+          created_at: string
+          id: string
+          identity_method: string
+          note: string | null
+          organization_id: string
+          person_id: string
+          reset_by: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          identity_method: string
+          note?: string | null
+          organization_id: string
+          person_id: string
+          reset_by: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          identity_method?: string
+          note?: string | null
+          organization_id?: string
+          person_id?: string
+          reset_by?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       client_reconciliation_adjustments: {
         Row: {
           amount_cents: number
@@ -1865,6 +1898,66 @@ export type Database = {
           privacy_response_days?: number | null
           updated_at?: string
           updated_by?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
+      consent_impact_reviews: {
+        Row: {
+          consent_purpose: Database["public"]["Enums"]["consent_purpose"]
+          consent_record_id: string
+          created_at: string
+          created_by: string | null
+          done_at: string | null
+          done_by: string | null
+          done_note: string | null
+          id: string
+          impacts: Json
+          matter_id: string | null
+          organization_id: string
+          person_id: string
+          source: string
+          status: string
+          task_id: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          consent_purpose: Database["public"]["Enums"]["consent_purpose"]
+          consent_record_id: string
+          created_at?: string
+          created_by?: string | null
+          done_at?: string | null
+          done_by?: string | null
+          done_note?: string | null
+          id?: string
+          impacts: Json
+          matter_id?: string | null
+          organization_id: string
+          person_id: string
+          source: string
+          status?: string
+          task_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          consent_purpose?: Database["public"]["Enums"]["consent_purpose"]
+          consent_record_id?: string
+          created_at?: string
+          created_by?: string | null
+          done_at?: string | null
+          done_by?: string | null
+          done_note?: string | null
+          id?: string
+          impacts?: Json
+          matter_id?: string | null
+          organization_id?: string
+          person_id?: string
+          source?: string
+          status?: string
+          task_id?: string | null
+          updated_at?: string
           version?: number
         }
         Relationships: []
@@ -8223,6 +8316,7 @@ export type Database = {
           retention_policy: Json | null
           sample_mode: boolean
           slug: string
+          staff_idle_timeout_minutes: number
           subscription_terms_accepted_at: string | null
           subscription_terms_version: string | null
           succession_note: string | null
@@ -8256,6 +8350,7 @@ export type Database = {
           retention_policy?: Json | null
           sample_mode?: boolean
           slug: string
+          staff_idle_timeout_minutes?: number
           subscription_terms_accepted_at?: string | null
           subscription_terms_version?: string | null
           succession_note?: string | null
@@ -8289,6 +8384,7 @@ export type Database = {
           retention_policy?: Json | null
           sample_mode?: boolean
           slug?: string
+          staff_idle_timeout_minutes?: number
           subscription_terms_accepted_at?: string | null
           subscription_terms_version?: string | null
           succession_note?: string | null
@@ -10677,6 +10773,27 @@ export type Database = {
           organization_id?: string
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      staff_session_activity: {
+        Row: {
+          created_at: string
+          last_active_at: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          last_active_at?: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          last_active_at?: string
+          session_id?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -13251,6 +13368,10 @@ export type Database = {
         Args: { p_amount_cents: number; p_description: string; p_item_date: string; p_kind: string; p_reconciliation_id: string; p_reference: string | null }
         Returns: string
       }
+      complete_consent_review: {
+        Args: { p_expected_version: number; p_note: string; p_review_id: string }
+        Returns: number
+      }
       confirm_submission_fees: {
         Args: { p_confirmed: boolean; p_handoff_id: string; p_note: string }
         Returns: string
@@ -13267,9 +13388,15 @@ export type Database = {
         Args: { p_org: string }
         Returns: { display_name: string; matter_ids: string[] | null; role: string; user_id: string }[]
       }
+      my_consents: { Args: never; Returns: Json }
+      my_two_step_state: { Args: never; Returns: string }
       override_submission_gate: {
         Args: { p_gate: string; p_handoff_id: string; p_reason: string }
         Returns: string
+      }
+      person_consent_overview: {
+        Args: { p_organization_id: string; p_person_id: string }
+        Returns: Json
       }
       propose_submission_requirement: {
         Args: {
@@ -13314,8 +13441,27 @@ export type Database = {
             Args: { p_decision: string; p_expected_version: number; p_note: string; p_page_opened_on: string | null; p_step_id: string }
             Returns: number
           }
+      record_my_two_step: { Args: { p_enabled: boolean }; Returns: string }
+      record_staff_activity: { Args: { p_active?: boolean }; Returns: Json }
+      reset_client_two_step: {
+        Args: {
+          p_identity_method: string
+          p_note?: string
+          p_organization_id: string
+          p_person_id: string
+        }
+        Returns: string
+      }
       retire_approval_follow_up_step: {
         Args: { p_expected_version: number; p_reason: string; p_step_id: string }
+        Returns: number
+      }
+      set_my_consent: {
+        Args: { p_granted: boolean; p_purpose: string }
+        Returns: Json
+      }
+      set_staff_idle_timeout: {
+        Args: { p_minutes: number; p_organization_id: string }
         Returns: number
       }
       tick_approval_follow_up_step: {
@@ -16315,6 +16461,7 @@ export type Database = {
         | "ai_drafting"
         | "participation_declined"
         | "electronic_signature"
+        | "marketing"
       correspondence_channel:
         | "portal_message"
         | "email"
@@ -16914,6 +17061,7 @@ export const Constants = {
         "ai_drafting",
         "participation_declined",
         "electronic_signature",
+        "marketing",
       ],
       person_identity_kind: ["name", "passport", "address"],
       person_section_key: [

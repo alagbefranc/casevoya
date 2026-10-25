@@ -31,6 +31,7 @@ import { MATTERS_READ } from "@/modules/sheet/matters-present";
 import type { SheetQuery } from "@/modules/sheet/present";
 import { firstName } from "@/modules/sheet/tasks-present";
 import { leadRow } from "@/modules/sheet/clients-present";
+import { loadPersonConsent } from "@/modules/sheet/person-consent-load";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -81,8 +82,9 @@ async function loadPerson(
   matter: Map<string, MatterRecord>,
   portal: ReturnType<typeof portalState>,
   people: Map<string, PersonRecord>,
+  timeZone: string,
 ): Promise<PersonData> {
-  const [relationships, openTasks] = await Promise.all([
+  const [relationships, openTasks, consent] = await Promise.all([
     supabase
       .from("person_relationships")
       .select("from_person_id, to_person_id, relationship_type")
@@ -95,6 +97,8 @@ async function loadPerson(
       .eq("organization_id", org)
       .eq("owner_person_id", person.id)
       .in("status", [...OPEN_TASK]),
+    // SEC-01, SEC-05: consent history, impact reviews and portal two-step, when the viewer may see them.
+    loadPersonConsent(supabase, org, person.id, timeZone).catch(() => null),
   ]);
   const links = relationships.data ?? [];
   const related = await morePeople(
@@ -132,6 +136,7 @@ async function loadPerson(
     },
     // Language, timezone and contact preferences are not stored for a person yet.
     preferences: null,
+    consent,
   };
 }
 
@@ -263,7 +268,7 @@ export async function loadSheetClients(staff: SheetStaff, query: SheetQuery, now
   const household = householdRows.find((row) => row.id === householdId) ?? null;
 
   const [personData, householdData] = await Promise.all([
-    tab === "person" && person ? loadPerson(supabase, org, person, parties.get(person.id) ?? [], matter, portalOf(person), people) : null,
+    tab === "person" && person ? loadPerson(supabase, org, person, parties.get(person.id) ?? [], matter, portalOf(person), people, staff.timezone) : null,
     tab === "household" && household
       ? loadHousehold(
           supabase,

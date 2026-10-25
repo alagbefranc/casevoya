@@ -169,7 +169,7 @@ describe("Subscription entitlements in the rest of the Sheet", () => {
     expect(subscriptionActionError("enterprise plans are arranged with Casevoya")).toMatch(/arranged with Casevoya/);
     expect(subscriptionActionError("the current subscription is changed in the billing portal")).toMatch(/Manage billing/);
     expect(subscriptionActionError("firm owner step-up is required")).toBeNull();
-    expect(subscriptionStepUpLocation(true)).toBe("/mfa?step=6&next=%2Fsheet%2Fsettings%3Ftab%3Dbilling%26dlg%3Dplan");
+    expect(subscriptionStepUpLocation(true)).toBe("/mfa?step=6&next=%2Fsheet%2Fsettings%3Ftab%3Dbilling%26dlg%3Dplan&for=plan");
   });
 
   it("shows the seat allowance on Team and seats, and a paused subscription on the setup banner", () => {
@@ -231,6 +231,6 @@ describe("Settings > Retention", () => {
     expect(retentionSaveError("retention policy version conflict")).toMatch(/Reload/);
     expect(retentionSaveError("that is already the firm retention period")).toMatch(/already/);
     expect(retentionSaveError("firm owner step-up is required")).toBeNull();
-    expect(retentionStepUpLocation()).toBe("/mfa?step=6&next=%2Fsheet%2Fsettings%3Ftab%3Dretention");
+    expect(retentionStepUpLocation()).toBe("/mfa?step=6&next=%2Fsheet%2Fsettings%3Ftab%3Dretention&for=retention");
   });
 });

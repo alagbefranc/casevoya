@@ -56,6 +56,8 @@ const MESSAGES: Record<string, string> = {
   failed: "Vo couldn’t finish. Nothing was sent. Write it yourself, or try again.",
   // Document reading.
   category_off: "The firm owner hasn’t let Vo read this kind of document. Review it yourself; nothing was read.",
+  // SEC-05: the client said no to AI drafting, or withdrew it, in their portal.
+  client_ai_off: "This client hasn’t agreed to AI drafting, so Vo doesn’t read their documents. Review it yourself; nothing was read.",
   not_clean: "Vo reads only files that passed the upload check.",
   already_read: "Vo already read this version. Its proposals are waiting on the matter’s Documents tab.",
   unsupported_file: "Vo can read PDFs and JPEG, PNG, WebP or GIF images up to 20 MB (5 MB for an image). Review this one yourself.",

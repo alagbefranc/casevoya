@@ -11,6 +11,7 @@ import {
   reviewPrivacyTimeLimit,
   searchPrivacyRecords,
 } from "@/modules/compliance/privacy-response-actions";
+import { stepUpHref, type StepUpActionKey } from "@/lib/auth/mfa-step";
 import { needsStepUp } from "@/modules/sheet/matter-wire";
 import { done, failed, keyFor, value } from "./compliance-acts";
 
@@ -26,8 +27,8 @@ type Open = (id: string) => void;
 type BusyRun = (button: HTMLElement, run: () => Promise<void>) => void;
 
 /** A button outside a dialog that needs a step-up: go to the step-up page and come back here. */
-function stepUp() {
-  window.location.assign(`/mfa?step=6&next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`);
+function stepUp(action: StepUpActionKey) {
+  window.location.assign(stepUpHref(`${window.location.pathname}${window.location.search}`, action));
 }
 
 function selected(dialog: ParentNode, id: string): string[] {
@@ -187,7 +188,7 @@ async function runLimitReview(button: HTMLElement, router: Router) {
 async function runScope(button: HTMLElement, router: Router) {
   const result = await searchPrivacyRecords({ organizationId: button.dataset.org ?? "", requestId: button.dataset.privacyScope ?? "" });
   if ("error" in result) {
-    if (needsStepUp(result.error)) return stepUp();
+    if (needsStepUp(result.error)) return stepUp("compliance");
     toast2(result.error, { kind: "bad", sub: "Nothing was searched." });
     return;
   }
@@ -205,7 +206,7 @@ async function runBuild(button: HTMLElement, router: Router) {
   const body = (await response.json().catch(() => ({}))) as { error?: string };
   delete button.dataset.key;
   if (!response.ok) {
-    if (needsStepUp(body.error)) return stepUp();
+    if (needsStepUp(body.error)) return stepUp("privacy_response");
     toast2(body.error ?? "The package could not be built.", { kind: "bad", sub: "Nothing was kept." });
     router.refresh();
     return;
@@ -222,7 +223,7 @@ async function runPreview(button: HTMLElement) {
   });
   const body = (await response.json().catch(() => ({}))) as { error?: string; url?: string };
   if (!response.ok || !body.url) {
-    if (needsStepUp(body.error)) return stepUp();
+    if (needsStepUp(body.error)) return stepUp("privacy_response");
     toast2(body.error ?? "That package can’t be opened.", { kind: "bad" });
     return;
   }

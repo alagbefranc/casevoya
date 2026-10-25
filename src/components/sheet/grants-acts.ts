@@ -4,6 +4,7 @@ import { busyBtn, clearBtn, settleBtn, toast2 } from "@/components/port/kit";
 import { grantDraftProblem } from "@/modules/sheet/grants-present";
 import { createAccessGrant, revokeAccessGrant } from "@/modules/staff/grant-actions";
 import { approveSupportAccess, declineSupportAccess, endSupportAccess, extendSupportAccess, type SupportResult } from "@/modules/staff/support-actions";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 type Router = { refresh: () => void };
 type Open = (id: string) => void;
@@ -51,7 +52,7 @@ export async function runGrantCreate(button: HTMLElement, router: Router) {
       params.set("dlg", GRANT_DIALOG);
       const next = `${window.location.pathname}?${params.toString()}`;
       toast2("Confirm it’s you", { kind: "warn", sub: "Then the dialog opens again with what you typed." });
-      window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`), 900);
+      window.setTimeout(() => window.location.assign(stepUpHref(next, "access_grant")), 900);
       return;
     }
     toast2(result.error, { kind: "bad", sub: "No access was given." });
@@ -111,7 +112,7 @@ export async function runGrantRevoke(button: HTMLElement, router: Router) {
       params.set("dlg", GRANT_REVOKE_DIALOG);
       const next = `${window.location.pathname}?${params.toString()}`;
       toast2("Confirm it’s you", { kind: "warn", sub: "Then the dialog opens again with your reason." });
-      window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`), 900);
+      window.setTimeout(() => window.location.assign(stepUpHref(next, "access_revoke")), 900);
       return;
     }
     toast2(result.error, { kind: "bad", sub: "The grant is unchanged." });
@@ -158,7 +159,7 @@ function supportStepUp(draft: SupportDraft) {
   params.set("dlg", SUPPORT_DIALOG);
   const next = `${window.location.pathname}?${params.toString()}`;
   toast2("Confirm it’s you", { kind: "warn", sub: draft.act === "decline" ? "Then the dialog opens again with your reason." : "Then this finishes on its own." });
-  window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`), 900);
+  window.setTimeout(() => window.location.assign(stepUpHref(next, "support_access")), 900);
 }
 
 /** The waiting request's Decline opens the dialog for that request. */

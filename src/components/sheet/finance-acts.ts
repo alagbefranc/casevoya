@@ -52,7 +52,7 @@ export async function runNewInvoice(button: HTMLElement, router: Router) {
       } catch {
         // Storage can be unavailable; the person types it again.
       }
-      window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, INVOICE_DIALOG));
+      window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, INVOICE_DIALOG, "invoice"));
       return;
     }
     toast2(result.error, { kind: "bad", sub: "Nothing was issued." });
@@ -147,7 +147,7 @@ export async function runRefund(button: HTMLElement, router: Router) {
       } catch {
         // Storage can be unavailable; the person opens the refund again.
       }
-      window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, REFUND_DIALOG));
+      window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, REFUND_DIALOG, "refund"));
       return;
     }
     toast2(result.error, { kind: "bad", sub: "Check the Refunds and disputes tab before trying again." });

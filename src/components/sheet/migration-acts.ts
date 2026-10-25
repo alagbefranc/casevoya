@@ -1,6 +1,7 @@
 "use client";
 
 import { toast2 } from "@/components/port/kit";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 type Router = { refresh(): void; push(href: string): void };
 type Reply = { ok: boolean; data: Record<string, unknown> };
@@ -34,7 +35,7 @@ function n(value: unknown): number {
 function stepUp(batch: string) {
   const next = `${window.location.pathname}?tab=signoff&id=${encodeURIComponent(batch)}`;
   toast2("Confirm it’s you", { kind: "warn", sub: "Then choose the button again." });
-  window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`), 900);
+  window.setTimeout(() => window.location.assign(stepUpHref(next, "import_signoff")), 900);
 }
 
 function withTab(tab: string, batch: string): string {

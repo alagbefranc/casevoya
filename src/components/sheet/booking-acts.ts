@@ -16,6 +16,7 @@ import {
   shareConsultationSummary,
   voidBookingAgreement,
 } from "@/modules/scheduling/staff-actions";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 type Router = { refresh: () => void };
 type Open = (id: string) => void;
@@ -35,7 +36,7 @@ function key(): string {
 /** The step-up screen, back to this page afterwards. The dialog is opened again by hand. */
 function stepUp() {
   const next = `${window.location.pathname}${window.location.search}`;
-  window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`);
+  window.location.assign(stepUpHref(next, "booking_settings"));
 }
 
 function first(name: string): string {

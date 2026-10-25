@@ -3,6 +3,7 @@
 import { toast2 } from "@/components/port/kit";
 import { removeFirmOffice, saveFirmBranding, saveFirmDetails, saveFirmOffice, saveTimezones, type FirmSettingsResult } from "@/modules/settings/firm-actions";
 import { withoutDialog } from "@/modules/sheet/matter-wire";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 type Router = { refresh: () => void; replace: (href: string) => void };
 type Open = (id: string) => void;
@@ -30,7 +31,7 @@ function stepUp(dialogId: string, fields: Record<string, string | boolean>) {
   params.set("dlg", dialogId);
   const next = `${window.location.pathname}?${params.toString()}`;
   toast2("Confirm it’s you", { kind: "warn", sub: "Then the dialog opens again with what you typed." });
-  window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`), 900);
+  window.setTimeout(() => window.location.assign(stepUpHref(next, "firm_settings")), 900);
 }
 
 function finish(result: FirmSettingsResult, dialog: HTMLDialogElement, fields: Record<string, string | boolean>, done: { title: string; sub: string }, router: Router): void {

@@ -14,6 +14,7 @@ import { toast2 } from "@/components/port/kit";
 import { switchToLive } from "@/modules/sheet/sample-actions";
 import { Icon } from "./frame";
 import type { GoLiveData } from "./sample-case";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 const RETURN = "golive";
 
@@ -33,7 +34,7 @@ export function GoLiveSwitch({ data }: { data: GoLiveData }) {
       if (result.stepUp && !afterStepUp) {
         toast2("Confirm it’s you", { kind: "warn", sub: "Then you come back here to switch to live." });
         const next = `${window.location.pathname}?${RETURN}=1`;
-        window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`), 900);
+        window.setTimeout(() => window.location.assign(stepUpHref(next, "go_live")), 900);
         return;
       }
       toast2(result.error, { kind: "bad", sub: "The firm is still in sample mode." });
