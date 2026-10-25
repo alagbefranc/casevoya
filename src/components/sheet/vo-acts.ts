@@ -3,6 +3,7 @@
 import { toast2 } from "@/components/port/kit";
 import { acceptVoDraft, askVo, discardVoDraft, rateVoRun, saveVoSetting } from "@/modules/vo/actions";
 import type { VoSettingKey } from "@/modules/vo/errors";
+import { VO_CANT_ANSWER, type VoCitation } from "@/modules/vo/grounding";
 
 type Router = { push: (href: string) => void; refresh: () => void };
 
@@ -87,11 +88,42 @@ export async function runVoAsk(button: HTMLElement) {
     text.textContent = result.error;
     return;
   }
+  // SRC-09: no supporting record or approved source, or it needs a consultant: Vo says so plainly.
   if ("abstained" in result) {
-    text.textContent = "This needs a consultant. Vo has no approved source for it, so it won’t guess.";
+    text.textContent =
+      result.reason === "consultant"
+        ? `${VO_CANT_ANSWER} It needs a consultant’s judgement, so Vo won’t guess.`
+        : `${VO_CANT_ANSWER} Nothing on this matter or in the firm’s approved official content supports an answer, so Vo won’t guess.`;
     sources.textContent = "Run logged · no answer kept";
     return;
   }
   text.textContent = result.text;
-  sources.textContent = `Sources: ${result.sources.map((source) => source.label).join(", ")} · for you only, not kept`;
+  showCitations(sources, result.sources);
+}
+
+/**
+ * The citations under an answer, each linked: the matter tab that holds the record, or the official
+ * page (with its section, dates and fingerprint). Built as DOM text, never HTML.
+ */
+export function showCitations(target: HTMLElement, citations: VoCitation[]) {
+  target.textContent = "Sources: ";
+  citations.forEach((citation, index) => {
+    if (index) target.append(", ");
+    const name = `${citation.marker ? `[${citation.marker}] ` : ""}${citation.label}`;
+    if (citation.href) {
+      const link = document.createElement("a");
+      link.href = citation.href;
+      link.textContent = name;
+      if (/^https:\/\//.test(citation.href)) {
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+      }
+      if (citation.detail) link.title = citation.detail;
+      target.append(link);
+    } else {
+      target.append(name);
+    }
+    if (citation.kind === "official" && citation.detail) target.append(` (${citation.detail})`);
+  });
+  target.append(" · for you only, not kept");
 }
