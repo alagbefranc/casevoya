@@ -59,6 +59,8 @@ export type MatterRuleState = {
     jurisdiction?: unknown;
     pack_version?: unknown;
     pack_status?: unknown;
+    /** SRC-03 live: false when the pack or a rule version in it is no longer live (suspended, expired, superseded). */
+    pack_live?: unknown;
     platform?: unknown;
     forms?: unknown;
   } | null;
@@ -180,6 +182,7 @@ export function matterRulePin(
     .filter((form): form is PinForm => Boolean(form));
   const recheck = binding.recheck_required === true;
   const status = text(binding.pack_status);
+  const notLive = binding.pack_live === false;
   const parts = [
     program ? programLabel(program) : null,
     text(binding.jurisdiction),
@@ -226,12 +229,18 @@ export function matterRulePin(
       ? { tone: "chg", label: "Source changed: recheck" }
       : status === "review_due"
         ? { tone: "chg", label: "Review due" }
+        : notLive
+          ? { tone: "chg", label: "No longer live" }
         : { tone: "ok", label: "Pinned" },
     title: `Rule pack v${version ?? "?"}`,
     parts,
     forms,
     formsEmpty: forms.length ? null : "This pack lists no IRCC form versions.",
-    note: recheck ? "An official page this pack cites has changed since it was approved. The pin stays as it is until a newer version is approved and accepted." : null,
+    note: recheck
+      ? "An official page this pack cites has changed since it was approved. The pin stays as it is until a newer version is approved and accepted."
+      : notLive
+        ? "A rule in this pack is no longer live (suspended, expired or replaced). The pin stays as it is until a newer version is approved and accepted."
+        : null,
     upgrade,
   };
 }

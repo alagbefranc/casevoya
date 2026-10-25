@@ -29,22 +29,9 @@ const KEY = /^[a-z0-9_]{1,80}$/;
 const JURISDICTION = /^[A-Z]{2}(-[A-Z0-9]{1,6})?$/;
 const KINDS = new Set(["program", "jurisdiction", "case_type"]);
 const ALLOWED = ["canada.ca", "cic.gc.ca", "justice.gc.ca", "gc.ca"];
-const LANDING = new Set([
-  "",
-  "/",
-  "/en",
-  "/fr",
-  "/en/",
-  "/fr/",
-  "/en.html",
-  "/fr.html",
-  "/english/index.asp",
-  "/francais/index.asp",
-  "/en/immigration-refugees-citizenship.html",
-  "/fr/immigration-refugies-citoyennete.html",
-  "/en/services.html",
-  "/fr/services.html",
-]);
+// The homepage rule of app.official_claim_url (SRC-01) and app.src_deep_official_url: at least two
+// path segments besides language folders and index pages.
+const LANGUAGE_OR_INDEX = /^(en|fr|eng|fra|english|francais|index|home|default|accueil|welcome)$/;
 
 /** Parses argv into { command, options }. */
 export function parseArgs(argv) {
@@ -78,7 +65,7 @@ export function parseArgs(argv) {
   return { command, options };
 }
 
-/** True for an https URL on an official host with a page path: never a site root or landing page. */
+/** True for an https URL on an official host with a page path: never a site root or landing page (the database's rule). */
 export function isDeepOfficialUrl(raw) {
   let url;
   try {
@@ -89,10 +76,12 @@ export function isDeepOfficialUrl(raw) {
   if (url.protocol !== "https:" || url.username || url.password || url.port) return false;
   const host = url.hostname.toLowerCase();
   if (!ALLOWED.some((domain) => host === domain || host.endsWith(`.${domain}`))) return false;
-  const pathname = url.pathname.toLowerCase();
-  if (LANDING.has(pathname)) return false;
-  if (/^\/((en|fr|eng|fra)\/)?(index|default|home)\.[a-z]+$/.test(pathname)) return false;
-  return true;
+  const meaningful = url.pathname
+    .toLowerCase()
+    .split("/")
+    .map((part) => part.replace(/\.(html?|aspx?|php)$/, ""))
+    .filter((part) => part !== "" && !LANGUAGE_OR_INDEX.test(part));
+  return meaningful.length >= 2;
 }
 
 /** The page's "Date modified" as canada.ca marks it up (YYYY-MM-DD), or null. Never inferred. */

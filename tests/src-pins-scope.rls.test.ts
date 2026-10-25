@@ -150,6 +150,9 @@ async function publishedRule(ctx: Firm, definitionId: string, versionNumber: num
   );
   const id = version.rows[0].id;
   await db.query(`insert into public.rule_evidence (rule_version_id, snapshot_id, source_section) values ($1, $2, 'fictional-section')`, [id, snapshotId]);
+  // SRC-03 gate: signed-in staff approve and publish only through Source review
+  // (app.review_rule_version); this fixture records the approval from a maintenance session.
+  await asMaintenance(db);
   await db.query(
     `insert into public.professional_reviews (organization_id, rule_version_id, reviewer_membership_id, decision, decided_at, rule_content_revision)
      values ($1, $2, $3, 'approved', '2026-10-16T15:00:00Z', 1)`,
@@ -190,6 +193,7 @@ type RuleState = {
     id: string;
     pack_id: string;
     pack_version: number;
+    pack_live: boolean;
     forms: { form_number: string; date_modified: string | null; source_url: string | null; content_hash: string | null }[];
   };
   newer: null | {
@@ -634,5 +638,86 @@ describe("SRC-12: support catalogue and unsupported programs", () => {
     await asMaintenance(db);
     const saved = await db.query(`select 1 from public.audit_log where action = 'support_catalogue.saved' and context ->> 'scope_key' = $1`, [unsupported]);
     expect(saved.rows.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("SRC-05 / SRC-12 on the SRC-03 gate: one definition of live, one homepage rule", () => {
+  type FirmCatalogue = { programs: { key: string; supported: boolean; pack_version: number | null }[] };
+
+  async function firmCatalogue(ctx: Firm) {
+    await asUser(db, staff(ctx, "manager"));
+    return (await db.query<{ c: FirmCatalogue }>(`select public.support_catalogue($1) as c`, [ctx.orgId])).rows[0].c;
+  }
+
+  it("counts a pack only while it is published and every rule version in it is live", async () => {
+    const w = await world();
+    const created = await openForProgram(w.ctx, w.program);
+    expect((await ruleState(w.ctx, created.id)).binding?.pack_live).toBe(true);
+
+    // A newer pack whose new rule version is then suspended is not offered, and can't be accepted.
+    const formPageV2 = await snapshot(w.ctx, "2025-06-01");
+    const checklistV2 = await publishedRule(w.ctx, w.checklistRule, 2, "checklist_item", formPageV2);
+    const packV2 = await publishedPack(w.ctx, w.program, 2, [checklistV2, w.deadlineV1], []);
+    expect((await ruleState(w.ctx, created.id)).newer?.pack_id).toBe(packV2);
+    expect((await firmCatalogue(w.ctx)).programs.find((row) => row.key === w.program)).toMatchObject({ supported: true, pack_version: 2 });
+    await asMaintenance(db);
+    await db.query(`update public.rule_versions set status = 'suspended' where id = $1`, [checklistV2]);
+    const state = await ruleState(w.ctx, created.id);
+    expect(state.newer).toBeNull();
+    expect((await firmCatalogue(w.ctx)).programs.find((row) => row.key === w.program)).toMatchObject({ supported: true, pack_version: 1 });
+    await asUser(db, staff(w.ctx, "consultant"));
+    await expectDbError(
+      () => db.query(`select public.decide_matter_rule_upgrade($1, $2, $3, 'accepted', 'Move to the new version')`, [created.id, packV2, state.matter_version]),
+      /not approved for this firm/,
+    );
+
+    // Once a rule version in the pinned pack is superseded, the pin stays but reads as no longer
+    // live, and the program is no longer supported for new matters.
+    await asMaintenance(db);
+    await db.query(`update public.rule_versions set status = 'superseded' where id = $1`, [w.checklistV1]);
+    const after = await ruleState(w.ctx, created.id);
+    expect(after.binding?.pack_version).toBe(1);
+    expect(after.binding?.pack_live).toBe(false);
+    expect((await firmCatalogue(w.ctx)).programs.find((row) => row.key === w.program)).toBeUndefined();
+    await asUser(db, staff(w.ctx, "manager"));
+    await expectDbError(
+      () =>
+        db.query(`select public.create_client_matter_for_program('Fictional Applicant', null, null, null, $1, $2)`, [
+          w.ctx.consultantMembership,
+          w.program,
+        ]),
+      /choose a program from the support catalogue/,
+    );
+  });
+
+  it("does not count a review-due pack, as review-due rule versions are not live", async () => {
+    const w = await world();
+    await asMaintenance(db);
+    await db.query(`update public.rule_pack_versions set status = 'review_due' where id = $1`, [w.packV1]);
+    expect((await firmCatalogue(w.ctx)).programs.find((row) => row.key === w.program)).toBeUndefined();
+  });
+
+  it("refuses the same homepages as app.official_claim_url, and keeps provincial deep pages", async () => {
+    await asMaintenance(db);
+    const urls = [
+      "https://www.canada.ca",
+      "https://www.canada.ca/en.html",
+      "https://www.canada.ca/en/immigration-refugees-citizenship.html",
+      "https://www.canada.ca/en/fictional-src-page.html",
+      "https://laws-lois.justice.gc.ca/eng/",
+      "https://www.canada.ca/en/immigration-refugees-citizenship/services/fictional-page.html",
+      "https://laws-lois.justice.gc.ca/eng/regulations/fictional/page.html",
+    ];
+    const rows = await db.query<{ url: string; deep: boolean; claim: boolean }>(
+      `select u as url, app.src_deep_official_url(u) as deep, app.official_claim_url(u) is not null as claim from unnest($1::text[]) u`,
+      [urls],
+    );
+    for (const row of rows.rows) expect(row.deep, row.url).toBe(row.claim);
+    expect(rows.rows.filter((row) => row.deep).map((row) => row.url)).toEqual(urls.slice(5));
+    const provincial = await db.query<{ home: boolean; deep: boolean }>(
+      `select app.src_deep_official_url('https://www.ontario.ca/en/') as home,
+              app.src_deep_official_url('https://www.ontario.ca/page/fictional-program/fictional-stream') as deep`,
+    );
+    expect(provincial.rows[0]).toEqual({ home: false, deep: true });
   });
 });

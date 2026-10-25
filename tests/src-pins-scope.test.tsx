@@ -57,6 +57,18 @@ describe("SRC-05: the pinned rule pack on the matter overview", () => {
     expect(pinForm({ form_number: "IMM 9003", date_modified: "15 January 2025" }, ZONE)?.modified).toBe("date modified Unknown");
   });
 
+  it("says when the pinned pack is no longer live (a rule in it suspended, expired or replaced)", () => {
+    const data = matterRulePin(
+      { ...pinned, binding: { ...pinned.binding, pack_live: false } },
+      { organizationId: ORG, matterId: MATTER, timeZone: ZONE, canDecide: true },
+    );
+    expect(data?.badge).toEqual({ tone: "chg", label: "No longer live" });
+    expect(data?.note).toMatch(/no longer live \(suspended, expired or replaced\)\. The pin stays as it is/);
+    const live = matterRulePin({ ...pinned, binding: { ...pinned.binding, pack_live: true } }, { organizationId: ORG, matterId: MATTER, timeZone: ZONE, canDecide: true });
+    expect(live?.badge).toEqual({ tone: "ok", label: "Pinned" });
+    expect(live?.note).toBeNull();
+  });
+
   it("is honest when there is no approved rule pack, and when a program is not supported", () => {
     const none = matterRulePin({ matter_version: 1, binding: null, scope: null }, { organizationId: ORG, matterId: MATTER, timeZone: ZONE, canDecide: true });
     expect(none?.title).toBe("No approved rule pack");
@@ -207,6 +219,9 @@ describe("SRC-12: What Casevoya supports", () => {
     expect(isDeepOfficialUrl("https://www.canada.ca/")).toBe(false);
     expect(isDeepOfficialUrl("https://www.canada.ca/en/immigration-refugees-citizenship.html")).toBe(false);
     expect(isDeepOfficialUrl("https://www.canada.ca/en.html")).toBe(false);
+    // The database's homepage rule (app.official_claim_url): two path segments besides language and index.
+    expect(isDeepOfficialUrl("https://www.canada.ca/en/fictional-page.html")).toBe(false);
+    expect(isDeepOfficialUrl("https://laws-lois.justice.gc.ca/eng/index.html")).toBe(false);
     expect(isDeepOfficialUrl("http://www.canada.ca/en/x/y.html")).toBe(false);
     expect(isDeepOfficialUrl("https://canada.ca.example.com/en/x.html")).toBe(false);
     expect(parseDateModified('<dl><dt>Date modified:</dt><dd><time property="dateModified">2026-03-04</time></dd></dl>')).toBe("2026-03-04");

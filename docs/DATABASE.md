@@ -936,6 +936,13 @@ SRC-05 and SRC-12 (gap #188), branch `feat/src-pins-scope`. Additive; no existin
 
 Ops wrapper: `scripts/ops/support-catalogue.mjs` (capture, entry, list). Tested in `tests/src-pins-scope.rls.test.ts` and `tests/src-pins-scope.test.tsx`.
 
+### Live packs and one homepage rule (`20261025410100`, not applied on the live project; apply after `20261025400000` and `20261025410000`)
+
+SRC-05 / SRC-12 on top of the SRC-03 publication gate. Additive.
+
+* New `app.rule_pack_is_live(pack)`: the pack is `published` and has rule versions, each live by `app.rule_version_is_live` (SRC-03: published and within its stated effective dates). A review-due, suspended or superseded pack, or one holding a review-due, suspended, superseded, rejected or expired rule version, is not live.
+* Redefined (copied from `20261025410000`): `app.current_program_pack`, `app.newer_rule_pack`, `app.decide_matter_rule_upgrade` and `app.support_catalogue` count live packs only (before: pack status published or review due); `app.matter_rule_state` adds `binding.pack_live`; `app.src_deep_official_url` uses `app.official_claim_url` for canada.ca / gc.ca pages and the same two-segment rule for other allowlisted official hosts.
+
 ## Service notice reach check is private (`20261025440000`, not applied on the live project)
 
 ADM-04 follow-up. Revokes `authenticated`'s EXECUTE on `app.service_notice_reaches(uuid, uuid)`. It is only called inside the security-definer `app.can_read_service_notice` and `app.dismiss_service_notice`, so reads and dismissals are unchanged; a signed-in user can no longer ask whether a notice reaches a firm. Tested in `tests/adm-service-notices.rls.test.ts`.

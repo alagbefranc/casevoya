@@ -1,7 +1,7 @@
 /**
  * SRC-12: pure helpers for "What Casevoya supports" (the staff Sheet page and the public page).
  * The input is public.support_catalogue's JSON. Support is never claimed here: a row reads
- * Supported only when the database found an approved (published or review due), sourced rule pack.
+ * Supported only when the database found a live (app.rule_pack_is_live), sourced rule pack.
  * A program shows IRCC's official name, linked to its official page with the retrieval date, only
  * when that page's snapshot was captured; otherwise it is listed with "Source not captured".
  */
