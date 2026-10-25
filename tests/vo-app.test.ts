@@ -189,6 +189,27 @@ describe("Vo actions", () => {
     expect(state.rpcCalls).toHaveLength(0);
   });
 
+  it("shows an attested official citation with the attestation the run stored in the database, not the service's (decided 2026-10-25)", async () => {
+    const page = "https://www.canada.ca/en/immigration-refugees-citizenship/services/synthetic-attested.html";
+    const rule = "88888888-8888-4888-8888-888888888888";
+    state.reply = {
+      result: "answered",
+      text: "The rule says so [S1].",
+      needsRule: false,
+      sources: [{ kind: "official", id: rule, label: "Program rule: synthetic", sourceKind: "rule_version", url: page, marker: "S1", attested: true, attestedBy: "Forged Name", attestedOn: "1999-01-01" }],
+    };
+    state.rows.vo_runs = { citations: [{ kind: "official", id: rule, source_kind: "rule_version", url: page, attested: true, attested_by: "Amara Osei", attested_on: "2026-10-24" }] };
+    try {
+      const result = await askVo({ organizationId: ORG, matterId: MATTER, question: "What does the rule say?" });
+      expect(result).toMatchObject({ ok: true, text: "The rule says so [S1]." });
+      if (!("sources" in result)) return;
+      expect(result.sources).toEqual([expect.objectContaining({ id: rule, href: page, attestation: "Page not captured by Casevoya, checked by Amara Osei on 24 Oct 2026" })]);
+      expect(JSON.stringify(result)).not.toContain("Forged");
+    } finally {
+      state.reply = { result: "drafted", draftId: DRAFT, text: "Hi, Tuesday works.", needsRule: false, sources: [{ kind: "message", id: "m", label: "Client message 17 Oct" }] };
+    }
+  });
+
   it("closes the run when the service is unreachable", async () => {
     state.env.VO_AGENT = { fetch: async () => { throw new Error("down"); } };
     const result = await draftWithVo({ organizationId: ORG, threadId: THREAD, kind: "document_request" });

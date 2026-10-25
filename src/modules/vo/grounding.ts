@@ -12,6 +12,9 @@
  *   money amount or a program requirement needs an [S#]. If nothing is left, Vo abstains: "Vo can't
  *   answer this from the file or approved sources." The database checks the citations again
  *   (public.finish_vo_run) and refuses anything outside the run's matter or approved sources.
+ * - Approved official content whose page Casevoya didn't capture is cited only with the licensed
+ *   reviewer's attestation next to it (attestationLine; decided 2026-10-25), as the database
+ *   stored it on the run (withStoredAttestation).
  * - isCitableOfficialUrl and adviceLike mirror the database's app.vo_citable_official_url and
  *   app.vo_advice_like, so the page and the service can decide early; the database decides.
  */
@@ -243,17 +246,62 @@ export function guardGroundedAnswer(raw: unknown, allowed: ReadonlyMap<string, V
   return { kind: "answer", text: out, cited, dropped, leftOut };
 }
 
-/** A citation as the page shows it: its link (null when there is nothing to open). */
-export type VoCitation = VoSourceRef & { href: string | null };
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** Links for a run's citations; an official citation whose page isn't a deep federal official page is not shown. */
+/**
+ * Attested official content (Francis's decision 2026-10-25): a page Casevoya didn't capture, which
+ * a licensed reviewer opened and attested. Vo cites it only with this line next to the citation,
+ * in the words of the claim's evidence on Source review (SRC-01):
+ * "Page not captured by Casevoya, checked by Amara Osei on 24 Oct 2026". Null without a valid date.
+ */
+export function attestationLine(by: string | null | undefined, on: string | null | undefined): string | null {
+  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(on ?? "").slice(0, 10));
+  if (!date || Number(date[2]) < 1 || Number(date[2]) > 12) return null;
+  const who = typeof by === "string" && by.trim() ? by.trim().slice(0, 120) : "a licensed member";
+  return `Page not captured by Casevoya, checked by ${who} on ${Number(date[3])} ${MONTHS[Number(date[2]) - 1]} ${date[1]}`;
+}
+
+/** A citation as the page shows it: its link (null when there is nothing to open), and the attestation line when the page wasn't captured. */
+export type VoCitation = VoSourceRef & { href: string | null; attestation: string | null };
+
+/**
+ * Links for a run's citations; an official citation whose page isn't a deep federal official page
+ * is not shown, nor is an attested one whose attestation can't be shown with it.
+ */
 export function citationsFor(refs: VoSourceRef[], at: { matterId: string; threadId?: string | null }): VoCitation[] {
   return refs
     .filter((ref) => ref.kind !== "official" || isCitableOfficialUrl(ref.url))
-    .map((ref) => ({ ...ref, href: citationHref(ref, at) }));
+    .map((ref) => ({ ...ref, href: citationHref(ref, at), attestation: ref.kind === "official" && ref.attested ? attestationLine(ref.attestedBy, ref.attestedOn) : null }))
+    .filter((ref) => ref.kind !== "official" || !ref.attested || ref.attestation);
 }
 
-/** A citation as public.finish_vo_run takes it (official content names what it is). */
+/**
+ * The attestation of each official citation as the database stored it on the run
+ * (public.vo_runs.citations, rebuilt by finish_vo_run), never as the Vo service said it. An
+ * official citation the run didn't keep is left out. When the run's citations can't be read
+ * (`stored` is not a list), the citations are returned as they are.
+ */
+export function withStoredAttestation(refs: VoSourceRef[], stored: unknown): VoSourceRef[] {
+  if (!Array.isArray(stored)) return refs;
+  const kept = stored.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object");
+  return refs.flatMap((ref) => {
+    if (ref.kind !== "official") return [ref];
+    const row = kept.find((item) => item.kind === "official" && item.id === ref.id && (!ref.sourceKind || item.source_kind === ref.sourceKind));
+    if (!row) return [];
+    const plain: VoSourceRef = { kind: ref.kind, id: ref.id, label: ref.label };
+    if (ref.marker) plain.marker = ref.marker;
+    if (ref.sourceKind) plain.sourceKind = ref.sourceKind;
+    if (ref.url) plain.url = ref.url;
+    if (ref.detail) plain.detail = ref.detail;
+    if (row.attested !== true) return [plain];
+    plain.attested = true;
+    if (typeof row.attested_by === "string") plain.attestedBy = row.attested_by;
+    if (typeof row.attested_on === "string") plain.attestedOn = row.attested_on;
+    return [plain];
+  });
+}
+
+/** A citation as public.finish_vo_run takes it (official content names what it is; the database adds the attestation). */
 export function dbSource(ref: VoSourceRef): Record<string, string> {
   const out: Record<string, string> = { kind: ref.kind, id: ref.id, label: ref.label.slice(0, 120) || ref.kind };
   if (ref.kind === "official" && ref.sourceKind) out.source_kind = ref.sourceKind;

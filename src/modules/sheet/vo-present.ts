@@ -4,7 +4,7 @@
  */
 import type { AiAudit, AiData, AiRunRow, AiRules, AiSettings, AiSources, AiStates, AiSwitch, AiTab } from "@/components/sheet/designer/ai";
 import type { Attrs, DraftCard, DraftsData, DraftsHeaderData, DraftSwitch, TimelineItem } from "@/components/sheet/designer/drafts";
-import { citationHref, isCitableOfficialUrl, VO_CANT_ANSWER } from "@/modules/vo/grounding";
+import { attestationLine, citationHref, isCitableOfficialUrl, VO_CANT_ANSWER } from "@/modules/vo/grounding";
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import type { VoSettingKey, VoSwitchKey } from "@/modules/vo/errors";
 import { MATTER_STAGES, stageLabel } from "@/modules/sheet/present";
@@ -70,18 +70,30 @@ export type VoViewer = {
 };
 
 /** A cited record; official content also names what it is and its official page (SRC-09). */
-export type VoSource = { kind: string; id: string; label: string; sourceKind?: string; url?: string };
+export type VoSource = {
+  kind: string;
+  id: string;
+  label: string;
+  sourceKind?: string;
+  url?: string;
+  /** A page Casevoya didn't capture, attested by a licensed reviewer: who, and the date they opened it. */
+  attested?: boolean;
+  attestedBy?: string | null;
+  attestedOn?: string | null;
+};
 
 /**
  * A draft's or reading's citations as the sources list shows them: each linked to the matter tab
  * that holds the record, or to the official page. An official source whose page isn't a deep
- * federal official page is never linked.
+ * federal official page is never linked. A page Casevoya didn't capture shows the reviewer's
+ * attestation next to it ("Page not captured by Casevoya, checked by … on …").
  */
 export function sourceItems(sources: VoSource[], at: { matterId: string; threadId?: string | null }): TimelineItem[] {
   return sources.map((source) => {
     const kind = source.kind as Parameters<typeof citationHref>[0]["kind"];
     const href = kind === "official" && !isCitableOfficialUrl(source.url) ? null : citationHref({ kind, url: source.url }, at);
-    return { label: source.label, href };
+    const attestation = kind === "official" && source.attested ? (attestationLine(source.attestedBy, source.attestedOn) ?? "Page not captured by Casevoya") : null;
+    return attestation ? { label: source.label, href, detail: attestation } : { label: source.label, href };
   });
 }
 

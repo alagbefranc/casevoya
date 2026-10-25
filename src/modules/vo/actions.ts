@@ -7,8 +7,8 @@ import { callVoAgent, voAgentConfigured } from "./agent-client";
 import { draftStale } from "@/modules/sheet/vo-present";
 import { MAX_DRAFT_CHARS } from "./guard";
 import { voError, voSettingChanges, type VoSwitchKey } from "./errors";
-import type { VoAbstainReason, VoTask, VoTaskRequest } from "./sign";
-import { citationsFor, type VoCitation } from "./grounding";
+import type { VoAbstainReason, VoSourceRef, VoTask, VoTaskRequest } from "./sign";
+import { citationsFor, withStoredAttestation, type VoCitation } from "./grounding";
 
 type Result<T extends object = object> = ({ ok: true } & T) | { error: string };
 
@@ -71,6 +71,21 @@ function request(organizationId: string, kind: VoTask, started: Started, threadI
   };
 }
 
+/**
+ * The run's citations as public.finish_vo_run stored them, read only when official content was
+ * cited: attested official content is shown with the attestation the database keeps, never the
+ * one the Vo service sent (decided 2026-10-25). Null when the run can't be read.
+ */
+async function storedCitations(supabase: Awaited<ReturnType<typeof createClient>>, runId: string, sources: VoSourceRef[]): Promise<unknown> {
+  if (!sources.some((source) => source.kind === "official")) return null;
+  try {
+    const { data } = await supabase.from("vo_runs").select("citations").eq("id", runId).maybeSingle();
+    return (data as { citations?: unknown } | null)?.citations ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** If the service never answered, the run is closed here so it doesn't look in progress. */
 async function closeIfOpen(supabase: Awaited<ReturnType<typeof createClient>>, runId: string, failure: string) {
   await supabase.rpc("finish_vo_run", { p_run_id: runId, p_result: "failed", p_failure: failure === "unavailable" ? "unavailable" : "failed" });
@@ -92,7 +107,8 @@ export async function draftWithVo(input: {
   if ("error" in begun) return begun;
   const out = await callVoAgent(request(input.organizationId, input.kind, begun.started, input.threadId, null));
   if (out.result === "drafted") {
-    const sources = citationsFor(out.sources, { matterId: begun.started.matterId, threadId: input.threadId });
+    const stored = await storedCitations(begun.supabase, begun.started.runId, out.sources);
+    const sources = citationsFor(withStoredAttestation(out.sources, stored), { matterId: begun.started.matterId, threadId: input.threadId });
     return { ok: true, draftId: out.draftId, text: out.text, needsRule: out.needsRule, sources };
   }
   if (out.result === "abstained") return { ok: true, abstained: true, reason: out.reason ?? "consultant" };
@@ -119,7 +135,8 @@ export async function askVo(input: {
   const out = await callVoAgent(request(input.organizationId, "ask", begun.started, null, question));
   // SRC-09: an answer always cites; one that cites nothing on file or approved is an abstention.
   if (out.result === "answered") {
-    const sources = citationsFor(out.sources, { matterId: begun.started.matterId });
+    const stored = await storedCitations(begun.supabase, begun.started.runId, out.sources);
+    const sources = citationsFor(withStoredAttestation(out.sources, stored), { matterId: begun.started.matterId });
     if (!sources.length) return { ok: true, abstained: true, reason: "unsupported" };
     return { ok: true, text: out.text, needsRule: out.needsRule, sources };
   }

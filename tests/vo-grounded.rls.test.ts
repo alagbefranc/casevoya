@@ -319,6 +319,144 @@ describe("Ask Vo's grounded reads", () => {
   });
 });
 
+/**
+ * 20261025450000_vo_attested_citations.sql (Francis's decision 2026-10-25): a live claim a licensed
+ * reviewer approved by attestation, without a page capture, is citable, and every citation of it
+ * carries the attestation (who, and the date they opened the page), rebuilt from the database.
+ */
+describe("attested claims (no page capture)", () => {
+  const OPENED = "2026-10-24";
+
+  /** A live claim whose only evidence is a page Casevoya didn't capture, attested by the firm owner who approved it. */
+  async function attestedClaim(f: Firm, opts: { attest?: boolean; reviewerMatches?: boolean } = {}) {
+    const attest = opts.attest ?? true;
+    await asMaintenance(db);
+    const ownerMembership = (
+      await db.query<{ id: string }>(`select id from public.memberships where organization_id = $1 and user_id = $2 and role = 'firm_owner'`, [f.orgId, f.owner])
+    ).rows[0].id;
+    const consultantMembership = (
+      await db.query<{ id: string }>(`select id from public.memberships where organization_id = $1 and user_id = $2`, [f.orgId, f.consultant])
+    ).rows[0].id;
+    await db.query(`update public.profiles set display_name = 'Amara Osei' where id = $1`, [f.owner]);
+    const page = `https://www.canada.ca/en/immigration-refugees-citizenship/services/synthetic-attested-${tag()}.html#s2`;
+    await staff(f.owner, f.orgId, true);
+    const definition = (
+      await db.query<{ id: string }>(
+        `insert into public.rule_definitions (organization_id, stable_key, category, jurisdiction) values ($1, $2, 'immigration_requirement', 'CA') returning id`,
+        [f.orgId, `CA.SYNTHETIC.ATTESTED${tag().toUpperCase().replace(/[^A-Z0-9]/g, "X")}`],
+      )
+    ).rows[0].id;
+    const id = (
+      await db.query<{ id: string }>(
+        `insert into public.rule_versions (definition_id, version_number, claim, output_value, effective_from, next_review_at, test_case_ids)
+         values ($1, 1, 'Synthetic attested claim. Not an immigration requirement.', '{"kind": "rule"}'::jsonb, '2020-01-01T00:00:00Z', '2027-11-01T00:00:00Z', array['synthetic-case']) returning id`,
+        [definition],
+      )
+    ).rows[0].id;
+    await db.query(`insert into public.rule_evidence (rule_version_id, snapshot_id, source_section, source_url, checked_on) values ($1, null, 'synthetic-section', $2, $3)`, [id, page, OPENED]);
+    await asMaintenance(db);
+    await db.query(
+      `insert into public.professional_reviews (organization_id, rule_version_id, reviewer_membership_id, decision, decided_at, rule_content_revision)
+       values ($1, $2, $3, 'approved', '2026-10-24T15:00:00Z', 1)`,
+      [f.orgId, id, ownerMembership],
+    );
+    // What app.review_rule_version records when the reviewer attests (a maintenance session stands in for it).
+    const attester = opts.reviewerMatches === false ? consultantMembership : ownerMembership;
+    await db.query(`update public.rule_evidence set page_attested_by_membership_id = $2, page_attested_on = $3, page_attested_at = now() where rule_version_id = $1`, [id, attester, OPENED]);
+    await db.query(`update public.rule_versions set status = 'published' where id = $1`, [id]);
+    if (!attest) {
+      // Published evidence can't change; with triggers off this stands in for a claim published without one.
+      await db.query(`set session_replication_role = replica`);
+      try {
+        await db.query(`update public.rule_evidence set page_attested_by_membership_id = null, page_attested_on = null, page_attested_at = null where rule_version_id = $1`, [id]);
+      } finally {
+        await db.query(`set session_replication_role = origin`);
+      }
+    }
+    return { id, page };
+  }
+
+  async function officialContent(run: string) {
+    return (await db.query<{ r: Record<string, unknown>[] }>(`select public.vo_run_official_content($1) as r`, [run])).rows[0].r;
+  }
+
+  it("lists an attested live claim with its attestation, and every citation of it carries the attestation from the database", async () => {
+    const f = await firm();
+    const feeId = await fee(f, FEES);
+    const claim = await attestedClaim(f);
+    const run = await beginAsk(f);
+    const official = await officialContent(run);
+    expect(official.find((row) => row.id === claim.id)).toMatchObject({
+      kind: "rule_version",
+      source_url: claim.page,
+      snapshot_sha256: null,
+      checked_on: OPENED,
+      attested: true,
+      attested_by: "Amara Osei",
+      attested_on: OPENED,
+    });
+    expect(official.find((row) => row.id === feeId)).toMatchObject({ attested: false });
+
+    // The service's own say about the attestation is ignored: the run keeps the database's.
+    await answer(run, [
+      { kind: "official", source_kind: "rule_version", id: claim.id, label: "Program rule: synthetic", attested_by: "Forged Name", attested_on: "1999-01-01" },
+      { kind: "official", source_kind: "fee", id: feeId, label: "IRCC fee: Synthetic test fee" },
+    ]);
+    await asMaintenance(db);
+    const cites = (await db.query<{ citations: Record<string, unknown>[] }>(`select citations from public.vo_runs where id = $1`, [run])).rows[0].citations;
+    expect(cites[0]).toMatchObject({ source_kind: "rule_version", url: claim.page, snapshot_sha256: null, attested: true, attested_by: "Amara Osei", attested_on: OPENED });
+    expect(cites[1]).toMatchObject({ source_kind: "fee", attested: false });
+    expect(JSON.stringify(cites)).not.toContain("Forged");
+
+    // A draft's source list keeps it too.
+    const reply = await beginReply(f);
+    const draftId = await drafted(reply, "Thanks, we will be in touch.", [
+      { kind: "message", id: f.messageId, label: "Client message" },
+      { kind: "official", source_kind: "rule_version", id: claim.id, label: "Program rule: synthetic" },
+    ]);
+    await asMaintenance(db);
+    const sources = (await db.query<{ sources: Record<string, unknown>[] }>(`select sources from public.vo_drafts where id = $1`, [draftId])).rows[0].sources;
+    expect(sources[0]).not.toHaveProperty("attested");
+    expect(sources[1]).toMatchObject({ kind: "official", url: claim.page, attested: true, attested_by: "Amara Osei", attested_on: OPENED });
+  });
+
+  it("doesn't cite a claim with no capture and no attestation, or one attested by someone who didn't approve it", async () => {
+    const f = await firm();
+    const bare = await attestedClaim(f, { attest: false });
+    const stranger = await attestedClaim(f, { reviewerMatches: false });
+    const run = await beginAsk(f);
+    const ids = (await officialContent(run)).map((row) => row.id);
+    expect(ids).not.toContain(bare.id);
+    expect(ids).not.toContain(stranger.id);
+    for (const claim of [bare, stranger]) {
+      await expectDbError(() => answer(run, [{ kind: "official", source_kind: "rule_version", id: claim.id, label: "Program rule" }]), /not approved official content/);
+    }
+  });
+
+  it("doesn't cite an attested claim whose page is a homepage or not a federal page", async () => {
+    const f = await firm();
+    const homepage = await attestedClaim(f);
+    const provincial = await attestedClaim(f);
+    // Evidence like this is refused on entry (and can't change once published); with triggers off,
+    // the citation rule must refuse it on its own as well.
+    await asMaintenance(db);
+    await db.query(`set session_replication_role = replica`);
+    try {
+      await db.query(`update public.rule_evidence set source_url = 'https://www.canada.ca/en.html' where rule_version_id = $1`, [homepage.id]);
+      await db.query(`update public.rule_evidence set source_url = 'https://www.welcomebc.ca/immigrate-to-b-c/about-the-bc-provincial-nominee-program' where rule_version_id = $1`, [provincial.id]);
+    } finally {
+      await db.query(`set session_replication_role = origin`);
+    }
+    const run = await beginAsk(f);
+    const ids = (await officialContent(run)).map((row) => row.id);
+    expect(ids).not.toContain(homepage.id);
+    expect(ids).not.toContain(provincial.id);
+    for (const claim of [homepage, provincial]) {
+      await expectDbError(() => answer(run, [{ kind: "official", source_kind: "rule_version", id: claim.id, label: "Program rule" }]), /not approved official content/);
+    }
+  });
+});
+
 describe("finish_vo_run: citations in the run's allowed set", () => {
   it("keeps an answer's checked citations on the run, with the official source rebuilt from the database", async () => {
     const f = await firm();
