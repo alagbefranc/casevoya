@@ -78,7 +78,7 @@ describe("Reading an official page", () => {
       expect(Number.isNaN(Date.parse(page.retrievedAt))).toBe(false);
     }
     for (const claim of CAPTURED_CLAIMS) {
-      expect(claimUrlProblem(claim.sourceUrl)).toBeNull();
+      expect(claimUrlProblem(claim.sourceUrl, claim.section)).toBeNull();
       expect(CAPTURED_PAGES.some((page) => page.url === claim.page)).toBe(true);
       expect(claim.excerpt.length).toBeLessThanOrEqual(600);
       expect(claim.key).toMatch(/^[A-Z][A-Z0-9]*(\.[A-Z][A-Z0-9_]*)+$/);

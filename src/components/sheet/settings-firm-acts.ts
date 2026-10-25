@@ -1,6 +1,7 @@
 "use client";
 
 import { toast2 } from "@/components/port/kit";
+import { acceptChosen, failUpload } from "./upload-failure";
 import { removeFirmOffice, saveFirmBranding, saveFirmDetails, saveFirmOffice, saveTimezones, type FirmSettingsResult } from "@/modules/settings/firm-actions";
 import { withoutDialog } from "@/modules/sheet/matter-wire";
 import { stepUpHref } from "@/lib/auth/mfa-step";
@@ -106,12 +107,19 @@ export async function runFirmSave(button: HTMLElement, router: Router) {
     return finish(result, dialog, fields, { title: "Office removed", sub: "The change is in the audit log." }, router);
   }
   if (kind === "brand") {
-    const file = dialog.querySelector<HTMLInputElement>("input[type=file]")?.files?.[0] ?? null;
+    const input = dialog.querySelector<HTMLInputElement>("input[type=file]");
+    const file = input?.files?.[0] ?? null;
     let locator = typeof fields.logoLocator === "string" ? fields.logoLocator : "";
-    if (file) {
+    if (file && input) {
+      // DES-04: a failed upload says why and what to do next, with a retry that chooses the file again.
+      const again = () => {
+        input.value = "";
+        input.click();
+      };
+      if (!acceptChosen(input, file, "logo", again)) return;
       const uploaded = await uploadLogo(file);
       if ("error" in uploaded) {
-        toast2(uploaded.error, { kind: "bad", sub: "Nothing was changed." });
+        failUpload(input, uploaded.error, "logo", again);
         return;
       }
       locator = uploaded.locator;

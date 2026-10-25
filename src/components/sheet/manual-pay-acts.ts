@@ -15,6 +15,7 @@ import {
 import { ACCOUNTS_DIALOG, MANUAL_DIALOG, readAdvance, readManualPayment, readReconItem, readReverse } from "@/modules/finance/manual-payments-present";
 import { financeNeedsStepUp, financeStepUpLocation } from "@/modules/sheet/finance-present";
 import { chooseFile, uploadEvidence } from "./gov-acts";
+import { acceptChosen, failUpload } from "./upload-failure";
 
 /**
  * Manual payments (FIN-09), the reconciliation workspace's outstanding items (FIN-12) and the bank
@@ -81,6 +82,11 @@ export async function pickEvidence(button: HTMLElement) {
   const id = button.dataset.mpFile ?? "";
   const file = await chooseFile();
   if (!file || !id) return;
+  // DES-04: a file this upload can't take is refused here, with a next step and a retry.
+  if (!acceptChosen(button, file, "evidence", () => void pickEvidence(button))) {
+    files.delete(id);
+    return;
+  }
   files.set(id, file);
   const label = button.closest(".fld")?.querySelector<HTMLElement>(`#${CSS.escape(`${id}F`)}`);
   if (label) label.textContent = file.name;
@@ -92,6 +98,9 @@ async function uploadChosen(fieldId: string, organizationId: string, matterId: s
   if (!file) return { versionId: null };
   const uploaded = await uploadEvidence({ organizationId, matterId, file, purpose });
   if ("error" in uploaded) {
+    // DES-04: the failure where the file was chosen, with Choose another file / Try again.
+    const picker = document.querySelector<HTMLElement>(`[data-mp-file="${CSS.escape(fieldId)}"]`);
+    if (picker && !financeNeedsStepUp(uploaded.error)) failUpload(picker, uploaded.error, "evidence", () => void pickEvidence(picker));
     return {
       error: financeNeedsStepUp(uploaded.error)
         ? uploaded.error

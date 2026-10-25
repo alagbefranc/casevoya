@@ -26,6 +26,8 @@ import {
   type Step,
 } from "./compliance";
 import type { ResponseDialogsData } from "@/modules/compliance/privacy-response-present";
+import { NoAccessPanel } from "./state-views";
+import { deniedView } from "@/modules/sheet/states-present";
 
 export type PrivacyRow = {
   ref: string;
@@ -158,11 +160,10 @@ export function SheetPrivacy({ data }: { data: PrivacyData }) {
     <>
       <Heading art={"privacy-shield"} title={"Privacy requests"} copy={COPY} />
       {data.rows === null ? (
-        <EmptyPanel
+        // DES-04: the shared permission-denied view.
+        <NoAccessPanel
           n={1}
-          art={"privacy-shield"}
-          title={"Privacy requests are limited"}
-          copy={"The firm owner, licensed consultants and case managers handle privacy requests. Ask one of them."}
+          data={deniedView("You don’t have access to Privacy requests", "The firm owner, licensed consultants and case managers handle privacy requests. Ask one of them if a request needs you.")}
         />
       ) : data.rows.length === 0 ? (
         <EmptyPanel
