@@ -9,6 +9,7 @@ import { roleLabel } from "@/modules/sheet/present";
 import { FIRM_SETTINGS } from "@/modules/sheet/home-controls";
 import { voDraftsWaiting } from "@/modules/sheet/vo-present";
 import { loadSheetSetup } from "@/modules/sheet/setup-load";
+import { loadContinuityBanner } from "@/modules/sheet/sec-load";
 
 export type SheetChrome = { sidebar: SidebarData; top: TopBarData; statusbar: StatusbarData };
 
@@ -70,7 +71,7 @@ async function baseChrome(staff: SheetStaff, active: string): Promise<SheetChrom
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
   const count = { count: "exact" as const, head: true };
-  const [matterCount, recentMatters, openCount, unsorted, voDrafts, voReadings, setup] = await Promise.all([
+  const [matterCount, recentMatters, openCount, unsorted, voDrafts, voReadings, setup, continuity] = await Promise.all([
     supabase.from("matters").select("id", count).eq("organization_id", org).neq("stage", "closed"),
     supabase.from("matters").select("id").eq("organization_id", org).order("updated_at", { ascending: false }).limit(2),
     supabase.from("tasks").select("id", count).eq("organization_id", org).in("status", [...OPEN_TASK]),
@@ -82,6 +83,8 @@ async function baseChrome(staff: SheetStaff, active: string): Promise<SheetChrom
     supabase.from("vo_doc_drafts").select("id", count).eq("organization_id", org).eq("status", "draft"),
     // Sample mode: what is left before the firm can go live, for the Finish setup banner.
     loadSheetSetup(supabase, staff),
+    // SEC-10: the subscription is ending, in its export window or archived (banner on every page).
+    loadContinuityBanner(supabase, staff),
   ]);
   const pinned = (recentMatters.data ?? []).map((row) => row.id);
   const name = await matterNames(supabase, org, pinned);
@@ -109,6 +112,7 @@ async function baseChrome(staff: SheetStaff, active: string): Promise<SheetChrom
       timezone: staff.timezone,
       sample: staff.sampleMode ? { label: "Sample mode", detail: "practice records are marked sample" } : null,
       setup: setup?.banner ?? null,
+      continuity,
     },
   };
 }

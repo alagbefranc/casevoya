@@ -29,8 +29,8 @@ export type SettingsBillingAlert = { tone: "warn" | "info"; icon: string; title:
 /** One Casevoya invoice line: "CV-0007 · 19 Oct 2026 · CAD 349 · Paid" with Stripe's hosted page or PDF. */
 export type SubscriptionInvoiceRow = { text: string; href: string | null };
 
-/** A live-only button under the Plan rows (firm owner): opens the plan dialog, or the Billing Portal. */
-export type SubscriptionButton = { label: string; act: "plan" | "portal"; primary: boolean; organizationId: string };
+/** A live-only button under the Plan rows (firm owner): opens the plan dialog, the Billing Portal, or Cancel subscription (SEC-10). */
+export type SubscriptionButton = { label: string; act: "plan" | "portal" | "cancel"; primary: boolean; organizationId: string };
 
 export type PlanDialogData = {
   organizationId: string;
