@@ -8,6 +8,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../../src/types/database.types";
 import { parseAvailability, slotsFromAvailability } from "../../../src/modules/scheduling/availability";
+import { isCitableOfficialUrl } from "../../../src/modules/vo/grounding";
 
 export type VoSettingsRow = {
   enabled: boolean;
@@ -27,7 +28,7 @@ export type VoMatter = { id: string; title: string; reference: string | null; st
 export type VoRequestRow = { id: string; purpose: string; explanation: string; dueOn: string | null; formats: string[] };
 export type VoTaskRow = { id: string; title: string; dueOn: string | null; status: string };
 export type VoDeadlineRow = { id: string; label: string; dueOn: string | null; verification: string };
-export type VoDocumentRow = { id: string; purpose: string; sensitivity: string; category: string | null; status: string | null };
+export type VoDocumentRow = { id: string; purpose: string; sensitivity: string; category: string | null; status: string | null; versionId?: string | null };
 export type VoSourceRow = { title: string; publisher: string; url: string; lastChecked: string | null };
 
 /** The narrow read surface the tools use. Tests pass a fake; production uses supabaseVoData. */
@@ -47,6 +48,9 @@ export interface VoData {
   /** AI-01 letter drafts (letter-tools.ts): the run's approved facts and approved official content. */
   letterFacts?(runId: string): Promise<VoLetterFacts>;
   officialContent?(runId: string): Promise<VoOfficialItem[]>;
+  /** SRC-09 Ask Vo: the run's approved facts and approved official content (public.vo_run_facts, vo_run_official_content). */
+  runFacts?(runId: string): Promise<VoLetterFacts>;
+  runOfficialContent?(runId: string): Promise<VoOfficialSource[]>;
   rpc(name: "finish_vo_run" | "save_vo_letter_draft", args: Record<string, unknown>): Promise<{ data: unknown; error: { message: string } | null }>;
 }
 
@@ -55,6 +59,14 @@ export type VoLetterFact = { answerId: string; person: string; form: string; fie
 export type VoLetterFacts = { facts: VoLetterFact[]; hidden: number };
 /** Approved official content (public.vo_letter_official_content): text and source, no page body. */
 export type VoOfficialItem = { kind: string; id: string; label: string; content: string; sourceUrl: string; checkedOn: string | null };
+/** Approved official content with its source as Ask Vo shows it (SRC-01/02 dates, as stored; null when the page didn't say). */
+export type VoOfficialSource = VoOfficialItem & {
+  section: string | null;
+  formNumber: string | null;
+  formModifiedOn: string | null;
+  currentTo: string | null;
+  sha256: string | null;
+};
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -78,6 +90,25 @@ export function parseOfficialContent(raw: unknown): VoOfficialItem[] {
     .map((row) => (row ?? {}) as Record<string, unknown>)
     .filter((row) => text(row.id) && text(row.kind) && text(row.content))
     .map((row) => ({ kind: text(row.kind), id: text(row.id), label: text(row.label), content: text(row.content), sourceUrl: text(row.source_url), checkedOn: text(row.checked_on) || null }));
+}
+
+export function parseOfficialSources(raw: unknown): VoOfficialSource[] {
+  return (Array.isArray(raw) ? raw : [])
+    .map((row) => (row ?? {}) as Record<string, unknown>)
+    .filter((row) => text(row.id) && text(row.kind) && text(row.content))
+    .map((row) => ({
+      kind: text(row.kind),
+      id: text(row.id),
+      label: text(row.label),
+      content: text(row.content),
+      sourceUrl: text(row.source_url),
+      checkedOn: text(row.checked_on) || null,
+      section: text(row.source_section) || null,
+      formNumber: text(row.form_number) || null,
+      formModifiedOn: text(row.form_modified_on) || null,
+      currentTo: text(row.current_to) || null,
+      sha256: text(row.snapshot_sha256) || null,
+    }));
 }
 
 export function supabaseVoData(input: { url: string; publishableKey: string; accessToken: string; organizationId: string }): VoData {
@@ -148,8 +179,8 @@ export function supabaseVoData(input: { url: string; publishableKey: string; acc
       const { data: refs } = await db.from("document_matter_refs").select("document_id").eq("organization_id", org).eq("matter_id", matterId).is("removed_at", null).limit(100);
       const ids = (refs ?? []).map((row) => row.document_id);
       if (!ids.length) return [];
-      const { data } = await db.from("documents").select("id, purpose, sensitivity").eq("organization_id", org).in("id", ids);
-      return (data ?? []).map((row) => ({ id: row.id, purpose: row.purpose, sensitivity: String(row.sensitivity), category: null, status: null }));
+      const { data } = await db.from("documents").select("id, purpose, sensitivity, current_version_id").eq("organization_id", org).in("id", ids);
+      return (data ?? []).map((row) => ({ id: row.id, purpose: row.purpose, sensitivity: String(row.sensitivity), category: null, status: null, versionId: row.current_version_id }));
     },
     async approvedSources() {
       const { data } = await db
@@ -160,6 +191,8 @@ export function supabaseVoData(input: { url: string; publishableKey: string; acc
       const now = Date.now();
       return (data ?? [])
         .filter((row) => String(row.change_state) !== "change_detected" && (!row.next_review_at || Date.parse(row.next_review_at) > now))
+        // SRC-09: only deep pages on federal official hosts (never a homepage or another site).
+        .filter((row) => isCitableOfficialUrl(row.canonical_url))
         .map((row) => ({ title: row.title ?? row.canonical_url, publisher: row.publisher, url: row.canonical_url, lastChecked: row.last_checked_at }));
     },
     async freeSlots(days) {
@@ -194,6 +227,16 @@ export function supabaseVoData(input: { url: string; publishableKey: string; acc
       const { data, error } = await db.rpc("vo_letter_official_content", { p_run_id: runId });
       if (error) throw new Error("official");
       return parseOfficialContent(data);
+    },
+    async runFacts(runId) {
+      const { data, error } = await db.rpc("vo_run_facts", { p_run_id: runId });
+      if (error) throw new Error("facts");
+      return parseLetterFacts(data);
+    },
+    async runOfficialContent(runId) {
+      const { data, error } = await db.rpc("vo_run_official_content", { p_run_id: runId });
+      if (error) throw new Error("official");
+      return parseOfficialSources(data);
     },
     async rpc(name, args) {
       const { data, error } = await db.rpc(name, args as never);

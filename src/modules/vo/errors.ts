@@ -66,6 +66,9 @@ const MESSAGES: Record<string, string> = {
   doc_empty: "Vo found nothing to propose in this document. Review it yourself.",
   proposal_reviewed: "Someone already accepted or rejected this.",
   proposal_role: "Only the firm owner, a licensed consultant or a case manager can change a document’s purpose.",
+  // SRC-09: advice-like drafts (fees, eligibility, requirements, recommendations, official content).
+  licensed_review: "This draft reads as advice or cites official content, so a licensed member of the firm reviews and sends it. Nothing was sent.",
+  step_up: "Sending advice-like material needs a fresh two-step check. Verify again, then send. Nothing was sent.",
 };
 
 export function voError(code: string): string {

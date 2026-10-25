@@ -257,7 +257,12 @@ describe("presentation", () => {
     expect(data.heading).toBe("Vo drafted one thing for you.");
     const card = data.cards[0];
     expect(card.meta).toEqual(["Drafted by Vo", "needs your review", "Administrative reply", "needs a sourced rule"]);
-    expect(card.timeline.items).toEqual(["Client message 17 Oct", "SF-2026-0001", "Run logged"]);
+    // SRC-09: each cited record links to the matter tab that holds it.
+    expect(card.timeline.items).toEqual([
+      { label: "Client message 17 Oct", href: `/sheet/matters/${MATTER}?tab=messages&thread=${THREAD}` },
+      { label: "SF-2026-0001", href: `/sheet/matters/${MATTER}` },
+      "Run logged",
+    ]);
     expect(card.timeline.said).toBe("Checked 2 sources in 4.2s");
     // Accept sends the draft as written; with a "[needs a sourced rule]" placeholder it waits for Edit.
     expect(card.accept).toMatchObject({ disabled: true });

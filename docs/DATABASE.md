@@ -880,3 +880,19 @@ ADM-04 (gap #186), branch `feat/adm-service-levels`. Additive; no existing funct
 * `public.service_level_report(firm, months)`: 1 to 24 months in the firm's timezone, newest first: received, answered, waiting, median and longest seconds to first reply; `uptime` is `{"measured": false}`. The firm's owner (aal2, current firm), a platform admin (aal2) or the service role; the latter two audited `service_level.report_read` on the firm.
 
 Ops wrapper: `scripts/ops/service-levels.mjs` (record, report). Tested in `tests/service-levels.rls.test.ts` and `tests/service-levels-present.test.tsx`.
+
+## Grounded Vo outputs (`20261025420000`, not applied on the live project)
+
+SRC-09 (gap #188), branch `feat/src-grounded-vo`. Additive.
+
+* `vo_runs.citations` (jsonb array, at most 40, 64 kB): the run's checked citations, rebuilt by `finish_vo_run` (`kind`, `id`, `label`; official ones add `source_kind`, `url`, `section`, `form_number`, `form_modified_on`, `checked_on`, `current_to`, `snapshot_sha256`). Never the answer text.
+* `vo_drafts.licensed_review_required` (boolean): the draft cites official content or reads as advice; only a licensed member with a fresh step-up can send it.
+* `app.vo_citable_official_url(url)`: https, allowlisted federal official host (canada.ca, *.canada.ca, *.gc.ca), not a site root or landing page.
+* `app.vo_advice_like(text)`: the advice-like word test (mirrored in `src/modules/vo/grounding.ts`).
+* `app.vo_letter_official_items(org, matter)`: REDEFINED from `20261025240100_vo_letter_drafts.sql`: the same rows, kept only when `app.vo_citable_official_url(source_url)`.
+* `app.vo_ask_run(run)`: the caller's own running Ask Vo run on a matter they can read (MFA, active firm), else `vo denied`.
+* `public.vo_run_facts(run)`, `public.vo_run_official_content(run)`: Ask Vo's approved facts (with how many the firm's category switches hide) and approved official content with its source, for the run's own person while it runs.
+* `public.finish_vo_run`: REDEFINED from `20261019207100_vo_drafts.sql` (same signature): also accepts `document_version` (linked, not removed, on the run's matter), `fact` (an approved fact of the matter in an allowed category) and `official` (`source_kind` + id in `app.vo_letter_official_items`) citations; anything else refuses the save; stores the rebuilt citations on the run (and a short form on the draft); sets `licensed_review_required`; audit `vo.run_finished` adds `official_sources` and `licensed_review_required`.
+* `public.send_vo_draft`: REDEFINED from `20261019207100_vo_drafts.sql`: a flagged draft, or text that reads as advice, needs `app.actor_is_licensed` and `app.require_licensed_staff(org, true)` (step-up); audit `vo.draft_sent` adds `licensed_review`.
+
+Tested in `tests/vo-grounded.rls.test.ts`, `tests/vo-grounding.test.ts`, `tests/vo-grounded-present.test.tsx`.

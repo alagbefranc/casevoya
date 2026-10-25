@@ -12211,6 +12211,7 @@ export type Database = {
           id: string
           is_sample: boolean
           kind: Database["public"]["Enums"]["vo_draft_kind"]
+          licensed_review_required: boolean
           matter_id: string
           model: string
           needs_rule: boolean
@@ -12234,6 +12235,7 @@ export type Database = {
           id?: string
           is_sample?: boolean
           kind: Database["public"]["Enums"]["vo_draft_kind"]
+          licensed_review_required?: boolean
           matter_id: string
           model: string
           needs_rule?: boolean
@@ -12257,6 +12259,7 @@ export type Database = {
           id?: string
           is_sample?: boolean
           kind?: Database["public"]["Enums"]["vo_draft_kind"]
+          licensed_review_required?: boolean
           matter_id?: string
           model?: string
           needs_rule?: boolean
@@ -12277,6 +12280,7 @@ export type Database = {
       vo_runs: {
         Row: {
           booking_id: string | null
+          citations: Json
           cost_usd: number | null
           created_at: string
           failure: string | null
@@ -12302,6 +12306,7 @@ export type Database = {
         }
         Insert: {
           booking_id?: string | null
+          citations?: Json
           cost_usd?: number | null
           created_at?: string
           failure?: string | null
@@ -12327,6 +12332,7 @@ export type Database = {
         }
         Update: {
           booking_id?: string | null
+          citations?: Json
           cost_usd?: number | null
           created_at?: string
           failure?: string | null
@@ -13377,6 +13383,14 @@ export type Database = {
         Returns: Json
       }
       vo_letter_official_content: {
+        Args: { p_run_id: string }
+        Returns: Json
+      }
+      vo_run_facts: {
+        Args: { p_run_id: string }
+        Returns: Json
+      }
+      vo_run_official_content: {
         Args: { p_run_id: string }
         Returns: Json
       }
