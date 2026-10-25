@@ -32,7 +32,12 @@ async function Body({ params }: { params: Promise<{ firm: string; event: string 
   try {
     found = parsePublicEvent(await (await publicDeps()).event(firmSlug, eventSlug));
   } catch {
-    found = null;
+    // DES-04: a page that couldn't be read is not "not published".
+    return (
+      <SheetScreen page="book" tone="public">
+        <QuietSheet title="Booking isn’t available right now" copy="This booking page couldn’t be loaded. Nothing was booked. Try again in a moment." />
+      </SheetScreen>
+    );
   }
   if (!found || found.priceCents > 0) return <Unavailable />;
   return (

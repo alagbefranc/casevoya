@@ -96,7 +96,7 @@ export async function loadPortalAgreements(viewer: PortalViewer): Promise<Portal
   const supabase = await createClient({ organizationId: viewer.organizationId });
   const { data: claims } = await supabase.auth.getClaims();
   const userId = claims?.claims?.sub;
-  const [{ data: agreements }, { data: versions }, { data: envelopes }, { data: signers }, { data: memberships }, { data: consent }, { data: quoteLines }, { data: quoteInstalments }] =
+  const [{ data: agreements, error: agreementsError }, { data: versions, error: versionsError }, { data: envelopes }, { data: signers }, { data: memberships }, { data: consent }, { data: quoteLines }, { data: quoteInstalments }] =
     await Promise.all([
       supabase.from("agreements").select("id, matter_id, title, kind, status, current_version_id, quote_expires_on, accepted_at").limit(40),
       supabase
@@ -117,6 +117,8 @@ export async function loadPortalAgreements(viewer: PortalViewer): Promise<Portal
       supabase.from("quote_lines").select("id, agreement_version_id, position, category, description, amount_cents, source_note, entered_on").order("position").limit(400),
       supabase.from("quote_instalments").select("id, agreement_version_id, position, label, amount_cents, paid_as").order("position").limit(200),
     ]);
+  // DES-04: unreadable is not "no agreements"; the page shows its couldn't-load state.
+  if (agreementsError || versionsError) throw new Error("portal agreements unreadable");
 
   const versionById = new Map((versions ?? []).map((row) => [row.id, row as VersionRow]));
   const envelopesByAgreement = new Map<string, EnvelopeRow[]>();
