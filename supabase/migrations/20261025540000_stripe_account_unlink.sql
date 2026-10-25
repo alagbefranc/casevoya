@@ -12,7 +12,13 @@
 --                                  Refuses (and lists them) while the account has card payments in
 --                                  flight, refunds pending at Stripe or open disputes. Otherwise it
 --                                  copies the link into the history, removes the current row and
---                                  records stripe.account_unlinked.
+--                                  records stripe.account_unlinked. It returns the payment requests
+--                                  still open on the old account (started or failed card payments,
+--                                  of any age) so the server action cancels them at Stripe.
+--   app.record_stripe_unlink_cancellations
+--                                  records what Stripe answered for each (canceled / already
+--                                  finished / failed): canceled rows are marked canceled, the
+--                                  results are audited, and a failure opens a task for the owner.
 --
 -- The current row's blanket no-delete trigger is replaced by one that lets a row go only once its
 -- ended link is in the history (so only app.unlink_stripe_account can remove it).
@@ -148,6 +154,7 @@ declare
   blockers jsonb;
   reason_text text := btrim(coalesce(p_reason, ''));
   hid uuid;
+  open_requests jsonb;
 begin
   perform app.require_firm_owner_step_up(p_org);
   select * into current_link from public.firm_payment_accounts where organization_id = p_org for update;
@@ -182,14 +189,114 @@ begin
   )
   returning id into hid;
   delete from public.firm_payment_accounts where id = current_link.id;
+  -- Payment requests a client could still complete on the old account: the server action cancels
+  -- them at Stripe right after this commits, then records the results.
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'payment_id', payment.id, 'payment_intent_id', payment.payment_intent_id,
+           'invoice_number', invoice.number, 'amount_cents', payment.amount_cents, 'currency', payment.currency
+         ) order by payment.created_at), '[]'::jsonb)
+    into open_requests
+  from public.invoice_payments payment
+  join public.invoices invoice on invoice.id = payment.invoice_id
+  where payment.organization_id = p_org
+    and payment.connected_account_id = current_link.account_id
+    and payment.status in ('requires_payment', 'failed');
   perform app.record_audit_event(
     p_org, 'stripe.account_unlinked', 'public.firm_payment_account_history', hid, 'success',
-    jsonb_build_object('provider', 'stripe', 'account_id', current_link.account_id, 'payment_account_id', current_link.id, 'reason', reason_text)
+    jsonb_build_object('provider', 'stripe', 'account_id', current_link.account_id, 'payment_account_id', current_link.id, 'reason', reason_text, 'open_requests', jsonb_array_length(open_requests))
   );
-  return jsonb_build_object('unlinked', true, 'history_id', hid);
+  return jsonb_build_object('unlinked', true, 'history_id', hid, 'account_id', current_link.account_id, 'open_requests', open_requests);
 end;
 $$;
 revoke all on function app.unlink_stripe_account(uuid, text, text, text) from public;
+
+-- What Stripe answered when the server action canceled the old account's open payment requests,
+-- once per disconnect, by the owner who disconnected it (fresh step-up). Each result names one of
+-- the requests app.unlink_stripe_account returned: 'canceled' marks the row canceled, 'already_finished'
+-- leaves it to Stripe's own event, 'failed' is listed in a task for the firm owner (on the first
+-- failed request's matter). All results are audited as stripe.account_unlink_requests_closed.
+create function app.record_stripe_unlink_cancellations(p_history_id uuid, p_results jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  ended public.firm_payment_account_history%rowtype;
+  entry jsonb;
+  payment public.invoice_payments%rowtype;
+  outcome_text text;
+  recorded jsonb := '[]'::jsonb;
+  failed_count integer := 0;
+  canceled_count integer := 0;
+  failed_matter uuid;
+  new_task uuid;
+begin
+  select * into ended from public.firm_payment_account_history where id = p_history_id;
+  if ended.id is null then
+    raise exception 'disconnected account not found' using errcode = '42501';
+  end if;
+  perform app.require_firm_owner_step_up(ended.organization_id);
+  if ended.ended_by is distinct from (select auth.uid()) then
+    raise exception 'only the owner who disconnected the account records its requests' using errcode = '42501';
+  end if;
+  if exists (
+    select 1 from public.audit_log log
+    where log.object_id = ended.id and log.action = 'stripe.account_unlink_requests_closed'
+  ) then
+    raise exception 'these requests are already recorded' using errcode = '23505';
+  end if;
+  if jsonb_typeof(coalesce(p_results, 'null'::jsonb)) <> 'array' or jsonb_array_length(p_results) > 500 then
+    raise exception 'results must be a list' using errcode = '22023';
+  end if;
+
+  for entry in select value from jsonb_array_elements(p_results) loop
+    outcome_text := entry ->> 'result';
+    if outcome_text is null or outcome_text not in ('canceled', 'already_finished', 'failed') then
+      raise exception 'unknown result' using errcode = '22023';
+    end if;
+    if coalesce(entry ->> 'payment_id', '') !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then
+      raise exception 'payment request not on the disconnected account' using errcode = '42501';
+    end if;
+    select * into payment from public.invoice_payments
+    where id = (entry ->> 'payment_id')::uuid
+      and organization_id = ended.organization_id
+      and connected_account_id = ended.account_id
+    for update;
+    if payment.id is null then
+      raise exception 'payment request not on the disconnected account' using errcode = '42501';
+    end if;
+    if outcome_text = 'canceled' then
+      update public.invoice_payments set status = 'canceled'
+      where id = payment.id and status in ('requires_payment', 'failed');
+      canceled_count := canceled_count + 1;
+    elsif outcome_text = 'failed' then
+      failed_count := failed_count + 1;
+      if failed_matter is null then
+        select invoice.matter_id into failed_matter from public.invoices invoice where invoice.id = payment.invoice_id;
+      end if;
+    end if;
+    recorded := recorded || jsonb_build_array(jsonb_build_object(
+      'payment_id', payment.id, 'payment_intent_id', payment.payment_intent_id, 'result', outcome_text
+    ));
+  end loop;
+
+  if failed_count > 0 then
+    new_task := app.create_finance_task(
+      ended.organization_id, failed_matter,
+      format('Cancel %s card payment request%s on the disconnected Stripe account at Stripe', failed_count, case when failed_count = 1 then '' else 's' end),
+      'high', app.firm_today(ended.organization_id), 'stripe-unlink-' || ended.id::text
+    );
+  end if;
+  perform app.record_audit_event(
+    ended.organization_id, 'stripe.account_unlink_requests_closed', 'public.firm_payment_account_history', ended.id,
+    case when failed_count > 0 then 'failure' else 'success' end,
+    jsonb_build_object('account_id', ended.account_id, 'results', recorded, 'canceled', canceled_count, 'failed', failed_count, 'task_id', new_task)
+  );
+  return jsonb_build_object('canceled', canceled_count, 'failed', failed_count, 'task_id', new_task);
+end;
+$$;
+revoke all on function app.record_stripe_unlink_cancellations(uuid, jsonb) from public;
 
 -- From 20261019100100_stripe_connect_invoices.sql; also refuses an account another firm used before.
 create or replace function app.record_firm_payment_account(p_org uuid, p_account_id text, p_livemode boolean)
@@ -238,6 +345,13 @@ create function public.unlink_stripe_account(p_org uuid, p_account_id text, p_co
 returns jsonb language sql security invoker set search_path = ''
 as $$ select app.unlink_stripe_account(p_org, p_account_id, p_confirmation, p_reason); $$;
 
+create function public.record_stripe_unlink_cancellations(p_history_id uuid, p_results jsonb)
+returns jsonb language sql security invoker set search_path = ''
+as $$ select app.record_stripe_unlink_cancellations(p_history_id, p_results); $$;
+
+revoke all on function public.record_stripe_unlink_cancellations(uuid, jsonb) from public, anon;
+grant execute on function public.record_stripe_unlink_cancellations(uuid, jsonb) to authenticated;
+grant execute on function app.record_stripe_unlink_cancellations(uuid, jsonb) to authenticated;
 revoke all on function public.unlink_stripe_account(uuid, text, text, text) from public, anon;
 grant execute on function public.unlink_stripe_account(uuid, text, text, text) to authenticated;
 grant execute on function app.unlink_stripe_account(uuid, text, text, text) to authenticated;

@@ -16049,6 +16049,10 @@ export type Database = {
         Args: { p_account_id: string; p_livemode: boolean; p_org: string }
         Returns: string
       }
+      record_stripe_unlink_cancellations: {
+        Args: { p_history_id: string; p_results: Json }
+        Returns: Json
+      }
       record_firm_transfer: {
         Args: {
           p_contact_email: string

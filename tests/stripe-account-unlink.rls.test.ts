@@ -281,3 +281,107 @@ describe("disconnecting the firm's Stripe account (bug 8)", () => {
     await expectDbError(() => db.query(`select public.record_invoice_payment_intent($1, $2, $3, 70000, 'cad', 0, false)`, [invoiceId, intentId(), next]), /does not match the firm/);
   });
 });
+
+type Closed = { unlinked: boolean; history_id: string; account_id: string; open_requests: { payment_id: string; payment_intent_id: string; invoice_number: string }[] };
+
+async function paymentRow(intent: string) {
+  await asMaintenance(db);
+  return (await db.query<{ id: string; status: string; invoice_id: string }>(`select id, status, invoice_id from public.invoice_payments where payment_intent_id = $1`, [intent])).rows[0];
+}
+
+describe("closing the old account's open payment requests (bug 8 follow-up)", () => {
+  it("returns every open request on the old account, of any age, and records what Stripe answered", async () => {
+    const f = await firm();
+    const { intent: stale } = await startPayment(f, 41_000);
+    await backdate(`payment_intent_id = $1`, [stale], "3 days");
+    const { intent: failed } = await startPayment(f, 42_000);
+    expect((await paymentEvent(f, "payment_intent.payment_failed", failed, 42_000)).outcome).toBe("applied");
+    const { intent: broken } = await startPayment(f, 43_000);
+    await backdate(`payment_intent_id = $1`, [broken], "2 days");
+    const { intent: paid } = await paidInvoice(f, 44_000);
+
+    await asStepUp(f);
+    const done = (await db.query<{ r: Closed }>(`select public.unlink_stripe_account($1, $2, 'DISCONNECT', 'Moving to a new account') as r`, [f.orgId, f.account])).rows[0].r;
+    expect(done.unlinked).toBe(true);
+    expect(done.account_id).toBe(f.account);
+    expect(done.open_requests.map((item) => item.payment_intent_id).sort()).toEqual([stale, failed, broken].sort());
+    expect(done.open_requests.map((item) => item.payment_intent_id)).not.toContain(paid);
+
+    const ids: Record<string, string> = {};
+    for (const intent of [stale, failed, broken]) ids[intent] = (await paymentRow(intent)).id;
+    const results = [
+      { payment_id: ids[stale], result: "canceled" },
+      { payment_id: ids[failed], result: "already_finished" },
+      { payment_id: ids[broken], result: "failed" },
+    ];
+
+    // Only the owner who disconnected it, with a fresh step-up, and only requests on that account.
+    await asUser(db, { userId: f.finance, aal: "aal2", orgId: f.orgId, totpAgeSeconds: 0 });
+    await expectDbError(() => db.query(`select public.record_stripe_unlink_cancellations($1, $2::jsonb)`, [done.history_id, JSON.stringify(results)]), /step-up/);
+    const other = await firm();
+    const { intent: elsewhere } = await startPayment(other, 45_000);
+    const foreign = (await paymentRow(elsewhere)).id;
+    await asStepUp(f);
+    await expectDbError(
+      () => db.query(`select public.record_stripe_unlink_cancellations($1, $2::jsonb)`, [done.history_id, JSON.stringify([{ payment_id: "not-a-uuid", result: "canceled" }])]),
+      /not on the disconnected account/,
+    );
+    await expectDbError(
+      () => db.query(`select public.record_stripe_unlink_cancellations($1, $2::jsonb)`, [done.history_id, JSON.stringify([{ payment_id: foreign, result: "canceled" }])]),
+      /not on the disconnected account/,
+    );
+    await expectDbError(() => db.query(`select public.record_stripe_unlink_cancellations($1, $2::jsonb)`, [done.history_id, JSON.stringify([{ payment_id: ids[stale], result: "maybe" }])]), /unknown result/);
+
+    const recorded = (await db.query<{ r: { canceled: number; failed: number; task_id: string | null } }>(`select public.record_stripe_unlink_cancellations($1, $2::jsonb) as r`, [done.history_id, JSON.stringify(results)])).rows[0].r;
+    expect(recorded).toMatchObject({ canceled: 1, failed: 1 });
+    expect(recorded.task_id).toBeTruthy();
+    await expectDbError(() => db.query(`select public.record_stripe_unlink_cancellations($1, $2::jsonb)`, [done.history_id, JSON.stringify(results)]), /already recorded/);
+
+    expect((await paymentRow(stale)).status).toBe("canceled");
+    expect((await paymentRow(failed)).status).toBe("failed");
+    expect((await paymentRow(broken)).status).toBe("requires_payment");
+
+    // The unlink stands; the failure is audited and is a task for the firm owner, due today in the firm's timezone.
+    expect(await currentLink(f.orgId)).toEqual([]);
+    await asMaintenance(db);
+    const task = (
+      await db.query<{ title: string; priority: string; due_on: string; today: string; owner_user: string }>(
+        `select t.title, t.priority, t.due_on::text, app.firm_today(t.organization_id)::text as today, m.user_id as owner_user
+         from public.tasks t join public.memberships m on m.id = t.owner_membership_id where t.id = $1`,
+        [recorded.task_id],
+      )
+    ).rows[0];
+    expect(task).toMatchObject({ title: "Cancel 1 card payment request on the disconnected Stripe account at Stripe", priority: "high", owner_user: f.owner });
+    expect(task.due_on).toBe(task.today);
+    const audit = (
+      await db.query<{ result: string; context: { results: { payment_intent_id: string; result: string }[] } }>(
+        `select result, context from public.audit_log where object_id = $1 and action = 'stripe.account_unlink_requests_closed'`,
+        [done.history_id],
+      )
+    ).rows;
+    expect(audit).toHaveLength(1);
+    expect(audit[0].result).toBe("failure");
+    expect(audit[0].context.results.map((item) => `${item.payment_intent_id}:${item.result}`).sort()).toEqual([`${stale}:canceled`, `${failed}:already_finished`, `${broken}:failed`].sort());
+  });
+
+  it("still records a later Stripe event for a payment on the old account", async () => {
+    const f = await firm();
+    const { invoiceId, intent } = await startPayment(f, 46_000);
+    await backdate(`payment_intent_id = $1`, [intent], "2 days");
+    await asStepUp(f);
+    const done = (await db.query<{ r: Closed }>(`select public.unlink_stripe_account($1, $2, 'DISCONNECT', 'Moving to a new account') as r`, [f.orgId, f.account])).rows[0].r;
+    const paymentId = (await paymentRow(intent)).id;
+    await asStepUp(f);
+    await db.query(`select public.record_stripe_unlink_cancellations($1, $2::jsonb)`, [done.history_id, JSON.stringify([{ payment_id: paymentId, result: "canceled" }])]);
+    expect((await paymentRow(intent)).status).toBe("canceled");
+
+    // Stripe's own canceled event changes nothing; a payment that raced the cancel still lands.
+    expect((await paymentEvent(f, "payment_intent.canceled", intent, 46_000)).outcome).toBe("unchanged");
+    expect((await paymentEvent(f, "payment_intent.succeeded", intent, 46_000, 46_000)).outcome).toBe("applied");
+    await asMaintenance(db);
+    const invoice = (await db.query<{ status: string; paid_cents: string }>(`select status, paid_cents from public.invoices where id = $1`, [invoiceId])).rows[0];
+    expect({ status: invoice.status, paid: Number(invoice.paid_cents) }).toEqual({ status: "paid", paid: 46_000 });
+    const events = await db.query<{ outcome: string }>(`select outcome from public.invoice_payment_events where payment_id = $1 order by created_at`, [paymentId]);
+    expect(events.rows.map((row) => row.outcome)).toEqual(["unchanged", "applied"]);
+  });
+});

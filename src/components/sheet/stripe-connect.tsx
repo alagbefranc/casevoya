@@ -6,7 +6,7 @@ import { loadConnectAndInitialize, type StripeConnectInstance } from "@stripe/co
 import { ConnectAccountOnboarding, ConnectComponentsProvider, ConnectNotificationBanner } from "@stripe/react-connect-js";
 import { Icon, Sep } from "@/components/sheet/designer/frame";
 import { Badge } from "@/components/sheet/designer/matters";
-import { blockerLine, DISCONNECT_WORD, shortAccount, type ConnectCardData, type FinanceAccountData, type UnlinkBlocker } from "@/modules/finance/connect-present";
+import { blockerLine, DISCONNECT_WORD, openRequestLine, shortAccount, type ConnectCardData, type FinanceAccountData, type UnlinkBlocker } from "@/modules/finance/connect-present";
 import { connectStripeAccount, createAccountSession, disconnectStripeAccount, refreshStripeAccount } from "@/modules/finance/staff-actions";
 import { financeNeedsStepUp, financeStepUpLocation } from "@/modules/sheet/finance-present";
 
@@ -253,6 +253,8 @@ function DisconnectDialog({ data }: { data: FinanceAccountData }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [blockers, setBlockers] = useState<UnlinkBlocker[]>([]);
+  // Disconnected, but some open payment requests couldn't be canceled at Stripe: shown until closed.
+  const [leftOpen, setLeftOpen] = useState<{ lines: string[]; taskCreated: boolean } | null>(null);
   const [pending, start] = useTransition();
   const account = data.account;
 
@@ -294,13 +296,17 @@ function DisconnectDialog({ data }: { data: FinanceAccountData }) {
         setError(result.blockers.length ? null : "The account couldn’t be disconnected. Try again.");
         return;
       }
+      if (result.notCanceled.length) {
+        setLeftOpen({ lines: result.notCanceled.map(openRequestLine), taskCreated: result.taskCreated });
+        return;
+      }
       dialog.current?.close();
       router.refresh();
     });
   };
 
   return (
-    <dialog className={"dlg"} id={STRIPE_DISCONNECT_DIALOG} aria-labelledby={`${STRIPE_DISCONNECT_DIALOG}H`} ref={dialog}>
+    <dialog className={"dlg"} id={STRIPE_DISCONNECT_DIALOG} aria-labelledby={`${STRIPE_DISCONNECT_DIALOG}H`} ref={dialog} onClose={() => (leftOpen ? router.refresh() : undefined)}>
       <form data-live={"1"} onSubmit={submit} noValidate>
         <div className={"dh"}>
           <h2 id={`${STRIPE_DISCONNECT_DIALOG}H`}>{"Disconnect the Stripe account?"}</h2>
@@ -310,7 +316,7 @@ function DisconnectDialog({ data }: { data: FinanceAccountData }) {
         </div>
         <div className={"db"}>
           <p className={"fp-note"}>
-            {`Casevoya stops using ${shortAccount(account.accountId)} (test mode) for ${data.firmName}. Stripe isn’t asked to close, delete or reject the account; it stays with Stripe as it is. Clients can’t pay by card until you set up a new account here. Card payments already received on it can’t be refunded from Casevoya afterwards. The disconnected account stays in the firm’s history and audit log.`}
+            {`Casevoya stops using ${shortAccount(account.accountId)} (test mode) for ${data.firmName}. Stripe isn’t asked to close, delete or reject the account; it stays with Stripe as it is. Card payment requests still open on it are canceled at Stripe, so a page left open can’t pay it. Clients can’t pay by card until you set up a new account here. Card payments already received on it can’t be refunded from Casevoya afterwards. The disconnected account stays in the firm’s history and audit log.`}
           </p>
           <div className={"fld"}>
             <label htmlFor={"soR"}>{"Reason (kept in the audit log)"}</label>
@@ -320,6 +326,22 @@ function DisconnectDialog({ data }: { data: FinanceAccountData }) {
             <label htmlFor={"soC"}>{`Type ${DISCONNECT_WORD} to confirm`}</label>
             <input className={"inp"} id={"soC"} name={"confirmation"} type={"text"} defaultValue={""} autoComplete={"off"} maxLength={20} />
           </div>
+          {leftOpen ? (
+            <div className={"alert warn"} role={"alert"}>
+              <Icon name={"info"} />
+              <div>
+                <b>{"Disconnected; some requests are still open at Stripe"}</b>
+                {leftOpen.taskCreated
+                  ? "Stripe didn’t cancel these, so a client could still pay them on the old account. A task to cancel them in Stripe was added for you:"
+                  : "Stripe didn’t cancel these, so a client could still pay them on the old account. Cancel them in Stripe:"}
+                <ul>
+                  {leftOpen.lines.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : null}
           {blockers.length ? (
             <div className={"alert warn"} role={"alert"}>
               <Icon name={"info"} />
@@ -346,11 +368,13 @@ function DisconnectDialog({ data }: { data: FinanceAccountData }) {
         </div>
         <div className={"df"}>
           <button className={"btn"} type={"button"} data-close={STRIPE_DISCONNECT_DIALOG}>
-            {"Cancel"}
+            {leftOpen ? "Close" : "Cancel"}
           </button>
-          <button className={"btn p"} type={"submit"} disabled={pending} aria-busy={pending || undefined}>
-            {pending ? "Disconnecting…" : "Disconnect"}
-          </button>
+          {leftOpen ? null : (
+            <button className={"btn p"} type={"submit"} disabled={pending} aria-busy={pending || undefined}>
+              {pending ? "Disconnecting…" : "Disconnect"}
+            </button>
+          )}
         </div>
       </form>
     </dialog>

@@ -254,6 +254,11 @@ export function blockerLine(blocker: UnlinkBlocker): string {
   return `Card payment on ${blocker.invoice_number}, ${amount}: ${status}`;
 }
 
+/** "Card payment request on INV-0001, CAD 400.00 (pi_…)": one request Stripe didn't cancel. */
+export function openRequestLine(request: { invoice_number: string; amount_cents: number; currency: string; payment_intent_id: string }): string {
+  return `Card payment request on ${request.invoice_number || "an invoice"}, ${formatMoney(Number(request.amount_cents), request.currency)} (${request.payment_intent_id})`;
+}
+
 /** Wording for the database's refusals of a disconnect. */
 export function disconnectError(message: string): string | null {
   if (/type DISCONNECT/i.test(message)) return `Type ${DISCONNECT_WORD} to confirm.`;
