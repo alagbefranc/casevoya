@@ -27,6 +27,7 @@ import { GOVERNMENT_CSS, GovernmentHeader, SheetGovernment } from "@/components/
 import { GovDialogs } from "@/components/sheet/designer/matter-government";
 import { loadSheetGovernment } from "@/modules/sheet/government-load";
 import { MatterDialogs, MatterRbar, MatterTopBar, SheetMatter } from "@/components/sheet/designer/matter";
+import { MatterLetterDialogs } from "@/components/sheet/designer/matter-letters";
 import { MATTER_CSS } from "@/components/sheet/designer/matter-css";
 import { MattersTopBar, NewMatterDialog, SheetMatters } from "@/components/sheet/designer/matters";
 import { PersonEditDialog } from "@/components/sheet/designer/person-edit";
@@ -112,6 +113,7 @@ import { loadSheetCalendar, loadSheetConsultations } from "@/modules/scheduling/
 import { loadSheetLead, loadSheetPipeline } from "@/modules/leads/load";
 import { EnquiryShareDialog } from "@/components/sheet/designer/enquiry-share";
 import { loadEnquiryShare } from "@/modules/leads/share-load";
+import { loadLeadVo } from "@/modules/sheet/vo-crm-load";
 
 const PUBLIC = new Set(["enquiry", "book"]);
 
@@ -869,11 +871,11 @@ export async function SheetBody({
   if (page === "lead" && (access.kind === "live" || access.kind === "sample")) {
     // The Designer's + Lead goes to /sheet/lead?new=1: New lead is a dialog on the pipeline.
     if (!query.id) redirect("/sheet/pipeline?new=1");
-    const loaded = await loadSheetLead(access.staff, query.id, { conflict: query.dlg === "conflict" });
+    const [loaded, vo] = await Promise.all([loadSheetLead(access.staff, query.id, { conflict: query.dlg === "conflict" }), loadLeadVo(access.staff, query.id)]);
     if (!loaded) notFound();
     return (
       <SheetScreen page={page}>
-        <LeadScreen loaded={loaded} />
+        <LeadScreen loaded={loaded} vo={vo} />
       </SheetScreen>
     );
   }
@@ -891,6 +893,7 @@ export async function SheetBody({
             <>
               <MatterDialogs data={loaded.dialogs} />
               <GovDialogs data={loaded.governmentDialogs} />
+              {loaded.letterDialogs ? <MatterLetterDialogs data={loaded.letterDialogs} /> : null}
               {loaded.page.billing?.work ? <MatterWorkDialogs data={loaded.page.billing.work} /> : null}
               {loaded.countersign.map((sign) => (
                 <CountersignDialog key={sign.envelopeId} data={sign} />

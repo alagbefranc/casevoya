@@ -17,6 +17,7 @@ import { DOC_REQUEST_DIALOG, DocRequestDialog, type DocRequestDialogData } from 
 import { MatterIntake, type MatterIntakeData } from "./matter-intake";
 import { MatterWork, type MatterWorkData } from "./billing-live";
 import { InboundAddress, type InboundAddressData } from "./inbound-filing";
+import { MatterLetters, type LetterAttrs, type MatterLettersData } from "./matter-letters";
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
 import type { PersonHistoryPanel } from "@/modules/sheet/person-history-present";
 import type { PersonEditData } from "@/modules/sheet/edit-person";
@@ -450,8 +451,13 @@ export function MatterOverview({ data }: { data: MatterOverviewData }) {
 /* ------------------------------------------------------------ right column */
 
 export type MatterRbarData = {
-  /** The Vo draft card. Absent until Vo is switched on and has a draft for this matter. */
-  vo?: { draft: string; sources: string } | null;
+  /**
+   * The Vo draft card. Absent until Vo is switched on and has a draft for this matter. Live only
+   * (AI-01): `accept`, `edit` and `reject` wire its buttons to the Vo letter draft it shows.
+   */
+  vo?: { draft: string; sources: string; accept?: LetterAttrs; edit?: LetterAttrs; reject?: LetterAttrs } | null;
+  /** Live only (AI-01): the matter's letters, Draft letter with Vo and New letter. */
+  letters?: MatterLettersData | null;
   agreement: { title: string; state: string | null; parts: string[] };
   /** Recorded separately from the agreement. Absent until the firm stores it. */
   representation?: { title: string; note: string } | null;
@@ -461,7 +467,7 @@ export type MatterRbarData = {
   inbound?: InboundAddressData | null;
 };
 
-function MatterVo({ draft, sources }: { draft: string; sources: string }) {
+function MatterVo({ draft, sources, accept, edit, reject }: { draft: string; sources: string; accept?: LetterAttrs; edit?: LetterAttrs; reject?: LetterAttrs }) {
   return (
     <div className={"ai"} id={"voAssist"}>
       <div className={"vohd"}>
@@ -492,13 +498,13 @@ function MatterVo({ draft, sources }: { draft: string; sources: string }) {
       <p style={{ marginTop: "8px" }}>{draft}</p>
       <small style={{ display: "block", marginTop: "6px" }}>{sources}</small>
       <div className={"row"}>
-        <button className={"btn sm p"} data-ai={"ok"}>
+        <button className={"btn sm p"} data-ai={"ok"} {...accept}>
           {"Accept"}
         </button>
-        <button className={"btn sm"} data-ai={"edit"}>
+        <button className={"btn sm"} data-ai={"edit"} {...edit}>
           {"Edit"}
         </button>
-        <button className={"btn sm"} data-ai={"no"}>
+        <button className={"btn sm"} data-ai={"no"} {...reject}>
           {"Reject"}
         </button>
       </div>
@@ -512,9 +518,10 @@ export function MatterRbar({ data }: { data: MatterRbarData }) {
       {data.vo ? (
         <>
           <h4>{"Assist"}</h4>
-          <MatterVo draft={data.vo.draft} sources={data.vo.sources} />
+          <MatterVo draft={data.vo.draft} sources={data.vo.sources} accept={data.vo.accept} edit={data.vo.edit} reject={data.vo.reject} />
         </>
       ) : null}
+      {data.letters ? <MatterLetters data={data.letters} /> : null}
       <h4>{"Agreement"}</h4>
       <div className={"card"} style={{ display: "flex", gap: "10px" }}>
         <span style={{ color: "#f0a200" }}>

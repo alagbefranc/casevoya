@@ -12,6 +12,7 @@ import { dataBlock, oneLine } from "../../../src/modules/vo/prompt";
 import { guardVoOutput, type GuardResult } from "../../../src/modules/vo/guard";
 import type { VoSourceRef, VoTask, VoTaskRequest } from "../../../src/modules/vo/sign";
 import type { VoData, VoSettingsRow } from "./data";
+import { LETTER_TOOL_SPECS, type LetterContext, type LetterToolName } from "./letter-tools";
 
 export type VoToolName =
   | "read_matter_summary"
@@ -20,7 +21,8 @@ export type VoToolName =
   | "read_messages_thread"
   | "search_approved_sources"
   | "find_free_slots"
-  | "save_draft";
+  | "save_draft"
+  | LetterToolName;
 
 /** The tools each task may use. Ask Vo has no write at all. */
 export const TASK_TOOLS: Record<VoTask, readonly VoToolName[]> = {
@@ -29,6 +31,8 @@ export const TASK_TOOLS: Record<VoTask, readonly VoToolName[]> = {
   ask: ["read_matter_summary", "read_person", "read_documents_index", "search_approved_sources"],
   // A document reading is one model call with no tools at all (vo-doc-read.ts).
   document_review: [],
+  // AI-01 letter drafts (letter-tools.ts): approved facts, approved official content, one save.
+  letter_draft: ["read_person", "read_approved_facts", "find_official_content", "save_letter_draft"],
 };
 
 export type ToolResult = { content: { type: "text"; text: string }[]; isError?: boolean };
@@ -44,6 +48,8 @@ export type RunContext = {
   calls: string[];
   draft: Extract<GuardResult, { kind: "draft" }> | null;
   abstainedByDraft: boolean;
+  /** letter_draft only: the facts and official content handed out, and the guarded letter. */
+  letter?: LetterContext;
 };
 
 export type ToolSpec = {
@@ -230,4 +236,5 @@ export const TOOL_SPECS: Record<VoToolName, ToolSpec> = {
       return text("Draft saved for review. Answer DONE.");
     },
   },
+  ...LETTER_TOOL_SPECS,
 };
