@@ -183,6 +183,16 @@ describe("Vo letter drafts: who may ask, and the switches", () => {
     await db.query(`select public.set_vo_settings($1, '{"letter_drafts": true, "enabled": false}'::jsonb)`, [f.orgId]);
     expect((await begin(f)).error).toBe("off");
   });
+
+  it("keeps DOC-05's read_on_upload switch working next to letter_drafts", async () => {
+    const f = await firm();
+    await staff(f.owner, f.orgId);
+    const saved = (
+      await db.query<{ s: Record<string, unknown> }>(`select public.set_vo_settings($1, '{"read_on_upload": true, "letter_drafts": false}'::jsonb) as s`, [f.orgId])
+    ).rows[0].s;
+    expect(saved.read_on_upload).toBe(true);
+    expect(saved.letter_drafts).toBe(false);
+  });
 });
 
 describe("Vo letter drafts: approved facts only", () => {
