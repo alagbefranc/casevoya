@@ -828,3 +828,7 @@ SEC-06 (gap #184), branch `feat/sec-privacy-requests`. No existing function rede
 * RLS forced on every new table; select only, through `app.can_read_privacy_request` (requests stay per firm) or firm staff for time limits.
 
 Tested in `tests/privacy-responses.rls.test.ts` and `tests/privacy-responses-present.test.ts`.
+
+## Privacy response download needs the client's two-step (`20261025340000`, not applied on the live project)
+
+SEC-01 + SEC-06 follow-up. **Redefines** `app.authorize_privacy_response_download(uuid)` (only definition `20261025280000_sec_privacy_responses.sql`): after the ownership and expiry checks it raises `two-step sign-in is required for this download` when the person has no verified authenticator, and `client step-up required: enter your two-step code` when `app.client_step_up_satisfied()` is false. Otherwise unchanged. Tested in `tests/privacy-responses.rls.test.ts`.
