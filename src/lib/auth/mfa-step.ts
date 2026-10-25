@@ -79,6 +79,7 @@ const ACTIONS = {
   agreement: { phrase: "change an agreement", icon: "signature", title: "Change an agreement", detail: "Terms the client signs" },
   countersign: { phrase: "countersign an agreement", icon: "signature", title: "Countersign an agreement", detail: "The firm’s signature on the client’s agreement" },
   quote: { phrase: "change a quote", icon: "invoice", title: "Change a quote", detail: "Fees offered to the client" },
+  letter_approve: { phrase: "approve a letter", icon: "file-check", title: "Approve a letter", detail: "The version that can be released to the client or the government" },
 } as const satisfies Record<string, { phrase: string } & StepUpAction>;
 
 export type StepUpActionKey = keyof typeof ACTIONS;
