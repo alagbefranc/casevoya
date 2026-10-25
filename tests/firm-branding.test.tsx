@@ -170,6 +170,6 @@ describe("firm default language", () => {
 
   it("the invite page presses the firm's language on the Language switch", () => {
     const wire = readFileSync("src/components/port/wire.ts", "utf8");
-    expect(wire).toContain("presetPortalLocale(event.root, invite.current?.organization?.default_locale);");
+    expect(wire).toContain("presetPortalLocale(event.root, loaded.preview?.organization?.default_locale);");
   });
 });
