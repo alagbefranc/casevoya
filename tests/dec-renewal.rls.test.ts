@@ -545,3 +545,58 @@ describe("DEC-02 renewal timings follow the GOV review rules (2026-10-24)", () =
     expect(audit.rows.map((row) => row.action)).toEqual(["decision.renewal_timing_approved", "decision.renewal_timing_approved_self"]);
   });
 });
+
+describe("DES-04 the client's renewal reminder carries its official timing's freshness (20261025451000)", () => {
+  type Seen = { timing: { status: string; source_review: string; source_change: string; source_attempt: string | null; source_next_review: string | null } };
+
+  it("returns the timing's status and its official page's review and check state, and shows a retired timing as retired", async () => {
+    const ctx = await firm();
+    await stale(ctx.manager, ctx.orgId);
+    const snapshot = JSON.stringify({ sha256: sha(`page ${randomUUID()}`), retrieved_at: new Date().toISOString(), final_url: PAGE.split("#")[0], http_status: 200 });
+    const proposed = await db.query<{ id: string }>(
+      `select public.propose_renewal_timing($1, null, 'Synthetic permit', 'Synthetic timing words', 30, $2, null, null, null, $3::date, null, $4::jsonb) as id`,
+      [ctx.orgId, PAGE, firmDay(), snapshot],
+    );
+    const timingId = proposed.rows[0].id;
+    await fresh(ctx.consultant, ctx.orgId);
+    await db.query(`select public.review_renewal_timing($1, 1, 'approved', null, null)`, [timingId]);
+
+    const decisionId = await decision(ctx);
+    await confirm(ctx, decisionId);
+    const renewal = await expiry(ctx, decisionId, null, timingId);
+    await clientChoices(ctx, true);
+    await stale(ctx.manager, ctx.orgId);
+    await db.query(`select public.set_renewal_reminder($1, 1, 'Synthetic renewal application', null)`, [renewal]);
+
+    await asMaintenance(db);
+    const source = await db.query<{ review_status: string; change_state: string; last_attempt_result: string | null }>(
+      `select review_status::text, change_state::text, last_attempt_result::text from public.official_sources
+       where id = (select source_id from public.renewal_timings where id = $1)`,
+      [timingId],
+    );
+    await stale(ctx.client, ctx.orgId);
+    const seen = await db.query<{ r: Seen[] }>(`select public.portal_renewal_reminders($1) as r`, [ctx.orgId]);
+    expect(seen.rows[0].r[0].timing).toMatchObject({
+      status: "approved",
+      source_review: source.rows[0].review_status,
+      source_change: source.rows[0].change_state,
+      source_attempt: source.rows[0].last_attempt_result,
+    });
+
+    // A licensed member retires the timing after the reminder was set: the client's reminder says so.
+    const version = await versionOf("renewal_timings", timingId);
+    await fresh(ctx.consultant, ctx.orgId);
+    await db.query(`select public.retire_renewal_timing($1, $2, 'Synthetic: superseded by a newer page')`, [timingId, version]);
+    await stale(ctx.client, ctx.orgId);
+    const after = await db.query<{ r: Seen[] }>(`select public.portal_renewal_reminders($1) as r`, [ctx.orgId]);
+    expect(after.rows[0].r[0].timing.status).toBe("retired");
+
+    // Still only the client's own: another firm's client sees none of it.
+    const other = await firm();
+    await stale(other.client, other.orgId);
+    expect((await db.query<{ r: unknown[] }>(`select public.portal_renewal_reminders($1) as r`, [other.orgId])).rows[0].r).toEqual([]);
+    // And the client can't read the timing or its source table directly.
+    await stale(ctx.client, ctx.orgId);
+    expect((await db.query(`select id from public.renewal_timings where id = $1`, [timingId])).rows).toEqual([]);
+  });
+});

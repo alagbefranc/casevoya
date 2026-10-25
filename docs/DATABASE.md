@@ -999,6 +999,10 @@ SRC-01, SRC-02, SRC-03 (gap #188), branch `feat/src-claims-review`. Builds on th
 
 Capture script: `scripts/ops/capture-official-claims.mjs` writes `src/modules/content-governance/captured-claims.json` (drafts offered in Add claim). Tested in `tests/src-claims-review.rls.test.ts` and `tests/src-claims-present.test.tsx`; `tests/source-governance.test.ts`, `tests/owner-licence-gates.rls.test.ts` and `tests/owner-full-access.rls.test.ts` now write approved reviews from a maintenance session.
 
+## Renewal reminders carry their official timing's freshness (`20261025451000`, not applied on the live project)
+
+DES-04 (stale-source state, client portal), branch `feat/des-states-portal`. Redefines `app.portal_renewal_reminders(uuid)` (copied from `20261025230000`): the `timing` object also carries `status` (`renewal_timings.status`), and from the timing's `official_sources` row `source_review` (`review_status`), `source_next_review` (`next_review_at`), `source_change` (`change_state`), `source_attempt` (`last_attempt_result`) and `source_attempt_at` (`last_attempt_at`). Clients can't read either table, so without this the portal couldn't tell a retired timing, a page due for review or suspended, a detected change or a failed check from a current one. Same signature, grants, rows and gating (contact choices, own reminders only); no tables, no data. Tested in `tests/dec-renewal.rls.test.ts` (DES-04 block) and `tests/des-portal-states.test.tsx`.
+
 ## Program selection accepts only a live pack (`20261025430000`, not applied on the live project)
 
 SRC follow-up (Francis, 2026-10-25). **Redefines** `app.pack_is_selectable(uuid, uuid)` (only definition `20261017170000_matter_lifecycle.sql`): the status test `status in (published, review_due)` becomes `app.rule_pack_is_live(pack.id)` (`20261025410100`), so `select_matter_program` and its callers refuse a review-due pack or one holding a rule version that is not live. Otherwise unchanged. Tested in `tests/src-pins-scope.rls.test.ts`.

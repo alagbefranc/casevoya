@@ -161,6 +161,13 @@ export type PortalRenewalRow = {
     snapshot_sha256: string | null;
     page_attested_on?: string | null;
     page_attested_by?: string | null;
+    /** DES-04 (20261025451000): the timing's status and its official page's freshness. Absent before that migration. */
+    status?: string | null;
+    source_review?: string | null;
+    source_next_review?: string | null;
+    source_change?: string | null;
+    source_attempt?: string | null;
+    source_attempt_at?: string | null;
   } | null;
   fee: CurrentFee | null;
 };
@@ -170,10 +177,48 @@ export type PortalRenewalView = {
   lines: string[];
   timing: { text: string; href: string; facts: string } | null;
   fee: { text: string; href: string } | null;
+  /** DES-04: why the official content shown may be out of date, in the client's words; null while current. */
+  stale?: string[] | null;
 };
 
+/** A year, as the timing's "date checked" rule counts it (app.propose_renewal_timing: within the last year). */
+const YEAR_MS = 366 * 24 * 60 * 60 * 1000;
+
+function olderThanAYear(value: string | null | undefined, now: Date): boolean {
+  if (!value) return false;
+  const at = new Date(value.length === 10 ? `${value}T00:00:00Z` : value).getTime();
+  return Number.isFinite(at) && now.getTime() - at > YEAR_MS;
+}
+
+/**
+ * DES-04 stale-source: why IRCC's timing or fee on a reminder may no longer be current. Read from the
+ * firm's own records (the timing's status, the official page's review and check state from SRC, the
+ * dates checked and retrieved); nothing is fetched or guessed. Empty while everything is current.
+ */
+export function renewalStaleReasons(row: Pick<PortalRenewalRow, "timing" | "fee">, firmName: string, now: Date): string[] {
+  const reasons: string[] = [];
+  const timing = row.timing;
+  if (timing) {
+    if (timing.status && timing.status !== "approved") {
+      reasons.push(`${firmName} withdrew this IRCC timing after the reminder was set.`);
+    } else if (timing.source_review === "suspended") {
+      reasons.push("The official page for this timing is suspended from use while it’s reviewed.");
+    } else if (timing.source_review === "review_due" || (timing.source_next_review && new Date(timing.source_next_review).getTime() < now.getTime())) {
+      reasons.push("The official page for this timing is due for review.");
+    }
+    if (timing.source_change === "change_detected") reasons.push("The official page has changed since this timing was checked.");
+    if (timing.source_attempt === "failed" || timing.source_attempt === "blocked" || timing.source_attempt === "partial") {
+      reasons.push("The last check of the official page didn’t complete.");
+    }
+    if (olderThanAYear(timing.checked_on, now)) reasons.push(`This timing was last checked on ${renewalDate(timing.checked_on)}, more than a year ago.`);
+  }
+  if (row.fee && olderThanAYear(row.fee.retrieved_at, now)) reasons.push("The fee was taken from the IRCC fee list more than a year ago.");
+  return reasons;
+}
+
 /** The client's renewal reminders, in their words. Rows that aren't shaped as expected are left out. */
-export function portalRenewals(data: unknown, firmName: string, timeZone: string): PortalRenewalView[] {
+/** `now` turns on the stale-source check (DES-04); the portal's loader always passes it. */
+export function portalRenewals(data: unknown, firmName: string, timeZone: string, now?: Date): PortalRenewalView[] {
   if (!Array.isArray(data)) return [];
   return data.flatMap((raw): PortalRenewalView[] => {
     const row = raw as Partial<PortalRenewalRow> | null;
@@ -197,6 +242,10 @@ export function portalRenewals(data: unknown, firmName: string, timeZone: string
             }
           : null,
         fee: fee && row.fee ? { text: `Government fee: ${fee}`, href: row.fee.source_url } : null,
+        ...(() => {
+          const reasons = now ? renewalStaleReasons({ timing: row.timing ?? null, fee: fee ? (row.fee ?? null) : null }, firmName, now) : [];
+          return reasons.length ? { stale: reasons } : {};
+        })(),
       },
     ];
   });
