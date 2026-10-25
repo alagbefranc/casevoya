@@ -1015,3 +1015,12 @@ MIG follow-ups (gap #187, Francis's MIG decision 2), branch `feat/mig-followups`
 * **Redefines** `public.set_migration_kind` and `public.save_migration_mapping` (latest `20261025385100_mig_import_kinds_evaluate.sql`), each copied unchanged except for one `perform app.migration_refuse_mixed(b.headers)` after its state check. The upload (`src/modules/migration/actions.ts`) now calls `set_migration_kind` for every kind, clients and matters included, and discards the staged batch when it refuses.
 
 Tested in `tests/migration-followups.rls.test.ts` (the detection, refusal at staging for every kind chosen with nothing taken, refusal at mapping, a one-kind file through; and `imported_record_provenance` for imported key dates, relationships and opening balances, staff only, no values, no other firm) and `tests/migration-followups-present.test.tsx`.
+
+## Viewing an imported matter doesn't block its rollback (`20261025520000`, not applied on the live project)
+
+DES-04 follow-up (#237 live checks), branch `fix/des-billing-call`. Additive; nothing seeded. Opening a matter reads `public.matter_inbound_address`, which makes the matter's reply address (`matter_reply_addresses`) on first use; for an imported matter that row made the rollback refuse ("1 new matter reply addresses linked to imported records since the import").
+
+* **Redefines** `app.migration_rollback_blockers` (latest `20261025385200_mig_import_kinds_commit.sql`): the `public.matter_reply_addresses.matter_id` count is skipped while no `email_deliveries` or `inbound_emails` row names one of the batch's matters (mail out uses the reply address as Reply-To; mail in arrives on it). Otherwise unchanged; a used reply address still refuses.
+* **Redefines** `public.rollback_migration_batch` (latest `20261025385200`): deletes the batch's matters' `matter_reply_addresses` rows before the matters. Otherwise unchanged.
+
+Tested in `tests/migration-import.rls.test.ts` (opening the matter then rolling back succeeds and removes the reply address; with mail received on the matter the rollback still refuses and keeps it).

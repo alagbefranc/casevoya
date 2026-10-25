@@ -280,6 +280,23 @@ export type DisputeFact = { number: string; status: string; evidenceDueBy: strin
 
 const OPEN_DISPUTE = new Set(["needs_response", "warning_needs_response"]);
 
+/** Each invoice's latest card payment attempt (a later one, such as a success, replaces a failure). */
+export function latestPayments(payments: readonly PaymentFact[]): Map<string, PaymentFact> {
+  const latest = new Map<string, PaymentFact>();
+  for (const row of payments) {
+    const seen = latest.get(row.invoiceId);
+    if (!seen || row.updatedAt > seen.updatedAt) latest.set(row.invoiceId, row);
+  }
+  return latest;
+}
+
+/** A failed or canceled card attempt, in a few words; null for any other status. */
+export function failedPaymentWords(status: string): string | null {
+  if (status === "canceled") return "payment canceled";
+  if (status === "failed") return "payment failed or declined";
+  return null;
+}
+
 /**
  * Card payments whose latest attempt on an invoice failed or was canceled (Stripe's signed event
  * moved them; a later success clears it), and disputes waiting for evidence. Null when none.
@@ -291,18 +308,14 @@ export function failedPaymentAlert(input: {
   now: Date;
   timeZone: string;
 }): StateAlertData | null {
-  const latest = new Map<string, PaymentFact>();
-  for (const row of input.payments) {
-    const seen = latest.get(row.invoiceId);
-    if (!seen || row.updatedAt > seen.updatedAt) latest.set(row.invoiceId, row);
-  }
-  const failed = [...latest.values()].filter((row) => row.status === "failed" || row.status === "canceled").sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const latest = latestPayments(input.payments);
+  const failed = [...latest.values()].filter((row) => failedPaymentWords(row.status) !== null).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const disputes = (input.disputes ?? []).filter((row) => OPEN_DISPUTE.has(row.status) && (!row.evidenceDueBy || Date.parse(row.evidenceDueBy) > input.now.getTime()));
   if (!failed.length && !disputes.length) return null;
   const items = [
     ...failed.map((row) => {
       const invoice = input.invoices.get(row.invoiceId);
-      return `${invoice?.number ?? "Invoice"}${invoice?.client ? ` (${invoice.client})` : ""}: ${row.status === "canceled" ? "payment canceled" : "payment failed or declined"} ${day(row.updatedAt, input.timeZone)}`;
+      return `${invoice?.number ?? "Invoice"}${invoice?.client ? ` (${invoice.client})` : ""}: ${failedPaymentWords(row.status)} ${day(row.updatedAt, input.timeZone)}`;
     }),
     ...disputes.map((row) => `Dispute ${row.number}: needs evidence${row.evidenceDueBy ? ` by ${day(row.evidenceDueBy, input.timeZone)}` : ""}`),
   ];
