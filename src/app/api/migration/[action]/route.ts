@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { isMigrationAction, runMigrationAction, uploadMigrationFile, type MigrationResult } from "@/modules/migration/actions";
+import { migrationReportResponse } from "@/modules/migration/report-download";
 
 /**
  * Migration import (T044): `/api/migration/upload` takes the CSV as multipart form data and parses
- * it here (5 MB, 5,000 rows); `map`, `decide`, `commit`, `rollback` and `discard` take JSON. The
+ * it here (5 MB, 5,000 rows); `map`, `decide`, `pilot`, `signoff`, `commit`, `rollback` and `discard` take JSON. The
  * database functions decide every write as the signed-in firm owner.
  */
 function reply(result: MigrationResult) {
@@ -12,6 +13,14 @@ function reply(result: MigrationResult) {
     return NextResponse.json(result, { status });
   }
   return NextResponse.json(result);
+}
+
+/** MIG-02: `/api/migration/report?batch=<id>&format=csv|pdf`, a finished import's run report (firm owner). */
+export async function GET(request: Request, { params }: { params: Promise<{ action: string }> }) {
+  const { action } = await params;
+  if (action !== "report") return NextResponse.json({ error: "Not found." }, { status: 404 });
+  const url = new URL(request.url);
+  return migrationReportResponse(url.searchParams.get("batch") ?? "", url.searchParams.get("format") === "pdf" ? "pdf" : "csv");
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ action: string }> }) {

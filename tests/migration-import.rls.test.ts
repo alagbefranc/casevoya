@@ -144,16 +144,24 @@ async function planHash(ctx: Firm, batch: string) {
   return (await db.query<{ plan_hash: string }>(`select plan_hash from public.migration_batches where id = $1`, [batch])).rows[0].plan_hash;
 }
 
-async function commit(ctx: Firm, batch: string) {
-  const hash = await planHash(ctx, batch);
-  await as(ctx);
-  const begun = await rpc<{ ok: boolean; reason?: string }>(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]);
-  if (!begun.ok) return begun;
+async function chunks(ctx: Firm, batch: string) {
   let left = 1;
   while (left > 0) {
     const chunk = await rpc<{ remaining: number }>(`public.commit_migration_chunk($1, $2, 2)`, [ctx.orgId, batch]);
     left = chunk.remaining;
   }
+}
+
+/** MIG-02: a pilot (the first matter), the firm owner's sign-off, then the full run. */
+async function commit(ctx: Firm, batch: string) {
+  const hash = await planHash(ctx, batch);
+  await as(ctx);
+  const begun = await rpc<{ ok: boolean; reason?: string }>(`public.begin_migration_pilot($1, $2, $3, 1)`, [ctx.orgId, batch, hash]);
+  if (!begun.ok) return begun;
+  await chunks(ctx, batch);
+  await rpc(`public.sign_off_migration_pilot($1, $2, 'Synthetic pilot checked')`, [ctx.orgId, batch]);
+  await rpc(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]);
+  await chunks(ctx, batch);
   return begun;
 }
 
@@ -310,7 +318,7 @@ describe("migration import: dry run, values and duplicates", () => {
     // Sign-off waits for every decision.
     const hash = await planHash(ctx, batch);
     await as(ctx);
-    await expectDbError(() => rpc(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]), /decide every possible match/);
+    await expectDbError(() => rpc(`public.begin_migration_pilot($1, $2, $3)`, [ctx.orgId, batch, hash]), /decide every possible match/);
 
     await rpc(`public.decide_migration_duplicate($1, $2, 2, true)`, [ctx.orgId, batch]);
     const decided = await rpc<Record<string, number>>(`public.decide_migration_duplicate($1, $2, 6, false)`, [ctx.orgId, batch]);
@@ -341,11 +349,11 @@ describe("migration import: sign-off", () => {
     // Step-up and the plan hash are required.
     const hash = await planHash(ctx, batch);
     await as(ctx, "owner", false);
-    await expectDbError(() => rpc(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]), /firm owner step-up is required/);
+    await expectDbError(() => rpc(`public.begin_migration_pilot($1, $2, $3)`, [ctx.orgId, batch, hash]), /firm owner step-up is required/);
     await as(ctx, "manager");
-    await expectDbError(() => rpc(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]), /firm owner step-up is required/);
+    await expectDbError(() => rpc(`public.begin_migration_pilot($1, $2, $3)`, [ctx.orgId, batch, hash]), /firm owner step-up is required/);
     await as(ctx);
-    const stale = await rpc<{ ok: boolean; reason: string }>(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, "0".repeat(64)]);
+    const stale = await rpc<{ ok: boolean; reason: string }>(`public.begin_migration_pilot($1, $2, $3)`, [ctx.orgId, batch, "0".repeat(64)]);
     expect(stale).toEqual({ ok: false, reason: "plan_changed" });
 
     await commit(ctx, batch);
@@ -536,9 +544,9 @@ describe("migration import: rollback", () => {
     await dryRun(ctx, batch);
     const hash = await planHash(ctx, batch);
     await as(ctx);
-    await rpc(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]);
+    await rpc(`public.begin_migration_pilot($1, $2, $3, 2)`, [ctx.orgId, batch, hash]);
     const first = await rpc<{ remaining: number; done: number }>(`public.commit_migration_chunk($1, $2, 1)`, [ctx.orgId, batch]);
-    expect(first).toMatchObject({ remaining: 1, done: 1, status: "committing" });
+    expect(first).toMatchObject({ remaining: 1, done: 1, status: "committing", phase: "pilot" });
     // The consultant leaves before the rest is created: create_engaged_matter refuses, nothing of this chunk stays.
     await asMaintenance(db);
     await db.query(`update public.memberships set status = 'suspended' where id = $1`, [ctx.consultantMembership]);
