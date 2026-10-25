@@ -15,6 +15,8 @@
  */
 import type { CSSProperties, ReactNode } from "react";
 import { Empty, Icon, Sep } from "./frame";
+import { NoAccessPanel } from "./state-views";
+import { deniedView } from "@/modules/sheet/states-present";
 import { ScheduledActionsHead, ScheduledNewButton, ScheduledNotes, ScheduledRowActions } from "./scheduled-reports";
 import type { ScheduledLive, ScheduledRowLive } from "@/modules/sheet/scheduled-reports-present";
 
@@ -284,10 +286,16 @@ function Freshness({ text, n }: { text?: string | null; n: number }) {
   );
 }
 
+/** DES-04: a tab this role can't open, in the shared permission-denied view. */
 function Denied({ data, n }: { data: { title: string; copy: string }; n: number }) {
+  return <NoAccessPanel n={n} data={deniedView(data.title, data.copy)} />;
+}
+
+/** No figures came back for an allowed tab: say so rather than showing a blank panel. */
+function NothingLoaded({ n }: { n: number }) {
   return (
     <div className={"panel rv"} style={i(n)}>
-      <Empty art={"privacy-shield"} title={data.title} copy={data.copy} />
+      <Empty art={"error-unplugged"} title={"These figures couldn’t load"} copy={"Nothing was changed. Reload the page to try again."} />
     </div>
   );
 }
@@ -399,7 +407,7 @@ function Operations({ data, ops }: { data: ReportsData; ops: ReportsOps | null |
         ))}
       </div>
       {data.denied || !ops ? (
-        <Denied data={data.denied ?? { title: "Nothing to show", copy: "" }} n={2} />
+        data.denied ? <Denied data={data.denied} n={2} /> : <NothingLoaded n={2} />
       ) : (
         <div className={"fp-g2 rv"} style={i(2)}>
           <div>
@@ -515,7 +523,7 @@ function Money({ data, money }: { data: ReportsData; money: ReportsMoney | null 
         </div>
       ) : null}
       {data.denied || !money ? (
-        <Denied data={data.denied ?? { title: "Nothing to show", copy: "" }} n={2} />
+        data.denied ? <Denied data={data.denied} n={2} /> : <NothingLoaded n={2} />
       ) : (
         <div className={"fp-g2 rv"} style={i(2)}>
           <div>
@@ -612,7 +620,7 @@ function Outcomes({ data, outcomes }: { data: ReportsData; outcomes: ReportsOutc
         </div>
       </div>
       {data.denied || !outcomes ? (
-        <Denied data={data.denied ?? { title: "Nothing to show", copy: "" }} n={2} />
+        data.denied ? <Denied data={data.denied} n={2} /> : <NothingLoaded n={2} />
       ) : (
         <>
           {outcomes.rows.length ? (
