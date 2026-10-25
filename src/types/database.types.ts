@@ -14543,6 +14543,30 @@ export type Database = {
         Returns: boolean
       }
       service_finish_deletion_job: { Args: { p_job_id: string }; Returns: string }
+      scheduled_reports_overview: { Args: { p_organization_id: string }; Returns: Json }
+      save_scheduled_report: {
+        Args: {
+          p_organization_id: string
+          p_schedule_id: string | null
+          p_title: string
+          p_tab: string
+          p_range: string
+          p_frequency: string
+          p_weekday: number | null
+          p_month_day: number | null
+          p_send_time: string
+          p_recipients: string[]
+          p_expected_version?: number | null
+        }
+        Returns: string
+      }
+      set_scheduled_report_paused: {
+        Args: { p_schedule_id: string; p_paused: boolean }
+        Returns: boolean
+      }
+      delete_scheduled_report: { Args: { p_schedule_id: string }; Returns: boolean }
+      run_scheduled_report_now: { Args: { p_schedule_id: string }; Returns: Json }
+      service_run_scheduled_reports: { Args: { p_limit?: number }; Returns: Json }
       subscription_continuity: { Args: { p_organization_id: string }; Returns: Json }
       subscription_cancel_allowed: {
         Args: { p_organization_id: string }

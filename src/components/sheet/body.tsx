@@ -57,6 +57,7 @@ import { NotificationsHeader, SheetNotifications } from "@/components/sheet/desi
 import { loadSheetNotifications } from "@/modules/sheet/notifications-load";
 import { LeadScreen, PipelineScreen } from "@/components/sheet/lead-screens";
 import { ReportsExportDialog, ReportsHeader, SheetReports } from "@/components/sheet/designer/reports";
+import { ScheduleReportDialog } from "@/components/sheet/designer/scheduled-reports";
 import { loadSheetReports } from "@/modules/sheet/reports-load";
 import { QueueHeader, SheetQueue } from "@/components/sheet/designer/queue";
 import { loadSheetQueue } from "@/modules/sheet/queue-load";
@@ -267,14 +268,19 @@ export async function SheetBody({
   }
   // Reports (T041): Operations, Money, Processing and outcomes, Scheduled. Each tab is role-gated.
   if (page === "reports" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, reports } = await loadSheetReports(access.staff, query);
+    const { chrome, reports, scheduleDialog } = await loadSheetReports(access.staff, query);
     return (
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={chrome.sidebar}
           header={<ReportsHeader tab={reports.tab} pills={reports.pills} pillTitles={reports.pillTitles} />}
           statusbar={chrome.statusbar}
-          after={<ReportsExportDialog data={reports.dialog} />}
+          after={
+            <>
+              <ReportsExportDialog data={reports.dialog} />
+              {scheduleDialog ? <ScheduleReportDialog data={scheduleDialog} /> : null}
+            </>
+          }
         >
           <SheetReports data={reports} />
         </SheetFrame>

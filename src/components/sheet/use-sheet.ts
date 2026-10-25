@@ -124,6 +124,7 @@ import { closeCrumbMenu, toggleCrumbMenu } from "./crumb-menu";
 import { runQueueReassign, syncQueuePicked } from "./queue-acts";
 import { runNewTask, syncNewTask } from "./new-task-act";
 import { runReportExport } from "./report-acts";
+import { runScheduledReportAct, syncScheduleDialog } from "./scheduled-report-acts";
 import { runExportAct } from "./export-acts";
 import { runMigrationAct, syncMigrationCheck } from "./migration-acts";
 import { inviteFromEdit, openPersonEdit, runPersonEdit } from "./person-edit-act";
@@ -161,6 +162,7 @@ import { reopenFirmDialog, runFirmSave } from "./settings-firm-acts";
 import { bindOffboardHold, mountMember, mountOffboard, reopenStaffAdmin, runContinuitySave, runMemberAct } from "./settings-staff-admin-acts";
 import { prepareTransferDialog, runFirmTransferAct } from "./firm-transfer-acts";
 import { stepUpHref } from "@/lib/auth/mfa-step";
+import { presetChipLabel } from "@/modules/sheet/filter-preset";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
 const NEW_MATTER = "/sheet/matters?new=1";
@@ -788,6 +790,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         button.setAttribute("aria-busy", "true");
         void run().finally(() => button.removeAttribute("aria-busy"));
       };
+      // REP-03: Reports > Scheduled (New schedule, Edit, Save, Pause or Resume, Run now (test), Delete).
+      const schedAct = target.closest<HTMLElement>("[data-sched-act]");
+      if (schedAct && root.contains(schedAct)) {
+        event.preventDefault();
+        busyRun(schedAct, () => runScheduledReportAct(schedAct, root, router, openDialog));
+        return;
+      }
       // FIN-09 / FIN-12: manual payments, evidence files, reconciliation items and bank account records.
       const manualOpen = target.closest<HTMLElement>("[data-mp-open]");
       if (manualOpen && root.contains(manualOpen)) {
@@ -1487,6 +1496,16 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (filters?.contains(input)) {
         const preset = new URLSearchParams(window.location.search).get("q");
         if (preset && !input.value) input.value = preset;
+        // REP-01: `?f=overdue` (a Reports card's link) turns that chip on, as a click would.
+        const chips = [...filters.querySelectorAll<HTMLElement>(".fchip")];
+        const chipLabel = presetChipLabel(FILTER_TOKEN, chips.map((chip) => chip.textContent?.trim() ?? ""), new URLSearchParams(window.location.search).get("f"));
+        if (chipLabel) {
+          chips.forEach((chip) => {
+            const on = chip.textContent?.trim() === chipLabel;
+            chip.classList.toggle("on", on);
+            chip.setAttribute("aria-pressed", String(on));
+          });
+        }
         input.addEventListener("input", applyFilters, listen);
         applyFilters();
         return;
@@ -1742,6 +1761,9 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       }, listen);
     }
     bindPrivacyResponseControls(root, ac.signal);
+    // REP-03: the schedule dialog shows the right day field and only staff who see the chosen report.
+    const schedDialog = root.querySelector<HTMLDialogElement>("dialog#dlgSched");
+    if (schedDialog) schedDialog.addEventListener("change", () => syncScheduleDialog(schedDialog), listen);
     // ?dlg=review&doc= (back from step-up) reopens the document review with what was typed.
     if (root.querySelector("dialog#dlgDocRev")) window.setTimeout(() => reopenDocReview(root, openDialog), 300);
 
