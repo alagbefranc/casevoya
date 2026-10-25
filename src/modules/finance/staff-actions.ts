@@ -6,6 +6,7 @@ import { isUuid } from "@/lib/tenant/context";
 import { accountCreateParams, ACCOUNT_SESSION_COMPONENTS, retrieveAccountStatus, syncStatusArgs } from "@/modules/finance/stripe-account";
 import { financeError, readNewInvoice, readRefund, refundError, type NewInvoiceFields, type RefundFields } from "@/modules/sheet/finance-present";
 import { creditError, readCredit, type CreditFields } from "@/modules/finance/credits-present";
+import { connectIdempotencyKey, disconnectError, readDisconnect, type UnlinkBlocker } from "@/modules/finance/connect-present";
 
 /**
  * The Sheet's finance actions, run as the signed-in staff member. Who may do what is the
@@ -212,11 +213,14 @@ export async function connectStripeAccount(input: { organizationId: string }): P
   const stripe = stripeServer();
   if (!stripe) return { error: NOT_CONFIGURED };
   const org = await supabase.from("organizations").select("display_name").eq("id", input.organizationId).maybeSingle();
+  // After a disconnect, a new key: Stripe would otherwise hand back the disconnected account.
+  const ended = await supabase.from("firm_payment_account_history").select("id", { count: "exact", head: true }).eq("organization_id", input.organizationId);
+  if (ended.error) return { error: "Casevoya couldn’t check the firm’s earlier Stripe accounts. Try again." };
   let accountId: string;
   try {
     const account = await stripe.v2.core.accounts.create(
       accountCreateParams({ organizationId: input.organizationId, displayName: org.data?.display_name ?? "Firm", email: session.email }),
-      { idempotencyKey: `casevoya-connect-${input.organizationId}` },
+      { idempotencyKey: connectIdempotencyKey(input.organizationId, ended.count ?? 0) },
     );
     if (account.livemode) return { error: "Only a Stripe test-mode account can be connected." };
     accountId = account.id;
@@ -266,4 +270,32 @@ export async function refreshStripeAccount(input: { organizationId: string }): P
   } catch {
     return { error: "Stripe didn’t answer. Try again." };
   }
+}
+
+/**
+ * Disconnects the firm's Stripe account (firm owner, fresh step-up, typed DISCONNECT, a reason):
+ * app.unlink_stripe_account ends the link, keeps it in the history and audits it, or refuses with
+ * what still runs on the account. Stripe is not called: the account isn't deleted or rejected,
+ * Casevoya just stops using it. The firm can then set up a new account. TEST MODE ONLY.
+ */
+export async function disconnectStripeAccount(input: {
+  organizationId: string;
+  accountId: string;
+  confirmation: string;
+  reason: string;
+}): Promise<{ ok: true } | { blockers: UnlinkBlocker[] } | { error: string }> {
+  const read = readDisconnect(input);
+  if ("error" in read) return read;
+  const session = await staffClient(input.organizationId);
+  if ("error" in session) return { error: session.error ?? "Sign in first." };
+  const { data, error } = await session.supabase.rpc("unlink_stripe_account", {
+    p_org: input.organizationId,
+    p_account_id: input.accountId,
+    p_confirmation: read.input.confirmation,
+    p_reason: read.input.reason,
+  });
+  if (error) return { error: disconnectError(error.message) ?? financeError(error.message) };
+  const result = data as { unlinked?: unknown; blockers?: unknown } | null;
+  if (result?.unlinked === true) return { ok: true };
+  return { blockers: Array.isArray(result?.blockers) ? (result.blockers as UnlinkBlocker[]) : [] };
 }
