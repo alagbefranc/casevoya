@@ -842,6 +842,22 @@ Tested in `tests/rep-outcomes.rls.test.ts` (seeded decided matters, RLS scope, s
 
 SEC-01 + SEC-06 follow-up. **Redefines** `app.authorize_privacy_response_download(uuid)` (only definition `20261025280000_sec_privacy_responses.sql`): after the ownership and expiry checks it raises `two-step sign-in is required for this download` when the person has no verified authenticator, and `client step-up required: enter your two-step code` when `app.client_step_up_satisfied()` is false. Otherwise unchanged. Tested in `tests/privacy-responses.rls.test.ts`.
 
+## Scheduled reports (`20261025320000`, `20261025320100`, not applied on the live project)
+
+REP-03 (gap #185), branch `feat/rep-scheduled-reports`.
+
+* `scheduled_reports`: one schedule: `title`, `tab` (`ops` / `money` / `outcomes`), `range_key` (`90d` / `month` / `year`), `frequency` (`weekly` with `weekday` 1 to 7, ISO; `monthly` with `month_day` 1 to 28), `send_time` (local time in the firm's timezone), `paused`, `next_run_at`, `last_run_at`, soft delete (`deleted_at`, `deleted_by`), `created_by`, `updated_by`, `version`. Never deleted; firm and creator immutable. Forced RLS, no policies.
+* `scheduled_report_recipients`: (`schedule_id`, `user_id`) staff of the firm. Forced RLS, no policies.
+* `scheduled_report_runs`: append-only, one per send: `kind` `scheduled` (unique per schedule and `due_at`) or `test` (`run_by`). Forced RLS, no policies.
+* `scheduled_report_deliveries`: append-only, one per recipient of a run: `delivered` with `link` (only `/sheet/reports?tab=…&view=…`, by check constraint) or `skipped` with `skip_reason` (`not_active_staff` / `role_cannot_see_tab`). No report content. Forced RLS, no policies.
+* `app.report_tab_roles(tab)` (equal to `MONEY_ROLES` / `OPS_ROLES` in `reports-present.ts`, tested), `app.user_sees_report_tab(org, user, tab)`, `app.report_schedule_zone(org)`, `app.report_schedule_next_run(org, frequency, weekday, month_day, time, after)`, `app.deliver_scheduled_report(run)` (the recipient recheck), `app.require_report_staff(org)`, `app.managed_scheduled_report(id)`.
+* Staff (MFA): `public.scheduled_reports_overview(org)` (schedules of the tabs the caller sees, staff who could receive each tab, last run counts), `public.save_scheduled_report(...)` (create or edit; the caller and every recipient must see the tab; creator or firm owner; version check), `public.set_scheduled_report_paused(id, paused)`, `public.delete_scheduled_report(id)` (soft), `public.run_scheduled_report_now(id)` (test run, one a minute). Audited `report.schedule_created`, `_updated`, `_paused`, `_resumed`, `_deleted`, `_test_run`, `_sent` (tab, range, frequency, counts only).
+* Service role: `public.service_run_scheduled_reports(limit)`: every due schedule once per due time, then its next time after now.
+* `app.kick_scheduled_reports()` and pg_cron job `casevoya-scheduled-reports` (every 5 minutes, only while one is due): POSTs to `/api/reports/scheduled/run` with the existing mail dispatch Vault secrets.
+* `20261025320100_rep_report_notifications.sql` **redefines** `app.staff_notification_items(uuid, integer)` (latest `20261025100100_task_notifications.sql`): adds a `report` branch (a delivered link for the caller while a role of theirs sees the tab; subject the schedule's name, detail `scheduled` / `test`). Nothing else changes.
+
+Tested in `tests/scheduled-reports.rls.test.ts` and `tests/scheduled-reports.test.tsx`.
+
 ## Service-level report (`20261025360000`, not applied on the live project)
 
 ADM-04 (gap #186), branch `feat/adm-service-levels`. Additive; no existing function is redefined.
