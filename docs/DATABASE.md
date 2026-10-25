@@ -888,3 +888,14 @@ MIG-02 (gap #187), branch `feat/mig-pilot-report`. Extends the migration import 
   * `app.migration_after_chunk`: a finished pilot sets `pilot_completed_at` and `pilot_counts` (audited `migration.pilot_completed`) and returns status `pilot_done`; the end of the full run also writes `run_report`. The totals check, exception report and purge are unchanged.
 
 Tested in `tests/migration-pilot.rls.test.ts` (and `tests/migration-import.rls.test.ts`, whose sign-off now goes through a pilot) and `tests/migration-pilot-present.test.tsx`.
+
+## Service-level report (`20261025360000`, not applied on the live project)
+
+ADM-04 (gap #186), branch `feat/adm-service-levels`. Additive; no existing function is redefined.
+
+* `support_response_records`: one support request a firm sent Casevoya (`ticket_ref`, unique per firm; `received_at`; `first_response_at`, null while waiting, never before `received_at`; `recorded_by_user_id`, a platform admin). Metadata only. Forced RLS; select for the firm's owners (`app.actor_is_firm_owner`) and platform admins (`app.is_platform_admin`, aal2); no direct writes; no delete or truncate; row-change audit.
+* `app.platform_ops_actor(uuid)`: a signed-in platform admin at aal2 (their id), or the service role naming a `platform_admins` user (that id); anyone else `42501`.
+* `public.record_support_response(firm, ticket_ref, received_at, first_response_at, recorded_by)`: records or corrects one request (not in the future, reply not before receipt); audited `service_level.support_response_recorded` / `.support_response_updated`.
+* `public.service_level_report(firm, months)`: 1 to 24 months in the firm's timezone, newest first: received, answered, waiting, median and longest seconds to first reply; `uptime` is `{"measured": false}`. The firm's owner (aal2, current firm), a platform admin (aal2) or the service role; the latter two audited `service_level.report_read` on the firm.
+
+Ops wrapper: `scripts/ops/service-levels.mjs` (record, report). Tested in `tests/service-levels.rls.test.ts` and `tests/service-levels-present.test.tsx`.

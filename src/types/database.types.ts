@@ -11621,6 +11621,53 @@ export type Database = {
           },
         ]
       }
+      support_response_records: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          first_response_at: string | null
+          id: string
+          organization_id: string
+          received_at: string
+          recorded_by_user_id: string
+          ticket_ref: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          first_response_at?: string | null
+          id?: string
+          organization_id: string
+          received_at: string
+          recorded_by_user_id: string
+          ticket_ref: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          first_response_at?: string | null
+          id?: string
+          organization_id?: string
+          received_at?: string
+          recorded_by_user_id?: string
+          ticket_ref?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_response_records_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_dependencies: {
         Row: {
           created_at: string
@@ -15540,6 +15587,16 @@ export type Database = {
         }
         Returns: string
       }
+      record_support_response: {
+        Args: {
+          p_first_response_at: string | null
+          p_organization_id: string
+          p_received_at: string
+          p_recorded_by?: string | null
+          p_ticket_ref: string
+        }
+        Returns: string
+      }
       record_matter_engagement: {
         Args: {
           p_agreement_locator: string | null
@@ -16456,6 +16513,10 @@ export type Database = {
           p_organization_id: string
           p_plan: Database["public"]["Enums"]["subscription_plan"]
         }
+        Returns: Json
+      }
+      service_level_report: {
+        Args: { p_months?: number; p_organization_id: string }
         Returns: Json
       }
       subscription_entitlements: {
