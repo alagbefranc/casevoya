@@ -96,6 +96,6 @@ describe("Product analytics policy", () => {
   it("tells the firm in Settings that Casevoya runs no product analytics and what any would exclude", () => {
     expect(PRODUCT_ANALYTICS_ENABLED).toBe(false);
     expect(PRODUCT_ANALYTICS_COPY.detail).toMatch(/^Casevoya runs no product analytics\./);
-    for (const word of ["immigration narratives", "identity numbers", "uploaded documents", "message bodies"]) expect(PRODUCT_ANALYTICS_COPY.detail).toContain(word);
+    for (const word of ["immigration narratives", "identity numbers", "uploaded documents", "message bodies", "names", "contact details", "free text"]) expect(PRODUCT_ANALYTICS_COPY.detail).toContain(word);
   });
 });

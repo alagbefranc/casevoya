@@ -392,13 +392,20 @@ describe("regulated actions: the owner acts as a licensed consultant", () => {
          values ($1, 1, 'FICTIONAL fixture. Not an immigration requirement.') returning id`,
         [definition.rows[0].id],
       );
+      // SRC-03: an approval is recorded only through Source review (app.review_rule_version); a
+      // direct insert is refused even for the owner. The owner's membership still counts as a
+      // licensed reviewer (checked here from a maintenance session, which the gate allows).
       await as(ctx.owner, ctx.orgId);
-      await db.query(
-        `insert into public.professional_reviews (
-           organization_id, rule_version_id, reviewer_membership_id, decision, decided_at, rationale, rule_content_revision
-         ) values ($1, $2, $3, 'approved', '2026-10-16T15:00:00Z', 'FICTIONAL review.', 1)`,
-        [ctx.orgId, ruleVersion.rows[0].id, ctx.ownerMembership],
-      );
+      const insertReview = () =>
+        db.query(
+          `insert into public.professional_reviews (
+             organization_id, rule_version_id, reviewer_membership_id, decision, decided_at, rationale, rule_content_revision
+           ) values ($1, $2, $3, 'approved', '2026-10-16T15:00:00Z', 'FICTIONAL review.', 1)`,
+          [ctx.orgId, ruleVersion.rows[0].id, ctx.ownerMembership],
+        );
+      await expectDbError(insertReview, /only in Source review/);
+      await asMaintenance(db);
+      await insertReview();
 
       // The staff directory still says whether a licence is on file.
       await as(ctx.owner, ctx.orgId);
