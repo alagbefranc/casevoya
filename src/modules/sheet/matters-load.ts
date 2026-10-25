@@ -29,6 +29,7 @@ import {
   type NewMatterDialogData,
 } from "@/modules/sheet/new-matter";
 import {
+  MATTER_STAGES,
   matterMatches,
   mattersTitle,
   plusDays,
@@ -125,7 +126,7 @@ export async function loadSheetMatters(
   const onMatter = new Set((mineParties.data ?? []).map((row) => row.matter_id));
   const isMine = (row: (typeof rows)[number]) => row.responsible_consultant_membership_id === staff.membershipId || onMatter.has(row.id);
 
-  const visible = rows.filter((row) =>
+  const matched = rows.filter((row) =>
     matterMatches(
       {
         onHold: row.on_hold,
@@ -142,6 +143,9 @@ export async function loadSheetMatters(
       today,
     ),
   );
+  // REP-01: `?stage=` (a Reports stage-ageing row or readiness card) narrows the list to one stage.
+  const stage = (MATTER_STAGES as readonly string[]).includes(query.stage ?? "") ? (query.stage as string) : null;
+  const visible = stage ? matched.filter((row) => row.stage === stage) : matched;
   const page = visible.slice(0, limit);
 
   const packIds = [
@@ -203,7 +207,7 @@ export async function loadSheetMatters(
   });
 
   const active = rows.filter((row) => row.stage !== "closed");
-  const viewTitle = mattersTitle(query.view);
+  const viewTitle = stage ? stageLabel(stage) : mattersTitle(query.view);
   const data: MattersData = {
     title: viewTitle,
     counts: {
@@ -220,7 +224,7 @@ export async function loadSheetMatters(
     total: visible.length,
     more:
       visible.length > limit
-        ? `?${new URLSearchParams({ ...(query.view ? { view: query.view } : {}), limit: String(limit + MATTERS_PAGE) })}`
+        ? `?${new URLSearchParams({ ...(query.view ? { view: query.view } : {}), ...(stage ? { stage } : {}), limit: String(limit + MATTERS_PAGE) })}`
         : null,
     empty: matters.error
       ? { kind: "error" }
