@@ -1,0 +1,263 @@
+{
+  "capturedAt": "2026-10-25T12:26:57.686Z",
+  "pages": [
+    {
+      "url": "https://ircc.canada.ca/english/information/fees/fees.asp",
+      "publisher": "Immigration, Refugees and Citizenship Canada",
+      "title": "Citizenship and immigration application fees: Fee list",
+      "finalUrl": "https://ircc.canada.ca/english/information/fees/fees.asp",
+      "httpStatus": 200,
+      "retrievedAt": "2026-10-25T12:26:55.805Z",
+      "sha256": "1d31eff4ec4fb9f0779448510d732112d9be010162ff8e99f72c84112b39a865",
+      "modifiedOn": "2026-09-21",
+      "lastAmendedOn": null,
+      "currentTo": null
+    },
+    {
+      "url": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html",
+      "publisher": "Justice Laws (Department of Justice Canada)",
+      "title": "Immigration and Refugee Protection Regulations (SOR/2002-227)",
+      "finalUrl": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html",
+      "httpStatus": 200,
+      "retrievedAt": "2026-10-25T12:26:56.923Z",
+      "sha256": "09e9859df8b12deca13cfd9d0d09fe90e6091556fa8cc03674441fe6cf21b5fc",
+      "modifiedOn": "2026-10-15",
+      "lastAmendedOn": "2026-07-15",
+      "currentTo": "2026-09-30"
+    },
+    {
+      "url": "https://laws-lois.justice.gc.ca/eng/acts/I-2.5/FullText.html",
+      "publisher": "Justice Laws (Department of Justice Canada)",
+      "title": "Immigration and Refugee Protection Act (S.C. 2001, c. 27)",
+      "finalUrl": "https://laws-lois.justice.gc.ca/eng/acts/I-2.5/FullText.html",
+      "httpStatus": 200,
+      "retrievedAt": "2026-10-25T12:26:57.645Z",
+      "sha256": "0f53399b40fb86595f5910954d0e28b2299b9109246684981500dc3848067121",
+      "modifiedOn": "2026-10-15",
+      "lastAmendedOn": "2026-03-26",
+      "currentTo": "2026-09-30"
+    }
+  ],
+  "claims": [
+    {
+      "key": "CA.FEES.STUDY_PERMIT",
+      "program": "study_permit",
+      "jurisdiction": "CA",
+      "claim": "IRCC fee: Study permit (including extensions) – per person.",
+      "page": "https://ircc.canada.ca/english/information/fees/fees.asp",
+      "sourceUrl": "https://ircc.canada.ca/english/information/fees/fees.asp#temporary",
+      "section": "Temporary Residence > Study Permits (including extensions) > Study permit (including extensions) – per person",
+      "value": "$150.00 CAD",
+      "excerpt": "Study Permits (including extensions): Study permit (including extensions) – per person: 150.00 ($CAN)"
+    },
+    {
+      "key": "CA.FEES.WORK_PERMIT",
+      "program": "work_permit",
+      "jurisdiction": "CA",
+      "claim": "IRCC fee: Work permit (including extensions) – per person.",
+      "page": "https://ircc.canada.ca/english/information/fees/fees.asp",
+      "sourceUrl": "https://ircc.canada.ca/english/information/fees/fees.asp#temporary",
+      "section": "Temporary Residence > Work Permits (including extensions) > Work permit (including extensions) – per person",
+      "value": "$155.00 CAD",
+      "excerpt": "Work Permits (including extensions): Work permit (including extensions) – per person: 155.00 ($CAN)"
+    },
+    {
+      "key": "CA.FEES.OPEN_WORK_PERMIT_HOLDER",
+      "program": "work_permit",
+      "jurisdiction": "CA",
+      "claim": "IRCC fee: Open work permit holder.",
+      "page": "https://ircc.canada.ca/english/information/fees/fees.asp",
+      "sourceUrl": "https://ircc.canada.ca/english/information/fees/fees.asp#temporary",
+      "section": "Temporary Residence > Work Permits (including extensions) > Open work permit holder",
+      "value": "$100.00 CAD",
+      "excerpt": "Work Permits (including extensions): Open work permit holder: 100.00 ($CAN)"
+    },
+    {
+      "key": "CA.FEES.VISITOR_VISA",
+      "program": "visitor_visa",
+      "jurisdiction": "CA",
+      "claim": "IRCC fee: Visitor visa - per person.",
+      "page": "https://ircc.canada.ca/english/information/fees/fees.asp",
+      "sourceUrl": "https://ircc.canada.ca/english/information/fees/fees.asp#temporary",
+      "section": "Temporary Residence > Visitor visa (including super visa) or extend your stay in Canada > Visitor visa - per person",
+      "value": "$100.00 CAD",
+      "excerpt": "Visitor visa (including super visa) or extend your stay in Canada: Visitor visa - per person: 100.00 ($CAN)"
+    },
+    {
+      "key": "CA.FEES.VISITOR_EXTENSION",
+      "program": "visitor_visa",
+      "jurisdiction": "CA",
+      "claim": "IRCC fee: Extend your stay as a visitor – per person.",
+      "page": "https://ircc.canada.ca/english/information/fees/fees.asp",
+      "sourceUrl": "https://ircc.canada.ca/english/information/fees/fees.asp#temporary",
+      "section": "Temporary Residence > Visitor visa (including super visa) or extend your stay in Canada > Extend your stay as a visitor – per person",
+      "value": "$100.00 CAD",
+      "excerpt": "Visitor visa (including super visa) or extend your stay in Canada: Extend your stay as a visitor – per person: 100.00 ($CAN)"
+    },
+    {
+      "key": "CA.FEES.ECONOMIC_PR_APPLICATION",
+      "program": "express_entry",
+      "jurisdiction": "CA",
+      "claim": "IRCC fee, Economic immigration (including Express Entry): Your application (the page says this amount includes the processing fee and the right of permanent residence fee).",
+      "page": "https://ircc.canada.ca/english/information/fees/fees.asp",
+      "sourceUrl": "https://ircc.canada.ca/english/information/fees/fees.asp#permanent",
+      "section": "Permanent Residence > Economic immigration (including Express Entry) > Your application",
+      "value": "$1,590.00 CAD",
+      "excerpt": "Economic immigration (including Express Entry): Your application: 1,590.00 ($CAN)"
+    },
+    {
+      "key": "CA.FEES.SPOUSE_PARTNER_SPONSORSHIP",
+      "program": "spousal_sponsorship",
+      "jurisdiction": "CA",
+      "claim": "IRCC fee, Spouse, partner or children (abroad): Sponsor your spouse or partner (the page says this amount includes the sponsorship fee, the processing fee and the right of permanent residence fee).",
+      "page": "https://ircc.canada.ca/english/information/fees/fees.asp",
+      "sourceUrl": "https://ircc.canada.ca/english/information/fees/fees.asp#sponsorship",
+      "section": "Family sponsorship > Spouse, partner or children (abroad) > Sponsor your spouse or partner",
+      "value": "$1,260.00 CAD",
+      "excerpt": "Spouse, partner or children (abroad): Sponsor your spouse or partner: 1,260.00 ($CAN)"
+    },
+    {
+      "key": "CA.FEES.RPRF",
+      "program": null,
+      "jurisdiction": "CA",
+      "claim": "IRCC fee: Right of permanent residence fee.",
+      "page": "https://ircc.canada.ca/english/information/fees/fees.asp",
+      "sourceUrl": "https://ircc.canada.ca/english/information/fees/fees.asp#rprf",
+      "section": "Permanent Residence > Right of permanent residence fee > Right of permanent residence fee",
+      "value": "$600.00 CAD",
+      "excerpt": "Right of permanent residence fee: Right of permanent residence fee: 600.00 ($CAN)"
+    },
+    {
+      "key": "CA.FEES.CITIZENSHIP_ADULT",
+      "program": "citizenship",
+      "jurisdiction": "CA",
+      "claim": "IRCC fee, Citizenship - application fees: Adult (18 and over) (the page says this amount includes the processing fee and the right of citizenship fee).",
+      "page": "https://ircc.canada.ca/english/information/fees/fees.asp",
+      "sourceUrl": "https://ircc.canada.ca/english/information/fees/fees.asp#citizenship",
+      "section": "Citizenship > Citizenship - application fees > Adult (18 and over)",
+      "value": "$653.00 CAD",
+      "excerpt": "Citizenship - application fees: Adult (18 and over): 653.00 ($CAN)"
+    },
+    {
+      "key": "CA.FEES.BIOMETRICS_INDIVIDUAL",
+      "program": null,
+      "jurisdiction": "CA",
+      "claim": "IRCC fee: Biometrics – per individual.",
+      "page": "https://ircc.canada.ca/english/information/fees/fees.asp",
+      "sourceUrl": "https://ircc.canada.ca/english/information/fees/fees.asp#other",
+      "section": "Other applications and services > Biometrics > Biometrics – per individual",
+      "value": "$85.00 CAD",
+      "excerpt": "Biometrics: Biometrics – per individual: 85.00 ($CAN)"
+    },
+    {
+      "key": "CA.IRPR.S216_STUDY_PERMIT",
+      "program": "study_permit",
+      "jurisdiction": "CA",
+      "claim": "IRPR s. 216(1): when an officer shall issue a study permit.",
+      "page": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html",
+      "sourceUrl": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html#s-216",
+      "section": "Section 216",
+      "value": null,
+      "excerpt": "216 (1) Subject to subsections (2) and (3), an officer shall issue a study permit to a foreign national if, following an examination, it is established that the foreign national (a) applied for it in accordance with this Part; (b) will leave Canada by the end of the period authorized for their stay under Division 2 of Part 9; (c) meets the requirements of this Part; (d) meets the requirements of subsections 30(2) and (3), if they must submit to a medical examination under paragraph 16(2)(b) of the Act; and (e) has been accepted to undertake a course or program of study at a designated…"
+    },
+    {
+      "key": "CA.IRPR.S220_FINANCIAL_RESOURCES",
+      "program": "study_permit",
+      "jurisdiction": "CA",
+      "claim": "IRPR s. 220: financial resources required for a study permit.",
+      "page": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html",
+      "sourceUrl": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html#s-220",
+      "section": "Section 220",
+      "value": null,
+      "excerpt": "220 An officer shall not issue a study permit to a foreign national, other than one described in paragraph 215(1)(d) or (e), unless they have sufficient and available financial resources, without working in Canada, to (a) pay the tuition fees for the course or program of studies that they intend to pursue; (b) maintain themself and any family members who are accompanying them during their proposed period of study; and (c) pay the costs of transporting themself and the family members referred to in paragraph (b) to and from Canada."
+    },
+    {
+      "key": "CA.IRPR.S300_STUDY_PERMIT_FEE",
+      "program": "study_permit",
+      "jurisdiction": "CA",
+      "claim": "IRPR s. 300(1): the fee payable for processing an application for a study permit.",
+      "page": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html",
+      "sourceUrl": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html#s-300",
+      "section": "Section 300",
+      "value": "$150 (as written in the section)",
+      "excerpt": "300 (1) A fee of $150 is payable for processing an application for a study permit."
+    },
+    {
+      "key": "CA.IRPR.S200_WORK_PERMIT",
+      "program": "work_permit",
+      "jurisdiction": "CA",
+      "claim": "IRPR s. 200(1): when an officer shall issue a work permit.",
+      "page": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html",
+      "sourceUrl": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html#s-200",
+      "section": "Section 200",
+      "value": null,
+      "excerpt": "200 (1) Subject to subsections (2) and (3) — and, in respect of a foreign national who makes an application for a work permit before entering Canada, subject to section 87.3 of the Act — an officer shall issue a work permit to a foreign national if, following an examination, it is established that (a) the foreign national applied for it in accordance with Division 2; (b) the foreign national will leave Canada by the end of the period authorized for their stay under Division 2 of Part 9; (c) the foreign national (i) is described in section 206 or 208, (ii) intends to perform work described in…"
+    },
+    {
+      "key": "CA.IRPR.S299_WORK_PERMIT_FEE",
+      "program": "work_permit",
+      "jurisdiction": "CA",
+      "claim": "IRPR s. 299(1): the fee payable for processing an application for a work permit.",
+      "page": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html",
+      "sourceUrl": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html#s-299",
+      "section": "Section 299",
+      "value": "$155 (as written in the section)",
+      "excerpt": "299 (1) A fee of $155 is payable for processing an application for a work permit."
+    },
+    {
+      "key": "CA.IRPR.S179_TEMPORARY_RESIDENT_VISA",
+      "program": "visitor_visa",
+      "jurisdiction": "CA",
+      "claim": "IRPR s. 179: when an officer shall issue a temporary resident visa.",
+      "page": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html",
+      "sourceUrl": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html#s-179",
+      "section": "Section 179",
+      "value": null,
+      "excerpt": "179 An officer shall issue a temporary resident visa to a foreign national if, following an examination, it is established that the foreign national (a) has applied in accordance with these Regulations for a temporary resident visa as a member of the visitor, worker or student class; (b) will leave Canada by the end of the period authorized for their stay under Division 2; (c) holds a passport or other document that they may use to enter the country that issued it or another country; (d) meets the requirements applicable to that class; (e) is not inadmissible; (f) meets the requirements of…"
+    },
+    {
+      "key": "CA.IRPR.S296_TRV_FEE",
+      "program": "visitor_visa",
+      "jurisdiction": "CA",
+      "claim": "IRPR s. 296(1): the fee payable for processing an application for a temporary resident visa.",
+      "page": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html",
+      "sourceUrl": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html#s-296",
+      "section": "Section 296",
+      "value": "$100 (as written in the section)",
+      "excerpt": "296 (1) A fee of $100 is payable for processing an application for a temporary resident visa to enter Canada one or more times."
+    },
+    {
+      "key": "CA.IRPR.S303_RPRF",
+      "program": null,
+      "jurisdiction": "CA",
+      "claim": "IRPR s. 303(1): the fee payable for the acquisition of permanent resident status (indexed under s. 303(1.1); the current amount is on IRCC's fee list).",
+      "page": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html",
+      "sourceUrl": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html#s-303",
+      "section": "Section 303",
+      "value": null,
+      "excerpt": "303 (1) A fee of $500 is payable by a person for the acquisition of permanent resident status."
+    },
+    {
+      "key": "CA.IRPA.S11_VISA_BEFORE_ENTRY",
+      "program": null,
+      "jurisdiction": "CA",
+      "claim": "IRPA s. 11(1): a foreign national must apply for a visa or other document before entering Canada.",
+      "page": "https://laws-lois.justice.gc.ca/eng/acts/I-2.5/FullText.html",
+      "sourceUrl": "https://laws-lois.justice.gc.ca/eng/acts/I-2.5/FullText.html#s-11",
+      "section": "Section 11",
+      "value": null,
+      "excerpt": "11 (1) A foreign national must, before entering Canada, apply to an officer for a visa or for any other document required by the regulations. The visa or document may be issued if, following an examination, the officer is satisfied that the foreign national is not inadmissible and meets the requirements of this Act."
+    },
+    {
+      "key": "CA.IRPA.S30_WORK_STUDY_AUTHORIZATION",
+      "program": null,
+      "jurisdiction": "CA",
+      "claim": "IRPA s. 30(1): a foreign national may not work or study in Canada unless authorized.",
+      "page": "https://laws-lois.justice.gc.ca/eng/acts/I-2.5/FullText.html",
+      "sourceUrl": "https://laws-lois.justice.gc.ca/eng/acts/I-2.5/FullText.html#s-30",
+      "section": "Section 30",
+      "value": null,
+      "excerpt": "30 (1) A foreign national may not work or study in Canada unless authorized to do so under this Act."
+    }
+  ]
+}

@@ -492,9 +492,12 @@ describe("licensed publishing and approvals", () => {
            ) values ($1, $2, $3, 'approved', '2026-10-16T15:00:00Z', 'FICTIONAL review.', 1)`,
           [ctx.orgId, version.rows[0].id, membershipId],
         );
+      // SRC-03: approvals are recorded only through Source review; a direct insert is refused. The
+      // licence rule on the reviewer membership still applies (checked from a maintenance session).
       await as(ctx.owner, ctx.orgId);
+      await expectDbError(() => review(ctx.ownerMembership), /only in Source review/);
+      await asMaintenance(db);
       await review(ctx.ownerMembership);
-      await as(ctx.consultant, ctx.orgId);
       await review(ctx.consultantMembership);
     }
   });

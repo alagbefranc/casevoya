@@ -9920,6 +9920,17 @@ export type Database = {
       }
       rule_evidence: {
         Row: {
+          checked_on: string | null
+          current_to: string | null
+          form_modified_on: string | null
+          form_number: string | null
+          last_amended_on: string | null
+          modified_on: string | null
+          page_attested_at: string | null
+          page_attested_by_membership_id: string | null
+          page_attested_on: string | null
+          published_on: string | null
+          source_url: string | null
           created_at: string
           created_by: string | null
           evidence_excerpt: string | null
@@ -9928,13 +9939,24 @@ export type Database = {
           locator: string | null
           organization_id: string | null
           rule_version_id: string
-          snapshot_id: string
+          snapshot_id: string | null
           source_language: string | null
           source_section: string | null
           updated_at: string
           version: number
         }
         Insert: {
+          checked_on?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          last_amended_on?: string | null
+          modified_on?: string | null
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          published_on?: string | null
+          source_url?: string | null
           created_at?: string
           created_by?: string | null
           evidence_excerpt?: string | null
@@ -9943,13 +9965,24 @@ export type Database = {
           locator?: string | null
           organization_id?: string | null
           rule_version_id: string
-          snapshot_id: string
+          snapshot_id?: string | null
           source_language?: string | null
           source_section?: string | null
           updated_at?: string
           version?: number
         }
         Update: {
+          checked_on?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          last_amended_on?: string | null
+          modified_on?: string | null
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          published_on?: string | null
+          source_url?: string | null
           created_at?: string
           created_by?: string | null
           evidence_excerpt?: string | null
@@ -9958,7 +9991,7 @@ export type Database = {
           locator?: string | null
           organization_id?: string | null
           rule_version_id?: string
-          snapshot_id?: string
+          snapshot_id?: string | null
           source_language?: string | null
           source_section?: string | null
           updated_at?: string
@@ -10195,6 +10228,9 @@ export type Database = {
           organization_id: string | null
           output_value: Json | null
           status: Database["public"]["Enums"]["rule_publication_status"]
+          status_changed_at: string | null
+          status_changed_by_membership_id: string | null
+          status_reason: string | null
           structured_condition: Json | null
           supersedes_version_id: string | null
           test_case_ids: string[]
@@ -10220,6 +10256,9 @@ export type Database = {
           organization_id?: string | null
           output_value?: Json | null
           status?: Database["public"]["Enums"]["rule_publication_status"]
+          status_changed_at?: string | null
+          status_changed_by_membership_id?: string | null
+          status_reason?: string | null
           structured_condition?: Json | null
           supersedes_version_id?: string | null
           test_case_ids?: string[]
@@ -10245,6 +10284,9 @@ export type Database = {
           organization_id?: string | null
           output_value?: Json | null
           status?: Database["public"]["Enums"]["rule_publication_status"]
+          status_changed_at?: string | null
+          status_changed_by_membership_id?: string | null
+          status_reason?: string | null
           structured_condition?: Json | null
           supersedes_version_id?: string | null
           test_case_ids?: string[]
@@ -13546,6 +13588,51 @@ export type Database = {
       person_consent_overview: {
         Args: { p_organization_id: string; p_person_id: string }
         Returns: Json
+      }
+      // SRC-01/02/03 claims and the review workbench (20261025400000_src_claims_review.sql).
+      add_rule_claim: {
+        Args: {
+          p_applicability_note: string
+          p_checked_on: string
+          p_claim: string
+          p_current_to: string
+          p_effective_from: string
+          p_effective_to: string
+          p_excerpt: string
+          p_form_modified_on: string
+          p_form_number: string
+          p_jurisdiction: string
+          p_last_amended_on: string
+          p_modified_on: string
+          p_org: string
+          p_program_key: string
+          p_published_on: string
+          p_snapshot: Json
+          p_source_section: string
+          p_source_url: string
+          p_stable_key: string
+          p_value: string
+        }
+        Returns: string
+      }
+      resolve_rule_applicability: {
+        Args: { p_expected_version: number; p_note: string; p_resolution: string; p_version_id: string }
+        Returns: number
+      }
+      review_rule_version: {
+        Args: {
+          p_decision: string
+          p_expected_version: number
+          p_next_review_on: string
+          p_note: string
+          p_page_opened_on: string
+          p_version_id: string
+        }
+        Returns: number
+      }
+      suspend_rule_version: {
+        Args: { p_expected_version: number; p_reason: string; p_version_id: string }
+        Returns: number
       }
       propose_submission_requirement: {
         Args: {
