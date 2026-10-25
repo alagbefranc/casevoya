@@ -562,7 +562,10 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
     });
   };
 
-  const sendFile = async (file: File, fail: (reason: UploadFailure) => void) => {
+  // The same upload calls as before (intent, signed upload, the server's file check); each failure
+  // is named by uploadFailure so the person sees what happened and what to do next.
+  const sendFile = async (picked: File, fail: (reason: UploadFailure) => void) => {
+    const file = picked;
     {
       const intent = await createUploadIntent({
         organizationId: viewer.organizationId,

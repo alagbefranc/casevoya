@@ -1,6 +1,6 @@
 ## Portal and public pages
 
-DES-04 audit of the client portal (`/portal/*`) and the public pages, checked on branch `feat/des-states-portal` (from `main` at 8f04b09). Statuses: **Built** (already there, with the component or copy), **Built now** (added on this branch), **N/A** (the state can't happen on that page, with why), **Gap** (not built, with why). Paths are under `src/`. The portal's shared states:
+DES-04 audit of the client portal (`/portal/*`) and the public pages, checked on branch `feat/des-states-portal` (from `main` at 07c054b). Statuses: **Built** (already there, with the component or copy), **Built now** (added on this branch), **N/A** (the state can't happen on that page, with why), **Gap** (not built, with why). Paths are under `src/`. The portal's shared states:
 
 * Loading: `PortalLoading` (`components/portal/live.tsx`, the Suspense fallback of `app/portal/[[...slug]]/page.tsx`, from #173): a skeleton, never "No portal yet".
 * Couldn't load (new): `PortalUnavailable` (`components/portal/states.tsx`). A page's loader now throws when its main query fails (`modules/documents/load.ts`, `finance/portal-load.ts`, `agreements/load.ts`, `scheduling/portal-load.ts`, `portal/tasks-load.ts`), and the page says "Your … couldn’t be shown just now. Nothing was lost, and nothing here means there are none" with Try again. Before, a failed read showed "Nothing to pay" or "No documents requested yet".
@@ -48,6 +48,6 @@ DES-04 audit of the client portal (`/portal/*`) and the public pages, checked on
 | `/consultation/[ref]/agreement` | Built: `AgreementSignLoading` | N/A | N/A | Built: `AgreementSignError` | N/A | N/A | N/A |
 | `/privacy/[firm]` | Built: "Loading…" | Built: `QuietSheet` when no published notice | N/A | N/A | N/A: the firm's own notice | N/A | N/A |
 | `/call/[ref]` | Gap: the Suspense fallback is `null` (a blank page while the call loads); a page shared by staff and clients, left for a follow-up | N/A | N/A | Built: `CallScreen` kind `refused` | N/A | N/A | N/A |
-| `/supported` | N/A: not on `main` | | | | | | |
+| `/supported` (SRC-12, merged in #241) | Built: `QuietSheet` "Loading…" | Built: "No programs are catalogued yet. Nothing is supported until an approved, sourced rule pack exists."; couldn't load: "The catalogue couldn’t be read just now. Try again in a moment." | N/A: one read | N/A: public | Partly built: "Supported" needs a live rule pack (`app.rule_pack_is_live`); IRCC's program name and link show only from a verified snapshot, with its retrieval date, "date modified" (or Unknown) and hash. Gap: no "may be out of date" flag when that program page is later due for review, changed or failed a check; `public.support_catalogue` doesn't return the source's state, and redefining it here would collide with the SRC builds still merging | N/A | N/A |
 
 Content still to capture for stale-source on client pages: none on this branch. The only official content clients see is a renewal reminder's IRCC timing and fee (DEC-02); its values come from the firm's own approved entries, nothing is seeded, and no IRCC value was added here.
