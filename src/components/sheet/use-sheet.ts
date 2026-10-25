@@ -97,6 +97,7 @@ import { bindGovControls } from "./gov-acts";
 import { bindApprovalControls } from "./approval-acts";
 import { bindSubmissionControls } from "./submission-acts";
 import { bindRenewalControls } from "./renewal-acts";
+import { bindVoCrmControls } from "./vo-crm-acts";
 import { bindLetterControls } from "./letter-acts";
 import { bindGovStatusControls } from "./gov-status-acts";
 import {
@@ -264,6 +265,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     bindSubmissionControls(root, router, listen);
     // DEC-02: the Decisions tab's Expiry and renewal card (`data-ren`).
     bindRenewalControls(root, router, listen);
+    // AI-01: Vo lead follow-ups and call-notes summaries (`data-vo-crm`).
+    bindVoCrmControls(root, router, listen);
     // DEC-02: the Decisions tab's approval follow-up (`data-dec`).
     bindApprovalControls(root, router, listen);
     // GOV-04: Record a government letter's issuer and task rows, and the issuer list.
