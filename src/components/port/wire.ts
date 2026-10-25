@@ -393,7 +393,7 @@ export function usePortActions(page: string, token?: string) {
           if (!invite.current) {
             const loaded = await loadInvite();
             if ("error" in loaded) return { ok: false, message: loaded.error };
-            presetPortalLocale(event.root, invite.current?.organization?.default_locale);
+            presetPortalLocale(event.root, loaded.preview?.organization?.default_locale);
           }
           const preview = invite.current;
           const heading = event.root.querySelector("h1");

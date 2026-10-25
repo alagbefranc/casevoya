@@ -787,7 +787,7 @@ export async function joinPortalInvite(input: {
     },
   });
   if (signedUp.error) {
-    // The password above didn't sign in to it, so it is someone's other password.
+    // The typed password didn't sign in above, so this sign-in has a different password.
     if (/already/i.test(signedUp.error.message) || signedUp.error.code === "user_already_exists") return joinFail(alreadyMade);
     if (lockedMessage(signedUp.error.message)) return joinFail("Too many attempts. Wait and try again.");
     if (signedUp.error.code === "weak_password") return joinFail("Choose a password that meets all three rules");
