@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PrivacyDialogs, SheetPrivacy } from "@/components/sheet/designer/privacy";
 import { CAPTURED_PROVISIONS } from "@/modules/compliance/privacy-official";
-import { assemblePrivacyRecords, WITHHELD, type PackageItem } from "@/modules/compliance/privacy-package";
+import { assemblePrivacyRecords, WITHHELD, type ItemRows, type PackageItem } from "@/modules/compliance/privacy-package";
 import { presentPrivacy, privacyDialogs, type PrivacyContext, type PrivacyRequestRow } from "@/modules/compliance/privacy-present";
 import { privacyResponseError } from "@/modules/compliance/privacy-response-format";
 import { foundPanel, limitsPanel, responseActions, responseRows, type PrivacyExtras, type TimeLimitRow } from "@/modules/compliance/privacy-response-present";
@@ -188,7 +188,7 @@ describe("response package contents", () => {
       { id: "i2", source: "matter", source_id: "m1", label: "Matter MI-1", decision: "withhold", withheld_fields: [], reason: "About the sponsor only" },
       { id: "i3", source: "intake_response", source_id: "f1", label: "Intake form", decision: "redact", withheld_fields: ["spouse_name"], reason: "Spouse" },
     ];
-    const rows = new Map([
+    const rows = new Map<string, ItemRows>([
       ["i1", { person: [{ id: "p1", display_name: "Dana", email: "spouse@example.test" }] }],
       ["i3", { intake_response: [{ id: "f1", status: "submitted" }], intake_answer: [{ field_key: "spouse_name", raw_value: "Sam" }, { field_key: "own_name", raw_value: "Dana" }] }],
     ]);
