@@ -3741,7 +3741,7 @@ describe("Designer fidelity: Settings, Team and seats and Security", () => {
     });
     const html = renderToStaticMarkup(createElement(SheetSettingsSecurity, { data: owner }));
     expect(html).toContain("Required for every staff account · 1 of 2 set up");
-    expect(html).toContain("No idle timeout yet");
+    expect(html).toContain("Staff are signed out after a period with no activity, with a warning 2 minutes before");
     expect(html).toContain("only after you approve a request");
     expect(html).toContain('<span class="bd gr"><i></i>None active</span>');
     expect(html).not.toContain("aren’t built yet");

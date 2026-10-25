@@ -7,6 +7,7 @@ import type { ContinuityData, SecurityData, SecurityRow, TeamData, TeamRow } fro
 import { dayMonth } from "@/modules/sheet/home-present";
 import { isoDateInTimeZone, roleLabel } from "@/modules/sheet/present";
 import { orderedInvitations, type DirectoryMember, type PendingInvitation } from "@/modules/sheet/staff-present";
+import { idleDetail } from "@/modules/security/idle";
 
 /** Staff access is firm-wide: no membership or invitation is tied to one office. */
 export const ALL_OFFICES = "All offices";
@@ -181,6 +182,8 @@ export function securityData(input: {
   support?: SupportState;
   /** DOC-02: the per-file upload limit in force, and whether above 25 MB may be set yet. */
   upload?: { bytes: number; largeAllowed: boolean } | null;
+  /** SEC-01: the firm's idle sign-out time in minutes; null when it couldn't be read. */
+  idleMinutes?: number | null;
 }): SecurityData {
   const security = input.security;
   const known = security && security.length === input.members && security.every((row) => row.secondFactor || row.passkeys !== null);
@@ -203,9 +206,11 @@ export function securityData(input: {
       badge: supportBadge(input.support ?? null, input.timeZone),
     },
     {
+      // SEC-01: enforced for every staff session (public.record_staff_activity); the owner changes it.
       title: "Session timeout",
-      detail: "No idle timeout yet. Sessions end at sign-out, or when revoked or reset",
-      badge: { tone: "gr", label: "Off" },
+      detail: idleDetail(input.idleMinutes ?? null),
+      badge: { tone: "ok", label: "On" },
+      ...(input.owner && input.organizationId && input.idleMinutes != null ? { action: { label: "Change", attrs: { "data-open": IDLE_TIMEOUT_DIALOG } } } : {}),
     },
     { title: "Download audit", detail: "Every document download is logged", badge: { tone: "ok", label: "On" } },
   ];
@@ -245,10 +250,14 @@ export function securityData(input: {
       badge: input.events ? { tone: "chg", label: plural(input.events, "event", "events") } : { tone: "gr", label: "None" },
     });
   }
-  return { intro: "Staff sign-in, support access and session rules.", rows, uploadLimit };
+  const idleTimeout = input.owner && input.organizationId && input.idleMinutes != null ? { organizationId: input.organizationId, minutes: input.idleMinutes } : null;
+  return { intro: "Staff sign-in, support access and session rules.", rows, uploadLimit, idleTimeout };
 }
 
 const MB = 1024 * 1024;
+
+/** The idle sign-out Change dialog on the Security tab (SEC-01). */
+export const IDLE_TIMEOUT_DIALOG = "dIdleSet";
 
 /** The Change limit dialog on the Security tab (DOC-02). */
 export const UPLOAD_LIMIT_DIALOG = "dUpLimit";

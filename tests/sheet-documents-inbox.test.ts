@@ -84,7 +84,7 @@ describe("Documents page presentation (DOC-02, DOC-04, DOC-06)", () => {
     });
     expect(readDocumentReview({ versionId: V, version: "3", decision: "accepted", reason: "Clear copy", expires: "2027-01-01", previousExpires: "2027-01-01" })).toMatchObject({ input: { expiry: undefined } });
     expect(readDocumentReview({ versionId: V, version: "3", decision: "accepted", reason: "Clear copy", expires: "", previousExpires: "2027-01-01" })).toMatchObject({ input: { expiry: null } });
-    expect(reviewStepUpLocation("/sheet/documents", "?tab=review", V)).toBe(`/mfa?step=6&next=${encodeURIComponent(`/sheet/documents?tab=review&dlg=review&doc=${V}`)}`);
+    expect(reviewStepUpLocation("/sheet/documents", "?tab=review", V)).toBe(`/mfa?step=6&next=${encodeURIComponent(`/sheet/documents?tab=review&dlg=review&doc=${V}`)}&for=document_review`);
   });
 });
 

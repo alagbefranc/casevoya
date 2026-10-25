@@ -85,7 +85,7 @@ export async function runGovStatusAct(button: HTMLElement, router: Router) {
   const error = result && "error" in result && typeof result.error === "string" ? result.error : null;
   if (error) {
     if (needsStepUp(error)) {
-      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null));
+      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null, "government_status"));
       return;
     }
     toast2(error, { kind: "bad", sub: "Nothing was saved." });

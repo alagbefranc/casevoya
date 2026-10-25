@@ -4,6 +4,7 @@ import { toast2 } from "@/components/port/kit";
 import { authorizeDocumentDownload, reviewDocumentVersion, setDocumentExpiry } from "@/modules/documents/actions";
 import { needsStepUp } from "@/modules/sheet/matter-wire";
 import { readDocumentReview, reviewStepUpLocation } from "@/modules/sheet/documents-review";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 type Router = { replace: (href: string) => void; refresh: () => void };
 
@@ -165,7 +166,7 @@ export async function runDocOpen(card: HTMLElement) {
   const result = await authorizeDocumentDownload({ organizationId: card.dataset.org ?? "", versionId: card.dataset.docOpen ?? "" });
   if ("error" in result) {
     if (needsStepUp(result.error)) {
-      window.location.assign(`/mfa?step=6&next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`);
+      window.location.assign(stepUpHref(`${window.location.pathname}${window.location.search}`, "document_open"));
       return;
     }
     toast2(result.error ?? "That file cannot be opened.", { kind: "bad" });

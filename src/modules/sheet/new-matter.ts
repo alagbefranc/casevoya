@@ -6,6 +6,7 @@ import { safeAccessError } from "@/lib/auth/step-up";
 import { readBirthDate, todayIso } from "@/modules/sheet/birth-date";
 import { programLabel } from "@/modules/sheet/matters-present";
 import { entitlementError } from "@/modules/subscription/errors";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 export type NewMatterOption = { value: string; label: string };
 
@@ -144,7 +145,7 @@ export function needsStepUp(error: string | null | undefined): boolean {
 export function newMatterStepUpLocation(pathname: string, search: string): string {
   const params = new URLSearchParams(search);
   params.set("new", "1");
-  return `/mfa?step=6&next=${encodeURIComponent(`${pathname}?${params.toString()}`)}`;
+  return stepUpHref(`${pathname}?${params.toString()}`, "new_matter");
 }
 
 /** The same URL without `?new=1`, so closing the dialog and refreshing does not reopen it. */

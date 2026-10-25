@@ -113,7 +113,7 @@ export async function runMatterAct(button: HTMLElement, root: HTMLElement, route
   const error = result && "error" in result && typeof result.error === "string" ? result.error : null;
   if (error) {
     if (needsStepUp(error)) {
-      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, DIALOG[act] ?? null));
+      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, DIALOG[act] ?? null, act === "resume" ? "matter_hold" : act === "outcome" ? "decision" : undefined));
       return;
     }
     toast2(error, { kind: "bad", sub: "Nothing was saved." });

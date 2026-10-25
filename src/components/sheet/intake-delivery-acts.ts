@@ -68,7 +68,7 @@ export async function runIntakeFreeze(button: HTMLElement, router: Router) {
   const result = await freezeIntakeSnapshot({ organizationId: button.dataset.org ?? "", responseId: button.dataset.intakeFreeze ?? "" });
   if ("error" in result) {
     if (needsStepUp(result.error)) {
-      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null));
+      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null, "intake_send"));
       return;
     }
     toast2(result.error, { kind: "bad", sub: "Nothing was frozen." });

@@ -73,7 +73,7 @@ function finish(button: HTMLElement, router: Router, title: string, sub: string,
 
 function refuse(error: string, sub: string) {
   if (financeNeedsStepUp(error)) {
-    window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, null));
+    window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, null, "billing"));
     return;
   }
   toast2(error, { kind: "bad", sub });

@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { AccountForm } from "./account-form";
+import { ConsentsPanel, TwoStepRow } from "./account-privacy";
+import type { PortalAccountExtras } from "@/modules/portal/account-present";
 import { AgreementsLive } from "./agreements-live";
 import { AppointmentsLive } from "./appointments-live";
 import { ChatError, ChatView } from "@/components/messages/chat";
@@ -111,6 +113,7 @@ export function LivePortal({
   matters,
   receipt,
   notices,
+  account,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -140,6 +143,8 @@ export function LivePortal({
   receipt?: ReceiptView | null;
   /** ORG-06: the person's own notices (their consultant changed), shown on Home. */
   notices?: PortalNotice[] | null;
+  /** SEC-01, SEC-05: the Account page's two-step state and optional consents. */
+  account?: PortalAccountExtras | null;
 }) {
   const name = viewer.person?.displayName ?? "Your account";
   const matter = viewer.matters[0];
@@ -199,7 +204,7 @@ export function LivePortal({
               </span>
               <span className="acts"><a className="btn s sm" href="/help/client-home-screen" id="help">{icon("help", "s")}Help</a></span>
             </header>
-            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} messages={messages} intake={intake ?? null} tasks={tasks ?? null} home={home ?? null} matters={matters ?? null} receipt={receipt ?? null} notices={notices ?? null} />
+            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} messages={messages} intake={intake ?? null} tasks={tasks ?? null} home={home ?? null} matters={matters ?? null} receipt={receipt ?? null} notices={notices ?? null} account={account ?? null} />
           </div>
         </main>
         <footer className="statusbar">
@@ -226,6 +231,7 @@ function LiveMain({
   matters,
   receipt,
   notices,
+  account = null,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -240,6 +246,7 @@ function LiveMain({
   matters: MatterCard[] | null;
   receipt: ReceiptView | null;
   notices: PortalNotice[] | null;
+  account?: PortalAccountExtras | null;
 }) {
   // Messages: the chat view (redesigned as a chat view at the owner's request, 2026-10-18).
   if (page === "messages" && messages !== undefined) {
@@ -289,7 +296,7 @@ function LiveMain({
   }
   if (page === "family" || page === "rafael" || page === "olena") return <People viewer={viewer} />;
   if (page === "guardian") return <Guardian viewer={viewer} />;
-  if (page === "account") return <Account viewer={viewer} />;
+  if (page === "account") return <Account viewer={viewer} account={account} />;
   if ((page === "intake" || page === "correction") && intake) return <IntakeLive viewer={viewer} data={intake.data} correction={page === "correction"} field={intake.field} />;
   if (page === "intake" || page === "correction") return <Sections viewer={viewer} correction={page === "correction"} />;
   if (page === "tasks" && tasks) return <TasksLive viewer={viewer} tasks={tasks} />;
@@ -742,7 +749,7 @@ function Shares({ viewer }: { viewer: PortalViewer }) {
   );
 }
 
-function Account({ viewer }: { viewer: PortalViewer }) {
+function Account({ viewer, account }: { viewer: PortalViewer; account: PortalAccountExtras | null }) {
   const person = viewer.person;
   return (
     <div id="pc">
@@ -763,8 +770,10 @@ function Account({ viewer }: { viewer: PortalViewer }) {
               </form>
             </span>
           </div>
+          {person ? <TwoStepRow organizationId={viewer.organizationId} firm={viewer.organizationName} state={account?.twoStep ?? null} /> : null}
         </div>
       </div>
+      {person && account?.consents ? <ConsentsPanel organizationId={viewer.organizationId} firm={viewer.organizationName} consents={account.consents} /> : null}
     </div>
   );
 }

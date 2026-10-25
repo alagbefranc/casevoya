@@ -16,6 +16,7 @@ import { countPortalUnread, loadPortalMessages } from "@/modules/messages/load";
 import { firmLook } from "@/modules/firm-onboarding/public-logo";
 import { loadPortalHome, loadPortalMatters, loadPortalNotices } from "@/modules/portal/home-load";
 import { loadPortalAccess } from "@/modules/portal/load";
+import { loadPortalAccountExtras } from "@/modules/portal/account-load";
 import { payStateFromQuery } from "@/modules/portal/pay";
 import { loadPortalAppointments } from "@/modules/scheduling/portal-load";
 import { loadPortalIntake } from "@/modules/intake/portal-load";
@@ -101,6 +102,8 @@ async function Body({
   const matters = page === "matters" ? await loadPortalMatters(access.viewer).catch(() => null) : null;
   const receiptValue = Array.isArray(query.id) ? query.id[0] : query.id;
   const receipt = page === "receipt" && isUuid(receiptValue) ? await loadPortalReceipt(access.viewer, receiptValue).catch(() => null) : null;
+  // SEC-01, SEC-05: the Account page's two-step sign-in and optional consents.
+  const account = page === "account" ? await loadPortalAccountExtras(access.viewer).catch(() => null) : null;
   return (
     <PortalScreen page={page}>
       <LivePortal
@@ -121,6 +124,7 @@ async function Body({
         notices={notices}
         matters={matters}
         receipt={receipt}
+        account={account}
       />
       {opened ? <RememberMatter id={opened.id} /> : null}
     </PortalScreen>

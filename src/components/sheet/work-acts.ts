@@ -37,7 +37,7 @@ function busy(element: HTMLElement, run: () => Promise<void>) {
 }
 
 function stepUp() {
-  window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null));
+  window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null, "task_change"));
 }
 
 /** Mark a task done: from a row's tick (`data-task-done="<id>"`) or the Task dialog (`data-task-done="dialog"`). */

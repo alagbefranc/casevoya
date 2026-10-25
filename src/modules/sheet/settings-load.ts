@@ -151,7 +151,7 @@ export async function loadSheetSettingsSecurity(staff: SheetStaff, now: Date = n
       : null,
     owner ? supabase.rpc("firm_support_access", { p_organization_id: org }) : null,
     // DOC-02: the per-file upload limit, and whether above 25 MB may be set yet.
-    supabase.from("organizations").select("document_max_bytes").eq("id", org).maybeSingle(),
+    supabase.from("organizations").select("document_max_bytes, staff_idle_timeout_minutes").eq("id", org).maybeSingle(),
     supabase.from("product_settings").select("value").eq("key", "documents.large_uploads_enabled").maybeSingle(),
   ]);
   const largeAllowed = (largeUploads.data?.value as { enabled?: unknown } | null)?.enabled === true;
@@ -165,6 +165,7 @@ export async function loadSheetSettingsSecurity(staff: SheetStaff, now: Date = n
     organizationId: org,
     support: supportAccess ? { active: supportAccess.alert ? { endsAt: supportAccess.alert.ends_at } : null, pending: supportAccess.pending } : null,
     upload: firmLimit.error ? null : { bytes: effectiveUploadLimit(firmLimit.data?.document_max_bytes ?? null, largeAllowed), largeAllowed },
+    idleMinutes: firmLimit.error ? null : (firmLimit.data?.staff_idle_timeout_minutes ?? null),
   });
   return { chrome, header, page };
 }

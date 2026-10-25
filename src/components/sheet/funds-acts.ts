@@ -155,7 +155,7 @@ function stepUp(dialog: HTMLDialogElement, button: HTMLElement) {
   } catch {
     // Storage can be unavailable; the person opens the dialog again.
   }
-  window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, FUNDS_DIALOG));
+  window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, FUNDS_DIALOG, "client_funds"));
 }
 
 function failed(dialog: HTMLDialogElement, button: HTMLElement, error: string, sub: string): void {

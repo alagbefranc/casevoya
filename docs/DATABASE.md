@@ -722,3 +722,18 @@ DEC-02 (gap #182), branch `feat/dec-renewal`. No existing function redefined.
 * `public.portal_renewal_reminders(org)`: the signed-in client's set, uncancelled reminders while their reminder choice is on, with the official timing source and the fee from the currently approved snapshot (`app.renewal_current_fee`) or null.
 
 Tested in `tests/dec-renewal.rls.test.ts` and `tests/dec-renewal-present.test.tsx`.
+
+## Staff idle sign-out, client two-step, consent impact reviews (`20261025270000`, `20261025270100`, not applied on the live project)
+
+SEC-01 and SEC-05 (gap #184), branch `feat/sec-sessions-consent`.
+
+* `20261025270000_sec_marketing_consent_enum.sql`: `consent_purpose` gains `marketing` (own migration).
+* `organizations.staff_idle_timeout_minutes` (integer, not null, default 30, check 5 to 480). Set only by `public.set_staff_idle_timeout(org, minutes)` (firm owner with a fresh step-up; audited `security.idle_timeout_changed` with from/to).
+* `staff_session_activity` (session id, user, last activity): not a tenant table (a session belongs to a user, like `session_revocations`); no grants, forced RLS, read and written only by `public.record_staff_activity(p_active)`, which returns `active` / `expired` / `ended` / `none` and, past the strictest idle time of the user's staff firms, ends the session (`session_revocations` reason `idle`, Auth session row removed; audited `session.idle_signed_out`).
+* Client two-step: `app.user_has_verified_totp(user)`, `app.client_step_up_satisfied()` (verified TOTP and a fresh step-up), `public.my_two_step_state()` (`off` / `needs_check` / `ok`), `public.record_my_two_step(enabled)` (checked against `auth.mfa_factors`; audited `mfa.client_enabled` / `mfa.client_disabled`).
+* `client_mfa_resets` (org, person, user, identity method, note, reset by): forced RLS, select through `app.can_work_person_privacy` (firm owner, or a licensed consultant or case manager who can read the person, with staff MFA); written only by `public.reset_client_two_step(org, person, identity_method, note)` (step-up; refuses staff users and the caller; ends sessions with `app.revoke_member_sessions`, removes factors with `app.purge_auth_user_factors`; audited `mfa.client_reset`).
+* `consent_impact_reviews` (person, consent record, purpose, source portal/staff, impacts, matter, task, open/done with who, when and note): forced RLS, select through `app.can_work_person_privacy`; row audit with the note redacted. Opened by the `consent_records_impact_review` trigger (`app.open_consent_impact_review`, after insert or update of `withdrawn_at`) when a granted consent is refused or withdrawn; `app.create_consent_impact_review` adds a high-priority internal task (checklist from `app.consent_impact_items(purpose)`) on the person's latest open matter. `public.complete_consent_review(review, version, note)` marks it done and completes the task (through `app.open_task_write`); audited `consent.impact_review_done` without the note.
+* Client consent: `public.my_consents()`, `public.set_my_consent(purpose, granted)` (AI drafting, marketing, processing; append-only; audited `consent.given` / `consent.withdrawn`). Staff: `public.person_consent_overview(org, person)` (history, reviews, two-step state, resets). Helpers `app.my_person_id`, `app.person_consent_state`, `app.person_declines_ai`, `app.consent_purpose_label`.
+* **Redefines** `public.begin_vo_document_review(uuid, uuid)` (latest `20261019218100_vo_doc_review.sql`): returns `{ok: false, error: 'client_ai_off'}` when the document's person declines AI drafting. Otherwise unchanged.
+
+Tested in `tests/sec-sessions-consent.rls.test.ts` and `tests/sec-sessions-consent.test.tsx`.

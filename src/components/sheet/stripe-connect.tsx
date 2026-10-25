@@ -40,7 +40,7 @@ function Banner({ tone, icon, title, children, action }: { tone: "warn" | "info"
 }
 
 function stepUp(dialog: string | null) {
-  window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, dialog));
+  window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, dialog, "payment_settings"));
 }
 
 /**

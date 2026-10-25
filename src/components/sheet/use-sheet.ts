@@ -87,6 +87,8 @@ import {
 } from "./manual-pay-acts";
 import { restoreDocRequest, runDocRequest } from "./doc-request-act";
 import { runUploadLimit } from "./upload-limit-act";
+import { runIdleTimeout } from "./idle-timeout-act";
+import { openConsentReview, runClientTwoStepReset, runConsentReviewDone } from "./person-consent-acts";
 import { armIntakeReview, runIntakeFreeze, runIntakeReuse, runIntakeSend } from "./intake-delivery-acts";
 import { runFlagResolve, runPersonAdd, runPersonRemove } from "./person-history-acts";
 import { openInboxPick, runInboxDismiss, runInboxFile, runInboxFileGo, runInboxMove, runInboxSearch } from "./inbox-acts";
@@ -151,6 +153,7 @@ import {
 import { reopenFirmDialog, runFirmSave } from "./settings-firm-acts";
 import { bindOffboardHold, mountMember, mountOffboard, reopenStaffAdmin, runContinuitySave, runMemberAct } from "./settings-staff-admin-acts";
 import { prepareTransferDialog, runFirmTransferAct } from "./firm-transfer-acts";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
 const NEW_MATTER = "/sheet/matters?new=1";
@@ -538,7 +541,7 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
             if ("error" in result) {
               if (result.stepUp) {
                 const next = `${window.location.pathname}${window.location.search}`;
-                window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`);
+                window.location.assign(stepUpHref(next, "enquiry_page"));
                 return;
               }
               toast2(result.error, { kind: "bad", sub: "Nothing was changed." });
@@ -942,6 +945,32 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (intakeSend && root.contains(intakeSend)) {
         event.preventDefault();
         busyRun(intakeSend, () => runIntakeSend(intakeSend, router));
+        return;
+      }
+      // Clients › person: consent impact review (SEC-05) and the client's two-step reset (SEC-01).
+      const reviewOpen = target.closest<HTMLElement>("[data-cr-open]");
+      if (reviewOpen && root.contains(reviewOpen)) {
+        event.preventDefault();
+        openConsentReview(reviewOpen);
+        return;
+      }
+      const reviewDone = target.closest<HTMLElement>("[data-cr-done]");
+      if (reviewDone && root.contains(reviewDone)) {
+        event.preventDefault();
+        busyRun(reviewDone, () => runConsentReviewDone(reviewDone, router));
+        return;
+      }
+      const twoStepReset = target.closest<HTMLElement>("[data-tsr]");
+      if (twoStepReset && root.contains(twoStepReset)) {
+        event.preventDefault();
+        busyRun(twoStepReset, () => runClientTwoStepReset(twoStepReset, router));
+        return;
+      }
+      // Settings > Security: the idle sign-out time (SEC-01).
+      const idleTimeout = target.closest<HTMLElement>("[data-idle-timeout]");
+      if (idleTimeout && root.contains(idleTimeout)) {
+        event.preventDefault();
+        busyRun(idleTimeout, () => runIdleTimeout(idleTimeout, router));
         return;
       }
       // Settings > Security: the per-file upload limit (DOC-02).
