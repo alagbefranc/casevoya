@@ -12,6 +12,7 @@
 import type { PlanDialogData, RetentionData, RetentionRow, SettingsBillingAlert, SubscriptionButton, SubscriptionData, SubscriptionInvoiceRow } from "@/components/sheet/designer/settings-billing";
 import { dayMonth } from "@/modules/sheet/home-present";
 import { publishedOn } from "@/modules/portal-policies/present";
+import { readContinuity, type Continuity } from "@/modules/sheet/sec-present";
 import { isInterval, isPlan, money, PLAN_NAMES, planLabel, readCatalog, totalCents, type Catalog, type Interval, type Plan } from "@/modules/subscription/catalog";
 
 export type SubscriptionStatus = "trial" | "trial_ended" | "active" | "past_due" | "restricted" | "cancelled" | "archived";
@@ -86,6 +87,8 @@ export type FirmSubscription = {
   catalog: Catalog | null;
   grace: { past_due_days: number; export_window_days: number };
   invoices: SubscriptionInvoice[];
+  /** SEC-10: the cancellation continuity (phase, export window end, arrangement, coverage). */
+  continuity?: Continuity | null;
 };
 
 const STATE: Record<SubscriptionStatus, string> = {
@@ -226,14 +229,20 @@ export function readFirmSubscription(value: unknown): FirmSubscription | null {
     catalog: readCatalog(row.catalog),
     grace: { past_due_days: limit(grace.past_due_days) ?? 7, export_window_days: limit(grace.export_window_days) ?? 90 },
     invoices: Array.isArray(row.invoices) ? row.invoices.map(readInvoice).filter((inv): inv is SubscriptionInvoice => Boolean(inv)) : [],
+    continuity: readContinuity(row.continuity),
   };
+}
+
+/** SEC-10: the export window's end as the database counts it (from the later of cancellation and period end). */
+function windowEnd(detail: FirmSubscription | null, cancelledAt: string | null, days: number): string | null {
+  return detail?.continuity?.windowEndsAt ?? (cancelledAt ? addDays(cancelledAt, days) : null);
 }
 
 function addDays(iso: string, days: number): string {
   return new Date(new Date(iso).getTime() + days * 86_400_000).toISOString();
 }
 
-function stateText(row: SubscriptionRow | null, state: SubscriptionStatus | null, detail: SubscriptionDetail | null, grace: FirmSubscription["grace"], timeZone: string): string {
+function stateText(row: SubscriptionRow | null, state: SubscriptionStatus | null, detail: SubscriptionDetail | null, grace: FirmSubscription["grace"], timeZone: string, exportsUntil: string | null = null): string {
   if (!row || !state) return "Not available";
   const on = (iso: string) => publishedOn(iso, timeZone);
   if (state === "trial") {
@@ -254,7 +263,8 @@ function stateText(row: SubscriptionRow | null, state: SubscriptionStatus | null
   if (state === "restricted") return `Restricted${detail.restricted_at ? ` since ${on(detail.restricted_at)}` : ""}: payment is overdue, so new work is paused. Your records and exports stay open.`;
   if (state === "cancelled") {
     const when = detail.cancelled_at ? ` on ${on(detail.cancelled_at)}` : "";
-    const window = detail.cancelled_at ? ` Exports stay open at least until ${on(addDays(detail.cancelled_at, grace.export_window_days))}.` : "";
+    const until = exportsUntil ?? (detail.cancelled_at ? addDays(detail.cancelled_at, grace.export_window_days) : null);
+    const window = until ? ` Exports stay open at least until ${on(until)}.` : "";
     return `Cancelled${when}.${window}`;
   }
   return `Archived${detail.archived_at ? ` on ${on(detail.archived_at)}` : ""}. Nothing was deleted; choose a plan to carry on.`;
@@ -279,7 +289,9 @@ export function subscriptionButtons(detail: SubscriptionDetail | null, state: Su
   if (!state || !detail) return [];
   if (detail.has_stripe_subscription && (state === "active" || state === "past_due" || state === "restricted")) {
     const portal = (label: string): SubscriptionButton => ({ label, act: "portal", primary: false, organizationId });
-    return [{ label: "Change plan", act: "portal", primary: true, organizationId }, portal("Manage billing"), portal(detail.cancel_at ? "Keep subscription" : "Cancel at period end")];
+    // SEC-10: Cancel subscription opens Casevoya's own dialog (period end, export window, no deletion); keeping it is in the portal.
+    const cancel: SubscriptionButton = detail.cancel_at ? portal("Keep subscription") : { label: "Cancel subscription", act: "cancel", primary: false, organizationId };
+    return [{ label: "Change plan", act: "portal", primary: true, organizationId }, portal("Manage billing"), cancel];
   }
   const choose: SubscriptionButton = { label: state === "trial" || state === "trial_ended" ? "Choose a plan" : "Choose a plan again", act: "plan", primary: true, organizationId };
   return detail.has_billing_account ? [choose, { label: "Manage billing", act: "portal", primary: false, organizationId }] : [choose];
@@ -350,7 +362,7 @@ export function subscriptionPage(input: {
 
   const rows: [string, string][] = [
     ["Plan", planText],
-    ["State", stateText(input.subscription, state, sub, grace, input.timeZone)],
+    ["State", stateText(input.subscription, state, sub, grace, input.timeZone, windowEnd(detail, sub?.cancelled_at ?? null, grace.export_window_days))],
   ];
   if (usage) {
     const since = `since ${dayMonth(usage.month_start)}`;
@@ -388,7 +400,7 @@ export function subscriptionPage(input: {
   if (state === "trial_ended") alert = { tone: "warn", icon: "alert", title: "Your trial has ended", body: "Your records are kept and you can still export them. New client portal invitations are paused until you choose a plan." };
   else if (state === "past_due") alert = { tone: "warn", icon: "alert", title: "The last payment failed", body: `Update your card in Manage billing. New work pauses after ${grace.past_due_days} days past due; nothing is deleted.` };
   else if (state === "restricted") alert = { tone: "warn", icon: "alert", title: "Payment is overdue, so new work is paused", body: "New client invitations, staff invitations and real matters wait for the payment. Your records and exports stay open." };
-  else if (state === "cancelled") alert = { tone: "warn", icon: "alert", title: "Your subscription is cancelled", body: `Your records are kept and you can still export them${sub?.cancelled_at ? ` until at least ${on(addDays(sub.cancelled_at, grace.export_window_days))}` : ""}.` };
+  else if (state === "cancelled") alert = { tone: "warn", icon: "alert", title: "Your subscription is cancelled", body: `Your records are kept and you can still export them${sub?.cancelled_at ? ` until at least ${on(windowEnd(detail, sub.cancelled_at, grace.export_window_days)!)}` : ""}.` };
   else if (state === "archived") alert = { tone: "info", icon: "archive", title: "Your subscription is archived", body: "Nothing was deleted. Choose a plan to carry on where you left off." };
 
   const canManage = Boolean(input.canManage && input.organizationId && detail);

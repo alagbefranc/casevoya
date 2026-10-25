@@ -5,6 +5,8 @@ import { loadSheetChrome, matterNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { voAgentConfigured } from "@/modules/vo/agent-client";
 import { loadVoReadings } from "@/modules/sheet/vo-doc-load";
+import { loadVendorTermsAcks } from "@/modules/sheet/vo-vendor-terms-load";
+import { vendorTermsPanel } from "@/modules/sheet/vo-vendor-terms-present";
 import {
   aiPage,
   draftsHeader,
@@ -314,7 +316,18 @@ export async function loadSheetAi(staff: SheetStaff, tab: AiTab) {
       lastResult: row.last_attempt_result ? String(row.last_attempt_result) : null,
     }));
   }
-  return { chrome, data: aiPage({ tab, viewer: base.viewer, settings: base.settings, runs, drafts, sources: approved, names: nm, readings: readingsAudit }) };
+  // Settings: the AI vendor terms panel and whether the firm acknowledged the current version (AI-06).
+  const vendorTerms =
+    tab === "settings"
+      ? vendorTermsPanel({
+          organizationId: org,
+          isOwner: base.viewer.isOwner,
+          enabled: base.settings.enabled,
+          timeZone: base.viewer.timeZone,
+          acks: await loadVendorTermsAcks(supabase, org).catch(() => []),
+        })
+      : undefined;
+  return { chrome, data: aiPage({ tab, viewer: base.viewer, settings: base.settings, runs, drafts, sources: approved, names: nm, readings: readingsAudit, vendorTerms }) };
 }
 
 /** For the matter Messages composer: whether Vo can draft here, and drafts waiting on its threads. */

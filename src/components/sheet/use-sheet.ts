@@ -114,6 +114,7 @@ import {
   runPrivacyStep,
   runRedaction,
 } from "./compliance-acts";
+import { bindPrivacyResponseControls, handlePrivacyResponseClick } from "./privacy-response-acts";
 import { runMatterAct } from "./matter-acts";
 import { bindWorkControls, wireMattersList } from "./work-acts";
 import { runNewMatter } from "./new-matter-act";
@@ -135,10 +136,13 @@ import { runAutomationSave } from "./automations-acts";
 import { signOutOtherSessions } from "@/modules/settings/firm-actions";
 import { mountIntakeBuilder } from "./intake-builder-acts";
 import { runVoAccept, runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
+import { runVoTermsAck } from "./vo-vendor-terms-acts";
+import { VO_TERMS_DIALOG } from "@/modules/sheet/vo-vendor-terms-present";
 import { runVoDocAccept, runVoDocDiscard, runVoDocReject, runVoRead } from "./vo-doc-acts";
 import { runLetterApprove, runLetterDiscard, runLetterNew, runLetterRevise, runVoLetterDraft } from "./vo-letter-acts";
 import { mountRetentionSlider, runRetentionSave } from "./retention-act";
 import { mountSubscription, runSubscriptionAct } from "./subscription-act";
+import { runSecAct } from "./sec-acts";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
 import {
   mountIntegrations,
@@ -852,6 +856,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(subscriptionAct, () => runSubscriptionAct(subscriptionAct, openDialog));
         return;
       }
+      // SEC-07 / SEC-10 (firm owner): Approve deletion, Cancel subscription, after the window, firm index.
+      const secAct = target.closest<HTMLElement>("[data-sec-act]");
+      if (secAct && root.contains(secAct)) {
+        event.preventDefault();
+        busyRun(secAct, () => runSecAct(secAct, root, router, openDialog));
+        return;
+      }
       const bookingSubmit = target.closest<HTMLElement>("[data-booking-submit]");
       if (bookingSubmit && root.contains(bookingSubmit)) {
         event.preventDefault();
@@ -1105,6 +1116,11 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(inboxCompose, () => runInboxCompose(inboxCompose, root, router));
         return;
       }
+      // SEC-06: extend, records found, the response package, delivery and legal time limits.
+      if (handlePrivacyResponseClick(target, root, router, openDialog, busyRun)) {
+        event.preventDefault();
+        return;
+      }
       // Compliance: privacy requests, the complaints register and their settings.
       const redactionOpen = target.closest<HTMLElement>("[data-redaction-new], [data-redaction-edit]");
       if (redactionOpen && root.contains(redactionOpen)) {
@@ -1148,6 +1164,14 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
               ? () => runVoDocReject(voDoc, router)
               : () => runVoDocDiscard(voDoc, router);
         busyRun(voDoc, run);
+        return;
+      }
+      // AI-06: turning Vo on first opens the AI vendor terms acknowledgement; its button records it.
+      const voTerms = target.closest<HTMLElement>(".k2-sw[data-vo-terms], [data-vo-terms-ack]");
+      if (voTerms && root.contains(voTerms)) {
+        event.preventDefault();
+        if (voTerms.hasAttribute("data-vo-terms-ack")) busyRun(voTerms, () => runVoTermsAck(voTerms, router));
+        else openDialog(VO_TERMS_DIALOG);
         return;
       }
       // AI-01 letters on a matter: Draft letter with Vo, New letter, new version, Approve, Discard.
@@ -1709,6 +1733,7 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if ((event.target as HTMLElement | null)?.id === linkId) fillLinkedName(linkDialog, linkId, nameId);
       }, listen);
     }
+    bindPrivacyResponseControls(root, ac.signal);
     // ?dlg=review&doc= (back from step-up) reopens the document review with what was typed.
     if (root.querySelector("dialog#dlgDocRev")) window.setTimeout(() => reopenDocReview(root, openDialog), 300);
 

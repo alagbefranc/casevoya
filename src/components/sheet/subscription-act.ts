@@ -123,6 +123,11 @@ export async function runSubscriptionAct(button: HTMLElement, open: Open) {
     open("dlgPlan");
     return;
   }
+  // SEC-10: Cancel subscription opens its dialog (#dlgCancelSub); sec-acts sends it.
+  if (act === "cancel") {
+    open("dlgCancelSub");
+    return;
+  }
   if (act === "checkout") {
     const dialog = button.closest("dialog") as HTMLDialogElement | null;
     if (!dialog) return;

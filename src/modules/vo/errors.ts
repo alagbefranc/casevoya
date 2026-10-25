@@ -44,6 +44,9 @@ const MESSAGES: Record<string, string> = {
   firm_rate_limited: "Your firm has used today’s Vo allowance. Write it yourself; it resets tomorrow.",
   denied: "Only firm staff who can read this matter, signed in with two-step verification, can use Vo.",
   owner_only: "Only the firm owner, signed in with two-step verification, can change Vo settings.",
+  // AI vendor terms (AI-06).
+  vendor_terms: "Review and acknowledge the AI vendor terms before turning Vo on.",
+  vendor_terms_changed: "The AI vendor terms changed. Reload the page and review them again.",
   no_message: "There’s no client message to reply to yet.",
   no_requests: "There are no open document requests for the people in this conversation.",
   placeholder: "Replace “[needs a sourced rule]” with a checked, sourced fact (or remove it) before sending.",

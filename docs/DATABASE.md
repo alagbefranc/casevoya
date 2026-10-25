@@ -755,6 +755,47 @@ SEC-01 and SEC-05 (gap #184), branch `feat/sec-sessions-consent`.
 
 Tested in `tests/sec-sessions-consent.rls.test.ts` and `tests/sec-sessions-consent.test.tsx`.
 
+## Retention deletion jobs and tombstones (`20261025290000`, not applied on the live project)
+
+SEC-07 (gap #184), branch `feat/sec-retention-cancellation`. Additive; redefines no function.
+
+* `deletion_jobs`: one approved deletion of one closed matter's files (matter, closure, reason, retention end, policy version, approver, idempotency key, status `approved` / `running` / `completed` / `blocked` / `failed`, lease and attempts). One open job per matter. Never deleted; who approved what is immutable. Forced RLS, no policies.
+* `deletion_job_items`: what the job removes (`document_file`, `inbox_file`, `export_file`, `vo_reading`, `vo_draft`) or keeps with a reason (`agreement_pdf`, a document also on another matter): opaque storage key, SHA-256, status `pending` / `deleted` / `missing` / `kept`. Forced RLS, no policies.
+* `deletion_tombstones`: append-only, one per completed job: matter reference, closed and retention dates, policy version and years, approver and approval time, reason, removed counts by kind (embeddings 0), kept items with reasons, and the removed storage keys (`objects`, for reapplying after a backup restore). Forced RLS, no policies.
+* `app.retention_end(matter)`: the later of the latest closure's `retention_on` and `matters.retention_on`. `app.deletion_ineligible_reason(matter)`, `app.matter_records_deleted(matter)`, `app.document_on_other_matter(document, matter)`.
+* `public.retention_deletion_overview(org)`: firm owner (MFA): eligible matters, the count past the end but on hold, jobs not completed, tombstones.
+* `public.approve_deletion_job(matter, reason, key)`: firm owner + step-up (`app.require_owner_step_up_for_matter`); plans the items; audited `retention.deletion_approved`.
+* Service role only: `public.service_claim_deletion_job()`, `public.service_deletion_item_ready(item)` (re-check; stops the job on a legal hold, keeps a document linked elsewhere), `public.service_record_deletion_item(item, outcome)` (performs the Vo redactions and removes download grants), `public.service_finish_deletion_job(job)` (tombstone). Audited `retention.deletion_started`, `retention.deletion_blocked`, `retention.deletion_failed`, `retention.deletion_completed`.
+* `app.kick_retention_runner()` and pg_cron job `casevoya-retention-runner` (every 5 minutes, only while a job waits): POSTs to `/api/retention/run` with the existing mail dispatch Vault secrets.
+
+Tested in `tests/sec-retention-deletion.rls.test.ts` and `tests/sec-retention-cancellation.test.tsx`.
+
+## Subscription cancellation, export window, custodial archive or transfer (`20261025290100`, not applied on the live project)
+
+SEC-10 (gap #184), branch `feat/sec-retention-cancellation`.
+
+* `organization_subscriptions`: new `cancel_requested_at`, `cancel_requested_by`, `end_arrangement` (`custodial_archive` / `transfer`), `end_transfer_id` (FK `(…, organization_id)` to `firm_transfers`), `end_arrangement_chosen_by`, `end_arrangement_chosen_at`; indexes on each FK.
+* **Redefines** `app.subscription_grace_days(text)` (latest `20261020160100_subscription_billing.sql`): `export_window_days` is never below 90.
+* **Redefines** `app.sync_subscription_state(uuid)` (latest `20261020160100_subscription_billing.sql`): a subscription whose `cancel_at` has passed becomes `cancelled` (`subscription.contract_period_ended`); `cancelled` becomes `archived` at `app.subscription_export_window_end` (the later of `cancelled_at` and `current_period_end`, plus the window) with `end_arrangement` `transfer` only when the chosen transfer is completed, else `custodial_archive`.
+* **Redefines** `public.firm_subscription(uuid)` (latest `20261020160100_subscription_billing.sql`): adds `continuity` and, in `subscription`, `cancel_requested_at` and `end_arrangement`.
+* New: `app.subscription_export_window_end(org)`, `app.firm_transfer_verified(transfer)`, `app.subscription_continuity_json(org, with_coverage)`, `public.subscription_continuity(org)` (any staff, MFA: banner), `public.subscription_cancel_allowed(org)` (owner + step-up; audited `subscription.cancel_requested`), `public.service_record_subscription_cancel(org, actor, cancel_at, period_end)` (service role; Stripe's date; audited `subscription.cancel_scheduled`), `public.choose_subscription_end_arrangement(org, arrangement, transfer)` (owner + step-up; audited `subscription.end_arrangement_chosen`), `public.firm_export_index(org)` (owner + step-up; audited `firm_export.index_downloaded`).
+
+Tested in `tests/sec-subscription-cancellation.rls.test.ts`, `tests/subscription-billing.rls.test.ts` and `tests/sec-retention-cancellation.test.tsx`.
+
+## AI vendor terms acknowledgement (`20261025260000`, not applied on the live project)
+
+AI-06, branch `feat/ai-vendor-terms`. Additive; no existing function is redefined.
+
+* `vo_vendor_terms_acknowledgements`: one row per firm and terms version (`unique (organization_id, terms_version)`): `terms_version`, `acknowledged_by` (FK `auth.users`, indexed), `acknowledged_at`. Forced RLS; read by the firm's staff with staff MFA (the same rule as `vo_settings`); no insert, update or delete grant.
+* `app.vo_vendor_terms_version()`: the current terms version; must equal `VO_VENDOR_TERMS.version` in `src/modules/vo/vendor-terms.ts` (tested). A content change ships with a new migration redefining it.
+* `app.vo_vendor_terms_acknowledged(org)`: whether the firm acknowledged the current version.
+* `public.acknowledge_vo_vendor_terms(org, version)`: firm owner with staff MFA; only the current version ("the AI vendor terms changed" otherwise); idempotent. Audited `vo.vendor_terms_acknowledged` with the version.
+* Trigger `vo_settings_require_vendor_terms` (`app.vo_settings_require_vendor_terms`, before insert or update of `enabled` on `vo_settings`): setting `enabled` to true when Vo was off (the saved switch, or with no row the sample-mode default from `app.vo_enabled`) is refused without the current version acknowledged. `set_vo_settings` and `set_composio_enabled` are unchanged.
+
+* `20261025260100_vo_vendor_terms_version_2.sql` **redefines** `app.vo_vendor_terms_version()` (latest `20261025260000_vo_vendor_terms_ack.sql`): returns `2026-10-25.1` (signed vendor agreements and Casevoya's commitments added to the panel). Nothing else changes; owners acknowledge the new version before Vo can next be turned on.
+
+Tested in `tests/vo-vendor-terms.rls.test.ts` and `tests/vo-vendor-terms.test.tsx`; `tests/vo-drafts.rls.test.ts`, `tests/vo-doc-review.rls.test.ts` and `tests/vo-lead-call.rls.test.ts` now acknowledge before turning Vo on.
+
 ## Letters on a matter and Vo letter drafts (`20261025240000`, `20261025240100`, not applied on the live project)
 
 AI-01 (gap #183), branch `feat/ai-letter-drafts`. Apply in order: `20261025240000_vo_letter_enum.sql` (enum value, its own migration), then `20261025240100_vo_letter_drafts.sql`. Then `20261025240200_vo_settings_keep_read_on_upload.sql`, in the same go: it redefines `set_vo_settings` from DOC-05's body (`20261025000000`, live on prod) plus `letter_drafts`, and adds `vo_settings.read_on_upload` if missing, so neither switch is dropped.
@@ -774,3 +815,16 @@ AI-01 (gap #183), branch `feat/ai-letter-drafts`. Apply in order: `2026102524000
 * `public.release_matter_letter(letter)`: approved letters only; the approved version's text without citation markers. Audited `letter.released`. Used by `GET /api/letters/[letterId]`.
 
 Tested in `tests/vo-letter-drafts.rls.test.ts`, `tests/vo-letter-service.test.ts`, `tests/vo-letter-app.test.ts`, `tests/vo-letter-guard.test.ts` and `tests/vo-letters-present.test.tsx`.
+## Privacy requests: extension, response package, portal delivery (`20261025280000`, not applied on the live project)
+
+SEC-06 (gap #184), branch `feat/sec-privacy-requests`. No existing function redefined.
+
+* `privacy_time_limits` (per firm): `kind` response / extension, `law_name`, `provision_text` (word for word), `days` (only when stated), `source_id` / `snapshot_id` (firm `official_sources` / `source_snapshots`), `source_url` (allowlisted, trigger; federal official host in the function), `source_section`, `checked_on`, `current_to`, `snapshot_sha256`, status pending_review / approved / rejected / retired with reviewer and attestation columns. Entered values immutable (trigger); status changes only through the functions (`app.gov_guard_update`). Staff read; never seeded.
+* `privacy_requests` gains `extended_due_on`, `extension_basis` (official / firm), `extension_time_limit_id` (FK, indexed), `extension_reason`, `extension_recourse`, `extended_at` / `extended_by`, `extension_notice_channel` (portal / other), `extension_notice_method`, `extension_notice_late`, `extension_notice_seen_at`; shape check `privacy_requests_extension_shape`.
+* `privacy_request_items`: the scope search's records (`source`, `source_id`, `matter_id`, `label`, `fields`) with `decision` include / withhold / redact, `withheld_fields`, `third_party`, `reason`, `decided_by/at`; unique per request, source and record; never deleted. `privacy_request_redactions` gains `item_id` (FK, unique when set).
+* `privacy_request_responses`: packages (`building` / `ready` / `failed` / `superseded`, bucket `matter-exports`, key, `sha256`, `manifest_sha256`, sizes and counts, `withheld_count`, `excluded`); one building per request; built packages never change (trigger); never deleted.
+* `privacy_request_deliveries` (one per request: response, person, `delivered_by/at`, `expires_at` = 30 days, `sha256`, `download_count`, first/last download) and `privacy_response_downloads` (append-only: delivery, user, time, hash).
+* Functions (`app.` with `public.` invoker wrappers): `propose_privacy_time_limit`, `review_privacy_time_limit` (licensed, fresh step-up, `gov_check_page_attestation`, `gov_check_self_approval`), `retire_privacy_time_limit`, `extend_privacy_request`, `privacy_scope_search` (also records the scope step), `decide_privacy_item` (writes the worklist line), `start_privacy_response` (step-up; after the redaction step), `authorize_privacy_response_preview` (step-up), `deliver_privacy_response` (step-up; after the review; closes the request), `authorize_privacy_response_download` (the person, active portal login, within 30 days; records the download). Service role only: `public.service_complete_privacy_response`, `public.service_fail_privacy_response`. Client: `public.privacy_requests_for_me(org)`, `public.mark_privacy_notices_seen(org)`. Every action audited (`privacy.time_limit_*`, `privacy.request_extended`, `privacy.scope_searched`, `privacy.item_decided`, `privacy.response_started/ready/failed/previewed/delivered/downloaded`, `privacy.extension_notice_seen`).
+* RLS forced on every new table; select only, through `app.can_read_privacy_request` (requests stay per firm) or firm staff for time limits.
+
+Tested in `tests/privacy-responses.rls.test.ts` and `tests/privacy-responses-present.test.ts`.

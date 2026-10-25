@@ -29,6 +29,10 @@ export type ExportMeta = {
   generatedAt: string;
   generatedBy: string;
   timezone: string;
+  /** SEC-06: a privacy access response reuses this package with its own format name, title and scope. */
+  format?: string;
+  title?: string;
+  scope?: string;
 };
 
 export async function sha256Hex(bytes: Uint8Array): Promise<string> {
@@ -82,7 +86,7 @@ export async function buildExportPackage(meta: ExportMeta, records: ExportRecord
   contents.documents = files.length;
 
   const manifest = {
-    format: "casevoya.client-file-export",
+    format: meta.format ?? "casevoya.client-file-export",
     format_version: 1,
     export_id: meta.exportId,
     firm: meta.firm,
@@ -90,7 +94,7 @@ export async function buildExportPackage(meta: ExportMeta, records: ExportRecord
     generated_at: meta.generatedAt,
     generated_by: meta.generatedBy,
     timezone: meta.timezone,
-    scope: "Records and documents the requesting staff member could read when the export was made (row-level security).",
+    scope: meta.scope ?? "Records and documents the requesting staff member could read when the export was made (row-level security).",
     hash: "SHA-256 of each file's exact bytes in this archive.",
     limits: EXPORT_LIMITS,
     files: listed,
@@ -101,7 +105,7 @@ export async function buildExportPackage(meta: ExportMeta, records: ExportRecord
   entries.push({ path: "manifest.json", bytes: manifestBytes, modified: at });
 
   const summary: ReportFile = {
-    title: `Client-file export, ${meta.matterReference}`,
+    title: meta.title ?? `Client-file export, ${meta.matterReference}`,
     meta: [
       ["Firm", meta.firm],
       ["Matter", `${meta.matterReference}: ${meta.matterTitle}`],
