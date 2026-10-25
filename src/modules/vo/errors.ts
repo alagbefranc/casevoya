@@ -15,6 +15,7 @@ export const VO_SETTING_KEYS = [
   "ocr_normalisation",
   "missing_fields",
   "inconsistency_flags",
+  "letter_drafts",
 ] as const;
 
 export type VoSettingKey = (typeof VO_SETTING_KEYS)[number];
