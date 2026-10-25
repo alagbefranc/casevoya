@@ -135,7 +135,7 @@ describe("invoice, payment and refund mail", () => {
     expect(rows.rows.map((row) => row.status)).toEqual(["skipped"]);
   });
 
-  it("tells the payer when a card payment fails, and when a refund starts and completes", async () => {
+  it("tells the payer when a card payment fails and when a refund starts, never that it is complete", async () => {
     const f = await firm();
     const invoice = await issue(f);
     const intent = `pi_Syn${tag()}`;
@@ -170,14 +170,115 @@ describe("invoice, payment and refund mail", () => {
     const [started] = await mailEvent(f.orgId, "invoice.refund_started", "refund_id", refund);
     const startedMail = await prepare(started.id);
     expect(startedMail.messages.map((message) => [message.to, message.template])).toEqual([[f.applicantEmail, "refund_started"]]);
+    expect(JSON.stringify(startedMail.messages[0].context)).not.toMatch(/10000|amount/);
+    // Bug #215: a succeeded card refund can still fail (Stripe: up to 30 days), so no "complete" email.
     await asMaintenance(db);
     await db.query(`update public.invoice_refunds set status = 'succeeded', succeeded_at = now() where id = $1`, [refund]);
     await db.query(`update public.invoice_refunds set status = 'succeeded' where id = $1`, [refund]);
-    const done = await mailEvent(f.orgId, "invoice.refund_succeeded", "refund_id", refund);
-    expect(done).toHaveLength(1);
-    const doneMail = await prepare(done[0].id);
-    expect(doneMail.messages.map((message) => [message.to, message.template])).toEqual([[f.applicantEmail, "refund_complete"]]);
-    expect(JSON.stringify(doneMail.messages[0].context)).not.toMatch(/10000|amount/);
+    expect(await mailEvent(f.orgId, "invoice.refund_succeeded", "refund_id", refund)).toEqual([]);
+  });
+
+  async function paidRefund() {
+    const f = await firm();
+    const invoice = await issue(f);
+    const intent = `pi_Syn${tag()}`;
+    await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
+    await db.query(`select public.record_invoice_payment_intent($1, $2, $3, 50000, 'cad', 0, false)`, [invoice.id, intent, f.account]);
+    await asServiceRole(db);
+    await db.query(
+      `select public.apply_stripe_payment_event($1, $2, 'payment_intent.succeeded', $3, 50000, 50000, 'cad', false, null, '{}'::jsonb)`,
+      [`evt_${tag()}`, f.account, intent],
+    );
+    await asMaintenance(db);
+    const payment = (await db.query<{ id: string }>(`select id from public.invoice_payments where payment_intent_id = $1`, [intent])).rows[0].id;
+    const stripeRefund = `re_Syn${tag()}`;
+    const refund = (
+      await db.query<{ id: string }>(
+        `insert into public.invoice_refunds (organization_id, invoice_id, payment_id, number, refund_id, connected_account_id, amount_cents, currency, status, livemode)
+         values ($1, $2, $3, 'RF-0001', $4, $5, 10000, 'CAD', 'pending', false) returning id`,
+        [f.orgId, invoice.id, payment, stripeRefund, f.account],
+      )
+    ).rows[0].id;
+    return { f, intent, stripeRefund, refund };
+  }
+
+  async function stripeRefundEvent(f: Awaited<ReturnType<typeof firm>>, id: string, type: string, stripeRefund: string, intent: string, status: string, failure: string | null) {
+    await asServiceRole(db);
+    const result = await db.query<{ r: { outcome: string; refund_status: string } }>(
+      `select public.apply_stripe_reversal_event($1, $2, $3, $4, $5, null, 10000, 'cad', $6, null, $7, null, null, null, false, '{}'::jsonb) as r`,
+      [id, f.account, type, stripeRefund, intent, status, failure],
+    );
+    return result.rows[0].r;
+  }
+
+  it("tells the payer once, in plain words, when a refund fails after it succeeded, however often Stripe replays it", async () => {
+    const { f, intent, stripeRefund, refund } = await paidRefund();
+    expect(await stripeRefundEvent(f, `evt_${tag()}`, "refund.updated", stripeRefund, intent, "succeeded", null)).toMatchObject({ refund_status: "succeeded" });
+    expect(await mailEvent(f.orgId, "invoice.refund_succeeded", "refund_id", refund)).toEqual([]);
+
+    const failedEvent = `evt_${tag()}`;
+    expect(await stripeRefundEvent(f, failedEvent, "refund.failed", stripeRefund, intent, "failed", "expired_or_canceled_card")).toMatchObject({
+      outcome: "applied",
+      refund_status: "failed",
+    });
+    // The same event again, and Stripe's refund.updated for the same failure.
+    expect((await stripeRefundEvent(f, failedEvent, "refund.failed", stripeRefund, intent, "failed", "expired_or_canceled_card")).outcome).toBe("duplicate");
+    await stripeRefundEvent(f, `evt_${tag()}`, "refund.updated", stripeRefund, intent, "failed", "expired_or_canceled_card");
+
+    const corrections = await mailEvent(f.orgId, "invoice.refund_failed", "refund_id", refund);
+    expect(corrections).toHaveLength(1);
+    const mail = await prepare(corrections[0].id);
+    expect(mail.messages.map((message) => [message.to, message.template])).toEqual([[f.applicantEmail, "refund_failed"]]);
+    expect(mail.messages[0].context).toMatchObject({ refund_reason: "expired_or_canceled_card" });
+    expect(JSON.stringify(mail.messages[0].context)).not.toMatch(/10000|amount/);
+    const email = renderEmail({ ...mail.messages[0].context, template: mail.messages[0].template });
+    expect(email.design).toBe("EX20");
+    expect(email.subject).toBe("Your refund from Synthetic Firm didn’t go through");
+    expect(email.text).toContain("the card it was sent to is no longer active");
+    expect(email.text).not.toContain("expired_or_canceled_card");
+    // The owner's task is kept.
+    await asMaintenance(db);
+    expect((await db.query<{ task_id: string | null }>(`select task_id from public.invoice_refunds where id = $1`, [refund])).rows[0].task_id).not.toBeNull();
+  });
+
+  it("corrects a pending refund that fails, and says nothing for a refund that failed before the client heard of it", async () => {
+    const { f, intent, stripeRefund, refund } = await paidRefund();
+    await stripeRefundEvent(f, `evt_${tag()}`, "refund.failed", stripeRefund, intent, "failed", "unknown");
+    const [correction] = await mailEvent(f.orgId, "invoice.refund_failed", "refund_id", refund);
+    const mail = await prepare(correction.id);
+    const email = renderEmail({ ...mail.messages[0].context, template: mail.messages[0].template });
+    expect(email.design).toBe("EX20");
+    expect(email.text).not.toContain("no longer active");
+    expect(email.text).not.toContain("unknown");
+
+    await asMaintenance(db);
+    const silent = (
+      await db.query<{ id: string }>(
+        `insert into public.invoice_refunds (organization_id, invoice_id, payment_id, number, refund_id, connected_account_id, amount_cents, currency, status, livemode)
+         select organization_id, invoice_id, payment_id, 'RF-0002', $2, connected_account_id, 5000, 'CAD', 'failed', false from public.invoice_refunds where id = $1 returning id`,
+        [refund, `re_Syn${tag()}`],
+      )
+    ).rows[0].id;
+    await db.query(`update public.invoice_refunds set status = 'canceled' where id = $1`, [silent]);
+    expect(await mailEvent(f.orgId, "invoice.refund_started", "refund_id", silent)).toEqual([]);
+    expect(await mailEvent(f.orgId, "invoice.refund_failed", "refund_id", silent)).toEqual([]);
+  });
+
+  it("skips a 'refund complete' email still queued from before", async () => {
+    const { f, refund } = await paidRefund();
+    await asMaintenance(db);
+    const event = (
+      await db.query<{ id: string }>(
+        `select app.enqueue_event($1, 'invoice', invoice_id, 'invoice.refund_succeeded',
+           jsonb_build_object('invoice_id', invoice_id, 'payment_id', payment_id, 'refund_id', id), null, 'old-complete:' || id::text, null) as id
+         from public.invoice_refunds where id = $2`,
+        [f.orgId, refund],
+      )
+    ).rows[0].id;
+    const prepared = await prepare(event);
+    expect(prepared).toMatchObject({ action: "done", messages: [] });
+    await asMaintenance(db);
+    expect((await db.query(`select 1 from public.email_deliveries where outbox_event_id = $1`, [event])).rows).toEqual([]);
   });
 });
 
