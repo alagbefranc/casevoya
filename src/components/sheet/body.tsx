@@ -27,6 +27,7 @@ import { GOVERNMENT_CSS, GovernmentHeader, SheetGovernment } from "@/components/
 import { GovDialogs } from "@/components/sheet/designer/matter-government";
 import { loadSheetGovernment } from "@/modules/sheet/government-load";
 import { MatterDialogs, MatterRbar, MatterTopBar, SheetMatter } from "@/components/sheet/designer/matter";
+import { MatterLetterDialogs } from "@/components/sheet/designer/matter-letters";
 import { MATTER_CSS } from "@/components/sheet/designer/matter-css";
 import { MattersTopBar, NewMatterDialog, SheetMatters } from "@/components/sheet/designer/matters";
 import { PersonEditDialog } from "@/components/sheet/designer/person-edit";
@@ -884,6 +885,7 @@ export async function SheetBody({
             <>
               <MatterDialogs data={loaded.dialogs} />
               <GovDialogs data={loaded.governmentDialogs} />
+              {loaded.letterDialogs ? <MatterLetterDialogs data={loaded.letterDialogs} /> : null}
               {loaded.page.billing?.work ? <MatterWorkDialogs data={loaded.page.billing.work} /> : null}
               {loaded.countersign.map((sign) => (
                 <CountersignDialog key={sign.envelopeId} data={sign} />

@@ -6859,6 +6859,123 @@ export type Database = {
           },
         ]
       }
+      matter_letters: {
+        Row: {
+          approved_at: string | null
+          approved_by_membership_id: string | null
+          approved_self: boolean | null
+          approved_version: number | null
+          created_at: string
+          created_by: string
+          current_version: number
+          discarded_at: string | null
+          discarded_by: string | null
+          id: string
+          is_sample: boolean
+          letter_type: string
+          matter_id: string
+          organization_id: string
+          origin: string
+          run_id: string | null
+          status: string
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          approved_self?: boolean | null
+          approved_version?: number | null
+          created_at?: string
+          created_by: string
+          current_version?: number
+          discarded_at?: string | null
+          discarded_by?: string | null
+          id?: string
+          is_sample?: boolean
+          letter_type: string
+          matter_id: string
+          organization_id: string
+          origin: string
+          run_id?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          approved_self?: boolean | null
+          approved_version?: number | null
+          created_at?: string
+          created_by?: string
+          current_version?: number
+          discarded_at?: string | null
+          discarded_by?: string | null
+          id?: string
+          is_sample?: boolean
+          letter_type?: string
+          matter_id?: string
+          organization_id?: string
+          origin?: string
+          run_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      matter_letter_versions: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string
+          facts: Json
+          id: string
+          left_out: Json
+          letter_id: string
+          matter_id: string
+          official: Json
+          organization_id: string
+          origin: string
+          title: string
+          version_number: number
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by: string
+          facts?: Json
+          id?: string
+          left_out?: Json
+          letter_id: string
+          matter_id: string
+          official?: Json
+          organization_id: string
+          origin: string
+          title: string
+          version_number: number
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string
+          facts?: Json
+          id?: string
+          left_out?: Json
+          letter_id?: string
+          matter_id?: string
+          official?: Json
+          organization_id?: string
+          origin?: string
+          title?: string
+          version_number?: number
+        }
+        Relationships: []
+      }
       matter_staff_notes: {
         Row: {
           author_membership_id: string
@@ -11850,8 +11967,10 @@ export type Database = {
           inconsistency_flags: boolean
           missing_fields: boolean
           ocr_normalisation: boolean
+          letter_drafts: boolean
         }
         Insert: {
+          letter_drafts?: boolean
           composio_accepted_at?: string | null
           composio_accepted_by?: string | null
           composio_enabled?: boolean
@@ -11874,6 +11993,7 @@ export type Database = {
           updated_by: string
         }
         Update: {
+          letter_drafts?: boolean
           doc_classification?: boolean
           inconsistency_flags?: boolean
           missing_fields?: boolean
@@ -12567,6 +12687,57 @@ export type Database = {
       begin_vo_lead_follow_up: {
         Args: { p_lead_id: string; p_organization_id: string }
         Returns: Json
+      }
+      begin_vo_letter_draft: {
+        Args: { p_letter_type: string; p_matter_id: string; p_organization_id: string }
+        Returns: Json
+      }
+      create_matter_letter: {
+        Args: { p_body: string; p_letter_type: string; p_matter_id: string; p_organization_id: string; p_title: string }
+        Returns: string
+      }
+      revise_matter_letter: {
+        Args: { p_body: string; p_expected_version: number; p_letter_id: string; p_title: string }
+        Returns: number
+      }
+      approve_matter_letter: {
+        Args: { p_expected_version: number; p_letter_id: string }
+        Returns: Json
+      }
+      discard_matter_letter: {
+        Args: { p_expected_version: number; p_letter_id: string }
+        Returns: undefined
+      }
+      release_matter_letter: {
+        Args: { p_letter_id: string }
+        Returns: Json
+      }
+      vo_letter_facts: {
+        Args: { p_run_id: string }
+        Returns: Json
+      }
+      vo_letter_official_content: {
+        Args: { p_run_id: string }
+        Returns: Json
+      }
+      save_vo_letter_draft: {
+        Args: {
+          p_body: string
+          p_cost_usd?: number | null
+          p_facts: Json
+          p_input_tokens?: number | null
+          p_latency_ms?: number | null
+          p_left_out: Json
+          p_letter_type: string
+          p_model: string
+          p_official: Json
+          p_output_tokens?: number | null
+          p_prompt_version: string
+          p_run_id: string
+          p_title: string
+          p_tools?: string[] | null
+        }
+        Returns: string
       }
       begin_vo_run: {
         Args: {
@@ -15967,6 +16138,7 @@ export type Database = {
         | "document_request"
         | "ask"
         | "document_review"
+        | "letter_draft"
         | "lead_follow_up"
         | "call_summary"
       vo_run_result: "running" | "drafted" | "answered" | "abstained" | "failed"
@@ -16446,6 +16618,7 @@ export const Constants = {
         "document_request",
         "ask",
         "document_review",
+        "letter_draft",
         "lead_follow_up",
         "call_summary",
       ],

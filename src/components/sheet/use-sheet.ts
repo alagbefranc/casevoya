@@ -134,6 +134,7 @@ import { signOutOtherSessions } from "@/modules/settings/firm-actions";
 import { mountIntakeBuilder } from "./intake-builder-acts";
 import { runVoAccept, runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
 import { runVoDocAccept, runVoDocDiscard, runVoDocReject, runVoRead } from "./vo-doc-acts";
+import { runLetterApprove, runLetterDiscard, runLetterNew, runLetterRevise, runVoLetterDraft } from "./vo-letter-acts";
 import { mountRetentionSlider, runRetentionSave } from "./retention-act";
 import { mountSubscription, runSubscriptionAct } from "./subscription-act";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
@@ -1118,6 +1119,25 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
               ? () => runVoDocReject(voDoc, router)
               : () => runVoDocDiscard(voDoc, router);
         busyRun(voDoc, run);
+        return;
+      }
+      // AI-01 letters on a matter: Draft letter with Vo, New letter, new version, Approve, Discard.
+      const letterAct = target.closest<HTMLElement>("[data-vo-letter], [data-letter-new], [data-letter-revise], [data-letter-approve], [data-letter-discard]");
+      if (letterAct && root.contains(letterAct)) {
+        event.preventDefault();
+        if (letterAct.hasAttribute("disabled")) return;
+        const data = letterAct.dataset;
+        const run =
+          data.voLetter !== undefined
+            ? runVoLetterDraft
+            : data.letterNew !== undefined
+              ? runLetterNew
+              : data.letterRevise !== undefined
+                ? runLetterRevise
+                : data.letterApprove !== undefined
+                  ? runLetterApprove
+                  : runLetterDiscard;
+        busyRun(letterAct, () => run(letterAct, router));
         return;
       }
       // Vo drafts and Vo and AI: Reject, the owner's switches, "useful?" votes and Ask Vo.
