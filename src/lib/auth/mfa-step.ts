@@ -83,6 +83,7 @@ const ACTIONS = {
   subscription_cancel: { phrase: "cancel the subscription", icon: "credit-card", title: "Cancel the subscription", detail: "Ends at the close of the paid period; nothing is deleted" },
   subscription_end: { phrase: "choose what happens after cancelling", icon: "archive", title: "Choose the archive or transfer", detail: "Where the firm’s records go after the export window" },
   firm_index: { phrase: "download the firm export index", icon: "download", title: "Download the firm index", detail: "Every client-file package with its SHA-256" },
+  privacy_response: { phrase: "build or open a privacy response", icon: "privacy", title: "Build a privacy response", detail: "The person’s records, with third-party information withheld" },
   letter_approve: { phrase: "approve a letter", icon: "file-check", title: "Approve a letter", detail: "The version that can be released to the client or the government" },
 } as const satisfies Record<string, { phrase: string } & StepUpAction>;
 
