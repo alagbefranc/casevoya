@@ -95,7 +95,7 @@ describe("Settings > Subscription", () => {
       ["Active matters", "3 of 100 (1 sample, not counted)"],
       ["Storage", "0 of 25 GB"],
     ]);
-    expect(data.buttons?.map((button) => [button.label, button.act])).toEqual([["Change plan", "portal"], ["Manage billing", "portal"], ["Cancel at period end", "portal"]]);
+    expect(data.buttons?.map((button) => [button.label, button.act])).toEqual([["Change plan", "portal"], ["Manage billing", "portal"], ["Cancel subscription", "cancel"]]);
     expect(data.dialog).toBeNull();
     expect(data.note).toContain("Prices are in CAD and set by Casevoya");
     // A catalog with no prices shows no amount at all, and the dialog says "No price set".

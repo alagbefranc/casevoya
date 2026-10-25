@@ -134,10 +134,13 @@ import { runAutomationSave } from "./automations-acts";
 import { signOutOtherSessions } from "@/modules/settings/firm-actions";
 import { mountIntakeBuilder } from "./intake-builder-acts";
 import { runVoAccept, runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
+import { runVoTermsAck } from "./vo-vendor-terms-acts";
+import { VO_TERMS_DIALOG } from "@/modules/sheet/vo-vendor-terms-present";
 import { runVoDocAccept, runVoDocDiscard, runVoDocReject, runVoRead } from "./vo-doc-acts";
 import { runLetterApprove, runLetterDiscard, runLetterNew, runLetterRevise, runVoLetterDraft } from "./vo-letter-acts";
 import { mountRetentionSlider, runRetentionSave } from "./retention-act";
 import { mountSubscription, runSubscriptionAct } from "./subscription-act";
+import { runSecAct } from "./sec-acts";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
 import {
   mountIntegrations,
@@ -850,6 +853,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(subscriptionAct, () => runSubscriptionAct(subscriptionAct, openDialog));
         return;
       }
+      // SEC-07 / SEC-10 (firm owner): Approve deletion, Cancel subscription, after the window, firm index.
+      const secAct = target.closest<HTMLElement>("[data-sec-act]");
+      if (secAct && root.contains(secAct)) {
+        event.preventDefault();
+        busyRun(secAct, () => runSecAct(secAct, root, router, openDialog));
+        return;
+      }
       const bookingSubmit = target.closest<HTMLElement>("[data-booking-submit]");
       if (bookingSubmit && root.contains(bookingSubmit)) {
         event.preventDefault();
@@ -1125,6 +1135,14 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
               ? () => runVoDocReject(voDoc, router)
               : () => runVoDocDiscard(voDoc, router);
         busyRun(voDoc, run);
+        return;
+      }
+      // AI-06: turning Vo on first opens the AI vendor terms acknowledgement; its button records it.
+      const voTerms = target.closest<HTMLElement>(".k2-sw[data-vo-terms], [data-vo-terms-ack]");
+      if (voTerms && root.contains(voTerms)) {
+        event.preventDefault();
+        if (voTerms.hasAttribute("data-vo-terms-ack")) busyRun(voTerms, () => runVoTermsAck(voTerms, router));
+        else openDialog(VO_TERMS_DIALOG);
         return;
       }
       // AI-01 letters on a matter: Draft letter with Vo, New letter, new version, Approve, Discard.
