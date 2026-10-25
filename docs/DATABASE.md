@@ -921,6 +921,10 @@ ADM-04 (gap #186), branch `feat/adm-service-levels`. Additive; no existing funct
 
 Ops wrapper: `scripts/ops/service-levels.mjs` (record, report). Tested in `tests/service-levels.rls.test.ts` and `tests/service-levels-present.test.tsx`.
 
+## Service notice reach check is private (`20261025440000`, not applied on the live project)
+
+ADM-04 follow-up. Revokes `authenticated`'s EXECUTE on `app.service_notice_reaches(uuid, uuid)`. It is only called inside the security-definer `app.can_read_service_notice` and `app.dismiss_service_notice`, so reads and dismissals are unchanged; a signed-in user can no longer ask whether a notice reaches a firm. Tested in `tests/adm-service-notices.rls.test.ts`.
+
 ## Claims, review workbench and publication gate (`20261025400000`, not applied on the live project)
 
 SRC-01, SRC-02, SRC-03 (gap #188), branch `feat/src-claims-review`. Builds on the source-governance tables; additive (new nullable columns, `rule_evidence.snapshot_id` relaxed to nullable, new checks, functions and one trigger). Seeds nothing.
