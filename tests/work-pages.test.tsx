@@ -231,7 +231,9 @@ describe("Billing tab and the Money column", () => {
     expect(html).toContain("CAD 1,130.00 due 6 Nov");
     expect(html).not.toContain("No invoices yet");
     const none = renderToStaticMarkup(createElement(MatterBilling, { data: matterBilling({ invoices: [], entries: [], today: "2026-10-19", hidden: true }) }));
-    expect(none).toContain("Invoices are shown to billing staff");
+    // DES-04: the shared permission-denied view, in the Designer's own words for this case.
+    expect(none).toContain("You don’t have access to Billing on this matter");
+    expect(none).toContain('data-no-access="1"');
   });
 });
 

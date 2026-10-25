@@ -70,6 +70,7 @@ import { loadFinanceBilling, loadInvoiceBillingDialogs } from "@/modules/billing
 import { billingInvoiceState } from "@/modules/billing/present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone, plusDays } from "@/modules/sheet/present";
+import { failedPaymentAlert, partialAlert, type PaymentFact, type ReadSource, type StateAlertData } from "@/modules/sheet/states-present";
 
 const INVOICES_READ = 500;
 const BILLING_ROLES = new Set(["firm_owner", "finance_user"]);
@@ -151,7 +152,7 @@ async function loadManualPaymentRows(supabase: Supabase, staff: SheetStaff): Pro
  * sample invoices' payments, marked "(sample)". Billing staff get a Refund button on a received
  * payment with something left to refund.
  */
-async function loadPaymentRows(supabase: Supabase, staff: SheetStaff, canBill: boolean): Promise<PaymentRow[]> {
+async function loadPaymentRows(supabase: Supabase, staff: SheetStaff, canBill: boolean): Promise<{ rows: PaymentRow[]; facts: PaymentFact[]; labels: Map<string, { number: string; client: string }>; read: ReadSource }> {
   const org = staff.organizationId;
   const payments = await supabase
     .from("invoice_payments")
@@ -161,7 +162,9 @@ async function loadPaymentRows(supabase: Supabase, staff: SheetStaff, canBill: b
     .order("updated_at", { ascending: false })
     .limit(PAYMENTS_READ);
   const rows = payments.data ?? [];
-  if (!rows.length) return [];
+  // DES-04: the read behind the list (partial when it failed or hit its limit), and the facts the failed-payment state needs.
+  const read: ReadSource = { label: "Card payments", count: rows.length, cap: PAYMENTS_READ, failed: Boolean(payments.error) };
+  if (!rows.length) return { rows: [], facts: [], labels: new Map(), read };
   const received = rows.filter((row) => row.status === "succeeded" && row.amount_received_cents > 0).map((row) => row.id);
   const [labels, held, receipts] = await Promise.all([
     invoiceLabels(supabase, org, [...new Set(rows.map((row) => row.invoice_id))]),
@@ -174,7 +177,8 @@ async function loadPaymentRows(supabase: Supabase, staff: SheetStaff, canBill: b
   const receiptOf = new Map((receipts?.data ?? []).filter((row) => row.payment_id).map((row) => [row.payment_id as string, row]));
   const heldByPayment = new Map<string, number>();
   for (const refund of held?.data ?? []) heldByPayment.set(refund.payment_id, (heldByPayment.get(refund.payment_id) ?? 0) + refund.amount_cents);
-  return rows.map((row) => {
+  const facts: PaymentFact[] = rows.map((row) => ({ invoiceId: row.invoice_id, status: row.status, updatedAt: row.updated_at }));
+  const list = rows.map((row) => {
     const invoice = labels.get(row.invoice_id);
     const settled = row.status === "succeeded" && row.amount_received_cents > 0;
     const refundable = settled ? Math.max(0, row.amount_received_cents - (heldByPayment.get(row.id) ?? 0)) : 0;
@@ -203,6 +207,7 @@ async function loadPaymentRows(supabase: Supabase, staff: SheetStaff, canBill: b
         : {}),
     };
   });
+  return { rows: list, facts, labels, read };
 }
 
 const REFUNDS_READ = 500;
@@ -1089,6 +1094,10 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
 
   const accountData = firmAccount.data;
 
+  // DES-04: banners above the tab (partial reads, failed payments), in order.
+  const states: (StateAlertData | null)[] = [];
+  // (A failed invoice read already shows as "Invoices couldn’t load" in place of the table.)
+  if (tab === "invoices") states.push(partialAlert([{ label: "Invoices", count: rows.length, cap: INVOICES_READ }]));
   let payments: PaymentsData | null = null;
   let refundDialog: RefundDialogData | null = null;
   if (tab === "payments") {
@@ -1100,12 +1109,30 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
           ? { title: "Stripe isn’t configured", copy: "Refunds go through the firm’s Stripe account, which isn’t reachable in this environment. Nothing can be refunded here." }
           : null,
     };
-    const [cardRows, manualRows, balance] = await Promise.all([
+    const [card, manualRows, balance, disputes] = await Promise.all([
       loadPaymentRows(supabase, staff, canBill),
       canBill ? loadManualPaymentRows(supabase, staff) : [],
       // The account row is only visible to the owner and finance users (RLS).
       account && canBill ? loadBalance(stripe, account) : null,
+      // DES-04: disputes still taking evidence, for the failed-payment state.
+      supabase
+        .from("invoice_disputes")
+        .select("number, status, evidence_due_by")
+        .eq("organization_id", org)
+        .in("status", ["needs_response", "warning_needs_response"])
+        .limit(50),
     ]);
+    const cardRows = card.rows;
+    states.push(
+      failedPaymentAlert({
+        payments: card.facts,
+        invoices: card.labels,
+        disputes: (disputes.data ?? []).map((row) => ({ number: row.number, status: row.status, evidenceDueBy: row.evidence_due_by })),
+        now: new Date(),
+        timeZone: staff.timezone,
+      }),
+      partialAlert([card.read]),
+    );
     // Card payments first (newest first), then manual payments (newest first).
     const paymentRows: PaymentRow[] = [...cardRows, ...manualRows];
     payments = {
@@ -1149,8 +1176,12 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
   if (invoiceView) header.invoiceTab = invoiceView.number;
   // An invoice that isn't there (or isn't this person's to see) falls back to the Invoices tab.
   else if (tab === "invoice") header.tab = "invoices";
+  // DES-04: IRCC's fee list read again and waiting for review while the approved one is used.
+  if (billingPanels?.feesStale) states.push(billingPanels.feesStale);
 
   return {
+    // DES-04: the tab's partial, stale-source and failed-payment banners (live only).
+    states: states.filter((state): state is StateAlertData => Boolean(state)),
     chrome,
     header,
     page,

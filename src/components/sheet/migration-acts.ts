@@ -1,6 +1,7 @@
 "use client";
 
 import { toast2 } from "@/components/port/kit";
+import { acceptChosen, failUpload } from "./upload-failure";
 import { stepUpHref } from "@/lib/auth/mfa-step";
 
 type Router = { refresh(): void; push(href: string): void };
@@ -96,20 +97,16 @@ async function upload(button: HTMLElement, root: HTMLElement, router: Router) {
   const kind = root.querySelector<HTMLSelectElement>("select[data-mig-kind]")?.value || "clients_matters";
   const file = await pick(input, ".csv,text/csv");
   if (!file) return;
-  if (file.size > 5 * 1024 * 1024) {
-    toast2("The file is too large", { kind: "warn", sub: "Import up to 5 MB at a time. Split it and import each part." });
-    return;
-  }
+  // DES-04: a file the import can't take (wrong type, empty, over 5 MB) is refused here with a retry.
+  const again = () => void upload(button, root, router);
+  if (!acceptChosen(button, file, "migrationCsv", again)) return;
   // MIG-01: a documents import is a CSV manifest plus a ZIP of the files.
   let zip: File | null = null;
   if (kind === "documents") {
     toast2("Now choose the ZIP", { sub: "The ZIP of the files your manifest names, up to 25 MB." });
     zip = await pick(root.querySelector<HTMLInputElement>("input[data-mig-zip]"), ".zip,application/zip");
     if (!zip) return;
-    if (zip.size > 25 * 1024 * 1024) {
-      toast2("The ZIP is too large", { kind: "warn", sub: "Import up to 25 MB of files at a time. Split them into smaller ZIPs." });
-      return;
-    }
+    if (!acceptChosen(button, zip, "migrationZip", again)) return;
   }
   const form = new FormData();
   form.set("organizationId", button.dataset.org ?? "");
@@ -119,7 +116,7 @@ async function upload(button: HTMLElement, root: HTMLElement, router: Router) {
   toast2("Checking the file", { sub: "Counting rows and checking the checksum." });
   const result = await send("/api/migration/upload", form, false);
   if (!result.ok) {
-    toast2("File not uploaded", { kind: "warn", sub: errorOf(result.data) });
+    failUpload(button, errorOf(result.data), "migrationCsv", again);
     return;
   }
   toast2("File checked", { kind: "ok", sub: "Every row arrived intact. Map the columns next." });
