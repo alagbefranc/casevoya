@@ -14,6 +14,13 @@ export type NewMatterDialogData = {
   organizationId: string;
   consultants: NewMatterOption[];
   programs: NewMatterOption[];
+  /**
+   * Live only (SRC-12): the support catalogue's programs, by program key, supported or not. When
+   * present the dialog offers these instead of `programs` (published packs by id).
+   */
+  programChoices?: NewMatterOption[];
+  /** With `programChoices`: the first supported program, or "" (choose later) when none is supported. */
+  programDefault?: string;
   /** The firm is still in sample mode: the database refuses a real matter. */
   sampleMode: boolean;
   /** The latest date of birth the date fields accept (`YYYY-MM-DD`). Absent, no limit is set. */
@@ -30,6 +37,8 @@ export type NewMatterInput = {
   sponsorDateOfBirth: string | null;
   consultantMembershipId: string;
   rulePackVersionId: string | null;
+  /** SRC-12: a program from the support catalogue; the database pins its current approved pack, or none. */
+  programKey?: string;
 };
 
 const BLOCKING = new Set(["revoked", "suspended", "inactive", "not_entitled"]);
@@ -67,6 +76,35 @@ export function programOptions(
 }
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+/** A program key from the support catalogue (a pack id is a UUID and never matches). */
+const PROGRAM_KEY = /^[a-z0-9_]{1,80}$/;
+
+type CatalogueProgram = { key?: unknown; label?: unknown; supported?: unknown; pack_version?: unknown; official?: { name?: unknown; reviewed?: unknown } | null };
+
+/**
+ * SRC-12: the support catalogue's programs for the dialog, supported first. A supported program
+ * pins its current approved pack; an unsupported one opens with no pack, checklist or rules.
+ */
+export function programChoices(programs: unknown): { options: NewMatterOption[]; defaultValue: string } {
+  const rows = Array.isArray(programs) ? (programs as CatalogueProgram[]) : [];
+  const sorted = rows
+    .flatMap((row) => {
+      const key = typeof row.key === "string" && PROGRAM_KEY.test(row.key) ? row.key : null;
+      if (!key) return [];
+      const official = row.official?.reviewed === true && typeof row.official.name === "string" ? row.official.name : null;
+      const name = official ?? (typeof row.label === "string" && row.label.trim() ? row.label.trim() : programLabel(key));
+      const supported = row.supported === true;
+      const label = supported
+        ? `${name} · v${typeof row.pack_version === "number" ? row.pack_version : "?"}`
+        : `${name} (not supported: no approved rule pack)`;
+      return [{ value: key, label, supported }];
+    })
+    .sort((a, b) => Number(b.supported) - Number(a.supported) || a.label.localeCompare(b.label));
+  return {
+    options: sorted.map(({ value, label }) => ({ value, label })),
+    defaultValue: sorted.find((row) => row.supported)?.value ?? "",
+  };
+}
 
 function clean(value: FormDataEntryValue | string | null | undefined): string {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
@@ -112,7 +150,8 @@ export function readNewMatter(fields: {
       applicantDateOfBirth: applicantBirth.date,
       sponsorDateOfBirth: sponsorBirth.date,
       consultantMembershipId: consultant,
-      rulePackVersionId: program,
+      rulePackVersionId: program && PROGRAM_KEY.test(program) ? null : program,
+      ...(program && PROGRAM_KEY.test(program) ? { programKey: program } : {}),
     },
   };
 }
@@ -129,6 +168,7 @@ export function newMatterError(message: string): string {
   if (/licence blocks/i.test(message)) return "A licence blocks this new matter. Check the consultant’s licence status.";
   if (/active licensed consultant/i.test(message)) return "The responsible consultant must be an active licensed consultant.";
   if (/published pack/i.test(message)) return "Choose a published program template for a jurisdiction this firm practises.";
+  if (/support catalogue/i.test(message)) return "Choose a program from the list. It comes from What Casevoya supports.";
   if (/applicant name/i.test(message)) return "Add the applicant’s name.";
   if (/sponsor name is required/i.test(message)) return "Add the sponsor’s name, or leave the sponsor out.";
   if (/date of birth/i.test(message)) return "Check the dates of birth. They can’t be in the future or before 1900.";

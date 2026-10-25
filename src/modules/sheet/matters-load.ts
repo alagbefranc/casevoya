@@ -25,6 +25,7 @@ import {
 } from "@/modules/sheet/matters-present";
 import {
   consultantOptions,
+  programChoices,
   programOptions,
   type NewMatterDialogData,
 } from "@/modules/sheet/new-matter";
@@ -255,7 +256,7 @@ type Client = Awaited<ReturnType<typeof createClient>>;
  */
 export async function loadNewMatterDialog(supabase: Client, staff: SheetStaff): Promise<NewMatterDialogData> {
   const org = staff.organizationId;
-  const [consultants, credentials, published, members] = await Promise.all([
+  const [consultants, credentials, published, members, catalogue] = await Promise.all([
     supabase
       .from("memberships")
       .select("id, role")
@@ -273,7 +274,11 @@ export async function loadNewMatterDialog(supabase: Client, staff: SheetStaff): 
       .in("status", ["published", "review_due"])
       .limit(100),
     memberNames(supabase, org),
+    // SRC-12: the support catalogue's programs, supported or not, as this firm's staff see it.
+    supabase.rpc("support_catalogue", { p_org: org }),
   ]);
+  const catalogueJson = !catalogue.error && catalogue.data && typeof catalogue.data === "object" && !Array.isArray(catalogue.data) ? (catalogue.data as { programs?: unknown }) : null;
+  const choices = catalogueJson ? programChoices(catalogueJson.programs) : null;
   const credentialRows = credentials.data ?? [];
   const credentialStatus = new Map(
     credentialRows.map((row) => [row.membership_id, row.status as string]),
@@ -296,6 +301,7 @@ export async function loadNewMatterDialog(supabase: Client, staff: SheetStaff): 
       credentialStatus,
     ),
     programs: programOptions(published.data ?? []),
+    ...(choices ? { programChoices: choices.options, programDefault: choices.defaultValue } : {}),
     sampleMode: staff.sampleMode,
     maxBirthDate: todayIso(),
   };

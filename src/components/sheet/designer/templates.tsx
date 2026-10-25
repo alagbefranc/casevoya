@@ -52,7 +52,8 @@ export type TemplatesData = {
   newTemplateLabel?: string;
   /** Live (OPS-04): the dialog New template opens instead of a toast or a page. */
   newTemplateDialog?: string;
-  program: { rows: ProgramRow[]; note: string };
+  /** `supportHref` (live only, SRC-12): the link to "What Casevoya supports" after the note. */
+  program: { rows: ProgramRow[]; note: string; supportHref?: string };
   messages: { rows: MessageRow[] };
   checklists: { cards: ChecklistCard[] };
   /** `addClaim` (live only, SRC-01): the Add claim button and dialog. */
@@ -205,6 +206,12 @@ function Program({ data }: { data: TemplatesData }) {
       )}
       <p className={"fp-note rv"} style={i(2)}>
         {data.program.note}
+        {data.program.supportHref ? (
+          <>
+            {" "}
+            <a href={data.program.supportHref}>{"What Casevoya supports"}</a>
+          </>
+        ) : null}
       </p>
     </>
   );

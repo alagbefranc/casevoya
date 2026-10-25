@@ -103,7 +103,9 @@ export async function createClientMatter(input: {
   sponsorDateOfBirth?: string | null;
   consultantMembershipId: string;
   rulePackVersionId: string | null;
-}): Promise<{ id: string; reference: string | null; isSample: boolean } | { error: string }> {
+  /** SRC-12: a program from the support catalogue instead of a pack id. */
+  programKey?: string | null;
+}): Promise<{ id: string; reference: string | null; isSample: boolean; supported?: boolean } | { error: string }> {
   const read = readNewMatter({
     applicantName: input.applicantName,
     applicantEmail: input.applicantEmail,
@@ -112,13 +114,38 @@ export async function createClientMatter(input: {
     applicantDateOfBirth: input.applicantDateOfBirth,
     sponsorDateOfBirth: input.sponsorDateOfBirth,
     consultant: input.consultantMembershipId,
-    program: input.rulePackVersionId,
+    program: input.programKey ?? input.rulePackVersionId,
   });
   if ("error" in read) return { error: read.error };
   if (!isUuid(read.input.consultantMembershipId)) return { error: "Choose a responsible consultant." };
   if (read.input.rulePackVersionId && !isUuid(read.input.rulePackVersionId)) return { error: "Choose a published program template." };
   const session = await staffClient(input.organizationId, null);
   if ("error" in session) return { error: session.error ?? "Sign in first." };
+  // SRC-12: a catalogued program. The database pins its current approved pack, or opens the matter
+  // with no pack, checklist or rules when the program is not supported.
+  if (read.input.programKey) {
+    const { data, error } = await session.supabase.rpc("create_client_matter_for_program", {
+      p_applicant_name: read.input.applicantName,
+      p_applicant_email: read.input.applicantEmail,
+      p_sponsor_name: read.input.sponsorName,
+      p_sponsor_email: read.input.sponsorEmail,
+      p_consultant_membership_id: read.input.consultantMembershipId,
+      p_program_key: read.input.programKey,
+      p_applicant_date_of_birth: read.input.applicantDateOfBirth,
+      p_sponsor_date_of_birth: read.input.sponsorDateOfBirth,
+    });
+    if (error) return { error: newMatterError(error.message) };
+    const result = asRecord(data);
+    if (result.ok !== true || typeof result.id !== "string" || !isUuid(result.id)) {
+      return { error: result.blocked === "licence" ? newMatterError("licence blocks") : "The matter was not created." };
+    }
+    return {
+      id: result.id,
+      reference: typeof result.reference === "string" ? result.reference : null,
+      isSample: result.is_sample === true,
+      supported: result.supported === true,
+    };
+  }
   const { data, error } = await session.supabase.rpc("create_client_matter", {
     p_applicant_name: read.input.applicantName,
     p_applicant_email: read.input.applicantEmail,

@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { pdfBytes } from "@/modules/agreements/pdf";
-import { buildExportPackage, EXPORT_LIMITS, type ExportExcluded, type ExportFile, type ExportRecordSet } from "./package";
+import { buildExportPackage, EXPORT_LIMITS, type ExportExcluded, type ExportFile, type ExportRecordSet, type ExportRulePin } from "./package";
 
 type UserClient = Awaited<ReturnType<typeof createClient>>;
 type ServiceClient = ReturnType<typeof createServiceClient>;
@@ -61,6 +61,24 @@ export async function sealedPdfBytes(service: ServiceClient, org: string, versio
     if (row.certificate_document_version_id && certificate) found.set(row.certificate_document_version_id, certificate);
   }
   return found;
+}
+
+/** The rule pack and form versions stamped on the export job when it was requested (SRC-05). */
+async function exportRulePin(supabase: UserClient, org: string, exportId: string): Promise<ExportRulePin | null> {
+  const job = await supabase.from("matter_exports").select("rule_pack_version_id, form_versions").eq("organization_id", org).eq("id", exportId).maybeSingle();
+  const packId = job.data?.rule_pack_version_id;
+  if (!packId) return null;
+  const pack = await supabase.from("rule_pack_versions").select("program_key, pack_version").eq("id", packId).maybeSingle();
+  const forms = Array.isArray(job.data?.form_versions) ? (job.data.form_versions as Record<string, unknown>[]) : [];
+  const str = (value: unknown) => (typeof value === "string" ? value : null);
+  return {
+    rulePackVersionId: packId,
+    programKey: pack.data?.program_key ?? null,
+    packVersion: pack.data?.pack_version ?? null,
+    forms: forms
+      .filter((form) => typeof form.form_number === "string")
+      .map((form) => ({ form_number: form.form_number as string, date_modified: str(form.date_modified), source_url: str(form.source_url), content_hash: str(form.content_hash) })),
+  };
 }
 
 /**
@@ -154,6 +172,8 @@ export async function buildMatterExport(input: {
     records.push({ path: "audit/audit-trail.json", source: "public.audit_log", rows: [...audit.values()] });
     await progress("manifest", 60);
 
+    // SRC-05: the versions this export was requested under (stamped on the job, never changed).
+    const rulePin = await exportRulePin(supabase, org, exportId);
     const reference = (matter.data.reference as string | null) ?? matterId.slice(0, 8);
     const built = await buildExportPackage(
       {
@@ -164,6 +184,7 @@ export async function buildMatterExport(input: {
         generatedAt: new Date().toISOString(),
         generatedBy: input.requester,
         timezone: input.timezone,
+        rulePin,
       },
       records,
       files,

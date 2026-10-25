@@ -1,4 +1,5 @@
 import "server-only";
+import { SUPPORT_SHEET_HREF } from "@/modules/sheet/support-catalogue-present";
 import type { TemplatesTab } from "@/components/sheet/designer/templates";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
@@ -198,5 +199,7 @@ export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, v
     viewer: { organizationId: org, role: staff.role, today: isoDateInTimeZone(now, staff.timezone), timeZone: staff.timezone, now },
     addClaim: claimAddData(staff, isoDateInTimeZone(now, staff.timezone)),
   });
+  // SRC-12: Program templates links to What Casevoya supports.
+  data.program.supportHref = SUPPORT_SHEET_HREF;
   return { chrome, data, messageDialog };
 }
