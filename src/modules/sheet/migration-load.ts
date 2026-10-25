@@ -9,7 +9,6 @@ import type {
   MigrationTab,
   PreviewRow,
   SelectData,
-  SummaryRow,
   ValueRow,
 } from "@/components/sheet/designer/migration";
 import { createClient } from "@/lib/supabase/server";
@@ -24,7 +23,6 @@ import {
   plural,
   ROLE_LABELS,
   rowResult,
-  shortHash,
   STAGE_LABELS,
   suggestColumns,
   suggestValue,
@@ -33,6 +31,7 @@ import {
   type MigrationMapping,
   type ValueField,
 } from "@/modules/sheet/migration-present";
+import { signoffData } from "@/modules/sheet/migration-signoff";
 import type { SheetQuery } from "@/modules/sheet/present";
 
 const TABS = new Set<MigrationTab>(["map", "preview", "errors", "signoff"]);
@@ -60,6 +59,15 @@ type Batch = {
   rolled_back_at: string | null;
   discarded_at: string | null;
   staging_purged_at: string | null;
+  source_system: string;
+  pilot_size: number | null;
+  pilot_completed_at: string | null;
+  pilot_counts: unknown;
+  pilot_signed_off_at: string | null;
+  pilot_signed_off_by: string | null;
+  pilot_signoff_note: string | null;
+  full_run_started_at: string | null;
+  run_report: unknown;
 };
 
 type Row = {
@@ -133,7 +141,7 @@ export async function loadSheetMigration(staff: SheetStaff, query: SheetQuery) {
   const all = await supabase
     .from("migration_batches")
     .select(
-      "id, file_name, status, is_sample, source_sha256, source_row_count, staged_row_count, verified_at, headers, mapping, plan_counts, result_counts, exceptions, created_at, committed_at, rolled_back_at, discarded_at, staging_purged_at",
+      "id, file_name, status, is_sample, source_sha256, source_row_count, staged_row_count, verified_at, headers, mapping, plan_counts, result_counts, exceptions, created_at, committed_at, rolled_back_at, discarded_at, staging_purged_at, source_system, pilot_size, pilot_completed_at, pilot_counts, pilot_signed_off_at, pilot_signed_off_by, pilot_signoff_note, full_run_started_at, run_report",
     )
     .eq("organization_id", org)
     .order("created_at", { ascending: true })
@@ -402,62 +410,3 @@ async function errorsData(supabase: Client, batch: Batch, staging: Batch | null,
   return null;
 }
 
-async function signoffData(
-  supabase: Client,
-  staff: SheetStaff,
-  batch: Batch,
-  counts: ReturnType<typeof planCounts>,
-  wire: Record<string, string>,
-  history: HistoryRow[],
-) {
-  const summary: SummaryRow[] = [];
-  const source: SummaryRow = { term: "Source file", value: [batch.file_name, shortHash(batch.source_sha256)] };
-  const checked: SummaryRow = {
-    term: "Rows checked",
-    value: batch.verified_at
-      ? [`${plural(batch.source_row_count, "row")} in the file`, `${batch.staged_row_count.toLocaleString("en-CA")} staged, checksum matches`]
-      : [`${plural(batch.source_row_count, "row")} in the file`, "not verified"],
-  };
-  let action: { label: string; attrs: Record<string, string> } | null = null;
-  let rollback: { attrs: Record<string, string> | null; reasons: string[] } | null = null;
-
-  if (batch.status === "staged" || batch.status === "checked") {
-    if (counts) {
-      summary.push(
-        { term: "People", value: [`${counts.create.toLocaleString("en-CA")} new`, `${counts.link.toLocaleString("en-CA")} linked to existing`] },
-        { term: "Matters", value: [counts.matters.toLocaleString("en-CA"), "all start at engagement pending until reviewed"] },
-        { term: "Not imported", value: `${plural(counts.problem_rows, "row")} with problems` },
-      );
-      if (counts.confirm) summary.push({ term: "Waiting", value: `${plural(counts.confirm, "possible match", "possible matches")} to decide on Preview` });
-    } else {
-      summary.push({ term: "Plan", value: "Not checked yet: map your columns, then continue to preview" });
-    }
-    summary.push(source, checked);
-    if (batch.is_sample) summary.push({ term: "Sample mode", value: "Imported as sample records" });
-    const ready = batch.status === "checked" && counts && !counts.confirm && counts.matters > 0;
-    action = { label: "Sign off and import", attrs: { "data-mig-act": "commit", ...wire, ...(ready ? {} : { disabled: "" }) } };
-  } else if (batch.status === "committing") {
-    summary.push({ term: "Status", value: "Being created. Continue it, or roll back what was created." }, source, checked);
-    action = { label: "Continue the import", attrs: { "data-mig-act": "commit", ...wire } };
-  } else if (batch.status === "committed" || batch.status === "rolled_back") {
-    const done = (batch.result_counts ?? {}) as { matters?: number; people_created?: number; people_linked?: number; not_imported?: number };
-    summary.push(
-      { term: "People", value: [`${Number(done.people_created ?? 0).toLocaleString("en-CA")} new`, `${Number(done.people_linked ?? 0).toLocaleString("en-CA")} linked to existing`] },
-      { term: "Matters", value: [Number(done.matters ?? 0).toLocaleString("en-CA"), "created at engagement pending"] },
-      { term: "Not imported", value: `${plural(Number(done.not_imported ?? 0), "row")} with problems` },
-      source,
-      { term: "Signed off", value: day(batch.committed_at, staff.timezone) },
-    );
-    if (batch.is_sample) summary.push({ term: "Sample mode", value: "Imported as sample records" });
-    if (batch.status === "rolled_back") summary.push({ term: "Rolled back", value: [day(batch.rolled_back_at, staff.timezone), "the import’s records were removed"] });
-  } else {
-    summary.push({ term: "Status", value: [day(batch.discarded_at, staff.timezone), "discarded before import; staged rows removed"] }, source);
-  }
-
-  if (batch.status === "committed" || batch.status === "committing") {
-    const check = await supabase.rpc("migration_rollback_check", { p_org: staff.organizationId, p_batch: batch.id });
-    const reasons = Array.isArray(check.data) ? (check.data as string[]) : [];
-    rollback = { attrs: reasons.length ? null : { "data-mig-act": "rollback", ...wire }, reasons };
-  }
-  return { summary, action, rollback, history };
-}

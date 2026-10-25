@@ -32,6 +32,8 @@ import type { SheetQuery } from "@/modules/sheet/present";
 import { firstName } from "@/modules/sheet/tasks-present";
 import { leadRow } from "@/modules/sheet/clients-present";
 import { loadPersonConsent } from "@/modules/sheet/person-consent-load";
+import { loadImportProvenance } from "@/modules/migration/provenance-load";
+import { importedFacts } from "@/modules/sheet/imported-present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -84,7 +86,7 @@ async function loadPerson(
   people: Map<string, PersonRecord>,
   timeZone: string,
 ): Promise<PersonData> {
-  const [relationships, openTasks, consent] = await Promise.all([
+  const [relationships, openTasks, consent, imports] = await Promise.all([
     supabase
       .from("person_relationships")
       .select("from_person_id, to_person_id, relationship_type")
@@ -99,7 +101,10 @@ async function loadPerson(
       .in("status", [...OPEN_TASK]),
     // SEC-01, SEC-05: consent history, impact reviews and portal two-step, when the viewer may see them.
     loadPersonConsent(supabase, org, person.id, timeZone).catch(() => null),
+    // MIG-02: where an imported person's recorded facts came from.
+    loadImportProvenance(supabase, org, "persons", [person.id]),
   ]);
+  const imported = imports.get(person.id) ?? null;
   const links = relationships.data ?? [];
   const related = await morePeople(
     supabase,
@@ -120,7 +125,7 @@ async function loadPerson(
   return {
     name: person.display_name,
     summary: personSummary(roles, references),
-    facts: personFacts(person.date_of_birth, person.birth_date_precision, { email: person.email, phone: person.contact_phone }),
+    facts: importedFacts(personFacts(person.date_of_birth, person.birth_date_precision, { email: person.email, phone: person.contact_phone }), imported, timeZone, person.version),
     // The firm keeps no per-fact history to show yet, so the panel is left out.
     superseded: null,
     relationships: {

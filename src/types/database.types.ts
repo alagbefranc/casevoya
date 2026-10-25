@@ -7818,6 +7818,7 @@ export type Database = {
           byte_size: number
           checked_at: string | null
           commit_started_at: string | null
+          commit_verified_at: string | null
           committed_at: string | null
           committed_by: string | null
           created_at: string
@@ -7825,12 +7826,22 @@ export type Database = {
           discarded_at: string | null
           exceptions: Json
           file_name: string
+          full_run_started_at: string | null
+          full_run_started_by: string | null
           headers: string[]
           id: string
           is_sample: boolean
           mapping: Json
           organization_id: string
           parsed_digest: string
+          pilot_completed_at: string | null
+          pilot_counts: Json | null
+          pilot_signed_off_at: string | null
+          pilot_signed_off_by: string | null
+          pilot_signoff_note: string | null
+          pilot_size: number | null
+          pilot_started_at: string | null
+          pilot_started_by: string | null
           plan_counts: Json | null
           plan_hash: string | null
           purge_after: string
@@ -7838,6 +7849,7 @@ export type Database = {
           result_counts: Json | null
           rolled_back_at: string | null
           rolled_back_by: string | null
+          run_report: Json | null
           source_row_count: number
           source_sha256: string
           source_system: string
@@ -7853,6 +7865,7 @@ export type Database = {
           byte_size: number
           checked_at?: string | null
           commit_started_at?: string | null
+          commit_verified_at?: string | null
           committed_at?: string | null
           committed_by?: string | null
           created_at?: string
@@ -7860,12 +7873,22 @@ export type Database = {
           discarded_at?: string | null
           exceptions?: Json
           file_name: string
+          full_run_started_at?: string | null
+          full_run_started_by?: string | null
           headers: string[]
           id?: string
           is_sample?: boolean
           mapping?: Json
           organization_id: string
           parsed_digest: string
+          pilot_completed_at?: string | null
+          pilot_counts?: Json | null
+          pilot_signed_off_at?: string | null
+          pilot_signed_off_by?: string | null
+          pilot_signoff_note?: string | null
+          pilot_size?: number | null
+          pilot_started_at?: string | null
+          pilot_started_by?: string | null
           plan_counts?: Json | null
           plan_hash?: string | null
           purge_after: string
@@ -7873,6 +7896,7 @@ export type Database = {
           result_counts?: Json | null
           rolled_back_at?: string | null
           rolled_back_by?: string | null
+          run_report?: Json | null
           source_row_count: number
           source_sha256: string
           source_system?: string
@@ -7888,6 +7912,7 @@ export type Database = {
           byte_size?: number
           checked_at?: string | null
           commit_started_at?: string | null
+          commit_verified_at?: string | null
           committed_at?: string | null
           committed_by?: string | null
           created_at?: string
@@ -7895,12 +7920,22 @@ export type Database = {
           discarded_at?: string | null
           exceptions?: Json
           file_name?: string
+          full_run_started_at?: string | null
+          full_run_started_by?: string | null
           headers?: string[]
           id?: string
           is_sample?: boolean
           mapping?: Json
           organization_id?: string
           parsed_digest?: string
+          pilot_completed_at?: string | null
+          pilot_counts?: Json | null
+          pilot_signed_off_at?: string | null
+          pilot_signed_off_by?: string | null
+          pilot_signoff_note?: string | null
+          pilot_size?: number | null
+          pilot_started_at?: string | null
+          pilot_started_by?: string | null
           plan_counts?: Json | null
           plan_hash?: string | null
           purge_after?: string
@@ -7908,6 +7943,7 @@ export type Database = {
           result_counts?: Json | null
           rolled_back_at?: string | null
           rolled_back_by?: string | null
+          run_report?: Json | null
           source_row_count?: number
           source_sha256?: string
           source_system?: string
@@ -7937,6 +7973,7 @@ export type Database = {
           id: string
           imported_stage: Database["public"]["Enums"]["matter_stage"] | null
           organization_id: string
+          original_at: string | null
           record_id: string
           record_table: string
           removed_at: string | null
@@ -7951,6 +7988,7 @@ export type Database = {
           id?: string
           imported_stage?: Database["public"]["Enums"]["matter_stage"] | null
           organization_id: string
+          original_at?: string | null
           record_id: string
           record_table: string
           removed_at?: string | null
@@ -7965,6 +8003,7 @@ export type Database = {
           id?: string
           imported_stage?: Database["public"]["Enums"]["matter_stage"] | null
           organization_id?: string
+          original_at?: string | null
           record_id?: string
           record_table?: string
           removed_at?: string | null
@@ -7995,6 +8034,7 @@ export type Database = {
           group_first: number | null
           group_key: string | null
           id: string
+          in_pilot: boolean
           is_applicant: boolean
           match_detail: string[] | null
           match_person_id: string | null
@@ -8020,6 +8060,7 @@ export type Database = {
           group_first?: number | null
           group_key?: string | null
           id?: string
+          in_pilot?: boolean
           is_applicant?: boolean
           match_detail?: string[] | null
           match_person_id?: string | null
@@ -8045,6 +8086,7 @@ export type Database = {
           group_first?: number | null
           group_key?: string | null
           id?: string
+          in_pilot?: boolean
           is_applicant?: boolean
           match_detail?: string[] | null
           match_person_id?: string | null
@@ -8073,6 +8115,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           organization_id: string
+          pilot_max: number
           staging_days: number
           updated_at: string
           version: number
@@ -8081,6 +8124,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           organization_id: string
+          pilot_max?: number
           staging_days?: number
           updated_at?: string
           version?: number
@@ -8089,6 +8133,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           organization_id?: string
+          pilot_max?: number
           staging_days?: number
           updated_at?: string
           version?: number
@@ -13581,6 +13626,16 @@ export type Database = {
         Args: { p_batch: string; p_org: string; p_plan_hash: string }
         Returns: Json
       }
+      begin_migration_pilot: {
+        Args: {
+          p_batch: string
+          p_org: string
+          p_plan_hash: string
+          p_size?: number
+          p_source_system?: string
+        }
+        Returns: Json
+      }
       begin_verified_inbound_message: {
         Args: {
           p_domain: string
@@ -14906,6 +14961,10 @@ export type Database = {
         Args: { p_import_id: string; p_rows: Json }
         Returns: number
       }
+      imported_record_provenance: {
+        Args: { p_ids: string[]; p_org: string; p_table: string }
+        Returns: Json
+      }
       import_leads: {
         Args: {
           p_file_name: string
@@ -15824,6 +15883,10 @@ export type Database = {
         }
         Returns: number
       }
+      record_migration_report_download: {
+        Args: { p_batch: string; p_format: string; p_org: string }
+        Returns: undefined
+      }
       record_person_identity: {
         Args: { p_data: Json; p_kind: string; p_person_id: string; p_replaces_id?: string; p_retire?: boolean }
         Returns: string
@@ -16474,6 +16537,10 @@ export type Database = {
         }
         Returns: number
       }
+      set_migration_pilot_max: {
+        Args: { p_max: number; p_org: string }
+        Returns: undefined
+      }
       set_migration_staging_days: {
         Args: { p_days: number; p_org: string }
         Returns: undefined
@@ -16578,6 +16645,10 @@ export type Database = {
           }
       sign_client_reconciliation: {
         Args: { p_notes: string | null; p_outcome: string; p_reconciliation_id: string }
+        Returns: Json
+      }
+      sign_off_migration_pilot: {
+        Args: { p_batch: string; p_note: string; p_org: string }
         Returns: Json
       }
       sign_off_submission_handoff: {
