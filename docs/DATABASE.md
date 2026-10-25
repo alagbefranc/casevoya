@@ -879,3 +879,14 @@ REP-03 (gap #185), branch `feat/rep-scheduled-reports`.
 * `20261025320100_rep_report_notifications.sql` **redefines** `app.staff_notification_items(uuid, integer)` (latest `20261025100100_task_notifications.sql`): adds a `report` branch (a delivered link for the caller while a role of theirs sees the tab; subject the schedule's name, detail `scheduled` / `test`). Nothing else changes.
 
 Tested in `tests/scheduled-reports.rls.test.ts` and `tests/scheduled-reports.test.tsx`.
+
+## Service-level report (`20261025360000`, not applied on the live project)
+
+ADM-04 (gap #186), branch `feat/adm-service-levels`. Additive; no existing function is redefined.
+
+* `support_response_records`: one support request a firm sent Casevoya (`ticket_ref`, unique per firm; `received_at`; `first_response_at`, null while waiting, never before `received_at`; `recorded_by_user_id`, a platform admin). Metadata only. Forced RLS; select for the firm's owners (`app.actor_is_firm_owner`) and platform admins (`app.is_platform_admin`, aal2); no direct writes; no delete or truncate; row-change audit.
+* `app.platform_ops_actor(uuid)`: a signed-in platform admin at aal2 (their id), or the service role naming a `platform_admins` user (that id); anyone else `42501`.
+* `public.record_support_response(firm, ticket_ref, received_at, first_response_at, recorded_by)`: records or corrects one request (not in the future, reply not before receipt); audited `service_level.support_response_recorded` / `.support_response_updated`.
+* `public.service_level_report(firm, months)`: 1 to 24 months in the firm's timezone, newest first: received, answered, waiting, median and longest seconds to first reply; `uptime` is `{"measured": false}`. The firm's owner (aal2, current firm), a platform admin (aal2) or the service role; the latter two audited `service_level.report_read` on the firm.
+
+Ops wrapper: `scripts/ops/service-levels.mjs` (record, report). Tested in `tests/service-levels.rls.test.ts` and `tests/service-levels-present.test.tsx`.
