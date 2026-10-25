@@ -81,6 +81,17 @@ export function dueLabel(dueOn: string | null, dueAt: string | null, timeZone: s
   return dueOn ? dayLabel(dueOn, today) : "—";
 }
 
+/**
+ * The Tasks page's Due cell (OPS-01 "due timezone shown"): a timed due shows its own zone
+ * ("Mon 19 Oct 09:30 PT"); a date-only due in another zone than the firm's says which
+ * ("Mon 19 Oct (PT)").
+ */
+export function dueInZone(dueOn: string | null, dueAt: string | null, dueZone: string, firmZone: string, today: string): string {
+  const label = dueLabel(dueOn, dueAt, dueZone, today);
+  if (dueAt || !dueOn || dueZone === firmZone) return label;
+  return `${label} (${zoneAbbr(dueZone, new Date(`${dueOn}T12:00:00Z`))})`;
+}
+
 /** Whether open work is past due, as seen on the firm's calendar (date) or clock (instant). */
 export function isOverdue(dueOn: string | null, dueAt: string | null, today: string, now: Date): boolean {
   if (dueAt) {
@@ -133,6 +144,8 @@ export function deadlineTime(
 export const TASK_STAFF_ROLES: readonly string[] = ["firm_owner", "licensed_consultant", "case_manager", "assistant"];
 /** Who may create a task (app.create_task): the same staff. A finance user may not. */
 export const TASK_CREATE_ROLES: readonly string[] = TASK_STAFF_ROLES;
+/** Who may run public.escalate_overdue_work: a firm owner or licensed consultant. */
+export const TASK_ESCALATE_ROLES: readonly string[] = ["firm_owner", "licensed_consultant"];
 /** Who may give a task to someone else (app.reassign_task): not an assistant. */
 export const TASK_REASSIGN_ROLES: readonly string[] = ["firm_owner", "licensed_consultant", "case_manager"];
 

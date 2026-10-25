@@ -15,17 +15,19 @@ import { NewQuoteDialog, QuoteConvertDialog, QuoteEditDialog, QuotePreviewDialog
 import { ClauseDialog, SheetAgreementEditor } from "@/components/sheet/designer/agreements-editor";
 import { SheetAgreementCompare } from "@/components/sheet/designer/agreements-compare";
 import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet/designer/clients";
-import { CreditNoteDialog, FinanceHeader, NewInvoiceDialog, RefundDialog, SheetFinance, SheetFinancePayments, SheetFinanceRefunds } from "@/components/sheet/designer/finance";
+import { CreditDialog, CreditNoteDialog, EvidenceDialog, FinanceHeader, NewInvoiceDialog, RefundDialog, SheetFinance, SheetFinancePayments, SheetFinanceRefunds } from "@/components/sheet/designer/finance";
 import { CreditReviewDialog, SheetFinanceInvoice, VoidDialog } from "@/components/sheet/designer/invoice";
 import { ReconDialogs, SheetFinanceRecon } from "@/components/sheet/designer/recon";
+import { FinanceBillingDialogs, FinanceBillingPanels, InvoiceBillingDialogs, MatterWorkDialogs } from "@/components/sheet/designer/billing-live";
 import { SheetFrame } from "@/components/sheet/designer/frame";
 import { ApproveTransferDialog, FundsLiveDialogs, RecordPaymentDialog, SheetFinanceFunds, VerifyPaymentDialog } from "@/components/sheet/designer/funds";
-import { StripeAccountStatus } from "@/components/sheet/stripe-connect";
+import { StripeAccountStatus, StripeConnectCard } from "@/components/sheet/stripe-connect";
 import { SheetHome } from "@/components/sheet/designer/home";
 import { GOVERNMENT_CSS, GovernmentHeader, SheetGovernment } from "@/components/sheet/designer/government";
 import { GovDialogs } from "@/components/sheet/designer/matter-government";
 import { loadSheetGovernment } from "@/modules/sheet/government-load";
 import { MatterDialogs, MatterRbar, MatterTopBar, SheetMatter } from "@/components/sheet/designer/matter";
+import { MatterLetterDialogs } from "@/components/sheet/designer/matter-letters";
 import { MATTER_CSS } from "@/components/sheet/designer/matter-css";
 import { MattersTopBar, NewMatterDialog, SheetMatters } from "@/components/sheet/designer/matters";
 import { PersonEditDialog } from "@/components/sheet/designer/person-edit";
@@ -40,6 +42,7 @@ import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam } from "@/comp
 import { TeamDialogs } from "@/components/sheet/designer/settings-staff-admin";
 import { FirmTransferDialogs, FirmTransfersPanel } from "@/components/sheet/designer/firm-transfers";
 import { PlanDialog, SettingsBillingHeader, SheetRetention, SheetSubscription } from "@/components/sheet/designer/settings-billing";
+import { BankAccountDialogs, ManualPaymentDialogs, ReconItemDialog, SettingsBankAccounts } from "@/components/sheet/designer/manual-pay";
 import { loadSheetRetention, loadSheetSubscription } from "@/modules/sheet/settings-billing-load";
 import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
 import { SheetTasks, TaskEditDialog, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
@@ -57,7 +60,8 @@ import { loadSheetExports } from "@/modules/sheet/exports-load";
 import { MigrationHeader, SheetMigration } from "@/components/sheet/designer/migration";
 import { loadSheetMigration } from "@/modules/sheet/migration-load";
 import { DocumentReviewDialog, DocumentsHeader, SheetDocuments } from "@/components/sheet/designer/documents";
-import { ComposeDialog, InboxHeader, SheetInbox } from "@/components/sheet/designer/inbox";
+import { AnnouncementDialog, ComposeDialog, InboxHeader, SheetInbox } from "@/components/sheet/designer/inbox";
+import { FileToMatterDialog } from "@/components/sheet/designer/inbound-filing";
 import { PrivacyDialogs, PrivacyHeader, SheetPrivacy } from "@/components/sheet/designer/privacy";
 import { ComplaintsDialogs, ComplaintsHeader, SheetComplaints } from "@/components/sheet/designer/complaints";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
@@ -73,7 +77,8 @@ import { GrantDialog, GrantRevokeDialog, GrantsHeader, SheetGrants, SupportDecli
 import { loadSheetGrants } from "@/modules/sheet/grants-load";
 import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder } from "@/components/sheet/designer/intake-builder";
 import { loadSheetIntakeBuilder } from "@/modules/sheet/intake-builder-load";
-import { SheetTemplates, TemplatesHeader } from "@/components/sheet/designer/templates";
+import { MessageTemplateDialog, SheetTemplates, TemplatesHeader } from "@/components/sheet/designer/templates";
+import { OpenOnLoad } from "@/components/sheet/open-on-load";
 import { loadSheetTemplates } from "@/modules/sheet/templates-load";
 import { AutomationsDialog, AutomationsHeader, AutomationsSettings, SheetAutomations } from "@/components/sheet/designer/automations";
 import { loadSheetAutomations } from "@/modules/sheet/automations-load";
@@ -105,6 +110,7 @@ import { loadSheetCalendar, loadSheetConsultations } from "@/modules/scheduling/
 import { loadSheetLead, loadSheetPipeline } from "@/modules/leads/load";
 import { EnquiryShareDialog } from "@/components/sheet/designer/enquiry-share";
 import { loadEnquiryShare } from "@/modules/leads/share-load";
+import { loadLeadVo } from "@/modules/sheet/vo-crm-load";
 
 const PUBLIC = new Set(["enquiry", "book"]);
 
@@ -202,7 +208,7 @@ export async function SheetBody({
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={chrome.sidebar}
-          header={<TasksHeader tab={tasks.tab} counts={tasks.counts} canCreate={tasks.canCreate !== false} />}
+          header={<TasksHeader tab={tasks.tab} counts={tasks.counts} canCreate={tasks.canCreate !== false} escalate={tasks.escalate} />}
           statusbar={chrome.statusbar}
           after={
             <>
@@ -234,14 +240,20 @@ export async function SheetBody({
   }
   // Inbox: Conversations (filed client email), Email to triage, Delivery problems and Announcements (OPS-06).
   if (page === "inbox" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, pills, inbox, compose } = await loadSheetInbox(access.staff, query);
+    const { chrome, pills, inbox, compose, announce } = await loadSheetInbox(access.staff, query);
     return (
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={chrome.sidebar}
-          header={<InboxHeader tab={inbox.tab} pills={pills} />}
+          header={<InboxHeader tab={inbox.tab} pills={pills} announce={Boolean(announce)} />}
           statusbar={chrome.statusbar}
-          after={<ComposeDialog data={compose} />}
+          after={
+            <>
+              <ComposeDialog data={compose} />
+              {announce ? <AnnouncementDialog data={announce} /> : null}
+              {inbox.tab === "triage" ? <FileToMatterDialog organizationId={access.staff.organizationId} /> : null}
+            </>
+          }
         >
           <SheetInbox data={inbox} />
         </SheetFrame>
@@ -460,9 +472,17 @@ export async function SheetBody({
           sidebar={loaded.chrome.sidebar}
           header={<SettingsBillingHeader firmName={access.staff.organizationName} pill={loaded.pill} tab={"billing"} />}
           statusbar={loaded.chrome.statusbar}
-          after={loaded.page.dialog ? <PlanDialog data={loaded.page.dialog} /> : null}
+          after={
+            <>
+              {loaded.page.dialog ? <PlanDialog data={loaded.page.dialog} /> : null}
+              {loaded.accounts?.canAdd ? <BankAccountDialogs organizationId={loaded.accounts.organizationId} /> : null}
+            </>
+          }
         >
-          <SheetSubscription data={loaded.page} />
+          <SheetSubscription data={loaded.page}>
+            <StripeConnectCard data={loaded.connect.data} card={loaded.connect.card} index={3} />
+          </SheetSubscription>
+          {loaded.accounts ? <SettingsBankAccounts data={loaded.accounts} index={4} /> : null}
         </SheetFrame>
       </SheetScreen>
     );
@@ -589,7 +609,19 @@ export async function SheetBody({
     const loaded = await loadSheetTemplates(access.staff, tab, query.view);
     return (
       <SheetScreen page={page}>
-        <SheetFrame sidebar={loaded.chrome.sidebar} header={<TemplatesHeader data={loaded.data} />} statusbar={loaded.chrome.statusbar}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<TemplatesHeader data={loaded.data} />}
+          statusbar={loaded.chrome.statusbar}
+          after={
+            loaded.messageDialog ? (
+              <>
+                <MessageTemplateDialog data={loaded.messageDialog} />
+                {loaded.messageDialog.edit ? <OpenOnLoad key={loaded.messageDialog.edit.id} id={"dlgMt"} /> : null}
+              </>
+            ) : undefined
+          }
+        >
           <SheetTemplates data={loaded.data} />
         </SheetFrame>
       </SheetScreen>
@@ -719,15 +751,21 @@ export async function SheetBody({
               ) : null}
               <NewInvoiceDialog data={finance.dialog} />
               {finance.refundDialog ? <RefundDialog data={finance.refundDialog} /> : null}
+              {finance.creditDialog ? <CreditDialog data={finance.creditDialog} /> : null}
+              {finance.evidenceDialog ? <EvidenceDialog data={finance.evidenceDialog} /> : null}
               {finance.funds ? <FundsLiveDialogs data={finance.funds.more} /> : null}
               {finance.invoiceView ? (
                 <>
                   <CreditNoteDialog data={finance.invoiceView.creditDialog} />
                   {finance.invoiceView.reviewDialog ? <CreditReviewDialog data={finance.invoiceView.reviewDialog} /> : null}
                   {finance.invoiceView.voidDialog ? <VoidDialog data={finance.invoiceView.voidDialog} /> : null}
+                  {finance.invoiceView.manualDialogs ? <ManualPaymentDialogs data={finance.invoiceView.manualDialogs} /> : null}
                 </>
               ) : null}
               {finance.recon ? <ReconDialogs data={finance.recon.dialogs} /> : null}
+              {finance.recon?.itemDialog ? <ReconItemDialog data={finance.recon.itemDialog} /> : null}
+              {finance.billing ? <FinanceBillingDialogs data={finance.billing} /> : null}
+              {finance.invoiceBilling ? <InvoiceBillingDialogs data={finance.invoiceBilling} /> : null}
             </>
           }
         >
@@ -742,7 +780,7 @@ export async function SheetBody({
           ) : finance.refunds ? (
             <SheetFinanceRefunds data={finance.refunds} />
           ) : (
-            <SheetFinance data={finance.page} />
+            <SheetFinance data={finance.page} after={finance.billing ? <FinanceBillingPanels data={finance.billing} /> : null} />
           )}
         </SheetFrame>
       </SheetScreen>
@@ -825,11 +863,11 @@ export async function SheetBody({
   if (page === "lead" && (access.kind === "live" || access.kind === "sample")) {
     // The Designer's + Lead goes to /sheet/lead?new=1: New lead is a dialog on the pipeline.
     if (!query.id) redirect("/sheet/pipeline?new=1");
-    const loaded = await loadSheetLead(access.staff, query.id, { conflict: query.dlg === "conflict" });
+    const [loaded, vo] = await Promise.all([loadSheetLead(access.staff, query.id, { conflict: query.dlg === "conflict" }), loadLeadVo(access.staff, query.id)]);
     if (!loaded) notFound();
     return (
       <SheetScreen page={page}>
-        <LeadScreen loaded={loaded} />
+        <LeadScreen loaded={loaded} vo={vo} />
       </SheetScreen>
     );
   }
@@ -847,6 +885,8 @@ export async function SheetBody({
             <>
               <MatterDialogs data={loaded.dialogs} />
               <GovDialogs data={loaded.governmentDialogs} />
+              {loaded.letterDialogs ? <MatterLetterDialogs data={loaded.letterDialogs} /> : null}
+              {loaded.page.billing?.work ? <MatterWorkDialogs data={loaded.page.billing.work} /> : null}
               {loaded.countersign.map((sign) => (
                 <CountersignDialog key={sign.envelopeId} data={sign} />
               ))}

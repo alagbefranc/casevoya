@@ -10,7 +10,11 @@ import type {
   PaymentsData,
   RefundDialogData,
   RefundsData,
+  CreditRow,
+  CreditDialogData,
+  EvidenceDialogData,
 } from "@/components/sheet/designer/finance";
+import { allocationLine, creditAvailableCents, creditState } from "@/modules/finance/credits-present";
 import { FINANCE_CHIPS } from "@/components/sheet/designer/finance";
 import type {
   FundsAction,
@@ -35,10 +39,10 @@ import {
 } from "@/modules/finance/client-funds-present";
 import { createClient } from "@/lib/supabase/server";
 import { stripeServer } from "@/lib/stripe/server";
-import { publishableKey } from "@/modules/finance/keys";
+import { MANUAL_METHODS, manualPaymentState } from "@/modules/finance/manual-payments-present";
 import { formatAmount, formatMoney, INVOICE_CURRENCIES } from "@/modules/finance/money";
 import { paymentReceiptHref } from "@/modules/finance/receipt-links";
-import { retrieveAccountStatus } from "@/modules/finance/stripe-account";
+import { loadFirmAccount } from "@/modules/finance/account-load";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import {
   cardReceived,
@@ -62,23 +66,15 @@ import {
   type ReconPage,
 } from "@/modules/sheet/finance-corrections-load";
 import { dayMonth } from "@/modules/sheet/home-present";
+import { loadFinanceBilling, loadInvoiceBillingDialogs } from "@/modules/billing/load";
+import { billingInvoiceState } from "@/modules/billing/present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone, plusDays } from "@/modules/sheet/present";
 
 const INVOICES_READ = 500;
 const BILLING_ROLES = new Set(["firm_owner", "finance_user"]);
 
-export type FinanceAccountData = {
-  organizationId: string;
-  firmName: string;
-  isOwner: boolean;
-  /** Both the server's test secret key and the browser's test publishable key are set. */
-  configured: boolean;
-  publishableKey: string | null;
-  account: null | { cardPayments: string; payouts: string; requirementsDue: number };
-  /** Firm owner or finance user: the staff who see the firm's billing. */
-  canBill: boolean;
-};
+export type { FinanceAccountData } from "@/modules/finance/connect-present";
 
 const PAYMENTS_READ = 500;
 
@@ -120,6 +116,34 @@ function money(minor: number, currency: string): string {
 
 /** Refunds that hold part of a payment: pending, needing action, or succeeded. */
 const HELD_REFUND_STATUSES = ["pending", "requires_action", "succeeded"] as const;
+
+/** FIN-09: manual payments (e-transfer, cheque, wire, cash) on the Payments tab, read as billing staff (RLS). */
+async function loadManualPaymentRows(supabase: Supabase, staff: SheetStaff): Promise<PaymentRow[]> {
+  const org = staff.organizationId;
+  const manual = await supabase
+    .from("invoice_manual_payments")
+    .select("id, invoice_id, number, method, external_reference, received_on, amount_cents, currency, status, self_verified, updated_at")
+    .eq("organization_id", org)
+    .order("updated_at", { ascending: false })
+    .limit(PAYMENTS_READ);
+  const rows = manual.data ?? [];
+  if (!rows.length) return [];
+  const labels = await invoiceLabels(supabase, org, [...new Set(rows.map((row) => row.invoice_id))]);
+  return rows.map((row) => {
+    const invoice = labels.get(row.invoice_id);
+    const state = manualPaymentState(row.status, row.self_verified);
+    return {
+      key: row.id,
+      received: dayMonth(row.received_on),
+      from: invoice?.client ?? "Client",
+      method: MANUAL_METHODS.find((method) => method.value === row.method)?.label ?? "Manual",
+      reference: [row.number, row.external_reference],
+      goesTo: invoice?.number ?? "Invoice",
+      amount: money(row.amount_cents, row.currency),
+      state: { tone: state.tone, label: state.label, ...(state.detail ? { detail: state.detail } : {}) },
+    };
+  });
+}
 
 /**
  * The Payments tab's rows: card payments Stripe has acted on, newest first, read as the signed-in
@@ -183,19 +207,137 @@ async function loadPaymentRows(supabase: Supabase, staff: SheetStaff, canBill: b
 
 const REFUNDS_READ = 500;
 
+export type RefundsPage = { data: RefundsData; creditDialog: CreditDialogData | null; evidenceDialog: EvidenceDialogData | null };
+
+/**
+ * Client credits (FIN-13) for the Refunds and disputes tab: each credit with what is left (the
+ * source invoice's overpayment less card refunds pending at Stripe, as the database counts it),
+ * where its money went, and for billing staff the targets it can be applied to (open invoices of
+ * the same client: the same matter or the same client name; the database checks the applicant).
+ */
+async function loadCredits(
+  supabase: Supabase,
+  staff: SheetStaff,
+  canBill: boolean,
+  labels: (ids: string[]) => Promise<Map<string, { number: string; client: string }>>,
+  stripeConfigured: boolean,
+): Promise<CreditRow[]> {
+  const org = staff.organizationId;
+  if (!canBill) return [];
+  const credits = await supabase
+    .from("client_credits")
+    .select("id, number, source_invoice_id, matter_id, currency, status, created_at")
+    .eq("organization_id", org)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  const rows = credits.data ?? [];
+  if (!rows.length) return [];
+  const sourceIds = rows.map((row) => row.source_invoice_id);
+  const creditIds = rows.map((row) => row.id);
+  const [sources, pending, cards, allocations, open] = await Promise.all([
+    supabase.from("invoices").select("id, matter_id, status, amount_cents, paid_cents, refunded_cents, credited_cents").eq("organization_id", org).in("id", sourceIds),
+    supabase.from("invoice_refunds").select("id, invoice_id, number, amount_cents, status").eq("organization_id", org).in("invoice_id", sourceIds),
+    supabase.from("invoice_payments").select("invoice_id").eq("organization_id", org).eq("status", "succeeded").gt("amount_received_cents", 0).in("invoice_id", sourceIds),
+    supabase
+      .from("client_credit_allocations")
+      .select("id, credit_id, kind, target_invoice_id, refund_id, amount_cents, currency, bank_method, bank_reference, created_at")
+      .eq("organization_id", org)
+      .in("credit_id", creditIds)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("invoices")
+      .select("id, matter_id, number, amount_cents, paid_cents, credited_cents, currency, is_sample")
+      .eq("organization_id", org)
+      .in("status", ["issued", "partially_paid"])
+      .limit(INVOICES_READ),
+  ]);
+  const sourceOf = new Map((sources.data ?? []).map((row) => [row.id, row]));
+  const refundRows = pending.data ?? [];
+  const refundOf = new Map(refundRows.map((row) => [row.id, row]));
+  const pendingOf = new Map<string, number>();
+  for (const refund of refundRows) {
+    if (refund.status === "pending" || refund.status === "requires_action") pendingOf.set(refund.invoice_id, (pendingOf.get(refund.invoice_id) ?? 0) + refund.amount_cents);
+  }
+  const hasCard = new Set((cards.data ?? []).map((row) => row.invoice_id));
+  const openRows = (open.data ?? []).filter((row) => staff.sampleMode || !row.is_sample);
+  const names = await labels([...new Set([...sourceIds, ...openRows.map((row) => row.id), ...(allocations.data ?? []).map((row) => row.target_invoice_id).filter((id): id is string => Boolean(id))])]);
+  const allocationsOf = new Map<string, NonNullable<typeof allocations.data>>();
+  for (const row of allocations.data ?? []) allocationsOf.set(row.credit_id, [...(allocationsOf.get(row.credit_id) ?? []), row]);
+
+  return rows.flatMap((row): CreditRow[] => {
+    const source = sourceOf.get(row.source_invoice_id);
+    if (!source) return [];
+    const pendingCents = pendingOf.get(source.id) ?? 0;
+    const available = creditAvailableCents(
+      { status: source.status, amountCents: source.amount_cents, paidCents: source.paid_cents, refundedCents: source.refunded_cents, creditedCents: source.credited_cents },
+      pendingCents,
+    );
+    const label = names.get(source.id);
+    const client = label?.client ?? "Client";
+    const links = (allocationsOf.get(row.id) ?? []).map((allocation) =>
+      allocationLine(
+        allocation.kind === "invoice"
+          ? { kind: "invoice", amountCents: allocation.amount_cents, currency: allocation.currency, invoiceNumber: names.get(allocation.target_invoice_id ?? "")?.number ?? "another invoice" }
+          : allocation.kind === "card_refund"
+            ? {
+                kind: "card_refund",
+                amountCents: allocation.amount_cents,
+                currency: allocation.currency,
+                refundNumber: refundOf.get(allocation.refund_id ?? "")?.number ?? "refund",
+                refundStatus: refundOf.get(allocation.refund_id ?? "")?.status ?? "pending",
+              }
+            : { kind: "bank_refund", amountCents: allocation.amount_cents, currency: allocation.currency, method: allocation.bank_method ?? "", reference: allocation.bank_reference ?? "" },
+      ),
+    );
+    const targets = openRows
+      .filter((invoice) => invoice.id !== source.id && invoice.currency === row.currency)
+      .filter((invoice) => invoice.matter_id === source.matter_id || (names.get(invoice.id)?.client ?? "") === client)
+      .map((invoice) => {
+        const dueCents = Math.max(0, invoice.amount_cents - invoice.paid_cents - invoice.credited_cents);
+        return { value: invoice.id, label: `${names.get(invoice.id)?.number ?? "Invoice"} · ${formatMoney(dueCents, invoice.currency)} owed`, dueCents };
+      })
+      .filter((target) => target.dueCents > 0);
+    const availableText = formatAmount(available, row.currency);
+    return [
+      {
+        key: row.id,
+        number: row.number,
+        client,
+        from: { label: label?.number ?? "Invoice", href: `?tab=invoice&view=${source.id}` },
+        available: availableText,
+        links,
+        state: creditState(row.status, available, pendingCents),
+        ...(available > 0
+          ? {
+              act: {
+                creditId: row.id,
+                availableCents: available,
+                available: availableText.replaceAll(",", ""),
+                label: `${row.number} · ${client} · ${formatMoney(available, row.currency)} left`,
+                targets,
+                card: stripeConfigured && hasCard.has(source.id),
+                pendingCard: pendingCents > 0,
+              },
+            }
+          : {}),
+      },
+    ];
+  });
+}
+
 /** The Refunds and disputes tab, read as the signed-in staff member (RLS mirrors invoice_payments). */
-async function loadRefunds(supabase: Supabase, staff: SheetStaff, canBill: boolean): Promise<RefundsData> {
+async function loadRefunds(supabase: Supabase, staff: SheetStaff, canBill: boolean, today: string, stripeConfigured: boolean): Promise<RefundsPage> {
   const org = staff.organizationId;
   const [refunds, disputes, creditNotes] = await Promise.all([
     supabase
       .from("invoice_refunds")
-      .select("id, invoice_id, payment_id, number, amount_cents, currency, status, failure_reason, created_at")
+      .select("id, invoice_id, payment_id, number, amount_cents, currency, status, failure_reason, task_id, created_at")
       .eq("organization_id", org)
       .order("created_at", { ascending: false })
       .limit(REFUNDS_READ),
     supabase
       .from("invoice_disputes")
-      .select("id, invoice_id, number, amount_cents, currency, status, reason, evidence_due_by, created_at")
+      .select("id, invoice_id, number, amount_cents, currency, status, reason, evidence_due_by, evidence_submitted_at, task_id, created_at")
       .eq("organization_id", org)
       .order("created_at", { ascending: false })
       .limit(REFUNDS_READ),
@@ -204,6 +346,7 @@ async function loadRefunds(supabase: Supabase, staff: SheetStaff, canBill: boole
   const refundRows = refunds.data ?? [];
   const disputeRows = disputes.data ?? [];
   const labels = await invoiceLabels(supabase, org, [...new Set([...refundRows.map((row) => row.invoice_id), ...disputeRows.map((row) => row.invoice_id)])]);
+  const credits = await loadCredits(supabase, staff, canBill, (ids) => invoiceLabels(supabase, org, ids), stripeConfigured);
   const day = (iso: string) => dayMonth(isoDateInTimeZone(new Date(iso), staff.timezone));
 
   // The newest refund of a payment that failed, unless a later refund of that payment replaced it.
@@ -213,8 +356,15 @@ async function loadRefunds(supabase: Supabase, staff: SheetStaff, canBill: boole
   const failedClient = failed ? (labels.get(failed.invoice_id)?.client ?? "the client") : "";
   const failedWhy = failed ? refundState(failed.status, failed.failure_reason).detail : undefined;
 
-  return {
-    intro: `Card refunds, credit notes and the disputes Stripe reported for ${staff.organizationName}. Refunding a payment isn’t the same as crediting an invoice; each keeps its own state and links. A refund counts only when Stripe’s signed event confirms it. Disputes never hold back or delete a client’s records, and none of these changes a matter’s stage or government status.`,
+  // Disputes Stripe still takes evidence for, before their deadline (the database checks again).
+  const now = Date.now();
+  const takingEvidence = disputeRows.filter(
+    (row) => (row.status === "needs_response" || row.status === "warning_needs_response") && (!row.evidence_due_by || Date.parse(row.evidence_due_by) > now),
+  );
+  const evidenceLive = canBill && stripeConfigured && takingEvidence.length > 0;
+
+  const data: RefundsData = {
+    intro: `Card refunds, credit notes, client credits and the disputes Stripe reported for ${staff.organizationName}. Refunding a payment isn’t the same as crediting an invoice; each keeps its own state and links. A refund counts only when Stripe’s signed event confirms it. Disputes never hold back or delete a client’s records, and none of these changes a matter’s stage or government status.`,
     refunds: refundRows.map((row) => ({
       key: row.id,
       number: row.number,
@@ -230,7 +380,7 @@ async function loadRefunds(supabase: Supabase, staff: SheetStaff, canBill: boole
     failed: failed
       ? {
           title: `Refund ${failed.number} ${failed.status === "canceled" ? "was canceled" : "failed"}`,
-          copy: `Stripe couldn’t return ${formatMoney(failed.amount_cents, failed.currency)} to ${failedClient}’s card${failedWhy ? ` (${failedWhy})` : ""}. Nothing was refunded twice; the amount can be refunded again from the Payments tab.`,
+          copy: `Stripe couldn’t return ${formatMoney(failed.amount_cents, failed.currency)} to ${failedClient}’s card${failedWhy ? ` (${failedWhy})` : ""}. Nothing was refunded twice; the amount can be refunded again from the Payments tab.${failed.task_id ? " A task to follow it up is on the firm owner’s list." : ""}`,
         }
       : null,
     creditNotes,
@@ -241,17 +391,52 @@ async function loadRefunds(supabase: Supabase, staff: SheetStaff, canBill: boole
       key: row.id,
       number: row.number,
       client: labels.get(row.invoice_id)?.client ?? "Client",
-      payment: ["Card", `${labels.get(row.invoice_id)?.number ?? "Invoice"}, ${disputeReason(row.reason).toLowerCase()}`],
+      payment: [
+        "Card",
+        `${labels.get(row.invoice_id)?.number ?? "Invoice"}, ${disputeReason(row.reason).toLowerCase()}`,
+        ...(row.evidence_submitted_at ? [`evidence sent ${day(row.evidence_submitted_at)}`] : []),
+      ],
       amount: money(row.amount_cents, row.currency),
       evidenceDue: disputeOpen(row.status) && row.evidence_due_by ? day(row.evidence_due_by) : "—",
       state: disputeState(row.status),
     })),
     disputesEmpty: canBill
-      ? { title: "No disputes", copy: "If a client disputes a card payment with their bank, Stripe reports it and it shows here with its evidence deadline." }
+      ? { title: "No disputes", copy: "If a client disputes a card payment with their bank, Stripe reports it and it shows here with its evidence deadline and a task for the firm owner." }
       : { title: "No disputes to show", copy: "Disputes are shown to the firm owner and the matter’s finance user." },
     disputeFooter: disputeRows.length
       ? {
-          note: "Evidence can’t be submitted from Casevoya yet, and the firm’s Stripe account has no Stripe Dashboard: to respond before the due date, contact Stripe support. The client keeps full access to their portal and records during a dispute.",
+          evidenceLive,
+          note: !canBill
+            ? "The firm owner or the matter’s finance user responds to a dispute. The client keeps full access to their portal and records during a dispute."
+            : !stripeConfigured
+              ? "Stripe isn’t configured in this environment, so evidence can’t be sent from here. Each new dispute puts a task on the firm owner’s list. The client keeps full access to their portal and records during a dispute."
+              : "Add evidence sends a file and your explanation to Stripe before the due date; Stripe passes them to the client’s bank. Each new dispute puts a task on the firm owner’s list. The client keeps full access to their portal and records during a dispute.",
+        }
+      : null,
+    ...(credits.length
+      ? {
+          credits,
+          creditsIntro:
+            "Money held beyond what an invoice asks for: a payment above the balance, a credit note on a paid invoice, or a payment after a void. Refund it or apply it to another invoice of the same client; each move is linked here and on the invoices.",
+        }
+      : {}),
+  };
+  return {
+    data,
+    creditDialog: credits.some((row) => row.act)
+      ? {
+          organizationId: org,
+          today,
+          blocked: null,
+        }
+      : null,
+    evidenceDialog: evidenceLive
+      ? {
+          organizationId: org,
+          disputes: takingEvidence.map((row) => ({
+            value: row.id,
+            label: `${row.number} · ${labels.get(row.invoice_id)?.client ?? "Client"} · ${formatMoney(row.amount_cents, row.currency)}${row.evidence_due_by ? ` · due ${day(row.evidence_due_by)}` : ""}${row.evidence_submitted_at ? " · evidence already sent" : ""}`,
+          })),
         }
       : null,
   };
@@ -275,7 +460,7 @@ export type ClientFundsPage = {
 async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: boolean, today: string): Promise<ClientFundsPage> {
   const org = staff.organizationId;
   const isOwner = staff.role === "firm_owner";
-  const [claims, accounts, ledgers, entries, partyResult, names, receipts, banks, dues, paymentReceipts] = await Promise.all([
+  const [claims, accounts, ledgers, entries, partyResult, names, receipts, banks, dues, paymentReceipts, reviews, reviewerRows] = await Promise.all([
     supabase.auth.getClaims(),
     supabase.from("client_accounts").select("id, label, institution, account_last4, is_active").eq("organization_id", org).order("created_at"),
     supabase.from("client_fund_ledgers").select("id, client_account_id, matter_id, person_id, is_sample, created_at").eq("organization_id", org).order("created_at"),
@@ -293,7 +478,11 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
     supabase.from("client_fund_bank_transfers").select("entry_id, transferred_on, bank_reference").eq("organization_id", org).limit(FUNDS_READ),
     canBill ? supabase.rpc("list_client_fund_withdrawals") : null,
     supabase.from("invoice_payment_receipts").select("id, entry_id, number").eq("organization_id", org).eq("source", "client_funds").limit(FUNDS_READ),
+    // FIN-09: the evidence file and reviewer named when an advance was recorded.
+    canBill ? supabase.from("client_fund_deposit_reviews").select("entry_id, evidence_version_id, reviewer_user_id").eq("organization_id", org).limit(FUNDS_READ) : null,
+    canBill ? supabase.rpc("list_payment_reviewers", { p_org: org }) : null,
   ]);
+  const reviewOf = new Map((reviews?.data ?? []).map((row) => [row.entry_id, row]));
   const receiptOf = new Map((receipts.data ?? []).map((row) => [row.entry_id, row.number]));
   // An approved transfer pays an invoice: its receipt is the invoice payment receipt (CICC Code s. 33(3)).
   const paymentReceiptOf = new Map(
@@ -413,6 +602,9 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
       for (const entry of list) {
         if (entry.kind === "deposit" && entry.status === "pending_verification") {
           const recordedByViewer = entryRows.find((item) => item.id === entry.id)?.requested_by === viewer;
+          const review = reviewOf.get(entry.id);
+          // FIN-09: a named reviewer (or the firm owner) verifies it.
+          const notNamed = Boolean(review && review.reviewer_user_id !== viewer && !isOwner);
           actions.push({
             label: `Verify ${entry.number}`,
             primary: true,
@@ -425,8 +617,10 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
               "data-evidence": entry.evidence ?? "No note",
               "data-by": recordedByViewer ? `${entry.recordedBy} (you)` : entry.recordedBy,
               "data-dest": accountLabel(ledger.client_account_id),
+              "data-reviewer": review ? `${staffName(review.reviewer_user_id) ?? "Staff member"}${review.reviewer_user_id === viewer ? " (you)" : ""}` : "Any billing staff member but the recorder",
+              ...(review?.evidence_version_id ? { "data-evidence-file": review.evidence_version_id } : {}),
               // Second person: the recorder can't verify it, unless they are the firm owner.
-              "data-can-verify": recordedByViewer && !isOwner ? "0" : "1",
+              "data-can-verify": (recordedByViewer && !isOwner) || notNamed ? "0" : "1",
               "data-own-entry": recordedByViewer && isOwner ? "1" : "0",
             },
           });
@@ -611,6 +805,7 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
         sampleMode: staff.sampleMode,
         parties: parties.length ? parties : [{ value: "", label: "No open matter with a client" }],
         accounts: accountRows.length ? accountRows.map((row) => ({ value: row.id, label: `${row.label} ••• ${row.account_last4} (advances)` })) : [{ value: "", label: "No client account yet" }],
+        reviewers: reviewerOptions((reviewerRows?.data ?? []) as ReviewerRow[], viewer),
         blocked: !canBill
           ? { title: "Billing staff only", copy: "The firm owner or the matter’s finance user records client funds." }
           : !accountRows.length
@@ -624,6 +819,17 @@ async function loadClientFunds(supabase: Supabase, staff: SheetStaff, canBill: b
     transfer: { live: { organizationId: org } },
     more: { organizationId: org, today, ledgers: ledgerOptions, invoices: invoiceOptions, corrections, bankTransfers, isOwner },
   };
+}
+
+type ReviewerRow = { user_id: string; display_name: string; role: string; matter_ids: string[] | null };
+
+/** Reviewer options for the advance dialog: each carries the matters they review ("*" for a firm owner); the dialog narrows them to the chosen matter. */
+function reviewerOptions(rows: ReviewerRow[], viewer: string): FundsOption[] {
+  return rows.map((row) => ({
+    value: row.user_id,
+    label: `${row.display_name}${row.role === "firm_owner" ? " (firm owner)" : " (finance)"}${row.user_id === viewer ? " (you)" : ""}`,
+    data: { "data-matters": row.role === "firm_owner" ? "*" : (row.matter_ids ?? []).join(" "), ...(row.user_id === viewer ? { "data-self": "1" } : {}) },
+  }));
 }
 
 function sumCurrency(funds: { amount: number; currency: string }[] | undefined, currency: string): number {
@@ -686,11 +892,12 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
   const today = isoDateInTimeZone(new Date(), staff.timezone);
   const canBill = BILLING_ROLES.has(staff.role);
 
-  const [chrome, invoices, billable, samples, accountRow] = await Promise.all([
+  const stripe = stripeServer();
+  const [chrome, invoices, billable, samples, firmAccount] = await Promise.all([
     loadSheetChrome(staff, "/sheet/finance"),
     supabase
       .from("invoices")
-      .select("id, matter_id, number, description, fee_category, amount_cents, currency, paid_cents, refunded_cents, credited_cents, status, issued_on, due_on, is_sample, created_at")
+      .select("id, matter_id, number, description, fee_category, amount_cents, currency, paid_cents, refunded_cents, credited_cents, written_off_cents, status, issued_on, due_on, is_sample, discarded_at, created_at")
       .eq("organization_id", org)
       .order("created_at", { ascending: false })
       .limit(INVOICES_READ),
@@ -706,7 +913,8 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
           .neq("stage", "closed")
           .limit(50)
       : null,
-    supabase.from("firm_payment_accounts").select("account_id, card_payments_status, payouts_status, requirements_due").eq("organization_id", org).maybeSingle(),
+    // The cached account status, read again from Stripe for the owner when it needs it.
+    loadFirmAccount(supabase, staff, stripe),
   ]);
   const rows = invoices.data ?? [];
   const sampleBilling = (samples?.data ?? []).map((row) => ({
@@ -724,7 +932,7 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
   const billing = [...(billable?.data ?? []).filter((row) => row.organization_id === org && row.stage !== "closed"), ...sampleBilling];
   const matterIds = [...new Set([...rows.map((row) => row.matter_id), ...billing.map((row) => row.matter_id)])];
   const invoiceIds = rows.map((row) => row.id);
-  const [matters, processing, cardPayments] = await Promise.all([
+  const [matters, processing, cardPayments, manualPending] = await Promise.all([
     matterIds.length ? supabase.from("matters").select("id, reference, title, is_sample").eq("organization_id", org).in("id", matterIds) : null,
     invoiceIds.length
       ? supabase.from("invoice_payments").select("invoice_id").eq("organization_id", org).eq("status", "processing").in("invoice_id", invoiceIds)
@@ -736,7 +944,13 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
       .eq("organization_id", org)
       .eq("status", "succeeded")
       .limit(PAYMENTS_READ),
+    // FIN-09: manual payments waiting for their reviewer; the invoice shows "Pending verification".
+    invoiceIds.length
+      ? supabase.from("invoice_manual_payments").select("invoice_id, amount_cents").eq("organization_id", org).eq("status", "pending_verification").in("invoice_id", invoiceIds)
+      : null,
   ]);
+  const pendingByInvoice = new Map<string, number>();
+  for (const row of manualPending?.data ?? []) pendingByInvoice.set(row.invoice_id, (pendingByInvoice.get(row.invoice_id) ?? 0) + row.amount_cents);
   const matterById = new Map((matters?.data ?? []).map((row) => [row.id, row]));
   // Closed matters too: their invoices still need a name. A finance user reads no matter rows, so
   // the billing projection's title stands in for the reference.
@@ -753,36 +967,21 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
     return matter?.is_sample ? `${label} (sample)` : label;
   };
 
-  // The cached account status is refreshed from Stripe for the owner while it is not active yet.
-  let account = accountRow.data;
-  const stripe = stripeServer();
-  if (account && staff.role === "firm_owner" && stripe && (account.card_payments_status !== "active" || account.requirements_due > 0)) {
-    try {
-      const status = await retrieveAccountStatus(stripe, account.account_id);
-      if (!status.livemode) {
-        await supabase.rpc("sync_firm_payment_account", {
-          p_org: org,
-          p_account_id: account.account_id,
-          p_card_payments_status: status.cardPayments,
-          p_payouts_status: status.payouts,
-          p_requirements_due: status.requirementsDue,
-        });
-        account = { ...account, card_payments_status: status.cardPayments, payouts_status: status.payouts, requirements_due: status.requirementsDue };
-      }
-    } catch {
-      // Stripe unreachable: the cached status stays.
-    }
-  }
+  const account = firmAccount.row;
   const cardReady = account?.card_payments_status === "active";
 
   const tableRows: InvoiceRow[] = rows.map((row) => {
-    const state = invoiceState(
-      row.status,
-      row.due_on,
-      today,
-      processingIds.has(row.id),
-      row.refunded_cents > 0 ? formatMoney(row.refunded_cents, row.currency) : null,
-      row.credited_cents > 0 && row.status !== "credited" ? formatMoney(row.credited_cents, row.currency) : null,
+    const state = billingInvoiceState(
+      row,
+      invoiceState(
+        row.status,
+        row.due_on,
+        today,
+        processingIds.has(row.id),
+        row.refunded_cents > 0 ? formatMoney(row.refunded_cents, row.currency) : null,
+        row.credited_cents - row.written_off_cents > 0 && row.status !== "credited" ? formatMoney(row.credited_cents - row.written_off_cents, row.currency) : null,
+        pendingByInvoice.get(row.id) ? formatMoney(pendingByInvoice.get(row.id) ?? 0, row.currency) : null,
+      ),
     );
     return {
       key: row.id,
@@ -888,16 +1087,7 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
     },
   };
 
-  const pk = publishableKey();
-  const accountData: FinanceAccountData = {
-    organizationId: org,
-    firmName: staff.organizationName,
-    isOwner: staff.role === "firm_owner",
-    configured: Boolean(stripe && pk),
-    publishableKey: pk,
-    account: account ? { cardPayments: account.card_payments_status, payouts: account.payouts_status, requirementsDue: account.requirements_due } : null,
-    canBill,
-  };
+  const accountData = firmAccount.data;
 
   let payments: PaymentsData | null = null;
   let refundDialog: RefundDialogData | null = null;
@@ -910,13 +1100,16 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
           ? { title: "Stripe isn’t configured", copy: "Refunds go through the firm’s Stripe account, which isn’t reachable in this environment. Nothing can be refunded here." }
           : null,
     };
-    const [paymentRows, balance] = await Promise.all([
+    const [cardRows, manualRows, balance] = await Promise.all([
       loadPaymentRows(supabase, staff, canBill),
+      canBill ? loadManualPaymentRows(supabase, staff) : [],
       // The account row is only visible to the owner and finance users (RLS).
       account && canBill ? loadBalance(stripe, account) : null,
     ]);
+    // Card payments first (newest first), then manual payments (newest first).
+    const paymentRows: PaymentRow[] = [...cardRows, ...manualRows];
     payments = {
-      intro: `Money ${staff.organizationName} received by card, into the firm’s own Stripe account. A payment counts only when Stripe’s signed event confirms it. Stripe runs in test mode: no real card is charged, and Casevoya never holds the money.`,
+      intro: `Money ${staff.organizationName} received by card, into the firm’s own Stripe account, and payments recorded by hand (e-transfer, cheque, wire, cash). A card payment counts only when Stripe’s signed event confirms it; a manual one only once its reviewer verifies it. Stripe runs in test mode: no real card is charged, and Casevoya never holds the money.`,
       currency: "CAD",
       balance,
       rows: paymentRows,
@@ -933,16 +1126,45 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
     };
   }
 
-  const refunds = tab === "refunds" ? await loadRefunds(supabase, staff, canBill) : null;
+  const refundsPage = tab === "refunds" ? await loadRefunds(supabase, staff, canBill, today, Boolean(stripe)) : null;
+  const refunds = refundsPage?.data ?? null;
   const funds = tab === "funds" ? await loadClientFunds(supabase, staff, canBill, today) : null;
   if (funds && canBill) header.recordPayment = true;
   // Reconciliation: Stripe's payouts are read only for billing staff who see the firm's account.
   const recon: ReconPage | null =
     tab === "recon" ? await loadReconciliation(supabase, staff, canBill, today, account && canBill ? stripe : null, account && canBill ? account.account_id : null) : null;
   const invoiceView: InvoiceViewPage | null = tab === "invoice" && invoiceId ? await loadInvoiceView(supabase, staff, canBill, invoiceId, today) : null;
+  // FIN-06: ageing, unbilled time, tax rates and fee references under the Invoices tab; a draft's
+  // and an open invoice's own dialogs on its tab.
+  const billingPanels =
+    tab === "invoices"
+      ? await loadFinanceBilling(supabase, {
+          staff,
+          today,
+          invoices: rows,
+          matterName: (matterId) => `${clientOf(matterId)} · ${referenceOf(matterId)}`,
+        })
+      : null;
+  const invoiceBilling = invoiceView ? await loadInvoiceBillingDialogs(supabase, { staff, invoice: invoiceView.billing, today, canBill }) : null;
   if (invoiceView) header.invoiceTab = invoiceView.number;
   // An invoice that isn't there (or isn't this person's to see) falls back to the Invoices tab.
   else if (tab === "invoice") header.tab = "invoices";
 
-  return { chrome, header, page, dialog, account: accountData, payments, refunds, refundDialog, funds, recon, invoiceView };
+  return {
+    chrome,
+    header,
+    page,
+    dialog,
+    account: accountData,
+    payments,
+    refunds,
+    refundDialog,
+    creditDialog: refundsPage?.creditDialog ?? null,
+    evidenceDialog: refundsPage?.evidenceDialog ?? null,
+    funds,
+    recon,
+    invoiceView,
+    billing: billingPanels,
+    invoiceBilling,
+  };
 }

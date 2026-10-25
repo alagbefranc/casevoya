@@ -20,6 +20,7 @@ import {
 } from "@/components/sheet/designer/lead";
 import { BookingLeadsDialog, CsvDialog, NewLeadDialog, PipelineHeader, SheetPipeline } from "@/components/sheet/designer/pipeline";
 import { EnquiryShareDialog } from "@/components/sheet/designer/enquiry-share";
+import { LeadVoPanel, type LeadVoData } from "@/components/sheet/designer/vo-crm";
 import type { LeadPage, PipelinePage } from "@/modules/leads/load";
 import type { EnquiryShareData } from "@/modules/leads/share";
 
@@ -50,7 +51,8 @@ export function PipelineScreen({ loaded, share }: { loaded: PipelinePage; share?
   );
 }
 
-export function LeadScreen({ loaded }: { loaded: LeadPage }) {
+/** vo (live only): the "Follow-up with Vo" panel; absent while Vo can't draft and nothing waits. */
+export function LeadScreen({ loaded, vo }: { loaded: LeadPage; vo?: LeadVoData | null }) {
   const { dialogs } = loaded;
   return (
     <SheetFrame
@@ -105,6 +107,7 @@ export function LeadScreen({ loaded }: { loaded: LeadPage }) {
           ...loaded.page,
           leftAfter: (
             <>
+              {vo ? <LeadVoPanel data={vo} /> : null}
               <ConflictPanel data={loaded.conflict} />
               <ConsultationsPanel rows={loaded.consultations.rows} link={loaded.consultations.link} />
               <HistoryPanel items={loaded.history} />

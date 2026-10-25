@@ -55,10 +55,14 @@ export function conversationChannels(channels: readonly ("email" | MessageChanne
   return ["portal", "email", "whatsapp"].filter((channel) => channels.includes(channel as "email" | MessageChannel));
 }
 
-/** One secure matter message in a conversation: "Priya · 18 Oct 09:12 · via portal", then the text. */
-export function messageMail(input: { author: string; when: string; body: string; channel: MessageChannel; ack: boolean }): ThreadMail {
+/**
+ * One secure matter message in a conversation: "Priya · 18 Oct 09:12 · via portal", then the text.
+ * A staff message (OPS-04) also says whether it was acknowledged, and "Delivered" or "Read by …".
+ */
+export function messageMail(input: { author: string; when: string; body: string; channel: MessageChannel; ack: boolean; acked?: string[]; state?: string | null }): ThreadMail {
+  const ack = input.ack ? [input.acked?.length ? `acknowledged by ${input.acked.join(", ")}` : "acknowledgement asked"] : [];
   return {
-    meta: [firstName(input.author), input.when, input.channel === "whatsapp" ? "via WhatsApp" : "via portal", ...(input.ack ? ["acknowledgement asked"] : [])],
+    meta: [firstName(input.author), input.when, input.channel === "whatsapp" ? "via WhatsApp" : "via portal", ...ack, ...(input.state ? [input.state] : [])],
     body: input.body.trim().slice(0, 4000) || "(no text)",
     files: null,
   };

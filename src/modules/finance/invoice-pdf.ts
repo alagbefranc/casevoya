@@ -28,7 +28,13 @@ export type InvoicePdf = {
   consultantName: string | null;
   consultantLicence: string | null;
   isSample: boolean;
+  /** FIN-06: an invoice drafted from lines (time, a quote, an instalment, a government fee). */
+  lines?: { category: string; description: string; amountCents: number; taxLabel: string | null; taxCents: number; source: string | null }[];
+  /** FIN-06: the part of creditedCents written off, not credited by a credit note. */
+  writtenOffCents?: number;
 };
+
+const LINE_CATEGORY: Record<string, string> = { professional_fee: "Professional fee", disbursement: "Disbursement", government_fee: "Government fee" };
 
 export const INVOICE_NOTE = "An issued invoice can’t be edited. Corrections are made with a credit note; a payment counts once Stripe confirms it or a transfer from the client account is approved.";
 
@@ -43,13 +49,23 @@ export function invoiceRows(invoice: InvoicePdf): [string, string][] {
     creditedCents: invoice.creditedCents,
     refundedCents: invoice.refundedCents,
   });
+  const writtenOff = invoice.writtenOffCents ?? 0;
+  const lines = invoice.lines ?? [];
+  const tax = lines.reduce((sum, line) => sum + line.taxCents, 0);
   return [
     ["Invoice", invoice.number],
     ["For", invoice.description],
-    ["Category", FEE_CATEGORY_LABEL[invoice.feeCategory] ?? "Fee"],
+    ...(lines.length
+      ? lines.map((line, index): [string, string] => [
+          `Line ${index + 1}`,
+          [LINE_CATEGORY[line.category] ?? "Fee", line.description, money(line.amountCents), ...(line.taxLabel ? [`${line.taxLabel} ${money(line.taxCents)}`] : []), ...(line.source ? [line.source] : [])].join(" · "),
+        ])
+      : [["Category", FEE_CATEGORY_LABEL[invoice.feeCategory] ?? "Fee"] as [string, string]]),
+    ...(tax > 0 ? [["Tax", money(tax)] as [string, string]] : []),
     ["Total", money(invoice.amountCents)],
     ...(invoice.paidCents > 0 ? [["Paid", money(invoice.paidCents)] as [string, string]] : []),
-    ...(invoice.creditedCents > 0 ? [["Credited", money(invoice.creditedCents)] as [string, string]] : []),
+    ...(invoice.creditedCents - writtenOff > 0 ? [["Credited", money(invoice.creditedCents - writtenOff)] as [string, string]] : []),
+    ...(writtenOff > 0 ? [["Written off", money(writtenOff)] as [string, string]] : []),
     ...(invoice.refundedCents > 0 ? [["Refunded", money(invoice.refundedCents)] as [string, string]] : []),
     [invoice.status === "voided" ? "Voided" : "Amount due", invoice.status === "voided" ? "Nothing is due" : money(due)],
     ["Issued", invoice.issuedOn ? longDate(invoice.issuedOn) : "—"],

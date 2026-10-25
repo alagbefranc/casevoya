@@ -4,7 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import type { PortalViewer } from "@/modules/portal/load";
 import type { SheetStaff } from "@/modules/sheet/load";
+import { consultantNames, messageTemplateOptions } from "./templates-load";
 import {
+  messageEmailState,
   previewOf,
   sortThreads,
   type ChatAttachment,
@@ -319,6 +321,33 @@ async function whatsappWindows(supabase: Client, org: string, personIds: string[
   return { optedIn, until };
 }
 
+/**
+ * Staff (OPS-04): each staff message's email notice state, from its outbox event (message.sent)
+ * and that event's deliveries. Staff read both (outbox_events: firm staff; email_deliveries: staff
+ * who can read the matter).
+ */
+async function emailStates(supabase: Client, org: string, messageIds: string[], sample: boolean): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  if (!messageIds.length) return out;
+  const events = await supabase
+    .from("outbox_events")
+    .select("id, aggregate_id, status")
+    .eq("organization_id", org)
+    .eq("aggregate_type", "message")
+    .eq("event_type", "message.sent")
+    .in("aggregate_id", messageIds);
+  const rows = events.data ?? [];
+  const deliveries = rows.length
+    ? await supabase.from("email_deliveries").select("outbox_event_id, status").eq("organization_id", org).in("outbox_event_id", rows.map((row) => row.id))
+    : null;
+  const statusesOf = new Map<string, string[]>();
+  for (const row of deliveries?.data ?? []) statusesOf.set(row.outbox_event_id, [...(statusesOf.get(row.outbox_event_id) ?? []), row.status as string]);
+  for (const row of rows) {
+    if (row.aggregate_id) out.set(row.aggregate_id, messageEmailState({ eventStatus: row.status as string, deliveries: statusesOf.get(row.id) ?? [], sample }));
+  }
+  return out;
+}
+
 /** The matter workspace's Messages tab for staff: threads, audience options and documents. Staff notes stay separate. */
 export async function loadMatterMessages(staff: SheetStaff, matterId: string, threadId?: string | null): Promise<ChatData> {
   const org = staff.organizationId;
@@ -327,17 +356,19 @@ export async function loadMatterMessages(staff: SheetStaff, matterId: string, th
   const me = String(claims?.claims?.sub ?? "");
   const [raw, matter, participants] = await Promise.all([
     readRaw(supabase, org, matterId),
-    supabase.from("matters").select("id, title").eq("organization_id", org).eq("id", matterId).maybeSingle(),
+    supabase.from("matters").select("id, title, reference, is_sample, responsible_consultant_membership_id").eq("organization_id", org).eq("id", matterId).maybeSingle(),
     supabase.from("matter_participants").select("person_id, role").eq("organization_id", org).eq("matter_id", matterId).not("person_id", "is", null),
   ]);
   const personIds = [...new Set((participants.data ?? []).map((row) => row.person_id).filter((id): id is string => Boolean(id)))];
   const persons = personIds.length
-    ? (await supabase.from("persons").select("id, display_name, email").eq("organization_id", org).in("id", personIds)).data ?? []
+    ? (await supabase.from("persons").select("id, display_name, email, user_id").eq("organization_id", org).in("id", personIds)).data ?? []
     : [];
   const names = new Map(persons.map((row) => [row.id, row.display_name]));
   const roleOf = new Map<string, string>();
+  const rolesOf = new Map<string, string[]>();
   for (const row of participants.data ?? []) {
     if (row.person_id && !roleOf.has(row.person_id)) roleOf.set(row.person_id, ROLE[row.role] ?? row.role);
+    if (row.person_id) rolesOf.set(row.person_id, [...(rolesOf.get(row.person_id) ?? []), row.role]);
   }
   const docIds = [...new Set(raw.attachments.map((row) => row.document_id))];
   const [docs, documents] = await Promise.all([documentRows(supabase, org, docIds), attachable(supabase, org, [matterId])]);
@@ -360,9 +391,27 @@ export async function loadMatterMessages(staff: SheetStaff, matterId: string, th
     const until = chosen.map((id) => whatsapp.until.get(id) ?? null).filter((value): value is string => Boolean(value)).sort()[0] ?? null;
     thread.whatsapp = { until: until && until > new Date().toISOString() ? until : null };
   }
+  // OPS-04: an employer or sponsor (only those roles on the matter) needs portal access to be in a conversation.
   const audienceOptions: ChatAudienceOption[] = persons
-    .map((row) => ({ personId: row.id, name: row.display_name, role: roleOf.get(row.id) ?? "Person", email: Boolean(row.email) }))
+    .map((row) => {
+      const roles = rolesOf.get(row.id) ?? [];
+      return {
+        personId: row.id,
+        name: row.display_name,
+        role: roleOf.get(row.id) ?? "Person",
+        email: Boolean(row.email),
+        portal: Boolean(row.user_id),
+        external: roles.length > 0 && roles.every((role) => role === "sponsor" || role === "employer"),
+      };
+    })
     .sort((a, b) => a.name.localeCompare(b.name));
+  // OPS-04: each staff message's email notice; the firm's approved templates and merge values.
+  const [email, templates, consultant] = await Promise.all([
+    emailStates(supabase, org, messages.filter((message) => message.authorKind === "staff").map((message) => message.id), Boolean(matter.data?.is_sample)),
+    messageTemplateOptions(supabase, org),
+    matter.data ? consultantNames(supabase, org, [matter.data]) : Promise.resolve(new Map<string, string | null>()),
+  ]);
+  for (const message of messages) if (message.authorKind === "staff") message.email = email.get(message.id) ?? null;
   return {
     mode: "staff",
     organizationId: org,
@@ -378,5 +427,7 @@ export async function loadMatterMessages(staff: SheetStaff, matterId: string, th
     documents,
     selfPersonId: null,
     matterId,
+    templates,
+    merge: { firmName: staff.organizationName, matterReference: matter.data?.reference ?? null, consultantName: consultant.get(matterId) ?? null },
   };
 }

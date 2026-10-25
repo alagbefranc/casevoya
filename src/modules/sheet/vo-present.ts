@@ -23,6 +23,8 @@ export type VoSettingsRow = {
   ocr_normalisation: boolean;
   missing_fields: boolean;
   inconsistency_flags: boolean;
+  /** AI-01: first drafts of letters from approved facts. */
+  letter_drafts: boolean;
 };
 
 export type VoSettings = VoSettingsRow & { saved: boolean };
@@ -50,6 +52,7 @@ export function effectiveSettings(row: Partial<VoSettingsRow> | null, sampleMode
     ocr_normalisation: row?.ocr_normalisation ?? true,
     missing_fields: row?.missing_fields ?? true,
     inconsistency_flags: row?.inconsistency_flags ?? true,
+    letter_drafts: row?.letter_drafts ?? true,
   };
 }
 
@@ -80,7 +83,7 @@ export type VoDraftRow = {
 
 export type VoRunRow = {
   id: string;
-  kind: "message_reply" | "document_request" | "ask" | "document_review";
+  kind: "message_reply" | "document_request" | "ask" | "document_review" | "letter_draft" | "lead_follow_up" | "call_summary";
   result: "running" | "drafted" | "answered" | "abstained" | "failed";
   matterId: string;
   threadId: string | null;
@@ -281,7 +284,7 @@ export function draftsPage(input: {
     { id: "swVoFlags", label: "Missing-field and inconsistency flags", on: settings.missing_fields && settings.inconsistency_flags, attrs: switchAttrs(viewer, "doc_flags") },
     { id: "swVoSummaries", label: "Matter summaries", on: settings.staff_answers, attrs: switchAttrs(viewer, "staff_answers") },
     { id: "swVoReplies", label: "Administrative replies", on: settings.reply_drafts, attrs: switchAttrs(viewer, "reply_drafts") },
-    { id: "swVoLetters", label: "First drafts of letters from approved facts", on: false, attrs: switchAttrs(viewer, null) },
+    { id: "swVoLetters", label: "First drafts of letters from approved facts", on: settings.letter_drafts, attrs: switchAttrs(viewer, "letter_drafts") },
   ];
   // This week counts what the drafts page lists: reply drafts and document readings (the same two
   // kinds as the "waiting" count). A reading is accepted once each proposal is decided.
@@ -353,7 +356,7 @@ export function aiSettings(viewer: VoViewer, settings: VoSettings): AiSettings {
         aiSwitch("swVoFlags", "Inconsistency flags (not fraud findings)", settings.inconsistency_flags, a("inconsistency_flags")),
         aiSwitch("swVoSummaries", "Matter summaries for staff", settings.staff_answers, a("staff_answers")),
         aiSwitch("swVoReplies", "Administrative reply drafts", settings.reply_drafts, a("reply_drafts")),
-        aiSwitch("swVoLetters", "First drafts of letters from approved facts", false, a(null)),
+        aiSwitch("swVoLetters", "First drafts of letters from approved facts", settings.letter_drafts, a("letter_drafts")),
       ].map(sub),
     ],
     categories: [
@@ -380,7 +383,12 @@ const TASK_LABEL: Record<VoRunRow["kind"], string> = {
   document_request: "Document request explanation",
   ask: "Ask Vo",
   document_review: "Document reading",
+  letter_draft: "Letter draft",
+  lead_follow_up: "Lead follow-up",
+  call_summary: "Call notes summary",
 };
+/** Runs on a lead (no matter): lead follow-ups, and call summaries kept on a lead. */
+const LEAD_KINDS: readonly VoRunRow["kind"][] = ["lead_follow_up", "call_summary"];
 const FAILURE_LABEL: Record<string, string> = {
   unavailable: "Vo unavailable",
   empty: "No usable draft",
@@ -405,13 +413,15 @@ export function runReview(run: VoRunRow): { badge: MatterBadge; token: string } 
 export function aiRunRows(runs: VoRunRow[], names: VoNames, viewer: VoViewer): AiRunRow[] {
   return runs.map((run) => {
     const review = runReview(run);
-    const rateable = run.result === "drafted" || run.result === "answered";
+    // A run on a lead has no matter (and the "useful?" vote is for matter runs).
+    const onLead = LEAD_KINDS.includes(run.kind) && !run.matterId;
+    const rateable = (run.result === "drafted" || run.result === "answered") && !onLead;
     const vote = (useful: boolean): Attrs => ({ "data-vo-useful": useful ? "1" : "0", "data-run": run.id, "data-org": viewer.organizationId });
     return {
       when: dayTime(run.createdAt, viewer.timeZone),
-      matter: names.reference(run.matterId),
+      matter: onLead ? "A lead" : names.reference(run.matterId),
       ...(run.matterId ? { matterHref: `/sheet/matters/${run.matterId}` } : {}),
-      task: `${TASK_LABEL[run.kind]}${run.kind === "ask" ? "" : ` for ${names.matter(run.matterId)}`}`,
+      task: `${TASK_LABEL[run.kind]}${run.kind === "ask" || onLead ? "" : ` for ${names.matter(run.matterId)}`}`,
       model: { left: run.model ?? "—", right: `${run.tools.length} tool ${run.tools.length === 1 ? "call" : "calls"}` },
       prompt: run.promptVersion ?? "—",
       sources:
