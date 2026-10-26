@@ -4,7 +4,7 @@ import { loadMatterMessages } from "@/modules/messages/load";
 import { emailRuntimeConfig } from "@/lib/email/env";
 import { matterInboundAddress, timelineEmailEvents } from "@/modules/sheet/inbound-present";
 import { loadVoComposer } from "@/modules/sheet/vo-load";
-import { loadVoReadingPanel } from "@/modules/sheet/vo-doc-load";
+import { loadVoAutoRead, loadVoReadingPanel } from "@/modules/sheet/vo-doc-load";
 import { loadMatterLetters } from "@/modules/sheet/letters-load";
 import {
   matterTab,
@@ -328,6 +328,12 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
 
   // Vo's reading of one document waiting for review: the Designer's review panel (`#ocr`).
   const voReading = matterTab(query.tab) === "documents" ? await loadVoReadingPanel(supabase, org, matter.id, query.vo ?? null).catch(() => null) : null;
+  // DOC-05: "Read documents on upload": the newest checked uploads waiting for review that Vo hasn't read.
+  const unread = documentRows
+    .map((row) => (row.current_version_id ? versionById.get(row.current_version_id) : undefined))
+    .filter((version): version is NonNullable<typeof version> => Boolean(version && version.upload_state === "clean" && version.review_state === "pending"))
+    .map((version) => version.id);
+  const voAutoRead = matterTab(query.tab) === "documents" && mayRequestDocuments(staff.role) ? await loadVoAutoRead(supabase, org, staff.sampleMode, unread).catch(() => null) : null;
   // MIG follow-ups: documents, relationships and key dates an import brought in say so.
   const [documentImports, relationImports, deadlineImports] = await Promise.all([
     loadImportProvenance(supabase, org, "documents", checklist.map((row) => row.documentId)),
@@ -822,6 +828,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       checklist: program,
       people: [...new Set(checklist.map((row) => firstName(personName(row.personId))))].slice(0, 4),
       rows: documentTable,
+      autoRead: voAutoRead,
       apply: approvedChecklists?.data?.length
         ? { organizationId: org, matterId: matter.id, templates: approvedChecklists.data.map((row) => ({ id: row.id, label: `${row.title} v${row.version_number}` })) }
         : null,

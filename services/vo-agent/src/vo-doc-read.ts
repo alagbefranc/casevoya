@@ -22,15 +22,15 @@ import {
   voCategoryAllowed,
   voDocCapabilities,
   voDocMagicMatches,
+  voDocMaxBytes,
   voDocMedia,
   voDocumentCategory,
   VO_DOC_CATEGORY_LABEL,
-  VO_DOC_MAX_IMAGE_BYTES,
-  VO_DOC_MAX_PDF_BYTES,
   type VoDocCapabilities,
   type VoDocCategory,
   type VoDocSettings,
 } from "../../../src/modules/vo/vo-doc";
+import { docxText } from "../../../src/modules/vo/docx-text";
 import { voDocSchema, voDocSystemPrompt, voDocUserText, VO_DOC_EFFORT, VO_DOC_MAX_TOKENS, VO_DOC_PROMPT_VERSION } from "../../../src/modules/vo/vo-doc-prompt";
 import { redactIdentity } from "./tools";
 import type { VoDocData, VoDocVersion } from "./vo-doc-data";
@@ -279,7 +279,7 @@ export async function runDocumentReview(request: VoTaskRequest, deps: DocRunDeps
   if (settings?.enabled === false || !anyDocCapability(caps)) return failed("refused");
   if (!voCategoryAllowed(settings, voDocumentCategory(version.purpose, version.sensitivity))) return failed("refused");
   const media = voDocMedia(version.mediaType);
-  const limit = media?.kind === "pdf" ? VO_DOC_MAX_PDF_BYTES : VO_DOC_MAX_IMAGE_BYTES;
+  const limit = voDocMaxBytes(media);
   if (!media || version.byteSize > limit) return failed("unsupported_file");
 
   tools.push(READ_TOOL);
@@ -288,12 +288,17 @@ export async function runDocumentReview(request: VoTaskRequest, deps: DocRunDeps
   if (!bytes) return failed("failed");
   if (bytes.byteLength > limit || !voDocMagicMatches(media, bytes)) return failed("unsupported_file");
 
-  const data = Buffer.from(bytes).toString("base64");
+  // A Word document goes to the model as its text only; nothing in the file is run.
+  const docText = media.kind === "docx" ? docxText(bytes) : null;
+  if (media.kind === "docx" && !docText) return failed("unsupported_file");
+  const data = media.kind === "docx" ? "" : Buffer.from(bytes).toString("base64");
   const nonce = deps.nonce ?? newNonce();
   const file =
-    media.kind === "pdf"
-      ? { type: "document", source: { type: "base64", media_type: media.mediaType, data } }
-      : { type: "image", source: { type: "base64", media_type: media.mediaType, data } };
+    media.kind === "docx"
+      ? { type: "document", source: { type: "text", media_type: "text/plain", data: docText } }
+      : media.kind === "pdf"
+        ? { type: "document", source: { type: "base64", media_type: media.mediaType, data } }
+        : { type: "image", source: { type: "base64", media_type: media.mediaType, data } };
   const params: Record<string, unknown> = {
     model: VO_MODEL,
     max_tokens: VO_DOC_MAX_TOKENS,

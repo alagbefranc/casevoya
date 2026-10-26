@@ -3,7 +3,7 @@ import type { CustodyRow, DocCard, DocChip, DocumentReviewDialogData, DocumentsD
 import { WAITING_LABEL, type RequestWaiting } from "@/modules/sheet/reports-ops-more";
 import { loadOpenRequests, sampleMatterIds } from "@/modules/sheet/reports-ops-more-load";
 import { createClient } from "@/lib/supabase/server";
-import { PREVIEWABLE } from "@/modules/documents/preview";
+import { PREVIEWABLE } from "@/modules/documents/previewable";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import {
   cardOpenable,

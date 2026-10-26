@@ -13317,6 +13317,7 @@ export type Database = {
           read_identity: boolean
           read_medical: boolean
           read_narratives: boolean
+          read_on_upload: boolean
           read_relationship: boolean
           reply_drafts: boolean
           staff_answers: boolean
@@ -13348,6 +13349,7 @@ export type Database = {
           read_identity?: boolean
           read_medical?: boolean
           read_narratives?: boolean
+          read_on_upload?: boolean
           read_relationship?: boolean
           reply_drafts?: boolean
           staff_answers?: boolean
@@ -13368,6 +13370,7 @@ export type Database = {
           read_identity?: boolean
           read_medical?: boolean
           read_narratives?: boolean
+          read_on_upload?: boolean
           read_relationship?: boolean
           reply_drafts?: boolean
           staff_answers?: boolean

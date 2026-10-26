@@ -1117,3 +1117,11 @@ DOC-01 (#178), branch `feat/doc-checklists`. Already applied on the live project
 * `20261024230000_checklist_templates.sql`: new enum type `public.checklist_template_status` (`draft`, `approved`, `retired`; a new type, no value added to an existing enum). New tables `public.checklist_templates` (one version per row, one draft per key) and `public.checklist_template_items` (purpose, explanation, client or staff, due offset, formats, review criteria, expiry to record, matter role, an optional intake-answer condition); both forced RLS, select for the firm's staff with MFA, no API writes. `document_requests.checklist_item_id` (indexed FK). New `public.save_checklist_template` (owner, licensed consultant or case manager; a save under an approved key starts its next version), `public.approve_checklist_template` (licensed consultant, step-up; the previous approved version is retired), `app.checklist_proposals`, `public.checklist_apply_preview`, `public.apply_checklist` (step-up; only proposals the preview makes now; additions through `app.create_document_request`, removals cancel open requests; audited `checklist.saved`, `checklist.approved`, `checklist.applied`, `document.request_cancelled`).
 
 Tested in `tests/checklist-templates.rls.test.ts` and `tests/checklist-present.test.tsx`.
+
+## Vo reads documents on upload (`20261025000000`, already applied on the live project; deploy only)
+
+DOC-05 (#178), branch `feat/doc-vo-reading`. Already applied on the live project under this name (recorded in `supabase_migrations.schema_migrations`), so the file keeps its name; merging this PR only deploys the app code. `20261025240200_vo_settings_keep_read_on_upload.sql` (on main) also adds `vo_settings.read_on_upload` when missing and defines `public.set_vo_settings` with both `read_on_upload` and `letter_drafts`.
+
+* `20261025000000_vo_read_on_upload.sql`: `vo_settings.read_on_upload` (`add column if not exists`, default false). In this branch it does not redefine `set_vo_settings` (left to `20261025240200`); the body the live project ran did, which `20261025240200` then replaced.
+
+Tested in `tests/vo-doc-review.rls.test.ts`, `tests/vo-doc-review-service.test.ts` and `tests/vo-read-on-upload.test.tsx`.

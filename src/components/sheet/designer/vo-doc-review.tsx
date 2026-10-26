@@ -8,7 +8,8 @@
  * changes until a person accepts (PRD AI-03).
  *
  * Live-only additions (stripped in the fidelity test): `data-*` attributes on rows and buttons, and
- * `contentEditable` on a row's value so it can be corrected before it is accepted.
+ * `contentEditable` on a row's value so it can be corrected before it is accepted. DOC-05: a row's
+ * confidence and page badge links to the secure preview at that page when the file can be previewed.
  */
 import type { ReactNode } from "react";
 import { Icon, Sep } from "./frame";
@@ -27,6 +28,8 @@ export type VoDocReviewRow = {
   attrs?: VoDocAttrs;
   /** Live: the value can be edited before it is accepted. */
   editable?: boolean;
+  /** Live (DOC-05): the badge opens the secure preview at the page it was read from. */
+  pageHref?: string;
 };
 
 export type VoDocPaperPart = string | { hl: string; f: string };
@@ -101,7 +104,13 @@ export function MatterDocumentReview({ data }: { data: MatterDocumentReviewData 
                   <b>{row.value}</b>
                 )}
               </div>
-              <Badge badge={row.badge} />
+              {row.pageHref ? (
+                <a href={row.pageHref} target={"_blank"} rel={"noopener"} title={"Open the file at this page"}>
+                  <Badge badge={row.badge} />
+                </a>
+              ) : (
+                <Badge badge={row.badge} />
+              )}
               <span className={"ck"} role={"checkbox"} aria-label={row.check}></span>
             </div>
           ))}

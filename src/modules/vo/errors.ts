@@ -15,6 +15,7 @@ export const VO_SETTING_KEYS = [
   "ocr_normalisation",
   "missing_fields",
   "inconsistency_flags",
+  "read_on_upload",
   "letter_drafts",
 ] as const;
 
