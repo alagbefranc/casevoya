@@ -1099,3 +1099,13 @@ DOC-06 (#178), branch `feat/doc-evidence-links`. Already applied on the live pro
 * `20261024210000_document_evidence_links.sql`: new `public.link_document_matter(document, matter)` (owner, licensed consultant or case manager who can read both; the document's person must be on the matter; only a current version that passed its file check; an existing link is returned; audited `document.linked`). New `public.set_document_translation(version, expected_version, original_version, language_tag)` (same roles; same person, another document, no cycle; through `app.open_document_write`; audited `document.translation_set` / `document.translation_cleared`). New `public.set_document_classification(document, expected_version, purpose, sensitivity)` (same roles; a sensitivity change needs aal2; audited `document.classified`). Removing a link stays `public.unlink_document_matter`, expiry stays `public.set_document_expiry` (both unchanged).
 
 Tested in `tests/document-evidence-links.rls.test.ts`.
+
+## Custody steps for originals (`20261024220000`, already applied on the live project; deploy only)
+
+DOC-07 (#178), branch `feat/doc-custody-preview`. Already applied on the live project under this name (recorded in `supabase_migrations.schema_migrations`), so the file keeps its name and its exact applied contents; merging this PR only deploys the app code. Additive. Checked against main up to `20261025600100`: no migration since `20261017180000_document_storage.sql` touches `document_custody_events` or `record_document_custody`.
+
+* `20261024220000_document_custody_steps.sql`: `document_custody_events.kind` (`received`, `moved`, `returned`, `acknowledged`; null for rows from `public.record_document_custody`, which is unchanged; the table stays append only). New `public.record_custody_step(version, kind, on, location, purpose, recipient)` (owner, licensed consultant or case manager who can read the version; received only when not already held; moved only while held; returned once; acknowledged after the return; audited `document.custody_<kind>`). It also creates `document_custody_events_version_time_idx` on `(version_id, created_at)`, the same columns as `document_custody_events_version_idx`; it is kept because the live project has it (a later migration could drop the duplicate).
+
+The secure preview (`/api/documents/preview/[version]`) needs no migration: access is `public.authorize_document_download`, so each preview is audited like a download.
+
+Tested in `tests/document-custody-steps.rls.test.ts` and `tests/document-custody-preview.test.tsx`.

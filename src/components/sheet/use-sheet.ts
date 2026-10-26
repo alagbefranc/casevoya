@@ -92,6 +92,7 @@ import { runIdleTimeout } from "./idle-timeout-act";
 import { openConsentReview, runClientTwoStepReset, runConsentReviewDone } from "./person-consent-acts";
 import { armIntakeReview, runIntakeFreeze, runIntakeReuse, runIntakeSend } from "./intake-delivery-acts";
 import { runFlagResolve, runPersonAdd, runPersonRemove } from "./person-history-acts";
+import { openCustody, runCustodySave } from "./custody-acts";
 import { openInboxPick, runInboxDismiss, runInboxFile, runInboxFileGo, runInboxMove, runInboxSearch } from "./inbox-acts";
 import { runInboxCompose, runInboxMessage, runInboxNote, runInboxReply } from "./inbox-reply-acts";
 import { mountMessagingInputs, runAnnouncementSend, runTemplateApprove, runTemplateArchive, runTemplateSave } from "./messaging-acts";
@@ -1014,6 +1015,19 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (ddClassify && root.contains(ddClassify)) {
         event.preventDefault();
         busyRun(ddClassify, () => runDocumentClassify(router));
+        return;
+      }
+      // DOC-07: Originals we hold, a custody step.
+      const custodyOpen = target.closest<HTMLElement>("[data-custody-open]");
+      if (custodyOpen && root.contains(custodyOpen)) {
+        event.preventDefault();
+        openCustody(custodyOpen);
+        return;
+      }
+      const custodySave = target.closest<HTMLElement>("[data-custody-save]");
+      if (custodySave && root.contains(custodySave)) {
+        event.preventDefault();
+        busyRun(custodySave, () => runCustodySave(router));
         return;
       }
       // Clients › person: consent impact review (SEC-05) and the client's two-step reset (SEC-01).

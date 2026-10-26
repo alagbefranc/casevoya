@@ -2578,6 +2578,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          kind: string | null
           location: string | null
           organization_id: string
           purpose: string
@@ -2591,6 +2592,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          kind?: string | null
           location?: string | null
           organization_id: string
           purpose: string
@@ -2604,6 +2606,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          kind?: string | null
           location?: string | null
           organization_id?: string
           purpose?: string
@@ -15164,6 +15167,10 @@ export type Database = {
       set_document_translation: {
         Args: { p_expected_version: number; p_language_tag?: string; p_original_version_id?: string; p_version_id: string }
         Returns: number
+      }
+      record_custody_step: {
+        Args: { p_kind: string; p_location: string; p_on: string; p_purpose: string; p_recipient: string; p_version_id: string }
+        Returns: string
       }
       document_request_progress: {
         Args: { p_matter_id: string }
