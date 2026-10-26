@@ -87,6 +87,8 @@ const ACTIONS = {
   privacy_download: { phrase: "download your privacy response", icon: "download", title: "Download your privacy response", detail: "Your records the firm sent through the portal" },
   letter_approve: { phrase: "approve a letter", icon: "file-check", title: "Approve a letter", detail: "The version that can be released to the client or the government" },
   rule_approve: { phrase: "approve an official-source claim", icon: "file-check", title: "Approve a claim", detail: "The version becomes locked and live for its program" },
+  claim_edit: { phrase: "edit an official claim for your firm", icon: "file-check", title: "Edit an official claim", detail: "Your firm’s wording, stamped with your name and licence" },
+  rule_unsuspend: { phrase: "unsuspend a claim", icon: "file-check", title: "Unsuspend a claim", detail: "The version becomes live again for its program" },
 } as const satisfies Record<string, { phrase: string } & StepUpAction>;
 
 export type StepUpActionKey = keyof typeof ACTIONS;

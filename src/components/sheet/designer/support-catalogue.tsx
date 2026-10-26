@@ -65,7 +65,14 @@ function Table({ title, rows, empty, index }: { title: string; rows: CatalogueRo
                     </>
                   ) : null}
                 </td>
-                <td>{row.detail}</td>
+                <td>
+                  {row.detail}
+                  {row.flags?.map((flag, n) => (
+                    <p key={n} className={"fp-note"}>
+                      {flag}
+                    </p>
+                  ))}
+                </td>
                 <td>
                   <span className={`bd ${row.badge.tone}`}>
                     <i></i>
