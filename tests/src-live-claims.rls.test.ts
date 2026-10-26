@@ -313,6 +313,20 @@ describe("firm edits", () => {
     );
   });
 
+  it("refuses an edit from a member whose licence isn't on file, so the stamp always has a number", async () => {
+    const f = await firm();
+    const c = await liveClaim();
+    // The firm owner has no licence record (only the consultant declared one).
+    await as(f.owner, f.orgId, 0);
+    await expectDbError(
+      () => db.query(`select public.edit_rule_claim($1, $2, 'Firm wording.', null, 'Synthetic reason', 'edit')`, [c.defId, c.base]),
+      /licence isn't recorded/,
+    );
+    await asMaintenance(db);
+    const rows = await db.query(`select 1 from public.rule_claim_overrides where organization_id = $1`, [f.orgId]);
+    expect(rows.rows).toHaveLength(0);
+  });
+
   it("a licensed edit with a step-up is that firm's only; every change needs a fresh step-up; history keeps everything", async () => {
     const f = await firm();
     const other = await firm();
