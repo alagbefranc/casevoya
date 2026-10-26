@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { authorizeDocumentDownload, reviewDocumentVersion, setDocumentExpiry } from "@/modules/documents/actions";
 import { needsStepUp } from "@/modules/sheet/matter-wire";
@@ -129,7 +130,7 @@ export async function runDocReview(button: HTMLElement, router: Router) {
   if ("error" in reviewed) {
     if (needsStepUp(reviewed.error)) {
       keepDraft(read.input.versionId, fields);
-      window.location.assign(reviewStepUpLocation(window.location.pathname, window.location.search, read.input.versionId));
+      goStepUp(reviewStepUpLocation(window.location.pathname, window.location.search, read.input.versionId));
       return;
     }
     if (/someone else updated/i.test(reviewed.error ?? "")) {
@@ -166,7 +167,7 @@ export async function runDocOpen(card: HTMLElement) {
   const result = await authorizeDocumentDownload({ organizationId: card.dataset.org ?? "", versionId: card.dataset.docOpen ?? "" });
   if ("error" in result) {
     if (needsStepUp(result.error)) {
-      window.location.assign(stepUpHref(`${window.location.pathname}${window.location.search}`, "document_open"));
+      goStepUp(stepUpHref(`${window.location.pathname}${window.location.search}`, "document_open"));
       return;
     }
     toast2(result.error ?? "That file cannot be opened.", { kind: "bad" });
@@ -183,7 +184,7 @@ export async function runDocFile(button: HTMLElement) {
   if ("error" in result) {
     if (needsStepUp(result.error)) {
       keepReviewDraft(dialog);
-      window.location.assign(reviewStepUpLocation(window.location.pathname, window.location.search, versionId));
+      goStepUp(reviewStepUpLocation(window.location.pathname, window.location.search, versionId));
       return;
     }
     toast2(result.error ?? "That file cannot be opened.", { kind: "bad" });

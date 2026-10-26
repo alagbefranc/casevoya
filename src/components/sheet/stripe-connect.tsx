@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { loadConnectAndInitialize, type StripeConnectInstance } from "@stripe/connect-js/pure";
@@ -43,7 +44,7 @@ function Banner({ tone, icon, title, children, action }: { tone: "warn" | "info"
 }
 
 function stepUp(dialog: string | null) {
-  window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, dialog, "payment_settings"));
+  goStepUp(financeStepUpLocation(window.location.pathname, window.location.search, dialog, "payment_settings"));
 }
 
 /**
@@ -285,7 +286,7 @@ function DisconnectDialog({ data }: { data: FinanceAccountData }) {
       });
       if ("error" in result) {
         if (financeNeedsStepUp(result.error)) {
-          window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, STRIPE_DISCONNECT_PARAM, "stripe_disconnect"));
+          goStepUp(financeStepUpLocation(window.location.pathname, window.location.search, STRIPE_DISCONNECT_PARAM, "stripe_disconnect"));
           return;
         }
         setError(result.error);

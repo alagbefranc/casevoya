@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { dmy } from "@/modules/compliance/format";
 import { CAPTURED_PROVISIONS } from "@/modules/compliance/privacy-official";
@@ -28,7 +29,7 @@ type BusyRun = (button: HTMLElement, run: () => Promise<void>) => void;
 
 /** A button outside a dialog that needs a step-up: go to the step-up page and come back here. */
 function stepUp(action: StepUpActionKey) {
-  window.location.assign(stepUpHref(`${window.location.pathname}${window.location.search}`, action));
+  goStepUp(stepUpHref(`${window.location.pathname}${window.location.search}`, action));
 }
 
 function selected(dialog: ParentNode, id: string): string[] {

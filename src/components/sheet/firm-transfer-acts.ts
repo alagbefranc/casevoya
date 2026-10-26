@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { withoutDialog } from "@/modules/sheet/matter-wire";
 import { closeFirmTransfer, recordFirmTransfer, reviewTransferAuthority, type TransferResult } from "@/modules/settings/firm-transfer-actions";
@@ -68,7 +69,7 @@ export async function runFirmTransferAct(button: HTMLElement, router: Router) {
     if (result.stepUp) {
       toast2("Confirm it’s you", { kind: "warn", sub: "Then come back and save again." });
       const next = `${window.location.pathname}${window.location.search}`;
-      window.setTimeout(() => window.location.assign(stepUpHref(next, "firm_transfer")), 900);
+      window.setTimeout(() => goStepUp(stepUpHref(next, "firm_transfer")), 900);
       return;
     }
     toast2(result.error, { kind: "bad", sub: "Nothing was changed." });

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { stepUpHref } from "@/lib/auth/mfa-step";
+import { goStepUp } from "@/lib/auth/step-up-resume";
 
 /**
  * SEC-06: "Download" on a delivered privacy response. The download is recorded, then the file opens.
@@ -21,7 +22,9 @@ export function PrivacyDownload({ organizationId, deliveryId }: { organizationId
         type="button"
         aria-busy={busy || undefined}
         disabled={busy}
-        onClick={() => {
+        data-privacy-download={deliveryId}
+        onClick={(event) => {
+          const pressed = event.currentTarget;
           setBusy(true);
           setError(null);
           setNeedsTwoStep(false);
@@ -33,7 +36,8 @@ export function PrivacyDownload({ organizationId, deliveryId }: { organizationId
             .then(async (response) => {
               const body = (await response.json().catch(() => ({}))) as { url?: string; error?: string; twoStep?: string };
               if (body.twoStep === "check") {
-                window.location.assign(stepUpHref(`${window.location.pathname}${window.location.search}`, "privacy_download"));
+                // Back from /mfa, this download resumes on its own (one press, already made).
+                goStepUp(stepUpHref(`${window.location.pathname}${window.location.search}`, "privacy_download"), pressed);
                 return;
               }
               setBusy(false);

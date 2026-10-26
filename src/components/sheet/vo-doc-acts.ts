@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { reviewStepUpLocation } from "@/modules/sheet/documents-review";
 import { keepReviewDraft } from "./documents-acts";
@@ -21,7 +22,7 @@ export async function runVoRead(button: HTMLElement, router: Router) {
   if ("error" in result) {
     if (needsStepUp(result.error)) {
       keepReviewDraft(dialog);
-      window.location.assign(reviewStepUpLocation(window.location.pathname, window.location.search, versionId));
+      goStepUp(reviewStepUpLocation(window.location.pathname, window.location.search, versionId));
       return;
     }
     if ("draftId" in result && result.draftId && result.matterId) {

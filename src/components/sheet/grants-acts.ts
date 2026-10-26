@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { busyBtn, clearBtn, settleBtn, toast2 } from "@/components/port/kit";
 import { grantDraftProblem } from "@/modules/sheet/grants-present";
 import { createAccessGrant, revokeAccessGrant } from "@/modules/staff/grant-actions";
@@ -52,7 +53,7 @@ export async function runGrantCreate(button: HTMLElement, router: Router) {
       params.set("dlg", GRANT_DIALOG);
       const next = `${window.location.pathname}?${params.toString()}`;
       toast2("Confirm it’s you", { kind: "warn", sub: "Then the dialog opens again with what you typed." });
-      window.setTimeout(() => window.location.assign(stepUpHref(next, "access_grant")), 900);
+      window.setTimeout(() => goStepUp(stepUpHref(next, "access_grant")), 900);
       return;
     }
     toast2(result.error, { kind: "bad", sub: "No access was given." });
@@ -112,7 +113,7 @@ export async function runGrantRevoke(button: HTMLElement, router: Router) {
       params.set("dlg", GRANT_REVOKE_DIALOG);
       const next = `${window.location.pathname}?${params.toString()}`;
       toast2("Confirm it’s you", { kind: "warn", sub: "Then the dialog opens again with your reason." });
-      window.setTimeout(() => window.location.assign(stepUpHref(next, "access_revoke")), 900);
+      window.setTimeout(() => goStepUp(stepUpHref(next, "access_revoke")), 900);
       return;
     }
     toast2(result.error, { kind: "bad", sub: "The grant is unchanged." });
@@ -159,7 +160,7 @@ function supportStepUp(draft: SupportDraft) {
   params.set("dlg", SUPPORT_DIALOG);
   const next = `${window.location.pathname}?${params.toString()}`;
   toast2("Confirm it’s you", { kind: "warn", sub: draft.act === "decline" ? "Then the dialog opens again with your reason." : "Then this finishes on its own." });
-  window.setTimeout(() => window.location.assign(stepUpHref(next, "support_access")), 900);
+  window.setTimeout(() => goStepUp(stepUpHref(next, "support_access")), 900);
 }
 
 /** The waiting request's Decline opens the dialog for that request. */
@@ -228,8 +229,11 @@ export async function runSupportDecline(button: HTMLElement, router: Router) {
   router.refresh();
 }
 
-/** ?dlg=support (back from step-up): finish the pressed action, or reopen Decline with the reason. */
-export function reopenSupport(root: ParentNode, open: Open, router: Router) {
+/**
+ * ?dlg=support (back from step-up): reopen Decline with the reason. Approve, End now and Extend
+ * are pressed again by the shared step-up resume (goStepUp), once only.
+ */
+export function reopenSupport(root: ParentNode, open: Open) {
   if (new URLSearchParams(window.location.search).get("dlg") !== SUPPORT_DIALOG) return;
   let draft: Partial<SupportDraft> = {};
   try {
@@ -244,10 +248,7 @@ export function reopenSupport(root: ParentNode, open: Open, router: Router) {
     (item) => item.dataset.supportAct === draft.act && item.dataset.supportId === draft.requestId,
   );
   if (!button) return;
-  if (draft.act === "decline") return openSupportDecline(button, root, open, draft.reason ?? "");
-  if (button.getAttribute("aria-busy") === "true") return;
-  button.setAttribute("aria-busy", "true");
-  void runSupportAct(button, router, root, open).finally(() => button.removeAttribute("aria-busy"));
+  if (draft.act === "decline") openSupportDecline(button, root, open, draft.reason ?? "");
 }
 
 /** ?dlg=grant (back from step-up) reopens New access grant with what was typed. */

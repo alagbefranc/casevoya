@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { readAttestationFrom } from "@/modules/government/page-attestation";
 import { needsStepUp, stepUpLocation, withoutDialog } from "@/modules/sheet/matter-wire";
@@ -128,7 +129,7 @@ export async function runSubmissionAct(control: HTMLElement, root: HTMLElement, 
   const error = result && "error" in result && typeof result.error === "string" ? result.error : null;
   if (error) {
     if (needsStepUp(error)) {
-      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null, "submission"));
+      goStepUp(stepUpLocation(window.location.pathname, window.location.search, null, "submission"));
       return;
     }
     toast2(error, { kind: "bad", sub: "Nothing was saved." });

@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { acceptChosen, failUpload } from "./upload-failure";
 import { moveClientCredit } from "@/modules/finance/staff-actions";
@@ -124,7 +125,7 @@ export async function runCredit(button: HTMLElement, router: Router) {
       } catch {
         // Storage can be unavailable; the person opens the credit again.
       }
-      window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, CREDIT_DIALOG, "credit_note"));
+      goStepUp(financeStepUpLocation(window.location.pathname, window.location.search, CREDIT_DIALOG, "credit_note"));
       return;
     }
     toast2(result.error, { kind: "bad", sub: "Nothing was moved." });
@@ -217,7 +218,7 @@ export async function runEvidence(button: HTMLElement, router: Router) {
   if (!result.ok) {
     const error = result.error ?? "Nothing was submitted; try again.";
     if (financeNeedsStepUp(error)) {
-      window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, EVIDENCE_DIALOG, "dispute_evidence"));
+      goStepUp(financeStepUpLocation(window.location.pathname, window.location.search, EVIDENCE_DIALOG, "dispute_evidence"));
       return;
     }
     if (input) failUpload(input, error, "dispute", /file|PDF|JPEG|PNG|under/i.test(error) ? again : () => void runEvidence(button, router));

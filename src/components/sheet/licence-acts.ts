@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { addConsultantLicence, reassignMatters, reportLicenceChange, type LicenceResult } from "@/modules/staff/licence-actions";
 import { INVITE_SOMEONE } from "@/modules/sheet/licence-present";
@@ -27,7 +28,7 @@ function stepUp(dialog: string, draft: Record<string, unknown>) {
   params.set("dlg", dialog);
   const next = `${window.location.pathname}?${params.toString()}`;
   toast2("Confirm it’s you", { kind: "warn", sub: "Then the dialog opens again with what you typed." });
-  window.setTimeout(() => window.location.assign(stepUpHref(next, "licence")), 900);
+  window.setTimeout(() => goStepUp(stepUpHref(next, "licence")), 900);
 }
 
 function done(result: LicenceResult, dialog: string, draft: Record<string, unknown>): boolean {

@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { createClientMatter } from "@/modules/matters/actions";
 import { needsStepUp, newMatterStepUpLocation, readNewMatter } from "@/modules/sheet/new-matter";
@@ -34,7 +35,7 @@ export async function runNewMatter(button: HTMLElement, router: Router) {
   const result = await createClientMatter({ organizationId: button.dataset.org ?? "", ...read.input });
   if ("error" in result) {
     if (needsStepUp(result.error)) {
-      window.location.assign(newMatterStepUpLocation(window.location.pathname, window.location.search));
+      goStepUp(newMatterStepUpLocation(window.location.pathname, window.location.search));
       return;
     }
     toast2(result.error, { kind: "bad", sub: "Nothing was saved." });

@@ -164,6 +164,7 @@ import { reopenFirmDialog, runFirmSave } from "./settings-firm-acts";
 import { bindOffboardHold, mountMember, mountOffboard, reopenStaffAdmin, runContinuitySave, runMemberAct } from "./settings-staff-admin-acts";
 import { prepareTransferDialog, runFirmTransferAct } from "./firm-transfer-acts";
 import { stepUpHref } from "@/lib/auth/mfa-step";
+import { goStepUp, noteStepUpTrigger, resumeStepUp, type ResumeNode } from "@/lib/auth/step-up-resume";
 import { presetChipLabel } from "@/modules/sheet/filter-preset";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
@@ -556,7 +557,7 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
             if ("error" in result) {
               if (result.stepUp) {
                 const next = `${window.location.pathname}${window.location.search}`;
-                window.location.assign(stepUpHref(next, "enquiry_page"));
+                goStepUp(stepUpHref(next, "enquiry_page"));
                 return;
               }
               toast2(result.error, { kind: "bad", sub: "Nothing was changed." });
@@ -1545,6 +1546,14 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       }, listen);
     });
 
+    // Bug 1 (2026-10-25): every step-up caller goes through goStepUp, which keeps the pressed
+    // control (and its dialog's fields) for this tab; back here, the action resumes.
+    const noteTrigger = (event: Event) => noteStepUpTrigger(event.target, root as unknown as ResumeNode);
+    root.addEventListener("click", noteTrigger, { signal: ac.signal, capture: true });
+    root.addEventListener("change", noteTrigger, { signal: ac.signal, capture: true });
+    const stopResume = resumeStepUp(root, (title, sub, kind) => toast2(title, { kind, sub }));
+    ac.signal.addEventListener("abort", stopResume);
+
     const params = new URLSearchParams(window.location.search);
     const dialogParam = params.get("dlg");
     const dialog = dialogId(dialogParam);
@@ -1730,8 +1739,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
           if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
         }, listen);
       }
-      // Support access: ?dlg=support (back from step-up) finishes the pressed action, or reopens Decline.
-      if (root.querySelector("[data-support-act]")) window.setTimeout(() => reopenSupport(root, openDialog, router), 300);
+      // Support access: ?dlg=support (back from step-up) reopens Decline; the shared resume presses the others again.
+      if (root.querySelector("[data-support-act]")) window.setTimeout(() => reopenSupport(root, openDialog), 300);
     }
 
     const newTask = root.querySelector<HTMLDialogElement>("dialog#dlgTask");
