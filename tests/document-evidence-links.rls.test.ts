@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 
-// 20261026100000_document_evidence_links.sql (DOC-06): one verified document on several matters,
+// 20261024210000_document_evidence_links.sql (DOC-06): one verified document on several matters,
 // translations, and classification. Synthetic records only.
 
 let db: TestDb;
