@@ -12,7 +12,8 @@
  */
 import { Icon, Sep } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
-import { UPLOAD_LIMIT_DIALOG } from "@/modules/sheet/settings-present";
+import { IDLE_TIMEOUT_DIALOG, UPLOAD_LIMIT_DIALOG } from "@/modules/sheet/settings-present";
+import { IDLE_MINUTES_MAX, IDLE_MINUTES_MIN } from "@/modules/security/idle";
 
 /** The Designer's Settings tabs, exactly as it lists them. */
 export const DESIGNER_SETTINGS_TABS = [
@@ -239,8 +240,16 @@ export function SheetSettingsTeam({ data }: { data: TeamData }) {
 /** `action` (live only): a button after the badge, e.g. "Sign out my other sessions". */
 export type SecurityRow = { title: string; detail: string; badge: MatterBadge; action?: { label: string; attrs: Record<string, string> } };
 
-/** `uploadLimit`, live only (DOC-02): the owner's Change limit dialog, in MB. */
-export type SecurityData = { intro: string; rows: SecurityRow[]; uploadLimit?: { organizationId: string; mb: number; max: number } | null };
+/**
+ * `uploadLimit`, live only (DOC-02): the owner's Change limit dialog, in MB. `idleTimeout`, live
+ * only (SEC-01): the owner's idle sign-out dialog, in minutes.
+ */
+export type SecurityData = {
+  intro: string;
+  rows: SecurityRow[];
+  uploadLimit?: { organizationId: string; mb: number; max: number } | null;
+  idleTimeout?: { organizationId: string; minutes: number } | null;
+};
 
 export function SheetSettingsSecurity({ data }: { data: SecurityData }) {
   return (
@@ -266,7 +275,48 @@ export function SheetSettingsSecurity({ data }: { data: SecurityData }) {
         </div>
       ))}
       {data.uploadLimit ? <UploadLimitDialog data={data.uploadLimit} /> : null}
+      {data.idleTimeout ? <IdleTimeoutDialog data={data.idleTimeout} /> : null}
     </>
+  );
+}
+
+/**
+ * Live only (SEC-01): the owner changes the idle sign-out time. The Designer has no such dialog,
+ * so it is built like the upload limit's: the Designer's `.dlg` with `.fld` / `.inp` fields and the
+ * six-digit code field of "Confirm it's you". public.set_staff_idle_timeout checks the owner, the
+ * step-up and the bounds.
+ */
+function IdleTimeoutDialog({ data }: { data: NonNullable<SecurityData["idleTimeout"]> }) {
+  return (
+    <dialog className={"dlg"} id={IDLE_TIMEOUT_DIALOG} aria-labelledby={"dIdleSetH"}>
+      <div className={"dh"}>
+        <h2 id={"dIdleSetH"}>{"Idle sign-out"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={IDLE_TIMEOUT_DIALOG}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <div className={"fld"}>
+          <label htmlFor={"idMin"}>{"Minutes without activity"}</label>
+          <small className={"hint"} id={"idMin-h"}>
+            {`From ${IDLE_MINUTES_MIN} to ${IDLE_MINUTES_MAX} minutes. Staff see a warning 2 minutes before they are signed out.`}
+          </small>
+          <input className={"inp"} id={"idMin"} type={"number"} min={IDLE_MINUTES_MIN} max={IDLE_MINUTES_MAX} step={1} defaultValue={String(data.minutes)} aria-describedby={"idMin-h"} />
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"idC"}>{"Six-digit code"}</label>
+          <input className={"inp"} id={"idC"} inputMode={"numeric"} autoComplete={"one-time-code"} maxLength={6} />
+        </div>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={IDLE_TIMEOUT_DIALOG}>
+          {"Cancel"}
+        </button>
+        <button className={"btn p"} data-idle-timeout={"1"} data-org={data.organizationId}>
+          {"Save"}
+        </button>
+      </div>
+    </dialog>
   );
 }
 

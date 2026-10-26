@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { approveLetter, createLetter, discardLetter, draftLetterWithVo, reviseLetter } from "@/modules/vo/letter-actions";
 import { needsStepUp, stepUpLocation } from "@/modules/sheet/matter-wire";
@@ -84,7 +85,7 @@ export async function runLetterApprove(button: HTMLElement, router: Router) {
   const result = await approveLetter({ organizationId: button.dataset.org ?? "", letterId: button.dataset.letterApprove ?? "", version: Number(button.dataset.version) });
   if ("error" in result) {
     if (needsStepUp(result.error)) {
-      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null));
+      goStepUp(stepUpLocation(window.location.pathname, window.location.search, null, "letter_approve"));
       return;
     }
     toast2(result.error, { kind: "bad", sub: "Nothing was approved." });

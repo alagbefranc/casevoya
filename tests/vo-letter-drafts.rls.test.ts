@@ -303,6 +303,50 @@ describe("Vo letter drafts: approved official content only", () => {
     expect(official[0]).toMatchObject({ ref: "S1", kind: "fee", source_url: "https://ircc.canada.ca/english/information/fees/fees.asp", snapshot_sha256: "a".repeat(64), source_section: "Synthetic section" });
     expect(official[0].checked_on).toBeTruthy();
   });
+
+  it("cites a live claim approved by attestation without a page capture, keeping the attestation with the letter's source (20261025450000)", async () => {
+    const f = await firm();
+    const form = await approvedForm(f);
+    await asMaintenance(db);
+    const ownerMembership = (await db.query<{ id: string }>(`select id from public.memberships where organization_id = $1 and user_id = $2 and role = 'firm_owner'`, [f.orgId, f.owner])).rows[0].id;
+    await db.query(`update public.profiles set display_name = 'Amara Osei' where id = $1`, [f.owner]);
+    const page = `https://www.canada.ca/en/immigration-refugees-citizenship/services/synthetic-letter-${tag()}.html#s1`;
+    await staff(f.owner, f.orgId, true);
+    const definition = (
+      await db.query<{ id: string }>(`insert into public.rule_definitions (organization_id, stable_key, category, jurisdiction) values ($1, $2, 'immigration_requirement', 'CA') returning id`, [
+        f.orgId,
+        `CA.SYNTHETIC.LETTER${tag().toUpperCase().replace(/[^A-Z0-9]/g, "X")}`,
+      ])
+    ).rows[0].id;
+    const rule = (
+      await db.query<{ id: string }>(
+        `insert into public.rule_versions (definition_id, version_number, claim, output_value, effective_from, next_review_at, test_case_ids)
+         values ($1, 1, 'Synthetic attested claim. Not an immigration requirement.', '{"kind": "rule"}'::jsonb, '2020-01-01T00:00:00Z', '2027-11-01T00:00:00Z', array['synthetic-case']) returning id`,
+        [definition],
+      )
+    ).rows[0].id;
+    await db.query(`insert into public.rule_evidence (rule_version_id, snapshot_id, source_section, source_url, checked_on) values ($1, null, 'synthetic-section', $2, '2026-10-24')`, [rule, page]);
+    await asMaintenance(db);
+    await db.query(
+      `insert into public.professional_reviews (organization_id, rule_version_id, reviewer_membership_id, decision, decided_at, rule_content_revision) values ($1, $2, $3, 'approved', '2026-10-24T15:00:00Z', 1)`,
+      [f.orgId, rule, ownerMembership],
+    );
+    await db.query(`update public.rule_evidence set page_attested_by_membership_id = $2, page_attested_on = '2026-10-24', page_attested_at = now() where rule_version_id = $1`, [rule, ownerMembership]);
+    await db.query(`update public.rule_versions set status = 'published' where id = $1`, [rule]);
+
+    const run = await begin(f);
+    await staff(f.manager, f.orgId);
+    const content = (await db.query<{ c: Record<string, unknown>[] }>(`select public.vo_letter_official_content($1) as c`, [run.run_id])).rows[0].c;
+    expect(content.find((row) => row.id === rule)).toMatchObject({ kind: "rule_version", source_url: page, attested: true, attested_by: "Amara Osei", attested_on: "2026-10-24" });
+    const letterId = await save(run.run_id!, {
+      body: "Name [F1]. Synthetic attested claim [S1].",
+      facts: [{ ref: "F1", answer_id: form.name }],
+      official: [{ ref: "S1", kind: "rule_version", id: rule, attested_by: "Forged Name" }],
+    });
+    await asMaintenance(db);
+    const official = (await db.query<{ official: Record<string, unknown>[] }>(`select official from public.matter_letter_versions where letter_id = $1`, [letterId])).rows[0].official;
+    expect(official[0]).toMatchObject({ ref: "S1", kind: "rule_version", source_url: page, snapshot_sha256: null, attested: true, attested_by: "Amara Osei", attested_on: "2026-10-24" });
+  });
 });
 
 describe("Letters by hand, review and release", () => {

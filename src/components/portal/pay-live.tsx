@@ -8,6 +8,7 @@ import { createInvoicePayment } from "@/modules/portal/actions";
 import type { PortalInvoice } from "@/modules/finance/portal-load";
 import { advanceRefusal } from "@/modules/finance/connect-present";
 import { formatAmount, formatMoney } from "@/modules/finance/money";
+import { payFailure, redirectPayFailure, type PayFailure } from "@/modules/portal/pay-failure";
 import { PAY_CSS } from "./pay-css";
 
 const SPRITE = "/assets/icons-coreui/sprite.svg";
@@ -187,11 +188,16 @@ export function PayLive({
             </Note>
           ) : started && "error" in started ? (
             <Note title="The payment couldn’t start" tone="warn">
-              {started.error}
+              {started.error}{" "}
+              {/* DES-04: a next step, never a dead end. */}
+              <a href={`/portal/pay?invoice=${invoice.id}`} style={{ textDecoration: "underline" }}>{"Try again"}</a>
+              {", or "}
+              <a href="/portal/messages" style={{ textDecoration: "underline" }}>{`ask ${firmName} another way to pay`}</a>
+              {"."}
             </Note>
           ) : started && stripePromise ? (
             <Elements stripe={stripePromise} options={{ clientSecret: started.clientSecret, appearance: APPEARANCE, fonts: [{ cssSrc: `${typeof window === "undefined" ? "" : window.location.origin}/fonts/erode.css` }] }}>
-              <PayForm money={money} />
+              <PayForm money={money} firmName={firmName} />
             </Elements>
           ) : (
             <p className="lbl">{"Loading the secure card form…"}</p>
@@ -231,12 +237,43 @@ function Note({ title, tone = "info", children }: { title: string; tone?: "info"
   );
 }
 
-function PayForm({ money }: { money: string }) {
+/**
+ * DES-04: the Designer's declined message (`markup/portal-pay.tsx`, state "declined"): Vo worried,
+ * what happened, that nothing was charged, and the next step with the firm's bank-transfer link.
+ */
+export function PayFailed({ failure, firmName }: { failure: PayFailure; firmName: string }) {
+  const ask = `ask ${firmName} for bank transfer details`;
+  const at = failure.next.indexOf(ask);
+  return (
+    <p className="err" role="alert" data-failure={failure.kind}>
+      <img src="/assets/vo/vo-worried-96.png" srcSet="/assets/vo/vo-worried-192.png 2x" width={28} height={28} alt="" style={{ flex: "none", marginTop: "-4px" }} />
+      <span>
+        {failure.message}{" "}
+        {at < 0 ? (
+          failure.next
+        ) : (
+          <>
+            {failure.next.slice(0, at)}
+            <a href="/portal/messages" style={{ textDecoration: "underline" }}>{ask}</a>
+            {failure.next.slice(at + ask.length)}
+          </>
+        )}
+      </span>
+    </p>
+  );
+}
+
+function PayForm({ money, firmName }: { money: string; firmName: string }) {
   const stripe = useStripe();
   const elements = useElements();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A bank check that sent the person away and back with a failure (`?redirect_status=failed`).
+  // The form mounts only in the browser (after the payment starts), so the address is readable here.
+  const [failure, setFailure] = useState<PayFailure | null>(() =>
+    typeof window === "undefined" ? null : redirectPayFailure(window.location.search, firmName),
+  );
   const [done, setDone] = useState<null | "succeeded" | "processing">(null);
 
   useEffect(() => {
@@ -256,6 +293,7 @@ function PayForm({ money }: { money: string }) {
     if (!stripe || !elements || busy || done) return;
     setBusy(true);
     setError(null);
+    setFailure(null);
     const { error: submitError } = await elements.submit();
     if (submitError) {
       setError(submitError.message ?? "Check the card details.");
@@ -269,11 +307,14 @@ function PayForm({ money }: { money: string }) {
     });
     setBusy(false);
     if (result.error) {
-      setError(result.error.message ?? "The bank didn’t confirm this payment. Nothing was charged.");
+      // A card that didn't go through (declined, insufficient funds, expired, the bank's check
+      // failed): the Designer's declined state with the next step. The form stays for another card.
+      setFailure(payFailure(result.error, firmName));
       return;
     }
     const status = result.paymentIntent?.status;
     if (status === "succeeded" || status === "processing") setDone(status);
+    else if (status === "requires_payment_method") setFailure(payFailure({ code: "card_declined" }, firmName));
   };
 
   if (done) {
@@ -295,7 +336,7 @@ function PayForm({ money }: { money: string }) {
           <PaymentElement options={{ layout: { type: "accordion", defaultCollapsed: false, radios: "never", spacedAccordionItems: false } }} />
         </div>
       </div>
-      {error ? (
+      {failure ? <PayFailed failure={failure} firmName={firmName} /> : error ? (
         <p className="err" role="alert">
           <Icon name="alert" />
           <span>{error}</span>

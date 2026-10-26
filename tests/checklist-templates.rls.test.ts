@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 
-// 20261024230000_checklist_templates.sql (DOC-01): firm checklist templates, their approval, and
+// 20261026100200_checklist_templates.sql (DOC-01): firm checklist templates, their approval, and
 // Apply checklist with proposals staff confirm. Synthetic records only.
 
 let db: TestDb;

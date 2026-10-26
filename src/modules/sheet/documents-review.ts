@@ -1,4 +1,5 @@
 /** Pure helpers for the Documents page's review dialog: what it sends, and where a step-up goes. */
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -46,5 +47,5 @@ export function reviewStepUpLocation(pathname: string, search: string, versionId
   const params = new URLSearchParams(search);
   params.set("dlg", "review");
   params.set("doc", versionId);
-  return `/mfa?step=6&next=${encodeURIComponent(`${pathname}?${params.toString()}`)}`;
+  return stepUpHref(`${pathname}?${params.toString()}`, "document_review");
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { COMPOSIO_DIALOG } from "@/components/sheet/designer/settings-integrations";
 import { connectAccount, disconnectAccount, refreshConnection, setComposioEnabled, syncCalendarBusy } from "@/modules/integrations/actions";
@@ -9,6 +10,7 @@ import { needsStepUp } from "@/modules/sheet/matter-wire";
 import { INTEGRATIONS_PATH } from "@/modules/sheet/settings-integrations-present";
 import { setQuietHours } from "@/modules/tasks/actions";
 import { disconnectWhatsApp, finishWhatsAppConnect, startWhatsAppConnect } from "@/modules/whatsapp/actions";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 type Router = { replace: (href: string) => void; refresh: () => void };
 
@@ -83,7 +85,7 @@ export async function runIntSync(button: HTMLElement, router: Router) {
 
 function stepUp() {
   toast2("Confirm it’s you first", { kind: "warn", sub: "Then try again. Only the firm owner can change WhatsApp." });
-  window.location.assign(`/mfa?step=6&next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`);
+  goStepUp(stepUpHref(`${window.location.pathname}${window.location.search}`, "messaging_channel"));
 }
 
 /** WhatsApp Connect (firm owner): Meta's Embedded Signup through Zernio; it comes back to this tab. */
@@ -179,7 +181,7 @@ export async function runQuietHours(button: HTMLElement, router: Router) {
   if ("error" in result) {
     if (needsStepUp(result.error)) {
       toast2("Confirm it’s you first", { kind: "warn", sub: "Then turn it on or off again." });
-      window.location.assign(`/mfa?step=6&next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`);
+      goStepUp(stepUpHref(`${window.location.pathname}${window.location.search}`, "notification_settings"));
       return;
     }
     toast2(result.error ?? "That didn’t save.", { kind: "bad", sub: "Nothing was changed." });

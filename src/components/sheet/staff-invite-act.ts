@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { resendPortalInvitation, revokePortalInvitation } from "@/modules/portal-invitations/actions";
 import { inviteStaff, resendStaffInvitation, revokeStaffInvitation } from "@/modules/staff/actions";
@@ -19,7 +20,7 @@ function organizationOf(root: ParentNode): string {
 }
 
 function stepUp(reopen: boolean) {
-  window.location.assign(staffStepUpLocation(window.location.pathname, window.location.search, reopen));
+  goStepUp(staffStepUpLocation(window.location.pathname, window.location.search, reopen));
 }
 
 /**

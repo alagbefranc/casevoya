@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { confirmMatterDeadline } from "@/modules/sheet/actions";
 import { needsStepUp, stepUpLocation } from "@/modules/sheet/matter-wire";
@@ -37,7 +38,7 @@ function busy(element: HTMLElement, run: () => Promise<void>) {
 }
 
 function stepUp() {
-  window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null));
+  goStepUp(stepUpLocation(window.location.pathname, window.location.search, null, "task_change"));
 }
 
 /** Mark a task done: from a row's tick (`data-task-done="<id>"`) or the Task dialog (`data-task-done="dialog"`). */

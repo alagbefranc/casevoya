@@ -22,6 +22,8 @@ import { loadSubmissionChecklist } from "@/modules/sheet/matter-submissions-load
 import { blockedWhy, type GateKey } from "@/modules/submissions/present";
 import { loadLetterExtras } from "@/modules/sheet/letter-load";
 import { loadApprovalFollowUp } from "@/modules/decisions/load";
+import { currentEstimates } from "@/modules/government/status-provenance";
+import { newerReadingWaiting } from "@/modules/sheet/states-present";
 import { withApprovalFollowUp } from "@/modules/decisions/present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
@@ -254,7 +256,16 @@ export async function loadSheetGovernment(staff: SheetStaff, query: SheetQuery, 
     ]);
     const ctx = context({ staff, matter, members, licensed, today, now }, [], userName);
     const header: GovernmentHeaderData = { back: `/sheet/matters/${matter.id}`, client: { name: client ?? matter.title }, pills: GOVERNMENT_PILLS };
-    return { chrome, header, page: buildGovernmentPage(records, ctx) };
+    // DES-04: a newer IRCC processing-time estimate waits for licensed review while the approved one shows.
+    const { approved, pending } = currentEstimates(records.estimates ?? []);
+    const stale = newerReadingWaiting({
+      what: "IRCC processing-time estimate",
+      approvedAt: approved?.checked_on ?? null,
+      pendingAt: pending?.checked_on ?? null,
+      newer: Boolean(approved && pending && pending.created_at > approved.created_at),
+      timeZone: staff.timezone,
+    });
+    return { chrome, header, page: buildGovernmentPage(records, ctx), stale };
   }
 
   // Firm-wide: one row per matter with a handoff or a letter, newest first.
@@ -313,7 +324,7 @@ export async function loadSheetGovernment(staff: SheetStaff, query: SheetQuery, 
     history: null,
   };
   const header: GovernmentHeaderData = { back: "/sheet/matters", client: null, pills: GOVERNMENT_PILLS };
-  return { chrome, header, page };
+  return { chrome, header, page, stale: null };
 }
 
 async function clientName(supabase: Client, org: string, matterId: string) {

@@ -8,6 +8,7 @@ import { isoDate, localNow } from "@/modules/sheet/home-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { STAFF_ROLES, isoDateInTimeZone, plusDays, roleLabel } from "@/modules/sheet/present";
 import { dueBadge, hours, orderQueue, queueItemId, ruleHours, waitingBadge, weekOf, type QueueEntry } from "@/modules/sheet/queue-present";
+import { partialAlert } from "@/modules/sheet/states-present";
 
 /** Who reassign_task lets reassign an internal task (it checks again). */
 const REASSIGN_ROLES = new Set(["firm_owner", "licensed_consultant", "case_manager"]);
@@ -236,5 +237,11 @@ export async function loadSheetQueue(staff: SheetStaff, now: Date = new Date()) 
         }
       : null,
   };
-  return { chrome, queue };
+  // DES-04: each list reads the soonest QUEUE_READ rows; say when one was capped (a failed read shows as failed above).
+  const partial = partialAlert([
+    { label: "Open tasks", count: (tasks.data ?? []).length, cap: QUEUE_READ, order: "soonest" },
+    { label: "Documents to review", count: (versions.data ?? []).length, cap: QUEUE_READ, order: "oldest" },
+    { label: "Deadlines to verify", count: (deadlines.data ?? []).length, cap: QUEUE_READ, order: "soonest" },
+  ]);
+  return { chrome, queue, partial };
 }

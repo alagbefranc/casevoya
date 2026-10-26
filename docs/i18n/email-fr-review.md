@@ -71,6 +71,7 @@ Subjects and preheaders must not reveal a program, document name, amount or deci
 | EX08 | Payment failed | machine_draft | — | — | No (not_approved) |
 | EX09 | Refund started | machine_draft | — | — | No (not_approved) |
 | EX10 | Refund complete | machine_draft | — | — | No (not_approved) |
+| EX20 | Refund didn’t go through | machine_draft | — | — | No (not_approved) |
 | EX19 | New notice (announcement) | machine_draft | — | — | No (not_approved) |
 | EX18 | New enquiry (staff) | machine_draft | — | — | No (not_approved) |
 | EX17 | Consultant changed | machine_draft | — | — | No (not_approved) |
@@ -608,7 +609,7 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:fbb471777ea
 
 ## EX10: Refund complete
 
-Stripe confirms the refund (refund.updated succeeded; outbox invoice.refund_succeeded, template refund_complete). Honours email_notices. Audience: client. [French preview](../email/previews/fr/EX10.html)
+Not sent since 20261025530100: a card refund Stripe reports succeeded can still fail for up to 30 days and Stripe gives no final signal (docs.stripe.com/refunds#failed-refunds), so “complete” could be untrue. The client keeps EX09 (“on its way”) and gets EX20 if the refund fails. The renderer still maps template refund_complete here for mail queued before. Audience: client. [French preview](../email/previews/fr/EX10.html)
 
 Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:5609f6110cbf…`
 
@@ -619,6 +620,21 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:5609f6110cb
 | `heading` | Your refund is complete | Votre remboursement est complet | Machine draft |
 | `body` | {firm_name}’s refund has been sent. The details are in your portal. | Le remboursement de {firm_name} a été envoyé. Les détails se trouvent dans votre portail. | Machine draft. Keep {firm_name} |
 | `cta` | View payments | Afficher les paiements | Machine draft. Same English as another template; same French reused. |
+
+## EX20: Refund didn’t go through
+
+Stripe reports a refund failed or canceled after the client was told it was on its way (refund.failed / refund.updated; invoice_refunds moves from pending, requires_action or succeeded to failed or canceled; outbox invoice.refund_failed, template refund_failed), to the same people as EX09. Once per refund, also when Stripe replays the event. Sent even when the client turned Email notices off (a money correction; Francis 2026-10-25); suppressed (bounced or complained) addresses are not. A plain-words reason only for a closed, expired, lost or stolen card; never Stripe's code (bug #215 check 6; copy approved by Francis 2026-10-25). Audience: client. [French preview](../email/previews/fr/EX20.html)
+
+Status `machine_draft` · drafted 2026-10-25 · English hash `sha256:34b3867edc59…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject` | Your refund from {firm_name} didn’t go through | Votre remboursement de {firm_name} n’a pas abouti | Hand draft. EX20 hand draft (bug #215 refund correction). Not reviewed. Keep {firm_name} |
+| `preheader` | The money hasn’t reached you. The firm will contact you. | L’argent ne vous est pas parvenu. Le cabinet communiquera avec vous. | Hand draft. EX20 hand draft (bug #215 refund correction). Not reviewed. |
+| `heading` | Your refund didn’t go through | Votre remboursement n’a pas abouti | Hand draft. EX20 hand draft (bug #215 refund correction). Not reviewed. |
+| `body` | The refund from {firm_name} didn’t go through, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way. | Le remboursement de {firm_name} n’a pas abouti; l’argent ne vous est donc pas parvenu. Veuillez ne pas tenir compte de notre courriel précédent au sujet de ce remboursement. {firm_name} communiquera avec vous pour le faire autrement. | Hand draft. EX20 hand draft (bug #215 refund correction). Not reviewed. Keep {firm_name} |
+| `body_card` | The refund from {firm_name} didn’t go through because the card it was sent to is no longer active, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way. | Le remboursement de {firm_name} n’a pas abouti parce que la carte visée n’est plus active; l’argent ne vous est donc pas parvenu. Veuillez ne pas tenir compte de notre courriel précédent au sujet de ce remboursement. {firm_name} communiquera avec vous pour le faire autrement. | Hand draft. EX20 hand draft (bug #215 refund correction). Not reviewed. Keep {firm_name} |
+| `cta` | View payments | Afficher les paiements | Hand draft. EX20 hand draft (bug #215 refund correction). Not reviewed. |
 
 ## EX19: New notice (announcement)
 

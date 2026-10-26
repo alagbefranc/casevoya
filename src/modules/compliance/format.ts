@@ -117,6 +117,7 @@ export const CONSENT_LABEL: Record<string, string> = {
   ai_drafting: "AI drafting",
   participation_declined: "Declined to take part",
   electronic_signature: "Electronic signature",
+  marketing: "News and offers",
 };
 
 export const REDACTION_LABEL: Record<string, { tone: string; label: string }> = {
