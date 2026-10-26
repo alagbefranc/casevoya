@@ -1,6 +1,7 @@
 import { renderEmail } from "@/modules/email/templates";
 import type { OutboundEmail, SendOutcome } from "@/modules/email/cloudflare";
 import { DEFAULT_EMAIL_ORIGIN, emailOrigin } from "@/modules/email/designs/layout";
+import { managePath, manageTokenHash, newManageToken } from "@/modules/scheduling/manage-present";
 import { firmLogoPublicPath, ownFirmLogoKey } from "@/modules/firm-onboarding/firm-logo";
 
 export type MailDelivery = {
@@ -49,6 +50,11 @@ export type DispatchDeps = {
    */
   locales?: (deliveryIds: string[]) => Promise<Record<string, string>>;
   /**
+   * CRM-03: stores the hash of a new Manage your booking token for one EM16a / EM16b delivery and
+   * returns the booking reference, or null when that delivery gets no link (portal, not upcoming).
+   */
+  manageToken?: (deliveryId: string, sha256: string) => Promise<string | null>;
+  /**
    * Each delivery's firm look (ORG-01), from public.email_delivery_brands: the firm id, its stored
    * logo locator and colour. Optional; a failure or a missing entry means the initial tile.
    */
@@ -78,6 +84,19 @@ export function firmLookContext(look: FirmLook | undefined, appOrigin: string | 
   if (key) out.firm_logo_url = `${emailOrigin(appOrigin ?? DEFAULT_EMAIL_ORIGIN)}${firmLogoPublicPath(key)}`;
   if (typeof look.accent === "string" && /^#[0-9A-Fa-f]{6}$/.test(look.accent.trim())) out.firm_accent = look.accent.trim();
   return out;
+}
+
+/** The Manage your booking link for a consultation email to a booker without a portal, or null. */
+async function manageLinkFor(deps: DispatchDeps, message: MailDelivery, context: Record<string, unknown>, appOrigin: string | undefined): Promise<string | null> {
+  if (!deps.manageToken || context.portal === true) return null;
+  if (message.template !== "consultation_booked" && message.template !== "consultation_rescheduled") return null;
+  try {
+    const token = newManageToken();
+    const ref = await deps.manageToken(message.delivery_id, await manageTokenHash(token));
+    return ref ? `${emailOrigin(appOrigin ?? DEFAULT_EMAIL_ORIGIN)}${managePath(ref, token)}` : null;
+  } catch {
+    return null;
+  }
 }
 
 async function recipientLocales(deps: DispatchDeps, messages: MailDelivery[]): Promise<Record<string, string>> {
@@ -159,6 +178,7 @@ export async function dispatchOutbound(
       delete context.locale;
       delete context.body;
       delete context.subject;
+      delete context.manage_link;
       delete context.firm_logo_url;
       delete context.firm_accent;
       Object.assign(context, firmLookContext(brands[message.delivery_id], options.appOrigin));
@@ -170,6 +190,8 @@ export async function dispatchOutbound(
       const headers = message.template === "staff_message" ? threadingHeaders(message.headers) : undefined;
       const locale = locales[message.delivery_id];
       if (locale === "fr-CA") context.locale = locale;
+      const manage = await manageLinkFor(deps, message, context, options.appOrigin);
+      if (manage) context.manage_link = manage;
       const link = await openSealedLink(deps, sealed, context.invitation_id);
       // A signing code (EX16) reaches the template only after this worker opened it.
       if (message.template === "signing_code") {
