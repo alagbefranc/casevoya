@@ -286,7 +286,7 @@ function DisconnectDialog({ data }: { data: FinanceAccountData }) {
       });
       if ("error" in result) {
         if (financeNeedsStepUp(result.error)) {
-          window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, STRIPE_DISCONNECT_PARAM, "stripe_disconnect"));
+          goStepUp(financeStepUpLocation(window.location.pathname, window.location.search, STRIPE_DISCONNECT_PARAM, "stripe_disconnect"));
           return;
         }
         setError(result.error);
