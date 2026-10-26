@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asAnon, asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 
-// CRM-03 Manage your booking (20261026110000_booking_manage_link.sql): a token link for a booker
+// CRM-03 Manage your booking (20261024160000_booking_manage_link.sql): a token link for a booker
 // without a portal, to see, move or cancel their consultation. The helpers are the scheduling
 // tests'. Everything here is synthetic.
 
