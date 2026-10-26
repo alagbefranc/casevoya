@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import {
   approveAgreementTemplate,
@@ -47,7 +48,7 @@ function keep(draft: Record<string, string>) {
 
 /** To the step-up screen, coming back to this page (and tab) with the dialog open again. */
 function stepUp(dialog: string | null) {
-  window.location.assign(agreementStepUpLocation(window.location.pathname, window.location.search, dialog, {}, "agreement"));
+  goStepUp(agreementStepUpLocation(window.location.pathname, window.location.search, dialog, {}, "agreement"));
 }
 
 /** A clean URL (no `?dlg=`, `?matter=`) so a refresh does not reopen the dialog. */
@@ -262,7 +263,7 @@ export async function runCountersign(button: HTMLElement, router: Router) {
   const result = await countersignAgreement({ organizationId: button.dataset.org ?? "", envelopeId, consent });
   if ("error" in result) {
     if (needsStepUp(result.error)) {
-      window.location.assign(
+      goStepUp(
         agreementStepUpLocation(window.location.pathname, window.location.search, COUNTERSIGN_DIALOG, { envelope: envelopeId }, "countersign"),
       );
       return;

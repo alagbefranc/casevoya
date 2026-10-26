@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { readAttestationFrom } from "@/modules/government/page-attestation";
 import { needsStepUp, stepUpLocation, withoutDialog } from "@/modules/sheet/matter-wire";
@@ -144,7 +145,7 @@ export async function runRenewalAct(control: HTMLElement, root: HTMLElement, rou
   const error = result && "error" in result && typeof result.error === "string" ? result.error : null;
   if (error) {
     if (needsStepUp(error)) {
-      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null, "renewal"));
+      goStepUp(stepUpLocation(window.location.pathname, window.location.search, null, "renewal"));
       return;
     }
     toast2(error, { kind: "bad", sub: "Nothing was saved." });

@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { acceptChosen, failUpload } from "./upload-failure";
 import { stepUpHref } from "@/lib/auth/mfa-step";
@@ -37,7 +38,7 @@ function n(value: unknown): number {
 function stepUp(batch: string) {
   const next = `${window.location.pathname}?tab=signoff&id=${encodeURIComponent(batch)}`;
   toast2("Confirm it’s you", { kind: "warn", sub: "Then choose the button again." });
-  window.setTimeout(() => window.location.assign(stepUpHref(next, "import_signoff")), 900);
+  window.setTimeout(() => goStepUp(stepUpHref(next, "import_signoff")), 900);
 }
 
 function withTab(tab: string, batch: string): string {
@@ -280,7 +281,7 @@ export async function runMigrationAct(button: HTMLElement, root: HTMLElement, ro
       if (result.data.stepUp) {
         toast2("Confirm it’s you", { kind: "warn", sub: "Then choose the button again." });
         const next = `${window.location.pathname}${window.location.search}`;
-        window.setTimeout(() => window.location.assign(stepUpHref(next, "import_signoff")), 900);
+        window.setTimeout(() => goStepUp(stepUpHref(next, "import_signoff")), 900);
         return;
       }
       toast2("Not saved", { kind: "warn", sub: errorOf(result.data) });

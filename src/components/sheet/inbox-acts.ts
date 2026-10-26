@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { dismissInboundEmail, fileInboundEmail, fileInboundEmailToMatter, moveInboundFiles, searchFilingMatters, type FilingChoice, type FilingMatter } from "@/modules/inbox/actions";
 import { needsStepUp, stepUpLocation } from "@/modules/sheet/matter-wire";
@@ -7,7 +8,7 @@ import { needsStepUp, stepUpLocation } from "@/modules/sheet/matter-wire";
 type Router = { refresh: () => void };
 
 function stepUp() {
-  window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null, "file_email"));
+  goStepUp(stepUpLocation(window.location.pathname, window.location.search, null, "file_email"));
 }
 
 function filesLine(files: number, moved: number, problem: string | null): { kind: string; sub: string } {

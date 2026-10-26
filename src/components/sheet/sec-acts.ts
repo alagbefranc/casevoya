@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { stepUpHref, type StepUpActionKey } from "@/lib/auth/mfa-step";
 import { approveDeletionJob, cancelSubscription, chooseEndArrangement, firmExportIndex } from "@/modules/settings/sec-actions";
@@ -15,7 +16,7 @@ type Open = (id: string) => void;
 function stepUp(action: StepUpActionKey) {
   toast2("Confirm it’s you", { kind: "warn", sub: "Then come back and try again." });
   const next = `${window.location.pathname}${window.location.search}`;
-  window.setTimeout(() => window.location.assign(stepUpHref(next, action)), 900);
+  window.setTimeout(() => goStepUp(stepUpHref(next, action)), 900);
 }
 
 function newKey(): string {

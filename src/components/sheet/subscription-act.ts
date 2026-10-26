@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { openBillingPortal, startSubscriptionCheckout } from "@/modules/subscription/actions";
 import { PLAN_DRAFT, subscriptionStepUpLocation } from "@/modules/subscription/errors";
@@ -111,7 +112,7 @@ function stepUp(draft: Record<string, unknown> | null) {
     // The owner chooses again after the step-up.
   }
   toast2("Confirm it’s you", { kind: "warn", sub: draft ? "Then the plan dialog opens again with what you chose." : "Then try again." });
-  window.setTimeout(() => window.location.assign(subscriptionStepUpLocation(Boolean(draft))), 900);
+  window.setTimeout(() => goStepUp(subscriptionStepUpLocation(Boolean(draft))), 900);
 }
 
 /** Choose a plan, Continue to payment, Manage billing. */
