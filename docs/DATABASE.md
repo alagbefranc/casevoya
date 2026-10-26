@@ -1097,10 +1097,10 @@ DOC-01 (#178), branch `feat/doc-checklists`. Already applied on the live project
 
 Tested in `tests/checklist-templates.rls.test.ts` and `tests/checklist-present.test.tsx`.
 
-## Vo reads documents on upload (`20261026100300`, a no-op; apply after `20261026100200`)
+## Vo reads documents on upload (`20261025000000`, already applied on the live project; deploy only)
 
-DOC-05 (#178), branch `feat/doc-vo-reading`. Was `20261025000000_vo_read_on_upload.sql`, which already ran on the live project (see `20261025240200` above); renumbered 2026-10-26. Main fully covers it: `20261025240200_vo_settings_keep_read_on_upload.sql` adds `vo_settings.read_on_upload` when missing and defines `public.set_vo_settings` with `read_on_upload` and `letter_drafts`.
+DOC-05 (#178), branch `feat/doc-vo-reading`. Already applied on the live project under this name (recorded in `supabase_migrations.schema_migrations`), so the file keeps its name; merging this PR only deploys the app code. `20261025240200_vo_settings_keep_read_on_upload.sql` (on main) also adds `vo_settings.read_on_upload` when missing and defines `public.set_vo_settings` with both `read_on_upload` and `letter_drafts`.
 
-* `20261026100300_vo_read_on_upload.sql`: only `alter table public.vo_settings add column if not exists read_on_upload ...`, which changes nothing once `20261025240200` has run. It does not redefine `set_vo_settings`. If the live project's migration history lists `20261025000000`, that entry is this same change.
+* `20261025000000_vo_read_on_upload.sql`: `vo_settings.read_on_upload` (`add column if not exists`, default false). In this branch it does not redefine `set_vo_settings` (left to `20261025240200`); the body the live project ran did, which `20261025240200` then replaced.
 
 Tested in `tests/vo-doc-review.rls.test.ts`, `tests/vo-doc-review-service.test.ts` and `tests/vo-read-on-upload.test.tsx`.
