@@ -113,6 +113,54 @@ export function textOf(html: string): string {
 }
 
 /**
+ * The whole of one Justice Laws section as the live page prints it (`id="s-12"`): every subsection
+ * and paragraph with their marginal notes, from the section's list (`<ul class="Section …">`) to its
+ * end, e.g. "12 (1) A foreign national … Marginal note: Economic immigration (2) …". This is the
+ * shape Justice Canada's XML text takes, so the two can be compared. Null when the page has no such
+ * section.
+ */
+export function lawFullSectionText(html: string, sectionId: string): string | null {
+  if (!/^s-[0-9]+(\.[0-9]+)?$/.test(sectionId)) return null;
+  const at = html.search(new RegExp(`id=["']${sectionId.replace(".", "\\.")}["']`));
+  if (at < 0) return null;
+  // The section starts at its own element: a list of subsections (`<ul class="Section …">`) or a
+  // single provision (`<p class="Section">`, then any paragraphs under it).
+  const start = Math.max(html.lastIndexOf('<ul class="Section', at), html.lastIndexOf('<p class="Section"', at));
+  if (start < 0) return null;
+  // A list of subsections ends with its own closing tag (nested lists hold paragraphs).
+  let listEnd = -1;
+  if (html.startsWith("<ul", start)) {
+    const tags = /<(\/?)ul\b[^>]*>/gi;
+    tags.lastIndex = start;
+    let depth = 0;
+    for (let tag = tags.exec(html); tag; tag = tags.exec(html)) {
+      depth += tag[1] ? -1 : 1;
+      if (depth === 0) {
+        listEnd = tag.index + tag[0].length;
+        break;
+      }
+    }
+  }
+  // It ends before the amendment history, the next heading or the next section (with its marginal
+  // note), whichever is first.
+  const rest = html.slice(at);
+  const stops = [rest.search(/<div class="HistoricalNote"/), rest.search(/<h[1-6]\b/i)];
+  const next = rest.slice(1).search(/id=["']s-[0-9]+(\.[0-9]+)?["']/);
+  if (next >= 0) {
+    const nextAt = at + 1 + next;
+    const nextStart = Math.max(html.lastIndexOf('<ul class="Section', nextAt), html.lastIndexOf('<p class="Section"', nextAt));
+    const note = html.lastIndexOf('<p class="MarginalNote"', nextStart);
+    stops.push((note > Math.max(at, listEnd) ? note : nextStart) - at);
+  }
+  const valid = stops.filter((stop) => stop > 0);
+  let end = valid.length ? at + Math.min(...valid) : html.length;
+  if (listEnd > at) end = Math.min(end, listEnd);
+  const chunk = html.slice(start, end).replace(/<div class="HistoricalNote"[\s\S]*?<\/div>/gi, " ");
+  const text = textOf(chunk).replace(/\s*Previous Version\s*/g, " ").trim();
+  return text.length > 0 ? text : null;
+}
+
+/**
  * The words of one Justice Laws section (`id="s-216"`) up to its first marginal note, i.e. the
  * section's opening provision as printed: "216 (1) Subject to subsections (2) and (3), …". Null when
  * the page has no such section.

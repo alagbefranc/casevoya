@@ -10,7 +10,7 @@
  */
 import { z } from "zod";
 import { factText } from "../../../src/modules/vo/letter";
-import { attestationLine, isCitableOfficialUrl, officialDetail, officialKindLabel } from "../../../src/modules/vo/grounding";
+import { attestationLine, editStampLine, isCitableOfficialUrl, officialDetail, officialKindLabel } from "../../../src/modules/vo/grounding";
 import { dataBlock, oneLine } from "../../../src/modules/vo/prompt";
 import { cite } from "./cite";
 import type { RunContext, ToolResult, ToolSpec } from "./tools";
@@ -57,17 +57,27 @@ export const GROUNDED_TOOL_SPECS: Record<GroundedToolName, ToolSpec> = {
         .toLowerCase()
         .split(/\W+/)
         .filter((word) => word.length > 3);
+      const matches = (row: { kind: string; label: string; content: string }) =>
+        !words.length || words.some((word) => `${row.kind} ${officialKindLabel(row.kind)} ${row.label} ${row.content}`.toLowerCase().includes(word));
       const rows = all
+        .filter((row) => !row.stale)
         // Approved content from a deep federal official page only (the database checks it too); a
         // page Casevoya didn't capture only with the reviewer's attestation to show next to it.
         .filter((row) => isCitableOfficialUrl(row.sourceUrl) && (!row.attested || attestationLine(row.attestedBy, row.attestedOn)))
-        .filter((row) => !words.length || words.some((word) => `${row.kind} ${officialKindLabel(row.kind)} ${row.label} ${row.content}`.toLowerCase().includes(word)))
+        .filter(matches)
         .slice(0, 8);
-      if (!rows.length) return text("No approved official content covers this. Don't answer it from memory: answer with the consultant marker instead.");
-      const lines: string[] = [];
+      // #188 stale block: what Vo can't cite because its source is overdue for a re-check, and why.
+      const stale = all.filter((row) => row.stale && matches(row)).slice(0, 4);
+      const staleLines = stale.map((row) => `Not citable: ${oneLine(row.label, 120)}. ${oneLine(row.staleReason ?? "Its source is due for a re-check", 200)}. Say so; don't give the value.`);
+      if (!rows.length) {
+        return text([...staleLines, "No approved official content covers this. Don't answer it from memory: answer with the consultant marker instead."].join("\n"));
+      }
+      const lines: string[] = [...staleLines];
       for (const row of rows) {
         const detail = officialDetail({ section: row.section, formNumber: row.formNumber, formModifiedOn: row.formModifiedOn, checkedOn: row.checkedOn, currentTo: row.currentTo, sha256: row.sha256 });
         const attested = row.attested ? attestationLine(row.attestedBy, row.attestedOn) : null;
+        // #188: the firm's wording of a live official claim, cited with its stamp.
+        const edited = row.edit ? editStampLine(row.edit.by, row.edit.licence, row.edit.on) : null;
         const mark = cite(ctx, {
           kind: "official",
           id: row.id,
@@ -76,8 +86,11 @@ export const GROUNDED_TOOL_SPECS: Record<GroundedToolName, ToolSpec> = {
           detail,
           label: `${officialKindLabel(row.kind)}: ${row.label}`,
           ...(attested ? { attested: true, attestedBy: row.attestedBy ?? undefined, attestedOn: row.attestedOn ?? undefined } : {}),
+          ...(edited && row.edit ? { edited: true, editedBy: row.edit.by ?? undefined, editedLicence: row.edit.licence ?? undefined, editedOn: row.edit.on ?? undefined } : {}),
         });
-        lines.push(`${mark}${officialKindLabel(row.kind)}${row.checkedOn ? `, official page checked ${oneLine(row.checkedOn, 10)}` : ""}${attested ? `. ${oneLine(attested, 200)}` : ""}:`);
+        lines.push(
+          `${mark}${officialKindLabel(row.kind)}${row.checkedOn ? `, official page checked ${oneLine(row.checkedOn, 10)}` : ""}${attested ? `. ${oneLine(attested, 200)}` : ""}${edited ? `. Your firm's wording: ${oneLine(edited, 200)}` : ""}:`,
+        );
         lines.push(dataBlock(ctx.nonce, row.content, 600));
       }
       return text(lines.join("\n"));

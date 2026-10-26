@@ -2,7 +2,12 @@
 // SRC-01 / SRC-02: captures official IRCC, canada.ca and Justice Laws content for the Source review workbench.
 //
 // Usage:
-//   node scripts/ops/capture-official-claims.mjs [--dir src/modules/content-governance] [--dry-run] [--partial]
+//   node scripts/ops/capture-official-claims.mjs [--dir src/modules/content-governance] [--dry-run] [--partial] [--only official|canada]
+//   node scripts/ops/capture-official-claims.mjs --all-sources [--dir …] [--dry-run]
+//
+// `--only official` re-reads just captured-claims.json (the IRCC fee list and Justice Laws, which the
+// build machine reaches). `--all-sources` re-reads the fee and law claims of captured-all-sources.json
+// from the live sites (see "captured-all-sources.json" below).
 //
 // For each page a claim needs it fetches the page once (https only, official federal hosts; Node
 // fetch with a Chrome User-Agent and 2.5 s between requests, the approach www.canada.ca answers),
@@ -21,14 +26,14 @@
 // A claim whose page, row, section or item isn't found is left out and reported; nothing is guessed
 // or filled in from memory. Processing times are deliberately not captured: staff enter them.
 //
-// Output: two files of DRAFT claims, written only when every claim of that file was read (or with
+// Output: two files of claims, written only when every claim of that file was read (or with
 // --partial), so a run from a machine that can't reach www.canada.ca keeps the committed captures:
 //   - captured-claims.json: IRCC fee list and Justice Laws IRPR/IRPA;
 //   - captured-canada-ca.json: canada.ca forms and their PDF editions, the IMM 5483 checklist and
 //     program pages.
-// Nothing is approved: staff add a claim from them in Templates > Source review > Add claim,
-// Casevoya fetches the page again on the server, and a licensed reviewer resolves applicability and
-// approves it with a step-up.
+// These files are loaded as live official claims by scripts/ops/load-official-claims.mjs (decision
+// 2026-10-25 11:42/11:50: captured official claims go live on load; firms make licensed edits of
+// their own), run in a database maintenance session only.
 //
 // Hash: canada.ca's Akamai CDN injects a per-request mPulse/boomerang script into every HTML
 // response, so the raw bytes never hash the same twice. The hash is taken over the page with that
@@ -45,12 +50,12 @@
 // Needs Node 22.18+ (imports TypeScript helpers by type stripping). No secrets.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { federalHost, hashableBytes, lawSectionText, readPageDates, textOf } from "../../src/modules/content-governance/claim-capture.ts";
-import { parseIrccFeeList } from "../../src/modules/billing/ircc-fee-list.ts";
+import { federalHost, hashableBytes, lawFullSectionText, lawSectionText, readPageDates, textOf } from "../../src/modules/content-governance/claim-capture.ts";
+import { parseIrccFeeList, readFeeAmount } from "../../src/modules/billing/ircc-fee-list.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
@@ -486,10 +491,12 @@ async function captureClaim(spec, fetchPage, pdfReader) {
   };
 }
 
-export async function capture({ fetcher = fetch, now = () => new Date(), log = console.error, delayMs = DELAY_MS, pdfReader = pdfText } = {}) {
+export async function capture({ fetcher = fetch, now = () => new Date(), log = console.error, delayMs = DELAY_MS, pdfReader = pdfText, only = null } = {}) {
   const fetchPage = pageFetcher(fetcher, now, delayMs);
-  const results = Object.fromEntries(Object.keys(OUTPUTS).map((out) => [out, { claims: [], pages: new Set(), missing: [] }]));
+  const outs = Object.keys(OUTPUTS).filter((out) => !only || out === only);
+  const results = Object.fromEntries(outs.map((out) => [out, { claims: [], pages: new Set(), missing: [] }]));
   for (const spec of CLAIMS) {
+    if (!results[spec.out ?? "official"]) continue;
     const result = results[spec.out ?? "official"];
     const read = await captureClaim(spec, fetchPage, pdfReader);
     if ("missing" in read) {
@@ -524,13 +531,351 @@ export async function capture({ fetcher = fetch, now = () => new Date(), log = c
   );
 }
 
+// ---------------------------------------------------------------------------
+// captured-all-sources.json: re-read the IRCC fee list and Justice Laws live (decision 6, 2026-10-25)
+// ---------------------------------------------------------------------------
+//
+// The all-sources capture read the fee list through a provider that returns no page bytes (so no
+// page hash) and took law text from Justice Canada's XML. `--all-sources` re-fetches both from the
+// live sites, hashes them as captured here, and for each fee and law claim:
+//   - fee: finds the row under the same headings (section, group, sub-group or the table's own
+//     header) with the same name, and keeps it only when the live amount equals the claim's amount
+//     and the fees.json amount recorded with it (`feeFeedCheck`); otherwise it is refused and listed;
+//   - law: reads the whole section from the live page; the live text is used (and says whether it
+//     reads the same as the XML), with the live page's "current to" and "last amended" dates;
+//   - the two spousal rows whose own note says the amount includes the right of permanent residence
+//     fee although the row is named "without" it are split into their parts, each kept only when
+//     the fee list prints that part's amount on its own row (only the RPRF is); nothing is
+//     calculated by subtraction.
+// Every refused claim keeps `refused` with the reason; the loader never loads it.
+
+export const ALL_SOURCES = "captured-all-sources.json";
+
+/** The fee list's rows under every heading above them: the section (h2, with its id), group (h3), sub-group (h4) and a table's own header row. */
+export function readFeeRows(html) {
+  const main = html.indexOf("<main");
+  // A popup's text ("What's this?" dialogs) is never part of a row.
+  const body = (main >= 0 ? html.slice(main) : html).replace(/<section\b[^>]*\bmodal-dialog\b[\s\S]*?<\/section>/gi, " ");
+  const tokens = [];
+  for (const m of body.matchAll(/<h([234])\b([^>]*)>([\s\S]*?)<\/h\1>/gi)) tokens.push({ at: m.index, kind: `h${m[1]}`, attrs: m[2], html: m[3] });
+  for (const m of body.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) tokens.push({ at: m.index, kind: "tr", html: m[1] });
+  tokens.sort((a, b) => a.at - b.at);
+  const rows = [];
+  let section = null;
+  let anchor = null;
+  let group = null;
+  let groupId = null;
+  let sub = null;
+  let header = null;
+  for (const token of tokens) {
+    if (token.kind === "h2") {
+      const id = /\bid\s*=\s*["']([A-Za-z0-9_-]{1,80})["']/.exec(token.attrs)?.[1] ?? null;
+      section = id ? textOf(token.html) : null;
+      anchor = id;
+      group = groupId = sub = header = null;
+      continue;
+    }
+    if (!section) continue;
+    if (token.kind === "h3") {
+      group = textOf(token.html);
+      groupId = /\bid\s*=\s*["']([A-Za-z0-9_-]{1,80})["']/.exec(token.attrs)?.[1] ?? null;
+      sub = header = null;
+      continue;
+    }
+    if (token.kind === "h4") {
+      sub = textOf(token.html);
+      header = null;
+      continue;
+    }
+    const heads = [...token.html.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/gi)].map((cell) => textOf(cell[1]));
+    if (heads.length > 0) {
+      header = heads[0] && heads[0] !== "Fees" ? heads[0] : null;
+      continue;
+    }
+    const cells = [...token.html.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map((cell) => cell[1]);
+    if (cells.length !== 2) continue;
+    const amount = readFeeAmount(textOf(cells[1]));
+    if (!amount) continue;
+    const strong = /<strong\b[^>]*>([\s\S]*?)<\/strong>/i.exec(cells[0]);
+    const withoutNote = cells[0].replace(/<p class=['"]small['"][\s\S]*?<\/p>/gi, " ");
+    rows.push({
+      path: [section, group, sub, header].filter(Boolean),
+      anchor,
+      groupId,
+      names: [...new Set([strong ? textOf(strong[1]) : null, textOf(withoutNote)].filter(Boolean))],
+      text: textOf(cells[0]),
+      amountCents: amount.cents,
+      qualifier: amount.qualifier,
+    });
+  }
+  return rows;
+}
+
+const squash = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
+
+/** "$7" / "$2,495" / "$184.75 CAD per child" -> cents; null when it isn't one amount. */
+export function centsOf(value) {
+  const match = /\$\s?(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{2}))?/.exec(String(value ?? ""));
+  return match ? Number(match[1].replace(/,/g, "")) * 100 + Number(match[2] ?? 0) : null;
+}
+
+/** "$270.00 CAD per child": the amount as the claims write it, with the row's qualifier. */
+function feeValue(row) {
+  return `${money(row.amountCents)}${row.qualifier ? ` ${row.qualifier.replace(/^\(|\)$/g, "")}` : ""}`;
+}
+
+/** The live fee row for a fee claim (`section` = "Section > Group [> Sub-group] > Name"), or why there is none. */
+export function matchFeeClaim(claim, rows) {
+  const parts = claim.section.split(" > ").map(squash);
+  const name = parts.at(-1);
+  const heads = parts.slice(0, -1);
+  const found = rows.filter((row) => squash(row.path.join(" > ")) === heads.join(" > ") && row.names.some((candidate) => squash(candidate) === name));
+  if (found.length === 1) return { row: found[0] };
+  if (found.length > 1) return { missing: `${found.length} rows named “${name}” under ${heads.join(" > ")}` };
+  return { missing: `no row “${name}” under ${heads.join(" > ")} on the live fee list` };
+}
+
+/** A fee claim checked against the live row: the refreshed claim, or the reason it is refused. */
+export function refreshFeeClaim(claim, rows, page) {
+  const matched = matchFeeClaim(claim, rows);
+  if ("missing" in matched) return { refused: matched.missing };
+  const { row } = matched;
+  const live = feeValue(row);
+  const feed = claim.feeFeedCheck && typeof claim.feeFeedCheck === "object" ? centsOf(claim.feeFeedCheck.value) : null;
+  if (centsOf(claim.value) !== row.amountCents) return { refused: `the live fee list prints ${live}, the capture said ${claim.value}` };
+  if (feed !== null && feed !== row.amountCents) return { refused: `the live fee list prints ${live}, fees.json said ${claim.feeFeedCheck.value}` };
+  const hash = claim.sourceUrl.split("#")[1] ?? null;
+  const anchor = hash && (hash === row.anchor || hash === row.groupId) ? hash : row.anchor;
+  return {
+    claim: {
+      ...claim,
+      sourceUrl: `${FEES}#${anchor}`,
+      value: live,
+      excerpt: excerpt(`${row.text} ${printed(row.amountCents)}${row.qualifier ? ` ${row.qualifier}` : ""}`),
+      liveCheck: {
+        page: FEES,
+        sha256: page.sha256,
+        retrievedAt: page.retrievedAt,
+        amount: live,
+        feeFeed: feed === null ? "not cross-checked (no fees.json key recorded)" : `matches fees.json (${claim.feeFeedCheck.value})`,
+      },
+    },
+  };
+}
+
+/** A law claim re-read from the live Justice Laws page: the live text is used. */
+export function refreshLawClaim(claim, html, page) {
+  const id = claim.sourceUrl.split("#")[1] ?? "";
+  const text = lawFullSectionText(html, id);
+  if (!text) return { refused: `no section #${id} on the live page` };
+  const same = squash(text) === squash(claim.sectionText ?? "");
+  const currentTo = page.currentTo ?? "Unknown";
+  return {
+    claim: {
+      ...claim,
+      claim: claim.claim.replace(/current to (?:\d{4}-\d{2}-\d{2}|Unknown)/, `current to ${currentTo}`).replace(" (full text in sectionText)", ""),
+      excerpt: excerpt(text),
+      sectionText: text,
+      currentTo: page.currentTo,
+      lastAmended: page.lastAmendedOn,
+      liveCheck: {
+        page: claim.page,
+        sha256: page.sha256,
+        retrievedAt: page.retrievedAt,
+        text: same ? "reads the same as Justice Canada's XML" : "differs from Justice Canada's XML: the live page's text is used",
+      },
+    },
+  };
+}
+
+const SPOUSAL_SPLIT = {
+  "CA.FEES.SPOUSE_ABROAD_NO_RPRF": "CA.FEES.SPOUSE_ABROAD",
+  "CA.FEES.SPOUSE_IN_CANADA_NO_RPRF": "CA.FEES.SPOUSE_IN_CANADA",
+};
+
+/** The parts the spousal rows' own note names, and the fee list row each part is printed on (only the RPRF has one). */
+const SPOUSAL_PARTS = [
+  { part: "sponsorship fee", suffix: "SPONSORSHIP_PART", section: null },
+  { part: "processing fee", suffix: "PROCESSING_PART", section: null },
+  { part: "right of permanent residence fee", suffix: "RPRF_PART", section: "Permanent Residence > Right of permanent residence fee > Right of permanent residence fee" },
+];
+
+/** Splits a spousal row into its parts: a part is a claim only when the fee list prints its amount on its own row. */
+export function splitSpousalRow(claim, rows, page) {
+  const base = SPOUSAL_SPLIT[claim.key];
+  const claims = [];
+  const notLoaded = [];
+  const group = claim.section.split(" > ")[1];
+  for (const part of SPOUSAL_PARTS) {
+    const key = `${base}_${part.suffix}`;
+    if (!part.section) {
+      notLoaded.push({ key, reason: `the fee list doesn't print the ${part.part} for “${claim.section.split(" > ").at(-1)}” (${group}) on its own row` });
+      continue;
+    }
+    const matched = matchFeeClaim({ section: part.section }, rows);
+    if ("missing" in matched) {
+      notLoaded.push({ key, reason: matched.missing });
+      continue;
+    }
+    const { row } = matched;
+    claims.push({
+      jurisdiction: "CA",
+      key,
+      category: "fee",
+      program: claim.program,
+      namedInRepo: false,
+      page: FEES,
+      title: claim.title,
+      claim: `IRCC fee list, ${row.path.join(" > ")}: “${row.names[0]}” is ${feeValue(row)}. Part of “${claim.section.split(" > ").at(-1)}” (${group}), whose note on the fee list says it includes the ${part.part}; the fee list prints this part on its own row.`,
+      sourceUrl: `${FEES}#${row.groupId ?? row.anchor}`,
+      section: part.section,
+      value: feeValue(row),
+      excerpt: excerpt(`${row.text} ${printed(row.amountCents)}`),
+      formNumber: null,
+      splitFrom: claim.key,
+      liveCheck: { page: FEES, sha256: page.sha256, retrievedAt: page.retrievedAt, amount: feeValue(row), feeFeed: "not cross-checked (a part, read from its own row)" },
+    });
+  }
+  return { claims, notLoaded };
+}
+
+/** Fetches a page once for the refresh: its meta (hash, time, dates) and HTML, or the error. */
+async function livePage(fetcher, now, url, publisher, title) {
+  try {
+    const response = await fetcher(url, { redirect: "follow", signal: AbortSignal.timeout(60_000), headers: { "user-agent": UA, accept: "text/html" } });
+    const bytes = Buffer.from(await response.arrayBuffer());
+    const finalUrl = (response.url || url).split("#")[0];
+    if (!response.ok || bytes.length === 0 || !federalHost(finalUrl) || finalUrl !== url) return { error: `answered ${response.status}${finalUrl !== url ? ` from ${finalUrl}` : ""}` };
+    const contentType = response.headers.get("content-type");
+    const retrievedAt = now().toISOString();
+    const hashed = hashableBytes(new Uint8Array(bytes), contentType);
+    const html = bytes.toString("utf8");
+    const dates = readPageDates(html);
+    return {
+      html,
+      meta: {
+        url,
+        publisher,
+        title,
+        finalUrl,
+        httpStatus: response.status,
+        contentType,
+        bytes: bytes.length,
+        retrievedAt,
+        sha256: createHash("sha256").update(hashed.bytes).digest("hex"),
+        sha256Of: hashed.basis,
+        ...dates,
+        printedDates: printedDates(dates, retrievedAt),
+        capturedBy: "scripts/ops/capture-official-claims.mjs --all-sources (live re-fetch, decision 6)",
+      },
+    };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+const LAW_TITLES = {
+  "https://laws-lois.justice.gc.ca/eng/acts/I-2.5/FullText.html": "Immigration and Refugee Protection Act (S.C. 2001, c. 27)",
+  "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html": "Immigration and Refugee Protection Regulations (SOR/2002-227)",
+};
+
+/**
+ * Refreshes the fee and law claims of captured-all-sources.json from the live sites. Returns the
+ * new data and a report: matched, refused (with reasons) and parts not loaded.
+ */
+export async function refreshAllSources(data, { fetcher = fetch, now = () => new Date(), log = console.error, delayMs = DELAY_MS } = {}) {
+  const urls = [...new Set(data.claims.filter((claim) => claim.category === "fee" || claim.category === "law").map((claim) => claim.page))];
+  const pages = new Map();
+  for (const [index, url] of urls.entries()) {
+    if (index > 0 && delayMs > 0) await sleep(delayMs);
+    const title = url === FEES ? "Citizenship and immigration application fees: Fee list" : (LAW_TITLES[url] ?? data.claims.find((claim) => claim.page === url)?.title ?? null);
+    const page = await livePage(fetcher, now, url, url === FEES ? IRCC : JUSTICE, title);
+    if (page.error) log(`Couldn't fetch ${url}: ${page.error}`);
+    pages.set(url, page);
+  }
+  const fee = pages.get(FEES);
+  const rows = fee && !fee.error ? readFeeRows(fee.html) : [];
+  const report = { matched: { fee: 0, law: 0 }, lawTextDiffers: [], refused: [], notLoaded: [], split: [] };
+  const claims = [];
+  for (const claim of data.claims) {
+    if (claim.category !== "fee" && claim.category !== "law") {
+      claims.push(claim);
+      continue;
+    }
+    const page = pages.get(claim.page);
+    if (!page || page.error) {
+      const reason = `the live page couldn't be fetched (${page?.error ?? "not fetched"})`;
+      claims.push({ ...claim, refused: reason });
+      report.refused.push({ key: claim.key, reason });
+      continue;
+    }
+    if (claim.category === "fee" && SPOUSAL_SPLIT[claim.key]) {
+      const reason = "split into its parts: the fee list's note on this row says it includes the right of permanent residence fee, which contradicts its name";
+      const parts = splitSpousalRow(claim, rows, page.meta);
+      claims.push({ ...claim, refused: reason }, ...parts.claims);
+      report.refused.push({ key: claim.key, reason });
+      report.split.push({ key: claim.key, loaded: parts.claims.map((part) => `${part.key} (${part.value})`), notLoaded: parts.notLoaded });
+      report.notLoaded.push(...parts.notLoaded);
+      continue;
+    }
+    const refreshed = claim.category === "fee" ? refreshFeeClaim(claim, rows, page.meta) : refreshLawClaim(claim, page.html, page.meta);
+    if ("refused" in refreshed) {
+      claims.push({ ...claim, refused: refreshed.refused });
+      report.refused.push({ key: claim.key, reason: refreshed.refused });
+      continue;
+    }
+    report.matched[claim.category] += 1;
+    if (claim.category === "law" && refreshed.claim.liveCheck.text.startsWith("differs")) report.lawTextDiffers.push(claim.key);
+    claims.push(refreshed.claim);
+  }
+  const fetched = [...pages.values()].filter((page) => !page.error).map((page) => page.meta);
+  const refreshedAt = now().toISOString();
+  return {
+    report,
+    data: {
+      ...data,
+      pages: [...data.pages.filter((page) => !pages.has(page.url) || pages.get(page.url).error), ...fetched],
+      pagesReadViaWebFetch: (data.pagesReadViaWebFetch ?? []).map((page) =>
+        pages.get(page.url) && !pages.get(page.url).error ? { ...page, superseded: `re-fetched live with a SHA-256 at ${refreshedAt}; see pages` } : page,
+      ),
+      claims,
+      liveRefresh: {
+        at: refreshedAt,
+        by: "scripts/ops/capture-official-claims.mjs --all-sources",
+        what: "IRCC fee list and Justice Laws re-fetched live and hashed; fee amounts checked against the live rows and fees.json; law text read from the live pages (live text used); spousal rows split. Refused claims keep `refused` and are never loaded.",
+        matched: report.matched,
+        lawTextDiffers: report.lawTextDiffers,
+        refused: report.refused,
+        notLoaded: report.notLoaded,
+        split: report.split,
+      },
+    },
+  };
+}
+
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (isMain) {
+if (isMain && process.argv.includes("--all-sources")) {
   const args = process.argv.slice(2);
   const dirAt = args.indexOf("--dir");
   const root = path.resolve(HERE, "..", "..");
   const dir = dirAt >= 0 ? path.resolve(args[dirAt + 1]) : path.join(root, "src", "modules", "content-governance");
-  const results = await capture();
+  const file = path.join(dir, ALL_SOURCES);
+  const { report, data } = await refreshAllSources(JSON.parse(readFileSync(file, "utf8")));
+  console.log(`Fee claims matched live: ${report.matched.fee}. Law claims read live: ${report.matched.law} (${report.lawTextDiffers.length} differ from the XML; live text used).`);
+  for (const refused of report.refused) console.log(`  Refused ${refused.key}: ${refused.reason}`);
+  for (const part of report.notLoaded) console.log(`  Not loaded ${part.key}: ${part.reason}`);
+  if (!args.includes("--dry-run")) {
+    writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`);
+    console.log(`Wrote ${path.relative(root, file)}`);
+  }
+} else if (isMain) {
+  const args = process.argv.slice(2);
+  const dirAt = args.indexOf("--dir");
+  const onlyAt = args.indexOf("--only");
+  const only = onlyAt >= 0 ? args[onlyAt + 1] : null;
+  const root = path.resolve(HERE, "..", "..");
+  const dir = dirAt >= 0 ? path.resolve(args[dirAt + 1]) : path.join(root, "src", "modules", "content-governance");
+  const results = await capture({ only });
   for (const [out, result] of Object.entries(results)) {
     const file = path.join(dir, OUTPUTS[out]);
     const wanted = CLAIMS.filter((spec) => (spec.out ?? "official") === out).length;

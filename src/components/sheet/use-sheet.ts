@@ -98,7 +98,7 @@ import { mountDocOpen, mountDrafts, mountInboxFilters, mountRecordsCrumb } from 
 import { bindGovControls } from "./gov-acts";
 import { bindApprovalControls } from "./approval-acts";
 import { bindSubmissionControls } from "./submission-acts";
-import { mountClaimInputs, runClaimAct } from "./source-claim-acts";
+import { reopenClaimDialog, runClaimAct } from "./source-claim-acts";
 import { bindRenewalControls } from "./renewal-acts";
 import { bindRulePinControls } from "./rule-pin-acts";
 import { bindVoCrmControls } from "./vo-crm-acts";
@@ -1454,7 +1454,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     mountRecordsCrumb(root, page, (group) => openPalette(root, (href) => router.push(href), group), ac.signal);
     if (page === "inbox") mountInboxFilters(root, ac.signal);
     if (page === "inbox" || page === "templates") mountMessagingInputs(root, ac.signal);
-    if (page === "templates") mountClaimInputs(root, ac.signal);
+    // Live official claims: back from step-up (or an Edit link), reopen the claim dialog with what was typed.
+    if (page === "templates") window.setTimeout(() => reopenClaimDialog(root, openDialog), 300);
     if (page === "documents" || page === "government") mountDocOpen(root, runDocOpen, ac.signal);
     if (page === "drafts") mountDrafts(root, () => router.refresh(), ac.signal);
     // Back from a Composio Connect Link on Settings > Integrations.

@@ -85,6 +85,7 @@ import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder } 
 import { loadSheetIntakeBuilder } from "@/modules/sheet/intake-builder-load";
 import { MessageTemplateDialog, SheetTemplates, TemplatesHeader } from "@/components/sheet/designer/templates";
 import { AddClaimDialog, ClaimReviewDialogs } from "@/components/sheet/designer/source-claims";
+import { OfficialClaimDialogs } from "@/components/sheet/designer/official-claims";
 import { OpenOnLoad } from "@/components/sheet/open-on-load";
 import { loadSheetTemplates } from "@/modules/sheet/templates-load";
 import { loadSheetSupportCatalogue } from "@/modules/sheet/support-catalogue-load";
@@ -673,7 +674,7 @@ export async function SheetBody({
     // DES-04: where official content shows (program templates, Source review, a rule), say when its source is stale.
     const official = tab === "program" || tab === "sources" || tab === "rule";
     const [loaded, stale] = await Promise.all([
-      loadSheetTemplates(access.staff, tab, query.view),
+      loadSheetTemplates(access.staff, tab, query.view, undefined, { claim: query.claim, query: query.cq, offset: query.offset }),
       official ? loadSourceStaleness(access.staff, tab === "rule" && query.view ? { kind: "rule", ruleVersionId: query.view } : { kind: "firm" }) : null,
     ]);
     return (
@@ -693,6 +694,7 @@ export async function SheetBody({
               <>
                 {loaded.data.sources.addClaim ? <AddClaimDialog data={loaded.data.sources.addClaim} /> : null}
                 {loaded.data.rule?.review ? <ClaimReviewDialogs review={loaded.data.rule.review} /> : null}
+                {loaded.data.officialClaim ? <OfficialClaimDialogs view={loaded.data.officialClaim} /> : null}
               </>
             ) : undefined
           }
@@ -1063,5 +1065,8 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     vo: one("vo"),
     from: one("from"),
     program: one("program"),
+    claim: one("claim"),
+    cq: one("cq"),
+    offset: one("offset"),
   };
 }

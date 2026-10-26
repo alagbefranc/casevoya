@@ -261,8 +261,24 @@ export function attestationLine(by: string | null | undefined, on: string | null
   return `Page not captured by Casevoya, checked by ${who} on ${Number(date[3])} ${MONTHS[Number(date[2]) - 1]} ${date[1]}`;
 }
 
-/** A citation as the page shows it: its link (null when there is nothing to open), and the attestation line when the page wasn't captured. */
-export type VoCitation = VoSourceRef & { href: string | null; attestation: string | null };
+/**
+ * A firm's licensed edit of a live official claim (#188, decision 2026-10-25): Vo cites the firm's
+ * wording with this stamp next to it, the same words as Source review:
+ * "Edited by Amara Osei, licence R123456, 25 Oct 2026". Null without a name, licence and valid date.
+ */
+export function editStampLine(by: string | null | undefined, licence: string | null | undefined, on: string | null | undefined): string | null {
+  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(on ?? "").slice(0, 10));
+  const who = typeof by === "string" ? by.trim().slice(0, 120) : "";
+  const number = typeof licence === "string" ? licence.trim().slice(0, 40) : "";
+  if (!date || Number(date[2]) < 1 || Number(date[2]) > 12 || !who || !number) return null;
+  return `Edited by ${who}, licence ${number}, ${Number(date[3])} ${MONTHS[Number(date[2]) - 1]} ${date[1]}`;
+}
+
+/**
+ * A citation as the page shows it: its link (null when there is nothing to open), the attestation
+ * line when the page wasn't captured, and the firm's edit stamp when it cites the firm's wording.
+ */
+export type VoCitation = VoSourceRef & { href: string | null; attestation: string | null; edit?: string | null };
 
 /**
  * Links for a run's citations; an official citation whose page isn't a deep federal official page
@@ -271,7 +287,12 @@ export type VoCitation = VoSourceRef & { href: string | null; attestation: strin
 export function citationsFor(refs: VoSourceRef[], at: { matterId: string; threadId?: string | null }): VoCitation[] {
   return refs
     .filter((ref) => ref.kind !== "official" || isCitableOfficialUrl(ref.url))
-    .map((ref) => ({ ...ref, href: citationHref(ref, at), attestation: ref.kind === "official" && ref.attested ? attestationLine(ref.attestedBy, ref.attestedOn) : null }))
+    .map((ref) => ({
+      ...ref,
+      href: citationHref(ref, at),
+      attestation: ref.kind === "official" && ref.attested ? attestationLine(ref.attestedBy, ref.attestedOn) : null,
+      edit: ref.kind === "official" && ref.edited ? editStampLine(ref.editedBy, ref.editedLicence, ref.editedOn) : null,
+    }))
     .filter((ref) => ref.kind !== "official" || !ref.attested || ref.attestation);
 }
 
@@ -293,6 +314,13 @@ export function withStoredAttestation(refs: VoSourceRef[], stored: unknown): VoS
     if (ref.sourceKind) plain.sourceKind = ref.sourceKind;
     if (ref.url) plain.url = ref.url;
     if (ref.detail) plain.detail = ref.detail;
+    // #188: the firm's edit stamp, as the database stored it on the run.
+    if (row.edited === true) {
+      plain.edited = true;
+      if (typeof row.edited_by === "string") plain.editedBy = row.edited_by;
+      if (typeof row.edited_licence === "string") plain.editedLicence = row.edited_licence;
+      if (typeof row.edited_on === "string") plain.editedOn = row.edited_on;
+    }
     if (row.attested !== true) return [plain];
     plain.attested = true;
     if (typeof row.attested_by === "string") plain.attestedBy = row.attested_by;

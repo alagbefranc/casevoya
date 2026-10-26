@@ -285,6 +285,8 @@ export function claimReview(rule: RuleRow, claim: NonNullable<RuleRow["facts"]>,
     canApprove: licensed && waiting && resolved && !claimExpired({ status: "published", effectiveTo: claim.effectiveTo }, viewer.now) && claim.evidence.length > 0,
     canReject: licensed && waiting,
     canSuspend: licensed && (rule.status === "published" || rule.status === "review_due"),
+    // Decision 7 (2026-10-25): a suspended claim stays suspended until a licensed member unsuspends it.
+    canUnsuspend: licensed && rule.status === "suspended",
     needsAttestation: claim.evidence.some((item) => !item.snapshot),
     today: viewer.today,
     nextReviewDefault: next.toISOString().slice(0, 10),
