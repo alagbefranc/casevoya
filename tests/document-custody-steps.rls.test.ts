@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 
-// 20261026100100_document_custody_steps.sql (DOC-07): an original's custody as steps (received,
+// 20261024220000_document_custody_steps.sql (DOC-07): an original's custody as steps (received,
 // moved, returned, acknowledged), each a new row. Synthetic records only.
 
 let db: TestDb;

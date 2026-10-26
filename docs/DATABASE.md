@@ -1079,11 +1079,11 @@ DOC-06 (#178), branch `feat/doc-evidence-links`. Already applied on the live pro
 
 Tested in `tests/document-evidence-links.rls.test.ts`.
 
-## Custody steps for originals (`20261026100100`, not applied on the live project; apply after `20261026100000`)
+## Custody steps for originals (`20261024220000`, already applied on the live project; deploy only)
 
-DOC-07 (#178), branch `feat/doc-custody-preview`. Was `20261024220000`; renumbered 2026-10-26. Additive. Checked against main up to `20261025600100`: no migration since `20261017180000_document_storage.sql` touches `document_custody_events` or `record_document_custody`.
+DOC-07 (#178), branch `feat/doc-custody-preview`. Already applied on the live project under this name (recorded in `supabase_migrations.schema_migrations`), so the file keeps its name and its exact applied contents; merging this PR only deploys the app code. Additive. Checked against main up to `20261025600100`: no migration since `20261017180000_document_storage.sql` touches `document_custody_events` or `record_document_custody`.
 
-* `20261026100100_document_custody_steps.sql`: `document_custody_events.kind` (`received`, `moved`, `returned`, `acknowledged`; null for rows from `public.record_document_custody`, which is unchanged; the table stays append only). New `public.record_custody_step(version, kind, on, location, purpose, recipient)` (owner, licensed consultant or case manager who can read the version; received only when not already held; moved only while held; returned once; acknowledged after the return; audited `document.custody_<kind>`). The earlier draft's second `(version_id, created_at)` index is dropped from the file: `document_custody_events_version_idx` already covers it.
+* `20261024220000_document_custody_steps.sql`: `document_custody_events.kind` (`received`, `moved`, `returned`, `acknowledged`; null for rows from `public.record_document_custody`, which is unchanged; the table stays append only). New `public.record_custody_step(version, kind, on, location, purpose, recipient)` (owner, licensed consultant or case manager who can read the version; received only when not already held; moved only while held; returned once; acknowledged after the return; audited `document.custody_<kind>`). It also creates `document_custody_events_version_time_idx` on `(version_id, created_at)`, the same columns as `document_custody_events_version_idx`; it is kept because the live project has it (a later migration could drop the duplicate).
 
 The secure preview (`/api/documents/preview/[version]`) needs no migration: access is `public.authorize_document_download`, so each preview is audited like a download.
 
