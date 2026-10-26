@@ -8,7 +8,7 @@ import { PortScreen } from "@/components/port/screen";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { readPendingTotp, withQr } from "@/lib/auth/mfa-pending";
 import { createClient } from "@/lib/supabase/server";
-import { mfaActiveStep, stepUpAction, stepUpLead } from "@/lib/auth/mfa-step";
+import { mfaActiveStep, mfaDoneLabel, stepUpAction, stepUpLead } from "@/lib/auth/mfa-step";
 
 export const metadata: Metadata = {
   title: "Two-step sign-in · Casevoya",
@@ -52,7 +52,7 @@ async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: strin
 
   return (
     <PortScreen page="mfa" variant="au" initialStep={activeStep}>
-      <TwoStepMarkup email={email} activeStep={activeStep} enrollment={enrollment} stepUpLead={stepUpLead(params.next, params.for)} stepUpAction={stepUpAction(params.next, params.for)} />
+      <TwoStepMarkup email={email} activeStep={activeStep} enrollment={enrollment} stepUpLead={stepUpLead(params.next, params.for)} stepUpAction={stepUpAction(params.next, params.for)} doneLabel={mfaDoneLabel(params.next)} />
     </PortScreen>
   );
 }

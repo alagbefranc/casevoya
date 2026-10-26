@@ -20,6 +20,50 @@ export function firmLogoType(bytes: Uint8Array): FirmLogoType | null {
   return type && type in EXTENSION ? (type as FirmLogoType) : null;
 }
 
+/** The Branding hint: "Square, at least 256 px". Checked on both sides of the upload (issue #259). */
+export const FIRM_LOGO_MIN_PX = 256;
+
+export const FIRM_LOGO_TOO_SMALL = `Use a logo at least ${FIRM_LOGO_MIN_PX} px wide and tall.`;
+
+const JPEG_SOF = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
+
+/** The image's pixel size from its PNG IHDR or JPEG frame header; null when it can't be read. */
+export function firmLogoSize(bytes: Uint8Array, type: FirmLogoType): { width: number; height: number } | null {
+  if (type === "image/png") {
+    if (bytes.length < 24) return null;
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    // Signature (8), chunk length (4), "IHDR" (4), then width and height.
+    if (String.fromCharCode(...bytes.subarray(12, 16)) !== "IHDR") return null;
+    return { width: view.getUint32(16), height: view.getUint32(20) };
+  }
+  let at = 2;
+  while (at + 3 < bytes.length) {
+    if (bytes[at] !== 0xff) return null;
+    const marker = bytes[at + 1];
+    if (marker === 0xff) {
+      at += 1;
+      continue;
+    }
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)) {
+      at += 2;
+      continue;
+    }
+    const length = (bytes[at + 2] << 8) | bytes[at + 3];
+    if (JPEG_SOF.has(marker)) {
+      if (at + 8 >= bytes.length) return null;
+      return { height: (bytes[at + 5] << 8) | bytes[at + 6], width: (bytes[at + 7] << 8) | bytes[at + 8] };
+    }
+    if (length < 2) return null;
+    at += 2 + length;
+  }
+  return null;
+}
+
+/** Big enough for the Branding hint's "at least 256 px" on both sides. */
+export function firmLogoBigEnough(size: { width: number; height: number } | null): boolean {
+  return Boolean(size && size.width >= FIRM_LOGO_MIN_PX && size.height >= FIRM_LOGO_MIN_PX);
+}
+
 export function firmLogoKey(organizationId: string, fileId: string, type: FirmLogoType): string {
   return `${organizationId}/${fileId}.${EXTENSION[type]}`;
 }

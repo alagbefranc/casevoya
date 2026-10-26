@@ -384,8 +384,15 @@ export function closeDlg(id: string) {
   }, 150);
 }
 
-/** Calendar and payment providers have no OAuth backend yet. */
-export function connectOrRun(button: HTMLElement) {
+/**
+ * A setup connection row's Connect. With `href` the connection is set up in Settings, opened in a
+ * new tab so setup stays where it is; without it the provider isn't built yet, and the row says so.
+ */
+export function connectOrRun(button: HTMLElement, href?: string) {
+  if (href && href.startsWith("/") && !href.startsWith("//")) {
+    window.open(href, "_blank", "noopener");
+    return;
+  }
   const conn = button.closest(".conn");
   if (conn) {
     // The Designer markup names the provider as the label's own text, before its <small> description:
@@ -399,9 +406,9 @@ export function connectOrRun(button: HTMLElement) {
           .trim()
       : "";
     const name = own || conn.querySelector("b, strong")?.textContent?.trim() || "This connection";
-    toast2(`${name} is not connected yet`, {
+    toast2(`${name} is coming later`, {
       kind: "warn",
-      sub: "Calendar and payment sign-in is not available in this version.",
+      sub: "It isn’t available in Casevoya yet. You can skip this step.",
     });
     return;
   }

@@ -32,6 +32,7 @@ import {
   verifyTotpCode,
 } from "@/app/auth/port-actions";
 import { toast2 } from "./kit";
+import { showSignupEmail } from "./signup-email";
 import type { PortEvent, PortResult } from "./use-port";
 
 type Ctx = Awaited<ReturnType<typeof getAuthContext>>;
@@ -56,6 +57,31 @@ type InvitePreview = {
 
 function asPreview(value: unknown): InvitePreview | null {
   return value && typeof value === "object" ? (value as InvitePreview) : null;
+}
+
+/**
+ * Creates the firm the start-trial screen kept in sessionStorage, once two-step is on. Null when
+ * nothing is pending. Storage is cleared once the firm exists.
+ */
+async function createPendingTrialFirm(): Promise<PortResult> {
+  const raw = sessionStorage.getItem("cv-trial");
+  if (!raw) return null;
+  let pending: PendingTrial = {};
+  try {
+    pending = JSON.parse(raw) as PendingTrial;
+  } catch {
+    sessionStorage.removeItem("cv-trial");
+    return null;
+  }
+  if (!pending.firmName) return null;
+  const created = await createTrialFirm({
+    firmName: pending.firmName,
+    sampleMode: Boolean(pending.sampleMode),
+    licenceNumber: pending.licenceNumber,
+    licenceClass: pending.licenceClass,
+  });
+  if (created?.ok && created.href === "/setup") sessionStorage.removeItem("cv-trial");
+  return created;
 }
 
 function mfaDestination() {
@@ -368,26 +394,13 @@ export function usePortActions(page: string, token?: string) {
             }
           }
         }
+        if (page === "start-trial" && event.step === 1) showSignupEmail(event.root);
         if (page === "setup" && event.step === 0 && session.assured) {
-          const raw = sessionStorage.getItem("cv-trial");
-          if (raw) {
-            let pending: PendingTrial = {};
-            try {
-              pending = JSON.parse(raw) as PendingTrial;
-            } catch {
-              sessionStorage.removeItem("cv-trial");
-            }
-            if (pending.firmName) {
-              const created = await createTrialFirm({
-                firmName: pending.firmName,
-                sampleMode: Boolean(pending.sampleMode),
-                licenceNumber: pending.licenceNumber,
-                licenceClass: pending.licenceClass,
-              });
-              if (created?.ok && created.href === "/setup") sessionStorage.removeItem("cv-trial");
-              if (created && created.ok === false) return created;
-            }
-          }
+          // Normally made before /setup opened (the two-step "Continue setup"). If not, this page
+          // rendered without the firm, so it reloads once to show the firm name and saved answers.
+          const created = await createPendingTrialFirm();
+          if (created && created.ok === false) return created;
+          if (created?.ok && created.href === "/setup" && !val(event.root, "dn")) location.reload();
         }
         if ((page === "accept-client" || page === "accept-family" || page === "accept-sponsor") && token && event.step === 0) {
           if (!invite.current) {
@@ -538,7 +551,14 @@ export function usePortActions(page: string, token?: string) {
         return { ok: true, href: mfaDestination() };
       }
       if (page === "mfa" && el.dataset.href?.startsWith("/sheet")) {
-        return { ok: true, href: mfaDestination() };
+        const destination = mfaDestination();
+        // A new sign-up's firm is made now, signed in with two-step, so /setup opens with it.
+        if (destination.split(/[?#]/)[0] === "/setup") {
+          const created = await createPendingTrialFirm();
+          if (created && created.ok === false) return created;
+          if (created?.ok && created.href && created.href !== "/setup") return created;
+        }
+        return { ok: true, href: destination };
       }
       if (page === "start-trial" && el.hasAttribute("data-next") && event.step === 0) {
         return signUpForTrial({

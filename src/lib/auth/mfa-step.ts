@@ -1,3 +1,12 @@
+/**
+ * The "All set" button's words: it goes where `next` says (issue #259). The Designer's "Go to the
+ * Sheet" everywhere except a new firm's sign-up, which continues to firm setup.
+ */
+export function mfaDoneLabel(next: string | null | undefined): string {
+  const path = typeof next === "string" ? next.split(/[?#]/)[0] : "";
+  return path === "/setup" ? "Continue setup" : "Go to the Sheet";
+}
+
 /** Code entry when a factor is already verified. Setup otherwise. Explicit recovery and step-up steps stay available. */
 export function mfaActiveStep(hasVerifiedFactor: boolean, requested: number | null): number {
   if (!hasVerifiedFactor) return 2;

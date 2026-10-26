@@ -11,6 +11,14 @@ import { clearPendingTotp, readPendingTotp, withQr, writePendingTotp, type TotpS
 import { firmSlug } from "@/lib/auth/slug";
 import { syncClaimedFirmSlug } from "@/modules/email/sync-routing";
 import { isInvitationToken, normalizeEmail } from "@/lib/auth/invitations";
+import {
+  EMAIL_TAKEN,
+  STAFF_EMAIL_TAKEN,
+  isRateLimited,
+  rateLimitSeconds,
+  rateLimitText,
+  signUpEmailTaken,
+} from "@/lib/auth/signup-errors";
 import { acceptWithClient } from "@/modules/portal-invitations/accept";
 import { portalPreviewProblem } from "@/modules/portal-invitations/errors";
 import type { PortalAcceptPayload } from "@/modules/portal-invitations/types";
@@ -24,6 +32,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { DPA_AVAILABLE, DPA_VERSION } from "@/modules/firm-onboarding/legal";
+import { officeParts } from "@/modules/firm-onboarding/setup-saved";
 import { LICENCE_PROOF_BUCKET, ownLicenceProofKey } from "@/modules/firm-onboarding/licence-proof";
 import { FIRM_LOGO_BUCKET, ownFirmLogoKey } from "@/modules/firm-onboarding/firm-logo";
 import { todayIso } from "@/modules/sheet/birth-date";
@@ -33,7 +42,11 @@ import { isPortalInviteRole, type PortalInviteRole } from "@/modules/portal-invi
 
 export type PortResult =
   | { ok: true; href?: string; codes?: string[] }
-  | { ok: false; state?: "error" | "locked"; message: string };
+  /**
+   * `inline`: shown in the step's error summary (links as `[label](/path)`), not a toast.
+   * `retryAfter`: seconds the screen counts down before the button works again (a rate limit).
+   */
+  | { ok: false; state?: "error" | "locked"; message: string; inline?: boolean; retryAfter?: number | null };
 
 const STEPS = [
   "firm_details",
@@ -88,19 +101,6 @@ function isIsoDate(value: string) {
 function text(fields: Record<string, string | boolean>, id: string) {
   const value = fields[id];
   return typeof value === "string" ? value.trim() : "";
-}
-
-/** One address line on the firm-details screen. The office function stores the pieces separately. */
-function officeParts(raw: string) {
-  const postal = raw.match(/\b[A-Z]\d[A-Z][ -]?\d[A-Z]\d\b/i)?.[0]?.toUpperCase().replace("-", " ") ?? "";
-  const region = raw.match(/\b(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)\b/)?.[1] ?? "";
-  let rest = raw;
-  if (postal) rest = rest.replace(new RegExp(postal.replace(/\s+/g, "\\s*"), "i"), " ");
-  if (region) rest = rest.replace(new RegExp(`\\b${region}\\b`), " ");
-  const bits = rest.split(",").map((part) => part.trim()).filter(Boolean);
-  const locality = (bits.at(-1) || raw).slice(0, 120);
-  const addressLine = (bits.length > 1 ? bits.slice(0, -1).join(", ") : raw).slice(0, 300);
-  return { addressLine, locality, region, postal };
 }
 
 /**
@@ -250,8 +250,19 @@ export async function signUpForTrial(input: {
     password: input.password,
     options: { data: { display_name: name } },
   });
-  if (error) return lockedMessage(error.message) ? fail(error.message, "locked") : fail(error.message);
-  if (!data.session) return { ok: true };
+  if (error) {
+    if (error.code === "user_already_exists" || /already registered|already exists/i.test(error.message)) {
+      return { ok: false, message: EMAIL_TAKEN, inline: true };
+    }
+    if (isRateLimited(error)) {
+      const wait = rateLimitSeconds(error);
+      return { ok: false, message: rateLimitText(wait), inline: true, retryAfter: wait };
+    }
+    if (error.code === "weak_password") return fail("Choose a password that meets all three rules");
+    return fail("Your account could not be created. Try again.");
+  }
+  // A confirmed address: Supabase answers with a user that has no identities and sends nothing.
+  if (signUpEmailTaken(data)) return { ok: false, message: EMAIL_TAKEN, inline: true };
   return { ok: true };
 }
 
@@ -577,13 +588,21 @@ export async function joinStaffInvite(input: {
         emailRedirectTo: `${origin}/auth/confirm?next=${encodeURIComponent(`/invite/${input.token}`)}`,
       },
     });
-    if (signedUp.error && !/already/i.test(signedUp.error.message)) return fail(signedUp.error.message);
+    if (signedUp.error && isRateLimited(signedUp.error)) return fail(rateLimitText(rateLimitSeconds(signedUp.error)));
+    if (signedUp.error && !/already/i.test(signedUp.error.message)) return fail("Your sign-in could not be created. Try again.");
     if (!signedUp.data.session) {
+      // An account that already has this email signs in with its own password (#252: sign in first).
       const signedIn = await supabase.auth.signInWithPassword({
         email: row.email ?? input.email.trim(),
         password: input.password,
       });
-      if (signedIn.error) return fail("Confirm your email, then open this invitation again.");
+      if (signedIn.error) {
+        if (lockedMessage(signedIn.error.message)) return fail("Too many attempts. Wait and try again.");
+        // A confirmed account with another password: say so, instead of asking to confirm an email that is.
+        const taken = signUpEmailTaken(signedUp.data) || Boolean(signedUp.error);
+        if (taken && signedIn.error.code !== "email_not_confirmed") return { ok: false, message: STAFF_EMAIL_TAKEN, inline: true };
+        return fail("Confirm your email, then open this invitation again.");
+      }
     }
     claims = (await supabase.auth.getClaims()).data;
   }
@@ -789,13 +808,13 @@ export async function joinPortalInvite(input: {
   if (signedUp.error) {
     // The typed password didn't sign in above, so this sign-in has a different password.
     if (/already/i.test(signedUp.error.message) || signedUp.error.code === "user_already_exists") return joinFail(alreadyMade);
-    if (lockedMessage(signedUp.error.message)) return joinFail("Too many attempts. Wait and try again.");
+    if (isRateLimited(signedUp.error)) return joinFail(rateLimitText(rateLimitSeconds(signedUp.error)));
     if (signedUp.error.code === "weak_password") return joinFail("Choose a password that meets all three rules");
     return joinFail("Your sign-in could not be created.");
   }
   if (signedUp.data.session) return acceptJoined(supabase, input.token, input.payload);
   // With email confirmation on, an address that already has an account comes back with no identities.
-  if (signedUp.data.user && signedUp.data.user.identities?.length === 0) return joinFail(alreadyMade);
+  if (signUpEmailTaken(signedUp.data)) return joinFail(alreadyMade);
   // Supabase emailed a six-digit confirmation code; the same screen asks for it.
   return { ok: true, confirm: true };
 }
