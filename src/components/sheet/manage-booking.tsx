@@ -81,7 +81,10 @@ export function ManageBooking({ booking, token }: { booking: ManagedBooking; tok
             {mode.kind === "moved" ? `Now ${longWhen(mode.start, zone)}` : longWhen(start, zone)}
             {booking.hostName ? ` · with ${booking.hostName}` : ""}
           </small>
-          <small style={{ color: "#615d59" }}>{locationLabel(booking.locationKind)}</small>
+          <small style={{ color: "#615d59" }}>
+            {locationLabel(booking.locationKind)}
+            {booking.locationKind === "video" ? " · the call opens 15 minutes before the start · it isn’t recorded" : ""}
+          </small>
         </div>
 
         {error ? (
@@ -169,7 +172,13 @@ export function ManageBooking({ booking, token }: { booking: ManagedBooking; tok
           </section>
         ) : (
           <div style={{ display: "flex", gap: "8px", marginTop: "20px", flexWrap: "wrap" }}>
-            <button type="button" className="btn p" onClick={() => void openMove()}>
+            {booking.locationKind === "video" ? (
+              // The call page lets them in only from 15 minutes before the start (CRM-03).
+              <a className="btn p" href={`/call/${booking.ref}?t=${encodeURIComponent(token)}`}>
+                Join the video call
+              </a>
+            ) : null}
+            <button type="button" className={booking.locationKind === "video" ? "btn" : "btn p"} onClick={() => void openMove()}>
               Change the time
             </button>
             <button type="button" className="btn" onClick={() => setMode({ kind: "cancel" })}>

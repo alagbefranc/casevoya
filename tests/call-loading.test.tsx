@@ -6,14 +6,14 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/components/video/call-screen", () => ({ CallScreen: () => null }));
 vi.mock("@/modules/portal/load", () => ({ loadPortalAccess: vi.fn() }));
 vi.mock("@/modules/sheet/load", () => ({ loadSheetAccess: vi.fn() }));
-vi.mock("@/modules/video/service", () => ({ readCall: vi.fn() }));
+vi.mock("@/modules/video/service", () => ({ readCall: vi.fn(), readGuestCall: vi.fn() }));
 
 const { default: CallPage } = await import("@/app/call/[ref]/page");
 const { CallLoading } = await import("@/components/video/call-loading");
 
 describe("/call/[ref] loading state (DES-04)", () => {
   it("shows the call card with skeleton placeholders while the call loads, never a blank page", () => {
-    const page = CallPage({ params: Promise.resolve({ ref: "ABC123" }) }) as ReactElement<{ fallback: unknown }>;
+    const page = CallPage({ params: Promise.resolve({ ref: "ABC123" }), searchParams: Promise.resolve({}) }) as ReactElement<{ fallback: unknown }>;
     const fallback = page.props.fallback;
     expect(isValidElement(fallback)).toBe(true);
     const html = renderToStaticMarkup(fallback as ReactElement);
