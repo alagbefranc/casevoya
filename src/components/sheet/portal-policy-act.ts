@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { publishPortalPolicy } from "@/modules/portal-invitations/actions";
 import { isPolicyKind, POLICY_DIALOG, POLICY_NAME, policyStepUpLocation, readPolicyDraft, type PolicyKind } from "@/modules/portal-policies/defaults";
@@ -51,7 +52,7 @@ export async function runPublishPolicy(button: HTMLElement, router: Router) {
       } catch {
         // Storage can be unavailable; the dialog then reopens with the text it started with.
       }
-      window.location.assign(policyStepUpLocation(window.location.pathname, window.location.search, kind));
+      goStepUp(policyStepUpLocation(window.location.pathname, window.location.search, kind));
       return;
     }
     toast2(result.error, { kind: "bad", sub: "Nothing was published." });

@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { acceptChosen, failUpload } from "./upload-failure";
 import { removeFirmOffice, saveFirmBranding, saveFirmDetails, saveFirmOffice, saveTimezones, type FirmSettingsResult } from "@/modules/settings/firm-actions";
@@ -32,7 +33,7 @@ function stepUp(dialogId: string, fields: Record<string, string | boolean>) {
   params.set("dlg", dialogId);
   const next = `${window.location.pathname}?${params.toString()}`;
   toast2("Confirm it’s you", { kind: "warn", sub: "Then the dialog opens again with what you typed." });
-  window.setTimeout(() => window.location.assign(stepUpHref(next, "firm_settings")), 900);
+  window.setTimeout(() => goStepUp(stepUpHref(next, "firm_settings")), 900);
 }
 
 function finish(result: FirmSettingsResult, dialog: HTMLDialogElement, fields: Record<string, string | boolean>, done: { title: string; sub: string }, router: Router): void {

@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import {
   closePrivacyRequest,
@@ -87,7 +88,7 @@ export function failed(dialog: HTMLDialogElement, button: HTMLElement, error: st
     }
     const params = new URLSearchParams(window.location.search);
     params.set("dlg", "compliance");
-    window.location.assign(stepUpHref(`${window.location.pathname}?${params.toString()}`, "compliance"));
+    goStepUp(stepUpHref(`${window.location.pathname}?${params.toString()}`, "compliance"));
     return;
   }
   toast2(error, { kind: "bad", sub });

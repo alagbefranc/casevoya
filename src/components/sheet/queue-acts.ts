@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { reassignQueueTasks } from "@/modules/sheet/queue-actions";
 import { stepUpHref } from "@/lib/auth/mfa-step";
@@ -26,7 +27,7 @@ export function syncQueuePicked(root: ParentNode) {
 
 function stepUp() {
   const next = `${window.location.pathname}${window.location.search}`;
-  window.location.assign(stepUpHref(next, "reassign_work"));
+  goStepUp(stepUpHref(next, "reassign_work"));
 }
 
 export async function runQueueReassign(root: HTMLElement, button: HTMLElement, router: Router) {

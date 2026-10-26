@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { shareWithClient } from "@/modules/government/actions";
 import { readAttestationFrom } from "@/modules/government/page-attestation";
@@ -85,7 +86,7 @@ export async function runGovStatusAct(button: HTMLElement, router: Router) {
   const error = result && "error" in result && typeof result.error === "string" ? result.error : null;
   if (error) {
     if (needsStepUp(error)) {
-      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null, "government_status"));
+      goStepUp(stepUpLocation(window.location.pathname, window.location.search, null, "government_status"));
       return;
     }
     toast2(error, { kind: "bad", sub: "Nothing was saved." });

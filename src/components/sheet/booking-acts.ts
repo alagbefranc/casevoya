@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import {
   archiveBookingType,
@@ -36,7 +37,7 @@ function key(): string {
 /** The step-up screen, back to this page afterwards. The dialog is opened again by hand. */
 function stepUp() {
   const next = `${window.location.pathname}${window.location.search}`;
-  window.location.assign(stepUpHref(next, "booking_settings"));
+  goStepUp(stepUpHref(next, "booking_settings"));
 }
 
 function first(name: string): string {

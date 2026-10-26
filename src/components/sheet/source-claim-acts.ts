@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { stepUpHref, type StepUpActionKey } from "@/lib/auth/mfa-step";
 import {
@@ -42,7 +43,7 @@ function fieldsOf(dialog: ParentNode): Record<string, string> {
 /** To the step-up page, coming back to this claim with the dialog open and what was typed. */
 function stepUp(dialog: HTMLDialogElement | null, action: StepUpActionKey) {
   if (!dialog) {
-    window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null, action));
+    goStepUp(stepUpLocation(window.location.pathname, window.location.search, null, action));
     return;
   }
   try {
@@ -53,7 +54,7 @@ function stepUp(dialog: HTMLDialogElement | null, action: StepUpActionKey) {
   const params = new URLSearchParams(window.location.search);
   params.set("dlg", dialog.id);
   toast2("Confirm it’s you", { kind: "warn", sub: "Each change to a claim needs a fresh step-up. The dialog opens again with what you typed." });
-  window.setTimeout(() => window.location.assign(stepUpHref(`${window.location.pathname}?${params.toString()}`, action)), 900);
+  window.setTimeout(() => goStepUp(stepUpHref(`${window.location.pathname}?${params.toString()}`, action)), 900);
 }
 
 /** Back from step-up, or a link with `?dlg=`: reopen that claim dialog with what was typed. */
