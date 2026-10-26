@@ -1071,13 +1071,24 @@ Tested in `tests/portal-invites.rls.test.ts` ("counts only an open toward an inv
 
 Tested in `tests/src-live-claims.rls.test.ts`, `tests/load-official-claims.test.ts` (the committed captures loaded into PGlite, idempotent) and `tests/src-live-claims-present.test.tsx`. The capture files are `src/modules/content-governance/captured-claims.json`, `captured-canada-ca.json` and `captured-all-sources.json`; the all-sources coverage notes are in `docs/sources/captured-all-sources.md`.
 
-## Manage your booking link (`20261026110000`, not applied on the live project)
+## Manage your booking link (`20261024160000`, already applied on the live project)
 
-CRM-03 (gap #176), PR #197, branch `feat/crm-booking-manage`. First written as `20261024160000_booking_manage_link.sql` on 2026-10-24; renumbered on 2026-10-26 to come after main's latest (`20261025600100`). Additive; new objects only, nothing redefined. Re-checked against main on 2026-10-26: the functions it calls (`app.reschedule_booking`, latest `20261023090000`; `app.booking_availability`, `app.booking_audit`, `app.booking_outbox`, `app.is_time_zone`, all `20261019180100`) keep their signatures, and no later migration adds a manage link.
+CRM-03 (gap #176), PR #197, branch `feat/crm-booking-manage`. `20261024160000_booking_manage_link.sql` keeps its original name: it is already applied on prod (`supabase_migrations.schema_migrations` lists it; checked 2026-10-26), so this PR is deploy-only. Additive; new objects only, nothing redefined. Re-checked against main on 2026-10-26: the functions it calls (`app.reschedule_booking`, latest `20261023090000`; `app.booking_availability`, `app.booking_audit`, `app.booking_outbox`, `app.is_time_zone`, all `20261019180100`) keep their signatures, and no later migration adds a manage link.
 
 * New table `public.booking_manage_tokens` (one live SHA-256 per booking, organization FK and index, RLS enabled and forced, no policies, revoked from public, anon, authenticated).
 * New `public.issue_booking_manage_token(delivery, sha256)` (service role only): for an EM16a / EM16b delivery to a primary attendee with no portal login, on an upcoming confirmed booking, stores the hash (replacing the previous one, expiring at the booking's end) and returns the booking reference, else null.
 * New `app.booking_by_manage_token(ref, sha256, lock)` and the anon/authenticated functions `public.booking_manage_view`, `public.booking_manage_availability`, `public.booking_manage_reschedule` (through `app.reschedule_booking` with actor `client` and the notice enforced; outbox `booking.rescheduled_by_client`), `public.booking_manage_cancel` (the portal cancel's rules, a reason required, `late` inside the notice; outbox `booking.cancelled` unless sample and `booking.cancelled_by_client`; the token is removed). Audited `booking.manage_link_used`.
+
+Tested in `tests/booking-manage.rls.test.ts` and `tests/booking-manage.test.tsx`.
+
+## Video call join with the Manage link (`20261026110100`, not applied on the live project)
+
+CRM-03 (gap #176), PR #198, branch `feat/crm-call-token`. First written as `20261024170000_video_guest_join.sql` on 2026-10-24; renumbered on 2026-10-26 to come after main's latest (`20261025600100`); not applied on prod. It reads `booking_manage_tokens` from #197's `20261024160000_booking_manage_link.sql` (original name, already applied on prod), which sorts before it. Additive. Re-checked against main on 2026-10-26: `public.video_join`'s latest definition is still `20261022110000_video_end_for_everyone.sql` (the guest function follows its window, lobby, ended-by-host and rate-limit rules), `20261022120000` keeps `room_created_at` once set (the guest path only sets it when empty), and no later migration touches `video_participants`.
+
+* `video_participants.user_id` may be null (`alter column ... drop not null`, comment): a guest has no Casevoya account. Its FK and index are unchanged.
+* New `app.booking_by_call_token(ref, sha256)`: the booking a Manage token opens, until 30 minutes after the end (the join window).
+* New `public.video_join_guest(ref, sha256, issue, name)` (anon, authenticated): the call view, or with `issue` the lobby grant; identity `client:<booking id>`, so the host's Let in works unchanged; 10 grants a minute; audited `video.join_issued` with `via = manage_link`.
+* New `public.video_room_created_guest(ref, sha256)` (anon, authenticated): records the room's first creation, as `video_room_created` does.
 
 Tested in `tests/booking-manage.rls.test.ts` and `tests/booking-manage.test.tsx`.
 

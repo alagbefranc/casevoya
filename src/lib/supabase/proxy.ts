@@ -8,6 +8,7 @@ import { REQUEST_ID_HEADER, resolveRequestId } from "@/lib/tenant/context";
 import { bookingPagePath, isBookablePublicEvent } from "@/modules/scheduling/public-api";
 import { enquiryPagePath, parsePublicFirm } from "@/modules/leads/enquiry";
 import { idleSignInLocation, isStaffPageLoad, readActivityState } from "@/modules/security/idle";
+import { isGuestCallPath } from "@/modules/scheduling/manage-present";
 
 function redirectKeepingSession(request: NextRequest, response: NextResponse, pathname: string, search: string) {
   const redirectUrl = request.nextUrl.clone();
@@ -120,7 +121,9 @@ export async function updateSession(request: NextRequest) {
     response.headers.set("Cache-Control", "no-store");
   }
 
-  if (!signedIn && isGatedPath(path)) {
+  // CRM-03: a booker without a portal opens their call with the token from their Manage link;
+  // the page checks it with the database (video_join_guest), so they aren't sent to sign in.
+  if (!signedIn && isGatedPath(path) && !isGuestCallPath(path, search)) {
     const destination = new URL(signInLocation(path, search), request.url);
     return redirectKeepingSession(request, response, destination.pathname, destination.search);
   }

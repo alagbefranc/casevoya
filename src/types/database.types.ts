@@ -15190,6 +15190,11 @@ export type Database = {
       }
       booking_manage_view: { Args: { p_ref: string; p_sha256: string }; Returns: Json }
       issue_booking_manage_token: { Args: { p_delivery_id: string; p_sha256: string }; Returns: string }
+      video_join_guest: {
+        Args: { p_issue?: boolean; p_name?: string; p_ref: string; p_sha256: string }
+        Returns: Json
+      }
+      video_room_created_guest: { Args: { p_ref: string; p_sha256: string }; Returns: undefined }
       document_upload_limit: { Args: { p_organization_id: string }; Returns: number }
       edit_agreement_clause: {
         Args: { p_agreement_id: string; p_body: string; p_clause_id: string }
