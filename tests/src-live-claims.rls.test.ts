@@ -340,8 +340,18 @@ describe("firm edits", () => {
     const theirs = await claimFor(other.manager, other.orgId, c.defId);
     expect(theirs).toMatchObject({ claim: "Synthetic: the official wording.", edit: null });
 
-    // The same step-up can't be used twice.
+    // The same step-up can't be used twice: sign in again carrying the very step-up the edit used
+    // (its amr timestamp, read back from the edit), not "a step-up now", which is a new one as
+    // soon as the clock passes a second.
+    await asMaintenance(db);
+    const used = (await db.query<{ at: string }>(`select extract(epoch from step_up_at)::bigint as at from public.rule_claim_overrides where id = $1`, [id])).rows[0].at;
     await as(f.consultant, f.orgId, 0);
+    await db.query(
+      `select set_config('request.jwt.claims',
+         jsonb_set(current_setting('request.jwt.claims')::jsonb, '{amr}', jsonb_build_array(jsonb_build_object('method', 'totp', 'timestamp', $1::bigint)))::text,
+         false)`,
+      [used],
+    );
     await expectDbError(
       () => db.query(`select public.edit_rule_claim($1, $2, 'Synthetic: again.', null, 'Synthetic reason', 'edit')`, [c.defId, c.base]),
       /fresh step-up/,
