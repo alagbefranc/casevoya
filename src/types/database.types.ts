@@ -2572,6 +2572,108 @@ export type Database = {
         }
         Relationships: []
       }
+      checklist_template_items: {
+        Row: {
+          acceptable_formats: string[]
+          condition_equals: string | null
+          condition_field: string | null
+          created_at: string
+          due_offset_days: number | null
+          explanation: string
+          id: string
+          item_key: string
+          organization_id: string
+          owner: string
+          party_role: Database["public"]["Enums"]["matter_party_role"] | null
+          position: number
+          purpose: string
+          records_expiry: boolean
+          review_criteria: string | null
+          template_id: string
+        }
+        Insert: {
+          acceptable_formats: string[]
+          condition_equals?: string | null
+          condition_field?: string | null
+          created_at?: string
+          due_offset_days?: number | null
+          explanation: string
+          id?: string
+          item_key: string
+          organization_id: string
+          owner?: string
+          party_role?: Database["public"]["Enums"]["matter_party_role"] | null
+          position: number
+          purpose: string
+          records_expiry?: boolean
+          review_criteria?: string | null
+          template_id: string
+        }
+        Update: {
+          acceptable_formats?: string[]
+          condition_equals?: string | null
+          condition_field?: string | null
+          created_at?: string
+          due_offset_days?: number | null
+          explanation?: string
+          id?: string
+          item_key?: string
+          organization_id?: string
+          owner?: string
+          party_role?: Database["public"]["Enums"]["matter_party_role"] | null
+          position?: number
+          purpose?: string
+          records_expiry?: boolean
+          review_criteria?: string | null
+          template_id?: string
+        }
+        Relationships: []
+      }
+      checklist_templates: {
+        Row: {
+          approved_at: string | null
+          approved_by_membership_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          organization_id: string
+          stable_key: string
+          status: Database["public"]["Enums"]["checklist_template_status"]
+          title: string
+          updated_at: string
+          version: number
+          version_number: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id: string
+          stable_key: string
+          status?: Database["public"]["Enums"]["checklist_template_status"]
+          title: string
+          updated_at?: string
+          version?: number
+          version_number: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id?: string
+          stable_key?: string
+          status?: Database["public"]["Enums"]["checklist_template_status"]
+          title?: string
+          updated_at?: string
+          version?: number
+          version_number?: number
+        }
+        Relationships: []
+      }
       document_custody_events: {
         Row: {
           acknowledged_at: string | null
@@ -2652,6 +2754,7 @@ export type Database = {
       }
       document_requests: {
         Row: {
+          checklist_item_id: string | null
           acceptable_formats: string[]
           audience: Database["public"]["Enums"]["document_audience"]
           created_at: string
@@ -2676,6 +2779,7 @@ export type Database = {
           waiver_reason: string | null
         }
         Insert: {
+          checklist_item_id?: string | null
           acceptable_formats: string[]
           audience?: Database["public"]["Enums"]["document_audience"]
           created_at?: string
@@ -2700,6 +2804,7 @@ export type Database = {
           waiver_reason?: string | null
         }
         Update: {
+          checklist_item_id?: string | null
           acceptable_formats?: string[]
           audience?: Database["public"]["Enums"]["document_audience"]
           created_at?: string
@@ -15172,6 +15277,16 @@ export type Database = {
         Args: { p_kind: string; p_location: string; p_on: string; p_purpose: string; p_recipient: string; p_version_id: string }
         Returns: string
       }
+      apply_checklist: {
+        Args: { p_add: Json; p_matter_id: string; p_remove: string[]; p_template_id: string }
+        Returns: Json
+      }
+      approve_checklist_template: { Args: { p_expected_version: number; p_template_id: string }; Returns: number }
+      checklist_apply_preview: { Args: { p_matter_id: string; p_template_id: string }; Returns: Json }
+      save_checklist_template: {
+        Args: { p_items: Json; p_stable_key: string; p_template_id: string; p_title: string }
+        Returns: string
+      }
       document_request_progress: {
         Args: { p_matter_id: string }
         Returns: Json
@@ -17597,6 +17712,7 @@ export type Database = {
         | "withdrawal_request_sent"
         | "acknowledgement_received"
         | "financial_reconciliation"
+      checklist_template_status: "draft" | "approved" | "retired"
       document_audience: "subject" | "matter" | "staff"
       document_request_source: "rule" | "staff"
       document_request_status: "open" | "fulfilled" | "waived" | "cancelled"
@@ -18276,6 +18392,7 @@ export const Constants = {
       task_status: ["open", "blocked", "done", "cancelled"],
       deadline_kind: ["legal", "correspondence", "internal"],
       deadline_verification: ["tentative", "confirmed"],
+      checklist_template_status: ["draft", "approved", "retired"],
       document_audience: ["subject", "matter", "staff"],
       document_request_source: ["rule", "staff"],
       document_request_status: ["open", "fulfilled", "waived", "cancelled"],

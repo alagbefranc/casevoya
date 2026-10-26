@@ -10,6 +10,8 @@ import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
 import type { MessageTemplateDialogData } from "@/components/sheet/designer/templates";
 import { designUse, firmMessageRows, messageRows, programRows, templatesData, type CatalogRow, type RuleRow } from "@/modules/sheet/templates-present";
+import type { ChecklistItemInput, ChecklistsLiveData, ConditionOption } from "@/modules/sheet/checklist-present";
+import { fieldLabel, schemaFields } from "@/modules/intake/present";
 import { claimAddData, claimFactsFor } from "@/modules/sheet/source-claims-load";
 import { partialAlert } from "@/modules/sheet/states-present";
 import { liveClaimsData, OFFICIAL_CLAIMS_PAGE, officialClaimView, type OfficialClaimJson } from "@/modules/sheet/official-claims-present";
@@ -232,6 +234,12 @@ export async function loadSheetTemplates(
       timeZone: staff.timezone,
     });
   }
+  // DOC-01: the firm's checklist templates; a failed read shows as partial below (DES-04).
+  let checklistsFailed = false;
+  if (tab === "checklists") {
+    data.checklists.live = await loadChecklists(supabase, staff, names).catch(() => undefined);
+    checklistsFailed = !data.checklists.live;
+  }
   // DES-04: a read that failed or hit its limit makes the lists and counts partial; say so.
   const partial = partialAlert([
     { label: "Program templates", count: (packs.data ?? []).length, cap: READ, failed: Boolean(packs.error) },
@@ -239,6 +247,61 @@ export async function loadSheetTemplates(
     { label: "Rule evidence", count: (evidence.data ?? []).length, cap: READ, failed: Boolean(evidence.error) },
     { label: "Agreement templates", count: (agreementTemplates.data ?? []).length, cap: READ, failed: Boolean(agreementTemplates.error) },
     { label: "Live official claims", count: 0, cap: READ, failed: liveFailed },
+    { label: "Checklist templates", count: data.checklists.live?.templates.length ?? 0, cap: READ, failed: checklistsFailed },
   ]);
   return { chrome, data, messageDialog, partial };
+}
+
+const DRAFT_ROLES = ["firm_owner", "licensed_consultant", "case_manager"];
+
+/**
+ * DOC-01: the firm's checklist templates (RLS: staff of the firm) with their items, and the intake
+ * questions with fixed answers an item can depend on (from the firm's published intake forms).
+ */
+async function loadChecklists(supabase: Awaited<ReturnType<typeof createClient>>, staff: SheetStaff, names: Map<string, string>): Promise<ChecklistsLiveData> {
+  const org = staff.organizationId;
+  const [templates, items, forms] = await Promise.all([
+    supabase.from("checklist_templates").select("id, stable_key, title, version_number, status, version, approved_by_membership_id").eq("organization_id", org).order("stable_key").order("version_number", { ascending: false }).limit(READ),
+    supabase.from("checklist_template_items").select("*").eq("organization_id", org).order("position").limit(2000),
+    supabase.from("intake_templates").select("schema, status").eq("organization_id", org).eq("status", "published").limit(50),
+  ]);
+  // A failed read is shown as "couldn't load" (DES-04), never as a firm without checklists.
+  if (templates.error || items.error) throw new Error("checklist templates couldn't load");
+  const conditions = new Map<string, ConditionOption>();
+  for (const form of forms.data ?? []) {
+    for (const field of schemaFields(form.schema)) {
+      if (field.type !== "choice" || !field.options?.length || conditions.has(field.key)) continue;
+      conditions.set(field.key, { key: field.key, label: fieldLabel(field), answers: field.options });
+    }
+  }
+  return {
+    organizationId: org,
+    edit: DRAFT_ROLES.includes(staff.role),
+    approve: staff.role === "licensed_consultant",
+    conditions: [...conditions.values()].sort((a, b) => a.label.localeCompare(b.label)),
+    templates: (templates.data ?? []).map((row) => ({
+      id: row.id,
+      stableKey: row.stable_key,
+      title: row.title,
+      versionNumber: row.version_number,
+      status: row.status,
+      rowVersion: row.version,
+      approvedBy: row.approved_by_membership_id ? (names.get(row.approved_by_membership_id) ?? null) : null,
+      items: (items.data ?? [])
+        .filter((item) => item.template_id === row.id)
+        .map((item) => ({
+          item_key: item.item_key,
+          purpose: item.purpose,
+          explanation: item.explanation,
+          owner: item.owner === "staff" ? "staff" : "client",
+          due_offset_days: item.due_offset_days,
+          acceptable_formats: item.acceptable_formats as ChecklistItemInput["acceptable_formats"],
+          review_criteria: item.review_criteria ?? "",
+          records_expiry: item.records_expiry,
+          party_role: item.party_role ?? "",
+          condition_field: item.condition_field ?? "",
+          condition_equals: item.condition_equals ?? "",
+        })),
+    })),
+  };
 }

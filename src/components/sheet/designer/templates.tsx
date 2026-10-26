@@ -7,6 +7,8 @@
  * dialog, where firm templates are made). On Message templates (OPS-04) it opens the firm's own
  * message template dialog instead (`newTemplateDialog`, `MessageTemplateDialog`), and the firm's
  * templates are rows above the email catalog.
+ * DOC-01, also live only: the Checklists tab shows the firm's checklist templates with New checklist,
+ * Edit, New version and Approve (`ChecklistsLive`).
  *
  * Live-only additions (SRC-01/02/03, source-claims.tsx): Add claim on Source review
  * (`sources.addClaim`), and on Rule detail the claim's evidence with every date on its own
@@ -16,6 +18,8 @@
  * Live-only additions (#188, official-claims.tsx): the Live official claims list below the source
  * register (`sources.live`), and one live official claim on Rule detail (`officialClaim`).
  */
+import type { ChecklistsLiveData } from "@/modules/sheet/checklist-present";
+import { ChecklistsLive } from "./checklists-live";
 import { Empty, Icon, Pair } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
 import { AddClaimButton, ClaimEvidenceList, ClaimReviewPanel, type AddClaimData, type ClaimEvidenceItem, type ClaimReviewData } from "./source-claims";
@@ -60,7 +64,8 @@ export type TemplatesData = {
   /** `supportHref` (live only, SRC-12): the link to "What Casevoya supports" after the note. */
   program: { rows: ProgramRow[]; note: string; supportHref?: string };
   messages: { rows: MessageRow[] };
-  checklists: { cards: ChecklistCard[] };
+  /** `live` (DOC-01): the firm's own checklist templates, with editing for staff who may. */
+  checklists: { cards: ChecklistCard[]; live?: ChecklistsLiveData };
   /** `addClaim` (live only, SRC-01): the Add claim button and dialog. `live` (live only, #188): the live official claims. */
   sources: { kpis: SourceKpi[]; rows: SourceRow[]; addClaim?: AddClaimData; live?: LiveClaimsData };
   rule: RuleDetail | null;
@@ -277,7 +282,16 @@ function Checklists({ data }: { data: TemplatesData }) {
           <p>{"Per-person and per-matter checklists generated from the program template and the intake answers."}</p>
         </div>
       </div>
-      {data.checklists.cards.length === 0 ? (
+      {data.checklists.live && (data.checklists.live.templates.length || data.checklists.live.edit) ? (
+        <>
+          {data.checklists.live.templates.length === 0 ? (
+            <div className={"panel rv"} style={i(1)}>
+              <Empty art={"templates-empty"} title={"No checklist templates yet"} copy={"Make the firm’s first checklist: what to ask for, from whom, and when it applies. A licensed consultant approves it before it reaches clients."} />
+            </div>
+          ) : null}
+          <ChecklistsLive data={data.checklists.live} />
+        </>
+      ) : data.checklists.cards.length === 0 ? (
         <div className={"panel rv"} style={i(1)}>
           <Empty art={"templates-empty"} title={"No checklist templates yet"} copy={"Checklists come with a reviewed program template. None is published for your firm yet."} />
         </div>

@@ -1109,3 +1109,11 @@ DOC-07 (#178), branch `feat/doc-custody-preview`. Already applied on the live pr
 The secure preview (`/api/documents/preview/[version]`) needs no migration: access is `public.authorize_document_download`, so each preview is audited like a download.
 
 Tested in `tests/document-custody-steps.rls.test.ts` and `tests/document-custody-preview.test.tsx`.
+
+## Firm checklist templates and Apply checklist (`20261024230000`, already applied on the live project; deploy only)
+
+DOC-01 (#178), branch `feat/doc-checklists`. Already applied on the live project under this name (recorded in `supabase_migrations.schema_migrations`), so the file keeps its name and its exact applied contents; merging this PR only deploys the app code. Additive. Checked against main up to `20261025600100`: no migration since adds `checklist_*` objects or changes `document_requests` or `app.create_document_request` (latest `20261017200100_outbound_email.sql`, called with its 12 arguments). The firm's own templates are separate from the live official checklist claims of `20261025600100` (`rule_definitions.source_category = 'checklist'`); nothing links them yet.
+
+* `20261024230000_checklist_templates.sql`: new enum type `public.checklist_template_status` (`draft`, `approved`, `retired`; a new type, no value added to an existing enum). New tables `public.checklist_templates` (one version per row, one draft per key) and `public.checklist_template_items` (purpose, explanation, client or staff, due offset, formats, review criteria, expiry to record, matter role, an optional intake-answer condition); both forced RLS, select for the firm's staff with MFA, no API writes. `document_requests.checklist_item_id` (indexed FK). New `public.save_checklist_template` (owner, licensed consultant or case manager; a save under an approved key starts its next version), `public.approve_checklist_template` (licensed consultant, step-up; the previous approved version is retired), `app.checklist_proposals`, `public.checklist_apply_preview`, `public.apply_checklist` (step-up; only proposals the preview makes now; additions through `app.create_document_request`, removals cancel open requests; audited `checklist.saved`, `checklist.approved`, `checklist.applied`, `document.request_cancelled`).
+
+Tested in `tests/checklist-templates.rls.test.ts` and `tests/checklist-present.test.tsx`.

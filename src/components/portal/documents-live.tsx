@@ -477,6 +477,11 @@ function bytes(size: number): string {
   return size >= 1024 * 1024 ? `${(size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`;
 }
 
+/** "PDF, JPG, PNG, HEIC or DOCX", or only the formats the chosen request accepts (DOC-01; main's formatList). */
+export function formatsText(formats: readonly string[] | undefined): string {
+  return formatList(formats ?? []);
+}
+
 function audienceLine(audience: string, person: string, self: boolean, firm: string): string {
   if (audience === "matter") return "Shared on the matter. People on it can see it.";
   if (audience === "staff") return `Only ${firm} can see it.`;

@@ -87,6 +87,7 @@ import { loadCurrentPolicies } from "@/modules/portal-policies/load";
 import { loadClosurePanel } from "@/modules/sheet/closure-load";
 import { loadMatterIntake } from "@/modules/sheet/matter-intake-load";
 import { loadPersonHistory } from "@/modules/sheet/person-history-load";
+import { fromChecklist } from "@/modules/sheet/checklist-present";
 import { importedLine } from "@/modules/migration/provenance";
 import { loadImportProvenance } from "@/modules/migration/provenance-load";
 import { importedDocumentKind, importedEvent, importedEvidence, importedOrigin, importedTask, withImport } from "@/modules/sheet/imported-present";
@@ -155,7 +156,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       .limit(50),
     supabase
       .from("document_requests")
-      .select("id, purpose, person_id, document_id, status, source, due_on")
+      .select("id, purpose, person_id, document_id, status, source, due_on, checklist_item_id")
       .eq("organization_id", org)
       .eq("matter_id", matter.id)
       .neq("status", "cancelled")
@@ -289,10 +290,25 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       : null;
   };
   const requested = new Set(requestRows.map((row) => row.document_id).filter(Boolean));
+  // DOC-01: the checklist and version each generated request came from, and the approved checklists to apply.
+  const itemIds = [...new Set(requestRows.map((row) => row.checklist_item_id).filter((id): id is string => Boolean(id)))];
+  const [checklistItems, approvedChecklists] = await Promise.all([
+    itemIds.length ? supabase.from("checklist_template_items").select("id, template_id").eq("organization_id", org).in("id", itemIds) : null,
+    matterTab(query.tab) === "documents" && mayRequestDocuments(staff.role)
+      ? supabase.from("checklist_templates").select("id, title, version_number").eq("organization_id", org).eq("status", "approved").order("title").limit(100)
+      : null,
+  ]);
+  const templateIds = [...new Set((checklistItems?.data ?? []).map((row) => row.template_id))];
+  const usedTemplates = templateIds.length ? await supabase.from("checklist_templates").select("id, title, version_number").eq("organization_id", org).in("id", templateIds) : null;
+  const templateOfItem = new Map((checklistItems?.data ?? []).map((row) => [row.id, (usedTemplates?.data ?? []).find((template) => template.id === row.template_id)]));
   const checklist = [
     ...requestRows.map((row) => ({
       title: row.purpose,
-      kind: row.source === "rule" ? "From the checklist" : "Requested by the firm",
+      kind: (() => {
+        const template = row.checklist_item_id ? templateOfItem.get(row.checklist_item_id) : undefined;
+        if (template) return fromChecklist(template.title, template.version_number);
+        return row.source === "rule" || row.checklist_item_id ? "From the checklist" : "Requested by the firm";
+      })(),
       documentId: row.document_id,
       personId: row.person_id,
       state: documentState({ requestStatus: row.status, version: currentVersion(row.document_id) }, today),
@@ -806,6 +822,9 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       checklist: program,
       people: [...new Set(checklist.map((row) => firstName(personName(row.personId))))].slice(0, 4),
       rows: documentTable,
+      apply: approvedChecklists?.data?.length
+        ? { organizationId: org, matterId: matter.id, templates: approvedChecklists.data.map((row) => ({ id: row.id, label: `${row.title} v${row.version_number}` })) }
+        : null,
       vo: voReading?.panel ?? null,
       filter: true,
       request: requestsDocuments,
