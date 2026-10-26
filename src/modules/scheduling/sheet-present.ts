@@ -407,6 +407,9 @@ const EVENT_LABEL: Record<string, string> = {
   completed: "Marked attended",
 };
 
+/** CRM-03: recording (BUILD-SPEC slice 8) isn't built; the record says so plainly. */
+export const RECORDING_NOT_AVAILABLE = "Not available: Casevoya calls aren’t recorded";
+
 /**
  * Who a client's change came from (CRM-03): a client with a portal login acts from the portal;
  * a booker without one can only use the Manage your booking link from their email.

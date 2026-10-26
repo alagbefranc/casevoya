@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asAnon, asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 
-// CRM-03 Manage your booking (20261026110000_booking_manage_link.sql): a token link for a booker
+// CRM-03 Manage your booking (20261024160000_booking_manage_link.sql): a token link for a booker
 // without a portal, to see, move or cancel their consultation. The helpers are the scheduling
 // tests'. Everything here is synthetic.
 
@@ -207,5 +207,44 @@ describe("Manage your booking (CRM-03)", () => {
     const delivery = await confirmedDelivery(ctx, summary.public_ref);
     await asServiceRole(db);
     expect((await db.query<{ r: string | null }>(`select public.issue_booking_manage_token($1, $2) as r`, [delivery, sha("t".repeat(40))])).rows[0].r).toBeNull();
+  });
+});
+
+describe("joining the video call with the Manage token (CRM-03)", () => {
+  async function tokenFor(startDays: number, time = "10:00") {
+    const ctx = await firm();
+    await eventType(ctx, { notice: 0 });
+    const summary = await hold(ctx, await localStart(startDays, time));
+    const delivery = await confirmedDelivery(ctx, summary.public_ref);
+    const token = randomUUID() + randomUUID();
+    await asServiceRole(db);
+    await db.query(`select public.issue_booking_manage_token($1, $2)`, [delivery, sha(token)]);
+    return { ctx, ref: summary.public_ref, token };
+  }
+
+  it("says early before the window, and refuses a wrong token", async () => {
+    const { ref, token } = await tokenFor(5);
+    await asAnon(db);
+    const view = (await db.query<{ v: { state: string; role: string; booked_name: string } }>(`select public.video_join_guest($1, $2, false) as v`, [ref, sha(token)])).rows[0].v;
+    expect(view).toMatchObject({ state: "early", role: "client", booked_name: "Sam Example" });
+    await expectDbError(() => db.query(`select public.video_join_guest($1, $2, false)`, [ref, sha("nope")]), /call access denied/);
+  });
+
+  it("inside the window gives a lobby grant under the confirmed name, as client:<booking id>", async () => {
+    const { ref, token } = await tokenFor(5);
+    await asMaintenance(db);
+    // Move the booking to start in five minutes (inside the 15-minute window).
+    await db.query(
+      `update public.bookings set starts_at = now() + interval '5 minutes', ends_at = now() + interval '35 minutes',
+         blocked_from = now() + interval '5 minutes', blocked_until = now() + interval '35 minutes' where public_ref = $1`,
+      [ref],
+    );
+    await asAnon(db);
+    const grant = (await db.query<{ v: Record<string, unknown> }>(`select public.video_join_guest($1, $2, true, ' Sam E. ') as v`, [ref, sha(token)])).rows[0].v;
+    await asMaintenance(db);
+    const id = (await db.query<{ id: string }>(`select id from public.bookings where public_ref = $1`, [ref])).rows[0].id;
+    expect(grant).toMatchObject({ state: "open", identity: `client:${id}`, name: "Sam E.", admitted: false });
+    const part = await db.query<{ user_id: string | null; role: string }>(`select user_id, role from public.video_participants where identity = $1`, [`client:${id}`]);
+    expect(part.rows[0]).toEqual({ user_id: null, role: "client" });
   });
 });
