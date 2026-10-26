@@ -1,0 +1,41 @@
+export type CaptureFile = { name: string; data: { pages?: Record<string, unknown>[]; claims?: Record<string, unknown>[] } & Record<string, unknown> };
+export type ClaimPayload = {
+  key: string;
+  category: "fee" | "form" | "checklist" | "program" | "guide" | "law";
+  program: string | null;
+  jurisdiction: string;
+  claim: string;
+  value: string | null;
+  source_url: string;
+  section: string | null;
+  excerpt: string | null;
+  form_number: string | null;
+  page: {
+    url: string;
+    final_url: string;
+    publisher: string | null;
+    title: string | null;
+    sha256: string;
+    retrieved_at: string;
+    http_status: number | null;
+    modified_on: string | null;
+    last_amended_on: string | null;
+    current_to: string | null;
+  };
+};
+export type Refused = { key: string; file: string; category: string; reason: string };
+export type Counts = Record<string, { new: number; changed: number; unchanged: number; suspended: number; refused: number }>;
+export const CAPTURE_DIR: string;
+export const CAPTURE_FILES: string[];
+export function categoryOf(claim: { key: string; category?: unknown }): ClaimPayload["category"] | null;
+export function preparedClaims(files: CaptureFile[]): { claims: { file: string; payload: ClaimPayload }[]; refused: Refused[] };
+export function dollarQuoted(value: string): string;
+export function loadOfficialClaims(options: {
+  query: (sql: string) => Promise<Record<string, unknown>[]>;
+  files: CaptureFile[];
+  dryRun?: boolean;
+  batch?: number;
+  log?: (line: string) => void;
+}): Promise<{ counts: Counts; refused: Refused[]; considered: number }>;
+export function readCaptureFiles(names?: string[], dir?: string): CaptureFile[];
+export function summary(result: { counts: Counts; refused: Refused[]; considered: number }, dryRun: boolean): string;

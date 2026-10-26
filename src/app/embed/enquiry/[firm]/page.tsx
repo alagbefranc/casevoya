@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { EnquiryLive } from "@/components/sheet/enquiry-live";
 import { QuietSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
-import { loadEnquiryPage } from "@/modules/leads/enquiry-page";
+import { ENQUIRY_UNAVAILABLE, loadEnquiryPage } from "@/modules/leads/enquiry-page";
 import { ENQUIRY_CLOSED_COPY, enquiryClosedTitle } from "@/modules/leads/enquiry-present";
 
 export const metadata: Metadata = {
@@ -15,6 +15,14 @@ const TRANSPARENT = "html,body{background:transparent!important;min-height:0!imp
 
 async function Body({ params }: { params: Promise<{ firm: string }> }) {
   const loaded = await loadEnquiryPage((await params).firm, true);
+  if (loaded === "unavailable") {
+    return (
+      <SheetScreen page="enquiry" tone="public">
+        <style dangerouslySetInnerHTML={{ __html: TRANSPARENT }} />
+        <QuietSheet title={ENQUIRY_UNAVAILABLE.title} copy={ENQUIRY_UNAVAILABLE.copy} />
+      </SheetScreen>
+    );
+  }
   if (!loaded) {
     return (
       <SheetScreen page="enquiry" tone="public">

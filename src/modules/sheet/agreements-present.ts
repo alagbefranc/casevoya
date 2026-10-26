@@ -6,6 +6,7 @@
 import type { CountersignDialogData } from "@/components/sheet/designer/agreements";
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import { safeAccessError } from "@/lib/auth/step-up";
+import { stepUpHref, type StepUpActionKey } from "@/lib/auth/mfa-step";
 
 /** Agreement kinds the Sheet can create from a template and send for signature in one step. */
 export const SENDABLE_KINDS = ["service", "consultation", "consent"] as const;
@@ -523,7 +524,7 @@ export function authorityError(message: string): string {
 }
 
 /** The step-up screen, coming back to this page with the dialog open again. */
-export function agreementStepUpLocation(pathname: string, search: string, dialog: string | null, extra: Record<string, string> = {}): string {
+export function agreementStepUpLocation(pathname: string, search: string, dialog: string | null, extra: Record<string, string> = {}, action?: StepUpActionKey): string {
   const params = new URLSearchParams(search);
   if (dialog) params.set("dlg", dialog);
   else params.delete("dlg");
@@ -532,7 +533,7 @@ export function agreementStepUpLocation(pathname: string, search: string, dialog
     else params.delete(key);
   }
   const query = params.toString();
-  return `/mfa?step=6&next=${encodeURIComponent(`${pathname}${query ? `?${query}` : ""}`)}`;
+  return stepUpHref(`${pathname}${query ? `?${query}` : ""}`, action);
 }
 
 /** The All agreements list for one matter: the search box is filled with the matter's reference. */

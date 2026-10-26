@@ -109,7 +109,7 @@ describe("Record a deadline: what the dialog sends", () => {
     expect(dialogId("letter")).toBe("dLetter");
     expect(dialogId("toString")).toBeNull();
     expect(dialogId(null)).toBeNull();
-    expect(stepUpLocation("/sheet/matters/x", "?tab=tasks", "deadline")).toBe(`/mfa?step=6&next=${encodeURIComponent("/sheet/matters/x?tab=tasks&dlg=deadline")}`);
+    expect(stepUpLocation("/sheet/matters/x", "?tab=tasks", "deadline")).toBe(`/mfa?step=6&next=${encodeURIComponent("/sheet/matters/x?tab=tasks&dlg=deadline")}&for=matter_deadline`);
   });
 });
 

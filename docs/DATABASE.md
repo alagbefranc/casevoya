@@ -740,6 +740,62 @@ DEC-02 (gap #182), branch `feat/dec-renewal`. No existing function redefined.
 
 Tested in `tests/dec-renewal.rls.test.ts` and `tests/dec-renewal-present.test.tsx`.
 
+## Staff idle sign-out, client two-step, consent impact reviews (`20261025270000`, `20261025270100`, not applied on the live project)
+
+SEC-01 and SEC-05 (gap #184), branch `feat/sec-sessions-consent`.
+
+* `20261025270000_sec_marketing_consent_enum.sql`: `consent_purpose` gains `marketing` (own migration).
+* `organizations.staff_idle_timeout_minutes` (integer, not null, default 30, check 5 to 480). Set only by `public.set_staff_idle_timeout(org, minutes)` (firm owner with a fresh step-up; audited `security.idle_timeout_changed` with from/to).
+* `staff_session_activity` (session id, user, last activity): not a tenant table (a session belongs to a user, like `session_revocations`); no grants, forced RLS, read and written only by `public.record_staff_activity(p_active)`, which returns `active` / `expired` / `ended` / `none` and, past the strictest idle time of the user's staff firms, ends the session (`session_revocations` reason `idle`, Auth session row removed; audited `session.idle_signed_out`).
+* Client two-step: `app.user_has_verified_totp(user)`, `app.client_step_up_satisfied()` (verified TOTP and a fresh step-up), `public.my_two_step_state()` (`off` / `needs_check` / `ok`), `public.record_my_two_step(enabled)` (checked against `auth.mfa_factors`; audited `mfa.client_enabled` / `mfa.client_disabled`).
+* `client_mfa_resets` (org, person, user, identity method, note, reset by): forced RLS, select through `app.can_work_person_privacy` (firm owner, or a licensed consultant or case manager who can read the person, with staff MFA); written only by `public.reset_client_two_step(org, person, identity_method, note)` (step-up; refuses staff users and the caller; ends sessions with `app.revoke_member_sessions`, removes factors with `app.purge_auth_user_factors`; audited `mfa.client_reset`).
+* `consent_impact_reviews` (person, consent record, purpose, source portal/staff, impacts, matter, task, open/done with who, when and note): forced RLS, select through `app.can_work_person_privacy`; row audit with the note redacted. Opened by the `consent_records_impact_review` trigger (`app.open_consent_impact_review`, after insert or update of `withdrawn_at`) when a granted consent is refused or withdrawn; `app.create_consent_impact_review` adds a high-priority internal task (checklist from `app.consent_impact_items(purpose)`) on the person's latest open matter. `public.complete_consent_review(review, version, note)` marks it done and completes the task (through `app.open_task_write`); audited `consent.impact_review_done` without the note.
+* Client consent: `public.my_consents()`, `public.set_my_consent(purpose, granted)` (AI drafting, marketing, processing; append-only; audited `consent.given` / `consent.withdrawn`). Staff: `public.person_consent_overview(org, person)` (history, reviews, two-step state, resets). Helpers `app.my_person_id`, `app.person_consent_state`, `app.person_declines_ai`, `app.consent_purpose_label`.
+* **Redefines** `public.begin_vo_document_review(uuid, uuid)` (latest `20261019218100_vo_doc_review.sql`): returns `{ok: false, error: 'client_ai_off'}` when the document's person declines AI drafting. Otherwise unchanged.
+
+Tested in `tests/sec-sessions-consent.rls.test.ts` and `tests/sec-sessions-consent.test.tsx`.
+
+## Retention deletion jobs and tombstones (`20261025290000`, not applied on the live project)
+
+SEC-07 (gap #184), branch `feat/sec-retention-cancellation`. Additive; redefines no function.
+
+* `deletion_jobs`: one approved deletion of one closed matter's files (matter, closure, reason, retention end, policy version, approver, idempotency key, status `approved` / `running` / `completed` / `blocked` / `failed`, lease and attempts). One open job per matter. Never deleted; who approved what is immutable. Forced RLS, no policies.
+* `deletion_job_items`: what the job removes (`document_file`, `inbox_file`, `export_file`, `vo_reading`, `vo_draft`) or keeps with a reason (`agreement_pdf`, a document also on another matter): opaque storage key, SHA-256, status `pending` / `deleted` / `missing` / `kept`. Forced RLS, no policies.
+* `deletion_tombstones`: append-only, one per completed job: matter reference, closed and retention dates, policy version and years, approver and approval time, reason, removed counts by kind (embeddings 0), kept items with reasons, and the removed storage keys (`objects`, for reapplying after a backup restore). Forced RLS, no policies.
+* `app.retention_end(matter)`: the later of the latest closure's `retention_on` and `matters.retention_on`. `app.deletion_ineligible_reason(matter)`, `app.matter_records_deleted(matter)`, `app.document_on_other_matter(document, matter)`.
+* `public.retention_deletion_overview(org)`: firm owner (MFA): eligible matters, the count past the end but on hold, jobs not completed, tombstones.
+* `public.approve_deletion_job(matter, reason, key)`: firm owner + step-up (`app.require_owner_step_up_for_matter`); plans the items; audited `retention.deletion_approved`.
+* Service role only: `public.service_claim_deletion_job()`, `public.service_deletion_item_ready(item)` (re-check; stops the job on a legal hold, keeps a document linked elsewhere), `public.service_record_deletion_item(item, outcome)` (performs the Vo redactions and removes download grants), `public.service_finish_deletion_job(job)` (tombstone). Audited `retention.deletion_started`, `retention.deletion_blocked`, `retention.deletion_failed`, `retention.deletion_completed`.
+* `app.kick_retention_runner()` and pg_cron job `casevoya-retention-runner` (every 5 minutes, only while a job waits): POSTs to `/api/retention/run` with the existing mail dispatch Vault secrets.
+
+Tested in `tests/sec-retention-deletion.rls.test.ts` and `tests/sec-retention-cancellation.test.tsx`.
+
+## Subscription cancellation, export window, custodial archive or transfer (`20261025290100`, not applied on the live project)
+
+SEC-10 (gap #184), branch `feat/sec-retention-cancellation`.
+
+* `organization_subscriptions`: new `cancel_requested_at`, `cancel_requested_by`, `end_arrangement` (`custodial_archive` / `transfer`), `end_transfer_id` (FK `(…, organization_id)` to `firm_transfers`), `end_arrangement_chosen_by`, `end_arrangement_chosen_at`; indexes on each FK.
+* **Redefines** `app.subscription_grace_days(text)` (latest `20261020160100_subscription_billing.sql`): `export_window_days` is never below 90.
+* **Redefines** `app.sync_subscription_state(uuid)` (latest `20261020160100_subscription_billing.sql`): a subscription whose `cancel_at` has passed becomes `cancelled` (`subscription.contract_period_ended`); `cancelled` becomes `archived` at `app.subscription_export_window_end` (the later of `cancelled_at` and `current_period_end`, plus the window) with `end_arrangement` `transfer` only when the chosen transfer is completed, else `custodial_archive`.
+* **Redefines** `public.firm_subscription(uuid)` (latest `20261020160100_subscription_billing.sql`): adds `continuity` and, in `subscription`, `cancel_requested_at` and `end_arrangement`.
+* New: `app.subscription_export_window_end(org)`, `app.firm_transfer_verified(transfer)`, `app.subscription_continuity_json(org, with_coverage)`, `public.subscription_continuity(org)` (any staff, MFA: banner), `public.subscription_cancel_allowed(org)` (owner + step-up; audited `subscription.cancel_requested`), `public.service_record_subscription_cancel(org, actor, cancel_at, period_end)` (service role; Stripe's date; audited `subscription.cancel_scheduled`), `public.choose_subscription_end_arrangement(org, arrangement, transfer)` (owner + step-up; audited `subscription.end_arrangement_chosen`), `public.firm_export_index(org)` (owner + step-up; audited `firm_export.index_downloaded`).
+
+Tested in `tests/sec-subscription-cancellation.rls.test.ts`, `tests/subscription-billing.rls.test.ts` and `tests/sec-retention-cancellation.test.tsx`.
+
+## AI vendor terms acknowledgement (`20261025260000`, not applied on the live project)
+
+AI-06, branch `feat/ai-vendor-terms`. Additive; no existing function is redefined.
+
+* `vo_vendor_terms_acknowledgements`: one row per firm and terms version (`unique (organization_id, terms_version)`): `terms_version`, `acknowledged_by` (FK `auth.users`, indexed), `acknowledged_at`. Forced RLS; read by the firm's staff with staff MFA (the same rule as `vo_settings`); no insert, update or delete grant.
+* `app.vo_vendor_terms_version()`: the current terms version; must equal `VO_VENDOR_TERMS.version` in `src/modules/vo/vendor-terms.ts` (tested). A content change ships with a new migration redefining it.
+* `app.vo_vendor_terms_acknowledged(org)`: whether the firm acknowledged the current version.
+* `public.acknowledge_vo_vendor_terms(org, version)`: firm owner with staff MFA; only the current version ("the AI vendor terms changed" otherwise); idempotent. Audited `vo.vendor_terms_acknowledged` with the version.
+* Trigger `vo_settings_require_vendor_terms` (`app.vo_settings_require_vendor_terms`, before insert or update of `enabled` on `vo_settings`): setting `enabled` to true when Vo was off (the saved switch, or with no row the sample-mode default from `app.vo_enabled`) is refused without the current version acknowledged. `set_vo_settings` and `set_composio_enabled` are unchanged.
+
+* `20261025260100_vo_vendor_terms_version_2.sql` **redefines** `app.vo_vendor_terms_version()` (latest `20261025260000_vo_vendor_terms_ack.sql`): returns `2026-10-25.1` (signed vendor agreements and Casevoya's commitments added to the panel). Nothing else changes; owners acknowledge the new version before Vo can next be turned on.
+
+Tested in `tests/vo-vendor-terms.rls.test.ts` and `tests/vo-vendor-terms.test.tsx`; `tests/vo-drafts.rls.test.ts`, `tests/vo-doc-review.rls.test.ts` and `tests/vo-lead-call.rls.test.ts` now acknowledge before turning Vo on.
+
 ## Letters on a matter and Vo letter drafts (`20261025240000`, `20261025240100`, not applied on the live project)
 
 AI-01 (gap #183), branch `feat/ai-letter-drafts`. Apply in order: `20261025240000_vo_letter_enum.sql` (enum value, its own migration), then `20261025240100_vo_letter_drafts.sql`. Then `20261025240200_vo_settings_keep_read_on_upload.sql`, in the same go: it redefines `set_vo_settings` from DOC-05's body (`20261025000000`, live on prod) plus `letter_drafts`, and adds `vo_settings.read_on_upload` if missing, so neither switch is dropped.
@@ -759,3 +815,266 @@ AI-01 (gap #183), branch `feat/ai-letter-drafts`. Apply in order: `2026102524000
 * `public.release_matter_letter(letter)`: approved letters only; the approved version's text without citation markers. Audited `letter.released`. Used by `GET /api/letters/[letterId]`.
 
 Tested in `tests/vo-letter-drafts.rls.test.ts`, `tests/vo-letter-service.test.ts`, `tests/vo-letter-app.test.ts`, `tests/vo-letter-guard.test.ts` and `tests/vo-letters-present.test.tsx`.
+## Privacy requests: extension, response package, portal delivery (`20261025280000`, not applied on the live project)
+
+SEC-06 (gap #184), branch `feat/sec-privacy-requests`. No existing function redefined.
+
+* `privacy_time_limits` (per firm): `kind` response / extension, `law_name`, `provision_text` (word for word), `days` (only when stated), `source_id` / `snapshot_id` (firm `official_sources` / `source_snapshots`), `source_url` (allowlisted, trigger; federal official host in the function), `source_section`, `checked_on`, `current_to`, `snapshot_sha256`, status pending_review / approved / rejected / retired with reviewer and attestation columns. Entered values immutable (trigger); status changes only through the functions (`app.gov_guard_update`). Staff read; never seeded.
+* `privacy_requests` gains `extended_due_on`, `extension_basis` (official / firm), `extension_time_limit_id` (FK, indexed), `extension_reason`, `extension_recourse`, `extended_at` / `extended_by`, `extension_notice_channel` (portal / other), `extension_notice_method`, `extension_notice_late`, `extension_notice_seen_at`; shape check `privacy_requests_extension_shape`.
+* `privacy_request_items`: the scope search's records (`source`, `source_id`, `matter_id`, `label`, `fields`) with `decision` include / withhold / redact, `withheld_fields`, `third_party`, `reason`, `decided_by/at`; unique per request, source and record; never deleted. `privacy_request_redactions` gains `item_id` (FK, unique when set).
+* `privacy_request_responses`: packages (`building` / `ready` / `failed` / `superseded`, bucket `matter-exports`, key, `sha256`, `manifest_sha256`, sizes and counts, `withheld_count`, `excluded`); one building per request; built packages never change (trigger); never deleted.
+* `privacy_request_deliveries` (one per request: response, person, `delivered_by/at`, `expires_at` = 30 days, `sha256`, `download_count`, first/last download) and `privacy_response_downloads` (append-only: delivery, user, time, hash).
+* Functions (`app.` with `public.` invoker wrappers): `propose_privacy_time_limit`, `review_privacy_time_limit` (licensed, fresh step-up, `gov_check_page_attestation`, `gov_check_self_approval`), `retire_privacy_time_limit`, `extend_privacy_request`, `privacy_scope_search` (also records the scope step), `decide_privacy_item` (writes the worklist line), `start_privacy_response` (step-up; after the redaction step), `authorize_privacy_response_preview` (step-up), `deliver_privacy_response` (step-up; after the review; closes the request), `authorize_privacy_response_download` (the person, active portal login, within 30 days; records the download). Service role only: `public.service_complete_privacy_response`, `public.service_fail_privacy_response`. Client: `public.privacy_requests_for_me(org)`, `public.mark_privacy_notices_seen(org)`. Every action audited (`privacy.time_limit_*`, `privacy.request_extended`, `privacy.scope_searched`, `privacy.item_decided`, `privacy.response_started/ready/failed/previewed/delivered/downloaded`, `privacy.extension_notice_seen`).
+* RLS forced on every new table; select only, through `app.can_read_privacy_request` (requests stay per firm) or firm staff for time limits.
+
+Tested in `tests/privacy-responses.rls.test.ts` and `tests/privacy-responses-present.test.ts`.
+
+## Report export segment (`20261025310000`, not applied on the live project)
+
+REP-02 / REP-03 (gap #185), branch `feat/rep-outcomes-exports`. Additive; no existing function is redefined.
+
+* New overload `public.record_report_export(uuid, text, text, text, p_segment text)`, its body copied from the four-argument function in `20261019205100_matter_records_exports_closure.sql` (its only definition): the same checks (signed in, current firm, active membership, staff MFA, a role that can see the tab); `p_segment` is null, or a program key / `none` and only on the `outcomes` tab (else `22023`). The `report.exported` audit row's context gains `segment`. Revoked from public and anon; granted to authenticated. The four-argument function is unchanged.
+* Processing and outcomes reads reuse `matter_stage_transitions`, `matters` (`outcome`, `program_pack_id`), `rule_pack_versions.program_key` and approved `government_processing_estimates` (GOV-05) under their existing RLS. No new table.
+
+Tested in `tests/rep-outcomes.rls.test.ts` (seeded decided matters, RLS scope, segment audit) and `tests/rep-outcomes-exports.test.ts`.
+
+## Privacy response download needs the client's two-step (`20261025340000`, not applied on the live project)
+
+SEC-01 + SEC-06 follow-up. **Redefines** `app.authorize_privacy_response_download(uuid)` (only definition `20261025280000_sec_privacy_responses.sql`): after the ownership and expiry checks it raises `two-step sign-in is required for this download` when the person has no verified authenticator, and `client step-up required: enter your two-step code` when `app.client_step_up_satisfied()` is false. Otherwise unchanged. Tested in `tests/privacy-responses.rls.test.ts`.
+
+## Service notices (`20261025350000`, not applied on the live project)
+
+ADM-04 (gap #186), branch `feat/adm-service-notices`. No existing function redefined; nothing seeded.
+
+* `service_notices`: `kind` maintenance / incident / info, `severity` info / minor / major, `title` (3-120), `body` (plain text, up to 1000), `starts_at`, `ends_at` (required for maintenance; after the start), `status` draft / published / resolved, `audience` all_firms / listed_firms, `published_at`, `resolved_at` / `resolved_by` / `resolution_note`, `created_by` / `updated_by` (the platform admin). Never deleted (trigger).
+* `service_notice_targets` (notice, organization; PK both): the firms a listed_firms notice reaches. Never deleted.
+* `service_notice_dismissals` (notice, organization, user; PK all three): a staff member hid the banner for themselves in one firm. The notice stays in the history.
+* RLS forced on all three; select only. Notices: platform admins, or staff (aal2) of the workspace in use for a published or resolved notice that reaches it (`app.can_read_service_notice`, `app.service_notice_reaches`); client users and other firms read nothing. Targets: platform admins, or staff of that firm. Dismissals: the person, in the workspace in use.
+* Functions (`app.` with `public.` invoker wrappers): `post_service_notice`, `update_service_notice` (wording, severity, times, publish a draft; the audience is fixed), `resolve_service_notice` (note required): a signed-in platform admin at aal2 with a recent step-up, or the service role naming a `platform_admins` user (`app.service_notice_actor`, like the CICC list import). `dismiss_service_notice`: firm staff. Audited: `service_notice.drafted`, `.published`, `.updated`, `.resolved` (organization null, `acting_admin` in context), `.dismissed` (the firm).
+
+Tested in `tests/adm-service-notices.rls.test.ts` and `tests/adm-service-notices.test.tsx`.
+
+## Migration import: more kinds and sensitivity (`20261025385000`–`20261025385200`, not applied on the live project)
+
+MIG-01 (gap #187), branch `feat/mig-import-kinds`. Apply in order. Nothing seeded.
+
+* `20261025385000_mig_import_kinds_schema.sql`: `migration_batches` + `kind` (`clients_matters` default, `relationships`, `notes`, `tasks`, `key_dates`, `documents`, `opening_balances`), `sensitivity` (column index → `identity` / `narrative` / `health` / `financial`), `attachment_name`, `attachment_sha256`, `attachment_bytes` (≤ 25 MB), `attachment_files` (a documents import's ZIP; the bytes are not kept). `migration_rows` + `match_record_id`, `match_record_table`, `record_id`. `migration_records`: `record_table` check widened to the new tables (constraint dropped and re-added), + `original_at` timestamptz (`add column if not exists`, the same column MIG-02's `20261025380000` adds). `matter_staff_notes` + `original_author_name`, `original_written_on` (imported notes only). New `migration_files` (a documents import's ZIP entries: path, size, SHA-256, detected type, problem; owner-only select; purged with the staging rows) and `opening_balances` (receivable / advance, cents, currency, as-of, `pending_review` / `approved` / `rejected`, reviewer and note, source system, batch, importer; select for billing staff of the matter, `app.can_read_matter_billing`; audited). Forced RLS on both; no insert/update/delete grants.
+* `20261025385100_mig_import_kinds_evaluate.sql`: **redefines** `app.migration_evaluate` (latest `20261020011000`) as a dispatcher: its body moved unchanged to the new `app.migration_evaluate_clients`; other kinds go to the new `app.migration_evaluate_kind` (per-row checks, matter by Casevoya or old import reference, person by email or name and date of birth, staff by sign-in email, duplicates against existing records and earlier rows, decisions, counts with `ready`, and `matters` = ready so `begin_migration_commit` is unchanged). **Redefines** `public.save_migration_mapping` (latest `20261020011000`: per-kind columns, required fields and value fields; `default_owner`, `default_date_kind`, `sensitivity`, stored on the batch), `public.run_migration_dry_run` (latest `20261019208100`: the name check for clients only; a documents batch needs its ZIP) and `public.decide_migration_duplicate` (latest `20261019208100`: `record:<id>` targets). New `public.set_migration_kind`, `public.stage_migration_files` and helpers (`app.migration_read_*`, `app.migration_take`, `app.migration_issue`, `app.migration_kind_columns/required/values`, `app.migration_staff_by_email`, `app.migration_amount_cents`, `app.migration_raw_cell`).
+* `20261025385200_mig_import_kinds_commit.sql`: new `public.commit_migration_kind_chunk` (after MIG-02's pilot or full run start; rows taken through `app.migration_next_groups` (each row is its own group, `is_applicant`; a done row's `migration_rows.matter_id` holds its record) so MIG-02's pilot gates apply; during a pilot `app.migration_kind_after_chunk` hands over to `app.migration_after_chunk` (replaced by `20261025390000`: the kind ends its own pilot); tasks inserted without a `task_events` row, notes with the original author and date, key dates through `app.record_deadline` (tentative), relationships, opening balances pending review), `app.migration_kind_after_chunk` (totals against the plan, exceptions, purge), `app.migration_kind_reference_counts`, `public.migration_document_rows` and `public.record_migration_document` (a documents import's files go through `create_upload_intent` → storage → `finish_verified_document_upload`), `public.review_opening_balance` (billing staff + step-up; the importer needs a step-up after the import; approval posts nothing), `app.migration_firm_midnight`, `app.migration_rollback_deletes_record`, `app.migration_rollback_blockers_kind`, `app.migration_rollback_kind`. **Redefines** `app.migration_purge_staging` (also purges `migration_files`), `app.migration_rollback_blockers` and `public.rollback_migration_batch` (latest `20261019208100`: other kinds branch to the new functions; clients unchanged; a documents batch is never rolled back), and `app.reject_message_change` (latest `20261019203100`: a `matter_staff_notes` DELETE is allowed only inside a rollback for a note that batch created).
+
+Tested in `tests/migration-kinds.rls.test.ts` and `tests/migration-kinds-present.test.tsx`; `tests/migration-import.rls.test.ts` still passes unchanged.
+
+## Scheduled reports (`20261025320000`, `20261025320100`, not applied on the live project)
+
+REP-03 (gap #185), branch `feat/rep-scheduled-reports`.
+
+* `scheduled_reports`: one schedule: `title`, `tab` (`ops` / `money` / `outcomes`), `range_key` (`90d` / `month` / `year`), `frequency` (`weekly` with `weekday` 1 to 7, ISO; `monthly` with `month_day` 1 to 28), `send_time` (local time in the firm's timezone), `paused`, `next_run_at`, `last_run_at`, soft delete (`deleted_at`, `deleted_by`), `created_by`, `updated_by`, `version`. Never deleted; firm and creator immutable. Forced RLS, no policies.
+* `scheduled_report_recipients`: (`schedule_id`, `user_id`) staff of the firm. Forced RLS, no policies.
+* `scheduled_report_runs`: append-only, one per send: `kind` `scheduled` (unique per schedule and `due_at`) or `test` (`run_by`). Forced RLS, no policies.
+* `scheduled_report_deliveries`: append-only, one per recipient of a run: `delivered` with `link` (only `/sheet/reports?tab=…&view=…`, by check constraint) or `skipped` with `skip_reason` (`not_active_staff` / `role_cannot_see_tab`). No report content. Forced RLS, no policies.
+* `app.report_tab_roles(tab)` (equal to `MONEY_ROLES` / `OPS_ROLES` in `reports-present.ts`, tested), `app.user_sees_report_tab(org, user, tab)`, `app.report_schedule_zone(org)`, `app.report_schedule_next_run(org, frequency, weekday, month_day, time, after)`, `app.deliver_scheduled_report(run)` (the recipient recheck), `app.require_report_staff(org)`, `app.managed_scheduled_report(id)`.
+* Staff (MFA): `public.scheduled_reports_overview(org)` (schedules of the tabs the caller sees, staff who could receive each tab, last run counts), `public.save_scheduled_report(...)` (create or edit; the caller and every recipient must see the tab; creator or firm owner; version check), `public.set_scheduled_report_paused(id, paused)`, `public.delete_scheduled_report(id)` (soft), `public.run_scheduled_report_now(id)` (test run, one a minute). Audited `report.schedule_created`, `_updated`, `_paused`, `_resumed`, `_deleted`, `_test_run`, `_sent` (tab, range, frequency, counts only).
+* Service role: `public.service_run_scheduled_reports(limit)`: every due schedule once per due time, then its next time after now.
+* `app.kick_scheduled_reports()` and pg_cron job `casevoya-scheduled-reports` (every 5 minutes, only while one is due): POSTs to `/api/reports/scheduled/run` with the existing mail dispatch Vault secrets.
+* `20261025320100_rep_report_notifications.sql` **redefines** `app.staff_notification_items(uuid, integer)` (latest `20261025100100_task_notifications.sql`): adds a `report` branch (a delivered link for the caller while a role of theirs sees the tab; subject the schedule's name, detail `scheduled` / `test`). Nothing else changes.
+
+Tested in `tests/scheduled-reports.rls.test.ts` and `tests/scheduled-reports.test.tsx`.
+
+## Migration pilot, sign-off and run report (`20261025380000`, not applied on the live project)
+
+MIG-02 (gap #187), branch `feat/mig-pilot-report`. Extends the migration import (`20261019208100`); no second importer, nothing seeded.
+
+* `migration_settings.pilot_max` (default 25, 1 to 50): the largest pilot, in matters. `public.set_migration_pilot_max(org, max)`: firm owner, step-up, audited `migration.settings_changed`.
+* `migration_batches`: `pilot_size` (1 to 50; null for an import begun before pilots), `pilot_started_at` / `_by`, `pilot_completed_at`, `pilot_counts` (matters, people created and linked), `pilot_signed_off_at` / `_by`, `pilot_signoff_note` (3 to 1,000), `full_run_started_at` / `_by`, `commit_verified_at` (staged rows last checked against the upload checksum), `run_report` (object). Checks: sign-off needs a finished pilot; a full run needs a signed-off pilot (or no pilot). FK indexes on the three `_by` columns.
+* `migration_rows.in_pilot`: the row belongs to one of the pilot's matters. `migration_records.original_at` (`add column if not exists`): an imported item's original date.
+* `app.migration_staged_intact(batch)`: each staged row's SHA-256 matches its cells, and the digest over the rows and their count match the upload's.
+* `public.begin_migration_pilot(org, batch, plan_hash, size default 10, source_system default null)`: firm owner, step-up; checks the staged rows (`{ok: false, reason: 'checksum_changed'}`, audited), evaluates the plan again (must hash to the dry run's), marks the first `size` matters, sets status `committing`. Audited `migration.pilot_started`.
+* `public.sign_off_migration_pilot(org, batch, note)`: firm owner, step-up, a finished pilot, once. Audited `migration.pilot_signed_off` (note length, not text).
+* `public.record_migration_report_download(org, batch, format)`: firm owner, a committed batch with a report, `csv` or `pdf`. Audited `migration.report_downloaded`.
+* `public.imported_record_provenance(org, table, ids)`: staff of the firm (MFA): source system, import date, original date, old reference, created or linked, version at import, for up to 500 records of one table that an import of this firm created or linked and that are still there.
+* **Redefines** (latest definitions in `20261019208100_migration_import.sql`):
+  * `public.begin_migration_commit`: now the full run only. A `staged` / `checked` batch is refused ("run a pilot first"); a pilot not signed off is refused; the staged rows are checked again; the plan is not evaluated again (the dry run's hash must match). Sets `full_run_started_at`; audited `migration.commit_started` once.
+  * `app.migration_next_groups`: during a pilot only `in_pilot` matters; once the pilot is done, refuses until the full run starts.
+  * `app.migration_after_chunk`: a finished pilot sets `pilot_completed_at` and `pilot_counts` (audited `migration.pilot_completed`) and returns status `pilot_done`; the end of the full run also writes `run_report`. The totals check, exception report and purge are unchanged.
+
+Tested in `tests/migration-pilot.rls.test.ts` (and `tests/migration-import.rls.test.ts`, whose sign-off now goes through a pilot) and `tests/migration-pilot-present.test.tsx`.
+
+## Migration import: the new kinds through the pilot and run report (`20261025390000`, not applied on the live project)
+
+MIG-01 with MIG-02 (gap #187), branch `feat/mig-import-kinds`. **Apply after `20261025380000`**: it reads and writes the pilot and report columns that migration adds. Apply order for the two: `20261025385000`, `20261025385100`, `20261025385200` (MIG-01; they don't need MIG-02's columns: the one read of them is by name through `to_jsonb`, and `original_at` is `add column if not exists` in both), then `20261025380000` (MIG-02), then `20261025390000`. Nothing seeded.
+
+* `20261025390000_mig_kinds_pilot_report.sql` **redefines** (latest `20261025385200_mig_import_kinds_commit.sql`):
+  * `app.migration_kind_after_chunk`: the reference baseline is the kind's own (`app.migration_kind_reference_counts`) at every chunk, the pilot's included; a non-client pilot ends here (`pilot_completed_at`, `pilot_counts` = kind, records created and linked; audited `migration.pilot_completed`; status `pilot_done`) instead of in `app.migration_after_chunk`, which counted matters and people and set the clients' reference baseline (so a key dates or tasks pilot couldn't be rolled back); the end of the full run writes `run_report` (kind; source counts, SHA-256, staged digest, the checks at upload and at commit, and for documents the ZIP's name, SHA-256 and file count; the plan; record totals by table; created, linked and held totals; row counts, duplicates, errors, review, skipped, exception lines; the pilot and its sign-off; the full run's start). Totals check, exceptions and `result_counts` unchanged.
+  * `public.record_migration_document`: during a pilot only a pilot row's file is recorded, and none between the pilot's end and the full run (the same gate as `app.migration_next_groups`).
+* MIG-02's `public.begin_migration_commit`, `app.migration_next_groups` and `app.migration_after_chunk` are not redefined.
+
+Tested in `tests/migration-kinds.rls.test.ts` (every kind now signs off through a pilot; a tasks pilot, its gates, sign-off and run report; a key dates pilot rolled back; a documents pilot and full run).
+
+## Service-level report (`20261025360000`, not applied on the live project)
+
+ADM-04 (gap #186), branch `feat/adm-service-levels`. Additive; no existing function is redefined.
+
+* `support_response_records`: one support request a firm sent Casevoya (`ticket_ref`, unique per firm; `received_at`; `first_response_at`, null while waiting, never before `received_at`; `recorded_by_user_id`, a platform admin). Metadata only. Forced RLS; select for the firm's owners (`app.actor_is_firm_owner`) and platform admins (`app.is_platform_admin`, aal2); no direct writes; no delete or truncate; row-change audit.
+* `app.platform_ops_actor(uuid)`: a signed-in platform admin at aal2 (their id), or the service role naming a `platform_admins` user (that id); anyone else `42501`.
+* `public.record_support_response(firm, ticket_ref, received_at, first_response_at, recorded_by)`: records or corrects one request (not in the future, reply not before receipt); audited `service_level.support_response_recorded` / `.support_response_updated`.
+* `public.service_level_report(firm, months)`: 1 to 24 months in the firm's timezone, newest first: received, answered, waiting, median and longest seconds to first reply; `uptime` is `{"measured": false}`. The firm's owner (aal2, current firm), a platform admin (aal2) or the service role; the latter two audited `service_level.report_read` on the firm.
+
+Ops wrapper: `scripts/ops/service-levels.mjs` (record, report). Tested in `tests/service-levels.rls.test.ts` and `tests/service-levels-present.test.tsx`.
+
+## Grounded Vo outputs (`20261025420000`, not applied on the live project)
+
+SRC-09 (gap #188), branch `feat/src-grounded-vo`. Additive.
+
+* `vo_runs.citations` (jsonb array, at most 40, 64 kB): the run's checked citations, rebuilt by `finish_vo_run` (`kind`, `id`, `label`; official ones add `source_kind`, `url`, `section`, `form_number`, `form_modified_on`, `checked_on`, `current_to`, `snapshot_sha256`). Never the answer text.
+* `vo_drafts.licensed_review_required` (boolean): the draft cites official content or reads as advice; only a licensed member with a fresh step-up can send it.
+* `app.vo_citable_official_url(url)`: https, allowlisted federal official host (canada.ca, *.canada.ca, *.gc.ca), not a site root or landing page.
+* `app.vo_advice_like(text)`: the advice-like word test (mirrored in `src/modules/vo/grounding.ts`).
+* `app.vo_letter_official_items(org, matter)`: REDEFINED from `20261025240100_vo_letter_drafts.sql`: the same rows, kept only when `app.vo_citable_official_url(source_url)`.
+* `app.vo_ask_run(run)`: the caller's own running Ask Vo run on a matter they can read (MFA, active firm), else `vo denied`.
+* `public.vo_run_facts(run)`, `public.vo_run_official_content(run)`: Ask Vo's approved facts (with how many the firm's category switches hide) and approved official content with its source, for the run's own person while it runs.
+* `public.finish_vo_run`: REDEFINED from `20261019207100_vo_drafts.sql` (same signature): also accepts `document_version` (linked, not removed, on the run's matter), `fact` (an approved fact of the matter in an allowed category) and `official` (`source_kind` + id in `app.vo_letter_official_items`) citations; anything else refuses the save; stores the rebuilt citations on the run (and a short form on the draft); sets `licensed_review_required`; audit `vo.run_finished` adds `official_sources` and `licensed_review_required`.
+* `public.send_vo_draft`: REDEFINED from `20261019207100_vo_drafts.sql`: a flagged draft, or text that reads as advice, needs `app.actor_is_licensed` and `app.require_licensed_staff(org, true)` (step-up); audit `vo.draft_sent` adds `licensed_review`.
+
+Tested in `tests/vo-grounded.rls.test.ts`, `tests/vo-grounding.test.ts`, `tests/vo-grounded-present.test.tsx`.
+
+### Vo cites live rule versions and refuses claims-rule homepages (`20261025420100`, not applied on the live project; apply after `20261025400000` and `20261025420000`)
+
+SRC-09 on top of the SRC-03 publication gate. Additive.
+
+* Redefined `app.vo_citable_official_url` (from `20261025420000`): also false whenever `app.official_claim_url` refuses the URL (SRC-01 homepage rule); still federal-only.
+* Redefined `app.vo_letter_official_items` (from `20261025420000`): rule versions through `app.rule_version_is_live` instead of the inline status and date check (same semantics, one definition). Register rows keep `status = 'approved'`.
+
+### Vo cites attested claims (`20261025450000`, not applied on the live project; apply after `20261025400000`, `20261025420000` and `20261025420100`)
+
+Francis's decision 2026-10-25 (gap #188): Vo may cite a claim approved by attestation without a page capture, only with the attestation shown next to the citation. Additive; seeds nothing.
+
+* New `app.vo_official_attestation(org, kind, id, sha256, attested_on)` (internal): `{attested: true, attested_by, attested_on}` for an official item with no capture that a licensed reviewer attested (rule versions from `rule_evidence`; submission steps, renewal timings and steps after approval from their own `page_attested_*` columns), the name from the reviewer's profile ("a licensed member" when empty); null otherwise.
+* Redefined `app.vo_letter_official_items` (from `20261025420100`): a live rule version whose evidence has no snapshot is listed when that evidence carries the attestation (reviewer and date opened), the attesting reviewer recorded the approval (`professional_reviews`), and its `source_url` passes `app.official_claim_url` and `app.vo_citable_official_url`; `attested_on` and `checked_on` come from the evidence. A captured page is still preferred. Any item with neither a capture nor an attestation is left out.
+* Redefined `public.vo_run_official_content` (from `20261025420000`) and `public.vo_letter_official_content` (from `20261025240100`): each item adds `attested`, `attested_by`, `attested_on`.
+* Redefined `public.finish_vo_run` (from `20261025420000`, same signature): an official citation records `attested` (and `attested_by`, `attested_on` when true) in `vo_runs.citations`, and the attested ones in the short form on `vo_drafts.sources`; an uncaptured item without an attestation refuses the save. Whatever the service sends about an attestation is ignored.
+* Redefined `public.save_vo_letter_draft` (from `20261025240100`, same signature): each cited official item in `matter_letter_versions.official` adds `attested` and `attested_by` (it already kept `attested_on`).
+
+Tested in `tests/vo-grounded.rls.test.ts`, `tests/vo-letter-drafts.rls.test.ts`, `tests/vo-attested-citations.test.tsx` and `tests/vo-app.test.ts`.
+
+## Pinned rule versions and the support catalogue (`20261025410000`, not applied on the live project)
+
+SRC-05 and SRC-12 (gap #188), branch `feat/src-pins-scope`. Additive; no existing function is redefined (`app.select_matter_program`, `app.pack_is_selectable`, `public.create_client_matter` are called as they are). Nothing from IRCC is seeded.
+
+* `matter_rule_bindings.form_versions` (jsonb array): the pack's IRCC forms at pin time, each `{form_number, date_modified, source_url, retrieved_at, content_hash, snapshot_id}`, the date only from a snapshot a rule version in the pack cites (else null). Set by trigger `matter_rule_bindings_pin_forms` (`app.src_pin_binding`), never changed. The same trigger refuses another program's pack for a matter opened for an unsupported program.
+* `matter_exports` and `submission_handoffs`: `rule_binding_id`, `rule_pack_version_id`, `form_versions`, stamped by `app.src_stamp_package_pin` when the export is requested and when the handoff's manifest is pinned; never changed after.
+* Triggers `document_requests_src_pinned_rule`, `deadlines_src_pinned_rule` (`app.src_rule_from_pinned_pack`): a `rule_version_id` must belong to the pack pinned on the matter.
+* `matter_program_scopes`: the program a matter was opened for and whether it was supported (with the pack). Append-only; forced RLS; select for staff who can read the matter.
+* `matter_rule_upgrade_decisions`: accepted or declined, reason, the impact preview, old and new binding, who and when. Append-only; forced RLS; select for staff who can read the matter.
+* `support_catalogue_entries`: platform scope configuration (jurisdictions and case types seeded; programs added by a platform admin with an optional platform snapshot of their official page and official name). No delete; forced RLS; select for platform admins and the service role only.
+* Helpers: `app.src_deep_official_url`, `app.pack_is_sourced`, `app.current_program_pack`, `app.pack_form_pins`, `app.src_rule_kind`, `app.rule_pack_impact`, `app.newer_rule_pack`, `app.program_pack_for_new_matter`, `app.record_matter_program_scope` (only for a matter created in the same transaction).
+* RPCs: `public.matter_rule_state(matter)` (pin, scope, newer approved version with impact and last decision; staff at aal2 who can read the matter), `public.decide_matter_rule_upgrade(matter, to_pack, expected_version, accepted|declined, reason)` (licensed consultant or firm owner; step-up to accept; audited), `public.create_client_matter_for_program(..., program_key, ...)` (invoker), `public.support_catalogue(org default null)` (security definer, anon allowed; firm view only for that firm's staff), `public.save_support_catalogue_entry(...)` (`app.platform_ops_actor` plus step-up when signed in; audited `support_catalogue.saved`).
+
+Ops wrapper: `scripts/ops/support-catalogue.mjs` (capture, entry, list). Tested in `tests/src-pins-scope.rls.test.ts` and `tests/src-pins-scope.test.tsx`.
+
+### Live packs and one homepage rule (`20261025410100`, not applied on the live project; apply after `20261025400000` and `20261025410000`)
+
+SRC-05 / SRC-12 on top of the SRC-03 publication gate. Additive.
+
+* New `app.rule_pack_is_live(pack)`: the pack is `published` and has rule versions, each live by `app.rule_version_is_live` (SRC-03: published and within its stated effective dates). A review-due, suspended or superseded pack, or one holding a review-due, suspended, superseded, rejected or expired rule version, is not live.
+* Redefined (copied from `20261025410000`): `app.current_program_pack`, `app.newer_rule_pack`, `app.decide_matter_rule_upgrade` and `app.support_catalogue` count live packs only (before: pack status published or review due); `app.matter_rule_state` adds `binding.pack_live`; `app.src_deep_official_url` uses `app.official_claim_url` for canada.ca / gc.ca pages and the same two-segment rule for other allowlisted official hosts.
+
+## Service notice reach check is private (`20261025440000`, not applied on the live project)
+
+ADM-04 follow-up. Revokes `authenticated`'s EXECUTE on `app.service_notice_reaches(uuid, uuid)`. It is only called inside the security-definer `app.can_read_service_notice` and `app.dismiss_service_notice`, so reads and dismissals are unchanged; a signed-in user can no longer ask whether a notice reaches a firm. Tested in `tests/adm-service-notices.rls.test.ts`.
+
+## Claims, review workbench and publication gate (`20261025400000`, not applied on the live project)
+
+SRC-01, SRC-02, SRC-03 (gap #188), branch `feat/src-claims-review`. Builds on the source-governance tables; additive (new nullable columns, `rule_evidence.snapshot_id` relaxed to nullable, new checks, functions and one trigger). Seeds nothing.
+
+* `rule_evidence` new columns: `source_url` (exact official page with its section anchor; homepage refused), `form_number`, `form_modified_on`, `published_on`, `modified_on`, `last_amended_on`, `current_to`, `checked_on` (dates exactly as the page shows; null is Unknown), and `page_attested_by_membership_id` / `page_attested_on` / `page_attested_at` (the approving reviewer's attestation when there is no capture). A row has a snapshot or a `source_url`; an attestation only without a snapshot. New trigger `rule_evidence_source_guard` (`app.guard_rule_evidence_source`): URL check on insert, provenance immutable, attestation only from the review function.
+* `rule_versions` new columns: `status_reason` (reject/suspend reason), `status_changed_at`, `status_changed_by_membership_id`. Applicability resolution lives in the existing `applicability` jsonb (`resolution`, `resolved_by_membership_id`, `resolved_at`).
+* `app.official_claim_url(url)`: host when the URL is canada.ca or a gc.ca site and not a homepage or landing page; null otherwise.
+* `app.rule_review_gate_open(version)` (internal): true inside `app.review_rule_version` for that version (the existing `app.gov_write_nonce` in the current transaction) or in a maintenance session; never for authenticated, anon or service_role requests.
+* `app.rule_version_is_live(version)`: published and within its stated effective dates (granted to authenticated and service_role).
+* Redefined `app.guard_rule_version()` (from `20261017113157`): moving to approved/published also needs the gate (`publication blocked: approval_required`). `app.rule_publication_blockers(...)` (from `20261017113157`): evidence without a capture counts once attested; test cases are required only for executable rules (`structured_condition`). `app.prepare_professional_review()` (from `20261018100000`): an approved review is recorded only through the gate.
+* `public.add_rule_claim(org, stable_key, jurisdiction, program_key, claim, value, source_url, source_section, excerpt, applicability_note, form_number, form_modified_on, published_on, modified_on, last_amended_on, current_to, effective_from, effective_to, checked_on, snapshot)`: firm owner, licensed consultant or case manager (aal2); creates the definition or its next version (one waiting at a time), the firm source and snapshot (reused for the same hash), the version (`draft`, or `evidence_captured` with a capture) and its evidence; audited `rule.claim_entered`.
+* `public.resolve_rule_applicability(version, expected_version, resolution, note)`: licensed (aal2); applies / does_not_apply / partly with a note; status `professional_review`; audited `rule.applicability_resolved`.
+* `public.review_rule_version(version, expected_version, decision, note, next_review_on, page_opened_on)`: approve = licensed with step-up, applicability resolved (applies/partly), not expired, next review within two years, GOV attestation and self-approval rules; records the approved review (credential snapshot when on file), publishes (frozen) and supersedes the earlier live version; audited `rule.version_approved` / `_self`. Reject = licensed (aal2) with a reason; audited `rule.version_rejected`.
+* `public.suspend_rule_version(version, expected_version, reason)`: licensed (aal2), live versions only, reason required; audited `rule.version_suspended`.
+
+Capture script: `scripts/ops/capture-official-claims.mjs` writes `src/modules/content-governance/captured-claims.json` (drafts offered in Add claim). Tested in `tests/src-claims-review.rls.test.ts` and `tests/src-claims-present.test.tsx`; `tests/source-governance.test.ts`, `tests/owner-licence-gates.rls.test.ts` and `tests/owner-full-access.rls.test.ts` now write approved reviews from a maintenance session.
+
+## Renewal reminders carry their official timing's freshness (`20261025451000`, not applied on the live project)
+
+DES-04 (stale-source state, client portal), branch `feat/des-states-portal`. Redefines `app.portal_renewal_reminders(uuid)` (copied from `20261025230000`): the `timing` object also carries `status` (`renewal_timings.status`), and from the timing's `official_sources` row `source_review` (`review_status`), `source_next_review` (`next_review_at`), `source_change` (`change_state`), `source_attempt` (`last_attempt_result`) and `source_attempt_at` (`last_attempt_at`). Clients can't read either table, so without this the portal couldn't tell a retired timing, a page due for review or suspended, a detected change or a failed check from a current one. Same signature, grants, rows and gating (contact choices, own reminders only); no tables, no data. Tested in `tests/dec-renewal.rls.test.ts` (DES-04 block) and `tests/des-portal-states.test.tsx`.
+
+## Program selection accepts only a live pack (`20261025430000`, not applied on the live project)
+
+SRC follow-up (Francis, 2026-10-25). **Redefines** `app.pack_is_selectable(uuid, uuid)` (only definition `20261017170000_matter_lifecycle.sql`): the status test `status in (published, review_due)` becomes `app.rule_pack_is_live(pack.id)` (`20261025410100`), so `select_matter_program` and its callers refuse a review-due pack or one holding a rule version that is not live. Otherwise unchanged. Tested in `tests/src-pins-scope.rls.test.ts`.
+
+## Migration import: one kind per file (`20261025460000`, not applied on the live project)
+
+MIG follow-ups (gap #187, Francis's MIG decision 2), branch `feat/mig-followups`. Additive; nothing seeded. Applies after the MIG migrations (`20261025385100` is where both redefined functions were last defined).
+
+* New `app.migration_kinds_in_headers(text[])` (immutable SQL): the import kinds a file's headings point to, by labels in the upload picker's order, from headings distinctive to each kind only. New `app.migration_refuse_mixed(text[])`: raises 22023 "this file holds more than one kind of record: <kind>; <kind>" when two or more are found. Both revoked from public, anon and authenticated (called inside the definer functions).
+* **Redefines** `public.set_migration_kind` and `public.save_migration_mapping` (latest `20261025385100_mig_import_kinds_evaluate.sql`), each copied unchanged except for one `perform app.migration_refuse_mixed(b.headers)` after its state check. The upload (`src/modules/migration/actions.ts`) now calls `set_migration_kind` for every kind, clients and matters included, and discards the staged batch when it refuses.
+
+Tested in `tests/migration-followups.rls.test.ts` (the detection, refusal at staging for every kind chosen with nothing taken, refusal at mapping, a one-kind file through; and `imported_record_provenance` for imported key dates, relationships and opening balances, staff only, no values, no other firm) and `tests/migration-followups-present.test.tsx`.
+
+## Refund emails when a refund fails after "complete" (`20261025530000`, `20261025530100`, not applied on the live project)
+
+Bug #215 live check 6, branch `fix/refund-failed-email`. Additive. Apply in order.
+
+* `20261025530000_refund_failed_mail_enum.sql`: `email_template` gains `refund_failed` (own migration).
+* `20261025530100_refund_failed_mail.sql`:
+  * **Redefines** `app.mail_on_invoice_refund()` (only definition `20261019170100_email_design_events.sql`): a refund moving to succeeded no longer queues `invoice.refund_succeeded` (EX10 is not sent, see DECISIONS); a refund moving to failed or canceled queues `invoice.refund_failed` with idempotency key `invoice.refund_failed-email:<refund id>` (once per refund).
+  * New trigger `invoice_refunds_failed_mail` on `invoice_refunds` (after update of status, when the new status is failed or canceled and the old one was pending, requires_action or succeeded, the statuses that sent EX09).
+  * **Redefines** `public.claim_mail_events` and `public.prepare_email_delivery` (latest `20261025110100_ops_messaging.sql`): claim `invoice.refund_failed`; prepare maps it to `refund_failed`, sends it to the same people as the other refund mail (payer, else the matter's applicants) but regardless of their Email notices choice (suppressed and missing addresses still not sent) with `refund_reason` (the refund's `failure_reason` when it is a plain code), and marks any queued `invoice.refund_succeeded` published without sending (audit `email.skipped`, reason `refund_not_final`). Grants restated.
+  * `app.apply_stripe_reversal_event` is unchanged (it already records the failure and opens the owner's task).
+
+Tested in `tests/email-designs.rls.test.ts` (no complete event; one correction after succeeded then failed, also to a client who turned Email notices off, with the same event replayed and a refund.updated repeat; pending then failed; a refund recorded as failed sends nothing; a queued complete event is skipped).
+## Viewing an imported matter doesn't block its rollback (`20261025520000`, not applied on the live project)
+
+DES-04 follow-up (#237 live checks), branch `fix/des-billing-call`. Additive; nothing seeded. Opening a matter reads `public.matter_inbound_address`, which makes the matter's reply address (`matter_reply_addresses`) on first use; for an imported matter that row made the rollback refuse ("1 new matter reply addresses linked to imported records since the import").
+
+* **Redefines** `app.migration_rollback_blockers` (latest `20261025385200_mig_import_kinds_commit.sql`): the `public.matter_reply_addresses.matter_id` count is skipped while no `email_deliveries` or `inbound_emails` row names one of the batch's matters (mail out uses the reply address as Reply-To; mail in arrives on it). Otherwise unchanged; a used reply address still refuses.
+* **Redefines** `public.rollback_migration_batch` (latest `20261025385200`): deletes the batch's matters' `matter_reply_addresses` rows before the matters. Otherwise unchanged.
+
+Tested in `tests/migration-import.rls.test.ts` (opening the matter then rolling back succeeds and removes the reply address; with mail received on the matter the rollback still refuses and keeps it).
+## Disconnecting the firm's Stripe account (`20261025540000`, not applied on the live project)
+
+Bug 8, branch `fix/stripe-account-unlink`. Additive; test mode only; nothing seeded. Stripe is never asked to delete or reject an account.
+
+* `firm_payment_accounts` keeps holding the **current** link only (its unique `organization_id` and `account_id` are unchanged: one link per firm, one firm per account). Every existing lookup reads it, so none can see an ended link. Its blanket `firm_payment_accounts_no_delete` trigger is disabled and replaced by `firm_payment_accounts_unlink_only` (`app.guard_payment_account_delete()`): a row may go only once its ended link is in the history. A truncate guard is added.
+* New `firm_payment_account_history` (forced RLS; append-only by trigger; select for the firm's owner and finance users at aal2, like `firm_payment_accounts`): each ended link copied whole (`payment_account_id`, `account_id`, last statuses, `linked_at`/`linked_by`, `ended_at`, `ended_by`, `end_reason` 3–500 chars).
+* New `app.stripe_account_unlink_blockers(org, account)`: card payments processing, or started (`requires_payment`) in the last 24 hours; refunds `pending` or `requires_action`; disputes not closed (`warning_needs_response`, `warning_under_review`, `needs_response`, `under_review`). Not granted to API roles.
+* New `public.unlink_stripe_account(org, account, confirmation, reason)` → `app.unlink_stripe_account`: firm owner with a fresh step-up (`app.require_firm_owner_step_up`), the current account id (40001 if it changed), `DISCONNECT` typed, a reason. With blockers: returns `{unlinked: false, blockers}`, changes nothing, audits `stripe.account_unlink_refused` (denied). Otherwise copies the link into the history, removes the current row and audits `stripe.account_unlinked` (object: the history row; context: account, reason, number of open requests). Returns `{unlinked: true, history_id, account_id, open_requests}`: the card payment requests still open on the old account (`requires_payment` or `failed`, any age), which the server action then cancels at Stripe.
+* New `public.record_stripe_unlink_cancellations(history_id, results)` → `app.record_stripe_unlink_cancellations`: the owner who disconnected the account, fresh step-up, once per disconnect. Each result names a payment on that account and `canceled` (the row is marked canceled), `already_finished` (left to Stripe's own event) or `failed`. Audits `stripe.account_unlink_requests_closed` with every result (`failure` when one failed) and, on a failure, opens a high-priority task for the firm owner due today in the firm's timezone (`app.create_finance_task`, key `stripe-unlink-<history id>`).
+* **Redefines** `app.record_firm_payment_account` (latest `20261019100100_stripe_connect_invoices.sql`): unchanged except it also refuses an account in another firm's history (23505 "this Stripe account belongs to another firm").
+
+Tested in `tests/stripe-account-unlink.rls.test.ts` (owner-only, fresh step-up, typed confirmation and reason, refusals listing open items, history kept and append-only, single active link, relink and move, open requests returned and their results recorded, the failure task, a later webhook on the old account still recorded) and `tests/stripe-account-unlink-requests.test.ts` (mocked Stripe: cancels on the old account's Stripe-Account header, already-finished left alone, a failure keeps the unlink and is listed).
+## Portal invitation: only an open counts toward its limit (`20261025510000`, not applied on the live project)
+
+Bug 3 (Francis's bug list 2026-10-25, #215 live checks), branch `fix/invite-accept-codes`. Additive; no table changes. The accept wizard ran `app.present_portal_invitation` on every step and retry, and each call counted toward the `present` limits (40 per token per hour, 30 per signed-in actor per 15 minutes), so a client hit them within a few tries.
+
+* New `app.portal_invite_limited(text, text, uuid, boolean)`: the latest 3-argument body (`20261017140800_portal_invitations.sql`) with `p_record`; false checks the same limits without inserting an attempt. The 3-argument form now calls it with true (unchanged behaviour for create and resend).
+* **Redefines** `app.present_portal_invitation(text)` (only definition `20261017140800`): counts the attempt only when `app.portal_invitation_open` is `'1'` for the transaction (then clears it) or the token matches no invitation; every other use only checks. Same signature and grants. So draft saves, sign-in re-reads, acceptance, decline and mismatch reports no longer add to the count, and a token already over its limit stays refused.
+* New `public.preview_portal_invitation(text, boolean)` (anon, authenticated): `p_open` true is an open (sets the flag, then returns `public.preview_portal_invitation(text)`, unchanged, latest `20261024100000_firm_default_locale.sql`). The 1-argument form on its own is now an uncounted read. The accept screen opens once per page load; the server's page render and `openPortalInvitee` read with false.
+
+Tested in `tests/portal-invites.rls.test.ts` ("counts only an open toward an invitation's limit").
+
+## Live official claims with firm-only licensed edits (`20261025600000`, `20261025600100`, not applied on the live project)
+
+#188, Francis's decisions 2026-10-25 (11:42, 11:50 and 4:48 PM CDT), branch `feat/src-live-claims`. Apply in order; then @swe runs the loader (`node scripts/ops/load-official-claims.mjs --dry-run`, then without `--dry-run`) from a database maintenance session (Management API). Additive; seeds only five product settings; no claim is seeded by migration.
+
+* `20261025600000`: new enum `public.rule_origin` (`official_capture`, `firm_entry`).
+* `rule_versions.origin` (default `firm_entry`; `official_capture` only with `organization_id` null). `rule_definitions.source_category` (fee, form, checklist, program, guide, law; platform rows only; immutable). The `rule_definitions_stable_key_check` now allows a segment starting with a digit (`CA.GUIDE.5269.INTRO`).
+* Product settings `source.recheck_interval.fee|form|checklist` (7 days), `.program` (14, guides too), `.law` (30), confirmed.
+* New `public.rule_claim_overrides` (forced RLS; select for the firm's staff with MFA; no insert/update/delete grants; guard trigger refuses any writer but `app.edit_rule_claim`, and every update or delete): a firm's edit or revert of a live official claim, its base version, the editor's membership, name and licence (credential id and College ID copied in), the step-up time and session. New `public.rule_step_up_uses` (forced RLS, no grants): each step-up used once by a claim edit, revert or unsuspend.
+* New functions: `app.db_maintenance_session()`; `app.source_recheck_interval(category)`; `app.rule_version_source(version)`; `app.official_live_version(definition)`; `app.official_claim_stale(version)`; `app.latest_step_up_at()` and `app.use_rule_step_up(org, action, object)` (a fresh step-up, used once); `app.rule_claim_edit(org, definition)`, `app.rule_version_firm_edit(org, version)`; `app.firm_rule_claim(org, definition)` (the one read of a claim for a firm: official text and evidence, the firm's edit and stamp, `source_changed`, `stale`); `public.official_claims(query, program, limit, offset)`, `public.official_claim(definition)`, `public.rule_claim_history(definition)`, `public.matter_official_claims(matter, category)` (staff with MFA of the current firm); `public.edit_rule_claim(definition, expected_base_version, text, value, reason, action)` (licensed, fresh step-up, live official claim, stale base refused with PT409; audited `rule.claim_edited` / `rule.claim_reverted`); `public.unsuspend_rule_version(version, expected_version, reason)` (licensed, fresh step-up, no newer live version; audited `rule.version_unsuspended`); `app.load_official_claim(claim, dry_run)` and `app.load_official_claims(claims, dry_run)` (maintenance session only; refuses placeholders, homepages, non-federal pages, missing hash or retrieval time; new / changed / unchanged / suspended); `app.rule_item_is_live(version)`; `app.vo_stale_official_items(org, matter)`.
+* **Redefined** (copied from their latest definitions): `app.prepare_rule_definition` (`20261017113157`: `source_category` immutable); `app.guard_rule_version` and `app.rule_publication_blockers` (`20261025400000`: an official capture is created and published only in a maintenance session, needs its captured page and no review); `app.apply_source_check_attempt` (`20261017113157`: the loader's unchanged re-capture moves "last checked" to its time); `app.rule_pack_is_live` (`20261025410100`: an official claim item follows the claim's live version); `app.src_rule_from_pinned_pack` (`20261025410000`: a live official claim of the matter's program may back a checklist item or deadline); `app.support_catalogue` (`20261025410100`: live official form/checklist claims make a program supported; `official_claims`, `stale`, `last_checked_at`, `firm_edits`); `app.vo_official_attestation`, `app.vo_letter_official_items`, `public.vo_run_official_content`, `public.finish_vo_run` (`20261025450000`: the firm's wording and edit stamp, `CA.FEES.*` for any pack labelled with its program, overdue fee/advice-like claims left out and listed with the reason).
+
+Tested in `tests/src-live-claims.rls.test.ts`, `tests/load-official-claims.test.ts` (the committed captures loaded into PGlite, idempotent) and `tests/src-live-claims-present.test.tsx`. The capture files are `src/modules/content-governance/captured-claims.json`, `captured-canada-ca.json` and `captured-all-sources.json`; the all-sources coverage notes are in `docs/sources/captured-all-sources.md`.
+
+## Evidence on several matters, translations and classification (`20261026100000`, not applied on the live project)
+
+DOC-06 (#178), branch `feat/doc-evidence-links`. Was `20261024210000`; renumbered 2026-10-26 after main's `20261025600100`. Additive; new functions only, no table, policy or existing function changed (checked against every migration on main up to `20261025600100`: none of them redefines these or touches `documents`, `document_versions` or `document_matter_refs`).
+
+* `20261026100000_document_evidence_links.sql`: new `public.link_document_matter(document, matter)` (owner, licensed consultant or case manager who can read both; the document's person must be on the matter; only a current version that passed its file check; an existing link is returned; audited `document.linked`). New `public.set_document_translation(version, expected_version, original_version, language_tag)` (same roles; same person, another document, no cycle; through `app.open_document_write`; audited `document.translation_set` / `document.translation_cleared`). New `public.set_document_classification(document, expected_version, purpose, sensitivity)` (same roles; a sensitivity change needs aal2; audited `document.classified`). Removing a link stays `public.unlink_document_matter`, expiry stays `public.set_document_expiry` (both unchanged).
+
+Tested in `tests/document-evidence-links.rls.test.ts`.

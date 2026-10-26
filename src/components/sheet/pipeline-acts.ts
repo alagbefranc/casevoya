@@ -15,6 +15,7 @@
  * none of them, so nothing here runs on it.
  */
 import { toast2 } from "@/components/port/kit";
+import { acceptChosen } from "./upload-failure";
 import { LEAD_FIELDS, readLeadsCsv, type CsvLeadRow } from "@/modules/leads/csv";
 import { cardFee, leadCount, ringOffset } from "@/modules/leads/present";
 
@@ -527,10 +528,12 @@ export function wirePipeline(root: HTMLElement, router: Router, signal: AbortSig
       const file = input.files?.[0];
       const dialog = input.closest("dialog");
       if (!file || !dialog) return;
-      if (file.size > 2_000_000) {
-        toast2("That file is too large", { kind: "warn", sub: "Import up to 500 leads (2 MB) at a time." });
-        return;
-      }
+      // DES-04: a wrong type, empty or over-2 MB file is refused in the dialog, with Choose another file.
+      const again = () => {
+        input.value = "";
+        input.click();
+      };
+      if (!acceptChosen(input, file, "leadsCsv", again)) return;
       void file.text().then((text) => fillCsv(dialog, file, text));
     },
     listen,

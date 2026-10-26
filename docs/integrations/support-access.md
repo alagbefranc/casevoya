@@ -126,6 +126,51 @@ Audit actions: `support_access.requested`, `.approved`, `.declined`, `.ended`, `
 `.expired`, `.cancelled`, `.used`. The words of a reason stay on the row; the audit stream keeps
 their length.
 
+## Service-level report (ADM-04)
+
+Branch `feat/adm-service-levels`, migration `20261025360000_service_levels.sql` (not applied
+live). Platform admins act through RPC or `scripts/ops/service-levels.mjs` (service role); there is
+no platform admin web UI.
+
+**Support response times** come from `public.support_response_records`: one row per support
+request a firm sent Casevoya, keyed by firm and the support desk's ticket reference, with when it
+reached support and when support first replied (null while waiting). Metadata only: no subject,
+message or anything the firm wrote. Casevoya's support desk is outside this repository, so a
+platform admin records each request:
+
+```sql
+select public.record_support_response(
+  p_organization_id   => '<firm uuid>',
+  p_ticket_ref        => 'CS-2291',                    -- 1 to 60 characters; same ref again corrects it
+  p_received_at       => '2026-10-25T14:05:00-04:00',  -- when it reached support; not in the future
+  p_first_response_at => '2026-10-25T15:20:00-04:00',  -- null while it waits; not before received
+  p_recorded_by       => '<platform admin user id>'    -- service role only; a signed-in admin records as themself
+);
+```
+
+```
+node scripts/ops/service-levels.mjs record <firm-id> --ticket CS-2291 \
+  --received 2026-10-25T14:05:00-04:00 --responded 2026-10-25T15:20:00-04:00 \
+  --recorded-by <platform-admin-user-id>
+node scripts/ops/service-levels.mjs report <firm-id> --months 6
+```
+
+Callers: a platform admin signed in at aal2, or the service role naming a `platform_admins` user.
+Firm staff never. Audited `service_level.support_response_recorded` / `.support_response_updated`
+(ticket reference and times only).
+
+**The report** `public.service_level_report(firm, months)` (1 to 24, default 6) gives, per month in
+the firm's timezone (newest first), how many requests reached support, how many got a first reply,
+how many wait, and the median and longest time to that reply in seconds. Read by the firm's owner
+(aal2; shown on Settings > Security as "Support response time"), a platform admin at aal2 or the
+service role; a Casevoya read is audited on the firm as `service_level.report_read`.
+
+**Uptime** is `{"measured": false}`: Casevoya records no uptime monitoring (no health check,
+status page or monitor writes to the database), so Settings > Security says "Not measured yet" and
+no figure is ever computed. Hook: when a real source exists (for example service windows recorded
+when an incident or maintenance notice is resolved), fill `uptime` in `public.service_level_report`
+from it and give `serviceLevelRows` (`src/modules/sheet/service-levels-present.ts`) a measured form.
+
 ## Not built
 
 - The admin portal itself (a separate codebase) and its sign-in.
@@ -133,4 +178,4 @@ their length.
   grant here needs the owner's approval).
 - Reads for the `records_set` scope: the request describes the set in words; no function opens
   records for it yet.
-- Incident notices and service-level reporting (ADM-04).
+- Incident notices (ADM-04) and uptime monitoring (see Service-level report above).

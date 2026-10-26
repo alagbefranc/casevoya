@@ -1,6 +1,8 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
+import { acceptChosen, failUpload } from "./upload-failure";
 import { moveClientCredit } from "@/modules/finance/staff-actions";
 import { formatMoney } from "@/modules/finance/money";
 import { CREDIT_DIALOG, EVIDENCE_DIALOG } from "@/modules/finance/credits-present";
@@ -123,7 +125,7 @@ export async function runCredit(button: HTMLElement, router: Router) {
       } catch {
         // Storage can be unavailable; the person opens the credit again.
       }
-      window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, CREDIT_DIALOG));
+      goStepUp(financeStepUpLocation(window.location.pathname, window.location.search, CREDIT_DIALOG, "credit_note"));
       return;
     }
     toast2(result.error, { kind: "bad", sub: "Nothing was moved." });
@@ -193,6 +195,14 @@ export async function runEvidence(button: HTMLElement, router: Router) {
     toast2("Choose a file.", { kind: "warn", sub: "Nothing was sent." });
     return;
   }
+  // DES-04: Stripe takes a PDF, JPEG or PNG under 4.5 MB; say so before sending, with a retry.
+  const input = field<HTMLInputElement>(dialog, "evF");
+  const again = () => {
+    if (!input) return;
+    input.value = "";
+    input.click();
+  };
+  if (input && !acceptChosen(input, file, "dispute", again)) return;
   const form = new FormData();
   form.set("org", button.dataset.org ?? "");
   form.set("dispute", dispute);
@@ -208,10 +218,11 @@ export async function runEvidence(button: HTMLElement, router: Router) {
   if (!result.ok) {
     const error = result.error ?? "Nothing was submitted; try again.";
     if (financeNeedsStepUp(error)) {
-      window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, EVIDENCE_DIALOG));
+      goStepUp(financeStepUpLocation(window.location.pathname, window.location.search, EVIDENCE_DIALOG, "dispute_evidence"));
       return;
     }
-    toast2(error, { kind: "bad", sub: "Check the dispute before trying again." });
+    if (input) failUpload(input, error, "dispute", /file|PDF|JPEG|PNG|under/i.test(error) ? again : () => void runEvidence(button, router));
+    else toast2(error, { kind: "bad", sub: "Check the dispute before trying again." });
     return;
   }
   dialog.close();

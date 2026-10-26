@@ -335,6 +335,25 @@ describe("document storage and review", () => {
     expect(clientSees.rows).toHaveLength(1);
   });
 
+  it("refuses a document request without a fresh step-up, even one resumed after /mfa (bug 1, 2026-10-25)", async () => {
+    const ctx = await firm();
+    const request = () =>
+      db.query<{ id: string }>(
+        `select public.create_document_request(
+           $1, $2, 'Passport bio page', 'The page that shows the photograph and the name.',
+           null, array['pdf']::text[], null, null, 'subject', 'ordinary', null, null
+         ) as id`,
+        [ctx.matterId, ctx.applicant],
+      );
+    // The resumed press calls the same function: a stale check (an hour old) is still refused.
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 3600 });
+    await expectDbError(request, /step-up is required/);
+    await asUser(db, { userId: ctx.consultant, aal: "aal1", orgId: ctx.orgId });
+    await expectDbError(request, /denied|step-up/);
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    expect((await request()).rows[0].id).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
   it("refuses an unpublished rule and a direct version update", async () => {
     const ctx = await firm();
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });

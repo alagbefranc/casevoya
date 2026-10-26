@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { VO_MODEL } from "../src/modules/vo/prompt";
+import { VO_VENDOR_TERMS } from "../src/modules/vo/vendor-terms";
 
 /**
  * 20261025250100_vo_lead_call_drafts.sql against the real migrations (PRD AI-01, AI-06): Vo lead
@@ -75,6 +76,8 @@ const as = (f: Firm, userId: string) => asUser(db, { userId, aal: "aal2", orgId:
 
 async function settings(f: Firm, changes: Record<string, boolean>) {
   await as(f, f.owner);
+  // AI-06: the owner acknowledges the AI vendor terms before Vo can be turned on.
+  if (changes.enabled) await db.query(`select public.acknowledge_vo_vendor_terms($1, $2)`, [f.orgId, VO_VENDOR_TERMS.version]);
   await db.query(`select public.set_vo_settings($1, $2::jsonb)`, [f.orgId, JSON.stringify(changes)]);
 }
 

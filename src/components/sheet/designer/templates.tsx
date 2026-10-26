@@ -1,16 +1,26 @@
 /**
  * The Designer's Templates page (`markup/templates.tsx`): Program templates (default), Message
  * templates, Checklists, Source review and Rule detail tabs. Same DOM, classes and order; the
- * rows come from the firm's records and the approved email catalog. Read only here: rule review
- * and publication stay in the source-governance workflow (T013).
+ * rows come from the firm's records and the approved email catalog.
  *
  * Live-only addition: `data-nav` on New template (it opens the Agreements page's template
  * dialog, where firm templates are made). On Message templates (OPS-04) it opens the firm's own
  * message template dialog instead (`newTemplateDialog`, `MessageTemplateDialog`), and the firm's
  * templates are rows above the email catalog.
+ *
+ * Live-only additions (SRC-01/02/03, source-claims.tsx): Add claim on Source review
+ * (`sources.addClaim`), and on Rule detail the claim's evidence with every date on its own
+ * (`rule.evidence`) and the review panel (`rule.review`). The Designer's demo "Actions for your
+ * role" panel (`rule.actions`) stays demo-only; live data leaves it null.
+ *
+ * Live-only additions (#188, official-claims.tsx): the Live official claims list below the source
+ * register (`sources.live`), and one live official claim on Rule detail (`officialClaim`).
  */
 import { Empty, Icon, Pair } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
+import { AddClaimButton, ClaimEvidenceList, ClaimReviewPanel, type AddClaimData, type ClaimEvidenceItem, type ClaimReviewData } from "./source-claims";
+import { LiveOfficialClaims, OfficialClaimDetail } from "./official-claims";
+import type { LiveClaimsData, OfficialClaimView } from "@/modules/sheet/official-claims-present";
 
 export type TemplatesTab = "program" | "messages" | "checklists" | "sources" | "rule";
 
@@ -32,6 +42,10 @@ export type RuleDetail = {
   tests: { case: string; expected: string; result: string | MatterBadge }[] | null;
   source: { publisher: string; url: string; linkText: string; appliesTo: string; version: string; checked: string; reviewer: Text; state: MatterBadge } | null;
   actions: { role: string } | null;
+  /** Live only (SRC-01/02): each piece of evidence with its capture and every date on its own. */
+  evidence?: ClaimEvidenceItem[];
+  /** Live only (SRC-03): the review workbench panel for this version. */
+  review?: ClaimReviewData;
 };
 
 export type TemplatesData = {
@@ -43,11 +57,15 @@ export type TemplatesData = {
   newTemplateLabel?: string;
   /** Live (OPS-04): the dialog New template opens instead of a toast or a page. */
   newTemplateDialog?: string;
-  program: { rows: ProgramRow[]; note: string };
+  /** `supportHref` (live only, SRC-12): the link to "What Casevoya supports" after the note. */
+  program: { rows: ProgramRow[]; note: string; supportHref?: string };
   messages: { rows: MessageRow[] };
   checklists: { cards: ChecklistCard[] };
-  sources: { kpis: SourceKpi[]; rows: SourceRow[] };
+  /** `addClaim` (live only, SRC-01): the Add claim button and dialog. `live` (live only, #188): the live official claims. */
+  sources: { kpis: SourceKpi[]; rows: SourceRow[]; addClaim?: AddClaimData; live?: LiveClaimsData };
   rule: RuleDetail | null;
+  /** Live only (#188): one live official claim on the Rule tab (`?claim=`), with the firm's edit and history. */
+  officialClaim?: OfficialClaimView | null;
 };
 
 const UL: Record<TemplatesTab, React.CSSProperties> = {
@@ -195,6 +213,12 @@ function Program({ data }: { data: TemplatesData }) {
       )}
       <p className={"fp-note rv"} style={i(2)}>
         {data.program.note}
+        {data.program.supportHref ? (
+          <>
+            {" "}
+            <a href={data.program.supportHref}>{"What Casevoya supports"}</a>
+          </>
+        ) : null}
       </p>
     </>
   );
@@ -288,6 +312,7 @@ function Sources({ data }: { data: TemplatesData }) {
           <p>{"The official sources behind every rule in your templates. If a source is missing or stale, the rule shows “Review required” and who owns it, never a made-up answer."}</p>
         </div>
       </div>
+      {data.sources.addClaim ? <AddClaimButton data={data.sources.addClaim} /> : null}
       <div className={"fp-kpi rv"} style={i(1)}>
         {data.sources.kpis.map((kpi) => (
           <a key={kpi.label} className={kpi.warn ? "fp-k warn k2-spot" : "fp-k k2-spot"} href={kpi.href} data-spot={"1"}>
@@ -362,6 +387,7 @@ function Sources({ data }: { data: TemplatesData }) {
           </table>
         </div>
       )}
+      {data.sources.live ? <LiveOfficialClaims data={data.sources.live} /> : null}
     </>
   );
 }
@@ -404,6 +430,7 @@ function Rule({ rule }: { rule: RuleDetail | null }) {
               {rule.note ? <p className={"fp-note"}>{rule.note}</p> : null}
             </div>
           </section>
+          {rule.evidence ? <ClaimEvidenceList items={rule.evidence} /> : null}
           {rule.diff ? (
             <section className={"panel"}>
               <h2>
@@ -521,6 +548,7 @@ function Rule({ rule }: { rule: RuleDetail | null }) {
               </div>
             </div>
           ) : null}
+          {rule.review ? <ClaimReviewPanel review={rule.review} /> : null}
         </div>
       </div>
     </>
@@ -531,7 +559,7 @@ export function SheetTemplates({ data }: { data: TemplatesData }) {
   if (data.tab === "messages") return <Messages data={data} />;
   if (data.tab === "checklists") return <Checklists data={data} />;
   if (data.tab === "sources") return <Sources data={data} />;
-  if (data.tab === "rule") return <Rule rule={data.rule} />;
+  if (data.tab === "rule") return data.officialClaim ? <OfficialClaimDetail view={data.officialClaim} /> : <Rule rule={data.rule} />;
   return <Program data={data} />;
 }
 

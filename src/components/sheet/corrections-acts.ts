@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import {
   declineCreditNote,
@@ -59,7 +60,7 @@ function stepUp(dialog: HTMLDialogElement, button: HTMLElement, flag: string) {
   } catch {
     // Storage can be unavailable; the person opens the dialog again.
   }
-  window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, flag));
+  goStepUp(financeStepUpLocation(window.location.pathname, window.location.search, flag, flag === RECON_DIALOG ? "reconciliation" : "credit_note"));
 }
 
 function failed(dialog: HTMLDialogElement, button: HTMLElement, error: string, sub: string, flag: string): void {

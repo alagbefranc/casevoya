@@ -26,14 +26,28 @@ async function Body({ params }: { params: Promise<{ firm: string }> }) {
   const firm = (await params).firm.toLowerCase();
   let listing: Listing | null = null;
   let hasPrivacy = false;
+  let failed = false;
   if (SLUG.test(firm) && hasPublicSupabaseEnv()) {
-    const supabase = await createClient();
-    const [{ data }, privacy] = await Promise.all([
-      supabase.rpc("booking_public_event_types", { p_firm_slug: firm }),
-      supabase.rpc("public_privacy_notice", { p_firm_slug: firm }),
-    ]);
-    listing = data && typeof data === "object" ? (data as unknown as Listing) : null;
-    hasPrivacy = !privacy.error && parsePrivacyNotice(privacy.data) !== null;
+    try {
+      const supabase = await createClient();
+      const [{ data, error }, privacy] = await Promise.all([
+        supabase.rpc("booking_public_event_types", { p_firm_slug: firm }),
+        supabase.rpc("public_privacy_notice", { p_firm_slug: firm }),
+      ]);
+      failed = Boolean(error);
+      listing = data && typeof data === "object" ? (data as unknown as Listing) : null;
+      hasPrivacy = !privacy.error && parsePrivacyNotice(privacy.data) !== null;
+    } catch {
+      failed = true;
+    }
+  }
+  // DES-04: a booking list that couldn't be read is not "no booking pages".
+  if (failed) {
+    return (
+      <SheetScreen page="book" tone="public">
+        <QuietSheet title="Booking isn’t available right now" copy="The firm’s booking pages couldn’t be loaded. Nothing was booked. Try again in a moment." />
+      </SheetScreen>
+    );
   }
   if (!listing || listing.types.length === 0) {
     return (

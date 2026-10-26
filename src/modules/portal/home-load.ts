@@ -10,24 +10,32 @@ import { loadPortalRenewals } from "@/modules/portal/renewal-load";
 import { loadPortalFollowUp } from "@/modules/decisions/portal-load";
 import { portalNotices, type PortalNotice } from "@/modules/portal/notices";
 import { loadPortalTasks, type PortalTask } from "@/modules/portal/tasks-load";
+import type { PortalPart } from "@/modules/portal/states";
 
 /**
  * The client's Home: their next step, the summary strip, where the latest matter stands, the
- * documents they sent, the latest message and the next bill. A part that fails to load shows as
- * empty rather than breaking the page.
+ * documents they sent, the latest message and the next bill. DES-04: a part that fails to load
+ * doesn't break the page, and isn't shown as empty either: it is named in `unavailable`, so Home
+ * says it couldn't be shown (a partial state) instead of "nothing to pay".
  */
 export async function loadPortalHome(viewer: PortalViewer, tasks: PortalTask[] | null): Promise<HomeView> {
   const matter = viewer.matters[0] ?? null;
+  const unavailable: PortalPart[] = [];
+  const part = <T,>(name: PortalPart, load: Promise<T>, fallback: T): Promise<T> =>
+    load.catch(() => {
+      unavailable.push(name);
+      return fallback;
+    });
   const [taskRows, documents, invoices, messages, consultant, government, renewals, followUp] = await Promise.all([
-    tasks ? Promise.resolve(tasks) : loadPortalTasks(viewer).catch(() => []),
-    loadPortalDocuments(viewer).catch(() => null),
-    loadPortalInvoices(viewer).catch(() => null),
-    loadPortalMessages(viewer, null).catch(() => null),
-    matter ? loadPortalConsultants(viewer).then((names) => names.get(matter.id) ?? null) : Promise.resolve(null),
-    loadPortalGovernment(viewer, matter?.id ?? null),
+    tasks ? Promise.resolve(tasks) : part("tasks", loadPortalTasks(viewer), [] as PortalTask[]),
+    part("documents", loadPortalDocuments(viewer), null),
+    part("payments", loadPortalInvoices(viewer), null),
+    part("messages", loadPortalMessages(viewer, null), null),
+    matter ? part("consultant", loadPortalConsultants(viewer, true).then((names) => names.get(matter.id) ?? null), null) : Promise.resolve(null),
+    part("updates from your firm", loadPortalGovernment(viewer, matter?.id ?? null), []),
     // DEC-02: renewal reminders the firm set (portal only).
-    loadPortalRenewals(viewer),
-    loadPortalFollowUp(viewer, matter?.id ?? null),
+    part("renewal reminders", loadPortalRenewals(viewer), []),
+    part("decision documents", loadPortalFollowUp(viewer, matter?.id ?? null), null),
   ]);
   const view = homeView({
     firmName: viewer.organizationName,
@@ -45,22 +53,41 @@ export async function loadPortalHome(viewer: PortalViewer, tasks: PortalTask[] |
   const withGovernment = government.length ? { ...view, government } : view;
   const withRenewals = renewals.length ? { ...withGovernment, renewals } : withGovernment;
   // DEC-02: the firm's approved conditions summary and the decision documents delivered.
-  return followUp ? { ...withRenewals, followUp } : withRenewals;
+  const withFollowUp = followUp ? { ...withRenewals, followUp } : withRenewals;
+  return unavailable.length ? { ...withFollowUp, unavailable } : withFollowUp;
 }
 
-/** My matters: one card per matter, with the client's open tasks and each matter's consultant. */
-export async function loadPortalMatters(viewer: PortalViewer): Promise<MatterCard[]> {
-  const [tasks, consultants] = await Promise.all([loadPortalTasks(viewer).catch(() => []), loadPortalConsultants(viewer)]);
-  return matterCards({ matters: viewer.matters, tasks, consultants, timezone: viewer.timezone });
+/**
+ * My matters: one card per matter, with the client's open tasks and each matter's consultant.
+ * DES-04: `unavailable` names a part that couldn't be read (the cards then lack it, said plainly).
+ */
+export async function loadPortalMatters(viewer: PortalViewer): Promise<{ cards: MatterCard[]; unavailable: PortalPart[] }> {
+  const unavailable: PortalPart[] = [];
+  const [tasks, consultants] = await Promise.all([
+    loadPortalTasks(viewer).catch(() => {
+      unavailable.push("tasks");
+      return [] as PortalTask[];
+    }),
+    loadPortalConsultants(viewer, true).catch(() => {
+      unavailable.push("consultant");
+      return new Map<string, string | null>();
+    }),
+  ]);
+  return { cards: matterCards({ matters: viewer.matters, tasks, consultants, timezone: viewer.timezone }), unavailable };
 }
 
-/** Each of the client's matters and its responsible consultant's name (public.portal_matter_consultants). */
-async function loadPortalConsultants(viewer: PortalViewer): Promise<Map<string, string | null>> {
+/**
+ * Each of the client's matters and its responsible consultant's name (public.portal_matter_consultants).
+ * `strict`: an unreadable answer throws (DES-04 partial state) instead of reading as "no consultant".
+ */
+async function loadPortalConsultants(viewer: PortalViewer, strict = false): Promise<Map<string, string | null>> {
   try {
     const supabase = await createClient({ organizationId: viewer.organizationId });
-    const { data } = await supabase.rpc("portal_matter_consultants", { p_org: viewer.organizationId });
+    const { data, error } = await supabase.rpc("portal_matter_consultants", { p_org: viewer.organizationId });
+    if (error) throw new Error("portal consultants unreadable");
     return new Map((data ?? []).map((row) => [row.matter_id, row.consultant_name]));
-  } catch {
+  } catch (cause) {
+    if (strict) throw cause;
     return new Map();
   }
 }

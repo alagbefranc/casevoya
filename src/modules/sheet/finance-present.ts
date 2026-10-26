@@ -1,5 +1,6 @@
 import { safeAccessError } from "@/lib/auth/step-up";
 import { isInvoiceCurrency, normalizeCurrency, parseAmount } from "@/modules/finance/money";
+import { stepUpHref, type StepUpActionKey } from "@/lib/auth/mfa-step";
 
 /** Finance page and invoice wording that does not depend on the database. */
 
@@ -287,12 +288,12 @@ export function financeError(message: string): string {
 }
 
 /** The step-up page, then back to this page with the dialog reopened. */
-export function financeStepUpLocation(pathname: string, search: string, dialog: string | null): string {
+export function financeStepUpLocation(pathname: string, search: string, dialog: string | null, action?: StepUpActionKey): string {
   const params = new URLSearchParams(search);
   if (dialog) params.set("dlg", dialog);
   else params.delete("dlg");
   const query = params.toString();
-  return `/mfa?step=6&next=${encodeURIComponent(`${pathname}${query ? `?${query}` : ""}`)}`;
+  return stepUpHref(`${pathname}${query ? `?${query}` : ""}`, action);
 }
 
 const STEP_UP = new Set([safeAccessError("step-up is required"), safeAccessError("aal2")]);
