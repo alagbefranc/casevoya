@@ -1770,6 +1770,94 @@
           "note": "EX18 hand draft (CRM-01, #176)."
         }
       }
+    },
+    "EX19": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-24",
+      "sourceHash": "sha256:1a45496c2bab6e441615e4681a9ea168548bf576de41ed1ba1d638deb3768e24",
+      "strings": {
+        "subject": {
+          "en": "A new notice from {firm_name}",
+          "fr": "Un nouvel avis de {firm_name}",
+          "origin": "hand",
+          "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
+        },
+        "preheader": {
+          "en": "Read it in your portal.",
+          "fr": "Lisez-le dans votre portail.",
+          "origin": "hand",
+          "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
+        },
+        "heading": {
+          "en": "You have a new notice from {firm_name}",
+          "fr": "Vous avez un nouvel avis de {firm_name}",
+          "origin": "hand",
+          "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
+        },
+        "body": {
+          "en": "{firm_name} posted a notice for its clients. For your privacy, it is in your portal.",
+          "fr": "{firm_name} a publié un avis pour ses clients. Pour protéger votre vie privée, il se trouve dans votre portail.",
+          "origin": "hand",
+          "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
+        },
+        "cta": {
+          "en": "Open your portal",
+          "fr": "Ouvrir votre portail",
+          "origin": "hand",
+          "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
+        }
+      }
+    },
+    "EX20": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-25",
+      "sourceHash": "sha256:34b3867edc59b2198640f3b452be8036dc485f8752b78c2f1e392442cf011a35",
+      "strings": {
+        "subject": {
+          "en": "Your refund from {firm_name} didn’t go through",
+          "fr": "Votre remboursement de {firm_name} n’a pas abouti",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        },
+        "preheader": {
+          "en": "The money hasn’t reached you. The firm will contact you.",
+          "fr": "L’argent ne vous est pas parvenu. Le cabinet communiquera avec vous.",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        },
+        "heading": {
+          "en": "Your refund didn’t go through",
+          "fr": "Votre remboursement n’a pas abouti",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        },
+        "body": {
+          "en": "The refund from {firm_name} didn’t go through, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way.",
+          "fr": "Le remboursement de {firm_name} n’a pas abouti; l’argent ne vous est donc pas parvenu. Veuillez ne pas tenir compte de notre courriel précédent au sujet de ce remboursement. {firm_name} communiquera avec vous pour le faire autrement.",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        },
+        "body_card": {
+          "en": "The refund from {firm_name} didn’t go through because the card it was sent to is no longer active, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way.",
+          "fr": "Le remboursement de {firm_name} n’a pas abouti parce que la carte visée n’est plus active; l’argent ne vous est donc pas parvenu. Veuillez ne pas tenir compte de notre courriel précédent au sujet de ce remboursement. {firm_name} communiquera avec vous pour le faire autrement.",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        },
+        "cta": {
+          "en": "View payments",
+          "fr": "Afficher les paiements",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        }
+      }
     }
   }
 }

@@ -428,8 +428,10 @@ describe("Stripe billing events", () => {
     await as(ctx.owner, ctx.orgId);
     const page = await db.query<{ page: { subscription: Row; usage: Row } }>(`select public.firm_subscription($1) as page`, [ctx.orgId]);
     expect(page.rows[0].page.subscription).toMatchObject({ status: "cancelled" });
-    // 91 days on: archived. Nothing is deleted; the firm, people and matters are still there.
-    await setSubscription(ctx.orgId, `cancelled_at = statement_timestamp() - interval '91 days'`);
+    // 91 days after the end of the paid period: archived. Nothing is deleted; the firm, people and
+    // matters are still there. (SEC-10: the window counts from the later of the cancellation and the
+    // period end.)
+    await setSubscription(ctx.orgId, `cancelled_at = statement_timestamp() - interval '91 days', current_period_end = statement_timestamp() - interval '91 days'`);
     await as(ctx.owner, ctx.orgId);
     const ent = await db.query<{ ent: Row }>(`select public.subscription_entitlements($1) as ent`, [ctx.orgId]);
     expect(ent.rows[0].ent).toMatchObject({ status: "archived", new_work_blocked: true });

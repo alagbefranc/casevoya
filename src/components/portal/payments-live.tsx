@@ -175,7 +175,8 @@ export function PaymentsLive({ viewer, data }: { viewer: PortalViewer; data: Por
               </thead>
               <tbody>
                 {data.invoices.map((invoice) => {
-                  const dueSoon = invoice.open && !invoice.processing && invoice.state.label !== "Overdue";
+                  // A payment waiting for the firm's check keeps its "Pending verification" badge, not the due date.
+                  const dueSoon = invoice.open && !invoice.processing && !invoice.pendingCents && invoice.state.label !== "Overdue";
                   const badge = dueSoon ? { tone: "chg", label: `Due ${dayMonth(invoice.dueOn)}` } : invoice.state;
                   return (
                     <tr key={invoice.id}>

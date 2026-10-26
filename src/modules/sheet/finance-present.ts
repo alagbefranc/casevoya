@@ -1,5 +1,6 @@
 import { safeAccessError } from "@/lib/auth/step-up";
 import { isInvoiceCurrency, normalizeCurrency, parseAmount } from "@/modules/finance/money";
+import { stepUpHref, type StepUpActionKey } from "@/lib/auth/mfa-step";
 
 /** Finance page and invoice wording that does not depend on the database. */
 
@@ -29,6 +30,7 @@ type State = { tone: InvoiceTone; label: string; detail?: string };
  * The state badge and the filter chip token for an invoice. Overdue is derived, never stored.
  * `refunded` ("CAD 130.00") is what succeeded refunds returned: a partly refunded invoice keeps
  * its paid state and says how much went back; a fully refunded one is "Refunded" (FIN-13).
+ * `pendingVerification` ("CAD 100.00") is manual payments waiting for their reviewer (FIN-09).
  */
 export function invoiceState(
   status: string,
@@ -37,11 +39,15 @@ export function invoiceState(
   processing = false,
   refunded: string | null = null,
   credited: string | null = null,
+  pendingVerification: string | null = null,
 ): State & { flag: string } {
   const open = status === "issued" || status === "partially_paid";
   // A partly credited invoice says how much its credit notes took off (FIN-06); refunds say first.
   const detail = refunded ? { detail: `${refunded} refunded` } : credited ? { detail: `${credited} credited` } : {};
   if (open && processing) return { tone: "rev", label: "Payment processing", flag: status === "issued" ? "issued" : "partial" };
+  // FIN-09: a manual payment (e-transfer, cheque, wire, cash) was recorded and waits for its reviewer.
+  // It isn't paid until it's verified, so the invoice says so even when it's overdue.
+  if (open && pendingVerification) return { tone: "rev", label: "Pending verification", detail: `${pendingVerification} recorded`, flag: status === "issued" ? "issued" : "partial" };
   if (open && dueOn < today) return { tone: "bad", label: "Overdue", flag: "overdue" };
   switch (status) {
     case "draft":
@@ -282,12 +288,12 @@ export function financeError(message: string): string {
 }
 
 /** The step-up page, then back to this page with the dialog reopened. */
-export function financeStepUpLocation(pathname: string, search: string, dialog: string | null): string {
+export function financeStepUpLocation(pathname: string, search: string, dialog: string | null, action?: StepUpActionKey): string {
   const params = new URLSearchParams(search);
   if (dialog) params.set("dlg", dialog);
   else params.delete("dlg");
   const query = params.toString();
-  return `/mfa?step=6&next=${encodeURIComponent(`${pathname}${query ? `?${query}` : ""}`)}`;
+  return stepUpHref(`${pathname}${query ? `?${query}` : ""}`, action);
 }
 
 const STEP_UP = new Set([safeAccessError("step-up is required"), safeAccessError("aal2")]);

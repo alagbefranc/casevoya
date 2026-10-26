@@ -6,7 +6,7 @@ import { ManageBooking } from "@/components/sheet/manage-booking";
 import { SheetScreen } from "@/components/sheet/screen";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
-import { isBookingRef, isManageToken, manageTokenHash, parseManagedBooking, type ManagedBooking } from "@/modules/scheduling/manage-present";
+import { loadManageView, MANAGE_GONE_COPY, MANAGE_UNAVAILABLE_COPY } from "@/modules/scheduling/manage-present";
 
 export const metadata: Metadata = {
   title: "Manage your booking · Casevoya",
@@ -17,23 +17,21 @@ async function Body({ params, searchParams }: { params: Promise<{ ref: string }>
   const ref = (await params).ref.toLowerCase();
   const raw = (await searchParams).t;
   const token = Array.isArray(raw) ? raw[0] ?? "" : raw ?? "";
-  let booking: ManagedBooking | null = null;
-  if (isBookingRef(ref) && isManageToken(token) && hasPublicSupabaseEnv()) {
-    try {
-      const supabase = await createClient();
-      const { data, error } = await supabase.rpc("booking_manage_view", { p_ref: ref, p_sha256: await manageTokenHash(token) });
-      booking = error ? null : parseManagedBooking(data);
-    } catch {
-      booking = null;
-    }
-  }
-  if (!booking) {
+  const supabase = hasPublicSupabaseEnv() ? await createClient().catch(() => null) : null;
+  const view = await loadManageView(
+    ref,
+    token,
+    supabase ? async (p_ref, p_sha256) => supabase.rpc("booking_manage_view", { p_ref, p_sha256 }) : null,
+  );
+  if (view.kind !== "booking") {
+    const words = view.kind === "gone" ? MANAGE_GONE_COPY : MANAGE_UNAVAILABLE_COPY;
     return (
       <SheetScreen page="book" tone="public">
-        <QuietSheet title="This link doesn’t work any more" copy="Use the Manage your booking link in your latest email from the firm, or contact the firm. Links stop working after the appointment, or when a newer email replaces them." />
+        <QuietSheet title={words.title} copy={words.copy} />
       </SheetScreen>
     );
   }
+  const booking = view.booking;
   return (
     <SheetScreen page="book" tone="public">
       <style dangerouslySetInnerHTML={{ __html: BOOK_PAGE_CSS }} />

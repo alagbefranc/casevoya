@@ -333,5 +333,20 @@
     "heading": "You have a new enquiry",
     "body": "Someone sent {firm_name} an enquiry from your enquiry page or website form. For their privacy, the details are in the Pipeline.",
     "cta": "Open the Pipeline"
+  },
+  "EX19": {
+    "subject": "A new notice from {firm_name}",
+    "preheader": "Read it in your portal.",
+    "heading": "You have a new notice from {firm_name}",
+    "body": "{firm_name} posted a notice for its clients. For your privacy, it is in your portal.",
+    "cta": "Open your portal"
+  },
+  "EX20": {
+    "subject": "Your refund from {firm_name} didn’t go through",
+    "preheader": "The money hasn’t reached you. The firm will contact you.",
+    "heading": "Your refund didn’t go through",
+    "body": "The refund from {firm_name} didn’t go through, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way.",
+    "body_card": "The refund from {firm_name} didn’t go through because the card it was sent to is no longer active, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way.",
+    "cta": "View payments"
   }
 }

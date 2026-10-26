@@ -118,3 +118,19 @@ export function callIsOpen(startsAt: string, endsAt: string, now: number): boole
   if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
   return now >= start - CALL_OPENS_BEFORE_MS && now < end + CALL_CLOSES_AFTER_MS;
 }
+
+/**
+ * CRM-03: what a booker without a portal sees when /call/<ref>?t=<token> doesn't open. A refused
+ * link points back to their Manage your booking email (they have no account to sign in with); a
+ * read that failed says so and that nothing changed (DES-04), instead of reading as a refusal.
+ */
+export function guestCallProblem(status: number): { title: string; copy: string } {
+  if (status === 403) {
+    return {
+      title: "This link doesn’t open the call",
+      copy: "Use Join the video call on your Manage your booking page, from the firm’s latest email. Links stop working after the call, or when a newer email replaces them.",
+    };
+  }
+  if (status === 429) return { title: "Too many tries", copy: "Wait a minute and try again." };
+  return { title: "The call isn’t available right now", copy: "It couldn’t be loaded. Nothing was changed. Try again in a moment." };
+}

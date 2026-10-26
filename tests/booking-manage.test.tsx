@@ -8,9 +8,9 @@ import { ManageBooking } from "@/components/sheet/manage-booking";
 import { manageLink } from "@/modules/email/designs/catalog";
 import { dispatchOutbound, type DispatchDeps } from "@/modules/email/dispatch";
 import { renderEmail } from "@/modules/email/templates";
-import { isManageToken, manageError, managePath, manageTokenHash, newManageToken, parseManagedBooking } from "@/modules/scheduling/manage-present";
+import { isGuestCallPath, isManageToken, loadManageView, manageError, managePath, manageTokenHash, newManageToken, parseManagedBooking } from "@/modules/scheduling/manage-present";
 import { clientActorLabel, RECORDING_NOT_AVAILABLE } from "@/modules/scheduling/sheet-present";
-import { isGuestCallPath } from "@/modules/scheduling/manage-present";
+import { guestCallProblem } from "@/modules/video/present";
 
 // CRM-03 (#176): Manage your booking for a booker without a portal. Everything here is synthetic.
 
@@ -127,6 +127,19 @@ describe("the page", () => {
     expect(manageError("booking access denied")).toMatch(/link no longer works/);
   });
 
+  it("tells a failed read apart from a link that stopped working (DES-04)", async () => {
+    const token = newManageToken();
+    const row = { ref: REF, starts_at: "2026-10-30T14:00:00Z", ends_at: "2026-10-30T14:30:00Z" };
+    const view = vi.fn(async () => ({ data: row as unknown, error: null as unknown }));
+    expect((await loadManageView(REF, token, view)).kind).toBe("booking");
+    expect(view).toHaveBeenCalledWith(REF, await manageTokenHash(token));
+    expect((await loadManageView(REF, token, async () => ({ data: null, error: null }))).kind).toBe("gone");
+    expect((await loadManageView("bad", token, view)).kind).toBe("gone");
+    expect((await loadManageView(REF, token, async () => ({ data: null, error: { message: "boom" } }))).kind).toBe("unavailable");
+    expect((await loadManageView(REF, token, async () => { throw new Error("network"); })).kind).toBe("unavailable");
+    expect((await loadManageView(REF, token, null)).kind).toBe("unavailable");
+  });
+
   it("the staff record says the booker used the Manage link", () => {
     expect(clientActorLabel(false)).toBe("Booker, from the Manage link");
     expect(clientActorLabel(true)).toBe("Client");
@@ -140,6 +153,13 @@ describe("joining the call without a portal", () => {
     expect(isGuestCallPath(`/call/${REF}`, "?t=short")).toBe(false);
     expect(isGuestCallPath(`/call/BAD`, `?t=${"a".repeat(43)}`)).toBe(false);
     expect(isGuestCallPath(`/sheet/x`, `?t=${"a".repeat(43)}`)).toBe(false);
+  });
+
+  it("a guest's refused link points back to their email; a failed read says nothing changed (DES-04)", () => {
+    expect(guestCallProblem(403).title).toBe("This link doesn’t open the call");
+    expect(guestCallProblem(403).copy).not.toMatch(/sign in/i);
+    expect(guestCallProblem(429).title).toBe("Too many tries");
+    expect(guestCallProblem(500)).toEqual({ title: "The call isn’t available right now", copy: "It couldn’t be loaded. Nothing was changed. Try again in a moment." });
   });
 
   it("the Manage page offers Join the video call, and says the call isn't recorded", () => {

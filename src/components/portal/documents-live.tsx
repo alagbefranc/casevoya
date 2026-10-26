@@ -18,7 +18,9 @@ import type { PortalDocumentCard, PortalDocuments } from "@/modules/documents/lo
 import { draftInFrench } from "@/modules/i18n/actions";
 import type { PortalViewer } from "@/modules/portal/load";
 import { createClient } from "@/lib/supabase/client";
+import { checkUploadFile, formatList, uploadFailure, type UploadFailure } from "@/modules/portal/upload-failure";
 import { Seg } from "./seg";
+import { UploadFailed } from "./upload-failed";
 
 const FORMATS = ["pdf", "jpeg", "png", "heic", "docx"] as const;
 
@@ -502,6 +504,9 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
   const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "checking" | "failed">("idle");
+  // DES-04: why the file wasn't taken (wrong type, too large, the check, an expired link, the
+  // connection), with its retry. Set before sending (the file check) or after (the upload calls).
+  const [failure, setFailure] = useState<UploadFailure | null>(null);
   const [pending, start] = useTransition();
   const request = documents.requests.find((item) => item.id === requestId) ?? null;
   const cardFor = (id: string) => documents.cards.find((card) => card.requestId === id) ?? null;
@@ -521,10 +526,14 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
 
   const choose = (picked: File | null | undefined) => {
     if (!picked) return;
-    if (picked.size > maxBytes) {
-      setMessage(`That file is over ${limitText(maxBytes)}, your firm’s limit per file. Choose a smaller one.`);
+    // The type the request accepts and the firm's size limit, before anything is sent.
+    const refused = checkUploadFile(picked, { maxBytes, formats: request?.formats ?? null });
+    if (refused) {
+      setFailure(refused);
+      setMessage("");
       return;
     }
+    setFailure(null);
     setMessage("");
     setFile(picked);
     setReadable(false);
@@ -538,7 +547,26 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
     if (!file) return;
     setStatus("sending");
     setMessage("");
+    setFailure(null);
+    const fail = (reason: UploadFailure) => {
+      setStatus("failed");
+      setFailure(reason);
+    };
     start(async () => {
+      // No answer at all (offline, a dropped connection) is a failure with a retry, not a stuck page.
+      try {
+        await sendFile(file, fail);
+      } catch {
+        fail(uploadFailure({ stage: "transfer", thrown: true }));
+      }
+    });
+  };
+
+  // The same upload calls as before (intent, signed upload, the server's file check); each failure
+  // is named by uploadFailure so the person sees what happened and what to do next.
+  const sendFile = async (picked: File, fail: (reason: UploadFailure) => void) => {
+    const file = picked;
+    {
       const intent = await createUploadIntent({
         organizationId: viewer.organizationId,
         matterId: request?.matterId ?? viewer.matters[0]?.id ?? "",
@@ -553,36 +581,41 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
         code: code || null,
       });
       if ("error" in intent) {
-        setStatus("failed");
-        setMessage(intent.error ?? "The upload could not start.");
+        fail(uploadFailure({ stage: "intent", message: intent.error ?? null }));
         return;
       }
       const supabase = createClient();
       const uploaded = await supabase.storage.from("documents").uploadToSignedUrl(intent.path, intent.token, file);
       if (uploaded.error) {
-        setStatus("failed");
-        setMessage("The file did not finish uploading. Try again.");
+        fail(uploadFailure({ stage: "transfer", message: uploaded.error.message }));
         return;
       }
       const done = await completeDocumentUpload({ organizationId: viewer.organizationId, versionId: intent.versionId });
       if ("error" in done) {
-        setStatus("failed");
-        setMessage(done.error ?? "The file could not be checked.");
+        fail(uploadFailure({ stage: "check", message: done.error ?? null }));
         return;
       }
-      if (done.uploadState === "quarantined") {
-        setStatus("failed");
-        setMessage("The file contents don’t match the file name, so it was set aside and isn’t accepted. Try a different file.");
-        return;
-      }
-      if (done.uploadState === "failed") {
-        setStatus("failed");
-        setMessage("The file couldn’t be checked, so it isn’t accepted. Try again.");
+      if (done.uploadState === "quarantined" || done.uploadState === "failed") {
+        fail(uploadFailure({ stage: "check", state: done.uploadState }));
         return;
       }
       setStatus(done.uploadState === "scanning" ? "checking" : "sent");
       router.refresh();
-    });
+    }
+  };
+
+  // The retry: another file goes back to "Add the file"; the same file is sent again with a new
+  // upload authorisation (an expired one is never reused).
+  const retry = () => {
+    if (!failure || failure.retry === "choose") {
+      setFailure(null);
+      setStatus("idle");
+      setFile(null);
+      setReadable(false);
+      setAt(2);
+      return;
+    }
+    send();
   };
 
   const canContinue =
@@ -693,8 +726,13 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
               <label className="btn p"><Glyph name="camera" />Use camera<input type="file" className="sr" accept="image/*" capture="environment" onChange={(event) => choose(event.target.files?.[0])} /></label>
               <label className="btn"><Glyph name="paperclip" />{file ? "Choose another" : "Choose a file"}<input type="file" className="sr" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.docx,application/pdf,image/jpeg,image/png,image/heic" onChange={(event) => choose(event.target.files?.[0])} /></label>
             </div>
-            <small className="lbl">{file ? bytes(file.size) : <>PDF, JPG, PNG, HEIC or DOCX <span className="sep" aria-hidden="true" /> {`up to ${limitText(maxBytes)}`}</>}</small>
+            <small className="lbl">{file ? bytes(file.size) : <>{request?.formats?.length ? formatList(request.formats) : "PDF, JPG, PNG, HEIC or DOCX"} <span className="sep" aria-hidden="true" /> {`up to ${limitText(maxBytes)}`}</>}</small>
           </div>
+          {failure && at === 2 ? (
+            <div className="panel" style={{ marginTop: 12 }}>
+              <div className="pad"><UploadFailed failure={failure} onRetry={retry} /></div>
+            </div>
+          ) : null}
         </section>
 
         <section className={at === 3 ? "fstep on" : "fstep"} aria-labelledby="up-s3">
@@ -727,7 +765,7 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
               {status === "sending" || pending ? <p>Sending {file?.name}…</p> : null}
               {status === "sent" ? <p><b>Sent.</b> {firm} will check it. It shows as Being reviewed in Documents until they do.</p> : null}
               {status === "checking" ? <p><b>Sent.</b> The file is stored and still being checked. It isn’t accepted yet.</p> : null}
-              {status === "failed" ? <p><b>Not sent.</b> {message}</p> : null}
+              {status === "failed" && failure && !pending ? <UploadFailed failure={failure} onRetry={retry} busy={pending} /> : null}
               {status === "sent" || status === "checking" ? <a className="btn p sm" href="/portal/documents" style={{ marginTop: 10 }}>Back to Documents</a> : null}
             </div>
           </div>
@@ -735,11 +773,9 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
 
         {message && status !== "failed" ? <p className="lbl" role="alert" style={{ color: "var(--red, #b42318)", marginTop: 12 }}>{message}</p> : null}
         <div className="fnav">
-          <button className="btn" type="button" style={{ visibility: at === 0 || status === "sent" || status === "checking" || pending ? "hidden" : "visible" }} onClick={() => { setMessage(""); setStatus("idle"); setAt(Math.max(0, at - 1)); }}>Back</button>
+          <button className="btn" type="button" style={{ visibility: at === 0 || status === "sent" || status === "checking" || pending ? "hidden" : "visible" }} onClick={() => { setMessage(""); setFailure(null); setStatus("idle"); setAt(Math.max(0, at - 1)); }}>Back</button>
           {at < 4 ? (
             <button className="btn p" type="button" onClick={goNext}>{at === 3 ? "Send" : "Continue"}</button>
-          ) : status === "failed" ? (
-            <button className="btn p" type="button" onClick={send} disabled={pending}>Try again</button>
           ) : <span />}
         </div>
       </div>

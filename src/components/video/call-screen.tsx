@@ -35,7 +35,7 @@ import { callNotice, type JoinView } from "@/modules/video/present";
 type Back = { href: string; label: string };
 
 type Props =
-  | { kind: "refused"; back: Back }
+  | { kind: "refused"; back: Back; title?: string; copy?: string }
   | { kind: "call"; organizationId: string; callRef: string; view: JoinView; back: Back; guestToken?: string | null };
 
 type Grant = { serverUrl: string; token: string; identity: string; role: "host" | "client"; admitted: boolean };
@@ -84,10 +84,10 @@ export function CallScreen(props: Props) {
     return (
       <main className="cv-call">
         <section className="cv-call-card" role="alert">
-          <h1>You can’t join this call</h1>
+          <h1>{props.title ?? "You can’t join this call"}</h1>
           <p>
-            Only the client the consultation is with, its host and the firm’s owners can open it. Sign in with the account the booking is
-            under. Staff need two-step sign-in first.
+            {props.copy ??
+              "Only the client the consultation is with, its host and the firm’s owners can open it. Sign in with the account the booking is under. Staff need two-step sign-in first."}
           </p>
           <a className="btn p" href={props.back.href}>
             {props.back.label}

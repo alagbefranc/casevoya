@@ -1,4 +1,5 @@
 /** Pure helpers for Settings > Retention's Save: plain messages and the step-up round trip. */
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 /** public.set_firm_retention_policy's own refusals, in plain words; null for access refusals. */
 export function retentionSaveError(message: string): string | null {
@@ -10,7 +11,7 @@ export function retentionSaveError(message: string): string | null {
 
 /** Where the step-up screen sends the owner back: this tab, with what they chose kept in this browser tab. */
 export function retentionStepUpLocation(): string {
-  return `/mfa?step=6&next=${encodeURIComponent("/sheet/settings?tab=retention")}`;
+  return stepUpHref("/sheet/settings?tab=retention", "retention");
 }
 
 /** sessionStorage key for the period chosen before a step-up. */

@@ -22,6 +22,7 @@ import type { SheetQuery } from "@/modules/sheet/present";
 import { parseAvailability, slotsFromAvailability } from "./availability";
 import { isUuid } from "@/lib/tenant/context";
 import { CALL_WAIT_TOAST, callHref, callIsOpen } from "@/modules/video/present";
+import { loadCallVo } from "@/modules/sheet/vo-crm-load";
 import { COMMON_ZONES, PRACTICE_NOTICE, locationLabel, locationShort, longWhen, safeZone, shortWhen, slotLabel } from "./format";
 import {
   BOOKING_PAGE_PILL,
@@ -253,6 +254,7 @@ async function loadRecord(
     voidedBy: agreementRow.data?.voided_by ? byUser.get(agreementRow.data.voided_by) ?? "Staff" : null,
   });
   const live = agreementRow.data?.status === "sent";
+  const vo = await loadCallVo(supabase, staff, booking, lead?.data ?? null, now);
   return {
     picker,
     empty,
@@ -261,6 +263,7 @@ async function loadRecord(
       summary: summary.panel,
       agreement,
       voidDialog: live ? { organizationId: org, bookingId: booking.id, client: name } : null,
+      vo,
       attendee: name,
       notes: { items: noteItems, copy: notesCopy, lead: notesLink },
       outcome: { chip: outcome.chip, copy: outcome.copy, actions },

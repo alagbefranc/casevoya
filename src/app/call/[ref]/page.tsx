@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { CallLoading } from "@/components/video/call-loading";
 import { CallScreen } from "@/components/video/call-screen";
 import { signInLocation } from "@/lib/auth/redirect";
 import { loadPortalAccess } from "@/modules/portal/load";
 import { loadSheetAccess } from "@/modules/sheet/load";
-import { CALL_REF } from "@/modules/video/present";
+import { CALL_REF, guestCallProblem } from "@/modules/video/present";
 import { readCall, readGuestCall } from "@/modules/video/service";
 import { isManageToken, managePath } from "@/modules/scheduling/manage-present";
 
@@ -30,7 +31,7 @@ async function Body({ params, searchParams }: { params: Promise<{ ref: string }>
   if (guestToken && isManageToken(guestToken)) {
     const view = await readGuestCall(ref, guestToken);
     const manage = { href: managePath(ref, guestToken), label: "Back to your booking" };
-    if ("error" in view || !view.organizationId) return <CallScreen kind="refused" back={manage} />;
+    if ("error" in view || !view.organizationId) return <CallScreen kind="refused" back={manage} {...guestCallProblem("error" in view ? view.status : 500)} />;
     return <CallScreen kind="call" organizationId={view.organizationId} callRef={ref} view={view} back={manage} guestToken={guestToken} />;
   }
 
@@ -51,7 +52,7 @@ async function Body({ params, searchParams }: { params: Promise<{ ref: string }>
 
 export default function CallPage(props: { params: Promise<{ ref: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<CallLoading />}>
       <Body {...props} />
     </Suspense>
   );

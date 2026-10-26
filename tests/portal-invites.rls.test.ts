@@ -365,6 +365,61 @@ describe("portal invitations", () => {
     expect(limited).toMatchObject({ ok: false, error: "rate_limited" });
   });
 
+  // Bug 3 (2026-10-25): the accept wizard's steps and retries counted toward the open limit.
+  it("counts only an open toward an invitation's limit; steps and re-reads only check it", async () => {
+    const { owner, consultant, orgId, membershipId } = await firmWithConsultant();
+    const matterId = await addMatter(consultant, orgId, "Fictional sample file", true);
+    await addStaffParty(owner, orgId, matterId, membershipId, "consultant");
+    const personId = await addPerson(consultant, orgId, "Sample Applicant", null, "1991-05-05", true);
+    await addParty(consultant, orgId, matterId, personId, "applicant");
+    const issued = await invite(consultant, orgId, personId, matterId, "client", email("sample"));
+    expect(issued.ok).toBe(true);
+
+    const preview = async (open?: boolean) => {
+      const row = open === undefined
+        ? await db.query<{ result: { status: string } }>(`select public.preview_portal_invitation($1) as result`, [issued.token])
+        : await db.query<{ result: { status: string } }>(`select public.preview_portal_invitation($1, $2) as result`, [issued.token, open]);
+      return row.rows[0].result.status;
+    };
+    const saveDraft = async () => {
+      const row = await db.query<{ result: { ok: boolean; error?: string } }>(
+        `select public.save_portal_invitation_draft($1, '{"step": 1}'::jsonb) as result`,
+        [issued.token],
+      );
+      return row.rows[0].result;
+    };
+
+    await asAnon();
+    // Far more steps, retries and re-reads than the limit of 40: none of them counts.
+    for (let n = 0; n < 45; n += 1) {
+      expect(await saveDraft()).toMatchObject({ ok: true });
+      expect(await preview(false)).toBe("open");
+      expect(await preview()).toBe("open");
+    }
+    await asMaintenance(db);
+    const counted = await db.query<{ n: number }>(
+      `select count(*)::int as n from public.portal_invite_attempts where action = 'present' and organization_id = $1`,
+      [orgId],
+    );
+    expect(counted.rows[0].n).toBe(0);
+
+    // Opens still count: 40 in an hour, then the 41st is refused, and so is every other use.
+    await asAnon();
+    for (let n = 0; n < 40; n += 1) expect(await preview(true)).toBe("open");
+    expect(await preview(true)).toBe("rate_limited");
+    expect(await preview(false)).toBe("rate_limited");
+    expect(await saveDraft()).toMatchObject({ ok: false, error: "rate_limited" });
+
+    // A token that matches no invitation is always counted, so guessing stays limited.
+    const guess = "b".repeat(64);
+    let last = "";
+    for (let n = 0; n < 41; n += 1) {
+      const row = await db.query<{ result: { status: string } }>(`select public.preview_portal_invitation($1, false) as result`, [guess]);
+      last = row.rows[0].result.status;
+    }
+    expect(last).toBe("rate_limited");
+  });
+
   it("shares a dependant section with the applicant and not with the sponsor", async () => {
     const { owner, consultant, orgId, membershipId } = await firmWithConsultant();
     const policies = await publishPolicies(owner, orgId);

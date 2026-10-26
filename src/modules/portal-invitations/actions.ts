@@ -168,10 +168,15 @@ async function tokenClient(token: string, organizationId?: string | null) {
   return { supabase };
 }
 
-export async function previewPortalInvitation(token: string) {
+/**
+ * Reads the invitation. `open` is the accept screen opening it (once per page load), the only read
+ * that counts toward the invitation's rate limit; re-reads and the server's own page render pass
+ * false and are only checked against it (public.preview_portal_invitation(text, boolean)).
+ */
+export async function previewPortalInvitation(token: string, open = false) {
   const session = await tokenClient(token);
   if ("error" in session) return { error: session.error };
-  const { data, error } = await session.supabase.rpc("preview_portal_invitation", { p_token: token });
+  const { data, error } = await session.supabase.rpc("preview_portal_invitation", { p_token: token, p_open: open === true });
   if (error) return { error: "This invitation could not be opened." };
   return { preview: data };
 }

@@ -138,7 +138,9 @@ describe("publish dialog checks", () => {
   it("send a step-up back to Settings > Client portal with the same dialog open", () => {
     const location = policyStepUpLocation("/sheet/settings", "?tab=portal", "privacy_notice");
     expect(location.startsWith("/mfa?step=6&next=")).toBe(true);
-    expect(decodeURIComponent(location.split("next=")[1])).toBe("/sheet/settings?tab=portal&dlg=privacy");
+    // SEC-01: the step-up page names the action ("to publish a portal policy").
+    expect(location.endsWith("&for=portal_policy")).toBe(true);
+    expect(decodeURIComponent(location.split("next=")[1].replace("&for=portal_policy", ""))).toBe("/sheet/settings?tab=portal&dlg=privacy");
     expect(policyKindForDialog("terms")).toBe("portal_terms");
     expect(policyKindForDialog("privacy")).toBe("privacy_notice");
     expect(policyKindForDialog("invite")).toBeNull();

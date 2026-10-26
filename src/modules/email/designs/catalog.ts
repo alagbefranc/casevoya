@@ -19,6 +19,7 @@ import {
   dayDate,
   documentNumber,
   longDate,
+  refundCardInactive,
   shortDate,
   staffRolePhrase,
   uuidOrNull,
@@ -120,6 +121,9 @@ export type EmailContexts = {
   EX16: FirmContext & { code?: string | null };
   EX17: FirmContext;
   EX18: FirmContext;
+  EX19: FirmContext;
+  /** refundReason: Stripe's refund failure_reason code; only known codes become plain words. */
+  EX20: FirmContext & { refundReason?: string | null };
 };
 
 export type TemplateId = keyof EmailContexts;
@@ -1054,8 +1058,9 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
     name: "Refund complete",
     audience: "client",
     brand: "firm",
-    trigger: "Stripe confirms the refund (refund.updated succeeded; outbox invoice.refund_succeeded, template refund_complete). Honours email_notices",
-    status: "wired",
+    trigger:
+      "Not sent since 20261025530100: a card refund Stripe reports succeeded can still fail for up to 30 days and Stripe gives no final signal (docs.stripe.com/refunds#failed-refunds), so “complete” could be untrue. The client keeps EX09 (“on its way”) and gets EX20 if the refund fails. The renderer still maps template refund_complete here for mail queued before",
+    status: "ready-not-wired",
     ctaTarget: PATHS.portalPayments,
     mergeFields: ["firm_name"],
     sample: { firmName: SYNTHETIC_FIRM },
@@ -1275,6 +1280,57 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         cta: cta("Open the Pipeline", appLink(origin, PATHS.sheetPipeline)),
         spot: "reminder",
         brand: PLATFORM,
+      });
+    },
+  },
+  EX19: {
+    id: "EX19",
+    name: "New notice (announcement)",
+    audience: "client",
+    brand: "firm",
+    trigger:
+      "Staff with permission send an announcement from an approved firm template (send_announcement; outbox announcement.sent, template announcement), to each chosen client with a portal account. Honours email_notices. Never for a sample-mode firm. Firm name only: the announcement itself is in the portal (OPS-04)",
+    status: "wired",
+    ctaTarget: PATHS.portal,
+    mergeFields: ["firm_name"],
+    sample: { firmName: SYNTHETIC_FIRM },
+    build(context, origin) {
+      const firmName = firm(context);
+      return copy({
+        subject: `A new notice from ${firmName}`,
+        preheader: "Read it in your portal.",
+        heading: `You have a new notice from ${firmName}`,
+        body: `${firmName} posted a notice for its clients. For your privacy, it is in your portal.`,
+        cta: cta("Open your portal", appLink(origin, PATHS.portal)),
+        spot: "reminder",
+        brand: firmBrand(context),
+      });
+    },
+  },
+  EX20: {
+    id: "EX20",
+    name: "Refund didn’t go through",
+    audience: "client",
+    brand: "firm",
+    trigger:
+      "Stripe reports a refund failed or canceled after the client was told it was on its way (refund.failed / refund.updated; invoice_refunds moves from pending, requires_action or succeeded to failed or canceled; outbox invoice.refund_failed, template refund_failed), to the same people as EX09. Once per refund, also when Stripe replays the event. Sent even when the client turned Email notices off (a money correction; Francis 2026-10-25); suppressed (bounced or complained) addresses are not. A plain-words reason only for a closed, expired, lost or stolen card; never Stripe's code (bug #215 check 6; copy approved by Francis 2026-10-25)",
+    status: "wired",
+    ctaTarget: PATHS.portalPayments,
+    mergeFields: ["firm_name", "refund_reason"],
+    sample: { firmName: SYNTHETIC_FIRM, refundReason: "expired_or_canceled_card" },
+    build(context, origin) {
+      const firmName = firm(context);
+      const card = refundCardInactive(context.refundReason);
+      return copy({
+        subject: `Your refund from ${firmName} didn’t go through`,
+        preheader: "The money hasn’t reached you. The firm will contact you.",
+        heading: "Your refund didn’t go through",
+        body: card
+          ? `The refund from ${firmName} didn’t go through because the card it was sent to is no longer active, so the money hasn’t reached you. Please disregard our earlier email about this refund. ${firmName} will contact you to arrange it another way.`
+          : `The refund from ${firmName} didn’t go through, so the money hasn’t reached you. Please disregard our earlier email about this refund. ${firmName} will contact you to arrange it another way.`,
+        cta: cta("View payments", appLink(origin, PATHS.portalPayments)),
+        spot: "receipt",
+        brand: firmBrand(context),
       });
     },
   },

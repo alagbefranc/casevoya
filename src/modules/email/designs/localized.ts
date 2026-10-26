@@ -27,6 +27,7 @@ import {
   documentNumber,
   longDate,
   longDateFr,
+  refundCardInactive,
   shortDate,
   shortDateFr,
   uuidOrNull,
@@ -630,6 +631,32 @@ const BUILDERS: Builders = {
       body: t("body", { firm_name: firmName }),
       cta: cta(t("cta"), appLink(origin, PATHS.portalPayments)),
       spot: "receipt",
+      brand: firmBrand(kit, context),
+    });
+  },
+  EX20(kit, context) {
+    const { t, origin } = kit;
+    const firmName = firm(kit, context);
+    return copy(kit, {
+      subject: t("subject", { firm_name: firmName }),
+      preheader: t("preheader"),
+      heading: t("heading"),
+      body: refundCardInactive(context.refundReason) ? t("body_card", { firm_name: firmName }) : t("body", { firm_name: firmName }),
+      cta: cta(t("cta"), appLink(origin, PATHS.portalPayments)),
+      spot: "receipt",
+      brand: firmBrand(kit, context),
+    });
+  },
+  EX19(kit, context) {
+    const { t, origin } = kit;
+    const firmName = firm(kit, context);
+    return copy(kit, {
+      subject: t("subject", { firm_name: firmName }),
+      preheader: t("preheader"),
+      heading: t("heading", { firm_name: firmName }),
+      body: t("body", { firm_name: firmName }),
+      cta: cta(t("cta"), appLink(origin, PATHS.portal)),
+      spot: "reminder",
       brand: firmBrand(kit, context),
     });
   },

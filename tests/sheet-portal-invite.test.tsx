@@ -192,7 +192,7 @@ describe("portal invite helpers", () => {
 
   it("returns from step-up to the same person's invitation, and drops the flags after", () => {
     const location = inviteStepUpLocation("/sheet/matters/abc", "?tab=people", PERSON);
-    expect(location).toBe(`/mfa?step=6&next=${encodeURIComponent(`/sheet/matters/abc?tab=people&dlg=invite&pid=${PERSON}`)}`);
+    expect(location).toBe(`/mfa?step=6&next=${encodeURIComponent(`/sheet/matters/abc?tab=people&dlg=invite&pid=${PERSON}`)}&for=portal_invite`);
     expect(withoutInvite("/sheet/matters/abc", `?tab=people&dlg=invite&pid=${PERSON}`)).toBe("/sheet/matters/abc?tab=people");
     expect(needsStepUp(safeAccessError("portal invitations require a recent step-up"))).toBe(true);
   });

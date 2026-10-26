@@ -3,10 +3,12 @@
  * register become the Designer components' data. Pure, so the copy and the switch rules are tested.
  */
 import type { AiAudit, AiData, AiRunRow, AiRules, AiSettings, AiSources, AiStates, AiSwitch, AiTab } from "@/components/sheet/designer/ai";
-import type { Attrs, DraftCard, DraftsData, DraftsHeaderData, DraftSwitch } from "@/components/sheet/designer/drafts";
+import type { Attrs, DraftCard, DraftsData, DraftsHeaderData, DraftSwitch, TimelineItem } from "@/components/sheet/designer/drafts";
+import { attestationLine, citationHref, editStampLine, isCitableOfficialUrl, VO_CANT_ANSWER } from "@/modules/vo/grounding";
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import type { VoSettingKey, VoSwitchKey } from "@/modules/vo/errors";
 import { MATTER_STAGES, stageLabel } from "@/modules/sheet/present";
+import type { AiVendorTermsData } from "@/modules/sheet/vo-vendor-terms-present";
 
 export type VoSettingsRow = {
   enabled: boolean;
@@ -23,6 +25,8 @@ export type VoSettingsRow = {
   ocr_normalisation: boolean;
   missing_fields: boolean;
   inconsistency_flags: boolean;
+  /** AI-01: first drafts of letters from approved facts. */
+  letter_drafts: boolean;
 };
 
 export type VoSettings = VoSettingsRow & { saved: boolean };
@@ -50,12 +54,56 @@ export function effectiveSettings(row: Partial<VoSettingsRow> | null, sampleMode
     ocr_normalisation: row?.ocr_normalisation ?? true,
     missing_fields: row?.missing_fields ?? true,
     inconsistency_flags: row?.inconsistency_flags ?? true,
+    letter_drafts: row?.letter_drafts ?? true,
   };
 }
 
-export type VoViewer = { organizationId: string; firmName: string; isOwner: boolean; sampleMode: boolean; agentReady: boolean; timeZone: string };
+export type VoViewer = {
+  organizationId: string;
+  firmName: string;
+  isOwner: boolean;
+  sampleMode: boolean;
+  agentReady: boolean;
+  timeZone: string;
+  /** A licensed member (licensed consultant or firm owner): may send advice-like drafts (SRC-09). */
+  licensed?: boolean;
+};
 
-export type VoSource = { kind: string; id: string; label: string };
+/** A cited record; official content also names what it is and its official page (SRC-09). */
+export type VoSource = {
+  kind: string;
+  id: string;
+  label: string;
+  sourceKind?: string;
+  url?: string;
+  /** A page Casevoya didn't capture, attested by a licensed reviewer: who, and the date they opened it. */
+  attested?: boolean;
+  attestedBy?: string | null;
+  attestedOn?: string | null;
+  /** #188: the firm's licensed edit of the official claim it cites: who, their licence and the date. */
+  edited?: boolean;
+  editedBy?: string | null;
+  editedLicence?: string | null;
+  editedOn?: string | null;
+};
+
+/**
+ * A draft's or reading's citations as the sources list shows them: each linked to the matter tab
+ * that holds the record, or to the official page. An official source whose page isn't a deep
+ * federal official page is never linked. A page Casevoya didn't capture shows the reviewer's
+ * attestation next to it ("Page not captured by Casevoya, checked by … on …").
+ */
+export function sourceItems(sources: VoSource[], at: { matterId: string; threadId?: string | null }): TimelineItem[] {
+  return sources.map((source) => {
+    const kind = source.kind as Parameters<typeof citationHref>[0]["kind"];
+    const href = kind === "official" && !isCitableOfficialUrl(source.url) ? null : citationHref({ kind, url: source.url }, at);
+    const attestation = kind === "official" && source.attested ? (attestationLine(source.attestedBy, source.attestedOn) ?? "Page not captured by Casevoya") : null;
+    // #188: the firm's wording of an official claim, with its stamp.
+    const edit = kind === "official" && source.edited ? editStampLine(source.editedBy, source.editedLicence, source.editedOn) : null;
+    const detail = [attestation, edit].filter(Boolean).join(" · ");
+    return detail ? { label: source.label, href, detail } : { label: source.label, href };
+  });
+}
 
 export type VoDraftRow = {
   id: string;
@@ -76,11 +124,13 @@ export type VoDraftRow = {
   latencyMs: number | null;
   /** The matter or its conversation changed after Vo drafted this (see draftStale). */
   stale?: boolean;
+  /** SRC-09: advice-like (cites official content or reads as advice): a licensed member sends it. */
+  licensedReview?: boolean;
 };
 
 export type VoRunRow = {
   id: string;
-  kind: "message_reply" | "document_request" | "ask" | "document_review";
+  kind: "message_reply" | "document_request" | "ask" | "document_review" | "letter_draft" | "lead_follow_up" | "call_summary";
   result: "running" | "drafted" | "answered" | "abstained" | "failed";
   matterId: string;
   threadId: string | null;
@@ -178,12 +228,16 @@ export function draftStale(draftCreatedAt: string, changes: { threadLastMessageA
 function acceptAttrs(row: VoDraftRow, viewer: VoViewer): Attrs {
   if (row.needsRule) return { disabled: true, title: "It needs a sourced rule. Open it with Edit and replace the placeholder first." };
   if (row.stale) return { disabled: true, title: "Out of date: the matter changed after Vo drafted it. Open it with Edit and check it first." };
+  // SRC-09: advice-like material goes out only after a licensed member reviews it (the database checks too).
+  if (row.licensedReview && !viewer.licensed) return { disabled: true, title: "It reads as advice, so a licensed member of the firm reviews and sends it" };
+  if (row.licensedReview) return { "data-vo-accept": row.id, "data-org": viewer.organizationId, title: "Send this advice-like draft as written, as its licensed reviewer (needs a fresh two-step check)" };
   return { "data-vo-accept": row.id, "data-org": viewer.organizationId, title: "Send this draft to the client as written" };
 }
 
 function draftCard(row: VoDraftRow, names: VoNames, viewer: VoViewer): DraftCard {
   const sources = row.sources.map((source) => source.label);
   const meta = ["Drafted by Vo", "needs your review", KIND_LABEL[row.kind]];
+  if (row.licensedReview) meta.push("needs a licensed member’s review");
   if (row.needsRule) meta.push("needs a sourced rule");
   if (row.stale) meta.push("out of date: the matter changed since");
   if (row.isSample) meta.push("sample");
@@ -200,7 +254,7 @@ function draftCard(row: VoDraftRow, names: VoNames, viewer: VoViewer): DraftCard
       done: true,
       said: `Checked ${sources.length} ${sources.length === 1 ? "source" : "sources"} in ${seconds(row.latencyMs)}`,
       clock: "",
-      items: [...sources, "Run logged"],
+      items: [...sourceItems(row.sources, { matterId: row.matterId, threadId: row.threadId }), "Run logged"],
     },
     // Accept sends the draft as written; Edit opens it in the conversation's composer first.
     accept: acceptAttrs(row, viewer),
@@ -249,7 +303,7 @@ export function readingCard(row: VoReadingRow, names: VoNames, viewer: VoViewer)
       done: true,
       said: `Read ${sources.length === 1 ? "one document" : `${sources.length} documents`} in ${seconds(row.latencyMs)}`,
       clock: "",
-      items: [...sources, `${row.waiting} ${row.waiting === 1 ? "proposal" : "proposals"} to decide`, "Run logged"],
+      items: [...sourceItems(row.sources, { matterId: row.matterId }), `${row.waiting} ${row.waiting === 1 ? "proposal" : "proposals"} to decide`, "Run logged"],
     },
     // A reading has one decision per proposal, made on the matter's review panel (Edit opens it).
     accept: { disabled: true, title: "Accept each proposal on the matter’s Documents tab: choose Edit to open them" },
@@ -281,7 +335,7 @@ export function draftsPage(input: {
     { id: "swVoFlags", label: "Missing-field and inconsistency flags", on: settings.missing_fields && settings.inconsistency_flags, attrs: switchAttrs(viewer, "doc_flags") },
     { id: "swVoSummaries", label: "Matter summaries", on: settings.staff_answers, attrs: switchAttrs(viewer, "staff_answers") },
     { id: "swVoReplies", label: "Administrative replies", on: settings.reply_drafts, attrs: switchAttrs(viewer, "reply_drafts") },
-    { id: "swVoLetters", label: "First drafts of letters from approved facts", on: false, attrs: switchAttrs(viewer, null) },
+    { id: "swVoLetters", label: "First drafts of letters from approved facts", on: settings.letter_drafts, attrs: switchAttrs(viewer, "letter_drafts") },
   ];
   // This week counts what the drafts page lists: reply drafts and document readings (the same two
   // kinds as the "waiting" count). A reading is accepted once each proposal is decided.
@@ -309,8 +363,8 @@ export function draftsPage(input: {
     abstain: input.abstained
       ? {
           meta: { left: "Vo didn’t draft this one", right: "needs a consultant" },
-          title: `${names.matter(input.abstained.matterId)}: the request needs a consultant`,
-          copy: "It asked for advice, an eligibility view or a rule Vo has no approved source for, so Vo won’t guess. Answer it yourself from the conversation.",
+          title: `${names.matter(input.abstained.matterId)}: ${VO_CANT_ANSWER.replace(/\.$/, "")}`,
+          copy: "It asked for advice, an eligibility view, or something nothing on the matter or in the firm’s approved official content supports, so Vo won’t guess. Answer it yourself.",
         }
       : null,
     empty: count === 0
@@ -332,8 +386,10 @@ function aiSwitch(id: string, label: string, on: boolean, attrs: Attrs, small?: 
   return { id, label, small, sr, on, attrs };
 }
 
-export function aiSettings(viewer: VoViewer, settings: VoSettings): AiSettings {
+export function aiSettings(viewer: VoViewer, settings: VoSettings, vendorTerms?: AiVendorTermsData): AiSettings {
   const a = (key: VoSettingKey | null) => switchAttrs(viewer, key);
+  // AI-06: turning Vo on asks the owner to acknowledge the AI vendor terms first (once per version).
+  const firmAttrs = viewer.isOwner && !settings.enabled && vendorTerms && !vendorTerms.acknowledged ? { "data-vo-terms": "1", "data-org": viewer.organizationId } : a("enabled");
   const notes: string[] = [];
   if (!settings.saved) notes.push(viewer.sampleMode ? "Vo is on because this firm is in sample mode, for sample records only. A real firm starts with Vo off." : "Vo is off until the firm owner turns it on.");
   if (!viewer.agentReady) notes.push("Vo isn’t configured on this server yet, so it shows as unavailable.");
@@ -345,7 +401,7 @@ export function aiSettings(viewer: VoViewer, settings: VoSettings): AiSettings {
   return {
     intro: "Turn Vo off for the whole firm, for one capability or for a sensitive kind of document. Switched off, every workflow still works by hand.",
     firm: [
-      aiSwitch("swVoFirm", `Vo for ${viewer.firmName}`, settings.enabled, a("enabled"), "Drafts only. People accept, edit or reject everything."),
+      aiSwitch("swVoFirm", `Vo for ${viewer.firmName}`, settings.enabled, firmAttrs, "Drafts only. People accept, edit or reject everything."),
       ...[
         aiSwitch("swVoClassify", "Document classification", settings.doc_classification, a("doc_classification")),
         aiSwitch("swVoOcr", "OCR normalisation (names, dates, numbers)", settings.ocr_normalisation, a("ocr_normalisation")),
@@ -353,7 +409,7 @@ export function aiSettings(viewer: VoViewer, settings: VoSettings): AiSettings {
         aiSwitch("swVoFlags", "Inconsistency flags (not fraud findings)", settings.inconsistency_flags, a("inconsistency_flags")),
         aiSwitch("swVoSummaries", "Matter summaries for staff", settings.staff_answers, a("staff_answers")),
         aiSwitch("swVoReplies", "Administrative reply drafts", settings.reply_drafts, a("reply_drafts")),
-        aiSwitch("swVoLetters", "First drafts of letters from approved facts", false, a(null)),
+        aiSwitch("swVoLetters", "First drafts of letters from approved facts", settings.letter_drafts, a("letter_drafts")),
       ].map(sub),
     ],
     categories: [
@@ -366,12 +422,12 @@ export function aiSettings(viewer: VoViewer, settings: VoSettings): AiSettings {
       aiSwitch("swVoMessages", "Client messages", settings.read_client_messages, a("read_client_messages"), "Portal messages", "Vo may read Client messages"),
     ].map(sub),
     dataUse: [
-      { term: "Training on your files", value: "Never by Casevoya. The AI vendor’s terms are in review (pending)" },
-      { term: "Vendor retention", value: "Pending the AI vendor review (Anthropic, Cloudflare)" },
+      { term: "Training on your files", value: "Never by Casevoya. What each AI vendor’s terms say is quoted in AI vendor terms below" },
       { term: "What Vo can read", value: "Only the matter and conversation you’re working in, with your own access" },
       { term: "Documents’ own instructions", value: "Ignored. Text inside an upload or a message can’t change Vo’s rules" },
     ],
     note: notes.length ? notes.join(" ") : null,
+    ...(vendorTerms ? { vendorTerms } : {}),
   };
 }
 
@@ -380,7 +436,12 @@ const TASK_LABEL: Record<VoRunRow["kind"], string> = {
   document_request: "Document request explanation",
   ask: "Ask Vo",
   document_review: "Document reading",
+  letter_draft: "Letter draft",
+  lead_follow_up: "Lead follow-up",
+  call_summary: "Call notes summary",
 };
+/** Runs on a lead (no matter): lead follow-ups, and call summaries kept on a lead. */
+const LEAD_KINDS: readonly VoRunRow["kind"][] = ["lead_follow_up", "call_summary"];
 const FAILURE_LABEL: Record<string, string> = {
   unavailable: "Vo unavailable",
   empty: "No usable draft",
@@ -405,13 +466,15 @@ export function runReview(run: VoRunRow): { badge: MatterBadge; token: string } 
 export function aiRunRows(runs: VoRunRow[], names: VoNames, viewer: VoViewer): AiRunRow[] {
   return runs.map((run) => {
     const review = runReview(run);
-    const rateable = run.result === "drafted" || run.result === "answered";
+    // A run on a lead has no matter (and the "useful?" vote is for matter runs).
+    const onLead = LEAD_KINDS.includes(run.kind) && !run.matterId;
+    const rateable = (run.result === "drafted" || run.result === "answered") && !onLead;
     const vote = (useful: boolean): Attrs => ({ "data-vo-useful": useful ? "1" : "0", "data-run": run.id, "data-org": viewer.organizationId });
     return {
       when: dayTime(run.createdAt, viewer.timeZone),
-      matter: names.reference(run.matterId),
+      matter: onLead ? "A lead" : names.reference(run.matterId),
       ...(run.matterId ? { matterHref: `/sheet/matters/${run.matterId}` } : {}),
-      task: `${TASK_LABEL[run.kind]}${run.kind === "ask" ? "" : ` for ${names.matter(run.matterId)}`}`,
+      task: `${TASK_LABEL[run.kind]}${run.kind === "ask" || onLead ? "" : ` for ${names.matter(run.matterId)}`}`,
       model: { left: run.model ?? "—", right: `${run.tools.length} tool ${run.tools.length === 1 ? "call" : "calls"}` },
       prompt: run.promptVersion ?? "—",
       sources:
@@ -601,12 +664,14 @@ export function aiPage(input: {
   sources: ApprovedSourceRow[];
   names: VoNames;
   readings?: readonly VoReadingAuditRow[];
+  /** Settings: the AI vendor terms panel (AI-06). */
+  vendorTerms?: AiVendorTermsData;
 }): AiData {
   const { tab, viewer, settings, names } = input;
   return {
     tab,
     pills: aiPills(viewer, settings),
-    settings: tab === "settings" ? aiSettings(viewer, settings) : undefined,
+    settings: tab === "settings" ? aiSettings(viewer, settings, input.vendorTerms) : undefined,
     runs:
       tab === "runs"
         ? {

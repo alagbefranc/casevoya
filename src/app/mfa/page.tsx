@@ -8,14 +8,14 @@ import { PortScreen } from "@/components/port/screen";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { readPendingTotp, withQr } from "@/lib/auth/mfa-pending";
 import { createClient } from "@/lib/supabase/server";
-import { mfaActiveStep } from "@/lib/auth/mfa-step";
+import { mfaActiveStep, stepUpAction, stepUpLead } from "@/lib/auth/mfa-step";
 
 export const metadata: Metadata = {
   title: "Two-step sign-in · Casevoya",
   robots: { index: false, follow: false },
 };
 
-async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: string; next?: string }> }) {
+async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: string; next?: string; for?: string }> }) {
   const params = await searchParams;
   const requested = Number(params.step);
   const asked = Number.isFinite(requested) ? requested : null;
@@ -52,12 +52,12 @@ async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: strin
 
   return (
     <PortScreen page="mfa" variant="au" initialStep={activeStep}>
-      <TwoStepMarkup email={email} activeStep={activeStep} enrollment={enrollment} />
+      <TwoStepMarkup email={email} activeStep={activeStep} enrollment={enrollment} stepUpLead={stepUpLead(params.next, params.for)} stepUpAction={stepUpAction(params.next, params.for)} />
     </PortScreen>
   );
 }
 
-export default function MfaPage({ searchParams }: { searchParams: Promise<{ step?: string; next?: string }> }) {
+export default function MfaPage({ searchParams }: { searchParams: Promise<{ step?: string; next?: string; for?: string }> }) {
   return (
     <Suspense
       fallback={

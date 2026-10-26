@@ -15,13 +15,20 @@ import { MatterDecisionsLive, MatterSubmissions, type MatterDecisionsData, type 
 import { MatterDocumentReview, type MatterDocumentReviewData } from "./vo-doc-review";
 import { DOC_REQUEST_DIALOG, DocRequestDialog, type DocRequestDialogData } from "./doc-request";
 import { MatterIntake, type MatterIntakeData } from "./matter-intake";
+import { MatterWork, type MatterWorkData } from "./billing-live";
 import { InboundAddress, type InboundAddressData } from "./inbound-filing";
+import { MatterLetters, type LetterAttrs, type MatterLettersData } from "./matter-letters";
+import { MatterRulePin } from "./matter-rule-pin";
+import type { MatterRulePinData } from "@/modules/sheet/rule-pin-present";
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
 import type { PersonHistoryPanel } from "@/modules/sheet/person-history-present";
 import type { PersonEditData } from "@/modules/sheet/edit-person";
 import { ChatError, ChatView } from "@/components/messages/chat";
 import { TaskEditDialog, TasksDialog, type TaskEditDialogData, type TasksDialogData } from "./tasks";
+import { LetterFormFields, type LetterFormData } from "./letter-form";
 import type { ChatData } from "@/modules/messages/present";
+import { NoAccessPanel } from "./state-views";
+import { MATTER_BILLING_DENIED } from "@/modules/sheet/states-present";
 
 export const MATTER_TABS = [
   ["overview", "Overview"],
@@ -223,6 +230,8 @@ export type MatterOverviewData = {
   events: MatterEvent[];
   /** Live: events come from the firm's audit log, which only the firm owner can read. */
   eventsOwnerOnly?: boolean;
+  /** Live only (SRC-05, SRC-12): the pinned rule pack and IRCC form versions, or the honest "No approved rule pack". */
+  rules?: MatterRulePinData | null;
 };
 
 const GROW = "@keyframes grow{from{transform:scaleX(0)}}";
@@ -422,6 +431,7 @@ export function MatterOverview({ data }: { data: MatterOverviewData }) {
           </div>
         </div>
       </div>
+      {data.rules ? <MatterRulePin data={data.rules} /> : null}
       <h3 className={"sub rv"} style={css({ "--i": "5" })}>
         <Icon name={"history"} cls={"ic s"} />
         {" Recent events"}
@@ -448,8 +458,13 @@ export function MatterOverview({ data }: { data: MatterOverviewData }) {
 /* ------------------------------------------------------------ right column */
 
 export type MatterRbarData = {
-  /** The Vo draft card. Absent until Vo is switched on and has a draft for this matter. */
-  vo?: { draft: string; sources: string } | null;
+  /**
+   * The Vo draft card. Absent until Vo is switched on and has a draft for this matter. Live only
+   * (AI-01): `accept`, `edit` and `reject` wire its buttons to the Vo letter draft it shows.
+   */
+  vo?: { draft: string; sources: string; accept?: LetterAttrs; edit?: LetterAttrs; reject?: LetterAttrs } | null;
+  /** Live only (AI-01): the matter's letters, Draft letter with Vo and New letter. */
+  letters?: MatterLettersData | null;
   agreement: { title: string; state: string | null; parts: string[] };
   /** Recorded separately from the agreement. Absent until the firm stores it. */
   representation?: { title: string; note: string } | null;
@@ -459,7 +474,7 @@ export type MatterRbarData = {
   inbound?: InboundAddressData | null;
 };
 
-function MatterVo({ draft, sources }: { draft: string; sources: string }) {
+function MatterVo({ draft, sources, accept, edit, reject }: { draft: string; sources: string; accept?: LetterAttrs; edit?: LetterAttrs; reject?: LetterAttrs }) {
   return (
     <div className={"ai"} id={"voAssist"}>
       <div className={"vohd"}>
@@ -490,13 +505,13 @@ function MatterVo({ draft, sources }: { draft: string; sources: string }) {
       <p style={{ marginTop: "8px" }}>{draft}</p>
       <small style={{ display: "block", marginTop: "6px" }}>{sources}</small>
       <div className={"row"}>
-        <button className={"btn sm p"} data-ai={"ok"}>
+        <button className={"btn sm p"} data-ai={"ok"} {...accept}>
           {"Accept"}
         </button>
-        <button className={"btn sm"} data-ai={"edit"}>
+        <button className={"btn sm"} data-ai={"edit"} {...edit}>
           {"Edit"}
         </button>
-        <button className={"btn sm"} data-ai={"no"}>
+        <button className={"btn sm"} data-ai={"no"} {...reject}>
           {"Reject"}
         </button>
       </div>
@@ -510,9 +525,10 @@ export function MatterRbar({ data }: { data: MatterRbarData }) {
       {data.vo ? (
         <>
           <h4>{"Assist"}</h4>
-          <MatterVo draft={data.vo.draft} sources={data.vo.sources} />
+          <MatterVo draft={data.vo.draft} sources={data.vo.sources} accept={data.vo.accept} edit={data.vo.edit} reject={data.vo.reject} />
         </>
       ) : null}
+      {data.letters ? <MatterLetters data={data.letters} /> : null}
       <h4>{"Agreement"}</h4>
       <div className={"card"} style={{ display: "flex", gap: "10px" }}>
         <span style={{ color: "#f0a200" }}>
@@ -736,6 +752,8 @@ export type MatterDialogsData = {
   task?: TaskEditDialogData | null;
   /** Live only (ORG-06): Change consultant (`#dCons`), opened from the responsible consultant's card. */
   consultant?: ConsultantDialogData | null;
+  /** Live only (GOV-04): Record a government letter's issuer, letter date, filed-email file and tasks. */
+  letterForm?: LetterFormData | null;
 };
 
 /**
@@ -1013,6 +1031,7 @@ export function MatterDialogs({ data }: { data: MatterDialogsData }) {
               {data.wire ? <input id={"ltD"} type={"date"} /> : <input placeholder={"Type exactly as written"} />}
             </label>
           </div>
+          {data.wire && data.letterForm ? <LetterFormFields data={data.letterForm} /> : null}
           <p className={"mu"} style={{ fontSize: "13px", marginTop: "8px" }}>
             {"Vo can read the date, but a person confirms it before it becomes a deadline. A decision letter also needs a consultant to confirm the outcome."}
           </p>
@@ -1675,11 +1694,16 @@ export type MatterBillingData = {
   invoices: { number: string; categories: string[]; issued: string; state: MatterBadge; total: string; payment: string[] }[];
   /** Nobody on this matter may read its invoices (they are shown to the firm owner and finance). */
   hidden?: boolean;
+  /** Live only (FIN-06): time on the matter, accepted quotes and instalments, after the invoices. */
+  work?: MatterWorkData | null;
 };
 
 export function MatterBilling({ data }: { data: MatterBillingData | null }) {
   if (!data || data.hidden || (data.invoices.length === 0 && data.held.count === 0)) {
-    return (
+    // DES-04: a role that can't read this matter's billing gets the shared permission-denied view.
+    const empty = data?.hidden ? (
+      <NoAccessPanel data={MATTER_BILLING_DENIED} />
+    ) : (
       <Panel>
         <Empty
           art={"invoice-plain"}
@@ -1687,6 +1711,14 @@ export function MatterBilling({ data }: { data: MatterBillingData | null }) {
           copy={data?.hidden ? "The firm owner and the matter’s finance user see this matter’s invoices and client funds." : "Invoices you issue from a matter appear here."}
         />
       </Panel>
+    );
+    return data?.work ? (
+      <>
+        {empty}
+        <MatterWork data={data.work} />
+      </>
+    ) : (
+      empty
     );
   }
   return (
@@ -1772,6 +1804,7 @@ export function MatterBilling({ data }: { data: MatterBillingData | null }) {
           </table>
         </div>
       )}
+      {data.work ? <MatterWork data={data.work} /> : null}
     </>
   );
 }

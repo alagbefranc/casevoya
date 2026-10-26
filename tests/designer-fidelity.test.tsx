@@ -3741,7 +3741,7 @@ describe("Designer fidelity: Settings, Team and seats and Security", () => {
     });
     const html = renderToStaticMarkup(createElement(SheetSettingsSecurity, { data: owner }));
     expect(html).toContain("Required for every staff account · 1 of 2 set up");
-    expect(html).toContain("No idle timeout yet");
+    expect(html).toContain("Staff are signed out after a period with no activity, with a warning 2 minutes before");
     expect(html).toContain("only after you approve a request");
     expect(html).toContain('<span class="bd gr"><i></i>None active</span>');
     expect(html).not.toContain("aren’t built yet");
@@ -4040,7 +4040,7 @@ describe("Designer fidelity: Settings, Subscription and Retention", () => {
     expect(html).toContain('<dt>Invoices from Casevoya</dt><dd>CV-0007 · 19 Oct 2026 · CAD 324 · Paid <a href="https://invoice.stripe.com/i/synthetic" target="_blank" rel="noreferrer">Download</a></dd>');
     // Live-only: the owner's .fp-row of Designer .btn buttons under the dl; a live subscription changes in the portal.
     expect(html).toContain(
-      '<div class="fp-row" style="margin-top:12px"><button class="btn p sm" data-subscription-act="portal" data-org="00000000-0000-4000-8000-000000000001">Change plan</button><button class="btn sm" data-subscription-act="portal" data-org="00000000-0000-4000-8000-000000000001">Manage billing</button><button class="btn sm" data-subscription-act="portal" data-org="00000000-0000-4000-8000-000000000001">Cancel at period end</button></div>',
+      '<div class="fp-row" style="margin-top:12px"><button class="btn p sm" data-subscription-act="portal" data-org="00000000-0000-4000-8000-000000000001">Change plan</button><button class="btn sm" data-subscription-act="portal" data-org="00000000-0000-4000-8000-000000000001">Manage billing</button><button class="btn sm" data-subscription-act="cancel" data-org="00000000-0000-4000-8000-000000000001">Cancel subscription</button></div>',
     );
     expect(data.dialog).toBeNull();
     // With the live-only row stripped, the panel closes exactly as the capture does.

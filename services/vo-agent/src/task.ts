@@ -5,9 +5,10 @@
  * the whole path with a scripted model.
  */
 import { NEEDS_CONSULTANT, newNonce, voSystemPrompt, voUserPrompt, VO_MODEL, VO_PROMPT_VERSION } from "../../../src/modules/vo/prompt";
-import { guardVoOutput } from "../../../src/modules/vo/guard";
+import { dbSource, guardGroundedAnswer } from "../../../src/modules/vo/grounding";
 import type { VoTaskRequest, VoTaskResponse } from "../../../src/modules/vo/sign";
 import type { VoData } from "./data";
+import { finishLetterRun } from "./letter-tools";
 import { agentOptions, MCP_SERVER, type ToolLog } from "./policy";
 import { TASK_TOOLS, TOOL_SPECS, type RunContext, type ToolResult } from "./tools";
 
@@ -97,7 +98,7 @@ export async function runVoTask(request: VoTaskRequest, deps: RunDeps): Promise<
   let usage = { input: 0, output: 0, cost: 0 };
   try {
     const stream = deps.sdk.query({
-      prompt: voUserPrompt(request.task, ctx.nonce, request.question),
+      prompt: voUserPrompt(request.task, ctx.nonce, request.question, request.letterType ?? null),
       options: agentOptions({
         task: request.task,
         systemPrompt: voSystemPrompt(request.task, ctx.nonce),
@@ -129,24 +130,32 @@ export async function runVoTask(request: VoTaskRequest, deps: RunDeps): Promise<
   const sources = [...ctx.sources.values()];
   const abstained = ctx.abstainedByDraft || resultText.trim().toLowerCase().startsWith(NEEDS_CONSULTANT);
 
+  // AI-01: a letter is saved as a matter letter draft (letter-tools.ts), not as a vo_drafts row.
+  if (request.task === "letter_draft") {
+    const latencyMs = Math.min(600000, Math.max(0, Math.round(now() - started)));
+    const outcome = await finishLetterRun(ctx, { metrics, latencyMs, success, abstained, finish });
+    return { ...outcome, log, tools: ctx.calls };
+  }
+
   if (request.task === "ask") {
     if (!success && !resultText) return failed("failed", metrics);
-    const guarded = guardVoOutput(resultText);
-    // Ungrounded (no record read) counts as an abstention: Vo doesn't answer from memory.
-    if (guarded.kind === "abstain" || (guarded.kind === "draft" && sources.length === 0)) {
+    // SRC-09: only sentences that cite the run's allowed set survive; markers the run never handed
+    // out are dropped. Nothing supported (or the model's own consultant marker): Vo abstains.
+    const grounded = guardGroundedAnswer(resultText, ctx.markers ?? new Map());
+    if (grounded.kind === "empty") return failed("empty", metrics);
+    if (grounded.kind === "abstain") {
       await finish({ p_result: "abstained", p_model: VO_MODEL, ...metrics });
-      return { result: "abstained", log, tools: ctx.calls };
+      return { result: "abstained", reason: grounded.reason, log, tools: ctx.calls };
     }
-    if (guarded.kind === "empty") return failed("empty", metrics);
-    const saved = await finish({ p_result: "answered", p_model: VO_MODEL, p_sources: sources, p_needs_rule: guarded.needsRule, ...metrics });
+    const saved = await finish({ p_result: "answered", p_model: VO_MODEL, p_sources: grounded.cited.map(dbSource), p_needs_rule: false, ...metrics });
     if (saved.error) return { result: "failed", failure: "failed", log, tools: ctx.calls };
-    return { result: "answered", text: guarded.text, needsRule: guarded.needsRule, sources, log, tools: ctx.calls };
+    return { result: "answered", text: grounded.text, needsRule: false, sources: grounded.cited, log, tools: ctx.calls };
   }
 
   if (!ctx.draft) {
     if (abstained) {
       await finish({ p_result: "abstained", p_model: VO_MODEL, ...metrics });
-      return { result: "abstained", log, tools: ctx.calls };
+      return { result: "abstained", reason: "consultant", log, tools: ctx.calls };
     }
     return failed(success ? "empty" : "failed", metrics);
   }
@@ -159,7 +168,7 @@ export async function runVoTask(request: VoTaskRequest, deps: RunDeps): Promise<
     p_result: "drafted",
     p_title: title,
     p_body: ctx.draft.text,
-    p_sources: sources,
+    p_sources: sources.map(dbSource),
     p_model: VO_MODEL,
     p_needs_rule: ctx.draft.needsRule,
     ...metrics,

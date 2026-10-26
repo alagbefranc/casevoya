@@ -502,6 +502,72 @@ The private link runs the designed flow (spec `docs/specs/consultation-agreement
 
 Tested in `tests/booking-agreements.rls.test.ts`.
 
+## Messaging: templates, announcements, external participants (`20261025110000`, `20261025110100`, not applied on the live project)
+
+PRD OPS-04 (#179).
+
+* `20261025110000`: enum value `email_template` `announcement` (EX19), in its own migration.
+* `message_templates`: the firm's own templates. `use_for` `message` or `announcement` (`title` required for an announcement only); `body` 1 to 4,000; `status` `draft` / `approved` / `archived`; `version`; who approved and when. Forced RLS: firm staff at staff MFA read; writes only through the functions below.
+* `public.save_message_template(org, id, use_for, name, title, body, expected_version)`: firm owner, licensed consultant, case manager. New, or an edit (always back to `draft`, version + 1). Unknown merge fields refused (`app.message_template_fields_ok`). Audited `message_template.saved` without the text.
+* `public.approve_message_template(org, id, expected_version)`: firm owner or licensed consultant; a draft at that version. Audited. `public.archive_message_template(org, id)`: writers. Audited.
+* `announcements` (append-only, trigger `app.reject_message_change`) and `announcement_deliveries` (one per person: `emailed`, `seen_at`, `dismissed_at`). Forced RLS: case staff (owner, licensed consultant, case manager, assistant) at staff MFA read; clients only through `portal_notices_for_me`.
+* `app.announcement_candidates(org)`: people on the firm's non-closed matters (applicant, dependant, sponsor, employer, guardian), sample matters only while the firm is in sample mode, with program key, portal account and whether they'd be emailed (address, email notices on, firm not in sample mode).
+* `public.announcement_audiences(org)`: case staff; counts for all active clients and each program (portal recipients, emailed, left out without a portal account).
+* `public.send_announcement(org, template, version, program_key)`: firm owner or licensed consultant; an approved announcement template at that version; one per firm every 10 minutes (advisory lock; refusal returned as `{rate_limited, retry_at}` and audited `announcement.rate_limited`); refuses an empty audience; stores the text with `{firm_name}` merged, a delivery per portal person, queues `announcement.sent` when anyone is emailed. Audited `announcement.sent` with counts.
+* `public.mark_portal_announcements_seen(org)`: the signed-in client's announcements are seen (portal Home).
+* Redefined from `20261024120100`: `portal_notices_for_me` (+ announcements, kind `announcement`, title and body, last 60 days) and `dismiss_portal_notice` (+ an announcement delivery of the caller; marks it seen too).
+* Redefined from `20261024150100`: `claim_mail_events` (+ `announcement.sent`) and `prepare_email_delivery` (+ EX19 to each emailed delivery, firm name only; skipped for a sample-mode announcement or when Email notices is now off). Nothing else in them changes.
+* Trigger `message_thread_people_external_portal` (`app.guard_thread_external_person`): a signed-in caller can't add an employer or sponsor without a portal account to a conversation. `send_matter_message` is unchanged.
+
+Tested in `tests/ops-messaging.rls.test.ts` (template roles, versions, merge fields, tenant isolation; audience counts; owner sends, case manager refused, client and other firm refused; portal notice, seen and dismiss; EX19 context has no text; rate limit audited; sample mode; external participant refused without portal, allowed with it, never reads other threads or staff notes).
+
+## Manual payments pending verification (`20261025150000`, `20261025150100`, not applied on the live project)
+
+FIN-09. Casevoya holds no money; staff record what the firm's bank shows.
+
+* `public.manual_payment_status` (own migration): `pending_verification`, `verified`, `rejected`, `reversed`, `failed`.
+* `firm_operating_accounts`: the firm's operating account record (label, institution, last four, CAD). `public.create_firm_operating_account(org, label, institution, last4)`: firm owner with a step-up (`app.require_firm_owner_step_up`), audited `finance.operating_account_added`. Read by the owner and finance users.
+* `invoices.manual_paid_cents`: verified manual payments, part of `paid_cents` (check: `manual_paid_cents + client_funds_paid_cents <= paid_cents`).
+* `invoice_manual_payments` (MP-0001 per firm): invoice, matter, method (`client_fund_method`), external reference, received date, operating account, evidence (`evidence_version_id`, a cleared document version filed on the matter, and/or `evidence_note`; one required), amount, currency, status, named reviewer, recorder, verifier (`self_verified`), rejection, reversal (`reopened_cents`, `reversal_task_id`). Recorded fields never change; `app.guard_manual_payment_change` allows pending -> verified / rejected / failed and verified -> reversed / failed only. Read by the matter's billing staff.
+* `public.record_invoice_manual_payment(...)`: billing staff of the matter (`app.require_client_funds_access`), sample-mode rule, an issued invoice with no card payment processing, amount no more than due less other pending manual payments, reference required, date not in the firm's future, an active operating account, evidence (`app.check_payment_evidence`) and an eligible reviewer (`app.check_payment_reviewer`: an active firm owner, or an active finance user assigned to the matter; not the recorder unless no one else is). Idempotent by key.
+* `public.verify_invoice_manual_payment(id)`: step-up; the named reviewer or a firm owner; the recorder only when no one else is eligible or as the firm owner, after a step-up taken after it was recorded (`self_verified`). Re-checks the amount due, then adds to `paid_cents` and `manual_paid_cents`; status from `app.invoice_settled_status`. `public.reject_invoice_manual_payment(id, reason)`.
+* `public.reverse_invoice_manual_payment(id, outcome, reason)`: `reversed` (verified only) or `failed` (pending or verified), step-up. A verified one reopens the balance. `app.create_payment_followup_task` makes an internal high-priority task (and its `task_events` row) for the matter's responsible consultant, else the longest-standing active firm owner. The matter is not touched.
+* `client_fund_deposit_reviews`: the evidence version and named reviewer of an advance, append-only. `public.record_client_advance(...)` checks reference, evidence and reviewer, then calls the unchanged `app.record_client_deposit`.
+* **Redefines** `app.verify_client_deposit` (latest `20261019140000_owner_self_verify_step_up.sql`): when a reviewer was named, only that reviewer or a firm owner verifies. Nothing else changed.
+* `public.list_payment_reviewers(org)` (billing staff): active owners and finance users with their assigned matters. `public.invoice_manual_payment_summary(invoice_ids)`: number, status, amount, date and method for invoices the caller can read (the client's portal), never the evidence or reviewer.
+
+* `20261025150300_card_checkout_manual_pending.sql` **redefines** `app.invoice_card_checkout_check` (latest `20261025130000_fin_stripe_connect_disputes_credits.sql`): it also answers `{allowed: false, reason: 'manual_payment_pending'}` while a manual payment on the invoice waits for verification, so the portal's card checkout is refused on the server. Nothing else changed.
+* Verifying refuses more than amount − paid − credited (credited includes FIN-06's `written_off_cents`), so it never makes `app.invoice_overpaid_cents` positive and opens no client credit (FIN-13); pending payments never touch `paid_cents`.
+
+Audit: `invoice.manual_payment_recorded`, `_verified`, `_verified_self`, `_rejected`, `_reversed`, `_failed`. Tested in `tests/finance-manual-payments.rls.test.ts`.
+
+## Reconciliation workspace (`20261025150200`, not applied on the live project)
+
+FIN-12, on top of `client_account_reconciliations`.
+
+* `client_reconciliation_adjustments`: deposits in transit and outstanding cheques of a reconciliation waiting for review (description, reference, date on or before the statement date, amount; removal kept as `removed_at` / `removed_by`). `app.guard_reconciliation_adjustment_change` locks them once the reconciliation is signed or discarded. `public.add_reconciliation_adjustment(...)`, `public.remove_reconciliation_adjustment(id)`: the firm owner or a finance user (`app.require_reconciliation_access`). Audited `client_funds.reconciliation_item_added` / `_removed`.
+* `client_account_reconciliations.adjusted_balance_cents`: statement + deposits in transit − outstanding cheques, stored when signed. The unnamed check "reconciled means `difference_cents = 0`" is dropped and replaced by `client_account_reconciliations_reconciled_balanced` (reconciled means the adjusted balance, or the statement for rows signed before, equals the control ledger), plus `client_account_reconciliations_adjusted_when_signed`.
+* **Redefines** `app.sign_client_reconciliation` (latest `20261019184700_client_account_reconciliations.sql`): computes the adjusted balance, requires it to equal the control ledger to sign as `reconciled`, and stores it. Everything else unchanged.
+* `app.guard_reconciled_period` (triggers on `client_fund_entries` and `client_fund_bank_transfers` inserts): nothing dated on or before a signed statement date of the same client account.
+* `public.record_reconciliation_export(id)`: audits a PDF report download (`client_funds.reconciliation_exported`).
+
+Tested in `tests/finance-reconciliation-workspace.rls.test.ts`.
+
+## Billing: time, drafts, tax rates, write-offs, quotes, instalments, government fees (`20261025140000`, not applied on the live project)
+
+FIN-06. No existing function is redefined.
+
+* `tax_rates`: the firm's rates (name, `rate_percent` numeric(7,4), `effective_from`/`effective_to`, `approved_by`, `source_note`). `public.add_tax_rate`, `public.end_tax_rate` (firm owner or finance user, step-up; no overlap per name; never edited). `app.tax_rate_on(org, name, date)`.
+* `time_entries`: matter, membership, `worked_on`, `minutes` (null while a timer runs), `rate_cents` per hour, description, billable, `discarded_at`. One running timer per membership (partial unique index). `public.log_time_entry`, `public.start_timer`, `public.stop_timer`, `public.discard_time_entry`; `app.time_amount_cents` (minutes × rate ÷ 60, rounded half away from zero). `public.matter_time_invoices(matter)` says which invoice each entry is on.
+* `invoice_lines`: lines of a draft-built invoice (category professional_fee / disbursement / government_fee, minutes and rate for time, amount, tax name/rate/cents, links to the time entry, quote line, instalment item or fee reference, and a government fee's `source_url`, `source_checked_on`, `source_retrieved_at`, `source_sha256`). Change only while the invoice is a draft (trigger). Clients read the lines of invoices they can read.
+* `invoices` gains `written_off_cents` (part of `credited_cents`) and `discarded_at`, `discarded_by`, `discard_reason` (a discarded draft stays a draft).
+* `public.create_time_invoice`, `public.create_quote_invoice`, `public.invoice_instalment` make drafts (billing staff, idempotency key, number from `app.next_invoice_number` under the same advisory lock as `create_invoice`); `public.add_invoice_government_fee`, `public.remove_invoice_line`, `public.issue_invoice_draft` (rate in effect on the firm's today; the existing draft-to-issued mail trigger sends the approved invoice email), `public.discard_invoice_draft`.
+* `invoice_write_offs` (append-only) and `public.write_off_invoice` (billing staff, step-up, up to what is owed less credit-note drafts; adds to `credited_cents` and `written_off_cents`; status by `app.invoice_settled_status`).
+* `instalment_plans`, `instalment_plan_items` (one active plan per quote; a due date and an internal reminder task per quote instalment). `public.create_instalment_plan`, `public.cancel_instalment_plan` (cancels open reminder tasks through `app.open_task_write`).
+* `government_fee_references`: the firm's catalogue read from IRCC's fee list (name, amount, URL with anchor, `retrieved_at`, `snapshot_sha256`, status pending_review / approved / rejected / superseded). `public.record_government_fee_snapshot` (owner, licensed consultant or finance user; allowlisted host; a known hash records nothing), `public.review_government_fee_snapshot` (licensed member, step-up). Nothing seeded.
+
+Forced RLS on every new table; no insert, update or delete grants. Tested in `tests/finance-billing.rls.test.ts`.
+
 ## Task detail, recurrence and task notifications (`20261025100000`, `20261025100100`, not applied on the live project)
 
 OPS-01 (gap #179). Apply in this order.
@@ -523,6 +589,97 @@ OPS-06, branch `feat/ops-inbound-filing`.
 
 Tested in `tests/inbound-filing.rls.test.ts`.
 
+## Stripe Connect status, disputes, failed refunds and client credits (`20261025130000`, not applied on the live project)
+
+PRD FIN-02 and FIN-13, test mode only.
+
+* `firm_payment_accounts` gains `requirements` (Stripe's open requirements as last read: description, how soon, who must act), `fees_collector` and `losses_collector` (Stripe's `defaults.responsibilities`; null until read). `public.sync_firm_payment_account_status(org, account, card, payouts, requirements, fees_collector?, losses_collector?)`: the firm owner at aal2 stores what Stripe reported; unknown keys are dropped, `requirements_due` is the list's length. `public.sync_firm_payment_account` is left as it was.
+* `public.invoice_card_checkout_check(invoice)`: for the client who is a party, `{allowed, reason}`; only `professional_fee`, `disbursement` and `consultation_fee` (`app.is_card_payable_category`). Trigger `invoice_payments_earned_fee_only` refuses a card payment on any other invoice.
+* `app.create_finance_task(org, matter, title, priority, due_on, task_key)`: an internal task for the firm's first active owner (null when there is none), with its `created` task event. Not granted to API roles.
+* `app.apply_stripe_reversal_event` redefined (copied from `20261019110100`, its only definition): a new open dispute makes a `card_dispute` task (critical, due on the evidence deadline in the firm's timezone) stored in `invoice_disputes.task_id`; a refund that fails or is canceled makes a `refund_failed` task (high, due the firm's today) stored in `invoice_refunds.task_id`. Once per dispute or refund. Nothing else changed.
+* `invoice_disputes` gains `task_id`, `evidence_submitted_at`, `evidence_submitted_by`; `invoice_refunds` gains `task_id`.
+* `invoice_dispute_evidence`: append-only, one row per file sent to Stripe (Stripe file id, name, type PDF/JPEG/PNG, size up to 4.5 MB, explanation, submitted). Billing staff of the matter read it; clients don't. `public.dispute_evidence_context(dispute)` (billing access through `app.require_refund_access`, recent step-up, dispute still `needs_response` or `warning_needs_response`, before its deadline, on the firm's account) and `public.record_dispute_evidence(...)` (test mode only; sets `evidence_submitted_at/by` when submitted). Audited `invoice.dispute_evidence_submitted` / `invoice.dispute_evidence_added`.
+* `client_credits`: one per source invoice (CR-0001 per firm), opened, reopened and settled by trigger `invoices_client_credit` from `app.invoice_overpaid_cents` (paid less refunded plus credited over the amount; everything kept on a voided invoice). What is left is computed (`app.client_credit_available_cents`: the overpayment less card refunds of that invoice still pending at Stripe), never stored.
+* `client_credit_allocations`: append-only links, kind `invoice` (target invoice), `card_refund` (an `invoice_refunds` row, unique) or `bank_refund` (method e_transfer/cheque/wire, reference, date). `public.apply_client_credit(credit, target, amount, key)` moves the amount from the source invoice's `paid_cents` to the target's (same client: same matter or a shared applicant; open; same currency; at most what is left and what the target owes); `public.client_credit_refund_context(credit)` names the card payment to refund; `public.link_client_credit_refund(credit, refund)`; `public.record_client_credit_bank_refund(credit, amount, method, reference, date, key)` lowers the source invoice's `paid_cents` and is refused while a card refund of the invoice is pending at Stripe. All need billing access to the matter and a recent step-up, are idempotent on the key and audited (`invoice.client_credit_*`). Billing staff read credits and links; clients don't.
+
+Tested in `tests/finance-stripe-disputes-credits.rls.test.ts` and `tests/finance-stripe-connect-credits.test.tsx`.
+
+## Stripe webhook: dispute before payment, refund failed after success (`20261025160000`, not applied on the live project)
+
+Found in the live test-mode run of FIN-13 (#214). `app.apply_stripe_reversal_event` copied from `20261025130000` with two changes:
+
+* A refund or dispute event whose payment has no row yet, or isn't succeeded (`requires_payment`, `processing`, `failed`), raises SQLSTATE 55000 "payment not applied yet; retry the event" while it is recent (Stripe's `created` within 24 hours). The transaction rolls back (no inbox row), the webhook answers 500 and Stripe retries; after `payment_intent.succeeded` the retry is recorded. Older events, or ones without `created`, are ignored or rejected as before; an amount above what a received payment took is still rejected.
+* A refund Stripe moves from `succeeded` to `failed` or `canceled` is reversed: `invoice_payments.refunded_cents` and `invoices.refunded_cents` go down by its amount, the invoice status is recomputed with `app.invoice_settled_status` (refunded goes back to paid or partially paid), `failure_reason` and `failed_at` are stored, the `refund_failed` task is made once, and it is audited `invoice.refund_reversed`. A linked client credit reopens through `invoices_client_credit`. Failed and canceled refunds stay final.
+
+Tested in `tests/finance-stripe-disputes-credits.rls.test.ts`, `tests/finance-refunds.rls.test.ts` and `tests/finance-refund-webhook.test.ts`.
+
+## Government letters: issuer list, issuer and tasks on a letter (`20261025180000`, not applied on the live project)
+
+GOV-04 (gap #181), branch `feat/gov-correspondence`.
+
+* `government_issuers` (per firm): `name`, `source_url` (allowlisted Government of Canada host via `app.host_is_allowlisted(app.official_url_host(...))`), `checked_on` (not in the firm's future, within a year), `retrieved_at` + `snapshot_sha256` (both or neither: the server's own read of the page), `page_modified_on`, `name_on_page`, `status` pending_review / approved / rejected / retired, reviewer, `review_note`. One live (pending or approved) row per name (case-insensitive partial unique index). Never deleted (`app.reject_governed_delete`), row-audited. Read by the firm's staff with MFA (`app.gov_staff_roles`); clients and other firms read nothing. Nothing seeded.
+* `government_correspondence.issuer_id` (FK `(issuer_id, organization_id)` to `government_issuers`, indexed): the approved issuer the letter names; `issuer` still stores the text.
+* **Redefines** `app.gov_correspondence_immutable` (latest `20261020130000_work_pages_fixes.sql`): `issuer_id` is immutable too, except that it may be set once from null to the approved issuer whose name equals the letter's `issuer`. Nothing else changed.
+* `public.propose_government_issuer(org, name, url, checked_on, retrieved_at, sha256, modified_on, name_on_page)`: gov staff roles; audited `government.issuer_proposed`.
+* `public.review_government_issuer(id, version, decision, note)`: licensed member with a fresh step-up (`app.require_licensed_staff(org, true)`); approve or reject a pending row, retire an approved one; a note to reject or retire; version conflict `PT409`. Audited `government.issuer_<decision>`.
+* `public.record_government_letter(matter, kind, issuer_id, issuer, channel, document_date, received_on, action_requested, stated_deadline, evidence_version_id, tasks)`: calls the unchanged `app.record_government_correspondence` (every matter, role, sample-mode, date and evidence check), pins the approved issuer (same firm only), then for each `{title, owner: staff|client, owner_id, due_on}` (at most 10; due today or later in the firm's timezone) calls the unchanged `app.create_task` and links it in `correspondence_work_links`, all in one transaction. Audited `government.letter_tasks_created`.
+
+Tested in `tests/government-letters.rls.test.ts`.
+## Government status provenance (`20261025190000`, not applied on the live project)
+
+GOV-05, branch `feat/gov-status-provenance`.
+
+* `government_status_checks.correspondence_id` (FK `(correspondence_id, organization_id)` to `government_correspondence`, indexed): the status a check was about; null is a check of the whole matter. The table stays append-only and audited.
+* `public.mark_government_checked(matter, correspondence)` (authenticated; staff on the matter, `app.gov_staff_roles`): records "Checked … No change." with the actor's membership; refuses a status from another matter. Audited `government.status_checked`.
+* `government_processing_estimates`: one row per estimate a staff member read on IRCC's processing-times page: `source_url` (allowlisted host, and the function requires `canada.ca`), `application_type`, `estimate_text` (as written, not parsed), `checked_on` (not after `app.firm_today`), `page_retrieved_at` + `snapshot_sha256` (both or neither; the server's fetch of the page), `status` (`pending_review`, `approved`, `rejected`, `superseded`), entered and reviewed by membership. Forced RLS; staff who can read the matter (`app.gov_staff_can_read`) select; no client access; entered facts immutable (trigger), updates only through the functions (`app.gov_guard_update`), never deleted. Never seeded.
+* `public.record_processing_estimate(matter, url, application_type, estimate, checked_on, retrieved_at, sha256)` (staff on the matter; sample-mode rule) and `public.review_processing_estimate(estimate, version, decision, note)` (licensed member via `app.gov_require_licensed`: recent step-up, no licence block; a note to reject; approving supersedes the matter's earlier approved estimate). Audited `government.estimate_entered` / `_approved` / `_rejected`.
+* No function redefined; `share_government_record` is reused unchanged.
+
+Tested in `tests/gov-status-provenance.rls.test.ts` and `tests/gov-status-provenance-present.test.tsx`.
+
+## Review attestation and self-approval (`20261025220000`, not applied on the live project)
+
+GOV follow-up (decisions of 2026-10-24, docs/DECISIONS.md), branch `fix/gov-review-decisions`.
+
+* `submission_requirements`, `government_issuers`, `government_processing_estimates`: new `page_attested_by_membership_id` (FK `(…, organization_id)` to `memberships`, indexed), `page_attested_on` (date the reviewer opened the page), `page_attested_at`. All three or none, and only on a row without `snapshot_sha256`. New check `<table>_approved_source`: an approved row has a snapshot or an attestation (`NOT VALID` on issuers and estimates, which may hold rows approved before this rule). `submission_requirements_check3` (approved needs a snapshot) is dropped in favour of it.
+* `app.gov_other_licensed_reviewers(org, user)`: active licensed members (`app.membership_is_licensed`) other than the user, not counting a blocked licence.
+* `app.gov_check_self_approval(org, entered_by, entered_at)`: refuses approving your own entry while another licensed member exists; otherwise needs a step-up after the entry. `app.gov_check_page_attestation(org, has_snapshot, opened_on, entered_at)`: without a snapshot, the date is required, from the firm day of the entry to `app.firm_today`.
+* New five-argument `app.` and `public.` `review_submission_requirement`, `review_government_issuer`, `review_processing_estimate` (`…, p_note, p_page_opened_on date`): the copied bodies plus the two checks; the attestation is stored with the approval; audit events gain `_self` on a self-approval and carry `page_attested_on` and `self_approved`.
+* **Redefines** `app.review_submission_requirement(uuid, integer, text, text)` (latest `20261025170000_gov_submission_checklist.sql`), `app.review_government_issuer(uuid, integer, text, text)` (latest `20261025180000_gov_correspondence_issuers_tasks.sql`) and `app.review_processing_estimate(uuid, integer, text, text)` (latest `20261025190000_gov_status_provenance.sql`): each now calls its five-argument version with no attestation. The four-argument public wrappers are unchanged.
+
+* `20261025220100_gov_requirement_snapshot_number.sql` **redefines** `app.propose_submission_requirement` (latest `20261025170000_gov_submission_checklist.sql`): it always inserted `source_snapshots.snapshot_number = 1`, so a second capture of the same URL broke `unique (source_id, snapshot_number)`. Now, under a transaction advisory lock per source, a capture with the same SHA-256 reuses that source's snapshot and a different one gets `max(snapshot_number) + 1`. `propose_government_issuer` and `record_processing_estimate` keep their hash on their own rows and never write `source_snapshots`, so they are unchanged.
+
+Tested in `tests/gov-review-decisions.rls.test.ts` and `tests/gov-review-decisions-present.test.tsx`.
+
+## DEC review rules (`20261025230000`, not applied on the live project)
+
+DEC-02 follows the GOV review rules (2026-10-24), branch `fix/dec-review-rules`.
+
+* `approval_follow_up_steps`, `renewal_timings`: new `page_attested_by_membership_id` (FK `(…, organization_id)` to `memberships`, indexed), `page_attested_on`, `page_attested_at`; all or none, only without `snapshot_sha256`. `approval_follow_up_steps_check3` and `renewal_timings_check3` (approved needs a snapshot) are replaced by `<table>_approved_source` (a snapshot or an attestation).
+* New five-argument `app.`/`public.` `review_approval_follow_up_step` and `review_renewal_timing` (`…, p_note, p_page_opened_on date`): copied bodies plus `app.gov_check_page_attestation` and `app.gov_check_self_approval` (from `20261025220000`); audits gain `_self`, `page_attested_on` and `self_approved`.
+* **Redefines** `app.review_approval_follow_up_step(uuid, integer, text, text)` (latest `20261025200000_dec_approval_follow_up.sql`) and `app.review_renewal_timing(uuid, integer, text, text)` (latest `20261025210000_dec_renewal.sql`): now call their five-argument versions with no attestation.
+* **Redefines** `app.approve_conditions_summary(uuid, integer)` (latest `20261025200000_dec_approval_follow_up.sql`): self-approval rule on the draft's drafter or last reviser (`drafted_by_membership_id`) and its last save (`updated_at`); audit `decision.conditions_summary_approved_self` when it applies.
+* **Redefines** `app.portal_renewal_reminders(uuid)` (latest `20261025210000_dec_renewal.sql`): the timing also carries `page_attested_on` and `page_attested_by` (the reviewer's display name, or "your consultant").
+
+Tested in `tests/dec-approval-follow-up.rls.test.ts`, `tests/dec-renewal.rls.test.ts` and `tests/dec-review-rules-present.test.tsx`.
+
+## Vo lead follow-ups and call-notes summaries (`20261025250000`–`20261025250100`, not applied on the live project)
+
+AI-01 (gap #183) criteria 2 to 4, branch `feat/ai-lead-call-drafts`. Additive; no existing function is redefined.
+
+* `20261025250000_vo_lead_call_enums.sql`: `vo_run_kind` and `vo_draft_kind` gain `lead_follow_up` and `call_summary`.
+* `vo_runs`: `matter_id` may be null (lead runs only); new `lead_id` (FK `(lead_id, organization_id)` to `leads`, indexed) and `booking_id` (FK to `bookings`, indexed). `vo_runs_thread_kind_check` is restated under the same name: only `message_reply` and `document_request` carry a conversation. New checks: every run has a matter or (these kinds) a lead; `lead_id` only on these kinds; a lead follow-up has a lead and no matter; `booking_id` exactly on call summaries; a call summary is kept on a lead or a matter, not both. Policy `vo_runs_select` (altered): staff who read the matter, or lead staff (`app.can_read_leads`) for a run with no matter and a lead.
+* `vo_crm_drafts` (forced RLS, select only; read by staff who read the matter, or lead staff for a lead): the draft (`kind`, `lead_id`, `matter_id`, `booking_id`, `title`, `body`, `sources` [{kind: lead, lead_note, booking or matter; id; label}], `model`, `prompt_version`, `needs_rule`), `marketing_consent` (lead follow-up: the lead's marketing answer when Vo drafted), `left_out` (notes kept from Vo for a switched-off sensitive category) and its review: `sent` (lead follow-up; `lead_note_id`), `reviewed` (call summary; `lead_note_id` or `matter_note_id`) or `discarded`, `edited`, `reviewed_by`, `reviewed_at`. One waiting draft per lead and per consultation (partial unique indexes). Every FK indexed.
+* `app.vo_lead_consent(org, lead, purpose)`: the latest answer, no row is no. `app.vo_rate_limited(org)`: the limits `begin_vo_run` uses (20/hour, 100/day per person, 300/day per firm, advisory lock per firm). `app.vo_crm_target_readable(org, lead, matter)`.
+* `public.begin_vo_lead_follow_up(org, lead)`: lead staff with MFA; `off`, `capability_off` (Administrative reply drafts or Client messages off), `converted`, `no_contact`, `no_consent` (no current enquiry-reply consent), `sample_only`, `already_drafted`, rate limits; audited `vo.run_started`.
+* `public.begin_vo_call_summary(org, booking)`: lead staff roles, scheduling read; the summary is kept on the linked lead, else the booking's matter (`no_target`); `off`, `capability_off` (Matter summaries for staff off), `not_video`, `no_call` (not completed and no started `video_sessions` row), `sample_only`, `already_drafted`, rate limits; audited `vo.run_started`.
+* `public.finish_vo_crm_run(...)`: the run's own user within 10 minutes; drafted (sources must be the run's lead, its notes, its consultation or linked consultations, or its matter; a lead follow-up re-checks consent), abstained or failed (`refused` allowed). Audited `vo.run_finished` (ids, counts; no text).
+* `public.mark_vo_lead_follow_up_sent(draft, body)`: lead staff; no placeholder; consent still given; records the text as a lead note through `public.add_lead_note`. Audited `vo.draft_sent`.
+* `public.save_vo_call_summary(draft, body)`: no placeholder; a lead note (`add_lead_note`) or a matter staff note (`add_matter_staff_note`). Audited `vo.draft_saved`.
+* `public.discard_vo_crm_draft(draft)`: audited `vo.draft_discarded`.
+
+The pasted call notes are never stored (they go to the Vo service in the signed request). Tested in `tests/vo-lead-call.rls.test.ts`; the service in `tests/vo-lead-call-service.test.ts`; the app in `tests/vo-lead-call-app.test.ts` and `tests/vo-lead-call-present.test.tsx`.
+
 ## Known gaps (next tasks)
 
 * T006 recovery codes, session revocation, owner-assisted MFA reset, and passkey assurance are in the repository and not applied live. Login rate limits and idle timeout are still open. Client and guardian invitations remain T021; this slice invites staff only.
@@ -536,3 +693,402 @@ Tested in `tests/inbound-filing.rls.test.ts`.
 * External tamper-evident audit sink (DB owner can still disable triggers).
 * Majority review still enqueues `person.majority_review_due`. T026 also opens one internal task titled `Majority review` when `is_minor` changes from true to false and a date of birth is on file. The birth date is not copied onto the task. Francis confirmed `age_of_majority_years` defaults to 19 and is firm-configurable from 18 to 21.
 * T018 firm onboarding, sample mode, and manual licence checks are in `20261017140600` and `20261017140700` and are not applied on the live project. There is no register scraper. Client invitation rows remain T021. An approved professional review is still not a verified licence until a manual register check is recorded.
+
+## Submission checklist, manifest and official steps (`20261025170000`, not applied on the live project)
+
+GOV-01 and GOV-03 (gap #181), on the manual submission handoff (`20261019202100`).
+
+* `submission_handoffs` gains `manifest_sha256`, `manifest_file_count`, `manifest_pinned_at` (all set together, check constraint).
+* `submission_manifest_files` (append-only): the files pinned at release: handoff, position, document, document version, file name, purpose, byte size, `file_sha256`, review state.
+* `submission_requirements`: a firm's official outside steps and channel names per program (null: every program) and `submission_channel`: label, `source_id` (firm `official_sources` row), `snapshot_id` (`source_snapshots`), `source_url` (allowlisted, trigger), section, form number and date modified, `checked_on`, `current_to`, `snapshot_sha256`, status pending_review / approved / rejected / retired with reviewer. One approved channel name per program and channel (partial unique index). Entered values are immutable (trigger); status changes only through the functions (`app.gov_guard_update` nonce).
+* `submission_checklist_events` (append-only): per handoff, an outside step ticked or unticked, the fee handling confirmed (with a note), a gate overridden by the firm owner (with a reason). The latest event per item is its state.
+* `public.submission_checklist(matter)` (matter staff): the gates from `app.submission_gates_for` (representation, package, deadlines, signatures, fees, outside_steps; state ok / blocked / overridden / none) and the blocked keys.
+* `public.tick_submission_step`, `public.confirm_submission_fees` (owner, consultant, case manager), `public.override_submission_gate` (firm owner, step-up, reason; never the package gate).
+* `public.propose_submission_requirement` (owner, consultant, case manager; canada.ca or gc.ca URL with anchor or section; date checked within the last year; optional snapshot JSON from the server's fetch), `public.review_submission_requirement` and `public.retire_submission_requirement` (licensed member, step-up; approval needs a snapshot hash).
+* **Redefines** `app.sign_off_submission_handoff` (latest `20261023090000_version_conflicts_not_retried.sql`): also pins the manifest (`app.gov_pin_manifest`; refuses with no stored files) and audits its hash and file count.
+* **Redefines** `app.record_submission` (latest `20261023090000_version_conflicts_not_retried.sql`): refuses while a gate blocks; the audit event carries the package label, manifest hash, each pinned file with its hash, and the overridden gates.
+* **Redefines** `app.gov_finish_verification` (latest `20261019216100_firm_today_rules.sql`): needs the confirmation file on the matter and the acknowledgement date.
+
+Forced RLS on every new table; reads only (matter staff through `app.gov_staff_can_read`; requirements to the firm's staff at aal2). Audit: `submission.step_done`, `_step_undone`, `_fees_confirmed`, `_fees_unconfirmed`, `_gate_overridden`, `_requirement_entered`, `_requirement_approved`, `_requirement_rejected`, `_requirement_retired`. Tested in `tests/gov-submission-checklist.rls.test.ts` and `tests/government-handoff.rls.test.ts`.
+
+## Approval follow-up: checklist, conditions summary, delivery record (`20261025200000`, not applied on the live project)
+
+DEC-02 (gap #182), branch `feat/dec-approval-followup`, on the T038/T039 decisions (`20261019202100`).
+
+* `approval_follow_up_steps`: a firm's official step after an approval, per program (`program_key`, required): label, `timing_text` (only as the page words it), `source_id` (firm `official_sources` row), `snapshot_id` (`source_snapshots`), `source_url` (allowlisted, trigger), section, form number and date modified, `checked_on`, `current_to`, `snapshot_sha256`, status pending_review / approved / rejected / retired with reviewer. Entered values immutable (trigger); status only through the functions (`app.gov_guard_update`). Staff of the firm (aal2) read it. Never seeded.
+* `approval_follow_up_events` (append-only): an official step ticked or unticked on a matter, with the decision, membership and time; the latest per step is its state.
+* `conditions_summaries`: draft / approved / superseded, `number` per matter (set on approval), `body`, `body_sha256`, drafter, approver, `approved_at`, `superseded_at`. One draft and one approved per matter (partial unique indexes); approved text immutable (trigger).
+* `decision_deliveries`: matter, decision, `document_version_id` (stored clean file on the matter), `document_label`, `method` (portal, email, in_person, mail), `delivered_at`, note, recorder; acknowledgement `client_portal` (user, time) or `staff_recorded` (membership, date, evidence file and/or note), set once (trigger).
+* Functions (public invoker wrappers over `app.*` SECURITY DEFINER, `search_path = ''`): `propose_approval_follow_up_step` (owner, licensed consultant, case manager), `review_approval_follow_up_step` and `retire_approval_follow_up_step` (licensed, fresh step-up, no licence block; snapshot required to approve), `tick_approval_follow_up_step` (matter staff, approval confirmed, step approved for the matter's program), `draft_conditions_summary`, `revise_conditions_summary`, `approve_conditions_summary` (licensed, fresh step-up; supersedes the earlier version; completes the conditions-summary task), `record_decision_delivery` (completes the document-delivery task), `record_delivery_acknowledgement` (evidence required), `acknowledge_decision_delivery` (a client party to the matter), and `portal_decision_follow_up(org)` (the signed-in client's current approved summaries and deliveries; no drafts or staff details). Helpers: `app.dec_latest_approval`, `app.dec_open_approved_matter`, `app.dec_complete_follow_up` (calls the unchanged `app.set_task_status`).
+* Forced RLS on every new table; staff on the matter read through `app.gov_staff_can_read`; clients read nothing directly. Audited `decision.follow_up_step_entered` / `_approved` / `_rejected` / `_retired` / `_done` / `_undone`, `decision.conditions_summary_drafted` / `_revised` / `_approved`, `decision.document_delivered`, `decision.delivery_acknowledged`.
+* No function redefined.
+
+Tested in `tests/dec-approval-follow-up.rls.test.ts` and `tests/dec-approval-follow-up-present.test.tsx`.
+
+## Renewal follow-up: expiry, official timing, renewal reminder (`20261025210000`, not applied on the live project)
+
+DEC-02 (gap #182), branch `feat/dec-renewal`. No existing function redefined.
+
+* `renewal_timings` (per firm): `program_key` (null: every program), `applies_to`, `timing_text` (word for word), `lead_days` (only when the page states a number), `source_id` / `snapshot_id` (firm `official_sources` / `source_snapshots`), `source_url` (allowlisted, trigger), section, form number and date modified, `checked_on`, `current_to`, `snapshot_sha256`, status pending_review / approved / rejected / retired with reviewer. Entered values immutable (trigger); status changes only through the functions (`app.gov_guard_update`). Staff with MFA read; clients read nothing. Never seeded.
+* `decision_renewals`: one recorded expiry per issued document on a confirmed approval: `document_label`, `expires_on`, optional `document_version_id` (a stored file on the matter), `remind_on`, `timing_id` (null: the firm's choice), `task_id` (internal reminder task), owner and recorder; then, once set, `client_person_id`, `consent_record_id`, `service_scope`, the fee by `fee_reference_id` + section/group/name, `lead_id`, `reminder_set_at/by`; `cancelled_at/by`, `cancel_reason`. Facts immutable (trigger); staff on the matter read (`app.gov_staff_can_read`); clients only through `public.portal_renewal_reminders`.
+* `public.propose_renewal_timing(...)` (owner, licensed consultant, case manager; federal official URL with anchor or section; snapshot reused per hash, numbered per source), `public.review_renewal_timing(id, version, decision, note)` and `public.retire_renewal_timing(id, version, reason)` (licensed, fresh step-up; approval needs the snapshot; `PT409` on version conflict). Audited `decision.renewal_timing_entered` / `_approved` / `_rejected` / `_retired`.
+* `public.renewal_contact_state(matter)`: whether the applicant may get a renewal reminder and why not (staff on the matter; null otherwise).
+* `public.record_issued_expiry(decision, label, expires_on, version, remind_on, timing, owner)`: confirmed approval only; reminder from the approved timing's days or the staff date (no default), between the firm's today and the expiry; creates the internal task with `app.create_task`. Audited `decision.expiry_recorded`.
+* `public.set_renewal_reminder(renewal, version, scope, fee)`: refuses unless `renewal_contact_state` allows; real matters only; scope 10 to 2000 characters; fee only an approved fee reference; creates the lead with `public.create_lead`. Audited `decision.renewal_reminder_set`.
+* `public.cancel_decision_renewal(renewal, version, reason)`: cancels the open task (`app.set_task_status`). Audited `decision.expiry_cancelled`.
+* `public.portal_renewal_reminders(org)`: the signed-in client's set, uncancelled reminders while their reminder choice is on, with the official timing source and the fee from the currently approved snapshot (`app.renewal_current_fee`) or null.
+
+Tested in `tests/dec-renewal.rls.test.ts` and `tests/dec-renewal-present.test.tsx`.
+
+## Staff idle sign-out, client two-step, consent impact reviews (`20261025270000`, `20261025270100`, not applied on the live project)
+
+SEC-01 and SEC-05 (gap #184), branch `feat/sec-sessions-consent`.
+
+* `20261025270000_sec_marketing_consent_enum.sql`: `consent_purpose` gains `marketing` (own migration).
+* `organizations.staff_idle_timeout_minutes` (integer, not null, default 30, check 5 to 480). Set only by `public.set_staff_idle_timeout(org, minutes)` (firm owner with a fresh step-up; audited `security.idle_timeout_changed` with from/to).
+* `staff_session_activity` (session id, user, last activity): not a tenant table (a session belongs to a user, like `session_revocations`); no grants, forced RLS, read and written only by `public.record_staff_activity(p_active)`, which returns `active` / `expired` / `ended` / `none` and, past the strictest idle time of the user's staff firms, ends the session (`session_revocations` reason `idle`, Auth session row removed; audited `session.idle_signed_out`).
+* Client two-step: `app.user_has_verified_totp(user)`, `app.client_step_up_satisfied()` (verified TOTP and a fresh step-up), `public.my_two_step_state()` (`off` / `needs_check` / `ok`), `public.record_my_two_step(enabled)` (checked against `auth.mfa_factors`; audited `mfa.client_enabled` / `mfa.client_disabled`).
+* `client_mfa_resets` (org, person, user, identity method, note, reset by): forced RLS, select through `app.can_work_person_privacy` (firm owner, or a licensed consultant or case manager who can read the person, with staff MFA); written only by `public.reset_client_two_step(org, person, identity_method, note)` (step-up; refuses staff users and the caller; ends sessions with `app.revoke_member_sessions`, removes factors with `app.purge_auth_user_factors`; audited `mfa.client_reset`).
+* `consent_impact_reviews` (person, consent record, purpose, source portal/staff, impacts, matter, task, open/done with who, when and note): forced RLS, select through `app.can_work_person_privacy`; row audit with the note redacted. Opened by the `consent_records_impact_review` trigger (`app.open_consent_impact_review`, after insert or update of `withdrawn_at`) when a granted consent is refused or withdrawn; `app.create_consent_impact_review` adds a high-priority internal task (checklist from `app.consent_impact_items(purpose)`) on the person's latest open matter. `public.complete_consent_review(review, version, note)` marks it done and completes the task (through `app.open_task_write`); audited `consent.impact_review_done` without the note.
+* Client consent: `public.my_consents()`, `public.set_my_consent(purpose, granted)` (AI drafting, marketing, processing; append-only; audited `consent.given` / `consent.withdrawn`). Staff: `public.person_consent_overview(org, person)` (history, reviews, two-step state, resets). Helpers `app.my_person_id`, `app.person_consent_state`, `app.person_declines_ai`, `app.consent_purpose_label`.
+* **Redefines** `public.begin_vo_document_review(uuid, uuid)` (latest `20261019218100_vo_doc_review.sql`): returns `{ok: false, error: 'client_ai_off'}` when the document's person declines AI drafting. Otherwise unchanged.
+
+Tested in `tests/sec-sessions-consent.rls.test.ts` and `tests/sec-sessions-consent.test.tsx`.
+
+## Retention deletion jobs and tombstones (`20261025290000`, not applied on the live project)
+
+SEC-07 (gap #184), branch `feat/sec-retention-cancellation`. Additive; redefines no function.
+
+* `deletion_jobs`: one approved deletion of one closed matter's files (matter, closure, reason, retention end, policy version, approver, idempotency key, status `approved` / `running` / `completed` / `blocked` / `failed`, lease and attempts). One open job per matter. Never deleted; who approved what is immutable. Forced RLS, no policies.
+* `deletion_job_items`: what the job removes (`document_file`, `inbox_file`, `export_file`, `vo_reading`, `vo_draft`) or keeps with a reason (`agreement_pdf`, a document also on another matter): opaque storage key, SHA-256, status `pending` / `deleted` / `missing` / `kept`. Forced RLS, no policies.
+* `deletion_tombstones`: append-only, one per completed job: matter reference, closed and retention dates, policy version and years, approver and approval time, reason, removed counts by kind (embeddings 0), kept items with reasons, and the removed storage keys (`objects`, for reapplying after a backup restore). Forced RLS, no policies.
+* `app.retention_end(matter)`: the later of the latest closure's `retention_on` and `matters.retention_on`. `app.deletion_ineligible_reason(matter)`, `app.matter_records_deleted(matter)`, `app.document_on_other_matter(document, matter)`.
+* `public.retention_deletion_overview(org)`: firm owner (MFA): eligible matters, the count past the end but on hold, jobs not completed, tombstones.
+* `public.approve_deletion_job(matter, reason, key)`: firm owner + step-up (`app.require_owner_step_up_for_matter`); plans the items; audited `retention.deletion_approved`.
+* Service role only: `public.service_claim_deletion_job()`, `public.service_deletion_item_ready(item)` (re-check; stops the job on a legal hold, keeps a document linked elsewhere), `public.service_record_deletion_item(item, outcome)` (performs the Vo redactions and removes download grants), `public.service_finish_deletion_job(job)` (tombstone). Audited `retention.deletion_started`, `retention.deletion_blocked`, `retention.deletion_failed`, `retention.deletion_completed`.
+* `app.kick_retention_runner()` and pg_cron job `casevoya-retention-runner` (every 5 minutes, only while a job waits): POSTs to `/api/retention/run` with the existing mail dispatch Vault secrets.
+
+Tested in `tests/sec-retention-deletion.rls.test.ts` and `tests/sec-retention-cancellation.test.tsx`.
+
+## Subscription cancellation, export window, custodial archive or transfer (`20261025290100`, not applied on the live project)
+
+SEC-10 (gap #184), branch `feat/sec-retention-cancellation`.
+
+* `organization_subscriptions`: new `cancel_requested_at`, `cancel_requested_by`, `end_arrangement` (`custodial_archive` / `transfer`), `end_transfer_id` (FK `(…, organization_id)` to `firm_transfers`), `end_arrangement_chosen_by`, `end_arrangement_chosen_at`; indexes on each FK.
+* **Redefines** `app.subscription_grace_days(text)` (latest `20261020160100_subscription_billing.sql`): `export_window_days` is never below 90.
+* **Redefines** `app.sync_subscription_state(uuid)` (latest `20261020160100_subscription_billing.sql`): a subscription whose `cancel_at` has passed becomes `cancelled` (`subscription.contract_period_ended`); `cancelled` becomes `archived` at `app.subscription_export_window_end` (the later of `cancelled_at` and `current_period_end`, plus the window) with `end_arrangement` `transfer` only when the chosen transfer is completed, else `custodial_archive`.
+* **Redefines** `public.firm_subscription(uuid)` (latest `20261020160100_subscription_billing.sql`): adds `continuity` and, in `subscription`, `cancel_requested_at` and `end_arrangement`.
+* New: `app.subscription_export_window_end(org)`, `app.firm_transfer_verified(transfer)`, `app.subscription_continuity_json(org, with_coverage)`, `public.subscription_continuity(org)` (any staff, MFA: banner), `public.subscription_cancel_allowed(org)` (owner + step-up; audited `subscription.cancel_requested`), `public.service_record_subscription_cancel(org, actor, cancel_at, period_end)` (service role; Stripe's date; audited `subscription.cancel_scheduled`), `public.choose_subscription_end_arrangement(org, arrangement, transfer)` (owner + step-up; audited `subscription.end_arrangement_chosen`), `public.firm_export_index(org)` (owner + step-up; audited `firm_export.index_downloaded`).
+
+Tested in `tests/sec-subscription-cancellation.rls.test.ts`, `tests/subscription-billing.rls.test.ts` and `tests/sec-retention-cancellation.test.tsx`.
+
+## AI vendor terms acknowledgement (`20261025260000`, not applied on the live project)
+
+AI-06, branch `feat/ai-vendor-terms`. Additive; no existing function is redefined.
+
+* `vo_vendor_terms_acknowledgements`: one row per firm and terms version (`unique (organization_id, terms_version)`): `terms_version`, `acknowledged_by` (FK `auth.users`, indexed), `acknowledged_at`. Forced RLS; read by the firm's staff with staff MFA (the same rule as `vo_settings`); no insert, update or delete grant.
+* `app.vo_vendor_terms_version()`: the current terms version; must equal `VO_VENDOR_TERMS.version` in `src/modules/vo/vendor-terms.ts` (tested). A content change ships with a new migration redefining it.
+* `app.vo_vendor_terms_acknowledged(org)`: whether the firm acknowledged the current version.
+* `public.acknowledge_vo_vendor_terms(org, version)`: firm owner with staff MFA; only the current version ("the AI vendor terms changed" otherwise); idempotent. Audited `vo.vendor_terms_acknowledged` with the version.
+* Trigger `vo_settings_require_vendor_terms` (`app.vo_settings_require_vendor_terms`, before insert or update of `enabled` on `vo_settings`): setting `enabled` to true when Vo was off (the saved switch, or with no row the sample-mode default from `app.vo_enabled`) is refused without the current version acknowledged. `set_vo_settings` and `set_composio_enabled` are unchanged.
+
+* `20261025260100_vo_vendor_terms_version_2.sql` **redefines** `app.vo_vendor_terms_version()` (latest `20261025260000_vo_vendor_terms_ack.sql`): returns `2026-10-25.1` (signed vendor agreements and Casevoya's commitments added to the panel). Nothing else changes; owners acknowledge the new version before Vo can next be turned on.
+
+Tested in `tests/vo-vendor-terms.rls.test.ts` and `tests/vo-vendor-terms.test.tsx`; `tests/vo-drafts.rls.test.ts`, `tests/vo-doc-review.rls.test.ts` and `tests/vo-lead-call.rls.test.ts` now acknowledge before turning Vo on.
+
+## Letters on a matter and Vo letter drafts (`20261025240000`, `20261025240100`, not applied on the live project)
+
+AI-01 (gap #183), branch `feat/ai-letter-drafts`. Apply in order: `20261025240000_vo_letter_enum.sql` (enum value, its own migration), then `20261025240100_vo_letter_drafts.sql`. Then `20261025240200_vo_settings_keep_read_on_upload.sql`, in the same go: it redefines `set_vo_settings` from DOC-05's body (`20261025000000`, live on prod) plus `letter_drafts`, and adds `vo_settings.read_on_upload` if missing, so neither switch is dropped.
+
+* `vo_run_kind` gains `letter_draft`. `vo_runs_thread_kind_check` is replaced so a letter run, like Ask Vo and a document reading, has no conversation.
+* `vo_settings.letter_drafts` (boolean, default true): the owner's "First drafts of letters from approved facts" switch.
+* `matter_letters`: one letter on a matter: `letter_type` (cover_letter, explanation, other), title, `origin` (vo with its `run_id`, or staff), `status` draft / approved / discarded, `current_version`, `approved_version`, `approved_by_membership_id`, `approved_at`, `approved_self`, `discarded_by` / `discarded_at`, `is_sample`, `version` (optimistic lock).
+* `matter_letter_versions` (append-only, trigger): `version_number`, title, body (up to 12,000 characters, with `[F#]` / `[S#]` markers), `facts` (cited approved facts: answer, response, person, form, question key and type, label, value, reviewer membership, reviewed at), `official` (cited approved official content: kind, id, label, content, source URL, section, form number and date modified, checked on, current to, snapshot SHA-256, attested on, reviewed at), `left_out` (lines), `origin`, `created_by`.
+* Forced RLS on both; read by staff who may read the matter's messages (`app.message_staff_reads_matter`: owner, licensed consultant, case manager, assistant at staff assurance, on a matter they can read). No direct writes.
+* Helpers (SECURITY DEFINER, `search_path = ''`): `app.vo_fact_category(section, label)`, `app.matter_approved_facts(matter)` (the latest reviewed answer per question on the matter's submitted forms, text/date/country/choice only), `app.vo_letter_official_items(org, matter)` (approved `government_fee_references`, `submission_requirements`, `renewal_timings`, `approval_follow_up_steps` for the matter's program, and published current `rule_versions` with their latest evidence snapshot), `app.vo_letter_run(run)`, `app.reject_letter_version_change()`.
+* `public.set_vo_settings` REDEFINED from `20261019218100_vo_doc_review.sql`: the same, plus the `letter_drafts` key.
+* `public.begin_vo_letter_draft(org, matter, letter_type)`: staff with MFA who can read the matter; returns `off`, `capability_off`, `sample_only`, `no_facts` (no approved fact Vo may use, before any run is counted), `rate_limited` or `firm_rate_limited` (the shared Vo limits), else starts a `letter_draft` run. Audited `vo.run_started`.
+* `public.vo_letter_facts(run)` and `public.vo_letter_official_content(run)`: the run's own person while it runs: the facts Vo may use (and how many the category switches hide), and the approved official content.
+* `public.save_vo_letter_draft(run, …)`: the run's person within 10 minutes; every cited fact an approved fact of the matter in an allowed category, every cited official item approved content of the firm, every marker cited and every citation used, a money amount only with an official citation; citations rebuilt from the database. Creates the letter and version 1 and ends the run as drafted. Audited `vo.run_finished`. A failed or abstained letter run still ends through the unchanged `public.finish_vo_run`.
+* `public.create_matter_letter`, `public.revise_matter_letter` (new version; citations whose marker remains are kept), `public.discard_matter_letter`: owner, licensed consultant, case manager, assistant on the matter; sample-mode rule. Audited `letter.created`, `letter.revised`, `letter.discarded`.
+* `public.approve_matter_letter(letter, version)`: licensed member with a fresh step-up (`app.require_licensed_staff`), no "[needs ...]" placeholder, the GOV self-approval rule (`app.gov_check_self_approval`). Audited `letter.approved` / `letter.approved_self`.
+* `public.release_matter_letter(letter)`: approved letters only; the approved version's text without citation markers. Audited `letter.released`. Used by `GET /api/letters/[letterId]`.
+
+Tested in `tests/vo-letter-drafts.rls.test.ts`, `tests/vo-letter-service.test.ts`, `tests/vo-letter-app.test.ts`, `tests/vo-letter-guard.test.ts` and `tests/vo-letters-present.test.tsx`.
+## Privacy requests: extension, response package, portal delivery (`20261025280000`, not applied on the live project)
+
+SEC-06 (gap #184), branch `feat/sec-privacy-requests`. No existing function redefined.
+
+* `privacy_time_limits` (per firm): `kind` response / extension, `law_name`, `provision_text` (word for word), `days` (only when stated), `source_id` / `snapshot_id` (firm `official_sources` / `source_snapshots`), `source_url` (allowlisted, trigger; federal official host in the function), `source_section`, `checked_on`, `current_to`, `snapshot_sha256`, status pending_review / approved / rejected / retired with reviewer and attestation columns. Entered values immutable (trigger); status changes only through the functions (`app.gov_guard_update`). Staff read; never seeded.
+* `privacy_requests` gains `extended_due_on`, `extension_basis` (official / firm), `extension_time_limit_id` (FK, indexed), `extension_reason`, `extension_recourse`, `extended_at` / `extended_by`, `extension_notice_channel` (portal / other), `extension_notice_method`, `extension_notice_late`, `extension_notice_seen_at`; shape check `privacy_requests_extension_shape`.
+* `privacy_request_items`: the scope search's records (`source`, `source_id`, `matter_id`, `label`, `fields`) with `decision` include / withhold / redact, `withheld_fields`, `third_party`, `reason`, `decided_by/at`; unique per request, source and record; never deleted. `privacy_request_redactions` gains `item_id` (FK, unique when set).
+* `privacy_request_responses`: packages (`building` / `ready` / `failed` / `superseded`, bucket `matter-exports`, key, `sha256`, `manifest_sha256`, sizes and counts, `withheld_count`, `excluded`); one building per request; built packages never change (trigger); never deleted.
+* `privacy_request_deliveries` (one per request: response, person, `delivered_by/at`, `expires_at` = 30 days, `sha256`, `download_count`, first/last download) and `privacy_response_downloads` (append-only: delivery, user, time, hash).
+* Functions (`app.` with `public.` invoker wrappers): `propose_privacy_time_limit`, `review_privacy_time_limit` (licensed, fresh step-up, `gov_check_page_attestation`, `gov_check_self_approval`), `retire_privacy_time_limit`, `extend_privacy_request`, `privacy_scope_search` (also records the scope step), `decide_privacy_item` (writes the worklist line), `start_privacy_response` (step-up; after the redaction step), `authorize_privacy_response_preview` (step-up), `deliver_privacy_response` (step-up; after the review; closes the request), `authorize_privacy_response_download` (the person, active portal login, within 30 days; records the download). Service role only: `public.service_complete_privacy_response`, `public.service_fail_privacy_response`. Client: `public.privacy_requests_for_me(org)`, `public.mark_privacy_notices_seen(org)`. Every action audited (`privacy.time_limit_*`, `privacy.request_extended`, `privacy.scope_searched`, `privacy.item_decided`, `privacy.response_started/ready/failed/previewed/delivered/downloaded`, `privacy.extension_notice_seen`).
+* RLS forced on every new table; select only, through `app.can_read_privacy_request` (requests stay per firm) or firm staff for time limits.
+
+Tested in `tests/privacy-responses.rls.test.ts` and `tests/privacy-responses-present.test.ts`.
+
+## Report export segment (`20261025310000`, not applied on the live project)
+
+REP-02 / REP-03 (gap #185), branch `feat/rep-outcomes-exports`. Additive; no existing function is redefined.
+
+* New overload `public.record_report_export(uuid, text, text, text, p_segment text)`, its body copied from the four-argument function in `20261019205100_matter_records_exports_closure.sql` (its only definition): the same checks (signed in, current firm, active membership, staff MFA, a role that can see the tab); `p_segment` is null, or a program key / `none` and only on the `outcomes` tab (else `22023`). The `report.exported` audit row's context gains `segment`. Revoked from public and anon; granted to authenticated. The four-argument function is unchanged.
+* Processing and outcomes reads reuse `matter_stage_transitions`, `matters` (`outcome`, `program_pack_id`), `rule_pack_versions.program_key` and approved `government_processing_estimates` (GOV-05) under their existing RLS. No new table.
+
+Tested in `tests/rep-outcomes.rls.test.ts` (seeded decided matters, RLS scope, segment audit) and `tests/rep-outcomes-exports.test.ts`.
+
+## Privacy response download needs the client's two-step (`20261025340000`, not applied on the live project)
+
+SEC-01 + SEC-06 follow-up. **Redefines** `app.authorize_privacy_response_download(uuid)` (only definition `20261025280000_sec_privacy_responses.sql`): after the ownership and expiry checks it raises `two-step sign-in is required for this download` when the person has no verified authenticator, and `client step-up required: enter your two-step code` when `app.client_step_up_satisfied()` is false. Otherwise unchanged. Tested in `tests/privacy-responses.rls.test.ts`.
+
+## Service notices (`20261025350000`, not applied on the live project)
+
+ADM-04 (gap #186), branch `feat/adm-service-notices`. No existing function redefined; nothing seeded.
+
+* `service_notices`: `kind` maintenance / incident / info, `severity` info / minor / major, `title` (3-120), `body` (plain text, up to 1000), `starts_at`, `ends_at` (required for maintenance; after the start), `status` draft / published / resolved, `audience` all_firms / listed_firms, `published_at`, `resolved_at` / `resolved_by` / `resolution_note`, `created_by` / `updated_by` (the platform admin). Never deleted (trigger).
+* `service_notice_targets` (notice, organization; PK both): the firms a listed_firms notice reaches. Never deleted.
+* `service_notice_dismissals` (notice, organization, user; PK all three): a staff member hid the banner for themselves in one firm. The notice stays in the history.
+* RLS forced on all three; select only. Notices: platform admins, or staff (aal2) of the workspace in use for a published or resolved notice that reaches it (`app.can_read_service_notice`, `app.service_notice_reaches`); client users and other firms read nothing. Targets: platform admins, or staff of that firm. Dismissals: the person, in the workspace in use.
+* Functions (`app.` with `public.` invoker wrappers): `post_service_notice`, `update_service_notice` (wording, severity, times, publish a draft; the audience is fixed), `resolve_service_notice` (note required): a signed-in platform admin at aal2 with a recent step-up, or the service role naming a `platform_admins` user (`app.service_notice_actor`, like the CICC list import). `dismiss_service_notice`: firm staff. Audited: `service_notice.drafted`, `.published`, `.updated`, `.resolved` (organization null, `acting_admin` in context), `.dismissed` (the firm).
+
+Tested in `tests/adm-service-notices.rls.test.ts` and `tests/adm-service-notices.test.tsx`.
+
+## Migration import: more kinds and sensitivity (`20261025385000`–`20261025385200`, not applied on the live project)
+
+MIG-01 (gap #187), branch `feat/mig-import-kinds`. Apply in order. Nothing seeded.
+
+* `20261025385000_mig_import_kinds_schema.sql`: `migration_batches` + `kind` (`clients_matters` default, `relationships`, `notes`, `tasks`, `key_dates`, `documents`, `opening_balances`), `sensitivity` (column index → `identity` / `narrative` / `health` / `financial`), `attachment_name`, `attachment_sha256`, `attachment_bytes` (≤ 25 MB), `attachment_files` (a documents import's ZIP; the bytes are not kept). `migration_rows` + `match_record_id`, `match_record_table`, `record_id`. `migration_records`: `record_table` check widened to the new tables (constraint dropped and re-added), + `original_at` timestamptz (`add column if not exists`, the same column MIG-02's `20261025380000` adds). `matter_staff_notes` + `original_author_name`, `original_written_on` (imported notes only). New `migration_files` (a documents import's ZIP entries: path, size, SHA-256, detected type, problem; owner-only select; purged with the staging rows) and `opening_balances` (receivable / advance, cents, currency, as-of, `pending_review` / `approved` / `rejected`, reviewer and note, source system, batch, importer; select for billing staff of the matter, `app.can_read_matter_billing`; audited). Forced RLS on both; no insert/update/delete grants.
+* `20261025385100_mig_import_kinds_evaluate.sql`: **redefines** `app.migration_evaluate` (latest `20261020011000`) as a dispatcher: its body moved unchanged to the new `app.migration_evaluate_clients`; other kinds go to the new `app.migration_evaluate_kind` (per-row checks, matter by Casevoya or old import reference, person by email or name and date of birth, staff by sign-in email, duplicates against existing records and earlier rows, decisions, counts with `ready`, and `matters` = ready so `begin_migration_commit` is unchanged). **Redefines** `public.save_migration_mapping` (latest `20261020011000`: per-kind columns, required fields and value fields; `default_owner`, `default_date_kind`, `sensitivity`, stored on the batch), `public.run_migration_dry_run` (latest `20261019208100`: the name check for clients only; a documents batch needs its ZIP) and `public.decide_migration_duplicate` (latest `20261019208100`: `record:<id>` targets). New `public.set_migration_kind`, `public.stage_migration_files` and helpers (`app.migration_read_*`, `app.migration_take`, `app.migration_issue`, `app.migration_kind_columns/required/values`, `app.migration_staff_by_email`, `app.migration_amount_cents`, `app.migration_raw_cell`).
+* `20261025385200_mig_import_kinds_commit.sql`: new `public.commit_migration_kind_chunk` (after MIG-02's pilot or full run start; rows taken through `app.migration_next_groups` (each row is its own group, `is_applicant`; a done row's `migration_rows.matter_id` holds its record) so MIG-02's pilot gates apply; during a pilot `app.migration_kind_after_chunk` hands over to `app.migration_after_chunk` (replaced by `20261025390000`: the kind ends its own pilot); tasks inserted without a `task_events` row, notes with the original author and date, key dates through `app.record_deadline` (tentative), relationships, opening balances pending review), `app.migration_kind_after_chunk` (totals against the plan, exceptions, purge), `app.migration_kind_reference_counts`, `public.migration_document_rows` and `public.record_migration_document` (a documents import's files go through `create_upload_intent` → storage → `finish_verified_document_upload`), `public.review_opening_balance` (billing staff + step-up; the importer needs a step-up after the import; approval posts nothing), `app.migration_firm_midnight`, `app.migration_rollback_deletes_record`, `app.migration_rollback_blockers_kind`, `app.migration_rollback_kind`. **Redefines** `app.migration_purge_staging` (also purges `migration_files`), `app.migration_rollback_blockers` and `public.rollback_migration_batch` (latest `20261019208100`: other kinds branch to the new functions; clients unchanged; a documents batch is never rolled back), and `app.reject_message_change` (latest `20261019203100`: a `matter_staff_notes` DELETE is allowed only inside a rollback for a note that batch created).
+
+Tested in `tests/migration-kinds.rls.test.ts` and `tests/migration-kinds-present.test.tsx`; `tests/migration-import.rls.test.ts` still passes unchanged.
+
+## Scheduled reports (`20261025320000`, `20261025320100`, not applied on the live project)
+
+REP-03 (gap #185), branch `feat/rep-scheduled-reports`.
+
+* `scheduled_reports`: one schedule: `title`, `tab` (`ops` / `money` / `outcomes`), `range_key` (`90d` / `month` / `year`), `frequency` (`weekly` with `weekday` 1 to 7, ISO; `monthly` with `month_day` 1 to 28), `send_time` (local time in the firm's timezone), `paused`, `next_run_at`, `last_run_at`, soft delete (`deleted_at`, `deleted_by`), `created_by`, `updated_by`, `version`. Never deleted; firm and creator immutable. Forced RLS, no policies.
+* `scheduled_report_recipients`: (`schedule_id`, `user_id`) staff of the firm. Forced RLS, no policies.
+* `scheduled_report_runs`: append-only, one per send: `kind` `scheduled` (unique per schedule and `due_at`) or `test` (`run_by`). Forced RLS, no policies.
+* `scheduled_report_deliveries`: append-only, one per recipient of a run: `delivered` with `link` (only `/sheet/reports?tab=…&view=…`, by check constraint) or `skipped` with `skip_reason` (`not_active_staff` / `role_cannot_see_tab`). No report content. Forced RLS, no policies.
+* `app.report_tab_roles(tab)` (equal to `MONEY_ROLES` / `OPS_ROLES` in `reports-present.ts`, tested), `app.user_sees_report_tab(org, user, tab)`, `app.report_schedule_zone(org)`, `app.report_schedule_next_run(org, frequency, weekday, month_day, time, after)`, `app.deliver_scheduled_report(run)` (the recipient recheck), `app.require_report_staff(org)`, `app.managed_scheduled_report(id)`.
+* Staff (MFA): `public.scheduled_reports_overview(org)` (schedules of the tabs the caller sees, staff who could receive each tab, last run counts), `public.save_scheduled_report(...)` (create or edit; the caller and every recipient must see the tab; creator or firm owner; version check), `public.set_scheduled_report_paused(id, paused)`, `public.delete_scheduled_report(id)` (soft), `public.run_scheduled_report_now(id)` (test run, one a minute). Audited `report.schedule_created`, `_updated`, `_paused`, `_resumed`, `_deleted`, `_test_run`, `_sent` (tab, range, frequency, counts only).
+* Service role: `public.service_run_scheduled_reports(limit)`: every due schedule once per due time, then its next time after now.
+* `app.kick_scheduled_reports()` and pg_cron job `casevoya-scheduled-reports` (every 5 minutes, only while one is due): POSTs to `/api/reports/scheduled/run` with the existing mail dispatch Vault secrets.
+* `20261025320100_rep_report_notifications.sql` **redefines** `app.staff_notification_items(uuid, integer)` (latest `20261025100100_task_notifications.sql`): adds a `report` branch (a delivered link for the caller while a role of theirs sees the tab; subject the schedule's name, detail `scheduled` / `test`). Nothing else changes.
+
+Tested in `tests/scheduled-reports.rls.test.ts` and `tests/scheduled-reports.test.tsx`.
+
+## Migration pilot, sign-off and run report (`20261025380000`, not applied on the live project)
+
+MIG-02 (gap #187), branch `feat/mig-pilot-report`. Extends the migration import (`20261019208100`); no second importer, nothing seeded.
+
+* `migration_settings.pilot_max` (default 25, 1 to 50): the largest pilot, in matters. `public.set_migration_pilot_max(org, max)`: firm owner, step-up, audited `migration.settings_changed`.
+* `migration_batches`: `pilot_size` (1 to 50; null for an import begun before pilots), `pilot_started_at` / `_by`, `pilot_completed_at`, `pilot_counts` (matters, people created and linked), `pilot_signed_off_at` / `_by`, `pilot_signoff_note` (3 to 1,000), `full_run_started_at` / `_by`, `commit_verified_at` (staged rows last checked against the upload checksum), `run_report` (object). Checks: sign-off needs a finished pilot; a full run needs a signed-off pilot (or no pilot). FK indexes on the three `_by` columns.
+* `migration_rows.in_pilot`: the row belongs to one of the pilot's matters. `migration_records.original_at` (`add column if not exists`): an imported item's original date.
+* `app.migration_staged_intact(batch)`: each staged row's SHA-256 matches its cells, and the digest over the rows and their count match the upload's.
+* `public.begin_migration_pilot(org, batch, plan_hash, size default 10, source_system default null)`: firm owner, step-up; checks the staged rows (`{ok: false, reason: 'checksum_changed'}`, audited), evaluates the plan again (must hash to the dry run's), marks the first `size` matters, sets status `committing`. Audited `migration.pilot_started`.
+* `public.sign_off_migration_pilot(org, batch, note)`: firm owner, step-up, a finished pilot, once. Audited `migration.pilot_signed_off` (note length, not text).
+* `public.record_migration_report_download(org, batch, format)`: firm owner, a committed batch with a report, `csv` or `pdf`. Audited `migration.report_downloaded`.
+* `public.imported_record_provenance(org, table, ids)`: staff of the firm (MFA): source system, import date, original date, old reference, created or linked, version at import, for up to 500 records of one table that an import of this firm created or linked and that are still there.
+* **Redefines** (latest definitions in `20261019208100_migration_import.sql`):
+  * `public.begin_migration_commit`: now the full run only. A `staged` / `checked` batch is refused ("run a pilot first"); a pilot not signed off is refused; the staged rows are checked again; the plan is not evaluated again (the dry run's hash must match). Sets `full_run_started_at`; audited `migration.commit_started` once.
+  * `app.migration_next_groups`: during a pilot only `in_pilot` matters; once the pilot is done, refuses until the full run starts.
+  * `app.migration_after_chunk`: a finished pilot sets `pilot_completed_at` and `pilot_counts` (audited `migration.pilot_completed`) and returns status `pilot_done`; the end of the full run also writes `run_report`. The totals check, exception report and purge are unchanged.
+
+Tested in `tests/migration-pilot.rls.test.ts` (and `tests/migration-import.rls.test.ts`, whose sign-off now goes through a pilot) and `tests/migration-pilot-present.test.tsx`.
+
+## Migration import: the new kinds through the pilot and run report (`20261025390000`, not applied on the live project)
+
+MIG-01 with MIG-02 (gap #187), branch `feat/mig-import-kinds`. **Apply after `20261025380000`**: it reads and writes the pilot and report columns that migration adds. Apply order for the two: `20261025385000`, `20261025385100`, `20261025385200` (MIG-01; they don't need MIG-02's columns: the one read of them is by name through `to_jsonb`, and `original_at` is `add column if not exists` in both), then `20261025380000` (MIG-02), then `20261025390000`. Nothing seeded.
+
+* `20261025390000_mig_kinds_pilot_report.sql` **redefines** (latest `20261025385200_mig_import_kinds_commit.sql`):
+  * `app.migration_kind_after_chunk`: the reference baseline is the kind's own (`app.migration_kind_reference_counts`) at every chunk, the pilot's included; a non-client pilot ends here (`pilot_completed_at`, `pilot_counts` = kind, records created and linked; audited `migration.pilot_completed`; status `pilot_done`) instead of in `app.migration_after_chunk`, which counted matters and people and set the clients' reference baseline (so a key dates or tasks pilot couldn't be rolled back); the end of the full run writes `run_report` (kind; source counts, SHA-256, staged digest, the checks at upload and at commit, and for documents the ZIP's name, SHA-256 and file count; the plan; record totals by table; created, linked and held totals; row counts, duplicates, errors, review, skipped, exception lines; the pilot and its sign-off; the full run's start). Totals check, exceptions and `result_counts` unchanged.
+  * `public.record_migration_document`: during a pilot only a pilot row's file is recorded, and none between the pilot's end and the full run (the same gate as `app.migration_next_groups`).
+* MIG-02's `public.begin_migration_commit`, `app.migration_next_groups` and `app.migration_after_chunk` are not redefined.
+
+Tested in `tests/migration-kinds.rls.test.ts` (every kind now signs off through a pilot; a tasks pilot, its gates, sign-off and run report; a key dates pilot rolled back; a documents pilot and full run).
+
+## Service-level report (`20261025360000`, not applied on the live project)
+
+ADM-04 (gap #186), branch `feat/adm-service-levels`. Additive; no existing function is redefined.
+
+* `support_response_records`: one support request a firm sent Casevoya (`ticket_ref`, unique per firm; `received_at`; `first_response_at`, null while waiting, never before `received_at`; `recorded_by_user_id`, a platform admin). Metadata only. Forced RLS; select for the firm's owners (`app.actor_is_firm_owner`) and platform admins (`app.is_platform_admin`, aal2); no direct writes; no delete or truncate; row-change audit.
+* `app.platform_ops_actor(uuid)`: a signed-in platform admin at aal2 (their id), or the service role naming a `platform_admins` user (that id); anyone else `42501`.
+* `public.record_support_response(firm, ticket_ref, received_at, first_response_at, recorded_by)`: records or corrects one request (not in the future, reply not before receipt); audited `service_level.support_response_recorded` / `.support_response_updated`.
+* `public.service_level_report(firm, months)`: 1 to 24 months in the firm's timezone, newest first: received, answered, waiting, median and longest seconds to first reply; `uptime` is `{"measured": false}`. The firm's owner (aal2, current firm), a platform admin (aal2) or the service role; the latter two audited `service_level.report_read` on the firm.
+
+Ops wrapper: `scripts/ops/service-levels.mjs` (record, report). Tested in `tests/service-levels.rls.test.ts` and `tests/service-levels-present.test.tsx`.
+
+## Grounded Vo outputs (`20261025420000`, not applied on the live project)
+
+SRC-09 (gap #188), branch `feat/src-grounded-vo`. Additive.
+
+* `vo_runs.citations` (jsonb array, at most 40, 64 kB): the run's checked citations, rebuilt by `finish_vo_run` (`kind`, `id`, `label`; official ones add `source_kind`, `url`, `section`, `form_number`, `form_modified_on`, `checked_on`, `current_to`, `snapshot_sha256`). Never the answer text.
+* `vo_drafts.licensed_review_required` (boolean): the draft cites official content or reads as advice; only a licensed member with a fresh step-up can send it.
+* `app.vo_citable_official_url(url)`: https, allowlisted federal official host (canada.ca, *.canada.ca, *.gc.ca), not a site root or landing page.
+* `app.vo_advice_like(text)`: the advice-like word test (mirrored in `src/modules/vo/grounding.ts`).
+* `app.vo_letter_official_items(org, matter)`: REDEFINED from `20261025240100_vo_letter_drafts.sql`: the same rows, kept only when `app.vo_citable_official_url(source_url)`.
+* `app.vo_ask_run(run)`: the caller's own running Ask Vo run on a matter they can read (MFA, active firm), else `vo denied`.
+* `public.vo_run_facts(run)`, `public.vo_run_official_content(run)`: Ask Vo's approved facts (with how many the firm's category switches hide) and approved official content with its source, for the run's own person while it runs.
+* `public.finish_vo_run`: REDEFINED from `20261019207100_vo_drafts.sql` (same signature): also accepts `document_version` (linked, not removed, on the run's matter), `fact` (an approved fact of the matter in an allowed category) and `official` (`source_kind` + id in `app.vo_letter_official_items`) citations; anything else refuses the save; stores the rebuilt citations on the run (and a short form on the draft); sets `licensed_review_required`; audit `vo.run_finished` adds `official_sources` and `licensed_review_required`.
+* `public.send_vo_draft`: REDEFINED from `20261019207100_vo_drafts.sql`: a flagged draft, or text that reads as advice, needs `app.actor_is_licensed` and `app.require_licensed_staff(org, true)` (step-up); audit `vo.draft_sent` adds `licensed_review`.
+
+Tested in `tests/vo-grounded.rls.test.ts`, `tests/vo-grounding.test.ts`, `tests/vo-grounded-present.test.tsx`.
+
+### Vo cites live rule versions and refuses claims-rule homepages (`20261025420100`, not applied on the live project; apply after `20261025400000` and `20261025420000`)
+
+SRC-09 on top of the SRC-03 publication gate. Additive.
+
+* Redefined `app.vo_citable_official_url` (from `20261025420000`): also false whenever `app.official_claim_url` refuses the URL (SRC-01 homepage rule); still federal-only.
+* Redefined `app.vo_letter_official_items` (from `20261025420000`): rule versions through `app.rule_version_is_live` instead of the inline status and date check (same semantics, one definition). Register rows keep `status = 'approved'`.
+
+### Vo cites attested claims (`20261025450000`, not applied on the live project; apply after `20261025400000`, `20261025420000` and `20261025420100`)
+
+Francis's decision 2026-10-25 (gap #188): Vo may cite a claim approved by attestation without a page capture, only with the attestation shown next to the citation. Additive; seeds nothing.
+
+* New `app.vo_official_attestation(org, kind, id, sha256, attested_on)` (internal): `{attested: true, attested_by, attested_on}` for an official item with no capture that a licensed reviewer attested (rule versions from `rule_evidence`; submission steps, renewal timings and steps after approval from their own `page_attested_*` columns), the name from the reviewer's profile ("a licensed member" when empty); null otherwise.
+* Redefined `app.vo_letter_official_items` (from `20261025420100`): a live rule version whose evidence has no snapshot is listed when that evidence carries the attestation (reviewer and date opened), the attesting reviewer recorded the approval (`professional_reviews`), and its `source_url` passes `app.official_claim_url` and `app.vo_citable_official_url`; `attested_on` and `checked_on` come from the evidence. A captured page is still preferred. Any item with neither a capture nor an attestation is left out.
+* Redefined `public.vo_run_official_content` (from `20261025420000`) and `public.vo_letter_official_content` (from `20261025240100`): each item adds `attested`, `attested_by`, `attested_on`.
+* Redefined `public.finish_vo_run` (from `20261025420000`, same signature): an official citation records `attested` (and `attested_by`, `attested_on` when true) in `vo_runs.citations`, and the attested ones in the short form on `vo_drafts.sources`; an uncaptured item without an attestation refuses the save. Whatever the service sends about an attestation is ignored.
+* Redefined `public.save_vo_letter_draft` (from `20261025240100`, same signature): each cited official item in `matter_letter_versions.official` adds `attested` and `attested_by` (it already kept `attested_on`).
+
+Tested in `tests/vo-grounded.rls.test.ts`, `tests/vo-letter-drafts.rls.test.ts`, `tests/vo-attested-citations.test.tsx` and `tests/vo-app.test.ts`.
+
+## Pinned rule versions and the support catalogue (`20261025410000`, not applied on the live project)
+
+SRC-05 and SRC-12 (gap #188), branch `feat/src-pins-scope`. Additive; no existing function is redefined (`app.select_matter_program`, `app.pack_is_selectable`, `public.create_client_matter` are called as they are). Nothing from IRCC is seeded.
+
+* `matter_rule_bindings.form_versions` (jsonb array): the pack's IRCC forms at pin time, each `{form_number, date_modified, source_url, retrieved_at, content_hash, snapshot_id}`, the date only from a snapshot a rule version in the pack cites (else null). Set by trigger `matter_rule_bindings_pin_forms` (`app.src_pin_binding`), never changed. The same trigger refuses another program's pack for a matter opened for an unsupported program.
+* `matter_exports` and `submission_handoffs`: `rule_binding_id`, `rule_pack_version_id`, `form_versions`, stamped by `app.src_stamp_package_pin` when the export is requested and when the handoff's manifest is pinned; never changed after.
+* Triggers `document_requests_src_pinned_rule`, `deadlines_src_pinned_rule` (`app.src_rule_from_pinned_pack`): a `rule_version_id` must belong to the pack pinned on the matter.
+* `matter_program_scopes`: the program a matter was opened for and whether it was supported (with the pack). Append-only; forced RLS; select for staff who can read the matter.
+* `matter_rule_upgrade_decisions`: accepted or declined, reason, the impact preview, old and new binding, who and when. Append-only; forced RLS; select for staff who can read the matter.
+* `support_catalogue_entries`: platform scope configuration (jurisdictions and case types seeded; programs added by a platform admin with an optional platform snapshot of their official page and official name). No delete; forced RLS; select for platform admins and the service role only.
+* Helpers: `app.src_deep_official_url`, `app.pack_is_sourced`, `app.current_program_pack`, `app.pack_form_pins`, `app.src_rule_kind`, `app.rule_pack_impact`, `app.newer_rule_pack`, `app.program_pack_for_new_matter`, `app.record_matter_program_scope` (only for a matter created in the same transaction).
+* RPCs: `public.matter_rule_state(matter)` (pin, scope, newer approved version with impact and last decision; staff at aal2 who can read the matter), `public.decide_matter_rule_upgrade(matter, to_pack, expected_version, accepted|declined, reason)` (licensed consultant or firm owner; step-up to accept; audited), `public.create_client_matter_for_program(..., program_key, ...)` (invoker), `public.support_catalogue(org default null)` (security definer, anon allowed; firm view only for that firm's staff), `public.save_support_catalogue_entry(...)` (`app.platform_ops_actor` plus step-up when signed in; audited `support_catalogue.saved`).
+
+Ops wrapper: `scripts/ops/support-catalogue.mjs` (capture, entry, list). Tested in `tests/src-pins-scope.rls.test.ts` and `tests/src-pins-scope.test.tsx`.
+
+### Live packs and one homepage rule (`20261025410100`, not applied on the live project; apply after `20261025400000` and `20261025410000`)
+
+SRC-05 / SRC-12 on top of the SRC-03 publication gate. Additive.
+
+* New `app.rule_pack_is_live(pack)`: the pack is `published` and has rule versions, each live by `app.rule_version_is_live` (SRC-03: published and within its stated effective dates). A review-due, suspended or superseded pack, or one holding a review-due, suspended, superseded, rejected or expired rule version, is not live.
+* Redefined (copied from `20261025410000`): `app.current_program_pack`, `app.newer_rule_pack`, `app.decide_matter_rule_upgrade` and `app.support_catalogue` count live packs only (before: pack status published or review due); `app.matter_rule_state` adds `binding.pack_live`; `app.src_deep_official_url` uses `app.official_claim_url` for canada.ca / gc.ca pages and the same two-segment rule for other allowlisted official hosts.
+
+## Service notice reach check is private (`20261025440000`, not applied on the live project)
+
+ADM-04 follow-up. Revokes `authenticated`'s EXECUTE on `app.service_notice_reaches(uuid, uuid)`. It is only called inside the security-definer `app.can_read_service_notice` and `app.dismiss_service_notice`, so reads and dismissals are unchanged; a signed-in user can no longer ask whether a notice reaches a firm. Tested in `tests/adm-service-notices.rls.test.ts`.
+
+## Claims, review workbench and publication gate (`20261025400000`, not applied on the live project)
+
+SRC-01, SRC-02, SRC-03 (gap #188), branch `feat/src-claims-review`. Builds on the source-governance tables; additive (new nullable columns, `rule_evidence.snapshot_id` relaxed to nullable, new checks, functions and one trigger). Seeds nothing.
+
+* `rule_evidence` new columns: `source_url` (exact official page with its section anchor; homepage refused), `form_number`, `form_modified_on`, `published_on`, `modified_on`, `last_amended_on`, `current_to`, `checked_on` (dates exactly as the page shows; null is Unknown), and `page_attested_by_membership_id` / `page_attested_on` / `page_attested_at` (the approving reviewer's attestation when there is no capture). A row has a snapshot or a `source_url`; an attestation only without a snapshot. New trigger `rule_evidence_source_guard` (`app.guard_rule_evidence_source`): URL check on insert, provenance immutable, attestation only from the review function.
+* `rule_versions` new columns: `status_reason` (reject/suspend reason), `status_changed_at`, `status_changed_by_membership_id`. Applicability resolution lives in the existing `applicability` jsonb (`resolution`, `resolved_by_membership_id`, `resolved_at`).
+* `app.official_claim_url(url)`: host when the URL is canada.ca or a gc.ca site and not a homepage or landing page; null otherwise.
+* `app.rule_review_gate_open(version)` (internal): true inside `app.review_rule_version` for that version (the existing `app.gov_write_nonce` in the current transaction) or in a maintenance session; never for authenticated, anon or service_role requests.
+* `app.rule_version_is_live(version)`: published and within its stated effective dates (granted to authenticated and service_role).
+* Redefined `app.guard_rule_version()` (from `20261017113157`): moving to approved/published also needs the gate (`publication blocked: approval_required`). `app.rule_publication_blockers(...)` (from `20261017113157`): evidence without a capture counts once attested; test cases are required only for executable rules (`structured_condition`). `app.prepare_professional_review()` (from `20261018100000`): an approved review is recorded only through the gate.
+* `public.add_rule_claim(org, stable_key, jurisdiction, program_key, claim, value, source_url, source_section, excerpt, applicability_note, form_number, form_modified_on, published_on, modified_on, last_amended_on, current_to, effective_from, effective_to, checked_on, snapshot)`: firm owner, licensed consultant or case manager (aal2); creates the definition or its next version (one waiting at a time), the firm source and snapshot (reused for the same hash), the version (`draft`, or `evidence_captured` with a capture) and its evidence; audited `rule.claim_entered`.
+* `public.resolve_rule_applicability(version, expected_version, resolution, note)`: licensed (aal2); applies / does_not_apply / partly with a note; status `professional_review`; audited `rule.applicability_resolved`.
+* `public.review_rule_version(version, expected_version, decision, note, next_review_on, page_opened_on)`: approve = licensed with step-up, applicability resolved (applies/partly), not expired, next review within two years, GOV attestation and self-approval rules; records the approved review (credential snapshot when on file), publishes (frozen) and supersedes the earlier live version; audited `rule.version_approved` / `_self`. Reject = licensed (aal2) with a reason; audited `rule.version_rejected`.
+* `public.suspend_rule_version(version, expected_version, reason)`: licensed (aal2), live versions only, reason required; audited `rule.version_suspended`.
+
+Capture script: `scripts/ops/capture-official-claims.mjs` writes `src/modules/content-governance/captured-claims.json` (drafts offered in Add claim). Tested in `tests/src-claims-review.rls.test.ts` and `tests/src-claims-present.test.tsx`; `tests/source-governance.test.ts`, `tests/owner-licence-gates.rls.test.ts` and `tests/owner-full-access.rls.test.ts` now write approved reviews from a maintenance session.
+
+## Renewal reminders carry their official timing's freshness (`20261025451000`, not applied on the live project)
+
+DES-04 (stale-source state, client portal), branch `feat/des-states-portal`. Redefines `app.portal_renewal_reminders(uuid)` (copied from `20261025230000`): the `timing` object also carries `status` (`renewal_timings.status`), and from the timing's `official_sources` row `source_review` (`review_status`), `source_next_review` (`next_review_at`), `source_change` (`change_state`), `source_attempt` (`last_attempt_result`) and `source_attempt_at` (`last_attempt_at`). Clients can't read either table, so without this the portal couldn't tell a retired timing, a page due for review or suspended, a detected change or a failed check from a current one. Same signature, grants, rows and gating (contact choices, own reminders only); no tables, no data. Tested in `tests/dec-renewal.rls.test.ts` (DES-04 block) and `tests/des-portal-states.test.tsx`.
+
+## Program selection accepts only a live pack (`20261025430000`, not applied on the live project)
+
+SRC follow-up (Francis, 2026-10-25). **Redefines** `app.pack_is_selectable(uuid, uuid)` (only definition `20261017170000_matter_lifecycle.sql`): the status test `status in (published, review_due)` becomes `app.rule_pack_is_live(pack.id)` (`20261025410100`), so `select_matter_program` and its callers refuse a review-due pack or one holding a rule version that is not live. Otherwise unchanged. Tested in `tests/src-pins-scope.rls.test.ts`.
+
+## Migration import: one kind per file (`20261025460000`, not applied on the live project)
+
+MIG follow-ups (gap #187, Francis's MIG decision 2), branch `feat/mig-followups`. Additive; nothing seeded. Applies after the MIG migrations (`20261025385100` is where both redefined functions were last defined).
+
+* New `app.migration_kinds_in_headers(text[])` (immutable SQL): the import kinds a file's headings point to, by labels in the upload picker's order, from headings distinctive to each kind only. New `app.migration_refuse_mixed(text[])`: raises 22023 "this file holds more than one kind of record: <kind>; <kind>" when two or more are found. Both revoked from public, anon and authenticated (called inside the definer functions).
+* **Redefines** `public.set_migration_kind` and `public.save_migration_mapping` (latest `20261025385100_mig_import_kinds_evaluate.sql`), each copied unchanged except for one `perform app.migration_refuse_mixed(b.headers)` after its state check. The upload (`src/modules/migration/actions.ts`) now calls `set_migration_kind` for every kind, clients and matters included, and discards the staged batch when it refuses.
+
+Tested in `tests/migration-followups.rls.test.ts` (the detection, refusal at staging for every kind chosen with nothing taken, refusal at mapping, a one-kind file through; and `imported_record_provenance` for imported key dates, relationships and opening balances, staff only, no values, no other firm) and `tests/migration-followups-present.test.tsx`.
+
+## Refund emails when a refund fails after "complete" (`20261025530000`, `20261025530100`, not applied on the live project)
+
+Bug #215 live check 6, branch `fix/refund-failed-email`. Additive. Apply in order.
+
+* `20261025530000_refund_failed_mail_enum.sql`: `email_template` gains `refund_failed` (own migration).
+* `20261025530100_refund_failed_mail.sql`:
+  * **Redefines** `app.mail_on_invoice_refund()` (only definition `20261019170100_email_design_events.sql`): a refund moving to succeeded no longer queues `invoice.refund_succeeded` (EX10 is not sent, see DECISIONS); a refund moving to failed or canceled queues `invoice.refund_failed` with idempotency key `invoice.refund_failed-email:<refund id>` (once per refund).
+  * New trigger `invoice_refunds_failed_mail` on `invoice_refunds` (after update of status, when the new status is failed or canceled and the old one was pending, requires_action or succeeded, the statuses that sent EX09).
+  * **Redefines** `public.claim_mail_events` and `public.prepare_email_delivery` (latest `20261025110100_ops_messaging.sql`): claim `invoice.refund_failed`; prepare maps it to `refund_failed`, sends it to the same people as the other refund mail (payer, else the matter's applicants) but regardless of their Email notices choice (suppressed and missing addresses still not sent) with `refund_reason` (the refund's `failure_reason` when it is a plain code), and marks any queued `invoice.refund_succeeded` published without sending (audit `email.skipped`, reason `refund_not_final`). Grants restated.
+  * `app.apply_stripe_reversal_event` is unchanged (it already records the failure and opens the owner's task).
+
+Tested in `tests/email-designs.rls.test.ts` (no complete event; one correction after succeeded then failed, also to a client who turned Email notices off, with the same event replayed and a refund.updated repeat; pending then failed; a refund recorded as failed sends nothing; a queued complete event is skipped).
+## Viewing an imported matter doesn't block its rollback (`20261025520000`, not applied on the live project)
+
+DES-04 follow-up (#237 live checks), branch `fix/des-billing-call`. Additive; nothing seeded. Opening a matter reads `public.matter_inbound_address`, which makes the matter's reply address (`matter_reply_addresses`) on first use; for an imported matter that row made the rollback refuse ("1 new matter reply addresses linked to imported records since the import").
+
+* **Redefines** `app.migration_rollback_blockers` (latest `20261025385200_mig_import_kinds_commit.sql`): the `public.matter_reply_addresses.matter_id` count is skipped while no `email_deliveries` or `inbound_emails` row names one of the batch's matters (mail out uses the reply address as Reply-To; mail in arrives on it). Otherwise unchanged; a used reply address still refuses.
+* **Redefines** `public.rollback_migration_batch` (latest `20261025385200`): deletes the batch's matters' `matter_reply_addresses` rows before the matters. Otherwise unchanged.
+
+Tested in `tests/migration-import.rls.test.ts` (opening the matter then rolling back succeeds and removes the reply address; with mail received on the matter the rollback still refuses and keeps it).
+## Disconnecting the firm's Stripe account (`20261025540000`, not applied on the live project)
+
+Bug 8, branch `fix/stripe-account-unlink`. Additive; test mode only; nothing seeded. Stripe is never asked to delete or reject an account.
+
+* `firm_payment_accounts` keeps holding the **current** link only (its unique `organization_id` and `account_id` are unchanged: one link per firm, one firm per account). Every existing lookup reads it, so none can see an ended link. Its blanket `firm_payment_accounts_no_delete` trigger is disabled and replaced by `firm_payment_accounts_unlink_only` (`app.guard_payment_account_delete()`): a row may go only once its ended link is in the history. A truncate guard is added.
+* New `firm_payment_account_history` (forced RLS; append-only by trigger; select for the firm's owner and finance users at aal2, like `firm_payment_accounts`): each ended link copied whole (`payment_account_id`, `account_id`, last statuses, `linked_at`/`linked_by`, `ended_at`, `ended_by`, `end_reason` 3–500 chars).
+* New `app.stripe_account_unlink_blockers(org, account)`: card payments processing, or started (`requires_payment`) in the last 24 hours; refunds `pending` or `requires_action`; disputes not closed (`warning_needs_response`, `warning_under_review`, `needs_response`, `under_review`). Not granted to API roles.
+* New `public.unlink_stripe_account(org, account, confirmation, reason)` → `app.unlink_stripe_account`: firm owner with a fresh step-up (`app.require_firm_owner_step_up`), the current account id (40001 if it changed), `DISCONNECT` typed, a reason. With blockers: returns `{unlinked: false, blockers}`, changes nothing, audits `stripe.account_unlink_refused` (denied). Otherwise copies the link into the history, removes the current row and audits `stripe.account_unlinked` (object: the history row; context: account, reason, number of open requests). Returns `{unlinked: true, history_id, account_id, open_requests}`: the card payment requests still open on the old account (`requires_payment` or `failed`, any age), which the server action then cancels at Stripe.
+* New `public.record_stripe_unlink_cancellations(history_id, results)` → `app.record_stripe_unlink_cancellations`: the owner who disconnected the account, fresh step-up, once per disconnect. Each result names a payment on that account and `canceled` (the row is marked canceled), `already_finished` (left to Stripe's own event) or `failed`. Audits `stripe.account_unlink_requests_closed` with every result (`failure` when one failed) and, on a failure, opens a high-priority task for the firm owner due today in the firm's timezone (`app.create_finance_task`, key `stripe-unlink-<history id>`).
+* **Redefines** `app.record_firm_payment_account` (latest `20261019100100_stripe_connect_invoices.sql`): unchanged except it also refuses an account in another firm's history (23505 "this Stripe account belongs to another firm").
+
+Tested in `tests/stripe-account-unlink.rls.test.ts` (owner-only, fresh step-up, typed confirmation and reason, refusals listing open items, history kept and append-only, single active link, relink and move, open requests returned and their results recorded, the failure task, a later webhook on the old account still recorded) and `tests/stripe-account-unlink-requests.test.ts` (mocked Stripe: cancels on the old account's Stripe-Account header, already-finished left alone, a failure keeps the unlink and is listed).
+## Portal invitation: only an open counts toward its limit (`20261025510000`, not applied on the live project)
+
+Bug 3 (Francis's bug list 2026-10-25, #215 live checks), branch `fix/invite-accept-codes`. Additive; no table changes. The accept wizard ran `app.present_portal_invitation` on every step and retry, and each call counted toward the `present` limits (40 per token per hour, 30 per signed-in actor per 15 minutes), so a client hit them within a few tries.
+
+* New `app.portal_invite_limited(text, text, uuid, boolean)`: the latest 3-argument body (`20261017140800_portal_invitations.sql`) with `p_record`; false checks the same limits without inserting an attempt. The 3-argument form now calls it with true (unchanged behaviour for create and resend).
+* **Redefines** `app.present_portal_invitation(text)` (only definition `20261017140800`): counts the attempt only when `app.portal_invitation_open` is `'1'` for the transaction (then clears it) or the token matches no invitation; every other use only checks. Same signature and grants. So draft saves, sign-in re-reads, acceptance, decline and mismatch reports no longer add to the count, and a token already over its limit stays refused.
+* New `public.preview_portal_invitation(text, boolean)` (anon, authenticated): `p_open` true is an open (sets the flag, then returns `public.preview_portal_invitation(text)`, unchanged, latest `20261024100000_firm_default_locale.sql`). The 1-argument form on its own is now an uncounted read. The accept screen opens once per page load; the server's page render and `openPortalInvitee` read with false.
+
+Tested in `tests/portal-invites.rls.test.ts` ("counts only an open toward an invitation's limit").
+
+## Live official claims with firm-only licensed edits (`20261025600000`, `20261025600100`, not applied on the live project)
+
+#188, Francis's decisions 2026-10-25 (11:42, 11:50 and 4:48 PM CDT), branch `feat/src-live-claims`. Apply in order; then @swe runs the loader (`node scripts/ops/load-official-claims.mjs --dry-run`, then without `--dry-run`) from a database maintenance session (Management API). Additive; seeds only five product settings; no claim is seeded by migration.
+
+* `20261025600000`: new enum `public.rule_origin` (`official_capture`, `firm_entry`).
+* `rule_versions.origin` (default `firm_entry`; `official_capture` only with `organization_id` null). `rule_definitions.source_category` (fee, form, checklist, program, guide, law; platform rows only; immutable). The `rule_definitions_stable_key_check` now allows a segment starting with a digit (`CA.GUIDE.5269.INTRO`).
+* Product settings `source.recheck_interval.fee|form|checklist` (7 days), `.program` (14, guides too), `.law` (30), confirmed.
+* New `public.rule_claim_overrides` (forced RLS; select for the firm's staff with MFA; no insert/update/delete grants; guard trigger refuses any writer but `app.edit_rule_claim`, and every update or delete): a firm's edit or revert of a live official claim, its base version, the editor's membership, name and licence (credential id and College ID copied in), the step-up time and session. New `public.rule_step_up_uses` (forced RLS, no grants): each step-up used once by a claim edit, revert or unsuspend.
+* New functions: `app.db_maintenance_session()`; `app.source_recheck_interval(category)`; `app.rule_version_source(version)`; `app.official_live_version(definition)`; `app.official_claim_stale(version)`; `app.latest_step_up_at()` and `app.use_rule_step_up(org, action, object)` (a fresh step-up, used once); `app.rule_claim_edit(org, definition)`, `app.rule_version_firm_edit(org, version)`; `app.firm_rule_claim(org, definition)` (the one read of a claim for a firm: official text and evidence, the firm's edit and stamp, `source_changed`, `stale`); `public.official_claims(query, program, limit, offset)`, `public.official_claim(definition)`, `public.rule_claim_history(definition)`, `public.matter_official_claims(matter, category)` (staff with MFA of the current firm); `public.edit_rule_claim(definition, expected_base_version, text, value, reason, action)` (licensed, fresh step-up, live official claim, stale base refused with PT409; audited `rule.claim_edited` / `rule.claim_reverted`); `public.unsuspend_rule_version(version, expected_version, reason)` (licensed, fresh step-up, no newer live version; audited `rule.version_unsuspended`); `app.load_official_claim(claim, dry_run)` and `app.load_official_claims(claims, dry_run)` (maintenance session only; refuses placeholders, homepages, non-federal pages, missing hash or retrieval time; new / changed / unchanged / suspended); `app.rule_item_is_live(version)`; `app.vo_stale_official_items(org, matter)`.
+* **Redefined** (copied from their latest definitions): `app.prepare_rule_definition` (`20261017113157`: `source_category` immutable); `app.guard_rule_version` and `app.rule_publication_blockers` (`20261025400000`: an official capture is created and published only in a maintenance session, needs its captured page and no review); `app.apply_source_check_attempt` (`20261017113157`: the loader's unchanged re-capture moves "last checked" to its time); `app.rule_pack_is_live` (`20261025410100`: an official claim item follows the claim's live version); `app.src_rule_from_pinned_pack` (`20261025410000`: a live official claim of the matter's program may back a checklist item or deadline); `app.support_catalogue` (`20261025410100`: live official form/checklist claims make a program supported; `official_claims`, `stale`, `last_checked_at`, `firm_edits`); `app.vo_official_attestation`, `app.vo_letter_official_items`, `public.vo_run_official_content`, `public.finish_vo_run` (`20261025450000`: the firm's wording and edit stamp, `CA.FEES.*` for any pack labelled with its program, overdue fee/advice-like claims left out and listed with the reason).
+
+Tested in `tests/src-live-claims.rls.test.ts`, `tests/load-official-claims.test.ts` (the committed captures loaded into PGlite, idempotent) and `tests/src-live-claims-present.test.tsx`. The capture files are `src/modules/content-governance/captured-claims.json`, `captured-canada-ca.json` and `captured-all-sources.json`; the all-sources coverage notes are in `docs/sources/captured-all-sources.md`.
+
+## Manage your booking link (`20261026110000`, not applied on the live project)
+
+CRM-03 (gap #176), PR #197, branch `feat/crm-booking-manage`. First written as `20261024160000_booking_manage_link.sql` on 2026-10-24; renumbered on 2026-10-26 to come after main's latest (`20261025600100`). Additive; new objects only, nothing redefined. Re-checked against main on 2026-10-26: the functions it calls (`app.reschedule_booking`, latest `20261023090000`; `app.booking_availability`, `app.booking_audit`, `app.booking_outbox`, `app.is_time_zone`, all `20261019180100`) keep their signatures, and no later migration adds a manage link.
+
+* New table `public.booking_manage_tokens` (one live SHA-256 per booking, organization FK and index, RLS enabled and forced, no policies, revoked from public, anon, authenticated).
+* New `public.issue_booking_manage_token(delivery, sha256)` (service role only): for an EM16a / EM16b delivery to a primary attendee with no portal login, on an upcoming confirmed booking, stores the hash (replacing the previous one, expiring at the booking's end) and returns the booking reference, else null.
+* New `app.booking_by_manage_token(ref, sha256, lock)` and the anon/authenticated functions `public.booking_manage_view`, `public.booking_manage_availability`, `public.booking_manage_reschedule` (through `app.reschedule_booking` with actor `client` and the notice enforced; outbox `booking.rescheduled_by_client`), `public.booking_manage_cancel` (the portal cancel's rules, a reason required, `late` inside the notice; outbox `booking.cancelled` unless sample and `booking.cancelled_by_client`; the token is removed). Audited `booking.manage_link_used`.
+
+Tested in `tests/booking-manage.rls.test.ts` and `tests/booking-manage.test.tsx`.
+
+## Video call join with the Manage link (`20261026110100`, not applied on the live project)
+
+CRM-03 (gap #176), PR #198, branch `feat/crm-call-token`. First written as `20261024170000_video_guest_join.sql` on 2026-10-24; renumbered on 2026-10-26 to come right after `20261026110000_booking_manage_link.sql` (#197), whose `booking_manage_tokens` it reads. Additive. Re-checked against main on 2026-10-26: `public.video_join`'s latest definition is still `20261022110000_video_end_for_everyone.sql` (the guest function follows its window, lobby, ended-by-host and rate-limit rules), `20261022120000` keeps `room_created_at` once set (the guest path only sets it when empty), and no later migration touches `video_participants`.
+
+* `video_participants.user_id` may be null (`alter column ... drop not null`, comment): a guest has no Casevoya account. Its FK and index are unchanged.
+* New `app.booking_by_call_token(ref, sha256)`: the booking a Manage token opens, until 30 minutes after the end (the join window).
+* New `public.video_join_guest(ref, sha256, issue, name)` (anon, authenticated): the call view, or with `issue` the lobby grant; identity `client:<booking id>`, so the host's Let in works unchanged; 10 grants a minute; audited `video.join_issued` with `via = manage_link`.
+* New `public.video_room_created_guest(ref, sha256)` (anon, authenticated): records the room's first creation, as `video_room_created` does.
+
+Tested in `tests/booking-manage.rls.test.ts` and `tests/booking-manage.test.tsx`.
+

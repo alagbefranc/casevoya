@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { changeMatterConsultant, changeMatterStage, confirmMatterOutcome, holdMatter, recordMatterDeadline, resumeMatter } from "@/modules/sheet/actions";
 import { consultantChangeDone } from "@/modules/sheet/consultant-change";
@@ -66,6 +67,9 @@ export async function runMatterAct(button: HTMLElement, root: HTMLElement, route
     // follows only once a staff member verifies it against the evidence.
     result = await recordLetter(scope, dialog, { organizationId: ref.organizationId, matterId: ref.matterId });
     sub = "Kept as received. It counts once a staff member verifies it against the evidence.";
+    // GOV-04: the tasks it created, each linked to the letter.
+    const made = result && "tasks" in result && typeof result.tasks === "number" ? result.tasks : 0;
+    if (made) sub = `Kept as received, with ${made === 1 ? "1 task" : `${made} tasks`} linked to it. It counts once a staff member verifies it.`;
   } else if (act === "consultant") {
     const membershipId = text(scope, "#consSel");
     const current = scope.querySelector<HTMLSelectElement>("#consSel")?.dataset.current ?? "";
@@ -110,7 +114,7 @@ export async function runMatterAct(button: HTMLElement, root: HTMLElement, route
   const error = result && "error" in result && typeof result.error === "string" ? result.error : null;
   if (error) {
     if (needsStepUp(error)) {
-      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, DIALOG[act] ?? null));
+      goStepUp(stepUpLocation(window.location.pathname, window.location.search, DIALOG[act] ?? null, act === "resume" ? "matter_hold" : act === "outcome" ? "decision" : undefined));
       return;
     }
     toast2(error, { kind: "bad", sub: "Nothing was saved." });

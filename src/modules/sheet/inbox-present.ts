@@ -23,6 +23,7 @@ const TEMPLATE_LABEL: Record<string, string> = {
   payment_failed: "Payment failed",
   refund_started: "Refund started",
   refund_complete: "Refund complete",
+  refund_failed: "Refund didn’t go through",
   consultation_booked: "Consultation booked",
   consultation_rescheduled: "Consultation moved",
   consultation_cancelled: "Consultation cancelled",

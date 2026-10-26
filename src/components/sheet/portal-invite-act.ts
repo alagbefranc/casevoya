@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { invitePortalPerson } from "@/modules/sheet/actions";
 import { needsStepUp } from "@/modules/sheet/matter-wire";
@@ -88,7 +89,7 @@ export async function runPortalInvite(button: HTMLElement, router: Router) {
   });
   if ("error" in result) {
     if (needsStepUp(result.error)) {
-      window.location.assign(inviteStepUpLocation(window.location.pathname, window.location.search, personId));
+      goStepUp(inviteStepUpLocation(window.location.pathname, window.location.search, personId));
       return;
     }
     toast2(result.error, { kind: "bad", sub: "No invitation was sent." });
