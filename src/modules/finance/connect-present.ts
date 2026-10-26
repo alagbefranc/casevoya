@@ -1,3 +1,5 @@
+import { formatMoney } from "@/modules/finance/money";
+
 /**
  * The firm's Stripe connected account as Settings > Subscription's "Card payments from clients"
  * card and the Finance banner show it (FIN-02). Every value comes from what Stripe reported (cached
@@ -97,7 +99,7 @@ export function liabilityText(account: Pick<ConnectAccount, "feesCollector" | "l
   return `${parts.join("; ")}. As Stripe reports it.`;
 }
 
-export type ConnectCardAction = "setup" | "continue" | "refresh";
+export type ConnectCardAction = "setup" | "continue" | "refresh" | "disconnect";
 
 export type ConnectCardData = {
   badge: { tone: "ok" | "chg" | "gr" | "bad"; label: string };
@@ -172,6 +174,7 @@ export function connectCard(data: FinanceAccountData, timeZone: string): Connect
   if (data.isOwner) {
     if (stage === "onboarding" || account.requirementsDue > 0) actions.push({ act: "continue", label: "Continue onboarding", primary: true });
     actions.push({ act: "refresh", label: "Check with Stripe", primary: actions.length === 0 });
+    actions.push({ act: "disconnect", label: "Disconnect Stripe account", primary: false });
   }
   const note =
     stage === "onboarding"
@@ -211,6 +214,67 @@ export function connectAccountFromRow(row: {
     lossesCollector: row.losses_collector ?? null,
     checkedAt: row.status_checked_at ?? null,
   };
+}
+
+/** What the owner types to confirm disconnecting the firm's Stripe account (app.unlink_stripe_account checks it too). */
+export const DISCONNECT_WORD = "DISCONNECT";
+
+export type DisconnectInput = { confirmation: string; reason: string };
+
+/** The disconnect dialog's fields, checked before the database is asked. */
+export function readDisconnect(fields: { confirmation?: unknown; reason?: unknown }): { input: DisconnectInput } | { error: string } {
+  const confirmation = typeof fields.confirmation === "string" ? fields.confirmation.trim() : "";
+  const reason = typeof fields.reason === "string" ? fields.reason.trim() : "";
+  if (confirmation !== DISCONNECT_WORD) return { error: `Type ${DISCONNECT_WORD} to confirm.` };
+  if (reason.length < 3) return { error: "Say why the account is being disconnected." };
+  if (reason.length > 500) return { error: "Keep the reason under 500 characters." };
+  return { input: { confirmation, reason } };
+}
+
+/** One thing still running on the account, as app.stripe_account_unlink_blockers lists it. */
+export type UnlinkBlocker = { kind: "payment" | "refund" | "dispute"; number: string; invoice_number: string; amount_cents: number; currency: string; status: string };
+
+const BLOCKER_STATUS: Record<string, string> = {
+  processing: "processing at Stripe",
+  requires_payment: "started by the client in the last 24 hours",
+  pending: "pending at Stripe",
+  requires_action: "waiting on the client at Stripe",
+  warning_needs_response: "inquiry needs a response",
+  warning_under_review: "inquiry under review",
+  needs_response: "needs a response",
+  under_review: "under review",
+};
+
+/** "Card payment on INV-0001, CAD 400.00: processing at Stripe". */
+export function blockerLine(blocker: UnlinkBlocker): string {
+  const amount = formatMoney(Number(blocker.amount_cents), blocker.currency);
+  const status = BLOCKER_STATUS[blocker.status] ?? blocker.status;
+  if (blocker.kind === "refund") return `Refund ${blocker.number} of ${blocker.invoice_number}, ${amount}: ${status}`;
+  if (blocker.kind === "dispute") return `Dispute ${blocker.number} on ${blocker.invoice_number}, ${amount}: ${status}`;
+  return `Card payment on ${blocker.invoice_number}, ${amount}: ${status}`;
+}
+
+/** "Card payment request on INV-0001, CAD 400.00 (pi_…)": one request Stripe didn't cancel. */
+export function openRequestLine(request: { invoice_number: string; amount_cents: number; currency: string; payment_intent_id: string }): string {
+  return `Card payment request on ${request.invoice_number || "an invoice"}, ${formatMoney(Number(request.amount_cents), request.currency)} (${request.payment_intent_id})`;
+}
+
+/** Wording for the database's refusals of a disconnect. */
+export function disconnectError(message: string): string | null {
+  if (/type DISCONNECT/i.test(message)) return `Type ${DISCONNECT_WORD} to confirm.`;
+  if (/reason/i.test(message)) return "Say why the account is being disconnected (3 to 500 characters).";
+  if (/changed; reload/i.test(message)) return "The firm’s Stripe account changed. Reload the page and try again.";
+  if (/no Stripe account to disconnect/i.test(message)) return "This firm has no Stripe account connected.";
+  return null;
+}
+
+/**
+ * Stripe's idempotency key for creating the firm's account. The first account keeps the original
+ * key; after each disconnect the count of ended links makes a new one, so setting up again creates
+ * a new account instead of returning the disconnected one.
+ */
+export function connectIdempotencyKey(organizationId: string, endedLinks: number): string {
+  return endedLinks > 0 ? `casevoya-connect-${organizationId}-${endedLinks}` : `casevoya-connect-${organizationId}`;
 }
 
 /** The invoice kinds a client may pay by card (app.is_card_payable_category): earned fees and incurred costs. */

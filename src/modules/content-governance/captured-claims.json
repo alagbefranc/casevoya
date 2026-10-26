@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-10-25T12:26:57.686Z",
+  "capturedAt": "2026-10-25T23:00:32.183Z",
   "pages": [
     {
       "url": "https://ircc.canada.ca/english/information/fees/fees.asp",
@@ -7,11 +7,23 @@
       "title": "Citizenship and immigration application fees: Fee list",
       "finalUrl": "https://ircc.canada.ca/english/information/fees/fees.asp",
       "httpStatus": 200,
-      "retrievedAt": "2026-10-25T12:26:55.805Z",
+      "contentType": "text/html",
+      "bytes": 69267,
+      "retrievedAt": "2026-10-25T23:00:25.900Z",
       "sha256": "1d31eff4ec4fb9f0779448510d732112d9be010162ff8e99f72c84112b39a865",
+      "sha256Of": "bytes",
       "modifiedOn": "2026-09-21",
       "lastAmendedOn": null,
-      "currentTo": null
+      "currentTo": null,
+      "printedDates": {
+        "published": "Unknown",
+        "modified": "2026-09-21",
+        "lastAmended": "Unknown",
+        "effective": "Unknown",
+        "currentTo": "Unknown",
+        "retrieved": "2026-10-25T23:00:25.900Z",
+        "reviewed": "Unknown"
+      }
     },
     {
       "url": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html",
@@ -19,11 +31,23 @@
       "title": "Immigration and Refugee Protection Regulations (SOR/2002-227)",
       "finalUrl": "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/FullText.html",
       "httpStatus": 200,
-      "retrievedAt": "2026-10-25T12:26:56.923Z",
-      "sha256": "09e9859df8b12deca13cfd9d0d09fe90e6091556fa8cc03674441fe6cf21b5fc",
+      "contentType": "text/html",
+      "bytes": 1419003,
+      "retrievedAt": "2026-10-25T23:00:29.353Z",
+      "sha256": "a07aa18acf1ead88321e83ae2e9515bb239864ab4ca17fb03db21631b42935bd",
+      "sha256Of": "bytes",
       "modifiedOn": "2026-10-15",
       "lastAmendedOn": "2026-07-15",
-      "currentTo": "2026-09-30"
+      "currentTo": "2026-09-30",
+      "printedDates": {
+        "published": "Unknown",
+        "modified": "2026-10-15",
+        "lastAmended": "2026-07-15",
+        "effective": "Unknown",
+        "currentTo": "2026-09-30",
+        "retrieved": "2026-10-25T23:00:29.353Z",
+        "reviewed": "Unknown"
+      }
     },
     {
       "url": "https://laws-lois.justice.gc.ca/eng/acts/I-2.5/FullText.html",
@@ -31,11 +55,23 @@
       "title": "Immigration and Refugee Protection Act (S.C. 2001, c. 27)",
       "finalUrl": "https://laws-lois.justice.gc.ca/eng/acts/I-2.5/FullText.html",
       "httpStatus": 200,
-      "retrievedAt": "2026-10-25T12:26:57.645Z",
+      "contentType": "text/html",
+      "bytes": 684820,
+      "retrievedAt": "2026-10-25T23:00:32.164Z",
       "sha256": "0f53399b40fb86595f5910954d0e28b2299b9109246684981500dc3848067121",
+      "sha256Of": "bytes",
       "modifiedOn": "2026-10-15",
       "lastAmendedOn": "2026-03-26",
-      "currentTo": "2026-09-30"
+      "currentTo": "2026-09-30",
+      "printedDates": {
+        "published": "Unknown",
+        "modified": "2026-10-15",
+        "lastAmended": "2026-03-26",
+        "effective": "Unknown",
+        "currentTo": "2026-09-30",
+        "retrieved": "2026-10-25T23:00:32.164Z",
+        "reviewed": "Unknown"
+      }
     }
   ],
   "claims": [

@@ -50,4 +50,28 @@ export function capture(options?: {
   log?: (line: string) => void;
   delayMs?: number;
   pdfReader?: (bytes: Uint8Array) => PdfText;
+  only?: "official" | "canada" | null;
 }): Promise<{ official: CaptureResult; canada: CaptureResult }>;
+
+export const ALL_SOURCES: string;
+export type FeeRow = { path: string[]; anchor: string | null; groupId: string | null; names: string[]; text: string; amountCents: number; qualifier: string | null };
+export type AllSourcesClaim = Record<string, unknown> & { key: string; category: string; page: string; sourceUrl: string; section: string; claim: string; value: string | null };
+export type AllSourcesData = Record<string, unknown> & { pages: Record<string, unknown>[]; claims: AllSourcesClaim[] };
+export function readFeeRows(html: string): FeeRow[];
+export function centsOf(value: unknown): number | null;
+export function matchFeeClaim(claim: { section: string }, rows: FeeRow[]): { row: FeeRow } | Missing;
+export function refreshFeeClaim(claim: AllSourcesClaim, rows: FeeRow[], page: { sha256: string; retrievedAt: string }): { claim: AllSourcesClaim } | { refused: string };
+export function refreshLawClaim(
+  claim: AllSourcesClaim,
+  html: string,
+  page: { sha256: string; retrievedAt: string; currentTo: string | null; lastAmendedOn: string | null },
+): { claim: AllSourcesClaim } | { refused: string };
+export function splitSpousalRow(
+  claim: AllSourcesClaim,
+  rows: FeeRow[],
+  page: { sha256: string; retrievedAt: string },
+): { claims: AllSourcesClaim[]; notLoaded: { key: string; reason: string }[] };
+export function refreshAllSources(
+  data: AllSourcesData,
+  options?: { fetcher?: typeof fetch; now?: () => Date; log?: (line: string) => void; delayMs?: number },
+): Promise<{ data: AllSourcesData; report: { matched: { fee: number; law: number }; lawTextDiffers: string[]; refused: { key: string; reason: string }[]; notLoaded: { key: string; reason: string }[]; split: unknown[] } }>;

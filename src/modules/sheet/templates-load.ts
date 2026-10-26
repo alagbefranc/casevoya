@@ -12,6 +12,7 @@ import type { MessageTemplateDialogData } from "@/components/sheet/designer/temp
 import { designUse, firmMessageRows, messageRows, programRows, templatesData, type CatalogRow, type RuleRow } from "@/modules/sheet/templates-present";
 import { claimAddData, claimFactsFor } from "@/modules/sheet/source-claims-load";
 import { partialAlert } from "@/modules/sheet/states-present";
+import { liveClaimsData, OFFICIAL_CLAIMS_PAGE, officialClaimView, type OfficialClaimJson } from "@/modules/sheet/official-claims-present";
 
 const READ = 200;
 
@@ -26,7 +27,14 @@ function tally(values: readonly (string | null)[]): Map<string, number> {
  * versions the firm may see (RLS), the firm's agreement templates, and the approved email
  * catalog. Read only.
  */
-export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, view: string | undefined, now: Date = new Date()) {
+export async function loadSheetTemplates(
+  staff: SheetStaff,
+  tab: TemplatesTab,
+  view: string | undefined,
+  now: Date = new Date(),
+  /** Live official claims (#188): the search and page on Source review, the claim on Rule detail. */
+  official: { claim?: string; query?: string; offset?: string } = {},
+) {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
   const [chrome, packs, pinnedMatters, agreementTemplates, agreements, versions, definitions, reviews, evidence, items, names] = await Promise.all([
@@ -38,6 +46,8 @@ export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, v
     supabase
       .from("rule_versions")
       .select("id, organization_id, definition_id, version_number, version, status, status_reason, effective_from, effective_to, next_review_at, claim, output_value, applicability, applicability_note")
+      // Live official claims have their own list below the register (#188); the register is the firm's review work.
+      .eq("origin", "firm_entry")
       .order("updated_at", { ascending: false })
       .limit(READ),
     supabase.from("rule_definitions").select("id, stable_key, jurisdiction, program_key").limit(READ),
@@ -202,12 +212,33 @@ export async function loadSheetTemplates(staff: SheetStaff, tab: TemplatesTab, v
   });
   // SRC-12: Program templates links to What Casevoya supports.
   data.program.supportHref = SUPPORT_SHEET_HREF;
+  // #188: the live official claims (Source review) and one of them with its history (Rule detail).
+  let liveFailed = false;
+  if (tab === "sources") {
+    const query = (official.query ?? "").trim().slice(0, 120);
+    const offset = Math.max(0, Math.min(Number.parseInt(official.offset ?? "0", 10) || 0, 100_000));
+    const live = await supabase.rpc("official_claims", { p_query: query || (null as unknown as string), p_program: null as unknown as string, p_limit: OFFICIAL_CLAIMS_PAGE, p_offset: offset });
+    liveFailed = Boolean(live.error);
+    data.sources.live = liveClaimsData(live.error ? null : (live.data as { total?: unknown; rows?: unknown }), { query, offset, timeZone: staff.timezone });
+  }
+  if (tab === "rule" && official.claim && isUuid(official.claim)) {
+    const [claim, history] = await Promise.all([
+      supabase.rpc("official_claim", { p_definition_id: official.claim }),
+      supabase.rpc("rule_claim_history", { p_definition_id: official.claim }),
+    ]);
+    data.officialClaim = officialClaimView(claim.error ? null : (claim.data as OfficialClaimJson | null), history.error ? [] : history.data, {
+      organizationId: org,
+      role: staff.role,
+      timeZone: staff.timezone,
+    });
+  }
   // DES-04: a read that failed or hit its limit makes the lists and counts partial; say so.
   const partial = partialAlert([
     { label: "Program templates", count: (packs.data ?? []).length, cap: READ, failed: Boolean(packs.error) },
     { label: "Rule versions", count: (versions.data ?? []).length, cap: READ, failed: Boolean(versions.error) },
     { label: "Rule evidence", count: (evidence.data ?? []).length, cap: READ, failed: Boolean(evidence.error) },
     { label: "Agreement templates", count: (agreementTemplates.data ?? []).length, cap: READ, failed: Boolean(agreementTemplates.error) },
+    { label: "Live official claims", count: 0, cap: READ, failed: liveFailed },
   ]);
   return { chrome, data, messageDialog, partial };
 }

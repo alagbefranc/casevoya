@@ -4,7 +4,7 @@
  */
 import type { AiAudit, AiData, AiRunRow, AiRules, AiSettings, AiSources, AiStates, AiSwitch, AiTab } from "@/components/sheet/designer/ai";
 import type { Attrs, DraftCard, DraftsData, DraftsHeaderData, DraftSwitch, TimelineItem } from "@/components/sheet/designer/drafts";
-import { attestationLine, citationHref, isCitableOfficialUrl, VO_CANT_ANSWER } from "@/modules/vo/grounding";
+import { attestationLine, citationHref, editStampLine, isCitableOfficialUrl, VO_CANT_ANSWER } from "@/modules/vo/grounding";
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import type { VoSettingKey, VoSwitchKey } from "@/modules/vo/errors";
 import { MATTER_STAGES, stageLabel } from "@/modules/sheet/present";
@@ -80,6 +80,11 @@ export type VoSource = {
   attested?: boolean;
   attestedBy?: string | null;
   attestedOn?: string | null;
+  /** #188: the firm's licensed edit of the official claim it cites: who, their licence and the date. */
+  edited?: boolean;
+  editedBy?: string | null;
+  editedLicence?: string | null;
+  editedOn?: string | null;
 };
 
 /**
@@ -93,7 +98,10 @@ export function sourceItems(sources: VoSource[], at: { matterId: string; threadI
     const kind = source.kind as Parameters<typeof citationHref>[0]["kind"];
     const href = kind === "official" && !isCitableOfficialUrl(source.url) ? null : citationHref({ kind, url: source.url }, at);
     const attestation = kind === "official" && source.attested ? (attestationLine(source.attestedBy, source.attestedOn) ?? "Page not captured by Casevoya") : null;
-    return attestation ? { label: source.label, href, detail: attestation } : { label: source.label, href };
+    // #188: the firm's wording of an official claim, with its stamp.
+    const edit = kind === "official" && source.edited ? editStampLine(source.editedBy, source.editedLicence, source.editedOn) : null;
+    const detail = [attestation, edit].filter(Boolean).join(" · ");
+    return detail ? { label: source.label, href, detail } : { label: source.label, href };
   });
 }
 

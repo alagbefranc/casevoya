@@ -40,6 +40,15 @@ function sources(value: unknown): VoSource[] {
           ...(typeof item.url === "string" ? { url: item.url } : {}),
           // Attested official content (finish_vo_run keeps the reviewer and the date with the source).
           ...(item.attested === true ? { attested: true, attestedBy: typeof item.attested_by === "string" ? item.attested_by : null, attestedOn: typeof item.attested_on === "string" ? item.attested_on : null } : {}),
+          // #188: the firm's edit stamp of a cited official claim (finish_vo_run keeps it with the source).
+          ...(item.edited === true
+            ? {
+                edited: true,
+                editedBy: typeof item.edited_by === "string" ? item.edited_by : null,
+                editedLicence: typeof item.edited_licence === "string" ? item.edited_licence : null,
+                editedOn: typeof item.edited_on === "string" ? item.edited_on : null,
+              }
+            : {}),
         }))
         .filter((item) => item.label)
     : [];

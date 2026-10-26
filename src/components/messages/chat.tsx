@@ -142,7 +142,7 @@ export function ChatView({ data }: { data: ChatData }) {
   const [voDraft, setVoDraft] = useState<string | null>(null);
   const [voBusy, setVoBusy] = useState(false);
   // The records Vo cited for the draft now in the composer (labels only).
-  const [voSources, setVoSources] = useState<{ label: string; href: string | null; attestation?: string | null }[]>([]);
+  const [voSources, setVoSources] = useState<{ label: string; href: string | null; attestation?: string | null; edit?: string | null }[]>([]);
   const [query, setQuery] = useState("");
   const voMenu = useRef<HTMLDetailsElement>(null);
   // OPS-04: Insert template, and a French machine draft waiting for the sender's check.
@@ -358,7 +358,7 @@ export function ChatView({ data }: { data: ChatData }) {
     if ("error" in result) return setNotice(result.error);
     if ("abstained" in result) return showInfo("Vo didn’t draft this one: it needs a consultant (advice, eligibility or a rule without an approved source). Please answer it yourself.");
     setVoDraft(result.draftId);
-    setVoSources(result.sources.map((source) => ({ label: source.label, href: source.href, attestation: source.attestation })));
+    setVoSources(result.sources.map((source) => ({ label: source.label, href: source.href, attestation: source.attestation, edit: source.edit ?? null })));
     setText(result.text);
     if (result.needsRule) setNotice("Replace “[needs a sourced rule]” with a checked, sourced fact, or remove it, then review and send.");
     requestAnimationFrame(() => {
@@ -641,6 +641,7 @@ export function ChatView({ data }: { data: ChatData }) {
                             <li key={index}>
                               {source.href ? <a href={source.href}>{source.label}</a> : source.label}
                               {source.attestation ? ` (${source.attestation})` : null}
+                              {source.edit ? ` (${source.edit})` : null}
                             </li>
                           ))}
                         </ul>

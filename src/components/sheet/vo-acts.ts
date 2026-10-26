@@ -126,6 +126,8 @@ export function showCitations(target: HTMLElement, citations: VoCitation[]) {
     if (citation.kind === "official" && citation.detail) target.append(` (${citation.detail})`);
     // A page Casevoya didn't capture: the reviewer's attestation, right next to the citation.
     if (citation.attestation) target.append(` (${citation.attestation})`);
+    // #188: the firm's wording of an official claim, with its stamp.
+    if (citation.edit) target.append(` (${citation.edit})`);
   });
   target.append(" · for you only, not kept");
 }

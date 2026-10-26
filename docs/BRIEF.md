@@ -105,7 +105,7 @@ New → Contacted → Consultation scheduled → Consultation completed → Qual
 - **Invoice:** Draft, Issued, Partially paid, Paid, Overdue, Voided, Credited. Refunds and disputes have their own states. Payment status is **derived from allocations**.
 - **Client-facing refund:** Requested, Processing, Completed, Failed.
 - **Subscription:** Trial, Active, Past due, Restricted, Cancelled, Archive.
-- **Rule/source:** Draft → Evidence captured → Professional review → Approved → Published. Published can move to Review due, Suspended or Superseded. Rejected stays traceable. Published versions are immutable.
+- **Rule/source:** Draft → Evidence captured → Professional review → Approved → Published. Published can move to Review due, Suspended or Superseded. Rejected stays traceable. Published versions are immutable. **Captured official claims (decision 2026-10-25):** live on load (operator's loader, maintenance session), platform-wide, no label; firm-only licensed edits (fresh step-up every time, stamped "Edited by <name>, licence <number>, <date>", history kept); a changed re-capture goes live and flags "Source changed since your edit"; suspended stays suspended (stamped step-up unsuspend); overdue after 7 days (fees, forms, checklists), 14 (program pages, guides), 30 (law), and Vo won't cite an overdue fee or advice.
 - **Integration adapter:** connected, degraded, expired, disconnected.
 
 ---

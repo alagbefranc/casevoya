@@ -3216,6 +3216,65 @@ export type Database = {
         }
         Relationships: []
       }
+      firm_payment_account_history: {
+        Row: {
+          account_id: string
+          card_payments_status: string
+          created_at: string
+          end_reason: string
+          ended_at: string
+          ended_by: string
+          id: string
+          linked_at: string
+          linked_by: string | null
+          livemode: boolean
+          organization_id: string
+          payment_account_id: string
+          payouts_status: string
+          provider: string
+        }
+        Insert: {
+          account_id: string
+          card_payments_status: string
+          created_at?: string
+          end_reason: string
+          ended_at?: string
+          ended_by: string
+          id?: string
+          linked_at: string
+          linked_by?: string | null
+          livemode?: boolean
+          organization_id: string
+          payment_account_id: string
+          payouts_status: string
+          provider?: string
+        }
+        Update: {
+          account_id?: string
+          card_payments_status?: string
+          created_at?: string
+          end_reason?: string
+          ended_at?: string
+          ended_by?: string
+          id?: string
+          linked_at?: string
+          linked_by?: string | null
+          livemode?: boolean
+          organization_id?: string
+          payment_account_id?: string
+          payouts_status?: string
+          provider?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "firm_payment_account_history_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       firm_payment_accounts: {
         Row: {
           account_id: string
@@ -10201,6 +10260,63 @@ export type Database = {
         }
         Relationships: []
       }
+      rule_claim_overrides: {
+        Row: {
+          action: string
+          base_version_id: string
+          claim_text: string | null
+          created_at: string
+          created_by: string | null
+          definition_id: string
+          editor_licence_id: string
+          editor_licence_number: string
+          editor_membership_id: string
+          editor_name: string
+          id: string
+          organization_id: string
+          output_value: Json | null
+          reason: string
+          step_up_at: string
+          step_up_session_id: string | null
+        }
+        Insert: {
+          action: string
+          base_version_id: string
+          claim_text?: string | null
+          created_at?: string
+          created_by?: string | null
+          definition_id: string
+          editor_licence_id: string
+          editor_licence_number: string
+          editor_membership_id: string
+          editor_name: string
+          id?: string
+          organization_id: string
+          output_value?: Json | null
+          reason: string
+          step_up_at: string
+          step_up_session_id?: string | null
+        }
+        Update: {
+          action?: string
+          base_version_id?: string
+          claim_text?: string | null
+          created_at?: string
+          created_by?: string | null
+          definition_id?: string
+          editor_licence_id?: string
+          editor_licence_number?: string
+          editor_membership_id?: string
+          editor_name?: string
+          id?: string
+          organization_id?: string
+          output_value?: Json | null
+          reason?: string
+          step_up_at?: string
+          step_up_session_id?: string | null
+        }
+        Relationships: []
+      }
       rule_definitions: {
         Row: {
           applicant_context: string | null
@@ -10214,6 +10330,7 @@ export type Database = {
           owner_label: string | null
           program_key: string | null
           required_facts: string[]
+          source_category: string | null
           stable_key: string
           updated_at: string
           version: number
@@ -10230,6 +10347,7 @@ export type Database = {
           owner_label?: string | null
           program_key?: string | null
           required_facts?: string[]
+          source_category?: string | null
           stable_key: string
           updated_at?: string
           version?: number
@@ -10246,6 +10364,7 @@ export type Database = {
           owner_label?: string | null
           program_key?: string | null
           required_facts?: string[]
+          source_category?: string | null
           stable_key?: string
           updated_at?: string
           version?: number
@@ -10551,6 +10670,39 @@ export type Database = {
           },
         ]
       }
+      rule_step_up_uses: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          object_id: string
+          organization_id: string
+          session_id: string | null
+          step_up_at: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          object_id: string
+          organization_id: string
+          session_id?: string | null
+          step_up_at: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          object_id?: string
+          organization_id?: string
+          session_id?: string | null
+          step_up_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       rule_versions: {
         Row: {
           applicability: Json | null
@@ -10568,6 +10720,7 @@ export type Database = {
           id: string
           next_review_at: string | null
           organization_id: string | null
+          origin: Database["public"]["Enums"]["rule_origin"]
           output_value: Json | null
           status: Database["public"]["Enums"]["rule_publication_status"]
           status_changed_at: string | null
@@ -10596,6 +10749,7 @@ export type Database = {
           id?: string
           next_review_at?: string | null
           organization_id?: string | null
+          origin?: Database["public"]["Enums"]["rule_origin"]
           output_value?: Json | null
           status?: Database["public"]["Enums"]["rule_publication_status"]
           status_changed_at?: string | null
@@ -10624,6 +10778,7 @@ export type Database = {
           id?: string
           next_review_at?: string | null
           organization_id?: string | null
+          origin?: Database["public"]["Enums"]["rule_origin"]
           output_value?: Json | null
           status?: Database["public"]["Enums"]["rule_publication_status"]
           status_changed_at?: string | null
@@ -14152,6 +14307,37 @@ export type Database = {
         }
         Returns: number
       }
+      edit_rule_claim: {
+        Args: {
+          p_action: string
+          p_definition_id: string
+          p_expected_base_version_id: string
+          p_reason: string
+          p_text: string
+          p_value: string
+        }
+        Returns: string
+      }
+      unsuspend_rule_version: {
+        Args: { p_expected_version: number; p_reason: string; p_version_id: string }
+        Returns: number
+      }
+      official_claims: {
+        Args: { p_limit?: number; p_offset?: number; p_program?: string; p_query?: string }
+        Returns: Json
+      }
+      official_claim: {
+        Args: { p_definition_id: string }
+        Returns: Json
+      }
+      rule_claim_history: {
+        Args: { p_definition_id: string }
+        Returns: Json
+      }
+      matter_official_claims: {
+        Args: { p_category?: string; p_matter_id: string }
+        Returns: Json
+      }
       suspend_rule_version: {
         Args: { p_expected_version: number; p_reason: string; p_version_id: string }
         Returns: number
@@ -15995,6 +16181,10 @@ export type Database = {
         Args: { p_account_id: string; p_livemode: boolean; p_org: string }
         Returns: string
       }
+      record_stripe_unlink_cancellations: {
+        Args: { p_history_id: string; p_results: Json }
+        Returns: Json
+      }
       record_firm_transfer: {
         Args: {
           p_contact_email: string
@@ -17137,6 +17327,10 @@ export type Database = {
         Args: { p_reason: string; p_ref_id: string }
         Returns: undefined
       }
+      unlink_stripe_account: {
+        Args: { p_account_id: string; p_confirmation: string; p_org: string; p_reason: string }
+        Returns: Json
+      }
       update_firm_profile: {
         Args: { p_changes: Json; p_organization_id: string }
         Returns: undefined
@@ -17603,6 +17797,7 @@ export type Database = {
         | "acknowledged"
         | "reassessed"
         | "dismissed"
+      rule_origin: "official_capture" | "firm_entry"
       rule_publication_status:
         | "draft"
         | "evidence_captured"
@@ -18108,6 +18303,7 @@ export const Constants = {
         "reassessed",
         "dismissed",
       ],
+      rule_origin: ["official_capture", "firm_entry"],
       rule_publication_status: [
         "draft",
         "evidence_captured",
