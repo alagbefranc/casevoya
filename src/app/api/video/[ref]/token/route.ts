@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { joinCall, validCall } from "@/modules/video/service";
+import { joinCall, joinGuestCall, validCall } from "@/modules/video/service";
 
 const NO_STORE = { "Cache-Control": "private, no-store" };
 
@@ -10,10 +10,12 @@ const NO_STORE = { "Cache-Control": "private, no-store" };
  */
 export async function POST(request: Request, { params }: { params: Promise<{ ref: string }> }) {
   const { ref } = await params;
-  const body = (await request.json().catch(() => null)) as { organizationId?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { organizationId?: unknown; guestToken?: unknown; name?: unknown } | null;
   const organizationId = body?.organizationId;
-  if (!validCall(organizationId, ref)) return NextResponse.json({ error: "Choose the call." }, { status: 400, headers: NO_STORE });
-  const result = await joinCall(organizationId, ref);
+  // CRM-03: a booker without a portal joins with their Manage your booking token instead of a session.
+  const guest = typeof body?.guestToken === "string" ? body.guestToken : null;
+  if (!guest && !validCall(organizationId, ref)) return NextResponse.json({ error: "Choose the call." }, { status: 400, headers: NO_STORE });
+  const result = guest ? await joinGuestCall(ref, guest, typeof body?.name === "string" ? body.name : "") : await joinCall(organizationId as string, ref);
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status, headers: NO_STORE });
   if (!result.grant) {
     // Not open (early, closed, cancelled) or video isn't set up: what the call is, and no token.

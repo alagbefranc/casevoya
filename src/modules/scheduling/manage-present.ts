@@ -124,3 +124,11 @@ export function manageError(message: string): string {
   if (/access denied/.test(message)) return "This link no longer works. Use the link in your latest email, or contact the firm.";
   return "That couldn’t be saved. Try again.";
 }
+
+/** /call/<ref>?t=<token>: a guest's call link (CRM-03). Only its shape; the database checks the token. */
+export function isGuestCallPath(pathname: string, search: string): boolean {
+  const match = /^\/call\/([a-z2-7]{26})\/?$/.exec(pathname);
+  if (!match) return false;
+  const token = new URLSearchParams(search).get("t");
+  return Boolean(token && TOKEN.test(token));
+}

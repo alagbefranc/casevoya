@@ -35,8 +35,8 @@ import { callNotice, type JoinView } from "@/modules/video/present";
 type Back = { href: string; label: string };
 
 type Props =
-  | { kind: "refused"; back: Back }
-  | { kind: "call"; organizationId: string; callRef: string; view: JoinView; back: Back };
+  | { kind: "refused"; back: Back; title?: string; copy?: string }
+  | { kind: "call"; organizationId: string; callRef: string; view: JoinView; back: Back; guestToken?: string | null };
 
 type Grant = { serverUrl: string; token: string; identity: string; role: "host" | "client"; admitted: boolean };
 
@@ -84,10 +84,10 @@ export function CallScreen(props: Props) {
     return (
       <main className="cv-call">
         <section className="cv-call-card" role="alert">
-          <h1>You can’t join this call</h1>
+          <h1>{props.title ?? "You can’t join this call"}</h1>
           <p>
-            Only the client the consultation is with, its host and the firm’s owners can open it. Sign in with the account the booking is
-            under. Staff need two-step sign-in first.
+            {props.copy ??
+              "Only the client the consultation is with, its host and the firm’s owners can open it. Sign in with the account the booking is under. Staff need two-step sign-in first."}
           </p>
           <a className="btn p" href={props.back.href}>
             {props.back.label}
@@ -99,7 +99,7 @@ export function CallScreen(props: Props) {
   return <Call {...props} />;
 }
 
-function Call({ organizationId, callRef, view, back }: Extract<Props, { kind: "call" }>) {
+function Call({ organizationId, callRef, view, back, guestToken }: Extract<Props, { kind: "call" }>) {
   const router = useRouter();
   const inBrowser = useInBrowser();
   const [step, setStep] = useState<Step>({ name: "prejoin" });
@@ -115,7 +115,10 @@ function Call({ organizationId, callRef, view, back }: Extract<Props, { kind: "c
 
   async function join(choices: LocalUserChoices) {
     setStep({ name: "joining", choices });
-    const result = await post<Grant & { view?: JoinView; configured?: boolean }>(`/api/video/${callRef}/token`, { organizationId });
+    const result = await post<Grant & { view?: JoinView; configured?: boolean }>(
+      `/api/video/${callRef}/token`,
+      guestToken ? { guestToken, name: choices.username } : { organizationId },
+    );
     if (!result.ok) {
       setStep({ name: "problem", title: "We couldn’t connect you", copy: result.error });
       return;
@@ -164,7 +167,8 @@ function Call({ organizationId, callRef, view, back }: Extract<Props, { kind: "c
               : `Check your camera and microphone, then join. ${view.hostName ?? view.firmName} lets you in when they’re ready.`}
           </p>
           <PreJoin
-            defaults={{ username: view.role === "host" ? "Host" : "Client", videoEnabled: true, audioEnabled: true }}
+            // A guest (CRM-03) confirms the name on their booking here; it is the name the host sees.
+            defaults={{ username: guestToken ? (view.bookedName ?? "") : view.role === "host" ? "Host" : "Client", videoEnabled: true, audioEnabled: true }}
             persistUserChoices={false}
             joinLabel={step.name === "joining" ? "Connecting…" : view.role === "host" ? "Start the call" : "Join the call"}
             micLabel="Microphone"
