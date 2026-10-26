@@ -5,7 +5,8 @@
  */
 import type { MatterBillingData } from "@/components/sheet/designer/matter";
 import { formatAmount, formatMoney } from "@/modules/finance/money";
-import { invoiceState } from "@/modules/sheet/finance-present";
+import { invoiceState, paymentState } from "@/modules/sheet/finance-present";
+import { failedPaymentWords } from "@/modules/sheet/states-present";
 import { dayMonthYear } from "@/modules/sheet/matter-present";
 
 export type BillingInvoice = {
@@ -22,6 +23,11 @@ export type BillingInvoice = {
   is_sample: boolean;
   /** FIN-09: manual payments on it still waiting for verification, in cents. */
   pending_cents?: number;
+  /**
+   * DES-04: its latest card payment attempt (`invoice_payments`), with the firm's date it last
+   * moved. A failed or canceled one is never money paid or pending; it is said as what it is.
+   */
+  card?: { status: string; on: string } | null;
 };
 
 export type BillingEntry = { kind: string; status: string; direction: string; amount_cents: number };
@@ -93,19 +99,28 @@ export function matterBilling(input: {
     invoices: [...input.invoices]
       .sort((a, b) => (b.issued_on ?? "").localeCompare(a.issued_on ?? "") || b.number.localeCompare(a.number))
       .map((row) => {
-        const state = invoiceState(row.status, row.due_on, input.today, false, null, null, row.pending_cents ? formatMoney(row.pending_cents, row.currency) : null);
+        const open = row.status === "issued" || row.status === "partially_paid";
+        const card = open ? row.card : null;
+        // DES-04: a card attempt that failed or was canceled shows as that (the Payments tab's badge
+        // and words), not as an open payment; the invoice's amount still owed is unchanged.
+        const words = card ? failedPaymentWords(card.status) : null;
+        const failed = card && words ? { words, status: card.status, on: card.on } : null;
+        const state = failed
+          ? paymentState(failed.status)
+          : invoiceState(row.status, row.due_on, input.today, card?.status === "processing", null, null, row.pending_cents ? formatMoney(row.pending_cents, row.currency) : null);
+        const money =
+          row.paid_cents > 0
+            ? [`${formatMoney(row.paid_cents, row.currency)} paid`, ...(owedCents(row) > 0 ? [`${formatMoney(owedCents(row), row.currency)} owed`] : [])]
+            : owedCents(row) > 0
+              ? [`${formatMoney(owedCents(row), row.currency)} owed`]
+              : ["—"];
         return {
           number: `${row.number}${row.is_sample ? " (sample)" : ""}`,
           categories: [CATEGORY[row.fee_category] ?? row.fee_category],
           issued: row.issued_on ? dayMonthYear(row.issued_on, input.today) : "Not issued",
           state: { tone: state.tone, label: state.label },
           total: formatAmount(row.amount_cents, row.currency),
-          payment:
-            row.paid_cents > 0
-              ? [`${formatMoney(row.paid_cents, row.currency)} paid`, ...(owedCents(row) > 0 ? [`${formatMoney(owedCents(row), row.currency)} owed`] : [])]
-              : owedCents(row) > 0
-                ? [`${formatMoney(owedCents(row), row.currency)} owed`]
-                : ["—"],
+          payment: failed ? [`Card ${failed.words} ${dayMonthYear(failed.on, input.today)}`,...money.filter((part) => part !== "—")] : money,
         };
       }),
   };

@@ -852,7 +852,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
   // The Billing tab: this matter's invoices and client funds, as row-level security shows them.
   if (tab === "billing") {
     const [billing, work] = await Promise.all([
-      loadMatterBilling(supabase, { organizationId: org, matterId: matter.id, today, role: staff.role }),
+      loadMatterBilling(supabase, { organizationId: org, matterId: matter.id, today, role: staff.role, timeZone: staff.timezone }),
       // FIN-06: time on the matter, and (billing staff) accepted quotes and instalments.
       loadMatterWork(supabase, { staff, matterId: matter.id, closed: matter.stage === "closed", today }),
     ]);

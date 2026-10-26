@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { CallLoading } from "@/components/video/call-loading";
 import { CallScreen } from "@/components/video/call-screen";
 import { signInLocation } from "@/lib/auth/redirect";
 import { loadPortalAccess } from "@/modules/portal/load";
@@ -40,7 +41,7 @@ async function Body({ params }: { params: Promise<{ ref: string }> }) {
 
 export default function CallPage({ params }: { params: Promise<{ ref: string }> }) {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<CallLoading />}>
       <Body params={params} />
     </Suspense>
   );
