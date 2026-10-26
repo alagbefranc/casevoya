@@ -3216,6 +3216,65 @@ export type Database = {
         }
         Relationships: []
       }
+      firm_payment_account_history: {
+        Row: {
+          account_id: string
+          card_payments_status: string
+          created_at: string
+          end_reason: string
+          ended_at: string
+          ended_by: string
+          id: string
+          linked_at: string
+          linked_by: string | null
+          livemode: boolean
+          organization_id: string
+          payment_account_id: string
+          payouts_status: string
+          provider: string
+        }
+        Insert: {
+          account_id: string
+          card_payments_status: string
+          created_at?: string
+          end_reason: string
+          ended_at?: string
+          ended_by: string
+          id?: string
+          linked_at: string
+          linked_by?: string | null
+          livemode?: boolean
+          organization_id: string
+          payment_account_id: string
+          payouts_status: string
+          provider?: string
+        }
+        Update: {
+          account_id?: string
+          card_payments_status?: string
+          created_at?: string
+          end_reason?: string
+          ended_at?: string
+          ended_by?: string
+          id?: string
+          linked_at?: string
+          linked_by?: string | null
+          livemode?: boolean
+          organization_id?: string
+          payment_account_id?: string
+          payouts_status?: string
+          provider?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "firm_payment_account_history_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       firm_payment_accounts: {
         Row: {
           account_id: string
@@ -16122,6 +16181,10 @@ export type Database = {
         Args: { p_account_id: string; p_livemode: boolean; p_org: string }
         Returns: string
       }
+      record_stripe_unlink_cancellations: {
+        Args: { p_history_id: string; p_results: Json }
+        Returns: Json
+      }
       record_firm_transfer: {
         Args: {
           p_contact_email: string
@@ -17263,6 +17326,10 @@ export type Database = {
       unlink_document_matter: {
         Args: { p_reason: string; p_ref_id: string }
         Returns: undefined
+      }
+      unlink_stripe_account: {
+        Args: { p_account_id: string; p_confirmation: string; p_org: string; p_reason: string }
+        Returns: Json
       }
       update_firm_profile: {
         Args: { p_changes: Json; p_organization_id: string }
