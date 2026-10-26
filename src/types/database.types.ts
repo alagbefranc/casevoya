@@ -15169,6 +15169,20 @@ export type Database = {
         Args: { p_matter_id: string }
         Returns: Json
       }
+      booking_manage_availability: {
+        Args: { p_from: string; p_ref: string; p_sha256: string; p_to: string }
+        Returns: Json
+      }
+      booking_manage_cancel: {
+        Args: { p_expected_version: number | null; p_reason: string; p_ref: string; p_sha256: string }
+        Returns: Json
+      }
+      booking_manage_reschedule: {
+        Args: { p_expected_version: number; p_ref: string; p_sha256: string; p_start: string; p_time_zone: string }
+        Returns: undefined
+      }
+      booking_manage_view: { Args: { p_ref: string; p_sha256: string }; Returns: Json }
+      issue_booking_manage_token: { Args: { p_delivery_id: string; p_sha256: string }; Returns: string }
       document_upload_limit: { Args: { p_organization_id: string }; Returns: number }
       edit_agreement_clause: {
         Args: { p_agreement_id: string; p_body: string; p_clause_id: string }
