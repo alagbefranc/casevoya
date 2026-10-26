@@ -1092,3 +1092,10 @@ CRM-03 (gap #176), PR #198, branch `feat/crm-call-token`. First written as `2026
 
 Tested in `tests/booking-manage.rls.test.ts` and `tests/booking-manage.test.tsx`.
 
+## Evidence on several matters, translations and classification (`20261024210000`, already applied on the live project; deploy only)
+
+DOC-06 (#178), branch `feat/doc-evidence-links`. Already applied on the live project under this name (recorded in `supabase_migrations.schema_migrations`), so the file keeps its name and its exact applied contents; merging this PR only deploys the app code. Additive; new functions only, no table, policy or existing function changed (checked against every migration on main up to `20261025600100`: none of them redefines these or touches `documents`, `document_versions` or `document_matter_refs`).
+
+* `20261024210000_document_evidence_links.sql`: new `public.link_document_matter(document, matter)` (owner, licensed consultant or case manager who can read both; the document's person must be on the matter; only a current version that passed its file check; an existing link is returned; audited `document.linked`). New `public.set_document_translation(version, expected_version, original_version, language_tag)` (same roles; same person, another document, no cycle; through `app.open_document_write`; audited `document.translation_set` / `document.translation_cleared`). New `public.set_document_classification(document, expected_version, purpose, sensitivity)` (same roles; a sensitivity change needs aal2; audited `document.classified`). Removing a link stays `public.unlink_document_matter`, expiry stays `public.set_document_expiry` (both unchanged).
+
+Tested in `tests/document-evidence-links.rls.test.ts`.

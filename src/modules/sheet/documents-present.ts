@@ -194,3 +194,89 @@ export function firstName(name: string): string {
 export function versionTitle(purpose: string, versionNumber: number): string {
   return versionNumber > 1 ? `${purpose} v${versionNumber}` : purpose;
 }
+
+/** DOC-06: the sensitivity choices a document can have, in plain words. */
+export const SENSITIVITIES = [
+  { value: "ordinary", label: "Ordinary" },
+  { value: "narrative", label: "Personal statement or narrative" },
+  { value: "medical", label: "Medical" },
+  { value: "criminal", label: "Police or court record" },
+] as const;
+
+/** DOC-06: the languages a translation can be marked as, by ISO 639-1 code. */
+export const TRANSLATION_LANGUAGES = [
+  { value: "en", label: "English" },
+  { value: "fr", label: "French" },
+] as const;
+
+export type DocumentDetails = {
+  organizationId: string;
+  documentId: string;
+  /** documents.version, for a classification change. */
+  documentVersion: number;
+  versionId: string;
+  /** document_versions.version, for the translation and expiry changes. */
+  versionRow: number;
+  title: string;
+  person: string;
+  purpose: string;
+  sensitivity: string;
+  expiresOn: string | null;
+  /** Matters using it now: each removable (public.unlink_document_matter). */
+  refs: { id: string; label: string }[];
+  /** The person's other matters it can be used on; empty when its file hasn't passed its check. */
+  candidates: { id: string; label: string }[];
+  /** A note when it can't be used on another matter yet. */
+  linkNote: string | null;
+  /** The person's other documents' current versions, as originals it can translate. */
+  originals: { versionId: string; label: string }[];
+  translationOf: string | null;
+  languageTag: string | null;
+  /** "Passport bio page (English)": the documents that translate this one. */
+  translations: string[];
+};
+
+const LANGUAGE_LABEL = new Map<string, string>(TRANSLATION_LANGUAGES.map((language) => [language.value, language.label]));
+
+export function languageLabel(tag: string | null): string {
+  if (!tag) return "";
+  return LANGUAGE_LABEL.get(tag.slice(0, 2)) ?? tag;
+}
+
+/** The All documents card's Details (DOC-06), for staff who review documents. */
+export function documentDetails(input: {
+  organizationId: string;
+  document: { id: string; purpose: string; sensitivity: string; version: number; personId: string };
+  person: string;
+  version: { id: string; rowVersion: number; expiresOn: string | null; uploadState: string; translationOf: string | null; languageTag: string | null };
+  refs: { id: string; matterId: string }[];
+  personMatters: string[];
+  others: { versionId: string; title: string; translationOf: string | null; languageTag: string | null }[];
+  matterName: (id: string) => string;
+}): DocumentDetails {
+  const linked = new Set(input.refs.map((ref) => ref.matterId));
+  const checked = input.version.uploadState === "clean";
+  const candidates = checked
+    ? [...new Set(input.personMatters)].filter((id) => !linked.has(id)).map((id) => ({ id, label: input.matterName(id) })).sort((a, b) => a.label.localeCompare(b.label))
+    : [];
+  return {
+    organizationId: input.organizationId,
+    documentId: input.document.id,
+    documentVersion: input.document.version,
+    versionId: input.version.id,
+    versionRow: input.version.rowVersion,
+    title: input.document.purpose,
+    person: input.person,
+    purpose: input.document.purpose,
+    sensitivity: input.document.sensitivity,
+    expiresOn: input.version.expiresOn,
+    refs: input.refs.map((ref) => ({ id: ref.id, label: input.matterName(ref.matterId) })),
+    candidates,
+    linkNote: checked ? (candidates.length ? null : `${input.person} isn’t on another matter you can open.`) : "Only a file that passed its check can be used on another matter.",
+    // A document that already translates this one can't also be its original.
+    originals: input.others.filter((other) => other.translationOf !== input.version.id).map((other) => ({ versionId: other.versionId, label: other.title })),
+    translationOf: input.version.translationOf,
+    languageTag: input.version.languageTag,
+    translations: input.others.filter((other) => other.translationOf === input.version.id).map((other) => `${other.title}${other.languageTag ? ` (${languageLabel(other.languageTag)})` : ""}`),
+  };
+}

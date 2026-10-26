@@ -13,6 +13,7 @@ import {
   firstName,
   queueEntry,
   REVIEW_ROLES,
+  documentDetails,
   requestAnswered,
   versionTitle,
   whenLabel,
@@ -43,12 +44,12 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
     loadSheetChrome(staff, "/sheet/documents"),
     supabase
       .from("document_versions")
-      .select("id, document_id, version_number, original_filename, declared_media_type, upload_state, scan_result, scan_engine, review_state, expires_on, superseded_at, intent_expires_at, completed_at, created_at, version")
+      .select("id, document_id, version_number, original_filename, declared_media_type, upload_state, scan_result, scan_engine, review_state, expires_on, superseded_at, intent_expires_at, completed_at, created_at, version, translation_of_version_id, language_tag")
       .eq("organization_id", org)
       .order("created_at", { ascending: false })
       .limit(READ),
-    supabase.from("documents").select("id, person_id, purpose").eq("organization_id", org).order("updated_at", { ascending: false }).limit(READ),
-    supabase.from("document_matter_refs").select("document_id, matter_id, created_at").eq("organization_id", org).is("removed_at", null).limit(READ),
+    supabase.from("documents").select("id, person_id, purpose, sensitivity, version").eq("organization_id", org).order("updated_at", { ascending: false }).limit(READ),
+    supabase.from("document_matter_refs").select("id, document_id, matter_id, created_at").eq("organization_id", org).is("removed_at", null).limit(READ),
     tab === "all"
       ? supabase.from("document_requests").select("id, matter_id, person_id, document_id, purpose, due_on, created_at").eq("organization_id", org).eq("status", "open").order("created_at", { ascending: false }).limit(READ)
       : null,
@@ -69,6 +70,8 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
     createdAt: row.completed_at ?? row.created_at,
     filename: row.original_filename,
     rowVersion: row.version,
+    translationOf: row.translation_of_version_id,
+    languageTag: row.language_tag,
   }));
   const documents = new Map((documentRows.data ?? []).map((row) => [row.id, row]));
   const matterOf = new Map<string, string>();
@@ -78,7 +81,13 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
   const requests = requestRows?.data ?? [];
 
   const personIds = [...new Set([...[...documents.values()].map((doc) => doc.person_id), ...requests.map((row) => row.person_id)])];
-  const matterIds = [...new Set([...matterOf.values(), ...requests.map((row) => row.matter_id)])];
+  const canReview = (REVIEW_ROLES as readonly string[]).includes(staff.role);
+  // DOC-06: the matters each person is on (that this member can read), for "Use in another matter".
+  const participants =
+    tab === "all" && canReview && personIds.length
+      ? await supabase.from("matter_participants").select("matter_id, person_id").eq("organization_id", org).in("person_id", personIds).limit(READ)
+      : null;
+  const matterIds = [...new Set([...matterOf.values(), ...requests.map((row) => row.matter_id), ...(participants?.data ?? []).map((row) => row.matter_id)])];
   const [people, matters] = await Promise.all([
     personIds.length ? supabase.from("persons").select("id, display_name").eq("organization_id", org).in("id", personIds) : null,
     matterIds.length ? supabase.from("matters").select("id, reference, title").eq("organization_id", org).in("id", matterIds) : null,
@@ -91,7 +100,6 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
   const current = currentVersions(versions, now);
   // MIG follow-ups: a document an import brought in says "Imported from <system> on <date>".
   const imports = await loadImportProvenance(supabase, org, "documents", [...current.keys()]);
-  const canReview = (REVIEW_ROLES as readonly string[]).includes(staff.role);
 
   // The last firm review of each version, for the reason shown when a replacement arrives.
   const previousIds = [...current.values()].filter((version) => version.versionNumber > 1).map((version) => version.documentId);
@@ -174,6 +182,22 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
         states: cardStates(version as VersionFacts, today),
         // An accepted, clean file opens through a short-lived signed link after a fresh access check.
         ...(cardOpenable(version) ? { open: { "data-doc-open": version.id, "data-org": org } } : {}),
+        ...(canReview
+          ? {
+              details: documentDetails({
+                organizationId: org,
+                document: { id: doc.id, purpose: doc.purpose, sensitivity: doc.sensitivity, version: doc.version, personId: doc.person_id },
+                person: nameOf(doc.person_id),
+                version: { id: version.id, rowVersion: version.rowVersion, expiresOn: version.expiresOn, uploadState: version.uploadState, translationOf: version.translationOf, languageTag: version.languageTag },
+                refs: (refRows.data ?? []).filter((ref) => ref.document_id === doc.id).map((ref) => ({ id: ref.id, matterId: ref.matter_id })),
+                personMatters: (participants?.data ?? []).filter((row) => row.person_id === doc.person_id).map((row) => row.matter_id),
+                others: [...current.values()]
+                  .filter((other) => other.documentId !== doc.id && documents.get(other.documentId)?.person_id === doc.person_id)
+                  .map((other) => ({ versionId: other.id, title: documents.get(other.documentId)?.purpose ?? "Document", translationOf: other.translationOf, languageTag: other.languageTag })),
+                matterName,
+              }),
+            }
+          : {}),
       });
     }
     for (const request of requests) {
