@@ -10,6 +10,7 @@ import { isoDateInTimeZone } from "@/modules/sheet/present";
 import { paymentReceiptFromRpc } from "@/modules/finance/payment-receipt";
 import { receiptView, type ReceiptView } from "@/modules/finance/portal-receipt";
 import { isCardPayableCategory } from "@/modules/finance/connect-present";
+import type { PortalPart } from "@/modules/portal/states";
 
 export type PortalInvoice = {
   id: string;
@@ -68,19 +69,23 @@ export type PortalInvoices = {
   /** Test keys on both sides: the Payment Element can load. */
   payable: boolean;
   publishableKey: string | null;
+  /** DES-04: parts that couldn't be read (a partial page); absent when everything loaded. */
+  unavailable?: PortalPart[];
 };
 
 /** The client's invoices (RLS: invoices on matters where they are a party). */
 export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalInvoices> {
   const supabase = await createClient({ organizationId: viewer.organizationId });
   const today = isoDateInTimeZone(new Date(), viewer.timezone);
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("invoices")
     .select("id, matter_id, number, description, fee_category, amount_cents, paid_cents, refunded_cents, credited_cents, currency, status, issued_on, due_on")
     .eq("organization_id", viewer.organizationId)
     .neq("status", "draft")
     .order("created_at", { ascending: false })
     .limit(200);
+  // DES-04: unreadable is not "nothing to pay"; the page shows its couldn't-load state.
+  if (error) throw new Error("portal invoices unreadable");
   const rows = data ?? [];
   const ids = rows.map((row) => row.id);
   const processing = ids.length
@@ -158,7 +163,14 @@ export async function loadPortalInvoices(viewer: PortalViewer): Promise<PortalIn
         })),
       }
     : null;
+  // DES-04: a part that couldn't be read is named, so the page says so instead of reading it as none.
+  const unavailable: PortalPart[] = [];
+  if (processing?.error || manual?.error) unavailable.push("payment status");
+  if (paymentReceipts?.error || receipts?.error) unavailable.push("receipts");
+  if (credits?.error) unavailable.push("credit notes");
+  if (funds.error) unavailable.push("client account");
   return {
+    ...(unavailable.length ? { unavailable } : {}),
     clientFunds,
     today,
     payable: Boolean(pk && stripeServer()),

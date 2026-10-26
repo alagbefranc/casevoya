@@ -1,18 +1,22 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { loadConnectAndInitialize, type StripeConnectInstance } from "@stripe/connect-js/pure";
 import { ConnectAccountOnboarding, ConnectComponentsProvider, ConnectNotificationBanner } from "@stripe/react-connect-js";
 import { Icon, Sep } from "@/components/sheet/designer/frame";
 import { Badge } from "@/components/sheet/designer/matters";
-import type { ConnectCardData, FinanceAccountData } from "@/modules/finance/connect-present";
-import { connectStripeAccount, createAccountSession, refreshStripeAccount } from "@/modules/finance/staff-actions";
+import { blockerLine, DISCONNECT_WORD, openRequestLine, shortAccount, type ConnectCardData, type FinanceAccountData, type UnlinkBlocker } from "@/modules/finance/connect-present";
+import { connectStripeAccount, createAccountSession, disconnectStripeAccount, refreshStripeAccount } from "@/modules/finance/staff-actions";
 import { financeNeedsStepUp, financeStepUpLocation } from "@/modules/sheet/finance-present";
 
 /** The Designer dialog that holds Stripe's onboarding, and the `?dlg=` value that reopens it after step-up. */
 export const STRIPE_DIALOG = "dlgStripe";
 const STRIPE_DIALOG_PARAM = "stripe";
+/** The disconnect dialog, and the `?dlg=` value that reopens it after step-up. */
+export const STRIPE_DISCONNECT_DIALOG = "dlgStripeOff";
+const STRIPE_DISCONNECT_PARAM = "stripe-disconnect";
 
 const APPEARANCE = {
   overlays: "dialog" as const,
@@ -40,7 +44,7 @@ function Banner({ tone, icon, title, children, action }: { tone: "warn" | "info"
 }
 
 function stepUp(dialog: string | null) {
-  window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, dialog));
+  goStepUp(financeStepUpLocation(window.location.pathname, window.location.search, dialog, "payment_settings"));
 }
 
 /**
@@ -240,6 +244,144 @@ export function StripeAccountStatus({ data }: { data: FinanceAccountData }) {
   );
 }
 
+/**
+ * Bug 8: the firm owner disconnects the firm's Stripe account, in the Designer's `.dlg` (fresh
+ * step-up, typed DISCONNECT, a reason). The database refuses while card payments, refunds or
+ * disputes are open on the account and lists them here. Stripe is not asked to delete anything.
+ */
+function DisconnectDialog({ data }: { data: FinanceAccountData }) {
+  const router = useRouter();
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [blockers, setBlockers] = useState<UnlinkBlocker[]>([]);
+  // Disconnected, but some open payment requests couldn't be canceled at Stripe: shown until closed.
+  const [leftOpen, setLeftOpen] = useState<{ lines: string[]; taskCreated: boolean } | null>(null);
+  const [pending, start] = useTransition();
+  const account = data.account;
+
+  // Back from step-up with ?dlg=stripe-disconnect: open the dialog again, then drop the flag.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("dlg") !== STRIPE_DISCONNECT_PARAM) return;
+    url.searchParams.delete("dlg");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
+    const timer = window.setTimeout(() => {
+      if (dialog.current && !dialog.current.open) dialog.current.showModal();
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  if (!account) return null;
+  const submit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    start(async () => {
+      setError(null);
+      setBlockers([]);
+      const result = await disconnectStripeAccount({
+        organizationId: data.organizationId,
+        accountId: account.accountId,
+        confirmation: String(form.get("confirmation") ?? ""),
+        reason: String(form.get("reason") ?? ""),
+      });
+      if ("error" in result) {
+        if (financeNeedsStepUp(result.error)) {
+          goStepUp(financeStepUpLocation(window.location.pathname, window.location.search, STRIPE_DISCONNECT_PARAM, "stripe_disconnect"));
+          return;
+        }
+        setError(result.error);
+        return;
+      }
+      if ("blockers" in result) {
+        setBlockers(result.blockers);
+        setError(result.blockers.length ? null : "The account couldn’t be disconnected. Try again.");
+        return;
+      }
+      if (result.notCanceled.length) {
+        setLeftOpen({ lines: result.notCanceled.map(openRequestLine), taskCreated: result.taskCreated });
+        return;
+      }
+      dialog.current?.close();
+      router.refresh();
+    });
+  };
+
+  return (
+    <dialog className={"dlg"} id={STRIPE_DISCONNECT_DIALOG} aria-labelledby={`${STRIPE_DISCONNECT_DIALOG}H`} ref={dialog} onClose={() => (leftOpen ? router.refresh() : undefined)}>
+      <form data-live={"1"} onSubmit={submit} noValidate>
+        <div className={"dh"}>
+          <h2 id={`${STRIPE_DISCONNECT_DIALOG}H`}>{"Disconnect the Stripe account?"}</h2>
+          <button className={"x"} type={"button"} aria-label={"Close"} data-close={STRIPE_DISCONNECT_DIALOG}>
+            <Icon name={"close"} cls={"ic s"} />
+          </button>
+        </div>
+        <div className={"db"}>
+          <p className={"fp-note"}>
+            {`Casevoya stops using ${shortAccount(account.accountId)} (test mode) for ${data.firmName}. Stripe isn’t asked to close, delete or reject the account; it stays with Stripe as it is. Card payment requests still open on it are canceled at Stripe, so a page left open can’t pay it. Clients can’t pay by card until you set up a new account here. Card payments already received on it can’t be refunded from Casevoya afterwards. The disconnected account stays in the firm’s history and audit log.`}
+          </p>
+          <div className={"fld"}>
+            <label htmlFor={"soR"}>{"Reason (kept in the audit log)"}</label>
+            <textarea className={"ta"} id={"soR"} name={"reason"} maxLength={500} rows={2}></textarea>
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"soC"}>{`Type ${DISCONNECT_WORD} to confirm`}</label>
+            <input className={"inp"} id={"soC"} name={"confirmation"} type={"text"} defaultValue={""} autoComplete={"off"} maxLength={20} />
+          </div>
+          {leftOpen ? (
+            <div className={"alert warn"} role={"alert"}>
+              <Icon name={"info"} />
+              <div>
+                <b>{"Disconnected; some requests are still open at Stripe"}</b>
+                {leftOpen.taskCreated
+                  ? "Stripe didn’t cancel these, so a client could still pay them on the old account. A task to cancel them in Stripe was added for you:"
+                  : "Stripe didn’t cancel these, so a client could still pay them on the old account. Cancel them in Stripe:"}
+                <ul>
+                  {leftOpen.lines.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : null}
+          {blockers.length ? (
+            <div className={"alert warn"} role={"alert"}>
+              <Icon name={"info"} />
+              <div>
+                <b>{"Still running on this account"}</b>
+                {"Disconnect it once these are settled at Stripe:"}
+                <ul>
+                  {blockers.map((blocker) => (
+                    <li key={`${blocker.kind}-${blocker.number}-${blocker.status}`}>{blockerLine(blocker)}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : null}
+          {error ? (
+            <div className={"alert bad"} role={"alert"}>
+              <Icon name={"x-circle"} />
+              <div>
+                <b>{"Not disconnected"}</b>
+                {error}
+              </div>
+            </div>
+          ) : null}
+        </div>
+        <div className={"df"}>
+          <button className={"btn"} type={"button"} data-close={STRIPE_DISCONNECT_DIALOG}>
+            {leftOpen ? "Close" : "Cancel"}
+          </button>
+          {leftOpen ? null : (
+            <button className={"btn p"} type={"submit"} disabled={pending} aria-busy={pending || undefined}>
+              {pending ? "Disconnecting…" : "Disconnect"}
+            </button>
+          )}
+        </div>
+      </form>
+    </dialog>
+  );
+}
+
 const STILL_NEEDS = "Stripe still needs";
 
 /**
@@ -285,7 +427,11 @@ export function StripeConnectCard({ data, card, index }: { data: FinanceAccountD
           {card.actions.length ? (
             <div className={"fp-row"} style={{ marginTop: "12px" }}>
               {card.actions.map((action) =>
-                action.act === "continue" ? (
+                action.act === "disconnect" ? (
+                  <button key={action.act} className={action.primary ? "btn p sm" : "btn sm"} type={"button"} data-dlg={STRIPE_DISCONNECT_DIALOG} disabled={pending}>
+                    {action.label}
+                  </button>
+                ) : action.act === "continue" ? (
                   <button
                     key={action.act}
                     className={action.primary ? "btn p sm" : "btn sm"}
@@ -328,6 +474,7 @@ export function StripeConnectCard({ data, card, index }: { data: FinanceAccountD
         {` ${card.note}`}
       </p>
       {canFinish ? <OnboardingDialog dialogRef={dialog} instance={instance} onClose={settle} /> : null}
+      {data.isOwner && card.actions.some((action) => action.act === "disconnect") ? <DisconnectDialog data={data} /> : null}
     </>
   );
 }

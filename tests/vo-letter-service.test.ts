@@ -60,7 +60,7 @@ const FACTS: VoLetterFacts = {
 };
 
 const OFFICIAL: VoOfficialItem[] = [
-  { kind: "fee", id: FEE, label: "Synthetic test fee", content: "Synthetic test fee: CAD 12.34", sourceUrl: "https://ircc.canada.ca/english/information/fees/fees.asp", checkedOn: "2026-10-23" },
+  { kind: "fee", id: FEE, label: "Synthetic test fee", content: "Synthetic test fee: CAD 12.34", sourceUrl: "https://ircc.canada.ca/english/information/fees/fees.asp", checkedOn: "2026-10-23", attested: false, attestedBy: null, attestedOn: null },
 ];
 
 function fakeData(rpcs: Rpc[], overrides: Partial<VoData> = {}): VoData {
@@ -181,7 +181,7 @@ describe("Vo letter drafts: the task and its tools", () => {
     // Saved by save_vo_letter_draft with record ids only; nothing through finish_vo_run.
     expect(rpcs.map((rpc) => rpc.name)).toEqual(["save_vo_letter_draft"]);
     const save = rpcs[0].args;
-    expect(save).toMatchObject({ p_run_id: RUN, p_letter_type: "cover_letter", p_title: "Cover letter", p_model: VO_MODEL, p_prompt_version: "letter-1", p_input_tokens: 2000 });
+    expect(save).toMatchObject({ p_run_id: RUN, p_letter_type: "cover_letter", p_title: "Cover letter", p_model: VO_MODEL, p_prompt_version: "letter-2", p_input_tokens: 2000 });
     expect(save.p_facts).toEqual([
       { ref: "F1", answer_id: NAME },
       { ref: "F2", answer_id: CITY },
@@ -211,7 +211,7 @@ describe("Vo letter drafts: the task and its tools", () => {
     const out = await runVoTask(request(), { sdk, data: fakeData(rpcs), apiKey: "key", cwd: "/tmp/vo" });
     expect(seen.toolResults[1]).toContain("must state at least one approved fact");
     expect(out).toMatchObject({ result: "failed", failure: "empty" });
-    expect(rpcs).toEqual([{ name: "finish_vo_run", args: expect.objectContaining({ p_run_id: RUN, p_result: "failed", p_failure: "empty", p_prompt_version: "letter-1" }) }]);
+    expect(rpcs).toEqual([{ name: "finish_vo_run", args: expect.objectContaining({ p_run_id: RUN, p_result: "failed", p_failure: "empty", p_prompt_version: "letter-2" }) }]);
   });
 
   it("abstains when the letter needs a consultant, and a refused save closes the run as failed", async () => {
@@ -248,7 +248,7 @@ describe("Vo letter drafts: the task and its tools", () => {
       hidden: 2,
     });
     expect(parseOfficialContent([{ kind: "fee", id: FEE, content: "c", checked_on: "2026-10-23" }, { kind: "fee" }])).toEqual([
-      { kind: "fee", id: FEE, label: "", content: "c", sourceUrl: "", checkedOn: "2026-10-23" },
+      { kind: "fee", id: FEE, label: "", content: "c", sourceUrl: "", checkedOn: "2026-10-23", attested: false, attestedBy: null, attestedOn: null },
     ]);
   });
 });

@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: string; next?: string }> }) {
+async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: string; next?: string; for?: string }> }) {
   const params = await searchParams;
   const requested = Number(params.step);
   const asked = Number.isFinite(requested) ? requested : null;
@@ -52,12 +52,12 @@ async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: strin
 
   return (
     <PortScreen page="mfa" variant="au" initialStep={activeStep}>
-      <TwoStepMarkup email={email} activeStep={activeStep} enrollment={enrollment} stepUpLead={stepUpLead(params.next)} stepUpAction={stepUpAction(params.next)} />
+      <TwoStepMarkup email={email} activeStep={activeStep} enrollment={enrollment} stepUpLead={stepUpLead(params.next, params.for)} stepUpAction={stepUpAction(params.next, params.for)} />
     </PortScreen>
   );
 }
 
-export default function MfaPage({ searchParams }: { searchParams: Promise<{ step?: string; next?: string }> }) {
+export default function MfaPage({ searchParams }: { searchParams: Promise<{ step?: string; next?: string; for?: string }> }) {
   return (
     <Suspense
       fallback={

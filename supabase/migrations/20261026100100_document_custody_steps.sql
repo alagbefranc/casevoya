@@ -18,7 +18,8 @@ alter table public.document_custody_events
 comment on column public.document_custody_events.kind is
   'DOC-07: which custody step this row records. Null for rows recorded before steps existed.';
 
-create index document_custody_events_version_time_idx on public.document_custody_events (version_id, created_at);
+-- The step lookups use document_custody_events_version_idx (version_id, created_at), which
+-- 20261017180000_document_storage.sql already creates; no second index.
 
 create function public.record_custody_step(
   p_version_id uuid,

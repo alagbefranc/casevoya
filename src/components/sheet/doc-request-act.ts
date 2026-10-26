@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { createDocumentRequest } from "@/modules/documents/actions";
 import { readDocRequest, type DocRequestFields } from "@/modules/sheet/doc-request";
@@ -89,7 +90,7 @@ export async function runDocRequest(button: HTMLElement, router: Router) {
   if ("error" in result) {
     if (needsStepUp(result.error)) {
       keepDraft(matterId, fields);
-      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, "request"));
+      goStepUp(stepUpLocation(window.location.pathname, window.location.search, "request"));
       return;
     }
     toast2(result.error ?? "The request was not created.", { kind: "bad", sub: "Nothing was sent." });

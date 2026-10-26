@@ -9,6 +9,7 @@ import { staffPerson } from "@/modules/sheet/avatar";
 import { dayMonth } from "@/modules/sheet/home-present";
 import { isoDateInTimeZone, roleLabel } from "@/modules/sheet/present";
 import { entitlementError } from "@/modules/subscription/errors";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 /**
  * The dialog's roles, in the Designer's order, and the staff role each one invites.
@@ -259,7 +260,7 @@ export function staffStepUpLocation(pathname: string, search: string, reopen: bo
   if (reopen) params.set("dlg", INVITE_DIALOG);
   else params.delete("dlg");
   const query = params.toString();
-  return `/mfa?step=6&next=${encodeURIComponent(`${pathname}${query ? `?${query}` : ""}`)}`;
+  return stepUpHref(`${pathname}${query ? `?${query}` : ""}`, "staff_invite");
 }
 
 /** The invitation link. The invitation email carries it; the owner gets it as a backup. */

@@ -4,7 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { loadSheetChrome, matterNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { voAgentConfigured } from "@/modules/vo/agent-client";
+import { isLicensedMembership } from "@/lib/tenant/roles";
 import { loadVoReadings } from "@/modules/sheet/vo-doc-load";
+import { loadVendorTermsAcks } from "@/modules/sheet/vo-vendor-terms-load";
+import { vendorTermsPanel } from "@/modules/sheet/vo-vendor-terms-present";
 import {
   aiPage,
   draftsHeader,
@@ -23,13 +26,30 @@ import {
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
-const DRAFT_COLUMNS = "id, run_id, kind, title, body, sources, matter_id, thread_id, status, edited, needs_rule, is_sample, created_at, reviewed_at, reviewed_by";
+const DRAFT_COLUMNS = "id, run_id, kind, title, body, sources, matter_id, thread_id, status, edited, needs_rule, licensed_review_required, is_sample, created_at, reviewed_at, reviewed_by";
 
 function sources(value: unknown): VoSource[] {
   return Array.isArray(value)
     ? value
         .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
-        .map((item) => ({ kind: String(item.kind ?? ""), id: String(item.id ?? ""), label: String(item.label ?? "") }))
+        .map((item) => ({
+          kind: String(item.kind ?? ""),
+          id: String(item.id ?? ""),
+          label: String(item.label ?? ""),
+          ...(typeof item.source_kind === "string" ? { sourceKind: item.source_kind } : {}),
+          ...(typeof item.url === "string" ? { url: item.url } : {}),
+          // Attested official content (finish_vo_run keeps the reviewer and the date with the source).
+          ...(item.attested === true ? { attested: true, attestedBy: typeof item.attested_by === "string" ? item.attested_by : null, attestedOn: typeof item.attested_on === "string" ? item.attested_on : null } : {}),
+          // #188: the firm's edit stamp of a cited official claim (finish_vo_run keeps it with the source).
+          ...(item.edited === true
+            ? {
+                edited: true,
+                editedBy: typeof item.edited_by === "string" ? item.edited_by : null,
+                editedLicence: typeof item.edited_licence === "string" ? item.edited_licence : null,
+                editedOn: typeof item.edited_on === "string" ? item.edited_on : null,
+              }
+            : {}),
+        }))
         .filter((item) => item.label)
     : [];
 }
@@ -46,6 +66,7 @@ type DraftDb = {
   status: "draft" | "sent" | "discarded";
   edited: boolean | null;
   needs_rule: boolean;
+  licensed_review_required?: boolean;
   is_sample: boolean;
   created_at: string;
   reviewed_at: string | null;
@@ -65,6 +86,7 @@ function draftRow(row: DraftDb, latency: Map<string, number | null>): VoDraftRow
     status: row.status,
     edited: row.edited,
     needsRule: row.needs_rule,
+    licensedReview: row.licensed_review_required === true,
     isSample: row.is_sample,
     createdAt: row.created_at,
     reviewedAt: row.reviewed_at,
@@ -143,6 +165,7 @@ async function viewerAndSettings(supabase: Client, staff: SheetStaff) {
     sampleMode: staff.sampleMode,
     agentReady: voAgentConfigured(),
     timeZone: staff.timezone,
+    licensed: isLicensedMembership(staff.role),
   };
   return { viewer, settings: effectiveSettings(data ?? null, staff.sampleMode) };
 }
@@ -314,7 +337,18 @@ export async function loadSheetAi(staff: SheetStaff, tab: AiTab) {
       lastResult: row.last_attempt_result ? String(row.last_attempt_result) : null,
     }));
   }
-  return { chrome, data: aiPage({ tab, viewer: base.viewer, settings: base.settings, runs, drafts, sources: approved, names: nm, readings: readingsAudit }) };
+  // Settings: the AI vendor terms panel and whether the firm acknowledged the current version (AI-06).
+  const vendorTerms =
+    tab === "settings"
+      ? vendorTermsPanel({
+          organizationId: org,
+          isOwner: base.viewer.isOwner,
+          enabled: base.settings.enabled,
+          timeZone: base.viewer.timeZone,
+          acks: await loadVendorTermsAcks(supabase, org).catch(() => []),
+        })
+      : undefined;
+  return { chrome, data: aiPage({ tab, viewer: base.viewer, settings: base.settings, runs, drafts, sources: approved, names: nm, readings: readingsAudit, vendorTerms }) };
 }
 
 /** For the matter Messages composer: whether Vo can draft here, and drafts waiting on its threads. */

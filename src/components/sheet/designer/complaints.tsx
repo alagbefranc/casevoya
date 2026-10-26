@@ -6,6 +6,8 @@
  * use the Designer's own parts and appear only when the data carries them.
  */
 import { Icon } from "./frame";
+import { NoAccessPanel } from "./state-views";
+import { deniedView } from "@/modules/sheet/states-present";
 import {
   Actions,
   ComplianceHeader,
@@ -104,12 +106,8 @@ export function SheetComplaints({ data }: { data: ComplaintsData }) {
         copy={`Complaints about ${data.firmName}’s professional service. Problems with the Casevoya software go to Casevoya support instead.`}
       />
       {data.rows === null ? (
-        <EmptyPanel
-          n={1}
-          art={"complaints-empty"}
-          title={"Only designated staff see complaints"}
-          copy={"The firm owner chooses who handles complaints. Ask them if you need access."}
-        />
+        // DES-04: the shared permission-denied view.
+        <NoAccessPanel n={1} data={deniedView("You don’t have access to Complaints", "Only staff the firm owner designates see complaints. Ask your firm owner if you need access.")} />
       ) : data.rows.length === 0 ? (
         <EmptyPanel
           n={1}

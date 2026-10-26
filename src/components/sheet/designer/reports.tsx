@@ -5,35 +5,70 @@
  * Live-only additions (absent from the capture, so absent when the Designer's own values are
  * given): each panel's metric definition (`definition`, a `.fp-note` in the panel, the same
  * note the Workload panel already has), the source freshness line at the foot of the content,
- * the range chips' `data-nav`, the outcomes tab's firm-work-time table, empty states (`.emp`)
+ * the range chips' `data-nav`, the outcomes tab's firm-work-time table, its range / outcome-count
+ * columns, IRCC-estimate column, program links and segment note (REP-02), empty states (`.emp`)
  * for a panel without rows, and a "no permission" panel for a tab the role cannot see.
+ * REP-01 (live only): each card's link to the list behind it (`link`), stage ageing rows'
+ * `data-href`, attendance's cancelled count, and four more Operations panels (`ops.more`: intake
+ * completion, time to internal readiness, overdue tasks, renewal workload) built from the same
+ * Panel, Bars, Table and note parts.
  */
 import type { CSSProperties, ReactNode } from "react";
 import { Empty, Icon, Sep } from "./frame";
+import { NoAccessPanel } from "./state-views";
+import { deniedView } from "@/modules/sheet/states-present";
+import { ScheduledActionsHead, ScheduledNewButton, ScheduledNotes, ScheduledRowActions } from "./scheduled-reports";
+import type { ScheduledLive, ScheduledRowLive } from "@/modules/sheet/scheduled-reports-present";
 
 export type ReportsTab = "ops" | "money" | "outcomes" | "scheduled";
 export type ReportRange = "90d" | "month" | "year";
 
 export type ReportBar = { label: string; count: number; tone: "" | "w" | "g" };
 
+/** Live only (REP-01): a card's link to the filtered list behind it. */
+export type ReportLink = { href: string; label: string };
+
+/** Live only (REP-01): the Operations cards added to the Designer's five. */
+export type ReportsOpsMore = {
+  overdue: { open: number; overdue: number; sampleOpen: number; sample: number; note: string; definition?: string };
+  intake: { bars: ReportBar[]; note: string; definition?: string };
+  readiness: { matters: number; median: string; longest: string; note: string; recorded: boolean; definition?: string };
+  renewals: { bars: ReportBar[]; note: string; definition?: string };
+  links?: { overdue?: ReportLink | null; intake?: ReportLink | null; readiness?: ReportLink | null; renewals?: ReportLink | null } | null;
+};
+
 export type ReportsOps = {
-  leads: { bars: ReportBar[]; note: string; definition?: string };
-  ageing: { rows: { stage: string; matters: number; median: string; oldest: string }[]; definition?: string };
-  workload: { rows: { person: string; open: number; overdue: number; matters: number }[]; definition?: string };
-  documents: { bars: ReportBar[]; definition?: string };
-  attendance: { booked: number; attended: number; rescheduled: number; noShow: number; definition?: string };
+  leads: { bars: ReportBar[]; note: string; definition?: string; link?: ReportLink | null };
+  /** Live: each row's `href` opens the matters list filtered to that stage. */
+  ageing: { rows: { stage: string; matters: number; median: string; oldest: string; href?: string }[]; definition?: string; link?: ReportLink | null };
+  workload: { rows: { person: string; open: number; overdue: number; matters: number }[]; definition?: string; link?: ReportLink | null };
+  documents: { bars: ReportBar[]; definition?: string; link?: ReportLink | null };
+  /** `cancelled` is live only. */
+  attendance: { booked: number; attended: number; rescheduled: number; noShow: number; cancelled?: number; definition?: string; link?: ReportLink | null };
+  more?: ReportsOpsMore | null;
 };
 
 export type ReportsMoney = {
   /** The accounting sync tag. Absent while no accounting integration exists. */
   sync?: { logo: string; label: string; detail: string } | null;
-  ageing: { rows: { age: string; invoices: number; amount: string }[]; total: { invoices: number; amount: string }; definition?: string };
-  months: { rows: { month: string; invoiced: string; collected: string }[]; definition?: string };
-  balances: { rows: { client: string; held: string; pending: string }[]; definition?: string };
+  ageing: { rows: { age: string; invoices: number; amount: string }[]; total: { invoices: number; amount: string }; definition?: string; link?: ReportLink | null };
+  months: { rows: { month: string; invoiced: string; collected: string }[]; definition?: string; link?: ReportLink | null };
+  balances: { rows: { client: string; held: string; pending: string }[]; definition?: string; link?: ReportLink | null };
   recon: { text: string; href: string; definition?: string };
 };
 
-export type OutcomeRow = { program: string; cohort: string; decided: number; median: string; pending: number };
+export type OutcomeRow = {
+  program: string;
+  cohort: string;
+  decided: number;
+  median: string;
+  pending: number;
+  /** Live only (REP-02): shortest–longest days with n timed, recorded outcome counts, IRCC's approved estimate, the program's filter link. */
+  range?: string;
+  outcomes?: string;
+  estimate?: { text: string; href: string; source: string } | null;
+  programHref?: string | null;
+};
 export type FirmTimeRow = { program: string; cohort: string; files: number; median: string };
 
 export type ReportsOutcomes = {
@@ -44,9 +79,20 @@ export type ReportsOutcomes = {
   firm?: { rows: FirmTimeRow[]; definition: string } | null;
   /** Live: the heading's line, in plain words (no requirement codes). */
   intro?: string | null;
+  /** Live (REP-02): show the range and outcome-count columns. */
+  detail?: boolean;
+  /** Live: the IRCC estimate column's note (shown apart from the firm's figures), when no row has one. */
+  estimateNote?: string | null;
+  /** Live: the program the table is narrowed to, and the link back to all programs. */
+  segment?: { label: string; clearHref: string } | null;
 };
 
-export type ReportsScheduled = { rows: { report: string; every: string; recipients: string; format: string; next: string }[] };
+export type ReportsScheduled = {
+  /** `live`: the row's id and what the signed-in person may do with it (REP-03). Absent in the capture. */
+  rows: { report: string; every: string; recipients: string; format: string; next: string; live?: ScheduledRowLive | null }[];
+  /** REP-03 live: New schedule, the last sends and the link-only note. Absent in the capture. */
+  live?: ScheduledLive | null;
+};
 
 export type ReportsExportDialog = {
   filters: [string, string, string];
@@ -160,6 +206,28 @@ function TableNote({ text }: { text?: string }) {
   );
 }
 
+/** Live only (REP-01): the card's link to its list, in the Reconciliation panel's link style. */
+function ListLink({ link }: { link?: ReportLink | null }) {
+  if (!link) return null;
+  return (
+    <p className={"fp-note"}>
+      <a href={link.href} style={{ color: "var(--blue)" }}>
+        {link.label}
+      </a>
+    </p>
+  );
+}
+
+/** A table panel's link, in its own padded block like TableNote. */
+function TableLink({ link }: { link?: ReportLink | null }) {
+  if (!link) return null;
+  return (
+    <div className={"fp-pad"}>
+      <ListLink link={link} />
+    </div>
+  );
+}
+
 function Bars({ bars }: { bars: ReportBar[] }) {
   const max = Math.max(0, ...bars.map((bar) => bar.count));
   return (
@@ -218,10 +286,16 @@ function Freshness({ text, n }: { text?: string | null; n: number }) {
   );
 }
 
+/** DES-04: a tab this role can't open, in the shared permission-denied view. */
 function Denied({ data, n }: { data: { title: string; copy: string }; n: number }) {
+  return <NoAccessPanel n={n} data={deniedView(data.title, data.copy)} />;
+}
+
+/** No figures came back for an allowed tab: say so rather than showing a blank panel. */
+function NothingLoaded({ n }: { n: number }) {
   return (
     <div className={"panel rv"} style={i(n)}>
-      <Empty art={"privacy-shield"} title={data.title} copy={data.copy} />
+      <Empty art={"error-unplugged"} title={"These figures couldn’t load"} copy={"Nothing was changed. Reload the page to try again."} />
     </div>
   );
 }
@@ -231,6 +305,70 @@ const CHIPS: [ReportRange, string][] = [
   ["month", "This month"],
   ["year", "This year"],
 ];
+
+/** Live only (REP-01): intake completion and time to internal readiness, under Stage ageing. */
+function OpsMoreLeft({ more }: { more: ReportsOpsMore }) {
+  return (
+    <>
+      <Panel icon={"templates"} title={"Intake completion"}>
+        <div className={"fp-pad"}>
+          <Bars bars={more.intake.bars} />
+          <p className={"fp-note"}>{more.intake.note}</p>
+          {more.intake.definition ? <p className={"fp-note"}>{more.intake.definition}</p> : null}
+          <ListLink link={more.links?.intake} />
+        </div>
+      </Panel>
+      <Panel icon={"check-circle"} title={"Time to internal readiness"}>
+        {more.readiness.recorded ? (
+          <Table label={"Time to internal readiness"} head={[["Matters", true], ["Median days", true], ["Longest", true]]}>
+            <tr>
+              <Num>{String(more.readiness.matters)}</Num>
+              <Num>{more.readiness.median}</Num>
+              <Num>{more.readiness.longest}</Num>
+            </tr>
+          </Table>
+        ) : (
+          <NoRows title={"Not recorded"} copy={"Days from opening to Ready to submit appear here once a matter makes that move in the period."} />
+        )}
+        <div className={"fp-pad"}>
+          <p className={"fp-note"} style={{ margin: "0" }}>
+            {more.readiness.note}
+          </p>
+          {more.readiness.definition ? <p className={"fp-note"}>{more.readiness.definition}</p> : null}
+          <ListLink link={more.links?.readiness} />
+        </div>
+      </Panel>
+    </>
+  );
+}
+
+/** Live only (REP-01): overdue tasks and renewal workload, under Consultation attendance. */
+function OpsMoreRight({ more }: { more: ReportsOpsMore }) {
+  return (
+    <>
+      <Panel icon={"alarm"} title={"Overdue tasks"}>
+        <div className={"fp-pad"}>
+          <p style={{ fontSize: "14.5px" }}>
+            {`${more.overdue.overdue} overdue `}
+            <Sep />
+            {` ${more.overdue.open} open internal tasks`}
+          </p>
+          <p className={"fp-note"}>{more.overdue.note}</p>
+          {more.overdue.definition ? <p className={"fp-note"}>{more.overdue.definition}</p> : null}
+          <ListLink link={more.links?.overdue} />
+        </div>
+      </Panel>
+      <Panel icon={"repeat"} title={"Renewal workload"}>
+        <div className={"fp-pad"}>
+          <Bars bars={more.renewals.bars} />
+          <p className={"fp-note"}>{more.renewals.note}</p>
+          {more.renewals.definition ? <p className={"fp-note"}>{more.renewals.definition}</p> : null}
+          <ListLink link={more.links?.renewals} />
+        </div>
+      </Panel>
+    </>
+  );
+}
 
 function Operations({ data, ops }: { data: ReportsData; ops: ReportsOps | null | undefined }) {
   return (
@@ -269,7 +407,7 @@ function Operations({ data, ops }: { data: ReportsData; ops: ReportsOps | null |
         ))}
       </div>
       {data.denied || !ops ? (
-        <Denied data={data.denied ?? { title: "Nothing to show", copy: "" }} n={2} />
+        data.denied ? <Denied data={data.denied} n={2} /> : <NothingLoaded n={2} />
       ) : (
         <div className={"fp-g2 rv"} style={i(2)}>
           <div>
@@ -278,13 +416,14 @@ function Operations({ data, ops }: { data: ReportsData; ops: ReportsOps | null |
                 <Bars bars={ops.leads.bars} />
                 <p className={"fp-note"}>{ops.leads.note}</p>
                 {ops.leads.definition ? <p className={"fp-note"}>{ops.leads.definition}</p> : null}
+                <ListLink link={ops.leads.link} />
               </div>
             </Panel>
             <Panel icon={"hourglass"} title={"Stage ageing, open matters"}>
               {ops.ageing.rows.length ? (
                 <Table label={"Stage ageing"} head={[["Stage", false], ["Matters", true], ["Median days", true], ["Oldest", true]]}>
                   {ops.ageing.rows.map((row) => (
-                    <tr key={row.stage}>
+                    <tr key={row.stage} data-href={row.href} style={row.href ? { cursor: "pointer" } : undefined}>
                       <td>{row.stage}</td>
                       <Num>{String(row.matters)}</Num>
                       <Num>{row.median}</Num>
@@ -296,7 +435,9 @@ function Operations({ data, ops }: { data: ReportsData; ops: ReportsOps | null |
                 <NoRows title={"No open matters"} copy={"Open matters and how long they have been in their stage appear here."} />
               )}
               <TableNote text={ops.ageing.definition} />
+              <TableLink link={ops.ageing.link} />
             </Panel>
+            {ops.more ? <OpsMoreLeft more={ops.more} /> : null}
           </div>
           <div>
             <Panel icon={"users"} title={"Workload"}>
@@ -319,12 +460,14 @@ function Operations({ data, ops }: { data: ReportsData; ops: ReportsOps | null |
                   {"Workload is shown for planning, not ranking. Nobody is ranked by approval rate."}
                 </p>
                 {ops.workload.definition ? <p className={"fp-note"}>{ops.workload.definition}</p> : null}
+                <ListLink link={ops.workload.link} />
               </div>
             </Panel>
             <Panel icon={"file-check"} title={"Outstanding documents"}>
               <div className={"fp-pad"}>
                 <Bars bars={ops.documents.bars} />
                 {ops.documents.definition ? <p className={"fp-note"}>{ops.documents.definition}</p> : null}
+                <ListLink link={ops.documents.link} />
               </div>
             </Panel>
             <Panel icon={"calendar"} title={"Consultation attendance"}>
@@ -337,10 +480,19 @@ function Operations({ data, ops }: { data: ReportsData; ops: ReportsOps | null |
                   {` ${ops.attendance.rescheduled} rescheduled `}
                   <Sep />
                   {` ${ops.attendance.noShow} no-show`}
+                  {ops.attendance.cancelled === undefined ? null : (
+                    <>
+                      {" "}
+                      <Sep />
+                      {` ${ops.attendance.cancelled} cancelled`}
+                    </>
+                  )}
                 </p>
                 {ops.attendance.definition ? <p className={"fp-note"}>{ops.attendance.definition}</p> : null}
+                <ListLink link={ops.attendance.link} />
               </div>
             </Panel>
+            {ops.more ? <OpsMoreRight more={ops.more} /> : null}
           </div>
         </div>
       )}
@@ -371,7 +523,7 @@ function Money({ data, money }: { data: ReportsData; money: ReportsMoney | null 
         </div>
       ) : null}
       {data.denied || !money ? (
-        <Denied data={data.denied ?? { title: "Nothing to show", copy: "" }} n={2} />
+        data.denied ? <Denied data={data.denied} n={2} /> : <NothingLoaded n={2} />
       ) : (
         <div className={"fp-g2 rv"} style={i(2)}>
           <div>
@@ -397,6 +549,7 @@ function Money({ data, money }: { data: ReportsData; money: ReportsMoney | null 
                 </tr>
               </Table>
               <TableNote text={money.ageing.definition} />
+              <TableLink link={money.ageing.link} />
             </Panel>
             <Panel icon={"wallet"} title={"Invoiced and collected"}>
               <Table label={"Invoiced and collected"} head={[["Month", false], ["Invoiced", true], ["Collected", true]]}>
@@ -409,6 +562,7 @@ function Money({ data, money }: { data: ReportsData; money: ReportsMoney | null 
                 ))}
               </Table>
               <TableNote text={money.months.definition} />
+              <TableLink link={money.months.link} />
             </Panel>
           </div>
           <div>
@@ -427,6 +581,7 @@ function Money({ data, money }: { data: ReportsData; money: ReportsMoney | null 
                 <NoRows title={"No client funds held"} copy={"Balances appear here once a deposit is recorded in a client account."} />
               )}
               <TableNote text={money.balances.definition} />
+              <TableLink link={money.balances.link} />
             </Panel>
             <Panel icon={"reconcile"} title={"Reconciliation exceptions"}>
               <div className={"fp-pad"}>
@@ -448,6 +603,7 @@ function Money({ data, money }: { data: ReportsData; money: ReportsMoney | null 
 }
 
 function Outcomes({ data, outcomes }: { data: ReportsData; outcomes: ReportsOutcomes | null | undefined }) {
+  const estimates = Boolean(outcomes?.rows.some((row) => row.estimate));
   return (
     <>
       <div className={"ph rv"} style={i(0)}>
@@ -464,7 +620,7 @@ function Outcomes({ data, outcomes }: { data: ReportsData; outcomes: ReportsOutc
         </div>
       </div>
       {data.denied || !outcomes ? (
-        <Denied data={data.denied ?? { title: "Nothing to show", copy: "" }} n={2} />
+        data.denied ? <Denied data={data.denied} n={2} /> : <NothingLoaded n={2} />
       ) : (
         <>
           {outcomes.rows.length ? (
@@ -484,16 +640,53 @@ function Outcomes({ data, outcomes }: { data: ReportsData; outcomes: ReportsOutc
                     <th scope={"col"} style={R}>
                       {"Still pending (not counted)"}
                     </th>
+                    {outcomes.detail ? (
+                      <>
+                        <th scope={"col"} style={R}>
+                          {"Range in days (n timed)"}
+                        </th>
+                        <th scope={"col"}>{"Outcomes recorded (counts)"}</th>
+                      </>
+                    ) : null}
+                    {estimates ? <th scope={"col"}>{"IRCC’s estimate, checked (not the firm’s figure)"}</th> : null}
                   </tr>
                 </thead>
                 <tbody>
                   {outcomes.rows.map((row) => (
                     <tr key={`${row.program}|${row.cohort}`}>
-                      <td>{row.program}</td>
+                      <td>
+                        {row.programHref ? (
+                          <a href={row.programHref} style={{ color: "var(--blue)" }} title={"Show only this program"}>
+                            {row.program}
+                          </a>
+                        ) : (
+                          row.program
+                        )}
+                      </td>
                       <td>{row.cohort}</td>
                       <Num>{String(row.decided)}</Num>
                       <Num>{row.median}</Num>
                       <Num>{String(row.pending)}</Num>
+                      {outcomes.detail ? (
+                        <>
+                          <Num>{row.range ?? "—"}</Num>
+                          <td>{row.outcomes ?? "—"}</td>
+                        </>
+                      ) : null}
+                      {estimates ? (
+                        <td>
+                          {row.estimate ? (
+                            <>
+                              {row.estimate.text}{" "}
+                              <a href={row.estimate.href} target={"_blank"} rel={"noopener noreferrer"} style={{ color: "var(--blue)" }} title={row.estimate.source}>
+                                {"Source"}
+                              </a>
+                            </>
+                          ) : (
+                            "Not entered"
+                          )}
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
@@ -501,12 +694,25 @@ function Outcomes({ data, outcomes }: { data: ReportsData; outcomes: ReportsOutc
             </div>
           ) : (
             <div className={"panel rv"} style={i(2)}>
-              <NoRows title={"No submitted files yet"} copy={"Once a matter is recorded as submitted, its processing time appears here by program and year."} />
+              <NoRows title={"No submitted files yet"} copy={"Once a matter is recorded as submitted, its processing time appears here by program and quarter submitted."} />
             </div>
           )}
+          {outcomes.segment ? (
+            <p className={"fp-note rv"} style={i(3)}>
+              {`${outcomes.segment.label}. `}
+              <a href={outcomes.segment.clearHref} style={{ color: "var(--blue)" }}>
+                {"Show all programs"}
+              </a>
+            </p>
+          ) : null}
           <p className={"fp-note rv"} style={i(3)}>
             {outcomes.note}
           </p>
+          {outcomes.estimateNote ? (
+            <p className={"fp-note rv"} style={i(3)}>
+              {outcomes.estimateNote}
+            </p>
+          ) : null}
           {outcomes.definition ? (
             <p className={"fp-note rv"} style={i(3)}>
               {outcomes.definition}
@@ -557,6 +763,7 @@ function Outcomes({ data, outcomes }: { data: ReportsData; outcomes: ReportsOutc
 
 function Scheduled({ data, scheduled }: { data: ReportsData; scheduled: ReportsScheduled | null | undefined }) {
   const rows = scheduled?.rows ?? [];
+  const live = scheduled?.live ?? null;
   return (
     <>
       <div className={"ph rv"} style={i(0)}>
@@ -566,6 +773,11 @@ function Scheduled({ data, scheduled }: { data: ReportsData; scheduled: ReportsS
             {"Recipients are checked again when each report is sent. Confidential reports are never attached to general email; the email links back to Casevoya."}
           </p>
         </div>
+        {live && rows.length ? (
+          <div className={"acts"}>
+            <ScheduledNewButton live={live} />
+          </div>
+        ) : null}
       </div>
       {rows.length ? (
         <div className={"tw rv"} role={"region"} aria-label={"Scheduled reports"} tabIndex={0} style={i(1)}>
@@ -578,11 +790,12 @@ function Scheduled({ data, scheduled }: { data: ReportsData; scheduled: ReportsS
                 <th scope={"col"}>{"Recipients"}</th>
                 <th scope={"col"}>{"Format"}</th>
                 <th scope={"col"}>{"Next"}</th>
+                {live ? <ScheduledActionsHead /> : null}
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.report}>
+                <tr key={row.live?.id ?? row.report}>
                   <td>{row.report}</td>
                   <td>{row.every}</td>
                   <td>{row.recipients}</td>
@@ -590,6 +803,7 @@ function Scheduled({ data, scheduled }: { data: ReportsData; scheduled: ReportsS
                   <td>
                     <span className={"num"}>{row.next}</span>
                   </td>
+                  {live && row.live ? <ScheduledRowActions row={row.live} organizationId={live.organizationId} /> : live ? <td></td> : null}
                 </tr>
               ))}
             </tbody>
@@ -597,12 +811,28 @@ function Scheduled({ data, scheduled }: { data: ReportsData; scheduled: ReportsS
         </div>
       ) : (
         <div className={"panel rv"} style={i(1)}>
-          <NoRows
-            title={"No scheduled reports"}
-            copy={"Scheduled sending isn’t set up yet. Use Export on any tab to make a file with its filters and the time it was made."}
-          />
+          {live ? (
+            <Empty
+              art={"reports-empty"}
+              px={64}
+              title={"No scheduled reports"}
+              copy={
+                live.canCreate
+                  ? "Schedule a report to send its link to staff weekly or monthly. Use Export on any tab to make a file now."
+                  : "Your role doesn’t see a report that can be scheduled. Ask your firm owner if you need one."
+              }
+            >
+              {live.canCreate ? <ScheduledNewButton live={live} /> : null}
+            </Empty>
+          ) : (
+            <NoRows
+              title={"No scheduled reports"}
+              copy={"Scheduled sending isn’t set up yet. Use Export on any tab to make a file with its filters and the time it was made."}
+            />
+          )}
         </div>
       )}
+      {live ? <ScheduledNotes live={live} n={2} /> : null}
       <Freshness text={data.freshness} n={2} />
     </>
   );

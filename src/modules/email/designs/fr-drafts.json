@@ -1799,6 +1799,53 @@
           "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
         }
       }
+    },
+    "EX20": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-25",
+      "sourceHash": "sha256:34b3867edc59b2198640f3b452be8036dc485f8752b78c2f1e392442cf011a35",
+      "strings": {
+        "subject": {
+          "en": "Your refund from {firm_name} didn’t go through",
+          "fr": "Votre remboursement de {firm_name} n’a pas abouti",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        },
+        "preheader": {
+          "en": "The money hasn’t reached you. The firm will contact you.",
+          "fr": "L’argent ne vous est pas parvenu. Le cabinet communiquera avec vous.",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        },
+        "heading": {
+          "en": "Your refund didn’t go through",
+          "fr": "Votre remboursement n’a pas abouti",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        },
+        "body": {
+          "en": "The refund from {firm_name} didn’t go through, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way.",
+          "fr": "Le remboursement de {firm_name} n’a pas abouti; l’argent ne vous est donc pas parvenu. Veuillez ne pas tenir compte de notre courriel précédent au sujet de ce remboursement. {firm_name} communiquera avec vous pour le faire autrement.",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        },
+        "body_card": {
+          "en": "The refund from {firm_name} didn’t go through because the card it was sent to is no longer active, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way.",
+          "fr": "Le remboursement de {firm_name} n’a pas abouti parce que la carte visée n’est plus active; l’argent ne vous est donc pas parvenu. Veuillez ne pas tenir compte de notre courriel précédent au sujet de ce remboursement. {firm_name} communiquera avec vous pour le faire autrement.",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        },
+        "cta": {
+          "en": "View payments",
+          "fr": "Afficher les paiements",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        }
+      }
     }
   }
 }

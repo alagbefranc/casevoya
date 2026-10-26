@@ -25,6 +25,9 @@ import {
   type StateBadge,
   type Step,
 } from "./compliance";
+import type { ResponseDialogsData } from "@/modules/compliance/privacy-response-present";
+import { NoAccessPanel } from "./state-views";
+import { deniedView } from "@/modules/sheet/states-present";
 
 export type PrivacyRow = {
   ref: string;
@@ -58,12 +61,16 @@ export type PrivacySelected = {
   notes: string[];
   worklist: Worklist | null;
   deadline: { rows: DlRow[]; actions: Action[] };
+  /** Live only (SEC-06): the scope search's records and what is withheld. */
+  found?: Worklist | null;
 };
 
 export type PrivacyData = {
   /** Null: this person can't see privacy requests; the page explains who can. */
   rows: PrivacyRow[] | null;
   selected: PrivacySelected | null;
+  /** Live only (SEC-06): the firm's legal time limits with their sources and reviews. */
+  limits?: Worklist | null;
 };
 
 export type PrivacyHeaderData = { pills: string[]; actions: Action[] };
@@ -153,11 +160,10 @@ export function SheetPrivacy({ data }: { data: PrivacyData }) {
     <>
       <Heading art={"privacy-shield"} title={"Privacy requests"} copy={COPY} />
       {data.rows === null ? (
-        <EmptyPanel
+        // DES-04: the shared permission-denied view.
+        <NoAccessPanel
           n={1}
-          art={"privacy-shield"}
-          title={"Privacy requests are limited"}
-          copy={"The firm owner, licensed consultants and case managers handle privacy requests. Ask one of them."}
+          data={deniedView("You don’t have access to Privacy requests", "The firm owner, licensed consultants and case managers handle privacy requests. Ask one of them if a request needs you.")}
         />
       ) : data.rows.length === 0 ? (
         <EmptyPanel
@@ -209,7 +215,17 @@ export function SheetPrivacy({ data }: { data: PrivacyData }) {
               </section>
             </div>
           </div>
+          {selected.found ? (
+            <div className={"rv"} style={{ marginTop: "6px", ...i(4) }}>
+              <WorklistPanel data={selected.found} />
+            </div>
+          ) : null}
         </>
+      ) : null}
+      {data.limits ? (
+        <div className={"rv"} style={{ marginTop: "6px", ...i(5) }}>
+          <WorklistPanel data={data.limits} />
+        </div>
       ) : null}
     </>
   );
@@ -243,6 +259,8 @@ export type PrivacyDialogsData = {
   };
   /** The firm's response target (#dlgPS), for the firm owner. */
   settings: null | { days: string };
+  /** Live only (SEC-06): extend, a record's decision, deliver, and the legal time limits. */
+  response?: ResponseDialogsData;
 };
 
 export const PRIVACY_DIALOG = { record: "dlgPR", step: "dlgPStep", redaction: "dlgPRed", close: "dlgPClose", settings: "dlgPS" } as const;
@@ -334,6 +352,7 @@ export function PrivacyDialogs({ data }: { data: PrivacyDialogsData }) {
           note={data.close.note}
         />
       ) : null}
+      {data.response ? <ResponseDialogs org={org} data={data.response} /> : null}
       {data.settings ? (
         <Dialog
           id={PRIVACY_DIALOG.settings}
@@ -341,6 +360,129 @@ export function PrivacyDialogs({ data }: { data: PrivacyDialogsData }) {
           fields={[{ kind: "text", id: "psD", label: "Days from receipt (your firm’s target)", value: data.settings.days, placeholder: "Leave blank for none", max: 3 }]}
           save={{ label: "Save", attrs: { "data-compliance-settings": "privacy", "data-org": org } }}
           note={"This is your firm’s own target, shown as a due date on new requests. Casevoya doesn’t set a legal deadline. Saving asks you to confirm it’s you."}
+        />
+      ) : null}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SEC-06 dialogs (the Designer has none; these use its `.dlg` parts)
+// ---------------------------------------------------------------------------
+
+const ITEM_DECISIONS = [
+  ["include", "Include"],
+  ["withhold", "Withhold the whole record"],
+  ["redact", "Withhold some fields"],
+] as const;
+
+function ResponseDialogs({ org, data }: { org: string; data: ResponseDialogsData }) {
+  return (
+    <>
+      {data.extend ? (
+        <Dialog
+          key={data.extend.requestId}
+          id={"dlgPExt"}
+          title={`Extend ${data.extend.reference}`}
+          fields={[
+            { kind: "text", id: "peD", label: "New due date", placeholder: "DD/MM/YYYY" },
+            { kind: "select", id: "peB", label: "Basis", options: data.extend.bases },
+            { kind: "area", id: "peR", label: "Reason (they see it)", max: 500 },
+            { kind: "text", id: "peC", label: "Their recourse (they see it, optional)", max: 500 },
+            ...(data.extend.hasPortal ? [] : [{ kind: "text", id: "peM", label: "How you told them", placeholder: "Letter posted, phone call…", max: 200 } satisfies Field]),
+          ]}
+          save={{ label: "Extend", attrs: { "data-privacy-extend": data.extend.requestId, "data-org": org } }}
+          note={
+            data.extend.hasPortal
+              ? "They see the new date, your reason and their recourse in the portal. Nothing is emailed. An official basis can’t pass its limit; otherwise the date is shown as set by the firm."
+              : "They have no portal login: say how you told them. An official basis can’t pass its limit; otherwise the date is shown as set by the firm."
+          }
+        />
+      ) : null}
+      {data.item ? (
+        <Dialog
+          key={data.item.requestId}
+          id={"dlgPItem"}
+          title={`Record · ${data.item.reference}`}
+          fields={[
+            { kind: "select", id: "piD", label: "Decision", options: ITEM_DECISIONS },
+            { kind: "select", id: "piF", label: "Fields to withhold", options: [], multiple: true },
+            { kind: "text", id: "piT", label: "Whose information (staff only)", max: 200 },
+            { kind: "area", id: "piR", label: "Reason (they see it)", max: 500 },
+          ]}
+          save={{ label: "Save", attrs: { "data-privacy-item": data.item.requestId, "data-org": org } }}
+          note={"Withheld records and fields are left out of the package and listed with your reason. Whose information it is stays with the firm."}
+        />
+      ) : null}
+      {data.deliver ? (
+        <Dialog
+          key={data.deliver.responseId}
+          id={"dlgPDel"}
+          title={`Deliver ${data.deliver.reference}`}
+          fields={[
+            {
+              kind: "select",
+              id: "pdO",
+              label: "Outcome",
+              options: [
+                ["fulfilled", "Done"],
+                ["partly_fulfilled", "Partly done (something withheld)"],
+              ],
+              value: data.deliver.withheld ? "partly_fulfilled" : "fulfilled",
+            },
+            { kind: "area", id: "pdN", label: "Note (optional)", max: 2000 },
+          ]}
+          save={{ label: "Deliver", attrs: { "data-privacy-deliver": data.deliver.requestId, "data-response": data.deliver.responseId, "data-org": org } }}
+          note={"They download it in the portal for 30 days and every download is recorded. Delivering closes the request. It asks you to confirm it’s you."}
+        />
+      ) : null}
+      {data.limit ? (
+        <Dialog
+          id={"dlgPTL"}
+          title={"Add legal time limit"}
+          fields={[
+            { kind: "select", id: "plS", label: "Start from", options: [["none", "Nothing, I’ll copy it"], ...data.limit.captured] },
+            {
+              kind: "select",
+              id: "plK",
+              label: "Kind",
+              options: [
+                ["response", "Time to respond"],
+                ["extension", "Extension"],
+              ],
+            },
+            { kind: "text", id: "plL", label: "Law", max: 200 },
+            { kind: "text", id: "plN", label: "Section", placeholder: "s. 8(3)", max: 200 },
+            { kind: "area", id: "plP", label: "Provision, word for word", max: 1500 },
+            { kind: "text", id: "plD", label: "Days (only when the provision states a number)", max: 3 },
+            { kind: "text", id: "plU", label: "Official page link", placeholder: "https://laws-lois.justice.gc.ca/…#s-8", max: 500 },
+            { kind: "text", id: "plC", label: "Current to (as the page states)", placeholder: "DD/MM/YYYY", max: 10 },
+            { kind: "text", id: "plW", label: "Date you checked the page", value: data.limit.today, placeholder: "DD/MM/YYYY", max: 10 },
+          ]}
+          save={{ label: "Save for review", attrs: { "data-privacy-limit": "1", "data-org": org } }}
+          note={"Copy it from the official page. Casevoya reads the page to keep its fingerprint; a licensed member of the firm approves it before any date uses it."}
+        />
+      ) : null}
+      {data.limitReview ? (
+        <Dialog
+          id={"dlgPTLR"}
+          title={"Review legal time limit"}
+          fields={[
+            {
+              kind: "select",
+              id: "lrD",
+              label: "Decision",
+              options: [
+                ["approved", "Approve: it matches the official page"],
+                ["rejected", "Reject"],
+                ["retired", "Retire: it no longer matches the law"],
+              ],
+            },
+            { kind: "area", id: "lrW", label: "Note (needed to reject or retire)", max: 500 },
+            { kind: "text", id: "lrO", label: "Date you opened the official page (when not captured)", placeholder: "DD/MM/YYYY", max: 10 },
+          ]}
+          save={{ label: "Save", attrs: { "data-privacy-limit-review": "1", "data-org": org } }}
+          note={"Only a licensed member approves. You can’t approve your own entry while another licensed member can. It asks you to confirm it’s you."}
         />
       ) : null}
     </>

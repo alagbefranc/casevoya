@@ -1,3 +1,4 @@
+import { stepUpHref } from "@/lib/auth/mfa-step";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { PREVIEWABLE, previewStamp, watermarkedPreview } from "@/modules/documents/preview";
@@ -50,7 +51,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ vers
   const grant = await supabase.rpc("authorize_document_download", { p_version_id: version });
   if (grant.error) {
     if (/step-up/i.test(grant.error.message)) {
-      return Response.redirect(new URL(`/mfa?step=6&next=${encodeURIComponent(backTo(request))}`, request.url), 303);
+      // SEC-01: the step-up names its action ("open a client document"), like every other caller.
+      return Response.redirect(new URL(stepUpHref(backTo(request), "document_open"), request.url), 303);
     }
     return page("You can’t open this file.", 403);
   }

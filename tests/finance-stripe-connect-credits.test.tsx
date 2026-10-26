@@ -6,11 +6,15 @@ import { CreditDialog, EvidenceDialog, SheetFinanceRefunds, type RefundsData } f
 import {
   accountNeedsRefresh,
   advanceRefusal,
+  blockerLine,
   connectAccountFromRow,
   connectCard,
+  connectIdempotencyKey,
   connectStage,
+  disconnectError,
   isCardPayableCategory,
   liabilityText,
+  readDisconnect,
   requirementLine,
   type FinanceAccountData,
 } from "@/modules/finance/connect-present";
@@ -107,12 +111,12 @@ describe("the connected account as Stripe reports it (FIN-02)", () => {
       "Stripe collects its processing fees from the firm’s own Stripe account (fees_collector “stripe”); Stripe covers a loss the firm’s Stripe balance can’t (an unpaid refund or a lost dispute) (losses_collector “stripe”). As Stripe reports it.",
     );
     expect(card.rows.find(([term]) => term === "Last checked with Stripe")?.[1]).toBe("24 Oct 2026, 11:00");
-    expect(card.actions.map((action) => action.act)).toEqual(["continue", "refresh"]);
+    expect(card.actions.map((action) => action.act)).toEqual(["continue", "refresh", "disconnect"]);
     expect(connectCard(finance({ account: row, isOwner: false }), "America/Toronto").actions).toEqual([]);
 
     const done = connectCard(finance({ account: { ...row, cardPayments: "active", payouts: "active", requirementsDue: 0, requirements: [] } }), "America/Toronto");
     expect(done.badge.label).toBe("Charges and payouts enabled");
-    expect(done.actions.map((action) => action.act)).toEqual(["refresh"]);
+    expect(done.actions.map((action) => action.act)).toEqual(["refresh", "disconnect"]);
     expect(done.rows.find(([term]) => term === "Stripe still needs")?.[1]).toBe("Nothing");
 
     const none = connectCard(finance(), "America/Toronto");
@@ -147,6 +151,36 @@ describe("the connected account as Stripe reports it (FIN-02)", () => {
     expect(isCardPayableCategory("advance")).toBe(false);
     expect(isCardPayableCategory(null)).toBe(false);
     expect(advanceRefusal("Synthetic Firm").copy).toMatch(/client \(trust\) account.*earned fees only.*Nothing was charged\./);
+  });
+});
+
+describe("disconnecting the firm's Stripe account (bug 8)", () => {
+  it("offers Disconnect to the owner only, and only once an account is connected", () => {
+    const row = connectAccountFromRow({ account_id: "acct_1SyntheticFirmLongId", card_payments_status: "active", payouts_status: "active", requirements_due: 0 });
+    const owner = connectCard(finance({ account: row }), "America/Toronto");
+    expect(owner.actions.find((action) => action.act === "disconnect")).toEqual({ act: "disconnect", label: "Disconnect Stripe account", primary: false });
+    expect(connectCard(finance({ account: row, isOwner: false }), "America/Toronto").actions).toEqual([]);
+    expect(connectCard(finance(), "America/Toronto").actions.map((action) => action.act)).toEqual(["setup"]);
+  });
+
+  it("needs DISCONNECT typed and a reason before asking the database", () => {
+    expect(readDisconnect({ confirmation: " DISCONNECT ", reason: "  Moving to a new account " })).toEqual({ input: { confirmation: "DISCONNECT", reason: "Moving to a new account" } });
+    expect(readDisconnect({ confirmation: "disconnect", reason: "Moving" })).toEqual({ error: "Type DISCONNECT to confirm." });
+    expect(readDisconnect({ confirmation: "DISCONNECT", reason: " a " })).toEqual({ error: "Say why the account is being disconnected." });
+    expect(readDisconnect({ confirmation: "DISCONNECT", reason: "x".repeat(501) })).toEqual({ error: "Keep the reason under 500 characters." });
+    expect(disconnectError("the firm's Stripe account changed; reload and try again")).toBe("The firm’s Stripe account changed. Reload the page and try again.");
+    expect(disconnectError("firm owner step-up is required")).toBeNull();
+  });
+
+  it("lists what still runs on the account in plain words", () => {
+    expect(blockerLine({ kind: "payment", number: "INV-0001", invoice_number: "INV-0001", amount_cents: 40_000, currency: "CAD", status: "processing" })).toBe("Card payment on INV-0001, CAD 400.00: processing at Stripe");
+    expect(blockerLine({ kind: "refund", number: "RF-0002", invoice_number: "INV-0001", amount_cents: 1_000, currency: "CAD", status: "pending" })).toBe("Refund RF-0002 of INV-0001, CAD 10.00: pending at Stripe");
+    expect(blockerLine({ kind: "dispute", number: "DP-0003", invoice_number: "INV-0004", amount_cents: 113_000, currency: "CAD", status: "needs_response" })).toBe("Dispute DP-0003 on INV-0004, CAD 1,130.00: needs a response");
+  });
+
+  it("asks Stripe for a new account after a disconnect, and keeps the first key unchanged", () => {
+    expect(connectIdempotencyKey(ORG, 0)).toBe(`casevoya-connect-${ORG}`);
+    expect(connectIdempotencyKey(ORG, 2)).toBe(`casevoya-connect-${ORG}-2`);
   });
 });
 

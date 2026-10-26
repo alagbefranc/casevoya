@@ -42,7 +42,32 @@ export type VoSourceRef = {
   kind: "message" | "matter" | "document_request" | "task" | "deadline" | "document_version" | "fact" | "official";
   id: string;
   label: string;
+  /** SRC-09 (Ask Vo): the marker the answer cites it by, e.g. R1, F2, S1. */
+  marker?: string;
+  /** official only: what it is (fee, submission_requirement, renewal_timing, follow_up_step, rule_version). */
+  sourceKind?: string;
+  /** official only: the official page (a deep canada.ca or gc.ca URL), and its dates and fingerprint in words. */
+  url?: string;
+  detail?: string;
+  /**
+   * official only: Casevoya didn't capture the page; a licensed reviewer attested it (Francis's
+   * decision 2026-10-25). Who and the date they opened the page, as the database states it.
+   */
+  attested?: boolean;
+  attestedBy?: string;
+  attestedOn?: string;
+  /**
+   * official only (#188): the firm's licensed edit of a live official claim; Vo cited the firm's
+   * wording. Who, their licence and the date, as the database states it.
+   */
+  edited?: boolean;
+  editedBy?: string;
+  editedLicence?: string;
+  editedOn?: string;
 };
+
+/** Why Vo didn't answer (SRC-09): the request needs a consultant, or nothing on file or approved supports it. */
+export type VoAbstainReason = "consultant" | "unsupported";
 
 /**
  * document_review answers "drafted" too: draftId is the vo_doc_drafts row, text its summary.
@@ -51,7 +76,7 @@ export type VoSourceRef = {
 export type VoTaskResponse =
   | { result: "drafted"; draftId: string; text: string; needsRule: boolean; sources: VoSourceRef[] }
   | { result: "answered"; text: string; needsRule: boolean; sources: VoSourceRef[] }
-  | { result: "abstained" }
+  | { result: "abstained"; reason?: VoAbstainReason }
   | { result: "failed"; failure: "unavailable" | "failed" | "empty" | "nothing_to_draft" | "refused" | "unsupported_file" };
 
 const encoder = new TextEncoder();

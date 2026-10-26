@@ -27,7 +27,8 @@ Use supported stable library versions pinned in a lockfile after checking offici
 flowchart TD
   Firm["Firm workspace"] --> API["Authenticated application API"]
   Client["Client portal"] --> API
-  Admin["Platform administration"] --> API
+  Admin["Platform admin portal (separate codebase)"] --> AdminFns["Named admin database functions (service role, audited)"]
+  AdminFns --> DB
   API --> Policy["Authorization and domain services"]
   Policy --> DB["PostgreSQL and transactional outbox"]
   Policy --> Files["Private evidence storage"]
@@ -44,7 +45,8 @@ The public marketing site reads approved public content only. It has no connecti
 
 ## 3 Repository layout
 
-- `apps/web`: marketing routes, firm routes, client routes, admin routes, and API transport handlers.
+- `apps/web`: marketing routes, firm routes, client routes, and API transport handlers. It has no platform-admin routes.
+- Platform administration is a separate codebase and deployment (Francis's admin portal, decided 2026-10-19; see `docs/DECISIONS.md` and `docs/integrations/support-access.md`). It has its own sign-in, and it reaches Casevoya data only through named, audited database functions (for example `create_support_access_request` and `support_read_matter`). It never gets RLS bypass on client content, and it has no "log in as this firm".
 - `apps/worker`: queue consumers, source monitoring, file processing, reconciliation, reminders and exports.
 - `packages/domain`: application services, state transitions, finance rules, source gates and permission policies.
 - `packages/db`: schema, migrations, transactions, tenant context and repositories.
@@ -136,6 +138,8 @@ Only a published, applicable, reviewed RuleVersion can drive regulated automatio
 Matter work stages, government status, engagement status, financial status, and outcome remain independent. Follow PRD section 7. A mutation specifies expected_version; stale writes fail with a conflict. Backward transitions require a reason and preserve history. An uploaded decision is not confirmed until verified.
 
 Source state is Draft → Evidence captured → Professional review → Approved → Published, with Review due, Suspended, Superseded and Rejected branches. Published versions are immutable; edits create successors. A content author and professional approver are distinct responsibilities, even where one qualified individual holds both roles and that fact is recorded.
+
+Captured official claims (decision 2026-10-25) are the exception: a rule version with `origin = official_capture` (platform-wide, `organization_id` null) is published by the loader in a database maintenance session with no review, so author and approver no longer have to be different people for it. A firm's change is an append-only override (`rule_claim_overrides`: edit or revert, the base version, the editor's licence copied in, the step-up used) read through `app.firm_rule_claim(org, definition)`; the captured version never changes. "Source changed since your edit" is derived (the override's base version is no longer the live one), never stored. Firm-entered claims keep the review workflow above.
 
 Signature state is Draft → Sent → Partially signed → Completed, with Declined, Expired, and Voided branches. Payment and refund states follow verified provider events plus reconciliation. Do not invent provider statuses; adapters map documented vendor states to domain states and preserve the original payload reference securely.
 

@@ -88,6 +88,8 @@ import {
 import { restoreDocRequest, runDocRequest } from "./doc-request-act";
 import { openDocumentDetails, runDocumentClassify, runDocumentLink, runDocumentTranslation, runDocumentUnlink } from "./document-details-acts";
 import { runUploadLimit } from "./upload-limit-act";
+import { runIdleTimeout } from "./idle-timeout-act";
+import { openConsentReview, runClientTwoStepReset, runConsentReviewDone } from "./person-consent-acts";
 import { armIntakeReview, runIntakeFreeze, runIntakeReuse, runIntakeSend } from "./intake-delivery-acts";
 import { runFlagResolve, runPersonAdd, runPersonRemove } from "./person-history-acts";
 import { openCustody, runCustodySave } from "./custody-acts";
@@ -98,7 +100,9 @@ import { mountDocOpen, mountDrafts, mountInboxFilters, mountRecordsCrumb } from 
 import { bindGovControls } from "./gov-acts";
 import { bindApprovalControls } from "./approval-acts";
 import { bindSubmissionControls } from "./submission-acts";
+import { reopenClaimDialog, runClaimAct } from "./source-claim-acts";
 import { bindRenewalControls } from "./renewal-acts";
+import { bindRulePinControls } from "./rule-pin-acts";
 import { bindVoCrmControls } from "./vo-crm-acts";
 import { bindLetterControls } from "./letter-acts";
 import { bindGovStatusControls } from "./gov-status-acts";
@@ -114,6 +118,7 @@ import {
   runPrivacyStep,
   runRedaction,
 } from "./compliance-acts";
+import { bindPrivacyResponseControls, handlePrivacyResponseClick } from "./privacy-response-acts";
 import { runMatterAct } from "./matter-acts";
 import { bindWorkControls, wireMattersList } from "./work-acts";
 import { runNewMatter } from "./new-matter-act";
@@ -123,6 +128,7 @@ import { closeCrumbMenu, toggleCrumbMenu } from "./crumb-menu";
 import { runQueueReassign, syncQueuePicked } from "./queue-acts";
 import { runNewTask, syncNewTask } from "./new-task-act";
 import { runReportExport } from "./report-acts";
+import { runScheduledReportAct, syncScheduleDialog } from "./scheduled-report-acts";
 import { runExportAct } from "./export-acts";
 import { runMigrationAct, syncMigrationCheck } from "./migration-acts";
 import { inviteFromEdit, openPersonEdit, runPersonEdit } from "./person-edit-act";
@@ -135,10 +141,14 @@ import { runAutomationSave } from "./automations-acts";
 import { signOutOtherSessions } from "@/modules/settings/firm-actions";
 import { mountIntakeBuilder } from "./intake-builder-acts";
 import { runVoAccept, runVoAsk, runVoDiscard, runVoSetting, runVoUseful } from "./vo-acts";
+import { runVoTermsAck } from "./vo-vendor-terms-acts";
+import { VO_TERMS_DIALOG } from "@/modules/sheet/vo-vendor-terms-present";
 import { runVoDocAccept, runVoDocDiscard, runVoDocReject, runVoRead } from "./vo-doc-acts";
 import { runLetterApprove, runLetterDiscard, runLetterNew, runLetterRevise, runVoLetterDraft } from "./vo-letter-acts";
 import { mountRetentionSlider, runRetentionSave } from "./retention-act";
 import { mountSubscription, runSubscriptionAct } from "./subscription-act";
+import { runSecAct } from "./sec-acts";
+import { runServiceNoticeDismiss } from "./service-notice-act";
 import { openLicenceReport, reopenLicenceDialog, runLicenceAdd, runLicenceReport, runReassign, syncReassign } from "./licence-acts";
 import {
   mountIntegrations,
@@ -155,6 +165,9 @@ import {
 import { reopenFirmDialog, runFirmSave } from "./settings-firm-acts";
 import { bindOffboardHold, mountMember, mountOffboard, reopenStaffAdmin, runContinuitySave, runMemberAct } from "./settings-staff-admin-acts";
 import { prepareTransferDialog, runFirmTransferAct } from "./firm-transfer-acts";
+import { stepUpHref } from "@/lib/auth/mfa-step";
+import { goStepUp, noteStepUpTrigger, resumeStepUp, type ResumeNode } from "@/lib/auth/step-up-resume";
+import { presetChipLabel } from "@/modules/sheet/filter-preset";
 
 const ASSET = "/assets/icons-coreui/sprite.svg";
 const NEW_MATTER = "/sheet/matters?new=1";
@@ -267,6 +280,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     bindSubmissionControls(root, router, listen);
     // DEC-02: the Decisions tab's Expiry and renewal card (`data-ren`).
     bindRenewalControls(root, router, listen);
+    // SRC-05: the Overview's Review upgrade dialog (`data-pin`).
+    bindRulePinControls(root, router, listen);
     // AI-01: Vo lead follow-ups and call-notes summaries (`data-vo-crm`).
     bindVoCrmControls(root, router, listen);
     // DEC-02: the Decisions tab's approval follow-up (`data-dec`).
@@ -544,7 +559,7 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
             if ("error" in result) {
               if (result.stepUp) {
                 const next = `${window.location.pathname}${window.location.search}`;
-                window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`);
+                goStepUp(stepUpHref(next, "enquiry_page"));
                 return;
               }
               toast2(result.error, { kind: "bad", sub: "Nothing was changed." });
@@ -782,6 +797,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         button.setAttribute("aria-busy", "true");
         void run().finally(() => button.removeAttribute("aria-busy"));
       };
+      // REP-03: Reports > Scheduled (New schedule, Edit, Save, Pause or Resume, Run now (test), Delete).
+      const schedAct = target.closest<HTMLElement>("[data-sched-act]");
+      if (schedAct && root.contains(schedAct)) {
+        event.preventDefault();
+        busyRun(schedAct, () => runScheduledReportAct(schedAct, root, router, openDialog));
+        return;
+      }
       // FIN-09 / FIN-12: manual payments, evidence files, reconciliation items and bank account records.
       const manualOpen = target.closest<HTMLElement>("[data-mp-open]");
       if (manualOpen && root.contains(manualOpen)) {
@@ -849,6 +871,20 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (subscriptionAct && root.contains(subscriptionAct)) {
         event.preventDefault();
         busyRun(subscriptionAct, () => runSubscriptionAct(subscriptionAct, openDialog));
+        return;
+      }
+      // ADM-04 (any staff): Dismiss on Casevoya's service notice banner, for this person only.
+      const noticeDismiss = target.closest<HTMLElement>("[data-notice-dismiss]");
+      if (noticeDismiss && root.contains(noticeDismiss)) {
+        event.preventDefault();
+        busyRun(noticeDismiss, () => runServiceNoticeDismiss(noticeDismiss, router));
+        return;
+      }
+      // SEC-07 / SEC-10 (firm owner): Approve deletion, Cancel subscription, after the window, firm index.
+      const secAct = target.closest<HTMLElement>("[data-sec-act]");
+      if (secAct && root.contains(secAct)) {
+        event.preventDefault();
+        busyRun(secAct, () => runSecAct(secAct, root, router, openDialog));
         return;
       }
       const bookingSubmit = target.closest<HTMLElement>("[data-booking-submit]");
@@ -994,6 +1030,32 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(custodySave, () => runCustodySave(router));
         return;
       }
+      // Clients › person: consent impact review (SEC-05) and the client's two-step reset (SEC-01).
+      const reviewOpen = target.closest<HTMLElement>("[data-cr-open]");
+      if (reviewOpen && root.contains(reviewOpen)) {
+        event.preventDefault();
+        openConsentReview(reviewOpen);
+        return;
+      }
+      const reviewDone = target.closest<HTMLElement>("[data-cr-done]");
+      if (reviewDone && root.contains(reviewDone)) {
+        event.preventDefault();
+        busyRun(reviewDone, () => runConsentReviewDone(reviewDone, router));
+        return;
+      }
+      const twoStepReset = target.closest<HTMLElement>("[data-tsr]");
+      if (twoStepReset && root.contains(twoStepReset)) {
+        event.preventDefault();
+        busyRun(twoStepReset, () => runClientTwoStepReset(twoStepReset, router));
+        return;
+      }
+      // Settings > Security: the idle sign-out time (SEC-01).
+      const idleTimeout = target.closest<HTMLElement>("[data-idle-timeout]");
+      if (idleTimeout && root.contains(idleTimeout)) {
+        event.preventDefault();
+        busyRun(idleTimeout, () => runIdleTimeout(idleTimeout, router));
+        return;
+      }
       // Settings > Security: the per-file upload limit (DOC-02).
       const uploadLimit = target.closest<HTMLElement>("[data-upload-limit]");
       if (uploadLimit && root.contains(uploadLimit)) {
@@ -1108,6 +1170,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         busyRun(annSend, () => runAnnouncementSend(annSend, root, router));
         return;
       }
+      // SRC-01/02/03: Templates > Source review and Rule detail (Add claim, resolve, approve, reject, suspend).
+      const claimAct = target.closest<HTMLElement>("[data-claim-act]");
+      if (claimAct && root.contains(claimAct)) {
+        event.preventDefault();
+        busyRun(claimAct, () => runClaimAct(claimAct, root, router));
+        return;
+      }
       const mtAct = target.closest<HTMLElement>("[data-mt-save], [data-mt-approve], [data-mt-archive]");
       if (mtAct && root.contains(mtAct)) {
         event.preventDefault();
@@ -1120,6 +1189,11 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (inboxCompose && root.contains(inboxCompose)) {
         event.preventDefault();
         busyRun(inboxCompose, () => runInboxCompose(inboxCompose, root, router));
+        return;
+      }
+      // SEC-06: extend, records found, the response package, delivery and legal time limits.
+      if (handlePrivacyResponseClick(target, root, router, openDialog, busyRun)) {
+        event.preventDefault();
         return;
       }
       // Compliance: privacy requests, the complaints register and their settings.
@@ -1165,6 +1239,14 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
               ? () => runVoDocReject(voDoc, router)
               : () => runVoDocDiscard(voDoc, router);
         busyRun(voDoc, run);
+        return;
+      }
+      // AI-06: turning Vo on first opens the AI vendor terms acknowledgement; its button records it.
+      const voTerms = target.closest<HTMLElement>(".k2-sw[data-vo-terms], [data-vo-terms-ack]");
+      if (voTerms && root.contains(voTerms)) {
+        event.preventDefault();
+        if (voTerms.hasAttribute("data-vo-terms-ack")) busyRun(voTerms, () => runVoTermsAck(voTerms, router));
+        else openDialog(VO_TERMS_DIALOG);
         return;
       }
       // AI-01 letters on a matter: Draft letter with Vo, New letter, new version, Approve, Discard.
@@ -1418,6 +1500,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     mountRecordsCrumb(root, page, (group) => openPalette(root, (href) => router.push(href), group), ac.signal);
     if (page === "inbox") mountInboxFilters(root, ac.signal);
     if (page === "inbox" || page === "templates") mountMessagingInputs(root, ac.signal);
+    // Live official claims: back from step-up (or an Edit link), reopen the claim dialog with what was typed.
+    if (page === "templates") window.setTimeout(() => reopenClaimDialog(root, openDialog), 300);
     if (page === "documents" || page === "government") mountDocOpen(root, runDocOpen, ac.signal);
     if (page === "drafts") mountDrafts(root, () => router.refresh(), ac.signal);
     // Back from a Composio Connect Link on Settings > Integrations.
@@ -1472,6 +1556,16 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (filters?.contains(input)) {
         const preset = new URLSearchParams(window.location.search).get("q");
         if (preset && !input.value) input.value = preset;
+        // REP-01: `?f=overdue` (a Reports card's link) turns that chip on, as a click would.
+        const chips = [...filters.querySelectorAll<HTMLElement>(".fchip")];
+        const chipLabel = presetChipLabel(FILTER_TOKEN, chips.map((chip) => chip.textContent?.trim() ?? ""), new URLSearchParams(window.location.search).get("f"));
+        if (chipLabel) {
+          chips.forEach((chip) => {
+            const on = chip.textContent?.trim() === chipLabel;
+            chip.classList.toggle("on", on);
+            chip.setAttribute("aria-pressed", String(on));
+          });
+        }
         input.addEventListener("input", applyFilters, listen);
         applyFilters();
         return;
@@ -1497,6 +1591,14 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         toast2("This form isn’t connected yet", { kind: "warn", sub: "Nothing was saved." });
       }, listen);
     });
+
+    // Bug 1 (2026-10-25): every step-up caller goes through goStepUp, which keeps the pressed
+    // control (and its dialog's fields) for this tab; back here, the action resumes.
+    const noteTrigger = (event: Event) => noteStepUpTrigger(event.target, root as unknown as ResumeNode);
+    root.addEventListener("click", noteTrigger, { signal: ac.signal, capture: true });
+    root.addEventListener("change", noteTrigger, { signal: ac.signal, capture: true });
+    const stopResume = resumeStepUp(root, (title, sub, kind) => toast2(title, { kind, sub }));
+    ac.signal.addEventListener("abort", stopResume);
 
     const params = new URLSearchParams(window.location.search);
     const dialogParam = params.get("dlg");
@@ -1683,8 +1785,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
           if (new URLSearchParams(window.location.search).has("dlg")) router.replace(withoutDialog(window.location.pathname, window.location.search));
         }, listen);
       }
-      // Support access: ?dlg=support (back from step-up) finishes the pressed action, or reopens Decline.
-      if (root.querySelector("[data-support-act]")) window.setTimeout(() => reopenSupport(root, openDialog, router), 300);
+      // Support access: ?dlg=support (back from step-up) reopens Decline; the shared resume presses the others again.
+      if (root.querySelector("[data-support-act]")) window.setTimeout(() => reopenSupport(root, openDialog), 300);
     }
 
     const newTask = root.querySelector<HTMLDialogElement>("dialog#dlgTask");
@@ -1726,6 +1828,10 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if ((event.target as HTMLElement | null)?.id === linkId) fillLinkedName(linkDialog, linkId, nameId);
       }, listen);
     }
+    bindPrivacyResponseControls(root, ac.signal);
+    // REP-03: the schedule dialog shows the right day field and only staff who see the chosen report.
+    const schedDialog = root.querySelector<HTMLDialogElement>("dialog#dlgSched");
+    if (schedDialog) schedDialog.addEventListener("change", () => syncScheduleDialog(schedDialog), listen);
     // ?dlg=review&doc= (back from step-up) reopens the document review with what was typed.
     if (root.querySelector("dialog#dlgDocRev")) window.setTimeout(() => reopenDocReview(root, openDialog), 300);
 

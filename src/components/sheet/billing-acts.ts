@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import {
   addGovernmentFee,
@@ -73,7 +74,7 @@ function finish(button: HTMLElement, router: Router, title: string, sub: string,
 
 function refuse(error: string, sub: string) {
   if (financeNeedsStepUp(error)) {
-    window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, null));
+    goStepUp(financeStepUpLocation(window.location.pathname, window.location.search, null, "billing"));
     return;
   }
   toast2(error, { kind: "bad", sub });

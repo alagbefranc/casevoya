@@ -14,17 +14,25 @@ import { privacyPath } from "./privacy";
 /**
  * The firm's public enquiry page (or its embedded form), or null when the firm takes no
  * enquiries from this viewer (unknown, no privacy notice, sample mode for anyone but its staff).
+ * "unavailable" when the firm's details couldn't be read (DES-04: the page says so and to try again).
  */
-export async function loadEnquiryPage(slug: string, embedded: boolean): Promise<(EnquiryLiveProps & { open: boolean }) | null> {
+export const ENQUIRY_UNAVAILABLE = {
+  title: "This form isn’t available right now",
+  copy: "The firm’s enquiry form couldn’t be loaded. Nothing was sent. Try again in a moment.",
+} as const;
+
+export async function loadEnquiryPage(slug: string, embedded: boolean): Promise<(EnquiryLiveProps & { open: boolean }) | null | "unavailable"> {
   const firmSlug = slug.toLowerCase();
   if (!isFirmSlug(firmSlug) || !hasPublicSupabaseEnv()) return null;
   let firm = null;
   try {
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("enquiry_public_firm", { p_firm_slug: firmSlug });
-    firm = error ? null : parsePublicFirm(data);
+    // DES-04: an answer that couldn't be read is not "the firm takes no enquiries".
+    if (error) return "unavailable";
+    firm = parsePublicFirm(data);
   } catch {
-    firm = null;
+    return "unavailable";
   }
   if (!firm) return null;
   const logo = embedded ? null : await firmLogo(firm.firmSlug);

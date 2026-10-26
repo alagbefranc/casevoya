@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import type { QuoteInstalmentInput, QuoteLineInput } from "@/components/sheet/designer/agreements-quote";
 import { createQuote, editAgreementClause, quoteToAgreement, saveQuote, sendQuote } from "@/modules/agreements/quote-actions";
@@ -30,7 +31,7 @@ function keep(draft: Record<string, unknown>) {
 }
 
 function stepUp(dialog: string, extra: Record<string, string> = {}) {
-  window.location.assign(agreementStepUpLocation(window.location.pathname, window.location.search, dialog, extra));
+  goStepUp(agreementStepUpLocation(window.location.pathname, window.location.search, dialog, extra, "quote"));
 }
 
 /** A clean URL (no `?dlg=`, `?clause=`) so a refresh does not reopen the dialog. */

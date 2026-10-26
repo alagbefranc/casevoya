@@ -6,6 +6,8 @@ import { isUuid } from "@/lib/tenant/context";
 import { accountCreateParams, ACCOUNT_SESSION_COMPONENTS, retrieveAccountStatus, syncStatusArgs } from "@/modules/finance/stripe-account";
 import { financeError, readNewInvoice, readRefund, refundError, type NewInvoiceFields, type RefundFields } from "@/modules/sheet/finance-present";
 import { creditError, readCredit, type CreditFields } from "@/modules/finance/credits-present";
+import { connectIdempotencyKey, disconnectError, readDisconnect, type UnlinkBlocker } from "@/modules/finance/connect-present";
+import { closeOpenRequests, readOpenRequests, type ClosedRequest } from "@/modules/finance/stripe-unlink";
 
 /**
  * The Sheet's finance actions, run as the signed-in staff member. Who may do what is the
@@ -212,11 +214,14 @@ export async function connectStripeAccount(input: { organizationId: string }): P
   const stripe = stripeServer();
   if (!stripe) return { error: NOT_CONFIGURED };
   const org = await supabase.from("organizations").select("display_name").eq("id", input.organizationId).maybeSingle();
+  // After a disconnect, a new key: Stripe would otherwise hand back the disconnected account.
+  const ended = await supabase.from("firm_payment_account_history").select("id", { count: "exact", head: true }).eq("organization_id", input.organizationId);
+  if (ended.error) return { error: "Casevoya couldn’t check the firm’s earlier Stripe accounts. Try again." };
   let accountId: string;
   try {
     const account = await stripe.v2.core.accounts.create(
       accountCreateParams({ organizationId: input.organizationId, displayName: org.data?.display_name ?? "Firm", email: session.email }),
-      { idempotencyKey: `casevoya-connect-${input.organizationId}` },
+      { idempotencyKey: connectIdempotencyKey(input.organizationId, ended.count ?? 0) },
     );
     if (account.livemode) return { error: "Only a Stripe test-mode account can be connected." };
     accountId = account.id;
@@ -266,4 +271,49 @@ export async function refreshStripeAccount(input: { organizationId: string }): P
   } catch {
     return { error: "Stripe didn’t answer. Try again." };
   }
+}
+
+/**
+ * Disconnects the firm's Stripe account (firm owner, fresh step-up, typed DISCONNECT, a reason):
+ * app.unlink_stripe_account ends the link, keeps it in the history and audits it, or refuses with
+ * what still runs on the account. The account isn't deleted or rejected at Stripe; Casevoya stops
+ * using it. TEST MODE ONLY.
+ *
+ * Right after the unlink commits, the payment requests still open on the old account are canceled
+ * at Stripe (Stripe-Account header) and the results recorded (rows canceled, audited, a task for
+ * the owner when one couldn't be canceled). After, not before: until the database has said yes the
+ * account may still be in use, and once the link is gone no new request can start on it, so the
+ * list can't grow. If Stripe fails the unlink still stands; the dialog lists what wasn't canceled.
+ */
+export async function disconnectStripeAccount(input: {
+  organizationId: string;
+  accountId: string;
+  confirmation: string;
+  reason: string;
+}): Promise<{ ok: true; notCanceled: ClosedRequest[]; taskCreated: boolean } | { blockers: UnlinkBlocker[] } | { error: string }> {
+  const read = readDisconnect(input);
+  if ("error" in read) return read;
+  const session = await staffClient(input.organizationId);
+  if ("error" in session) return { error: session.error ?? "Sign in first." };
+  const { data, error } = await session.supabase.rpc("unlink_stripe_account", {
+    p_org: input.organizationId,
+    p_account_id: input.accountId,
+    p_confirmation: read.input.confirmation,
+    p_reason: read.input.reason,
+  });
+  if (error) return { error: disconnectError(error.message) ?? financeError(error.message) };
+  const result = data as { unlinked?: unknown; blockers?: unknown; history_id?: unknown; account_id?: unknown; open_requests?: unknown } | null;
+  if (result?.unlinked !== true) return { blockers: Array.isArray(result?.blockers) ? (result.blockers as UnlinkBlocker[]) : [] };
+
+  const requests = readOpenRequests(result.open_requests);
+  if (!requests.length || typeof result.history_id !== "string" || typeof result.account_id !== "string") return { ok: true, notCanceled: [], taskCreated: false };
+  const closed = await closeOpenRequests(stripeServer(), result.account_id, requests);
+  const notCanceled = closed.filter((request) => request.result === "failed");
+  const recorded = await session.supabase.rpc("record_stripe_unlink_cancellations", {
+    p_history_id: result.history_id,
+    p_results: closed.map((request) => ({ payment_id: request.payment_id, result: request.result })),
+  });
+  const taskId = (recorded.data as { task_id?: unknown } | null)?.task_id;
+  // If recording fails, Stripe's own payment_intent.canceled events still mark the canceled rows.
+  return { ok: true, notCanceled, taskCreated: !recorded.error && typeof taskId === "string" };
 }
