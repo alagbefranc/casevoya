@@ -28,16 +28,16 @@ const MARKDOWN_LINK = /\[([^\]\n]{1,200})\]\(([^)\s]{1,500})\)/g;
 const EMAIL = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const PHONE = /(?:\+?\d[\d\s().-]{8,}\d)/g;
 const TAG = /<\/?[a-z][^>]{0,300}>/gi;
-const MONEY = /(?:(?:CA?\$|C\$|\$|CAD|USD|EUR|€|£)\s?\d|\b\d[\d,\s]*(?:[.,]\d+)?\s?(?:\$|CAD|USD|dollars?)(?![a-z]))/i;
+export const MONEY = /(?:(?:CA?\$|C\$|\$|CAD|USD|EUR|€|£)\s?\d|\b\d[\d,\s]*(?:[.,]\d+)?\s?(?:\$|CAD|USD|dollars?)(?![a-z]))/i;
 /** Every money amount in full, as guard.ts matches it, for the left-out notes. */
 const MONEY_ALL = /(?:(?:CA?\$|C\$|\$|CAD|USD|EUR|€|£)\s?\d[\d,\s]*(?:[.,]\d+)?(?:\s?\$)?|\b\d[\d,\s]*(?:[.,]\d+)?\s?(?:\$|CAD|USD|dollars?)(?![a-z]))/gi;
 /** Where a link, email address or phone number was removed: the sentence is left out. */
-const REMOVED = "⟦removed⟧";
-const DURATION =
+export const REMOVED = "⟦removed⟧";
+export const DURATION =
   /\b\d+(?:[.,]\d+)?(?:\s*(?:-|–|to|à)\s*\d+(?:[.,]\d+)?)?\s*(?:business\s+|calendar\s+|working\s+)?(?:days?|weeks?|months?|years?|jours?|semaines?|mois|ans?|années?)\b/i;
-const REQUIREMENT =
+export const REQUIREMENT =
   /\b(?:fees?|frais|processing\s+times?|délais?|deadlines?|requirements?|required|requires?|exigences?|eligib\w*|admissib\w*|regulations?|règlements?|IRPA|IRPR|LIPR|RIPR|subsection|paragraph\s+\d)\b/i;
-const DATE = /\b(?:\d{4}-\d{2}(?:-\d{2})?|\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/i;
+export const DATE = /\b(?:\d{4}-\d{2}(?:-\d{2})?|\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/i;
 
 function allowed(url: string): boolean {
   try {
@@ -49,7 +49,7 @@ function allowed(url: string): boolean {
 }
 
 /** Plain text, as guard.ts makes it, without its money and duration placeholders. */
-function clean(raw: string): string {
+export function clean(raw: string): string {
   return raw
     .normalize("NFC")
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F​-‏‪-‮⁦-⁩]/g, "")
@@ -79,7 +79,7 @@ function noteLine(text: string): string {
 }
 
 /** Splits a paragraph into sentences, keeping each sentence's own punctuation. */
-function sentences(paragraph: string): string[] {
+export function sentences(paragraph: string): string[] {
   return paragraph.split(/(?<=[.!?])\s+(?=\S)/).filter((part) => part.trim());
 }
 

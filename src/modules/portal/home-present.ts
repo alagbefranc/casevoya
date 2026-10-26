@@ -7,6 +7,7 @@ import type { PortalTask } from "@/modules/portal/tasks-load";
 import type { ClientRecordView } from "@/modules/government/status-provenance";
 import type { PortalRenewalView } from "@/modules/renewals/present";
 import type { PortalFollowUp } from "@/modules/decisions/present";
+import type { PortalPart } from "@/modules/portal/states";
 
 /** The eight steps of "Where things stand" on the client's Home, in order. */
 export const HOME_STEPS = [
@@ -68,6 +69,8 @@ export type HomeView = {
   renewals?: PortalRenewalView[];
   /** DEC-02: the firm's approved conditions summary and the decision documents delivered (src/modules/decisions/portal-load.ts). */
   followUp?: PortalFollowUp;
+  /** DES-04: parts that couldn't be read (src/modules/portal/home-load.ts); Home says so instead of showing them empty. */
+  unavailable?: PortalPart[];
 };
 
 export type HomeInput = {

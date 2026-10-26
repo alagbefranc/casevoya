@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { proposeGovernmentIssuer, reviewGovernmentIssuer } from "@/modules/government/letter-actions";
 import { readLetterTasks, type LetterTask } from "@/modules/government/letters";
@@ -129,7 +130,7 @@ async function runIssuerAct(button: HTMLElement, router: Router) {
   const error = "error" in result && typeof result.error === "string" ? result.error : null;
   if (error) {
     if (needsStepUp(error)) {
-      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null));
+      goStepUp(stepUpLocation(window.location.pathname, window.location.search, null, "government_letter"));
       return;
     }
     toast2(error, { kind: "bad", sub: "Nothing was saved." });

@@ -5,9 +5,7 @@ import {
   median,
   monthLabel,
   monthsBetween,
-  outcomesNote,
   outstandingDocuments,
-  processingRows,
   rangeLabel,
   rangeStart,
   receivablesAgeing,
@@ -15,6 +13,7 @@ import {
   workload,
 } from "@/modules/sheet/reports-present";
 import { reportCsv, reportPdf, reportSections } from "@/modules/sheet/reports-export";
+import { outcomeSegments, segmentsNote } from "@/modules/sheet/reports-outcomes";
 import { dueBadge, orderQueue, queueItemId, ruleHours, waitingBadge, weekOf } from "@/modules/sheet/queue-present";
 import { byteSize, exportError, exportState, jobSteps } from "@/modules/sheet/exports-present";
 import { buildZip, crc32, readZip, safeZipPath } from "@/modules/exports/zip";
@@ -124,30 +123,35 @@ describe("Reports (REP-01..03)", () => {
       [1, 60000],
       [0, 0],
       [1, 50000],
+      [0, 0],
     ]);
   });
 
   it("keeps pending files out of processing medians, hides small samples, and measures firm work time apart", () => {
     const decided = (n: number, days: number) =>
-      Array.from({ length: n }, () => ({
+      Array.from({ length: n }, (_, index) => ({
+        matterId: `m${index}`,
         program: "study_permit",
         createdAt: "2025-01-01T00:00:00Z",
-        submittedAt: "2025-02-01T00:00:00Z",
-        decidedAt: new Date(Date.parse("2025-02-01T00:00:00Z") + days * 86_400_000).toISOString(),
+        submittedAt: "2025-02-01T12:00:00Z",
+        decidedAt: new Date(Date.parse("2025-02-01T12:00:00Z") + days * 86_400_000).toISOString(),
         outcome: "approved",
       }));
-    const result = processingRows([
-      ...decided(5, 60),
-      { program: "study_permit", createdAt: "2025-01-01T00:00:00Z", submittedAt: "2025-03-01T00:00:00Z", decidedAt: null, outcome: null },
-      { program: null, createdAt: "2026-01-01T00:00:00Z", submittedAt: "2026-02-01T00:00:00Z", decidedAt: "2026-03-01T00:00:00Z", outcome: "refused" },
-      { program: "visitor", createdAt: "2026-01-01T00:00:00Z", submittedAt: null, decidedAt: null, outcome: null },
-    ]);
+    const result = outcomeSegments(
+      [
+        ...decided(5, 60),
+        { matterId: "p1", program: "study_permit", createdAt: "2025-01-01T00:00:00Z", submittedAt: "2025-03-01T12:00:00Z", decidedAt: null, outcome: null },
+        { matterId: "n1", program: null, createdAt: "2026-01-01T00:00:00Z", submittedAt: "2026-02-01T12:00:00Z", decidedAt: "2026-03-01T12:00:00Z", outcome: "refused" },
+        { matterId: "v1", program: "visitor", createdAt: "2026-01-01T00:00:00Z", submittedAt: null, decidedAt: null, outcome: null },
+      ],
+      { timeZone: "America/Toronto" },
+    );
     expect(result.rows).toEqual([
-      { program: "No program selected", cohort: "Submitted 2026", decided: 1, median: "—", pending: 0 },
-      { program: "Study permit", cohort: "Submitted 2025", decided: 5, median: "60", pending: 1 },
+      { program: "No program selected", cohort: "Submitted Jan–Mar 2026", decided: 1, median: "—", pending: 0, range: "— (1 timed)", outcomes: "—", estimate: null, programHref: null },
+      { program: "Study permit", cohort: "Submitted Jan–Mar 2025", decided: 5, median: "60", pending: 1, range: "60–60 (5 timed)", outcomes: "5 approved", estimate: null, programHref: null },
     ]);
-    expect(result.firm.find((row) => row.program === "Study permit")).toEqual({ program: "Study permit", cohort: "Submitted 2025", files: 6, median: "31" });
-    expect(outcomesNote(result.hidden, result.rows.length)).toMatch(/No program selected \(submitted 2026\) has only 1 decided file, so its median is hidden/);
+    expect(result.firm.find((row) => row.program === "Study permit")).toEqual({ program: "Study permit", cohort: "Submitted Jan–Mar 2025", files: 6, median: "31" });
+    expect(segmentsNote(result.hidden, result.rows.length)).toMatch(/No program selected \(submitted jan–mar 2026\) has fewer than 5 decided files with a recorded decision date, so its median, range and outcome counts are hidden/);
     expect(DEFINITIONS.firm).toMatch(/not government processing/);
   });
 

@@ -144,16 +144,24 @@ async function planHash(ctx: Firm, batch: string) {
   return (await db.query<{ plan_hash: string }>(`select plan_hash from public.migration_batches where id = $1`, [batch])).rows[0].plan_hash;
 }
 
-async function commit(ctx: Firm, batch: string) {
-  const hash = await planHash(ctx, batch);
-  await as(ctx);
-  const begun = await rpc<{ ok: boolean; reason?: string }>(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]);
-  if (!begun.ok) return begun;
+async function chunks(ctx: Firm, batch: string) {
   let left = 1;
   while (left > 0) {
     const chunk = await rpc<{ remaining: number }>(`public.commit_migration_chunk($1, $2, 2)`, [ctx.orgId, batch]);
     left = chunk.remaining;
   }
+}
+
+/** MIG-02: a pilot (the first matter), the firm owner's sign-off, then the full run. */
+async function commit(ctx: Firm, batch: string) {
+  const hash = await planHash(ctx, batch);
+  await as(ctx);
+  const begun = await rpc<{ ok: boolean; reason?: string }>(`public.begin_migration_pilot($1, $2, $3, 1)`, [ctx.orgId, batch, hash]);
+  if (!begun.ok) return begun;
+  await chunks(ctx, batch);
+  await rpc(`public.sign_off_migration_pilot($1, $2, 'Synthetic pilot checked')`, [ctx.orgId, batch]);
+  await rpc(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]);
+  await chunks(ctx, batch);
   return begun;
 }
 
@@ -310,7 +318,7 @@ describe("migration import: dry run, values and duplicates", () => {
     // Sign-off waits for every decision.
     const hash = await planHash(ctx, batch);
     await as(ctx);
-    await expectDbError(() => rpc(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]), /decide every possible match/);
+    await expectDbError(() => rpc(`public.begin_migration_pilot($1, $2, $3)`, [ctx.orgId, batch, hash]), /decide every possible match/);
 
     await rpc(`public.decide_migration_duplicate($1, $2, 2, true)`, [ctx.orgId, batch]);
     const decided = await rpc<Record<string, number>>(`public.decide_migration_duplicate($1, $2, 6, false)`, [ctx.orgId, batch]);
@@ -341,11 +349,11 @@ describe("migration import: sign-off", () => {
     // Step-up and the plan hash are required.
     const hash = await planHash(ctx, batch);
     await as(ctx, "owner", false);
-    await expectDbError(() => rpc(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]), /firm owner step-up is required/);
+    await expectDbError(() => rpc(`public.begin_migration_pilot($1, $2, $3)`, [ctx.orgId, batch, hash]), /firm owner step-up is required/);
     await as(ctx, "manager");
-    await expectDbError(() => rpc(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]), /firm owner step-up is required/);
+    await expectDbError(() => rpc(`public.begin_migration_pilot($1, $2, $3)`, [ctx.orgId, batch, hash]), /firm owner step-up is required/);
     await as(ctx);
-    const stale = await rpc<{ ok: boolean; reason: string }>(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, "0".repeat(64)]);
+    const stale = await rpc<{ ok: boolean; reason: string }>(`public.begin_migration_pilot($1, $2, $3)`, [ctx.orgId, batch, "0".repeat(64)]);
     expect(stale).toEqual({ ok: false, reason: "plan_changed" });
 
     await commit(ctx, batch);
@@ -502,6 +510,39 @@ describe("migration import: rollback", () => {
     expect(again).toEqual({ ok: false, reasons: ["Only an imported batch can be rolled back."] });
   });
 
+  it("isn't blocked by the reply address that opening an imported matter made, and removes it (DES-04)", async () => {
+    const { ctx, batch, matters } = await committed();
+    // Opening the matter in the Sheet reads its inbound address, which makes the reply address.
+    await as(ctx);
+    const address = await rpc<{ address: string; matter_tag: boolean }>(`public.matter_inbound_address($1, 'docs.casevoya.ca')`, [matters[0]]);
+    expect(address.matter_tag).toBe(true);
+    await asMaintenance(db);
+    expect((await db.query(`select 1 from public.matter_reply_addresses where matter_id = any($1)`, [matters])).rows).toHaveLength(1);
+    await as(ctx);
+    expect(await rpc(`public.migration_rollback_check($1, $2)`, [ctx.orgId, batch])).toEqual([]);
+    expect(await rpc(`public.rollback_migration_batch($1, $2)`, [ctx.orgId, batch])).toEqual({ ok: true, matters: 2, people: 3 });
+    await asMaintenance(db);
+    expect((await db.query(`select 1 from public.matter_reply_addresses where matter_id = any($1)`, [matters])).rows).toHaveLength(0);
+    expect((await db.query(`select 1 from public.matters where id = any($1)`, [matters])).rows).toHaveLength(0);
+  });
+
+  it("still refuses when the reply address was used: mail came in to the matter (DES-04)", async () => {
+    const { ctx, batch, matters } = await committed();
+    await as(ctx);
+    await rpc(`public.matter_inbound_address($1, 'docs.casevoya.ca')`, [matters[0]]);
+    await asMaintenance(db);
+    await db.query(
+      `insert into public.inbound_emails (organization_id, message_id, from_email, to_email, body_location, matter_id) values ($1, $2, 'client@example.test', 'firm@docs.casevoya.ca', 'inbound_emails', $3)`,
+      [ctx.orgId, `<${randomUUID()}@example.test>`, matters[0]],
+    );
+    await as(ctx);
+    const refused = await rpc<{ ok: boolean; reasons: string[] }>(`public.rollback_migration_batch($1, $2)`, [ctx.orgId, batch]);
+    expect(refused.ok).toBe(false);
+    expect(refused.reasons).toContain("1 new matter reply addresses linked to imported records since the import.");
+    await asMaintenance(db);
+    expect((await db.query(`select 1 from public.matter_reply_addresses where matter_id = any($1)`, [matters])).rows).toHaveLength(1);
+  });
+
   it("refuses when a record changed, gained new work, or is under a legal hold, and says why", async () => {
     const { ctx, batch, matters, persons } = await committed();
     await asMaintenance(db);
@@ -536,9 +577,9 @@ describe("migration import: rollback", () => {
     await dryRun(ctx, batch);
     const hash = await planHash(ctx, batch);
     await as(ctx);
-    await rpc(`public.begin_migration_commit($1, $2, $3)`, [ctx.orgId, batch, hash]);
+    await rpc(`public.begin_migration_pilot($1, $2, $3, 2)`, [ctx.orgId, batch, hash]);
     const first = await rpc<{ remaining: number; done: number }>(`public.commit_migration_chunk($1, $2, 1)`, [ctx.orgId, batch]);
-    expect(first).toMatchObject({ remaining: 1, done: 1, status: "committing" });
+    expect(first).toMatchObject({ remaining: 1, done: 1, status: "committing", phase: "pilot" });
     // The consultant leaves before the rest is created: create_engaged_matter refuses, nothing of this chunk stays.
     await asMaintenance(db);
     await db.query(`update public.memberships set status = 'suspended' where id = $1`, [ctx.consultantMembership]);

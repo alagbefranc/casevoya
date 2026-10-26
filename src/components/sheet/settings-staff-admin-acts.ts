@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { withoutDialog } from "@/modules/sheet/matter-wire";
 import { changeStaffRole, offboardStaff, previewOffboarding, saveContinuity, setStaffSuspended } from "@/modules/settings/settings-staff-admin-actions";
@@ -16,6 +17,7 @@ import {
   readHandover,
   type OffboardFacts,
 } from "@/modules/sheet/settings-staff-admin-present";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 /**
  * Settings > Team and seats: the Designer's Offboard dialog (#dlgOff, press and hold), and the live
@@ -39,7 +41,7 @@ function stepUp(dialog: string, draft: Record<string, string>) {
   params.set("dlg", dialog);
   const next = `${window.location.pathname}?${params.toString()}`;
   toast2("Confirm it’s you", { kind: "warn", sub: "Then the dialog opens again with what you chose." });
-  window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`), 900);
+  window.setTimeout(() => goStepUp(stepUpHref(next, dialog === "dlgOff" ? "offboard" : dialog === "dlgCont" ? "continuity" : "role")), 900);
 }
 
 function refused(result: { error: string; stepUp?: boolean }, dialog: string, draft: Record<string, string>) {

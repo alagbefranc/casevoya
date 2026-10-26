@@ -82,6 +82,7 @@ type Wired =
   | "EX17"
   | "EX18"
   | "EX19"
+  | "EX20"
   | "EX11"
   | "EM17";
 
@@ -111,6 +112,9 @@ export function designFor(context: Context): Wired | "generic" {
       return "EX09";
     case "refund_complete":
       return "EX10";
+    // Bug #215 (20261025530100): a refund the client was told about failed afterwards.
+    case "refund_failed":
+      return "EX20";
     // Hook for the receipts work (EM11): needs the email_template value 'payment_receipt' and an
     // outbox event that queues it with receipt_number (and advance: true for client funds).
     case "payment_receipt":
@@ -209,6 +213,8 @@ function contextFor(design: Wired, context: Context, firm: string): EmailContext
       return { firmName: firm };
     case "EX16":
       return { firmName: firm, code: textOf(context.code) || null };
+    case "EX20":
+      return { firmName: firm, refundReason: textOf(context.refund_reason) || null };
     // Support access: minutes asked for; on approval the approver, the minutes, the end and the firm's zone.
     case "EX11":
       return { firmName: firm, minutes: minutesOf(context.minutes) };

@@ -1,3 +1,5 @@
+import { stepUpHref } from "@/lib/auth/mfa-step";
+
 /** Pure: the subscription functions' own refusals, in plain words; null for access refusals. */
 export function subscriptionActionError(message: string): string | null {
   if (/arranged with Casevoya/i.test(message)) return "Enterprise plans are arranged with Casevoya. There is no checkout for them.";
@@ -13,7 +15,7 @@ export function subscriptionActionError(message: string): string | null {
 /** Where the step-up screen sends the owner back: this tab, with the plan dialog open again. */
 export function subscriptionStepUpLocation(reopenDialog: boolean): string {
   const next = `/sheet/settings?tab=billing${reopenDialog ? "&dlg=plan" : ""}`;
-  return `/mfa?step=6&next=${encodeURIComponent(next)}`;
+  return stepUpHref(next, "plan");
 }
 
 /** sessionStorage key for the plan chosen before a step-up. */
