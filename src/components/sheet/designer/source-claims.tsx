@@ -11,29 +11,11 @@ import { Icon } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
 import { PageAttestFields } from "./page-attestation";
 
-export type CapturedOption = {
-  key: string;
-  label: string;
-  program: string | null;
-  claim: string;
-  value: string | null;
-  sourceUrl: string;
-  section: string;
-  excerpt: string;
-  /** "IMM 5476" for a form, its edition or a checklist item. */
-  formNumber?: string | null;
-  /** The page's printed "Date modified" (YYYY-MM-DD) when the capture has it. */
-  modifiedOn?: string | null;
-  /** "IRCC fee list, captured 25 Oct 2026, SHA-256 1d31…" */
-  note: string;
-};
-
 export type AddClaimData = {
   organizationId: string;
   /** Firm owner, licensed consultant or case manager. */
   canAdd: boolean;
   today: string;
-  captured: CapturedOption[];
 };
 
 export type ClaimEvidenceItem = {
@@ -61,6 +43,8 @@ export type ClaimReviewData = {
   canApprove: boolean;
   canReject: boolean;
   canSuspend: boolean;
+  /** A suspended version: a licensed member unsuspends it with a fresh step-up (live only). */
+  canUnsuspend?: boolean;
   /** Some evidence has no capture: approving needs the reviewer's attestation. */
   needsAttestation: boolean;
   today: string;
@@ -75,7 +59,7 @@ export function AddClaimButton({ data }: { data: AddClaimData }) {
         {" Add claim"}
       </button>
       <span className={"mu"} style={{ fontSize: "13px" }}>
-        {"Each claim keeps its exact official page and section, Casevoya’s capture of the page and the dates it states. A licensed reviewer approves it before it is live."}
+        {"A claim your firm adds (a processing time, for example) keeps its exact official page and section, Casevoya’s capture of the page and the dates it states. A licensed reviewer approves it before it is live."}
       </span>
     </div>
   );
@@ -143,7 +127,7 @@ export function ClaimEvidenceList({ items }: { items: ClaimEvidenceItem[] }) {
 }
 
 export function ClaimReviewPanel({ review }: { review: ClaimReviewData }) {
-  const any = review.canResolve || review.canApprove || review.canReject || review.canSuspend;
+  const any = review.canResolve || review.canApprove || review.canReject || review.canSuspend || review.canUnsuspend;
   return (
     <div className={"panel"} style={{ marginTop: "16px" }}>
       <div className={"fp-pad"}>
@@ -174,6 +158,11 @@ export function ClaimReviewPanel({ review }: { review: ClaimReviewData }) {
             {review.canSuspend ? (
               <button className={"btn sm"} data-dlg={"dlgClaimSuspend"}>
                 {"Suspend"}
+              </button>
+            ) : null}
+            {review.canUnsuspend ? (
+              <button className={"btn sm"} data-dlg={"dlgClaimUnsuspend"}>
+                {"Unsuspend"}
               </button>
             ) : null}
           </div>
@@ -215,29 +204,9 @@ export function AddClaimDialog({ data }: { data: AddClaimData }) {
     <dialog className={"dlg"} id={"dlgClaim"} aria-labelledby={"dlgClaimH"}>
       <DialogHead id={"dlgClaim"} title={"Add claim"} />
       <div className={"db"}>
-        <Field id={"clK"} label={"Start from captured official content"} help={"Captured from IRCC’s fee list, Justice Laws and IRCC’s form, checklist and program pages on canada.ca. Casevoya fetches the page again when you save."}>
-          <select className={"sel"} id={"clK"} defaultValue={""}>
-            <option value={""}>{"None: I’ll type it from the official page"}</option>
-            {data.captured.map((option) => (
-              <option
-                key={option.key}
-                value={option.key}
-                data-program={option.program ?? ""}
-                data-claim={option.claim}
-                data-value={option.value ?? ""}
-                data-url={option.sourceUrl}
-                data-section={option.section}
-                data-excerpt={option.excerpt}
-                data-form={option.formNumber ?? ""}
-                data-modified={option.modifiedOn ?? ""}
-                data-note={option.note}
-              >
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <p className={"fp-note"} id={"clNote"} hidden={true}></p>
+        <p className={"fp-note"} style={{ marginTop: 0 }}>
+          {"For a claim Casevoya hasn’t captured, a processing time for example. Captured official claims are already live in Source review; edit your firm’s wording there."}
+        </p>
         <Field id={"clC"} label={"Claim"} help={"In the page’s words: what it says and who it applies to."}>
           <textarea className={"ta"} id={"clC"} maxLength={2000}></textarea>
         </Field>
@@ -379,7 +348,7 @@ export function ClaimReviewDialogs({ review }: { review: ClaimReviewData }) {
         <dialog className={"dlg"} id={"dlgClaimSuspend"} aria-labelledby={"dlgClaimSuspendH"}>
           <DialogHead id={"dlgClaimSuspend"} title={"Suspend this version"} />
           <div className={"db"}>
-            <p className={"fp-note"}>{"It stops being live straight away. To use the claim again, add and approve a new version."}</p>
+            <p className={"fp-note"}>{"It stops being live straight away. A licensed member can unsuspend it later with a step-up, or add and approve a new version."}</p>
             <Field id={"csN"} label={"Why"}>
               <textarea className={"ta"} id={"csN"} maxLength={500}></textarea>
             </Field>
@@ -390,6 +359,25 @@ export function ClaimReviewDialogs({ review }: { review: ClaimReviewData }) {
             </button>
             <button className={"btn p"} data-claim-act={"suspend"} {...ids}>
               {"Suspend"}
+            </button>
+          </div>
+        </dialog>
+      ) : null}
+      {review.canUnsuspend ? (
+        <dialog className={"dlg"} id={"dlgClaimUnsuspend"} aria-labelledby={"dlgClaimUnsuspendH"}>
+          <DialogHead id={"dlgClaimUnsuspend"} title={"Unsuspend this version"} />
+          <div className={"db"}>
+            <p className={"fp-note"}>{"It is live again for its program. It needs a fresh step-up; who did it and why are kept with the version."}</p>
+            <Field id={"cuN"} label={"Why"}>
+              <textarea className={"ta"} id={"cuN"} name={"cuN"} maxLength={500}></textarea>
+            </Field>
+          </div>
+          <div className={"df"}>
+            <button className={"btn"} data-close={"dlgClaimUnsuspend"}>
+              {"Cancel"}
+            </button>
+            <button className={"btn p"} data-claim-act={"unsuspend"} {...ids}>
+              {"Unsuspend"}
             </button>
           </div>
         </dialog>

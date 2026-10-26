@@ -14,6 +14,7 @@ import {
   type LetterSourceRow,
   type MatterLettersData,
 } from "@/components/sheet/designer/matter-letters";
+import { editStampLine } from "@/modules/vo/grounding";
 import { factText, LETTER_TYPES, letterTypeLabel, stripCitations } from "@/modules/vo/letter";
 import { longDate } from "@/modules/sheet/matter-present";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
@@ -101,6 +102,11 @@ type SourceJson = {
   attested?: boolean;
   attested_by?: string | null;
   reviewed_at?: string | null;
+  /** #188: the firm's licensed edit of the official claim the letter cites (save_vo_letter_draft keeps the stamp). */
+  edited?: boolean;
+  edited_by?: string | null;
+  edited_licence?: string | null;
+  edited_on?: string | null;
 };
 
 function list<T>(value: unknown): T[] {
@@ -158,6 +164,8 @@ export function sourceRows(value: unknown, timeZone: string): LetterSourceRow[] 
           ? `Page not captured by Casevoya, checked by ${source.attested_by?.trim() || "a licensed member"} on ${attested}`
           : null,
       reviewed ? `approved by a licensed member on ${reviewed}` : null,
+      // #188: the letter cites the firm's wording of an official claim, with its stamp.
+      source.edited ? editStampLine(source.edited_by, source.edited_licence, source.edited_on) : null,
     ].filter((part): part is string => Boolean(part));
     return {
       ref: String(source.ref ?? ""),

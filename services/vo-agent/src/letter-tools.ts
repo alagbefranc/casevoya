@@ -15,7 +15,7 @@ import { z } from "zod";
 import { dataBlock, oneLine, VO_MODEL, VO_PROMPT_VERSION } from "../../../src/modules/vo/prompt";
 import { guardLetter } from "../../../src/modules/vo/letter-guard";
 import { factText, letterTypeLabel } from "../../../src/modules/vo/letter";
-import { attestationLine } from "../../../src/modules/vo/grounding";
+import { attestationLine, editStampLine } from "../../../src/modules/vo/grounding";
 import type { VoSourceRef } from "../../../src/modules/vo/sign";
 import type { VoLetterFact, VoOfficialItem } from "./data";
 import type { RunContext, ToolResult, ToolSpec } from "./tools";
@@ -111,7 +111,11 @@ export const LETTER_TOOL_SPECS: Record<LetterToolName, ToolSpec> = {
       for (const row of rows) {
         const ref = refFor(letter.official, "S", (existing) => existing.id === row.id && existing.kind === row.kind, row);
         const attested = row.attested ? attestationLine(row.attestedBy, row.attestedOn) : null;
-        lines.push(`[${ref}] ${KIND_LABEL[row.kind] ?? "Official content"}${row.checkedOn ? `, official page checked ${oneLine(row.checkedOn, 10)}` : ""}${attested ? `. ${oneLine(attested, 200)}` : ""}:`);
+        // #188: the firm's wording of a live official claim, with its stamp.
+        const edited = row.edit ? editStampLine(row.edit.by, row.edit.licence, row.edit.on) : null;
+        lines.push(
+          `[${ref}] ${KIND_LABEL[row.kind] ?? "Official content"}${row.checkedOn ? `, official page checked ${oneLine(row.checkedOn, 10)}` : ""}${attested ? `. ${oneLine(attested, 200)}` : ""}${edited ? `. Your firm's wording: ${oneLine(edited, 200)}` : ""}:`,
+        );
         lines.push(dataBlock(ctx.nonce, row.content, 600));
       }
       return text(lines.join("\n"));

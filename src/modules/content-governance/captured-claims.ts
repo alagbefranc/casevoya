@@ -7,9 +7,9 @@
  *   - captured-canada-ca.json: canada.ca form pages ("Last updated" badge) and their PDF editions,
  *     the IMM 5483 study permit checklist (its 16 items word for word) and program page sections
  *     (captured from a machine that reaches www.canada.ca; the build machine can't).
- * These are DRAFTS offered in Templates > Source review > Add claim; nothing here is used as a rule.
- * When staff add one, Casevoya fetches the page again on the server; this capture is used only if
- * that fetch fails. A licensed reviewer resolves applicability and approves it before it goes live.
+ * They, and captured-all-sources.json, are loaded as live official claims by
+ * scripts/ops/load-official-claims.mjs (decisions 2026-10-25); the app doesn't import these files
+ * (Add claim no longer offers them). This module is kept for the capture checks in tests.
  *
  * Processing times are not captured: staff enter them from the official page, and they need the
  * reviewer's attestation when Casevoya can't capture the page.

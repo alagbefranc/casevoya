@@ -1,13 +1,16 @@
 /**
  * SRC-12: pure helpers for "What Casevoya supports" (the staff Sheet page and the public page).
  * The input is public.support_catalogue's JSON. Support is never claimed here: a row reads
- * Supported only when the database found a live (app.rule_pack_is_live), sourced rule pack.
+ * Supported only when the database found live official claims for the program's forms or
+ * checklists (#188, decisions 2026-10-25), or a live (app.rule_pack_is_live), sourced rule pack. A
+ * program whose official page is overdue for a re-check says it may be out of date.
  * A program shows IRCC's official name, linked to its official page with the retrieval date, only
  * when that page's snapshot was captured; otherwise it is listed with "Source not captured".
  */
 import { longDate } from "@/modules/sheet/matter-present";
 import { programLabel } from "@/modules/sheet/matters-present";
 import { dayInZone, shortHash } from "@/modules/renewals/present";
+import { claimStamp } from "@/modules/sheet/official-claims-present";
 
 export type CatalogueBadge = { tone: string; label: string };
 
@@ -18,6 +21,8 @@ export type CatalogueRow = {
   facts: string[];
   badge: CatalogueBadge;
   detail: string;
+  /** #188: "May be out of date" when a source is overdue for a re-check, and the firm's edit stamps (staff). */
+  flags?: string[];
 };
 
 export type SupportCatalogueData = {
@@ -42,6 +47,11 @@ type ProgramRow = {
   pack_version?: unknown;
   pack_scope?: unknown;
   official?: Official | null;
+  /** #188: live official claims for the program's forms and checklists. */
+  official_claims?: unknown;
+  stale?: unknown;
+  last_checked_at?: unknown;
+  firm_edits?: unknown;
 };
 type ScopeRow = { key?: unknown; label?: unknown; note?: unknown; supported?: unknown; firm_practises?: unknown };
 
@@ -98,6 +108,20 @@ export function programRow(row: ProgramRow, timeZone: string): CatalogueRow | nu
   }
   const version = typeof row.pack_version === "number" ? row.pack_version : null;
   const scope = text(row.pack_scope) === "firm" ? "your firm’s pack" : "Casevoya pack";
+  // #188: live official claims for the program's forms and checklists count as support.
+  const claims = typeof row.official_claims === "number" ? row.official_claims : 0;
+  const claimLine = claims
+    ? `${claims} live official claim${claims === 1 ? "" : "s"} for its forms and checklists, each from its official page with Casevoya’s capture and the dates the page prints.`
+    : null;
+  const flags: string[] = [];
+  if (claims && row.stale === true) {
+    const checked = text(row.last_checked_at);
+    flags.push(`May be out of date: an official page behind it is due for a re-check${checked ? ` (oldest last check ${longDate(dayInZone(checked, timeZone))})` : ""}.`);
+  }
+  for (const edit of list<{ key?: unknown; edited_by?: unknown; edited_licence?: unknown; edited_on?: unknown }>(row.firm_edits)) {
+    const stamp = claimStamp(edit);
+    if (stamp && text(edit.key)) flags.push(`${text(edit.key)}: ${stamp}.`);
+  }
   return {
     key,
     name,
@@ -105,8 +129,11 @@ export function programRow(row: ProgramRow, timeZone: string): CatalogueRow | nu
     facts,
     badge: supported ? SUPPORTED : NOT_SUPPORTED,
     detail: supported
-      ? `Approved, sourced rule pack v${version ?? "?"} (${scope}). ${source}`
-      : `No approved, sourced rule pack. A matter for it opens with no checklist or rules, and nothing is taken from another program. ${source}`,
+      ? row.pack_version != null
+        ? `Approved, sourced rule pack v${version ?? "?"} (${scope}).${claimLine ? ` ${claimLine}` : ""} ${source}`
+        : `${claimLine ?? "Live official claims."} ${source}`
+      : `No live official claims for its forms or checklists, and no approved rule pack. A matter for it opens with no checklist or rules, and nothing is taken from another program. ${source}`,
+    ...(flags.length ? { flags } : {}),
   };
 }
 
@@ -141,13 +168,14 @@ export function supportCatalogue(json: SupportCatalogueJson | null, input: { tim
   const firmCodes = list<unknown>(json?.firm_jurisdictions).filter((code): code is string => typeof code === "string");
   return {
     intro: input.staff
-      ? "Where Casevoya has an approved, sourced rule pack, and where it doesn’t. It counts the platform’s packs and your firm’s own approved packs."
-      : "Where Casevoya has an approved, sourced rule pack, and where it doesn’t.",
+      ? "Where Casevoya has live official claims (or an approved, sourced rule pack), and where it doesn’t. It counts the platform’s claims and packs and your firm’s own approved packs, and shows your firm’s edits."
+      : "Where Casevoya has live official claims (or an approved, sourced rule pack), and where it doesn’t.",
     jurisdictions,
     programs,
     caseTypes,
     notes: [
-      "Supported means a rule pack built from official IRCC or Government of Canada pages, each claim with its page, section, retrieval date and snapshot hash, approved by a licensed consultant. Anything else is not supported.",
+      "Supported means Casevoya has live official claims for the program’s forms or checklists, captured from official IRCC or Government of Canada pages, each with its page, section, retrieval date and snapshot hash (or a rule pack built from them). A firm’s licensed members can edit their firm’s wording; each edit is stamped with who, their licence and the date. Anything else is not supported.",
+      "An official page is due for a re-check 7 days after its last successful check for fees, forms and checklists, 14 days for program pages and guides, and 30 days for law. Until it is checked again, its programs say they may be out of date.",
       "Countries other than Canada are not supported.",
       "A matter for an unsupported program, province, tribunal or case type opens with no checklist or rules, and never takes them from another program.",
       "Casevoya doesn’t submit to IRCC or any other government, has no government integration, doesn’t verify licences on its own (firms record their College register checks), and doesn’t promise any approval or processing time.",

@@ -13,6 +13,7 @@ import { CAPTURED_CLAIMS, CAPTURED_PAGES, capturedPage } from "@/modules/content
 import { claimUrlProblem, hashableBytes, readPageDates } from "@/modules/content-governance/claim-capture";
 import { captureClaimPage } from "@/modules/content-governance/claim-page";
 import { claimAddData } from "@/modules/sheet/source-claims-load";
+import { preparedClaims } from "../scripts/ops/load-official-claims.mjs";
 
 /**
  * SRC-01/02: canada.ca captures. The HTML and PDF text below are synthetic (form IMM 9999, made-up
@@ -208,17 +209,13 @@ describe("committed canada.ca drafts", () => {
     expect(CAPTURED_PAGES.length).toBe(3 + canada.pages.length);
   });
 
-  it("offers them in Add claim with the form number, the page's Date modified and where the edition was read", () => {
-    const options = claimAddData({ organizationId: "o", role: "case_manager" }, "2026-10-25").captured;
-    const formPage = options.find((option) => option.key === claims.find((claim) => claim.category === "form")!.key)!;
-    expect(formPage.formNumber).toMatch(/^[A-Z]+ \d{4}$/);
-    expect(formPage.modifiedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(formPage.note).toMatch(/^IRCC form page on canada\.ca, captured .+ Date modified .+ A draft until a licensed reviewer approves it\.$/);
-    const edition = options.find((option) => option.key.endsWith(".EDITION"))!;
-    expect(edition.note).toMatch(/^IRCC form PDF on canada\.ca, .+ Edition read from: .+\./);
-    expect(edition.modifiedOn).toBeNull();
-    expect(options.filter((option) => option.key.startsWith("CA.CHECKLIST.IMM5483.")).every((option) => option.note.startsWith("IRCC document checklist PDF on canada.ca"))).toBe(true);
-    expect(options.find((option) => option.key.startsWith("CA.PROGRAM."))?.note).toMatch(/^IRCC program page on canada\.ca/);
-    expect(options.find((option) => option.key.startsWith("CA.FEES."))?.note).toMatch(/^IRCC fee list/);
+  it("no longer offers them in Add claim: the loader loads them as live official claims (decision 2026-10-25)", () => {
+    const data = claimAddData({ organizationId: "o", role: "case_manager" }, "2026-10-25");
+    expect(Object.keys(data).sort()).toEqual(["canAdd", "organizationId", "today"]);
+    const prepared = preparedClaims([{ name: "captured-canada-ca.json", data: canada as never }]);
+    expect(prepared.refused).toEqual([]);
+    const form = prepared.claims.find((item) => item.payload.key === claims.find((claim) => claim.category === "form")!.key)!;
+    expect(form.payload.form_number).toMatch(/^[A-Z]+ \d{4}$/);
+    expect(form.payload.page.modified_on).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

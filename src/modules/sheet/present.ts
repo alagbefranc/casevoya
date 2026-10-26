@@ -175,6 +175,11 @@ export type SheetQuery = {
   from?: string;
   /** Reports › Processing and outcomes: one program (a program key, or "none"). */
   program?: string;
+  /** Templates › Rule detail: one live official claim (its rule definition id). */
+  claim?: string;
+  /** Templates › Source review: the Live official claims search and page offset. */
+  cq?: string;
+  offset?: string;
 };
 
 export function sheetVariant(page: string, query: SheetQuery): string {

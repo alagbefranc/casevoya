@@ -139,6 +139,8 @@ Matter work stages, government status, engagement status, financial status, and 
 
 Source state is Draft → Evidence captured → Professional review → Approved → Published, with Review due, Suspended, Superseded and Rejected branches. Published versions are immutable; edits create successors. A content author and professional approver are distinct responsibilities, even where one qualified individual holds both roles and that fact is recorded.
 
+Captured official claims (decision 2026-10-25) are the exception: a rule version with `origin = official_capture` (platform-wide, `organization_id` null) is published by the loader in a database maintenance session with no review, so author and approver no longer have to be different people for it. A firm's change is an append-only override (`rule_claim_overrides`: edit or revert, the base version, the editor's licence copied in, the step-up used) read through `app.firm_rule_claim(org, definition)`; the captured version never changes. "Source changed since your edit" is derived (the override's base version is no longer the live one), never stored. Firm-entered claims keep the review workflow above.
+
 Signature state is Draft → Sent → Partially signed → Completed, with Declined, Expired, and Voided branches. Payment and refund states follow verified provider events plus reconciliation. Do not invent provider statuses; adapters map documented vendor states to domain states and preserve the original payload reference securely.
 
 ## 8 Source ingestion and rule execution

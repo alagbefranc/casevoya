@@ -56,6 +56,14 @@ export type VoSourceRef = {
   attested?: boolean;
   attestedBy?: string;
   attestedOn?: string;
+  /**
+   * official only (#188): the firm's licensed edit of a live official claim; Vo cited the firm's
+   * wording. Who, their licence and the date, as the database states it.
+   */
+  edited?: boolean;
+  editedBy?: string;
+  editedLicence?: string;
+  editedOn?: string;
 };
 
 /** Why Vo didn't answer (SRC-09): the request needs a consultant, or nothing on file or approved supports it. */

@@ -4,8 +4,6 @@
  * a date the evidence doesn't have stays null (Unknown on screen).
  */
 import type { AddClaimData } from "@/components/sheet/designer/source-claims";
-import { CAPTURED_CLAIMS, capturedPage } from "@/modules/content-governance/captured-claims";
-import { longDate } from "@/modules/sheet/matter-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import type { ClaimEvidenceRow, ClaimFacts, Resolution } from "@/modules/sheet/source-claims-present";
 
@@ -89,40 +87,15 @@ export function claimFactsFor(
 
 const ADDERS = new Set(["firm_owner", "licensed_consultant", "case_manager"]);
 
-/** The Add claim dialog: who may add, and the captured official content to start from. */
+/**
+ * The Add claim dialog: who may add. It no longer offers the committed capture files: the loader
+ * loads those as live official claims (#188, decisions 2026-10-25); Add claim is for a claim the
+ * firm enters itself (a processing time, for example), which keeps licensed approval.
+ */
 export function claimAddData(staff: Pick<SheetStaff, "organizationId" | "role">, today: string): AddClaimData {
   return {
     organizationId: staff.organizationId,
     canAdd: ADDERS.has(staff.role),
     today,
-    captured: CAPTURED_CLAIMS.map((claim) => {
-      const page = capturedPage(claim.page);
-      const where = claimSourceName(claim);
-      const edition = claim.editionSource ? ` Edition read from: ${claim.editionSource}.` : "";
-      return {
-        key: claim.key,
-        label: `${claim.claim.replace(/\.$/, "")}${claim.value && !claim.claim.includes(claim.value) ? ` (${claim.value})` : ""}`,
-        program: claim.program,
-        claim: claim.claim,
-        value: claim.value,
-        sourceUrl: claim.sourceUrl,
-        section: claim.section,
-        excerpt: claim.excerpt,
-        formNumber: claim.formNumber ?? null,
-        modifiedOn: page?.modifiedOn ?? null,
-        note: page
-          ? `${where}, captured ${longDate(page.retrievedAt.slice(0, 10))}, SHA-256 ${page.sha256}.${page.modifiedOn ? ` Date modified ${longDate(page.modifiedOn)}.` : ""}${edition} A draft until a licensed reviewer approves it.`
-          : `${where}.${edition} A draft until a licensed reviewer approves it.`,
-      };
-    }),
   };
-}
-
-/** Where a captured claim comes from, in the words staff know. */
-function claimSourceName(claim: { page: string; category?: string }): string {
-  if (claim.page.includes("justice.gc.ca")) return "Justice Laws";
-  if (claim.page.startsWith("https://ircc.canada.ca/")) return "IRCC fee list";
-  if (claim.category === "program") return "IRCC program page on canada.ca";
-  if (claim.page.endsWith(".pdf")) return claim.category === "checklist" ? "IRCC document checklist PDF on canada.ca" : "IRCC form PDF on canada.ca";
-  return "IRCC form page on canada.ca";
 }

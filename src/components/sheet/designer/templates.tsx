@@ -12,10 +12,15 @@
  * (`sources.addClaim`), and on Rule detail the claim's evidence with every date on its own
  * (`rule.evidence`) and the review panel (`rule.review`). The Designer's demo "Actions for your
  * role" panel (`rule.actions`) stays demo-only; live data leaves it null.
+ *
+ * Live-only additions (#188, official-claims.tsx): the Live official claims list below the source
+ * register (`sources.live`), and one live official claim on Rule detail (`officialClaim`).
  */
 import { Empty, Icon, Pair } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
 import { AddClaimButton, ClaimEvidenceList, ClaimReviewPanel, type AddClaimData, type ClaimEvidenceItem, type ClaimReviewData } from "./source-claims";
+import { LiveOfficialClaims, OfficialClaimDetail } from "./official-claims";
+import type { LiveClaimsData, OfficialClaimView } from "@/modules/sheet/official-claims-present";
 
 export type TemplatesTab = "program" | "messages" | "checklists" | "sources" | "rule";
 
@@ -56,9 +61,11 @@ export type TemplatesData = {
   program: { rows: ProgramRow[]; note: string; supportHref?: string };
   messages: { rows: MessageRow[] };
   checklists: { cards: ChecklistCard[] };
-  /** `addClaim` (live only, SRC-01): the Add claim button and dialog. */
-  sources: { kpis: SourceKpi[]; rows: SourceRow[]; addClaim?: AddClaimData };
+  /** `addClaim` (live only, SRC-01): the Add claim button and dialog. `live` (live only, #188): the live official claims. */
+  sources: { kpis: SourceKpi[]; rows: SourceRow[]; addClaim?: AddClaimData; live?: LiveClaimsData };
   rule: RuleDetail | null;
+  /** Live only (#188): one live official claim on the Rule tab (`?claim=`), with the firm's edit and history. */
+  officialClaim?: OfficialClaimView | null;
 };
 
 const UL: Record<TemplatesTab, React.CSSProperties> = {
@@ -380,6 +387,7 @@ function Sources({ data }: { data: TemplatesData }) {
           </table>
         </div>
       )}
+      {data.sources.live ? <LiveOfficialClaims data={data.sources.live} /> : null}
     </>
   );
 }
@@ -551,7 +559,7 @@ export function SheetTemplates({ data }: { data: TemplatesData }) {
   if (data.tab === "messages") return <Messages data={data} />;
   if (data.tab === "checklists") return <Checklists data={data} />;
   if (data.tab === "sources") return <Sources data={data} />;
-  if (data.tab === "rule") return <Rule rule={data.rule} />;
+  if (data.tab === "rule") return data.officialClaim ? <OfficialClaimDetail view={data.officialClaim} /> : <Rule rule={data.rule} />;
   return <Program data={data} />;
 }
 
