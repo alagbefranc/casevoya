@@ -28,6 +28,7 @@ import {
   BOOKING_PAGE_PILL,
   agreementLabel,
   bookingEventLabel,
+  clientActorLabel,
   bookingPageState,
   bookingPagesInOrder,
   bookingTypeState,
@@ -170,7 +171,11 @@ async function loadRecord(
     picker.unshift({ label: `${shortWhen(Date.parse(booking.starts_at), zone)} · ${booking.title}`, value: recordHref(booking.id), selected: true });
   }
 
-  const [attendee, type, events, link, summaryRow, agreementRow] = await Promise.all([
+  // CRM-03: a client without a portal login can only act through the Manage your booking link.
+  const portalPerson = booking.person_id
+    ? supabase.from("persons").select("user_id").eq("organization_id", org).eq("id", booking.person_id).maybeSingle()
+    : Promise.resolve({ data: null });
+  const [attendee, type, events, link, summaryRow, agreementRow, personRow] = await Promise.all([
     supabase.from("booking_attendees").select("display_name, time_zone, email").eq("organization_id", org).eq("booking_id", booking.id).eq("role", "primary").maybeSingle(),
     supabase.from("booking_event_types").select("title").eq("organization_id", org).eq("id", booking.event_type_id).maybeSingle(),
     supabase.from("booking_events").select("kind, actor, actor_user_id, created_at").eq("organization_id", org).eq("booking_id", booking.id).order("created_at", { ascending: false }).limit(30),
@@ -185,6 +190,7 @@ async function loadRecord(
       .order("sent_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    portalPerson,
   ]);
   const leadId = link.data?.lead_id ?? null;
   const [lead, notes] = leadId
@@ -273,7 +279,14 @@ async function loadRecord(
       ],
       history: (events.data ?? []).map((event) => ({
         what: bookingEventLabel(event.kind),
-        who: event.actor === "staff" ? (event.actor_user_id ? byUser.get(event.actor_user_id) ?? "Staff" : "Staff") : event.actor === "client" ? "Client" : "Casevoya",
+        who:
+          event.actor === "staff"
+            ? event.actor_user_id
+              ? byUser.get(event.actor_user_id) ?? "Staff"
+              : "Staff"
+            : event.actor === "client"
+              ? clientActorLabel(Boolean(personRow.data?.user_id))
+              : "Casevoya",
         when: shortWhen(Date.parse(event.created_at), zone),
       })),
     },

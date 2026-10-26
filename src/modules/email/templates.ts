@@ -185,10 +185,11 @@ function contextFor(design: Wired, context: Context, firm: string): EmailContext
         portal: context.portal === true,
         locationKind: textOf(context.location_kind) || null,
         address: textOf(context.address) || null,
+        manageUrl: textOf(context.manage_link) || null,
       };
     // The portal button only when the database says the attendee has a portal login.
     case "EM16b":
-      return { firmName: firm, startsAt: textOf(context.starts_at) || null, timeZone: textOf(context.time_zone) || null, portal: context.portal === true };
+      return { firmName: firm, startsAt: textOf(context.starts_at) || null, timeZone: textOf(context.time_zone) || null, portal: context.portal === true, manageUrl: textOf(context.manage_link) || null };
     case "EM16c":
       return {
         firmName: firm,

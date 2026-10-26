@@ -84,7 +84,7 @@ Subjects and preheaders must not reveal a program, document name, amount or deci
 
 ## _shared: header, footers and phrases used in every email
 
-Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:0f2d34633cbb…`
+Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:2392d7d1cd0a…`
 
 - These strings appear in every French email (header tagline, footers, zone label, role phrases). Approve them first: no French email is sent while _shared is not approved.
 
@@ -108,6 +108,8 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:0f2d34633cb
 | `role_assistant` | an Assistant | adjointe ou adjoint | Hand draft. Article-free (EM01). |
 | `role_finance_user` | a Finance user | responsable des finances | Hand draft. Article-free (EM01). |
 | `role_other` | a member of the team | membre de l’équipe | Hand draft. Article-free (EM01). |
+| `manage_line` | To change the time or cancel, use Manage your booking. | Pour changer l’heure ou annuler, utilisez Gérer votre réservation. | Hand draft. CRM-03 hand draft (#176). |
+| `manage_cta` | Manage your booking | Gérer votre réservation | Hand draft. CRM-03 hand draft (#176). |
 
 ## EM01: Staff invite
 
