@@ -36,7 +36,7 @@ The project is at specification and developer-handoff stage. Six Markdown docume
 
 **DEC-002 — Source grounding is mandatory.** Every real immigration requirement must have exact official evidence and reviewed applicability. A generic IRCC link, model answer, competitor checklist, or client assertion is insufficient authority. Product choices and personal facts use their own appropriate evidence types.
 
-**DEC-003 — Approved, versioned rule packs.** Store source snapshots, claim evidence and qualified review. Pin matter/package versions. Detect source changes, assess impact, and publish only after review; do not silently rewrite existing matters.
+**DEC-003 — Approved, versioned rule packs.** Store source snapshots, claim evidence and qualified review. Pin matter/package versions. Detect source changes, assess impact, and publish only after review; do not silently rewrite existing matters. **Exception (Francis, 2026-10-25):** a claim Casevoya captured from an official page (URL and section, page hash, retrieval time, printed dates) goes live when the operator's loader loads it; each firm's licensed members may edit their own firm's wording only (fresh step-up each time, stamped, kept); a changed re-capture goes live and flags firm edits; overdue sources stay blocked for Vo's fees and advice. Firm-entered claims, shared templates, package release approvals and the named content reviewer keep licensed review.
 
 **DEC-004 — Narrow launch scope, complete journey.** First launch may support one reviewed program and a small pilot, while still covering intake through decision. Unsupported programs cannot silently reuse another pack. Scope details await T001.
 

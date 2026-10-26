@@ -136,9 +136,9 @@ describe("invite staff dialog", () => {
     expect(needsStepUp(safeAccessError("aal2"))).toBe(true);
     expect(needsStepUp(staffInviteError("only a firm owner can invite staff"))).toBe(false);
     expect(staffStepUpLocation("/sheet/invitations", "?tab=staff", true)).toBe(
-      `/mfa?step=6&next=${encodeURIComponent("/sheet/invitations?tab=staff&dlg=invite")}`,
+      `/mfa?step=6&next=${encodeURIComponent("/sheet/invitations?tab=staff&dlg=invite")}&for=staff_invite`,
     );
-    expect(staffStepUpLocation("/sheet/invitations", "?dlg=invite", false)).toBe(`/mfa?step=6&next=${encodeURIComponent("/sheet/invitations")}`);
+    expect(staffStepUpLocation("/sheet/invitations", "?dlg=invite", false)).toBe(`/mfa?step=6&next=${encodeURIComponent("/sheet/invitations")}&for=staff_invite`);
   });
 
   it("never passes a database message through", () => {

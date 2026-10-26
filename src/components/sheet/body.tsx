@@ -15,17 +15,19 @@ import { NewQuoteDialog, QuoteConvertDialog, QuoteEditDialog, QuotePreviewDialog
 import { ClauseDialog, SheetAgreementEditor } from "@/components/sheet/designer/agreements-editor";
 import { SheetAgreementCompare } from "@/components/sheet/designer/agreements-compare";
 import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet/designer/clients";
-import { CreditNoteDialog, FinanceHeader, NewInvoiceDialog, RefundDialog, SheetFinance, SheetFinancePayments, SheetFinanceRefunds } from "@/components/sheet/designer/finance";
+import { CreditDialog, CreditNoteDialog, EvidenceDialog, FinanceHeader, NewInvoiceDialog, RefundDialog, SheetFinance, SheetFinancePayments, SheetFinanceRefunds } from "@/components/sheet/designer/finance";
 import { CreditReviewDialog, SheetFinanceInvoice, VoidDialog } from "@/components/sheet/designer/invoice";
 import { ReconDialogs, SheetFinanceRecon } from "@/components/sheet/designer/recon";
+import { FinanceBillingDialogs, FinanceBillingPanels, InvoiceBillingDialogs, MatterWorkDialogs } from "@/components/sheet/designer/billing-live";
 import { SheetFrame } from "@/components/sheet/designer/frame";
 import { ApproveTransferDialog, FundsLiveDialogs, RecordPaymentDialog, SheetFinanceFunds, VerifyPaymentDialog } from "@/components/sheet/designer/funds";
-import { StripeAccountStatus } from "@/components/sheet/stripe-connect";
+import { StripeAccountStatus, StripeConnectCard } from "@/components/sheet/stripe-connect";
 import { SheetHome } from "@/components/sheet/designer/home";
 import { GOVERNMENT_CSS, GovernmentHeader, SheetGovernment } from "@/components/sheet/designer/government";
 import { GovDialogs } from "@/components/sheet/designer/matter-government";
 import { loadSheetGovernment } from "@/modules/sheet/government-load";
 import { MatterDialogs, MatterRbar, MatterTopBar, SheetMatter } from "@/components/sheet/designer/matter";
+import { MatterLetterDialogs } from "@/components/sheet/designer/matter-letters";
 import { MATTER_CSS } from "@/components/sheet/designer/matter-css";
 import { MattersTopBar, NewMatterDialog, SheetMatters } from "@/components/sheet/designer/matters";
 import { PersonEditDialog } from "@/components/sheet/designer/person-edit";
@@ -40,8 +42,14 @@ import { SettingsHeader, SheetSettingsSecurity, SheetSettingsTeam } from "@/comp
 import { TeamDialogs } from "@/components/sheet/designer/settings-staff-admin";
 import { FirmTransferDialogs, FirmTransfersPanel } from "@/components/sheet/designer/firm-transfers";
 import { PlanDialog, SettingsBillingHeader, SheetRetention, SheetSubscription } from "@/components/sheet/designer/settings-billing";
+import { BankAccountDialogs, ManualPaymentDialogs, ReconItemDialog, SettingsBankAccounts } from "@/components/sheet/designer/manual-pay";
 import { loadSheetRetention, loadSheetSubscription } from "@/modules/sheet/settings-billing-load";
+import { DeletionDialog, RetentionDeletionPanels } from "@/components/sheet/designer/sec-retention";
+import { CancelSubscriptionDialog, ContinuityPanel, EndArrangementDialog } from "@/components/sheet/designer/sec-continuity";
+import { loadRetentionDeletion } from "@/modules/sheet/sec-load";
 import { loadSheetSettingsSecurity, loadSheetSettingsTeam } from "@/modules/sheet/settings-load";
+import { SheetServiceNotices } from "@/components/sheet/designer/service-notices";
+import { loadServiceNoticeHistory } from "@/modules/sheet/service-notices-load";
 import { SheetTasks, TaskEditDialog, TasksDialog, TasksHeader } from "@/components/sheet/designer/tasks";
 import { ComposioDialog, IntegrationsSettingsHeader, SheetIntegrations, SheetNotificationPrefs, WhatsAppDialog } from "@/components/sheet/designer/settings-integrations";
 import { loadSheetSettingsIntegrations } from "@/modules/sheet/settings-integrations-load";
@@ -49,6 +57,7 @@ import { NotificationsHeader, SheetNotifications } from "@/components/sheet/desi
 import { loadSheetNotifications } from "@/modules/sheet/notifications-load";
 import { LeadScreen, PipelineScreen } from "@/components/sheet/lead-screens";
 import { ReportsExportDialog, ReportsHeader, SheetReports } from "@/components/sheet/designer/reports";
+import { ScheduleReportDialog } from "@/components/sheet/designer/scheduled-reports";
 import { loadSheetReports } from "@/modules/sheet/reports-load";
 import { QueueHeader, SheetQueue } from "@/components/sheet/designer/queue";
 import { loadSheetQueue } from "@/modules/sheet/queue-load";
@@ -57,7 +66,8 @@ import { loadSheetExports } from "@/modules/sheet/exports-load";
 import { MigrationHeader, SheetMigration } from "@/components/sheet/designer/migration";
 import { loadSheetMigration } from "@/modules/sheet/migration-load";
 import { DocumentReviewDialog, DocumentsHeader, SheetDocuments } from "@/components/sheet/designer/documents";
-import { ComposeDialog, InboxHeader, SheetInbox } from "@/components/sheet/designer/inbox";
+import { AnnouncementDialog, ComposeDialog, InboxHeader, SheetInbox } from "@/components/sheet/designer/inbox";
+import { FileToMatterDialog } from "@/components/sheet/designer/inbound-filing";
 import { PrivacyDialogs, PrivacyHeader, SheetPrivacy } from "@/components/sheet/designer/privacy";
 import { ComplaintsDialogs, ComplaintsHeader, SheetComplaints } from "@/components/sheet/designer/complaints";
 import { LiveSheet, QuietSheet } from "@/components/sheet/live";
@@ -73,8 +83,13 @@ import { GrantDialog, GrantRevokeDialog, GrantsHeader, SheetGrants, SupportDecli
 import { loadSheetGrants } from "@/modules/sheet/grants-load";
 import { INTAKE_BUILDER_CSS, IntakeHeader, IntakeSettings, SheetIntakeBuilder } from "@/components/sheet/designer/intake-builder";
 import { loadSheetIntakeBuilder } from "@/modules/sheet/intake-builder-load";
-import { SheetTemplates, TemplatesHeader } from "@/components/sheet/designer/templates";
+import { MessageTemplateDialog, SheetTemplates, TemplatesHeader } from "@/components/sheet/designer/templates";
+import { AddClaimDialog, ClaimReviewDialogs } from "@/components/sheet/designer/source-claims";
+import { OfficialClaimDialogs } from "@/components/sheet/designer/official-claims";
+import { OpenOnLoad } from "@/components/sheet/open-on-load";
 import { loadSheetTemplates } from "@/modules/sheet/templates-load";
+import { loadSheetSupportCatalogue } from "@/modules/sheet/support-catalogue-load";
+import { SheetSupportCatalogue } from "@/components/sheet/designer/support-catalogue";
 import { AutomationsDialog, AutomationsHeader, AutomationsSettings, SheetAutomations } from "@/components/sheet/designer/automations";
 import { loadSheetAutomations } from "@/modules/sheet/automations-load";
 import { SheetScreen } from "@/components/sheet/screen";
@@ -105,6 +120,11 @@ import { loadSheetCalendar, loadSheetConsultations } from "@/modules/scheduling/
 import { loadSheetLead, loadSheetPipeline } from "@/modules/leads/load";
 import { EnquiryShareDialog } from "@/components/sheet/designer/enquiry-share";
 import { loadEnquiryShare } from "@/modules/leads/share-load";
+import { loadLeadVo } from "@/modules/sheet/vo-crm-load";
+import { NoAccessPanel, StateAlert, StateAlerts } from "@/components/sheet/designer/state-views";
+import { financeAccess, grantsAccess, migrationAccess, recordNotOpen, subscriptionAccess, type NoAccessData } from "@/modules/sheet/states-present";
+import { loadSourceStaleness } from "@/modules/sheet/states-load";
+import type { SheetStaff } from "@/modules/sheet/load";
 
 const PUBLIC = new Set(["enquiry", "book"]);
 
@@ -202,7 +222,7 @@ export async function SheetBody({
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={chrome.sidebar}
-          header={<TasksHeader tab={tasks.tab} counts={tasks.counts} canCreate={tasks.canCreate !== false} />}
+          header={<TasksHeader tab={tasks.tab} counts={tasks.counts} canCreate={tasks.canCreate !== false} escalate={tasks.escalate} />}
           statusbar={chrome.statusbar}
           after={
             <>
@@ -234,14 +254,20 @@ export async function SheetBody({
   }
   // Inbox: Conversations (filed client email), Email to triage, Delivery problems and Announcements (OPS-06).
   if (page === "inbox" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, pills, inbox, compose } = await loadSheetInbox(access.staff, query);
+    const { chrome, pills, inbox, compose, announce } = await loadSheetInbox(access.staff, query);
     return (
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={chrome.sidebar}
-          header={<InboxHeader tab={inbox.tab} pills={pills} />}
+          header={<InboxHeader tab={inbox.tab} pills={pills} announce={Boolean(announce)} />}
           statusbar={chrome.statusbar}
-          after={<ComposeDialog data={compose} />}
+          after={
+            <>
+              <ComposeDialog data={compose} />
+              {announce ? <AnnouncementDialog data={announce} /> : null}
+              {inbox.tab === "triage" ? <FileToMatterDialog organizationId={access.staff.organizationId} /> : null}
+            </>
+          }
         >
           <SheetInbox data={inbox} />
         </SheetFrame>
@@ -250,14 +276,19 @@ export async function SheetBody({
   }
   // Reports (T041): Operations, Money, Processing and outcomes, Scheduled. Each tab is role-gated.
   if (page === "reports" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, reports } = await loadSheetReports(access.staff, query);
+    const { chrome, reports, scheduleDialog } = await loadSheetReports(access.staff, query);
     return (
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={chrome.sidebar}
           header={<ReportsHeader tab={reports.tab} pills={reports.pills} pillTitles={reports.pillTitles} />}
           statusbar={chrome.statusbar}
-          after={<ReportsExportDialog data={reports.dialog} />}
+          after={
+            <>
+              <ReportsExportDialog data={reports.dialog} />
+              {scheduleDialog ? <ScheduleReportDialog data={scheduleDialog} /> : null}
+            </>
+          }
         >
           <SheetReports data={reports} />
         </SheetFrame>
@@ -282,10 +313,11 @@ export async function SheetBody({
   }
   // Team queue: open tasks, reviews, deadlines to verify and money waiting for a second person.
   if (page === "queue" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, queue } = await loadSheetQueue(access.staff);
+    const { chrome, queue, partial } = await loadSheetQueue(access.staff);
     return (
       <SheetScreen page={page}>
         <SheetFrame sidebar={chrome.sidebar} header={<QueueHeader counts={queue.counts} filter={{ "data-queue-filter": "1", "aria-controls": "ql", title: "Search and filter the queue" }} />} statusbar={chrome.statusbar}>
+          {partial && !queue.failed ? <StateAlert data={partial} /> : null}
           <SheetQueue data={queue} />
         </SheetFrame>
       </SheetScreen>
@@ -293,7 +325,7 @@ export async function SheetBody({
   }
   // Client-file exports (T040): export jobs for the matters the signed-in person can export.
   if (page === "exports" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, exports } = await loadSheetExports(access.staff, query);
+    const { chrome, exports, partial } = await loadSheetExports(access.staff, query);
     return (
       <SheetScreen page={page}>
         <SheetFrame
@@ -302,6 +334,7 @@ export async function SheetBody({
           statusbar={chrome.statusbar}
           after={<ExportsDialog data={exports.dialog} />}
         >
+          {partial ? <StateAlert data={partial} /> : null}
           <SheetExports data={exports} />
         </SheetFrame>
       </SheetScreen>
@@ -310,10 +343,11 @@ export async function SheetBody({
   // Compliance > Migration import (T044, PRD §25): the firm owner's CSV import with dry run and rollback.
   if (page === "migration" && (access.kind === "live" || access.kind === "sample")) {
     const loaded = await loadSheetMigration(access.staff, query);
+    const denied = migrationAccess(access.staff.role);
     return (
       <SheetScreen page={page}>
         <SheetFrame sidebar={loaded.chrome.sidebar} header={<MigrationHeader data={loaded.header} />} statusbar={loaded.chrome.statusbar}>
-          <SheetMigration data={loaded.page} />
+          {denied ? <NoAccessPanel data={denied} /> : <SheetMigration data={loaded.page} />}
         </SheetFrame>
       </SheetScreen>
     );
@@ -406,6 +440,17 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
+  // Settings > Service notices (ADM-04): Casevoya's notices to this firm, current and past (reached from Security and the banner).
+  if (page === "settings" && query.tab === "notices" && (access.kind === "live" || access.kind === "sample")) {
+    const loaded = await loadServiceNoticeHistory(access.staff);
+    return (
+      <SheetScreen key={"settings-notices"} page={page}>
+        <SheetFrame sidebar={loaded.chrome.sidebar} header={<SettingsHeader data={loaded.header} />} statusbar={loaded.chrome.statusbar}>
+          <SheetServiceNotices data={loaded.page} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
   // Settings > Firm (the default tab), Offices, Branding, Language and time: the firm's own values.
   const firmTab = page === "settings" ? settingsTab(query.tab) : null;
   if (firmTab && (access.kind === "live" || access.kind === "sample")) {
@@ -453,6 +498,18 @@ export async function SheetBody({
   // Settings > Subscription (ADM-02): the firm's stored subscription state and real usage counts.
   // Keyed per tab so the Sheet's scripts mount again when the tab changes.
   if (page === "settings" && query.tab === "billing" && (access.kind === "live" || access.kind === "sample")) {
+    // DES-04: the plan, usage, payment setup and bank accounts are for the firm owner and finance staff.
+    const denied = subscriptionAccess(access.staff.role);
+    if (denied) {
+      const chrome = await loadSheetChrome(access.staff, "/sheet/settings");
+      return (
+        <SheetScreen key={"settings-billing"} page={page}>
+          <SheetFrame sidebar={chrome.sidebar} header={<SettingsBillingHeader firmName={access.staff.organizationName} pill={"Firm owner and finance only"} tab={"billing"} />} statusbar={chrome.statusbar}>
+            <NoAccessPanel data={denied} />
+          </SheetFrame>
+        </SheetScreen>
+      );
+    }
     const loaded = await loadSheetSubscription(access.staff);
     return (
       <SheetScreen key={"settings-billing"} page={page}>
@@ -460,24 +517,37 @@ export async function SheetBody({
           sidebar={loaded.chrome.sidebar}
           header={<SettingsBillingHeader firmName={access.staff.organizationName} pill={loaded.pill} tab={"billing"} />}
           statusbar={loaded.chrome.statusbar}
-          after={loaded.page.dialog ? <PlanDialog data={loaded.page.dialog} /> : null}
+          after={
+            <>
+              {loaded.page.dialog ? <PlanDialog data={loaded.page.dialog} /> : null}
+              {loaded.accounts?.canAdd ? <BankAccountDialogs organizationId={loaded.accounts.organizationId} /> : null}
+              {loaded.continuity.cancel ? <CancelSubscriptionDialog data={loaded.continuity.cancel} /> : null}
+              {loaded.continuity.panel?.dialog ? <EndArrangementDialog data={loaded.continuity.panel.dialog} /> : null}
+            </>
+          }
         >
-          <SheetSubscription data={loaded.page} />
+          <SheetSubscription data={loaded.page}>
+            {loaded.continuity.panel ? <ContinuityPanel data={loaded.continuity.panel} index={2} /> : null}
+            <StripeConnectCard data={loaded.connect.data} card={loaded.connect.card} index={3} />
+          </SheetSubscription>
+          {loaded.accounts ? <SettingsBankAccounts data={loaded.accounts} index={4} /> : null}
         </SheetFrame>
       </SheetScreen>
     );
   }
   // Settings > Retention (SEC-07): the firm's own retention period, its version and legal holds.
   if (page === "settings" && query.tab === "retention" && (access.kind === "live" || access.kind === "sample")) {
-    const loaded = await loadSheetRetention(access.staff);
+    const [loaded, deletion] = await Promise.all([loadSheetRetention(access.staff), loadRetentionDeletion(access.staff)]);
     return (
       <SheetScreen key={"settings-retention"} page={page}>
         <SheetFrame
           sidebar={loaded.chrome.sidebar}
           header={<SettingsBillingHeader firmName={access.staff.organizationName} pill={loaded.pill} tab={"retention"} />}
           statusbar={loaded.chrome.statusbar}
+          after={deletion ? <DeletionDialog organizationId={deletion.organizationId} /> : undefined}
         >
           <SheetRetention data={loaded.page} />
+          {deletion ? <RetentionDeletionPanels data={deletion} index={3} /> : null}
         </SheetFrame>
       </SheetScreen>
     );
@@ -514,6 +584,7 @@ export async function SheetBody({
   if (page === "grants" && (access.kind === "live" || access.kind === "sample")) {
     const tab = query.tab === "support" || query.tab === "limits" ? query.tab : "grants";
     const loaded = await loadSheetGrants(access.staff, tab);
+    const grantsDenied = grantsAccess(access.staff.role, tab);
     return (
       <SheetScreen page={page}>
         <SheetFrame
@@ -528,7 +599,8 @@ export async function SheetBody({
             </>
           }
         >
-          <SheetGrants data={loaded.page} />
+          {/* DES-04: grants and support access answer the firm owner only; others see why, not empty lists. */}
+          {grantsDenied ? <NoAccessPanel data={grantsDenied} /> : <SheetGrants data={loaded.page} />}
         </SheetFrame>
       </SheetScreen>
     );
@@ -583,13 +655,51 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
+  // Practice > Templates > What Casevoya supports (SRC-12): jurisdictions, programs and case types, supported only with an approved, sourced pack.
+  if (page === "templates" && query.tab === "support" && (access.kind === "live" || access.kind === "sample")) {
+    // DES-04: the catalogue cites program packs and their official pages; say when one is stale.
+    const [loaded, stale] = await Promise.all([loadSheetSupportCatalogue(access.staff), loadSourceStaleness(access.staff, { kind: "firm" })]);
+    return (
+      <SheetScreen key={"templates-support"} page={page}>
+        <SheetFrame sidebar={loaded.chrome.sidebar} header={<TemplatesHeader data={loaded.header} />} statusbar={loaded.chrome.statusbar}>
+          {stale ? <StateAlert data={stale} /> : null}
+          <SheetSupportCatalogue data={loaded.page} />
+        </SheetFrame>
+      </SheetScreen>
+    );
+  }
   // Practice > Templates: program and agreement templates, the approved email catalog, checklists, and the rule source register (read only).
   if (page === "templates" && (access.kind === "live" || access.kind === "sample")) {
     const tab = query.tab === "messages" || query.tab === "checklists" || query.tab === "sources" || query.tab === "rule" ? query.tab : "program";
-    const loaded = await loadSheetTemplates(access.staff, tab, query.view);
+    // DES-04: where official content shows (program templates, Source review, a rule), say when its source is stale.
+    const official = tab === "program" || tab === "sources" || tab === "rule";
+    const [loaded, stale] = await Promise.all([
+      loadSheetTemplates(access.staff, tab, query.view, undefined, { claim: query.claim, query: query.cq, offset: query.offset }),
+      official ? loadSourceStaleness(access.staff, tab === "rule" && query.view ? { kind: "rule", ruleVersionId: query.view } : { kind: "firm" }) : null,
+    ]);
     return (
       <SheetScreen page={page}>
-        <SheetFrame sidebar={loaded.chrome.sidebar} header={<TemplatesHeader data={loaded.data} />} statusbar={loaded.chrome.statusbar}>
+        <SheetFrame
+          sidebar={loaded.chrome.sidebar}
+          header={<TemplatesHeader data={loaded.data} />}
+          statusbar={loaded.chrome.statusbar}
+          after={
+            loaded.messageDialog ? (
+              <>
+                <MessageTemplateDialog data={loaded.messageDialog} />
+                {loaded.messageDialog.edit ? <OpenOnLoad key={loaded.messageDialog.edit.id} id={"dlgMt"} /> : null}
+              </>
+            ) : tab === "sources" || tab === "rule" ? (
+              // SRC-01/03: Add claim, and the review dialogs for the chosen version.
+              <>
+                {loaded.data.sources.addClaim ? <AddClaimDialog data={loaded.data.sources.addClaim} /> : null}
+                {loaded.data.rule?.review ? <ClaimReviewDialogs review={loaded.data.rule.review} /> : null}
+                {loaded.data.officialClaim ? <OfficialClaimDialogs view={loaded.data.officialClaim} /> : null}
+              </>
+            ) : undefined
+          }
+        >
+          <StateAlerts items={[stale && tab === "sources" ? { ...stale, action: null } : stale, loaded.partial]} />
           <SheetTemplates data={loaded.data} />
         </SheetFrame>
       </SheetScreen>
@@ -701,6 +811,9 @@ export async function SheetBody({
     const invoiceId = query.tab === "invoice" && query.view && isUuid(query.view) ? query.view : null;
     const tab =
       query.tab === "payments" || query.tab === "funds" || query.tab === "refunds" || query.tab === "recon" ? query.tab : invoiceId ? "invoice" : "invoices";
+    // DES-04: Finance is for the firm owner and finance staff; others see why instead of empty tables.
+    const denied = financeAccess(access.staff.role);
+    if (denied) return <NoAccessScreen page={page} staff={access.staff} path={"/sheet/finance"} denied={denied} />;
     const finance = await loadSheetFinance(access.staff, tab, invoiceId);
     return (
       <SheetScreen page={page}>
@@ -719,18 +832,25 @@ export async function SheetBody({
               ) : null}
               <NewInvoiceDialog data={finance.dialog} />
               {finance.refundDialog ? <RefundDialog data={finance.refundDialog} /> : null}
+              {finance.creditDialog ? <CreditDialog data={finance.creditDialog} /> : null}
+              {finance.evidenceDialog ? <EvidenceDialog data={finance.evidenceDialog} /> : null}
               {finance.funds ? <FundsLiveDialogs data={finance.funds.more} /> : null}
               {finance.invoiceView ? (
                 <>
                   <CreditNoteDialog data={finance.invoiceView.creditDialog} />
                   {finance.invoiceView.reviewDialog ? <CreditReviewDialog data={finance.invoiceView.reviewDialog} /> : null}
                   {finance.invoiceView.voidDialog ? <VoidDialog data={finance.invoiceView.voidDialog} /> : null}
+                  {finance.invoiceView.manualDialogs ? <ManualPaymentDialogs data={finance.invoiceView.manualDialogs} /> : null}
                 </>
               ) : null}
               {finance.recon ? <ReconDialogs data={finance.recon.dialogs} /> : null}
+              {finance.recon?.itemDialog ? <ReconItemDialog data={finance.recon.itemDialog} /> : null}
+              {finance.billing ? <FinanceBillingDialogs data={finance.billing} /> : null}
+              {finance.invoiceBilling ? <InvoiceBillingDialogs data={finance.invoiceBilling} /> : null}
             </>
           }
         >
+          <StateAlerts items={finance.states} />
           {finance.invoiceView ? (
             <SheetFinanceInvoice data={finance.invoiceView.view} />
           ) : finance.recon ? (
@@ -742,7 +862,7 @@ export async function SheetBody({
           ) : finance.refunds ? (
             <SheetFinanceRefunds data={finance.refunds} />
           ) : (
-            <SheetFinance data={finance.page} />
+            <SheetFinance data={finance.page} after={finance.billing ? <FinanceBillingPanels data={finance.billing} /> : null} />
           )}
         </SheetFrame>
       </SheetScreen>
@@ -804,10 +924,15 @@ export async function SheetBody({
   // Government status: one matter's record (`?view=<matter id>`) or the firm's matters on record (T036, T037).
   if (page === "government" && (access.kind === "live" || access.kind === "sample")) {
     const loaded = await loadSheetGovernment(access.staff, query);
-    if (!loaded) notFound();
+    // DES-04: a matter this person can't open says so (and who to ask), instead of a bare 404.
+    if (!loaded)
+      return (
+        <NoAccessScreen page={page} staff={access.staff} path={"/sheet/government"} denied={recordNotOpen("matter", access.staff.role, { label: "Government status", href: "/sheet/government" })} />
+      );
     return (
       <SheetScreen page={page}>
         <SheetFrame sidebar={loaded.chrome.sidebar} header={<GovernmentHeader data={loaded.header} />} styles={GOVERNMENT_CSS} statusbar={loaded.chrome.statusbar}>
+          {loaded.stale ? <StateAlert data={loaded.stale} /> : null}
           <SheetGovernment data={loaded.page} />
         </SheetFrame>
       </SheetScreen>
@@ -825,17 +950,28 @@ export async function SheetBody({
   if (page === "lead" && (access.kind === "live" || access.kind === "sample")) {
     // The Designer's + Lead goes to /sheet/lead?new=1: New lead is a dialog on the pipeline.
     if (!query.id) redirect("/sheet/pipeline?new=1");
-    const loaded = await loadSheetLead(access.staff, query.id, { conflict: query.dlg === "conflict" });
-    if (!loaded) notFound();
+    const [loaded, vo] = await Promise.all([loadSheetLead(access.staff, query.id, { conflict: query.dlg === "conflict" }), loadLeadVo(access.staff, query.id)]);
+    if (!loaded) {
+      if (!isUuid(query.id)) notFound();
+      return <NoAccessScreen page={page} staff={access.staff} path={"/sheet/pipeline"} denied={recordNotOpen("lead", access.staff.role, { label: "Pipeline", href: "/sheet/pipeline" })} />;
+    }
     return (
       <SheetScreen page={page}>
-        <LeadScreen loaded={loaded} />
+        <LeadScreen loaded={loaded} vo={vo} />
       </SheetScreen>
     );
   }
   if (page === "matter" && (access.kind === "live" || access.kind === "sample")) {
-    const loaded = matterId ? await loadSheetMatter(access.staff, matterId, query) : null;
-    if (!loaded) notFound();
+    // DES-04: the matter's official content (its program pack and the rules its deadlines came from) when stale.
+    const [loaded, stale] = await Promise.all([
+      matterId ? loadSheetMatter(access.staff, matterId, query) : null,
+      matterId && isUuid(matterId) ? loadSourceStaleness(access.staff, { kind: "matter", matterId }) : null,
+    ]);
+    if (!loaded) {
+      if (!matterId || !isUuid(matterId)) notFound();
+      return <NoAccessScreen page={page} staff={access.staff} path={"/sheet/matters"} denied={recordNotOpen("matter", access.staff.role, { label: "All matters", href: "/sheet/matters" })} />;
+    }
+    const officialTab = ["overview", "forms", "documents", "submissions", "tasks"].includes(loaded.page.tab);
     return (
       <SheetScreen page={page}>
         <SheetFrame
@@ -847,6 +983,8 @@ export async function SheetBody({
             <>
               <MatterDialogs data={loaded.dialogs} />
               <GovDialogs data={loaded.governmentDialogs} />
+              {loaded.letterDialogs ? <MatterLetterDialogs data={loaded.letterDialogs} /> : null}
+              {loaded.page.billing?.work ? <MatterWorkDialogs data={loaded.page.billing.work} /> : null}
               {loaded.countersign.map((sign) => (
                 <CountersignDialog key={sign.envelopeId} data={sign} />
               ))}
@@ -854,6 +992,7 @@ export async function SheetBody({
           }
           statusbar={loaded.chrome.statusbar}
         >
+          {stale && officialTab ? <StateAlert data={stale} /> : null}
           <SheetMatter data={loaded.page} />
         </SheetFrame>
       </SheetScreen>
@@ -884,6 +1023,21 @@ export async function SheetBody({
   );
 }
 
+/**
+ * DES-04: a page or a record this person's role can't open, in the firm's own frame: the shared
+ * permission-denied view says what's missing and who to ask, never a blank table or a bare 404.
+ */
+async function NoAccessScreen({ page, staff, path, denied }: { page: string; staff: SheetStaff; path: string; denied: NoAccessData }) {
+  const chrome = await loadSheetChrome(staff, path);
+  return (
+    <SheetScreen page={page}>
+      <SheetFrame sidebar={chrome.sidebar} top={chrome.top} statusbar={chrome.statusbar}>
+        <NoAccessPanel data={denied} />
+      </SheetFrame>
+    </SheetScreen>
+  );
+}
+
 export function queryFrom(search: Record<string, string | string[] | undefined>): SheetQuery {
   const one = (key: keyof SheetQuery) => {
     const value = search[key];
@@ -910,5 +1064,9 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     owner: one("owner"),
     vo: one("vo"),
     from: one("from"),
+    program: one("program"),
+    claim: one("claim"),
+    cq: one("cq"),
+    offset: one("offset"),
   };
 }

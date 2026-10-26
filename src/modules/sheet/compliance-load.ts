@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { complaintsDialogs, presentComplaints, type ComplaintRowData } from "@/modules/compliance/complaints-present";
 import { dmy } from "@/modules/compliance/format";
 import { presentPrivacy, privacyDialogs, type ConsentRow, type KeptRecord, type PrivacyContext, type PrivacyRequestRow, type RedactionRow } from "@/modules/compliance/privacy-present";
+import { loadPrivacyExtras } from "@/modules/sheet/privacy-response-load";
 import { loadSheetChrome, type SheetChrome } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone, roleLabel, type SheetQuery } from "@/modules/sheet/present";
@@ -56,8 +57,9 @@ function memberOption(member: Member): readonly [string, string] {
   return [member.id, `${member.name} (${roleLabel(member.role)})`];
 }
 
+// The last ten (extended_due_on onwards) are SEC-06's extension and its notice.
 const PRIVACY_COLUMNS =
-  "id, reference, kind, requester_name, person_id, details, channel, received_on, target_days, due_on, assignee_membership_id, identity_verified_at, identity_method, scope_at, scope_note, redaction_at, redaction_note, reviewed_at, reviewed_by, review_note, closed_at, outcome, outcome_note, refusal_reason, delivery_method, evidence_note";
+  "id, reference, kind, requester_name, person_id, details, channel, received_on, target_days, due_on, assignee_membership_id, identity_verified_at, identity_method, scope_at, scope_note, redaction_at, redaction_note, reviewed_at, reviewed_by, review_note, closed_at, outcome, outcome_note, refusal_reason, delivery_method, evidence_note, extended_due_on, extension_basis, extension_time_limit_id, extension_reason, extension_recourse, extended_at, extension_notice_channel, extension_notice_method, extension_notice_late, extension_notice_seen_at";
 
 /**
  * Compliance > Privacy requests for a firm, read as the signed-in staff member so the database
@@ -95,7 +97,7 @@ export async function loadSheetPrivacy(
   const rows = canRecord ? ((requests?.data ?? []) as PrivacyRequestRow[]) : null;
   const selected = rows ? (rows.find((row) => row.id === query.view) ?? rows.find((row) => !row.closed_at) ?? rows[0] ?? null) : null;
 
-  const [lines, consents, kept, linkData] = await Promise.all([
+  const [lines, consents, kept, linkData, extras] = await Promise.all([
     selected?.kind === "access"
       ? supabase.from("privacy_request_redactions").select("id, request_id, record_label, third_party, removed, state, done_by").eq("request_id", selected.id).order("created_at")
       : null,
@@ -104,16 +106,19 @@ export async function loadSheetPrivacy(
       : null,
     selected?.kind === "deletion" ? supabase.rpc("privacy_request_kept_records", { p_request_id: selected.id }) : null,
     canRecord ? links(supabase, org) : null,
+    canRecord ? loadPrivacyExtras(supabase, org, selected, who.mine.some((row) => row.role === "firm_owner" || row.role === "licensed_consultant")) : undefined,
   ]);
   const consentRows = consents ? ((consents.data ?? []) as ConsentRow[]) : null;
   const keptRows = kept && Array.isArray(kept.data) ? (kept.data as KeptRecord[]) : null;
-  const presented = presentPrivacy({ ctx: { ...ctx, selectedId: selected?.id }, rows, lines: (lines?.data ?? []) as RedactionRow[], consents: consentRows, kept: keptRows });
+  const presented = presentPrivacy({ ctx: { ...ctx, selectedId: selected?.id }, rows, lines: (lines?.data ?? []) as RedactionRow[], consents: consentRows, kept: keptRows, extras: extras?.extras });
   const me = who.mine.find((row) => PRIVACY_ROLES.has(row.role));
   const dialogs = privacyDialogs({
     ctx,
     selectedRow: presented.selectedRow,
     consents: consentRows,
     settingsDays: settings.data?.privacy_response_days ?? null,
+    extras: extras?.extras,
+    captured: extras?.captured,
     record:
       linkData && me
         ? {

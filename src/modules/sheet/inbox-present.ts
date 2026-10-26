@@ -23,6 +23,7 @@ const TEMPLATE_LABEL: Record<string, string> = {
   payment_failed: "Payment failed",
   refund_started: "Refund started",
   refund_complete: "Refund complete",
+  refund_failed: "Refund didn’t go through",
   consultation_booked: "Consultation booked",
   consultation_rescheduled: "Consultation moved",
   consultation_cancelled: "Consultation cancelled",
@@ -157,6 +158,43 @@ export function suggest(input: {
     };
   }
   return { suggestion: "No match", why: "—", actions: [dismiss] };
+}
+
+/** An inbox file as File to matter offers it: only clean files not yet in documents can be chosen. */
+export type FilingFile = { id: string; filename: string; upload_state: string };
+
+/**
+ * "File to matter" on an email to triage (OPS-06): opens the dialog for this email with its
+ * choosable files. It goes just before "Not case mail"; an email still arriving gets none.
+ */
+export function withFileToMatter(actions: TriageAction[], input: { emailId: string; organizationId: string; ready: boolean; files: FilingFile[] }): TriageAction[] {
+  if (!input.ready) return actions;
+  const files = input.files.filter((file) => file.upload_state === "clean").map((file) => ({ id: file.id, name: file.filename }));
+  const pick: TriageAction = {
+    label: "File to matter",
+    attrs: { "data-inbox-pick": input.emailId, "data-org": input.organizationId, "data-files": JSON.stringify(files) },
+  };
+  const dismissAt = actions.findIndex((action) => action.attrs?.["data-inbox-dismiss"]);
+  if (dismissAt === -1) return [...actions, pick];
+  return [...actions.slice(0, dismissAt), pick, ...actions.slice(dismissAt)];
+}
+
+/**
+ * Delivery problems' Follow-up cell (OPS-06): the task a critical bounce opened or joined
+ * (email_deliveries.follow_up_task_id), or why there is none.
+ */
+export function bouncedFollowUp(input: {
+  status: string;
+  critical: boolean;
+  matterId: string | null;
+  task: { status: string; owner: string | null } | null;
+}): Text2 {
+  if (input.task) {
+    const state = input.task.status === "done" ? "task done" : input.task.status === "cancelled" ? "task cancelled" : "task open";
+    return [input.task.owner ?? "Unassigned", state];
+  }
+  if (input.critical && input.status === "bounced") return input.matterId ? ["No task", "the firm has no active owner"] : ["No task", "not on a matter, follow it up yourself"];
+  return "—";
 }
 
 function time(date: Date, timeZone: string): string {

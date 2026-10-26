@@ -1058,6 +1058,7 @@ export type Database = {
       }
       client_account_reconciliations: {
         Row: {
+          adjusted_balance_cents: number | null
           client_account_id: string
           client_count: number
           client_ledgers_total_cents: number
@@ -1090,6 +1091,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          adjusted_balance_cents?: number | null
           client_account_id?: string
           client_count?: number
           client_ledgers_total_cents?: number
@@ -1122,6 +1124,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          adjusted_balance_cents?: number | null
           client_account_id?: string
           client_count?: number
           client_ledgers_total_cents?: number
@@ -1197,6 +1200,105 @@ export type Database = {
         }
         Relationships: []
       }
+      client_credit_allocations: {
+        Row: {
+          amount_cents: number
+          bank_method: string | null
+          bank_reference: string | null
+          created_at: string
+          created_by: string | null
+          credit_id: string
+          currency: string
+          id: string
+          idempotency_key: string | null
+          kind: string
+          organization_id: string
+          refund_id: string | null
+          refunded_on: string | null
+          target_invoice_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          bank_method?: string | null
+          bank_reference?: string | null
+          created_at?: string
+          created_by?: string | null
+          credit_id: string
+          currency: string
+          id?: string
+          idempotency_key?: string | null
+          kind: string
+          organization_id: string
+          refund_id?: string | null
+          refunded_on?: string | null
+          target_invoice_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          bank_method?: string | null
+          bank_reference?: string | null
+          created_at?: string
+          created_by?: string | null
+          credit_id?: string
+          currency?: string
+          id?: string
+          idempotency_key?: string | null
+          kind?: string
+          organization_id?: string
+          refund_id?: string | null
+          refunded_on?: string | null
+          target_invoice_id?: string | null
+        }
+        Relationships: []
+      }
+      client_credits: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          matter_id: string
+          number: string
+          opened_cents: number
+          organization_id: string
+          settled_at: string | null
+          source_invoice_id: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          currency: string
+          id?: string
+          matter_id: string
+          number: string
+          opened_cents: number
+          organization_id: string
+          settled_at?: string | null
+          source_invoice_id: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          matter_id?: string
+          number?: string
+          opened_cents?: number
+          organization_id?: string
+          settled_at?: string | null
+          source_invoice_id?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       client_fund_bank_transfers: {
         Row: {
           amount_cents: number
@@ -1248,6 +1350,36 @@ export type Database = {
           recorded_by?: string
           transferred_on?: string
           withdraw_by?: string
+        }
+        Relationships: []
+      }
+      client_fund_deposit_reviews: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          entry_id: string
+          evidence_version_id: string | null
+          matter_id: string
+          organization_id: string
+          reviewer_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          entry_id: string
+          evidence_version_id?: string | null
+          matter_id: string
+          organization_id: string
+          reviewer_user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          entry_id?: string
+          evidence_version_id?: string | null
+          matter_id?: string
+          organization_id?: string
+          reviewer_user_id?: string
         }
         Relationships: []
       }
@@ -1503,6 +1635,90 @@ export type Database = {
         }
         Relationships: []
       }
+      client_mfa_resets: {
+        Row: {
+          created_at: string
+          id: string
+          identity_method: string
+          note: string | null
+          organization_id: string
+          person_id: string
+          reset_by: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          identity_method: string
+          note?: string | null
+          organization_id: string
+          person_id: string
+          reset_by: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          identity_method?: string
+          note?: string | null
+          organization_id?: string
+          person_id?: string
+          reset_by?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      client_reconciliation_adjustments: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          item_date: string
+          kind: string
+          organization_id: string
+          reconciliation_id: string
+          reference: string | null
+          removed_at: string | null
+          removed_by: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          created_by?: string | null
+          description: string
+          id?: string
+          item_date: string
+          kind: string
+          organization_id: string
+          reconciliation_id: string
+          reference?: string | null
+          removed_at?: string | null
+          removed_by?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          item_date?: string
+          kind?: string
+          organization_id?: string
+          reconciliation_id?: string
+          reference?: string | null
+          removed_at?: string | null
+          removed_by?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       complaint_handlers: {
         Row: {
           added_by: string | null
@@ -1682,6 +1898,66 @@ export type Database = {
           privacy_response_days?: number | null
           updated_at?: string
           updated_by?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
+      consent_impact_reviews: {
+        Row: {
+          consent_purpose: Database["public"]["Enums"]["consent_purpose"]
+          consent_record_id: string
+          created_at: string
+          created_by: string | null
+          done_at: string | null
+          done_by: string | null
+          done_note: string | null
+          id: string
+          impacts: Json
+          matter_id: string | null
+          organization_id: string
+          person_id: string
+          source: string
+          status: string
+          task_id: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          consent_purpose: Database["public"]["Enums"]["consent_purpose"]
+          consent_record_id: string
+          created_at?: string
+          created_by?: string | null
+          done_at?: string | null
+          done_by?: string | null
+          done_note?: string | null
+          id?: string
+          impacts: Json
+          matter_id?: string | null
+          organization_id: string
+          person_id: string
+          source: string
+          status?: string
+          task_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          consent_purpose?: Database["public"]["Enums"]["consent_purpose"]
+          consent_record_id?: string
+          created_at?: string
+          created_by?: string | null
+          done_at?: string | null
+          done_by?: string | null
+          done_note?: string | null
+          id?: string
+          impacts?: Json
+          matter_id?: string | null
+          organization_id?: string
+          person_id?: string
+          source?: string
+          status?: string
+          task_id?: string | null
+          updated_at?: string
           version?: number
         }
         Relationships: []
@@ -2669,6 +2945,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           critical: boolean
+          follow_up_task_id: string | null
           id: string
           last_error: string | null
           matter_id: string | null
@@ -2687,6 +2964,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           critical?: boolean
+          follow_up_task_id?: string | null
           id?: string
           last_error?: string | null
           matter_id?: string | null
@@ -2705,6 +2983,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           critical?: boolean
+          follow_up_task_id?: string | null
           id?: string
           last_error?: string | null
           matter_id?: string | null
@@ -2895,17 +3174,121 @@ export type Database = {
         }
         Relationships: []
       }
+      firm_operating_accounts: {
+        Row: {
+          account_last4: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          institution: string
+          is_active: boolean
+          label: string
+          organization_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          account_last4: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          institution: string
+          is_active?: boolean
+          label: string
+          organization_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          account_last4?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          institution?: string
+          is_active?: boolean
+          label?: string
+          organization_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      firm_payment_account_history: {
+        Row: {
+          account_id: string
+          card_payments_status: string
+          created_at: string
+          end_reason: string
+          ended_at: string
+          ended_by: string
+          id: string
+          linked_at: string
+          linked_by: string | null
+          livemode: boolean
+          organization_id: string
+          payment_account_id: string
+          payouts_status: string
+          provider: string
+        }
+        Insert: {
+          account_id: string
+          card_payments_status: string
+          created_at?: string
+          end_reason: string
+          ended_at?: string
+          ended_by: string
+          id?: string
+          linked_at: string
+          linked_by?: string | null
+          livemode?: boolean
+          organization_id: string
+          payment_account_id: string
+          payouts_status: string
+          provider?: string
+        }
+        Update: {
+          account_id?: string
+          card_payments_status?: string
+          created_at?: string
+          end_reason?: string
+          ended_at?: string
+          ended_by?: string
+          id?: string
+          linked_at?: string
+          linked_by?: string | null
+          livemode?: boolean
+          organization_id?: string
+          payment_account_id?: string
+          payouts_status?: string
+          provider?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "firm_payment_account_history_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       firm_payment_accounts: {
         Row: {
           account_id: string
           card_payments_status: string
           created_at: string
           created_by: string | null
+          fees_collector: string | null
           id: string
           livemode: boolean
+          losses_collector: string | null
           organization_id: string
           payouts_status: string
           provider: string
+          requirements: Json
           requirements_due: number
           status_checked_at: string | null
           updated_at: string
@@ -2916,11 +3299,14 @@ export type Database = {
           card_payments_status?: string
           created_at?: string
           created_by?: string | null
+          fees_collector?: string | null
           id?: string
           livemode?: boolean
+          losses_collector?: string | null
           organization_id: string
           payouts_status?: string
           provider?: string
+          requirements?: Json
           requirements_due?: number
           status_checked_at?: string | null
           updated_at?: string
@@ -2931,11 +3317,14 @@ export type Database = {
           card_payments_status?: string
           created_at?: string
           created_by?: string | null
+          fees_collector?: string | null
           id?: string
           livemode?: boolean
+          losses_collector?: string | null
           organization_id?: string
           payouts_status?: string
           provider?: string
+          requirements?: Json
           requirements_due?: number
           status_checked_at?: string | null
           updated_at?: string
@@ -2987,6 +3376,7 @@ export type Database = {
           evidence_version_id: string | null
           id: string
           issuer: string | null
+          issuer_id: string | null
           kind: Database["public"]["Enums"]["correspondence_kind"]
           matter_id: string
           organization_id: string
@@ -3011,6 +3401,7 @@ export type Database = {
           evidence_version_id?: string | null
           id?: string
           issuer?: string | null
+          issuer_id?: string | null
           kind: Database["public"]["Enums"]["correspondence_kind"]
           matter_id: string
           organization_id: string
@@ -3035,6 +3426,7 @@ export type Database = {
           evidence_version_id?: string | null
           id?: string
           issuer?: string | null
+          issuer_id?: string | null
           kind?: Database["public"]["Enums"]["correspondence_kind"]
           matter_id?: string
           organization_id?: string
@@ -3050,10 +3442,489 @@ export type Database = {
         }
         Relationships: []
       }
+      government_fee_references: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          created_by: string | null
+          currency: string
+          fee_group: string | null
+          id: string
+          name: string
+          organization_id: string
+          position: number
+          retrieved_at: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          section: string | null
+          snapshot_sha256: string
+          source_url: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          fee_group?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          position: number
+          retrieved_at: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          section?: string | null
+          snapshot_sha256: string
+          source_url: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          fee_group?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          position?: number
+          retrieved_at?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          section?: string | null
+          snapshot_sha256?: string
+          source_url?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      government_issuers: {
+        Row: {
+          checked_on: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          name_on_page: boolean | null
+          organization_id: string
+          page_attested_at: string | null
+          page_attested_by_membership_id: string | null
+          page_attested_on: string | null
+          page_modified_on: string | null
+          retrieved_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          snapshot_sha256: string | null
+          source_url: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          checked_on: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          name_on_page?: boolean | null
+          organization_id: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          page_modified_on?: string | null
+          retrieved_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          snapshot_sha256?: string | null
+          source_url: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          checked_on?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          name_on_page?: boolean | null
+          organization_id?: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          page_modified_on?: string | null
+          retrieved_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          snapshot_sha256?: string | null
+          source_url?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      government_processing_estimates: {
+        Row: {
+          application_type: string
+          checked_on: string
+          created_at: string
+          created_by: string | null
+          entered_by_membership_id: string
+          estimate_text: string
+          id: string
+          matter_id: string
+          organization_id: string
+          page_attested_at: string | null
+          page_attested_by_membership_id: string | null
+          page_attested_on: string | null
+          page_retrieved_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by_membership_id: string | null
+          snapshot_sha256: string | null
+          source_url: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          application_type: string
+          checked_on: string
+          created_at?: string
+          created_by?: string | null
+          entered_by_membership_id: string
+          estimate_text: string
+          id?: string
+          matter_id: string
+          organization_id: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          page_retrieved_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_sha256?: string | null
+          source_url: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          application_type?: string
+          checked_on?: string
+          created_at?: string
+          created_by?: string | null
+          entered_by_membership_id?: string
+          estimate_text?: string
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          page_retrieved_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_sha256?: string | null
+          source_url?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      // DEC-02 renewal follow-up (20261025210000_dec_renewal.sql)
+      decision_renewals: {
+        Row: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by_membership_id: string | null
+          client_person_id: string | null
+          consent_record_id: string | null
+          created_at: string
+          created_by: string | null
+          decision_id: string
+          document_label: string
+          document_version_id: string | null
+          expires_on: string
+          fee_group: string | null
+          fee_name: string | null
+          fee_reference_id: string | null
+          fee_section: string | null
+          id: string
+          lead_id: string | null
+          matter_id: string
+          organization_id: string
+          owner_membership_id: string
+          recorded_by_membership_id: string
+          remind_on: string
+          reminder_set_at: string | null
+          reminder_set_by_membership_id: string | null
+          service_scope: string | null
+          task_id: string
+          timing_id: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by_membership_id?: string | null
+          client_person_id?: string | null
+          consent_record_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_id: string
+          document_label: string
+          document_version_id?: string | null
+          expires_on: string
+          fee_group?: string | null
+          fee_name?: string | null
+          fee_reference_id?: string | null
+          fee_section?: string | null
+          id?: string
+          lead_id?: string | null
+          matter_id: string
+          organization_id: string
+          owner_membership_id: string
+          recorded_by_membership_id: string
+          remind_on: string
+          reminder_set_at?: string | null
+          reminder_set_by_membership_id?: string | null
+          service_scope?: string | null
+          task_id: string
+          timing_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by_membership_id?: string | null
+          client_person_id?: string | null
+          consent_record_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_id?: string
+          document_label?: string
+          document_version_id?: string | null
+          expires_on?: string
+          fee_group?: string | null
+          fee_name?: string | null
+          fee_reference_id?: string | null
+          fee_section?: string | null
+          id?: string
+          lead_id?: string | null
+          matter_id?: string
+          organization_id?: string
+          owner_membership_id?: string
+          recorded_by_membership_id?: string
+          remind_on?: string
+          reminder_set_at?: string | null
+          reminder_set_by_membership_id?: string | null
+          service_scope?: string | null
+          task_id?: string
+          timing_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      opening_balances: {
+        Row: {
+          amount_cents: number
+          as_of: string
+          batch_id: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          description: string | null
+          id: string
+          imported_by: string
+          is_sample: boolean
+          kind: string
+          matter_id: string
+          organization_id: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source_system: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          amount_cents: number
+          as_of: string
+          batch_id: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          id?: string
+          imported_by: string
+          is_sample?: boolean
+          kind: string
+          matter_id: string
+          organization_id: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_system: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          amount_cents?: number
+          as_of?: string
+          batch_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          id?: string
+          imported_by?: string
+          is_sample?: boolean
+          kind?: string
+          matter_id?: string
+          organization_id?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_system?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opening_balances_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "opening_balances_batch_id_organization_id_fkey"
+            columns: ["batch_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "migration_batches"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      renewal_timings: {
+        Row: {
+          applies_to: string
+          checked_on: string
+          created_at: string
+          created_by: string | null
+          current_to: string | null
+          form_modified_on: string | null
+          form_number: string | null
+          id: string
+          lead_days: number | null
+          organization_id: string
+          page_attested_at: string | null
+          page_attested_by_membership_id: string | null
+          page_attested_on: string | null
+          program_key: string | null
+          retired_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by_membership_id: string | null
+          snapshot_id: string | null
+          snapshot_sha256: string | null
+          source_id: string
+          source_section: string | null
+          source_url: string
+          status: string
+          timing_text: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          applies_to: string
+          checked_on: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          id?: string
+          lead_days?: number | null
+          organization_id: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          program_key?: string | null
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id: string
+          source_section?: string | null
+          source_url: string
+          status?: string
+          timing_text: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          applies_to?: string
+          checked_on?: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          id?: string
+          lead_days?: number | null
+          organization_id?: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          program_key?: string | null
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id?: string
+          source_section?: string | null
+          source_url?: string
+          status?: string
+          timing_text?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       government_status_checks: {
         Row: {
           checked_at: string
           checked_by_membership_id: string
+          correspondence_id: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -3064,6 +3935,7 @@ export type Database = {
         Insert: {
           checked_at?: string
           checked_by_membership_id: string
+          correspondence_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -3074,6 +3946,7 @@ export type Database = {
         Update: {
           checked_at?: string
           checked_by_membership_id?: string
+          correspondence_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -3334,6 +4207,7 @@ export type Database = {
           byte_size: number | null
           created_at: string
           created_by: string | null
+          file_audience: Database["public"]["Enums"]["document_audience"] | null
           filename: string
           id: string
           inbound_email_id: string
@@ -3342,6 +4216,8 @@ export type Database = {
           organization_id: string
           scan_result: string | null
           sha256: string | null
+          skipped_at: string | null
+          skipped_by: string | null
           storage_key: string
           updated_at: string
           upload_state: string
@@ -3352,6 +4228,7 @@ export type Database = {
           byte_size?: number | null
           created_at?: string
           created_by?: string | null
+          file_audience?: Database["public"]["Enums"]["document_audience"] | null
           filename: string
           id?: string
           inbound_email_id: string
@@ -3360,6 +4237,8 @@ export type Database = {
           organization_id: string
           scan_result?: string | null
           sha256?: string | null
+          skipped_at?: string | null
+          skipped_by?: string | null
           storage_key: string
           updated_at?: string
           upload_state?: string
@@ -3370,6 +4249,7 @@ export type Database = {
           byte_size?: number | null
           created_at?: string
           created_by?: string | null
+          file_audience?: Database["public"]["Enums"]["document_audience"] | null
           filename?: string
           id?: string
           inbound_email_id?: string
@@ -3378,9 +4258,104 @@ export type Database = {
           organization_id?: string
           scan_result?: string | null
           sha256?: string | null
+          skipped_at?: string | null
+          skipped_by?: string | null
           storage_key?: string
           updated_at?: string
           upload_state?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      instalment_plan_items: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          due_on: string
+          id: string
+          label: string
+          organization_id: string
+          paid_as: string
+          plan_id: string
+          position: number
+          quote_instalment_id: string
+          task_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          due_on: string
+          id?: string
+          label: string
+          organization_id: string
+          paid_as: string
+          plan_id: string
+          position: number
+          quote_instalment_id: string
+          task_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          due_on?: string
+          id?: string
+          label?: string
+          organization_id?: string
+          paid_as?: string
+          plan_id?: string
+          position?: number
+          quote_instalment_id?: string
+          task_id?: string | null
+        }
+        Relationships: []
+      }
+      instalment_plans: {
+        Row: {
+          agreement_id: string
+          agreement_version_id: string
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_sample: boolean
+          matter_id: string
+          organization_id: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          agreement_id: string
+          agreement_version_id: string
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_sample?: boolean
+          matter_id: string
+          organization_id: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          agreement_id?: string
+          agreement_version_id?: string
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_sample?: boolean
+          matter_id?: string
+          organization_id?: string
+          status?: string
+          updated_at?: string
           version?: number
         }
         Relationships: []
@@ -3512,6 +4487,54 @@ export type Database = {
             referencedColumns: ["id", "organization_id"]
           },
         ]
+      }
+      intake_fact_reuses: {
+        Row: {
+          answer_id: string
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          created_by: string | null
+          field_key: string
+          id: string
+          organization_id: string
+          origin_answer_id: string
+          origin_matter_id: string
+          origin_response_id: string
+          response_id: string
+          status: Database["public"]["Enums"]["intake_fact_reuse_status"]
+        }
+        Insert: {
+          answer_id: string
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          field_key: string
+          id?: string
+          organization_id: string
+          origin_answer_id: string
+          origin_matter_id: string
+          origin_response_id: string
+          response_id: string
+          status?: Database["public"]["Enums"]["intake_fact_reuse_status"]
+        }
+        Update: {
+          answer_id?: string
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          field_key?: string
+          id?: string
+          organization_id?: string
+          origin_answer_id?: string
+          origin_matter_id?: string
+          origin_response_id?: string
+          response_id?: string
+          status?: Database["public"]["Enums"]["intake_fact_reuse_status"]
+        }
+        Relationships: []
       }
       intake_corrections: {
         Row: {
@@ -4140,6 +5163,51 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_dispute_evidence: {
+        Row: {
+          content_type: string
+          created_at: string
+          created_by: string | null
+          dispute_id: string
+          explanation: string | null
+          file_name: string
+          id: string
+          livemode: boolean
+          organization_id: string
+          size_bytes: number
+          stripe_file_id: string
+          submitted: boolean
+        }
+        Insert: {
+          content_type: string
+          created_at?: string
+          created_by?: string | null
+          dispute_id: string
+          explanation?: string | null
+          file_name: string
+          id?: string
+          livemode?: boolean
+          organization_id: string
+          size_bytes: number
+          stripe_file_id: string
+          submitted?: boolean
+        }
+        Update: {
+          content_type?: string
+          created_at?: string
+          created_by?: string | null
+          dispute_id?: string
+          explanation?: string | null
+          file_name?: string
+          id?: string
+          livemode?: boolean
+          organization_id?: string
+          size_bytes?: number
+          stripe_file_id?: string
+          submitted?: boolean
+        }
+        Relationships: []
+      }
       invoice_disputes: {
         Row: {
           amount_cents: number
@@ -4151,6 +5219,8 @@ export type Database = {
           currency: string
           dispute_id: string
           evidence_due_by: string | null
+          evidence_submitted_at: string | null
+          evidence_submitted_by: string | null
           id: string
           invoice_id: string
           last_event_created: number | null
@@ -4162,6 +5232,7 @@ export type Database = {
           provider: string
           reason: string | null
           status: Database["public"]["Enums"]["invoice_dispute_status"]
+          task_id: string | null
           updated_at: string
           version: number
         }
@@ -4175,6 +5246,8 @@ export type Database = {
           currency: string
           dispute_id: string
           evidence_due_by?: string | null
+          evidence_submitted_at?: string | null
+          evidence_submitted_by?: string | null
           id?: string
           invoice_id: string
           last_event_created?: number | null
@@ -4186,6 +5259,7 @@ export type Database = {
           provider?: string
           reason?: string | null
           status: Database["public"]["Enums"]["invoice_dispute_status"]
+          task_id?: string | null
           updated_at?: string
           version?: number
         }
@@ -4199,6 +5273,8 @@ export type Database = {
           currency?: string
           dispute_id?: string
           evidence_due_by?: string | null
+          evidence_submitted_at?: string | null
+          evidence_submitted_by?: string | null
           id?: string
           invoice_id?: string
           last_event_created?: number | null
@@ -4210,8 +5286,198 @@ export type Database = {
           provider?: string
           reason?: string | null
           status?: Database["public"]["Enums"]["invoice_dispute_status"]
+          task_id?: string | null
           updated_at?: string
           version?: number
+        }
+        Relationships: []
+      }
+      invoice_manual_payments: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          created_by: string | null
+          currency: string
+          evidence_note: string | null
+          evidence_version_id: string | null
+          external_reference: string
+          id: string
+          idempotency_key: string
+          invoice_id: string
+          is_sample: boolean
+          matter_id: string
+          method: Database["public"]["Enums"]["client_fund_method"]
+          number: string
+          operating_account_id: string
+          organization_id: string
+          received_on: string
+          recorded_by: string
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          reopened_cents: number
+          reversal_reason: string | null
+          reversal_task_id: string | null
+          reversed_at: string | null
+          reversed_by: string | null
+          reviewer_user_id: string
+          self_verified: boolean
+          status: Database["public"]["Enums"]["manual_payment_status"]
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+          version: number
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          created_by?: string | null
+          currency: string
+          evidence_note?: string | null
+          evidence_version_id?: string | null
+          external_reference: string
+          id?: string
+          idempotency_key: string
+          invoice_id: string
+          is_sample?: boolean
+          matter_id: string
+          method: Database["public"]["Enums"]["client_fund_method"]
+          number: string
+          operating_account_id: string
+          organization_id: string
+          received_on: string
+          recorded_by: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          reopened_cents?: number
+          reversal_reason?: string | null
+          reversal_task_id?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
+          reviewer_user_id: string
+          self_verified?: boolean
+          status?: Database["public"]["Enums"]["manual_payment_status"]
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+          version?: number
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          evidence_note?: string | null
+          evidence_version_id?: string | null
+          external_reference?: string
+          id?: string
+          idempotency_key?: string
+          invoice_id?: string
+          is_sample?: boolean
+          matter_id?: string
+          method?: Database["public"]["Enums"]["client_fund_method"]
+          number?: string
+          operating_account_id?: string
+          organization_id?: string
+          received_on?: string
+          recorded_by?: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          reopened_cents?: number
+          reversal_reason?: string | null
+          reversal_task_id?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
+          reviewer_user_id?: string
+          self_verified?: boolean
+          status?: Database["public"]["Enums"]["manual_payment_status"]
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
+      invoice_lines: {
+        Row: {
+          amount_cents: number
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string
+          fee_reference_id: string | null
+          id: string
+          instalment_item_id: string | null
+          invoice_id: string
+          is_sample: boolean
+          minutes: number | null
+          organization_id: string
+          position: number
+          quote_line_id: string | null
+          rate_cents: number | null
+          source_checked_on: string | null
+          source_retrieved_at: string | null
+          source_sha256: string | null
+          source_url: string | null
+          tax_cents: number
+          tax_name: string | null
+          tax_rate_id: string | null
+          tax_rate_percent: number | null
+          time_entry_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          category: string
+          created_at?: string
+          created_by?: string | null
+          description: string
+          fee_reference_id?: string | null
+          id?: string
+          instalment_item_id?: string | null
+          invoice_id: string
+          is_sample?: boolean
+          minutes?: number | null
+          organization_id: string
+          position: number
+          quote_line_id?: string | null
+          rate_cents?: number | null
+          source_checked_on?: string | null
+          source_retrieved_at?: string | null
+          source_sha256?: string | null
+          source_url?: string | null
+          tax_cents?: number
+          tax_name?: string | null
+          tax_rate_id?: string | null
+          tax_rate_percent?: number | null
+          time_entry_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          fee_reference_id?: string | null
+          id?: string
+          instalment_item_id?: string | null
+          invoice_id?: string
+          is_sample?: boolean
+          minutes?: number | null
+          organization_id?: string
+          position?: number
+          quote_line_id?: string | null
+          rate_cents?: number | null
+          source_checked_on?: string | null
+          source_retrieved_at?: string | null
+          source_sha256?: string | null
+          source_url?: string | null
+          tax_cents?: number
+          tax_name?: string | null
+          tax_rate_id?: string | null
+          tax_rate_percent?: number | null
+          time_entry_id?: string | null
         }
         Relationships: []
       }
@@ -4484,6 +5750,7 @@ export type Database = {
           requested_by: string | null
           status: Database["public"]["Enums"]["invoice_refund_status"]
           succeeded_at: string | null
+          task_id: string | null
           updated_at: string
           version: number
         }
@@ -4509,6 +5776,7 @@ export type Database = {
           requested_by?: string | null
           status?: Database["public"]["Enums"]["invoice_refund_status"]
           succeeded_at?: string | null
+          task_id?: string | null
           updated_at?: string
           version?: number
         }
@@ -4534,6 +5802,7 @@ export type Database = {
           requested_by?: string | null
           status?: Database["public"]["Enums"]["invoice_refund_status"]
           succeeded_at?: string | null
+          task_id?: string | null
           updated_at?: string
           version?: number
         }
@@ -4608,8 +5877,51 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_write_offs: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency: string
+          id: string
+          idempotency_key: string
+          invoice_id: string
+          is_sample: boolean
+          organization_id: string
+          reason: string
+          written_off_by: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          currency: string
+          id?: string
+          idempotency_key: string
+          invoice_id: string
+          is_sample?: boolean
+          organization_id: string
+          reason: string
+          written_off_by: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          idempotency_key?: string
+          invoice_id?: string
+          is_sample?: boolean
+          organization_id?: string
+          reason?: string
+          written_off_by?: string
+        }
+        Relationships: []
+      }
       invoices: {
         Row: {
+          discard_reason: string | null
+          discarded_at: string | null
+          discarded_by: string | null
+          written_off_cents: number
           amount_cents: number
           created_at: string
           created_by: string | null
@@ -4625,6 +5937,7 @@ export type Database = {
           number: string
           organization_id: string
           client_funds_paid_cents: number
+          manual_paid_cents: number
           credited_cents: number
           void_reason: string | null
           voided_at: string | null
@@ -4636,6 +5949,10 @@ export type Database = {
           version: number
         }
         Insert: {
+          discard_reason?: string | null
+          discarded_at?: string | null
+          discarded_by?: string | null
+          written_off_cents?: number
           amount_cents: number
           created_at?: string
           created_by?: string | null
@@ -4651,6 +5968,7 @@ export type Database = {
           number: string
           organization_id: string
           client_funds_paid_cents?: number
+          manual_paid_cents?: number
           credited_cents?: number
           void_reason?: string | null
           voided_at?: string | null
@@ -4662,6 +5980,10 @@ export type Database = {
           version?: number
         }
         Update: {
+          discard_reason?: string | null
+          discarded_at?: string | null
+          discarded_by?: string | null
+          written_off_cents?: number
           amount_cents?: number
           created_at?: string
           created_by?: string | null
@@ -4677,6 +5999,7 @@ export type Database = {
           number?: string
           organization_id?: string
           client_funds_paid_cents?: number
+          manual_paid_cents?: number
           credited_cents?: number
           void_reason?: string | null
           voided_at?: string | null
@@ -5211,6 +6534,9 @@ export type Database = {
       }
       matter_exports: {
         Row: {
+          form_versions: Json | null
+          rule_binding_id: string | null
+          rule_pack_version_id: string | null
           byte_size: number | null
           cancelled_at: string | null
           cancelled_by: string | null
@@ -5245,6 +6571,9 @@ export type Database = {
           version: number
         }
         Insert: {
+          form_versions?: Json | null
+          rule_binding_id?: string | null
+          rule_pack_version_id?: string | null
           byte_size?: number | null
           cancelled_at?: string | null
           cancelled_by?: string | null
@@ -5279,6 +6608,9 @@ export type Database = {
           version?: number
         }
         Update: {
+          form_versions?: Json | null
+          rule_binding_id?: string | null
+          rule_pack_version_id?: string | null
           byte_size?: number | null
           cancelled_at?: string | null
           cancelled_by?: string | null
@@ -5586,6 +6918,54 @@ export type Database = {
           },
         ]
       }
+      matter_program_scopes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          matter_id: string
+          organization_id: string
+          program_key: string
+          rule_pack_version_id: string | null
+          supported: boolean
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id: string
+          organization_id: string
+          program_key: string
+          rule_pack_version_id?: string | null
+          supported: boolean
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          matter_id?: string
+          organization_id?: string
+          program_key?: string
+          rule_pack_version_id?: string | null
+          supported?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_program_scopes_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_program_scopes_rule_pack_version_id_fkey"
+            columns: ["rule_pack_version_id"]
+            isOneToOne: false
+            referencedRelation: "rule_pack_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       matter_program_changes: {
         Row: {
           actor_user_id: string | null
@@ -5694,6 +7074,7 @@ export type Database = {
       }
       matter_rule_bindings: {
         Row: {
+          form_versions: Json | null
           checked_at: string | null
           chosen_context: Json | null
           created_at: string
@@ -5710,6 +7091,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          form_versions?: Json | null
           checked_at?: string | null
           chosen_context?: Json | null
           created_at?: string
@@ -5726,6 +7108,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          form_versions?: Json | null
           checked_at?: string | null
           chosen_context?: Json | null
           created_at?: string
@@ -5772,6 +7155,123 @@ export type Database = {
           },
         ]
       }
+      matter_letters: {
+        Row: {
+          approved_at: string | null
+          approved_by_membership_id: string | null
+          approved_self: boolean | null
+          approved_version: number | null
+          created_at: string
+          created_by: string
+          current_version: number
+          discarded_at: string | null
+          discarded_by: string | null
+          id: string
+          is_sample: boolean
+          letter_type: string
+          matter_id: string
+          organization_id: string
+          origin: string
+          run_id: string | null
+          status: string
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          approved_self?: boolean | null
+          approved_version?: number | null
+          created_at?: string
+          created_by: string
+          current_version?: number
+          discarded_at?: string | null
+          discarded_by?: string | null
+          id?: string
+          is_sample?: boolean
+          letter_type: string
+          matter_id: string
+          organization_id: string
+          origin: string
+          run_id?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          approved_self?: boolean | null
+          approved_version?: number | null
+          created_at?: string
+          created_by?: string
+          current_version?: number
+          discarded_at?: string | null
+          discarded_by?: string | null
+          id?: string
+          is_sample?: boolean
+          letter_type?: string
+          matter_id?: string
+          organization_id?: string
+          origin?: string
+          run_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      matter_letter_versions: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string
+          facts: Json
+          id: string
+          left_out: Json
+          letter_id: string
+          matter_id: string
+          official: Json
+          organization_id: string
+          origin: string
+          title: string
+          version_number: number
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by: string
+          facts?: Json
+          id?: string
+          left_out?: Json
+          letter_id: string
+          matter_id: string
+          official?: Json
+          organization_id: string
+          origin: string
+          title: string
+          version_number: number
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string
+          facts?: Json
+          id?: string
+          left_out?: Json
+          letter_id?: string
+          matter_id?: string
+          official?: Json
+          organization_id?: string
+          origin?: string
+          title?: string
+          version_number?: number
+        }
+        Relationships: []
+      }
       matter_staff_notes: {
         Row: {
           author_membership_id: string
@@ -5781,6 +7281,8 @@ export type Database = {
           id: string
           matter_id: string
           organization_id: string
+          original_author_name: string | null
+          original_written_on: string | null
         }
         Insert: {
           author_membership_id: string
@@ -5790,6 +7292,8 @@ export type Database = {
           id?: string
           matter_id: string
           organization_id: string
+          original_author_name?: string | null
+          original_written_on?: string | null
         }
         Update: {
           author_membership_id?: string
@@ -5799,8 +7303,218 @@ export type Database = {
           id?: string
           matter_id?: string
           organization_id?: string
+          original_author_name?: string | null
+          original_written_on?: string | null
         }
         Relationships: []
+      }
+      announcement_deliveries: {
+        Row: {
+          announcement_id: string
+          created_at: string
+          dismissed_at: string | null
+          emailed: boolean
+          id: string
+          organization_id: string
+          person_id: string
+          seen_at: string | null
+        }
+        Insert: {
+          announcement_id: string
+          created_at?: string
+          dismissed_at?: string | null
+          emailed?: boolean
+          id?: string
+          organization_id: string
+          person_id: string
+          seen_at?: string | null
+        }
+        Update: {
+          announcement_id?: string
+          created_at?: string
+          dismissed_at?: string | null
+          emailed?: boolean
+          id?: string
+          organization_id?: string
+          person_id?: string
+          seen_at?: string | null
+        }
+        Relationships: []
+      }
+      announcements: {
+        Row: {
+          audience_kind: string
+          body: string
+          created_at: string
+          emailed_count: number
+          id: string
+          is_sample: boolean
+          organization_id: string
+          program_key: string | null
+          recipient_count: number
+          sent_by: string
+          sent_by_membership_id: string
+          template_id: string
+          template_version: number
+          title: string
+        }
+        Insert: {
+          audience_kind: string
+          body: string
+          created_at?: string
+          emailed_count: number
+          id?: string
+          is_sample?: boolean
+          organization_id: string
+          program_key?: string | null
+          recipient_count: number
+          sent_by: string
+          sent_by_membership_id: string
+          template_id: string
+          template_version: number
+          title: string
+        }
+        Update: {
+          audience_kind?: string
+          body?: string
+          created_at?: string
+          emailed_count?: number
+          id?: string
+          is_sample?: boolean
+          organization_id?: string
+          program_key?: string | null
+          recipient_count?: number
+          sent_by?: string
+          sent_by_membership_id?: string
+          template_id?: string
+          template_version?: number
+          title?: string
+        }
+        Relationships: []
+      }
+      message_templates: {
+        Row: {
+          approved_at: string | null
+          approved_by_membership_id: string | null
+          body: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          organization_id: string
+          status: string
+          title: string | null
+          updated_at: string
+          updated_by: string | null
+          use_for: string
+          version: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          body: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          use_for: string
+          version?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          use_for?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      matter_rule_upgrade_decisions: {
+        Row: {
+          created_at: string
+          decided_at: string
+          decided_by: string
+          decided_membership_id: string
+          decision: string
+          from_binding_id: string
+          from_pack_id: string
+          id: string
+          impact: Json
+          matter_id: string
+          new_binding_id: string | null
+          organization_id: string
+          reason: string
+          to_pack_id: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string
+          decided_by: string
+          decided_membership_id: string
+          decision: string
+          from_binding_id: string
+          from_pack_id: string
+          id?: string
+          impact: Json
+          matter_id: string
+          new_binding_id?: string | null
+          organization_id: string
+          reason: string
+          to_pack_id: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string
+          decided_by?: string
+          decided_membership_id?: string
+          decision?: string
+          from_binding_id?: string
+          from_pack_id?: string
+          id?: string
+          impact?: Json
+          matter_id?: string
+          new_binding_id?: string | null
+          organization_id?: string
+          reason?: string
+          to_pack_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matter_rule_upgrade_decisions_matter_id_organization_id_fkey"
+            columns: ["matter_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "matters"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "matter_rule_upgrade_decisions_from_pack_id_fkey"
+            columns: ["from_pack_id"]
+            isOneToOne: false
+            referencedRelation: "rule_pack_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matter_rule_upgrade_decisions_to_pack_id_fkey"
+            columns: ["to_pack_id"]
+            isOneToOne: false
+            referencedRelation: "rule_pack_versions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       matter_stage_evidence: {
         Row: {
@@ -6250,9 +7964,14 @@ export type Database = {
       }
       migration_batches: {
         Row: {
+          attachment_bytes: number | null
+          attachment_files: number | null
+          attachment_name: string | null
+          attachment_sha256: string | null
           byte_size: number
           checked_at: string | null
           commit_started_at: string | null
+          commit_verified_at: string | null
           committed_at: string | null
           committed_by: string | null
           created_at: string
@@ -6260,12 +7979,23 @@ export type Database = {
           discarded_at: string | null
           exceptions: Json
           file_name: string
+          full_run_started_at: string | null
+          full_run_started_by: string | null
           headers: string[]
           id: string
           is_sample: boolean
+          kind: string
           mapping: Json
           organization_id: string
           parsed_digest: string
+          pilot_completed_at: string | null
+          pilot_counts: Json | null
+          pilot_signed_off_at: string | null
+          pilot_signed_off_by: string | null
+          pilot_signoff_note: string | null
+          pilot_size: number | null
+          pilot_started_at: string | null
+          pilot_started_by: string | null
           plan_counts: Json | null
           plan_hash: string | null
           purge_after: string
@@ -6273,6 +8003,8 @@ export type Database = {
           result_counts: Json | null
           rolled_back_at: string | null
           rolled_back_by: string | null
+          run_report: Json | null
+          sensitivity: Json
           source_row_count: number
           source_sha256: string
           source_system: string
@@ -6285,9 +8017,14 @@ export type Database = {
           version: number
         }
         Insert: {
+          attachment_bytes?: number | null
+          attachment_files?: number | null
+          attachment_name?: string | null
+          attachment_sha256?: string | null
           byte_size: number
           checked_at?: string | null
           commit_started_at?: string | null
+          commit_verified_at?: string | null
           committed_at?: string | null
           committed_by?: string | null
           created_at?: string
@@ -6295,12 +8032,23 @@ export type Database = {
           discarded_at?: string | null
           exceptions?: Json
           file_name: string
+          full_run_started_at?: string | null
+          full_run_started_by?: string | null
           headers: string[]
           id?: string
           is_sample?: boolean
+          kind?: string
           mapping?: Json
           organization_id: string
           parsed_digest: string
+          pilot_completed_at?: string | null
+          pilot_counts?: Json | null
+          pilot_signed_off_at?: string | null
+          pilot_signed_off_by?: string | null
+          pilot_signoff_note?: string | null
+          pilot_size?: number | null
+          pilot_started_at?: string | null
+          pilot_started_by?: string | null
           plan_counts?: Json | null
           plan_hash?: string | null
           purge_after: string
@@ -6308,6 +8056,8 @@ export type Database = {
           result_counts?: Json | null
           rolled_back_at?: string | null
           rolled_back_by?: string | null
+          run_report?: Json | null
+          sensitivity?: Json
           source_row_count: number
           source_sha256: string
           source_system?: string
@@ -6320,9 +8070,14 @@ export type Database = {
           version?: number
         }
         Update: {
+          attachment_bytes?: number | null
+          attachment_files?: number | null
+          attachment_name?: string | null
+          attachment_sha256?: string | null
           byte_size?: number
           checked_at?: string | null
           commit_started_at?: string | null
+          commit_verified_at?: string | null
           committed_at?: string | null
           committed_by?: string | null
           created_at?: string
@@ -6330,12 +8085,23 @@ export type Database = {
           discarded_at?: string | null
           exceptions?: Json
           file_name?: string
+          full_run_started_at?: string | null
+          full_run_started_by?: string | null
           headers?: string[]
           id?: string
           is_sample?: boolean
+          kind?: string
           mapping?: Json
           organization_id?: string
           parsed_digest?: string
+          pilot_completed_at?: string | null
+          pilot_counts?: Json | null
+          pilot_signed_off_at?: string | null
+          pilot_signed_off_by?: string | null
+          pilot_signoff_note?: string | null
+          pilot_size?: number | null
+          pilot_started_at?: string | null
+          pilot_started_by?: string | null
           plan_counts?: Json | null
           plan_hash?: string | null
           purge_after?: string
@@ -6343,6 +8109,8 @@ export type Database = {
           result_counts?: Json | null
           rolled_back_at?: string | null
           rolled_back_by?: string | null
+          run_report?: Json | null
+          sensitivity?: Json
           source_row_count?: number
           source_sha256?: string
           source_system?: string
@@ -6364,6 +8132,53 @@ export type Database = {
           },
         ]
       }
+      migration_files: {
+        Row: {
+          batch_id: string
+          base_name: string
+          byte_size: number
+          created_at: string
+          id: string
+          media_type: string | null
+          organization_id: string
+          path: string
+          problem: string | null
+          sha256: string | null
+        }
+        Insert: {
+          batch_id: string
+          base_name: string
+          byte_size: number
+          created_at?: string
+          id?: string
+          media_type?: string | null
+          organization_id: string
+          path: string
+          problem?: string | null
+          sha256?: string | null
+        }
+        Update: {
+          batch_id?: string
+          base_name?: string
+          byte_size?: number
+          created_at?: string
+          id?: string
+          media_type?: string | null
+          organization_id?: string
+          path?: string
+          problem?: string | null
+          sha256?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "migration_files_batch_id_organization_id_fkey"
+            columns: ["batch_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "migration_batches"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
       migration_records: {
         Row: {
           batch_id: string
@@ -6372,6 +8187,7 @@ export type Database = {
           id: string
           imported_stage: Database["public"]["Enums"]["matter_stage"] | null
           organization_id: string
+          original_at: string | null
           record_id: string
           record_table: string
           removed_at: string | null
@@ -6386,6 +8202,7 @@ export type Database = {
           id?: string
           imported_stage?: Database["public"]["Enums"]["matter_stage"] | null
           organization_id: string
+          original_at?: string | null
           record_id: string
           record_table: string
           removed_at?: string | null
@@ -6400,6 +8217,7 @@ export type Database = {
           id?: string
           imported_stage?: Database["public"]["Enums"]["matter_stage"] | null
           organization_id?: string
+          original_at?: string | null
           record_id?: string
           record_table?: string
           removed_at?: string | null
@@ -6430,9 +8248,12 @@ export type Database = {
           group_first: number | null
           group_key: string | null
           id: string
+          in_pilot: boolean
           is_applicant: boolean
           match_detail: string[] | null
           match_person_id: string | null
+          match_record_id: string | null
+          match_record_table: string | null
           match_row_number: number | null
           matter_id: string | null
           normalized: Json | null
@@ -6440,6 +8261,7 @@ export type Database = {
           person_id: string | null
           plan: Database["public"]["Enums"]["migration_row_plan"] | null
           problems: Json
+          record_id: string | null
           row_number: number
           row_sha256: string
         }
@@ -6455,9 +8277,12 @@ export type Database = {
           group_first?: number | null
           group_key?: string | null
           id?: string
+          in_pilot?: boolean
           is_applicant?: boolean
           match_detail?: string[] | null
           match_person_id?: string | null
+          match_record_id?: string | null
+          match_record_table?: string | null
           match_row_number?: number | null
           matter_id?: string | null
           normalized?: Json | null
@@ -6465,6 +8290,7 @@ export type Database = {
           person_id?: string | null
           plan?: Database["public"]["Enums"]["migration_row_plan"] | null
           problems?: Json
+          record_id?: string | null
           row_number: number
           row_sha256: string
         }
@@ -6480,9 +8306,12 @@ export type Database = {
           group_first?: number | null
           group_key?: string | null
           id?: string
+          in_pilot?: boolean
           is_applicant?: boolean
           match_detail?: string[] | null
           match_person_id?: string | null
+          match_record_id?: string | null
+          match_record_table?: string | null
           match_row_number?: number | null
           matter_id?: string | null
           normalized?: Json | null
@@ -6490,6 +8319,7 @@ export type Database = {
           person_id?: string | null
           plan?: Database["public"]["Enums"]["migration_row_plan"] | null
           problems?: Json
+          record_id?: string | null
           row_number?: number
           row_sha256?: string
         }
@@ -6508,6 +8338,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           organization_id: string
+          pilot_max: number
           staging_days: number
           updated_at: string
           version: number
@@ -6516,6 +8347,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           organization_id: string
+          pilot_max?: number
           staging_days?: number
           updated_at?: string
           version?: number
@@ -6524,6 +8356,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           organization_id?: string
+          pilot_max?: number
           staging_days?: number
           updated_at?: string
           version?: number
@@ -6757,6 +8590,8 @@ export type Database = {
       organization_subscriptions: {
         Row: {
           archived_at: string | null
+          cancel_requested_at: string | null
+          cancel_requested_by: string | null
           billing_interval: Database["public"]["Enums"]["billing_interval"] | null
           cancel_at: string | null
           cancelled_at: string | null
@@ -6764,6 +8599,10 @@ export type Database = {
           created_by: string | null
           current_period_end: string | null
           duration_snapshot: Json | null
+          end_arrangement: string | null
+          end_arrangement_chosen_at: string | null
+          end_arrangement_chosen_by: string | null
+          end_transfer_id: string | null
           extra_seats: number
           last_webhook_event_id: string | null
           latest_invoice_status: string | null
@@ -6782,6 +8621,8 @@ export type Database = {
         }
         Insert: {
           archived_at?: string | null
+          cancel_requested_at?: string | null
+          cancel_requested_by?: string | null
           billing_interval?: Database["public"]["Enums"]["billing_interval"] | null
           cancel_at?: string | null
           cancelled_at?: string | null
@@ -6789,6 +8630,10 @@ export type Database = {
           created_by?: string | null
           current_period_end?: string | null
           duration_snapshot?: Json | null
+          end_arrangement?: string | null
+          end_arrangement_chosen_at?: string | null
+          end_arrangement_chosen_by?: string | null
+          end_transfer_id?: string | null
           extra_seats?: number
           last_webhook_event_id?: string | null
           latest_invoice_status?: string | null
@@ -6807,6 +8652,8 @@ export type Database = {
         }
         Update: {
           archived_at?: string | null
+          cancel_requested_at?: string | null
+          cancel_requested_by?: string | null
           billing_interval?: Database["public"]["Enums"]["billing_interval"] | null
           cancel_at?: string | null
           cancelled_at?: string | null
@@ -6814,6 +8661,10 @@ export type Database = {
           created_by?: string | null
           current_period_end?: string | null
           duration_snapshot?: Json | null
+          end_arrangement?: string | null
+          end_arrangement_chosen_at?: string | null
+          end_arrangement_chosen_by?: string | null
+          end_transfer_id?: string | null
           extra_seats?: number
           last_webhook_event_id?: string | null
           latest_invoice_status?: string | null
@@ -6866,6 +8717,7 @@ export type Database = {
           retention_policy: Json | null
           sample_mode: boolean
           slug: string
+          staff_idle_timeout_minutes: number
           subscription_terms_accepted_at: string | null
           subscription_terms_version: string | null
           succession_note: string | null
@@ -6899,6 +8751,7 @@ export type Database = {
           retention_policy?: Json | null
           sample_mode?: boolean
           slug: string
+          staff_idle_timeout_minutes?: number
           subscription_terms_accepted_at?: string | null
           subscription_terms_version?: string | null
           succession_note?: string | null
@@ -6932,6 +8785,7 @@ export type Database = {
           retention_policy?: Json | null
           sample_mode?: boolean
           slug?: string
+          staff_idle_timeout_minutes?: number
           subscription_terms_accepted_at?: string | null
           subscription_terms_version?: string | null
           succession_note?: string | null
@@ -7098,6 +8952,75 @@ export type Database = {
           locale?: string
           sms_notices?: boolean
           updated_at?: string
+        }
+        Relationships: []
+      }
+      person_flag_resolutions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          detail: string
+          flag_key: string
+          id: string
+          note: string
+          organization_id: string
+          person_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          detail: string
+          flag_key: string
+          id?: string
+          note: string
+          organization_id: string
+          person_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          detail?: string
+          flag_key?: string
+          id?: string
+          note?: string
+          organization_id?: string
+          person_id?: string
+        }
+        Relationships: []
+      }
+      person_identity_entries: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data: Json
+          id: string
+          kind: Database["public"]["Enums"]["person_identity_kind"]
+          organization_id: string
+          person_id: string
+          replaces_id: string | null
+          retired: boolean
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data: Json
+          id?: string
+          kind: Database["public"]["Enums"]["person_identity_kind"]
+          organization_id: string
+          person_id: string
+          replaces_id?: string | null
+          retired?: boolean
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data?: Json
+          id?: string
+          kind?: Database["public"]["Enums"]["person_identity_kind"]
+          organization_id?: string
+          person_id?: string
+          replaces_id?: string | null
+          retired?: boolean
         }
         Relationships: []
       }
@@ -7442,6 +9365,7 @@ export type Database = {
           done_at: string | null
           done_by: string | null
           id: string
+          item_id: string | null
           organization_id: string
           record_label: string
           removed: string
@@ -7457,6 +9381,7 @@ export type Database = {
           done_at?: string | null
           done_by?: string | null
           id?: string
+          item_id?: string | null
           organization_id: string
           record_label: string
           removed: string
@@ -7472,6 +9397,7 @@ export type Database = {
           done_at?: string | null
           done_by?: string | null
           id?: string
+          item_id?: string | null
           organization_id?: string
           record_label?: string
           removed?: string
@@ -7496,6 +9422,17 @@ export type Database = {
           details: string
           due_on: string | null
           evidence_note: string | null
+          extended_at: string | null
+          extended_by: string | null
+          extended_due_on: string | null
+          extension_basis: string | null
+          extension_notice_channel: string | null
+          extension_notice_late: boolean | null
+          extension_notice_method: string | null
+          extension_notice_seen_at: string | null
+          extension_reason: string | null
+          extension_recourse: string | null
+          extension_time_limit_id: string | null
           id: string
           identity_method: string | null
           identity_verified_at: string | null
@@ -7539,6 +9476,17 @@ export type Database = {
           details: string
           due_on?: string | null
           evidence_note?: string | null
+          extended_at?: string | null
+          extended_by?: string | null
+          extended_due_on?: string | null
+          extension_basis?: string | null
+          extension_notice_channel?: string | null
+          extension_notice_late?: boolean | null
+          extension_notice_method?: string | null
+          extension_notice_seen_at?: string | null
+          extension_reason?: string | null
+          extension_recourse?: string | null
+          extension_time_limit_id?: string | null
           id?: string
           identity_method?: string | null
           identity_verified_at?: string | null
@@ -7582,6 +9530,17 @@ export type Database = {
           details?: string
           due_on?: string | null
           evidence_note?: string | null
+          extended_at?: string | null
+          extended_by?: string | null
+          extended_due_on?: string | null
+          extension_basis?: string | null
+          extension_notice_channel?: string | null
+          extension_notice_late?: boolean | null
+          extension_notice_method?: string | null
+          extension_notice_seen_at?: string | null
+          extension_reason?: string | null
+          extension_recourse?: string | null
+          extension_time_limit_id?: string | null
           id?: string
           identity_method?: string | null
           identity_verified_at?: string | null
@@ -7610,6 +9569,318 @@ export type Database = {
           scope_by?: string | null
           scope_note?: string | null
           target_days?: number | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      privacy_request_deliveries: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          delivered_at: string
+          delivered_by: string
+          download_count: number
+          expires_at: string
+          first_downloaded_at: string | null
+          id: string
+          last_downloaded_at: string | null
+          organization_id: string
+          person_id: string
+          request_id: string
+          response_id: string
+          sha256: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string
+          delivered_by: string
+          download_count?: number
+          expires_at: string
+          first_downloaded_at?: string | null
+          id?: string
+          last_downloaded_at?: string | null
+          organization_id: string
+          person_id: string
+          request_id: string
+          response_id: string
+          sha256: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string
+          delivered_by?: string
+          download_count?: number
+          expires_at?: string
+          first_downloaded_at?: string | null
+          id?: string
+          last_downloaded_at?: string | null
+          organization_id?: string
+          person_id?: string
+          request_id?: string
+          response_id?: string
+          sha256?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      privacy_request_items: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          decided_at: string | null
+          decided_by: string | null
+          decision: string
+          fields: string[]
+          id: string
+          label: string
+          matter_id: string | null
+          organization_id: string
+          reason: string | null
+          request_id: string
+          source: string
+          source_id: string
+          third_party: string | null
+          updated_at: string
+          version: number
+          withheld_fields: string[]
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          fields?: string[]
+          id?: string
+          label: string
+          matter_id?: string | null
+          organization_id: string
+          reason?: string | null
+          request_id: string
+          source: string
+          source_id: string
+          third_party?: string | null
+          updated_at?: string
+          version?: number
+          withheld_fields?: string[]
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          fields?: string[]
+          id?: string
+          label?: string
+          matter_id?: string | null
+          organization_id?: string
+          reason?: string | null
+          request_id?: string
+          source?: string
+          source_id?: string
+          third_party?: string | null
+          updated_at?: string
+          version?: number
+          withheld_fields?: string[]
+        }
+        Relationships: []
+      }
+      privacy_request_responses: {
+        Row: {
+          byte_size: number | null
+          contents: Json | null
+          created_at: string
+          created_by: string | null
+          excluded: Json | null
+          failed_reason: string | null
+          file_count: number | null
+          id: string
+          idempotency_key: string
+          manifest_sha256: string | null
+          organization_id: string
+          ready_at: string | null
+          record_count: number | null
+          request_id: string
+          requested_at: string
+          requested_by: string
+          sha256: string | null
+          status: string
+          storage_bucket: string | null
+          storage_key: string | null
+          updated_at: string
+          version: number
+          withheld_count: number | null
+        }
+        Insert: {
+          byte_size?: number | null
+          contents?: Json | null
+          created_at?: string
+          created_by?: string | null
+          excluded?: Json | null
+          failed_reason?: string | null
+          file_count?: number | null
+          id?: string
+          idempotency_key: string
+          manifest_sha256?: string | null
+          organization_id: string
+          ready_at?: string | null
+          record_count?: number | null
+          request_id: string
+          requested_at?: string
+          requested_by: string
+          sha256?: string | null
+          status?: string
+          storage_bucket?: string | null
+          storage_key?: string | null
+          updated_at?: string
+          version?: number
+          withheld_count?: number | null
+        }
+        Update: {
+          byte_size?: number | null
+          contents?: Json | null
+          created_at?: string
+          created_by?: string | null
+          excluded?: Json | null
+          failed_reason?: string | null
+          file_count?: number | null
+          id?: string
+          idempotency_key?: string
+          manifest_sha256?: string | null
+          organization_id?: string
+          ready_at?: string | null
+          record_count?: number | null
+          request_id?: string
+          requested_at?: string
+          requested_by?: string
+          sha256?: string | null
+          status?: string
+          storage_bucket?: string | null
+          storage_key?: string | null
+          updated_at?: string
+          version?: number
+          withheld_count?: number | null
+        }
+        Relationships: []
+      }
+      privacy_response_downloads: {
+        Row: {
+          created_at: string
+          delivery_id: string
+          downloaded_at: string
+          id: string
+          organization_id: string
+          sha256: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_id: string
+          downloaded_at?: string
+          id?: string
+          organization_id: string
+          sha256: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          delivery_id?: string
+          downloaded_at?: string
+          id?: string
+          organization_id?: string
+          sha256?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      privacy_time_limits: {
+        Row: {
+          checked_on: string
+          created_at: string
+          created_by: string | null
+          current_to: string | null
+          days: number | null
+          id: string
+          kind: string
+          law_name: string
+          organization_id: string
+          page_attested_at: string | null
+          page_attested_by_membership_id: string | null
+          page_attested_on: string | null
+          provision_text: string
+          retired_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by_membership_id: string | null
+          snapshot_id: string | null
+          snapshot_sha256: string | null
+          source_id: string
+          source_section: string
+          source_url: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          checked_on: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          days?: number | null
+          id?: string
+          kind: string
+          law_name: string
+          organization_id: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          provision_text: string
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id: string
+          source_section: string
+          source_url: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          checked_on?: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          days?: number | null
+          id?: string
+          kind?: string
+          law_name?: string
+          organization_id?: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          provision_text?: string
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id?: string
+          source_section?: string
+          source_url?: string
+          status?: string
           updated_at?: string
           version?: number
         }
@@ -7989,6 +10260,63 @@ export type Database = {
         }
         Relationships: []
       }
+      rule_claim_overrides: {
+        Row: {
+          action: string
+          base_version_id: string
+          claim_text: string | null
+          created_at: string
+          created_by: string | null
+          definition_id: string
+          editor_licence_id: string
+          editor_licence_number: string
+          editor_membership_id: string
+          editor_name: string
+          id: string
+          organization_id: string
+          output_value: Json | null
+          reason: string
+          step_up_at: string
+          step_up_session_id: string | null
+        }
+        Insert: {
+          action: string
+          base_version_id: string
+          claim_text?: string | null
+          created_at?: string
+          created_by?: string | null
+          definition_id: string
+          editor_licence_id: string
+          editor_licence_number: string
+          editor_membership_id: string
+          editor_name: string
+          id?: string
+          organization_id: string
+          output_value?: Json | null
+          reason: string
+          step_up_at: string
+          step_up_session_id?: string | null
+        }
+        Update: {
+          action?: string
+          base_version_id?: string
+          claim_text?: string | null
+          created_at?: string
+          created_by?: string | null
+          definition_id?: string
+          editor_licence_id?: string
+          editor_licence_number?: string
+          editor_membership_id?: string
+          editor_name?: string
+          id?: string
+          organization_id?: string
+          output_value?: Json | null
+          reason?: string
+          step_up_at?: string
+          step_up_session_id?: string | null
+        }
+        Relationships: []
+      }
       rule_definitions: {
         Row: {
           applicant_context: string | null
@@ -8002,6 +10330,7 @@ export type Database = {
           owner_label: string | null
           program_key: string | null
           required_facts: string[]
+          source_category: string | null
           stable_key: string
           updated_at: string
           version: number
@@ -8018,6 +10347,7 @@ export type Database = {
           owner_label?: string | null
           program_key?: string | null
           required_facts?: string[]
+          source_category?: string | null
           stable_key: string
           updated_at?: string
           version?: number
@@ -8034,6 +10364,7 @@ export type Database = {
           owner_label?: string | null
           program_key?: string | null
           required_facts?: string[]
+          source_category?: string | null
           stable_key?: string
           updated_at?: string
           version?: number
@@ -8050,6 +10381,17 @@ export type Database = {
       }
       rule_evidence: {
         Row: {
+          checked_on: string | null
+          current_to: string | null
+          form_modified_on: string | null
+          form_number: string | null
+          last_amended_on: string | null
+          modified_on: string | null
+          page_attested_at: string | null
+          page_attested_by_membership_id: string | null
+          page_attested_on: string | null
+          published_on: string | null
+          source_url: string | null
           created_at: string
           created_by: string | null
           evidence_excerpt: string | null
@@ -8058,13 +10400,24 @@ export type Database = {
           locator: string | null
           organization_id: string | null
           rule_version_id: string
-          snapshot_id: string
+          snapshot_id: string | null
           source_language: string | null
           source_section: string | null
           updated_at: string
           version: number
         }
         Insert: {
+          checked_on?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          last_amended_on?: string | null
+          modified_on?: string | null
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          published_on?: string | null
+          source_url?: string | null
           created_at?: string
           created_by?: string | null
           evidence_excerpt?: string | null
@@ -8073,13 +10426,24 @@ export type Database = {
           locator?: string | null
           organization_id?: string | null
           rule_version_id: string
-          snapshot_id: string
+          snapshot_id?: string | null
           source_language?: string | null
           source_section?: string | null
           updated_at?: string
           version?: number
         }
         Update: {
+          checked_on?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          last_amended_on?: string | null
+          modified_on?: string | null
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          published_on?: string | null
+          source_url?: string | null
           created_at?: string
           created_by?: string | null
           evidence_excerpt?: string | null
@@ -8088,7 +10452,7 @@ export type Database = {
           locator?: string | null
           organization_id?: string | null
           rule_version_id?: string
-          snapshot_id?: string
+          snapshot_id?: string | null
           source_language?: string | null
           source_section?: string | null
           updated_at?: string
@@ -8306,6 +10670,39 @@ export type Database = {
           },
         ]
       }
+      rule_step_up_uses: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          object_id: string
+          organization_id: string
+          session_id: string | null
+          step_up_at: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          object_id: string
+          organization_id: string
+          session_id?: string | null
+          step_up_at: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          object_id?: string
+          organization_id?: string
+          session_id?: string | null
+          step_up_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       rule_versions: {
         Row: {
           applicability: Json | null
@@ -8323,8 +10720,12 @@ export type Database = {
           id: string
           next_review_at: string | null
           organization_id: string | null
+          origin: Database["public"]["Enums"]["rule_origin"]
           output_value: Json | null
           status: Database["public"]["Enums"]["rule_publication_status"]
+          status_changed_at: string | null
+          status_changed_by_membership_id: string | null
+          status_reason: string | null
           structured_condition: Json | null
           supersedes_version_id: string | null
           test_case_ids: string[]
@@ -8348,8 +10749,12 @@ export type Database = {
           id?: string
           next_review_at?: string | null
           organization_id?: string | null
+          origin?: Database["public"]["Enums"]["rule_origin"]
           output_value?: Json | null
           status?: Database["public"]["Enums"]["rule_publication_status"]
+          status_changed_at?: string | null
+          status_changed_by_membership_id?: string | null
+          status_reason?: string | null
           structured_condition?: Json | null
           supersedes_version_id?: string | null
           test_case_ids?: string[]
@@ -8373,8 +10778,12 @@ export type Database = {
           id?: string
           next_review_at?: string | null
           organization_id?: string | null
+          origin?: Database["public"]["Enums"]["rule_origin"]
           output_value?: Json | null
           status?: Database["public"]["Enums"]["rule_publication_status"]
+          status_changed_at?: string | null
+          status_changed_by_membership_id?: string | null
+          status_reason?: string | null
           structured_condition?: Json | null
           supersedes_version_id?: string | null
           test_case_ids?: string[]
@@ -8463,6 +10872,108 @@ export type Database = {
         }
         Update: {
           revoked_at?: string | null
+        }
+        Relationships: []
+      }
+      service_notice_dismissals: {
+        Row: {
+          dismissed_at: string
+          notice_id: string
+          organization_id: string
+          user_id: string
+        }
+        Insert: {
+          dismissed_at?: string
+          notice_id: string
+          organization_id: string
+          user_id: string
+        }
+        Update: {
+          dismissed_at?: string
+          notice_id?: string
+          organization_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      service_notice_targets: {
+        Row: {
+          created_at: string
+          notice_id: string
+          organization_id: string
+        }
+        Insert: {
+          created_at?: string
+          notice_id: string
+          organization_id: string
+        }
+        Update: {
+          created_at?: string
+          notice_id?: string
+          organization_id?: string
+        }
+        Relationships: []
+      }
+      service_notices: {
+        Row: {
+          audience: string
+          body: string
+          created_at: string
+          created_by: string
+          ends_at: string | null
+          id: string
+          kind: string
+          published_at: string | null
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          starts_at: string
+          status: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          audience: string
+          body: string
+          created_at?: string
+          created_by: string
+          ends_at?: string | null
+          id?: string
+          kind: string
+          published_at?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          starts_at?: string
+          status?: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          audience?: string
+          body?: string
+          created_at?: string
+          created_by?: string
+          ends_at?: string | null
+          id?: string
+          kind?: string
+          published_at?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          starts_at?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
         }
         Relationships: []
       }
@@ -8906,8 +11417,77 @@ export type Database = {
         }
         Relationships: []
       }
+      staff_session_activity: {
+        Row: {
+          created_at: string
+          last_active_at: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          last_active_at?: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          last_active_at?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      submission_checklist_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          handoff_id: string
+          id: string
+          item_key: string
+          kind: string
+          matter_id: string
+          membership_id: string
+          note: string | null
+          organization_id: string
+          requirement_id: string | null
+          ticked: boolean
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          handoff_id: string
+          id?: string
+          item_key: string
+          kind: string
+          matter_id: string
+          membership_id: string
+          note?: string | null
+          organization_id: string
+          requirement_id?: string | null
+          ticked: boolean
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          handoff_id?: string
+          id?: string
+          item_key?: string
+          kind?: string
+          matter_id?: string
+          membership_id?: string
+          note?: string | null
+          organization_id?: string
+          requirement_id?: string | null
+          ticked?: boolean
+        }
+        Relationships: []
+      }
       submission_handoffs: {
         Row: {
+          form_versions: Json | null
+          rule_binding_id: string | null
+          rule_pack_version_id: string | null
           acknowledged_on: string | null
           cancel_reason: string | null
           cancelled_at: string | null
@@ -8916,6 +11496,9 @@ export type Database = {
           created_by: string | null
           external_reference: string | null
           id: string
+          manifest_file_count: number | null
+          manifest_pinned_at: string | null
+          manifest_sha256: string | null
           matter_id: string
           organization_id: string
           package_label: string
@@ -8934,6 +11517,9 @@ export type Database = {
           version: number
         }
         Insert: {
+          form_versions?: Json | null
+          rule_binding_id?: string | null
+          rule_pack_version_id?: string | null
           acknowledged_on?: string | null
           cancel_reason?: string | null
           cancelled_at?: string | null
@@ -8942,6 +11528,9 @@ export type Database = {
           created_by?: string | null
           external_reference?: string | null
           id?: string
+          manifest_file_count?: number | null
+          manifest_pinned_at?: string | null
+          manifest_sha256?: string | null
           matter_id: string
           organization_id: string
           package_label: string
@@ -8960,6 +11549,9 @@ export type Database = {
           version?: number
         }
         Update: {
+          form_versions?: Json | null
+          rule_binding_id?: string | null
+          rule_pack_version_id?: string | null
           acknowledged_on?: string | null
           cancel_reason?: string | null
           cancelled_at?: string | null
@@ -8968,6 +11560,9 @@ export type Database = {
           created_by?: string | null
           external_reference?: string | null
           id?: string
+          manifest_file_count?: number | null
+          manifest_pinned_at?: string | null
+          manifest_sha256?: string | null
           matter_id?: string
           organization_id?: string
           package_label?: string
@@ -8986,6 +11581,465 @@ export type Database = {
           version?: number
         }
         Relationships: []
+      }
+      submission_manifest_files: {
+        Row: {
+          byte_size: number | null
+          created_at: string
+          created_by: string | null
+          document_id: string
+          document_version_id: string
+          file_name: string
+          file_sha256: string | null
+          handoff_id: string
+          id: string
+          organization_id: string
+          position: number
+          purpose: string
+          review_state: string
+        }
+        Insert: {
+          byte_size?: number | null
+          created_at?: string
+          created_by?: string | null
+          document_id: string
+          document_version_id: string
+          file_name: string
+          file_sha256?: string | null
+          handoff_id: string
+          id?: string
+          organization_id: string
+          position: number
+          purpose: string
+          review_state: string
+        }
+        Update: {
+          byte_size?: number | null
+          created_at?: string
+          created_by?: string | null
+          document_id?: string
+          document_version_id?: string
+          file_name?: string
+          file_sha256?: string | null
+          handoff_id?: string
+          id?: string
+          organization_id?: string
+          position?: number
+          purpose?: string
+          review_state?: string
+        }
+        Relationships: []
+      }
+      submission_requirements: {
+        Row: {
+          channel: Database["public"]["Enums"]["submission_channel"]
+          checked_on: string
+          created_at: string
+          created_by: string | null
+          current_to: string | null
+          form_modified_on: string | null
+          form_number: string | null
+          id: string
+          kind: string
+          label: string
+          organization_id: string
+          page_attested_at: string | null
+          page_attested_by_membership_id: string | null
+          page_attested_on: string | null
+          program_key: string | null
+          retired_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by_membership_id: string | null
+          snapshot_id: string | null
+          snapshot_sha256: string | null
+          source_id: string
+          source_section: string | null
+          source_url: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          channel: Database["public"]["Enums"]["submission_channel"]
+          checked_on: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          id?: string
+          kind: string
+          label: string
+          organization_id: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          program_key?: string | null
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id: string
+          source_section?: string | null
+          source_url: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          channel?: Database["public"]["Enums"]["submission_channel"]
+          checked_on?: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          id?: string
+          kind?: string
+          label?: string
+          organization_id?: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          program_key?: string | null
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id?: string
+          source_section?: string | null
+          source_url?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      // DEC-02 approval follow-up (20261025200000_dec_approval_follow_up.sql).
+      approval_follow_up_steps: {
+        Row: {
+          checked_on: string
+          created_at: string
+          created_by: string | null
+          current_to: string | null
+          form_modified_on: string | null
+          form_number: string | null
+          id: string
+          label: string
+          organization_id: string
+          page_attested_at: string | null
+          page_attested_by_membership_id: string | null
+          page_attested_on: string | null
+          program_key: string
+          retired_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by_membership_id: string | null
+          snapshot_id: string | null
+          snapshot_sha256: string | null
+          source_id: string
+          source_section: string | null
+          source_url: string
+          status: string
+          timing_text: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          checked_on: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          id?: string
+          label: string
+          organization_id: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          program_key: string
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id: string
+          source_section?: string | null
+          source_url: string
+          status?: string
+          timing_text?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          checked_on?: string
+          created_at?: string
+          created_by?: string | null
+          current_to?: string | null
+          form_modified_on?: string | null
+          form_number?: string | null
+          id?: string
+          label?: string
+          organization_id?: string
+          page_attested_at?: string | null
+          page_attested_by_membership_id?: string | null
+          page_attested_on?: string | null
+          program_key?: string
+          retired_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by_membership_id?: string | null
+          snapshot_id?: string | null
+          snapshot_sha256?: string | null
+          source_id?: string
+          source_section?: string | null
+          source_url?: string
+          status?: string
+          timing_text?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      approval_follow_up_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          decision_id: string
+          id: string
+          matter_id: string
+          membership_id: string
+          organization_id: string
+          step_id: string
+          ticked: boolean
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          decision_id: string
+          id?: string
+          matter_id: string
+          membership_id: string
+          organization_id: string
+          step_id: string
+          ticked: boolean
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          decision_id?: string
+          id?: string
+          matter_id?: string
+          membership_id?: string
+          organization_id?: string
+          step_id?: string
+          ticked?: boolean
+        }
+        Relationships: []
+      }
+      conditions_summaries: {
+        Row: {
+          approved_at: string | null
+          approved_by_membership_id: string | null
+          body: string
+          body_sha256: string | null
+          created_at: string
+          created_by: string | null
+          decision_id: string
+          drafted_by_membership_id: string
+          id: string
+          matter_id: string
+          number: number | null
+          organization_id: string
+          status: string
+          superseded_at: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          body: string
+          body_sha256?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_id: string
+          drafted_by_membership_id: string
+          id?: string
+          matter_id: string
+          number?: number | null
+          organization_id: string
+          status?: string
+          superseded_at?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by_membership_id?: string | null
+          body?: string
+          body_sha256?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_id?: string
+          drafted_by_membership_id?: string
+          id?: string
+          matter_id?: string
+          number?: number | null
+          organization_id?: string
+          status?: string
+          superseded_at?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      decision_deliveries: {
+        Row: {
+          ack_evidence_note: string | null
+          ack_evidence_version_id: string | null
+          ack_recorded_by_membership_id: string | null
+          acknowledged_at: string | null
+          acknowledged_by_user_id: string | null
+          acknowledged_on: string | null
+          acknowledgement: string | null
+          created_at: string
+          created_by: string | null
+          decision_id: string
+          delivered_at: string
+          delivered_by_membership_id: string
+          document_label: string
+          document_version_id: string
+          id: string
+          matter_id: string
+          method: string
+          note: string | null
+          organization_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          ack_evidence_note?: string | null
+          ack_evidence_version_id?: string | null
+          ack_recorded_by_membership_id?: string | null
+          acknowledged_at?: string | null
+          acknowledged_by_user_id?: string | null
+          acknowledged_on?: string | null
+          acknowledgement?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_id: string
+          delivered_at: string
+          delivered_by_membership_id: string
+          document_label: string
+          document_version_id: string
+          id?: string
+          matter_id: string
+          method: string
+          note?: string | null
+          organization_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          ack_evidence_note?: string | null
+          ack_evidence_version_id?: string | null
+          ack_recorded_by_membership_id?: string | null
+          acknowledged_at?: string | null
+          acknowledged_by_user_id?: string | null
+          acknowledged_on?: string | null
+          acknowledgement?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_id?: string
+          delivered_at?: string
+          delivered_by_membership_id?: string
+          document_label?: string
+          document_version_id?: string
+          id?: string
+          matter_id?: string
+          method?: string
+          note?: string | null
+          organization_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      support_catalogue_entries: {
+        Row: {
+          active: boolean
+          case_type_key: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          jurisdiction: string | null
+          label: string
+          note: string | null
+          official_name: string | null
+          position: number
+          scope_key: string
+          scope_kind: string
+          snapshot_id: string | null
+          source_section: string | null
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          active?: boolean
+          case_type_key?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          jurisdiction?: string | null
+          label: string
+          note?: string | null
+          official_name?: string | null
+          position?: number
+          scope_key: string
+          scope_kind: string
+          snapshot_id?: string | null
+          source_section?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          active?: boolean
+          case_type_key?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          jurisdiction?: string | null
+          label?: string
+          note?: string | null
+          official_name?: string | null
+          position?: number
+          scope_key?: string
+          scope_kind?: string
+          snapshot_id?: string | null
+          source_section?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_catalogue_entries_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "source_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       support_access_requests: {
         Row: {
@@ -9135,6 +12189,53 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "support_access_requests"
             referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      support_response_records: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          first_response_at: string | null
+          id: string
+          organization_id: string
+          received_at: string
+          recorded_by_user_id: string
+          ticket_ref: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          first_response_at?: string | null
+          id?: string
+          organization_id: string
+          received_at: string
+          recorded_by_user_id: string
+          ticket_ref: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          first_response_at?: string | null
+          id?: string
+          organization_id?: string
+          received_at?: string
+          recorded_by_user_id?: string
+          ticket_ref?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_response_records_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -9427,6 +12528,8 @@ export type Database = {
           owner_person_id: string | null
           person_id: string | null
           priority: Database["public"]["Enums"]["task_priority"]
+          recurrence: string | null
+          recurrence_parent_id: string | null
           status: Database["public"]["Enums"]["task_status"]
           task_key: string | null
           title: string
@@ -9454,6 +12557,8 @@ export type Database = {
           owner_person_id?: string | null
           person_id?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
+          recurrence?: string | null
+          recurrence_parent_id?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           task_key?: string | null
           title: string
@@ -9481,6 +12586,8 @@ export type Database = {
           owner_person_id?: string | null
           person_id?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
+          recurrence?: string | null
+          recurrence_parent_id?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           task_key?: string | null
           title?: string
@@ -9525,6 +12632,117 @@ export type Database = {
           },
         ]
       }
+      tax_rates: {
+        Row: {
+          approved_by: string
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          effective_to: string | null
+          ended_by: string | null
+          id: string
+          name: string
+          organization_id: string
+          rate_percent: number
+          source_note: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          approved_by: string
+          created_at?: string
+          created_by?: string | null
+          effective_from: string
+          effective_to?: string | null
+          ended_by?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          rate_percent: number
+          source_note?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          approved_by?: string
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          ended_by?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          rate_percent?: number
+          source_note?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      time_entries: {
+        Row: {
+          billable: boolean
+          created_at: string
+          created_by: string | null
+          description: string
+          discarded_at: string | null
+          discarded_by: string | null
+          id: string
+          is_sample: boolean
+          matter_id: string
+          membership_id: string
+          minutes: number | null
+          organization_id: string
+          rate_cents: number
+          started_at: string | null
+          stopped_at: string | null
+          updated_at: string
+          version: number
+          worked_on: string
+        }
+        Insert: {
+          billable?: boolean
+          created_at?: string
+          created_by?: string | null
+          description: string
+          discarded_at?: string | null
+          discarded_by?: string | null
+          id?: string
+          is_sample?: boolean
+          matter_id: string
+          membership_id: string
+          minutes?: number | null
+          organization_id: string
+          rate_cents: number
+          started_at?: string | null
+          stopped_at?: string | null
+          updated_at?: string
+          version?: number
+          worked_on: string
+        }
+        Update: {
+          billable?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          discarded_at?: string | null
+          discarded_by?: string | null
+          id?: string
+          is_sample?: boolean
+          matter_id?: string
+          membership_id?: string
+          minutes?: number | null
+          organization_id?: string
+          rate_cents?: number
+          started_at?: string | null
+          stopped_at?: string | null
+          updated_at?: string
+          version?: number
+          worked_on?: string
+        }
+        Relationships: []
+      }
       translation_draft_requests: {
         Row: {
           char_count: number
@@ -9549,6 +12767,57 @@ export type Database = {
         }
         Relationships: []
       }
+      video_sessions: {
+        Row: {
+          booking_id: string
+          created_at: string
+          created_by: string | null
+          ended_at: string | null
+          ended_by_host_at: string | null
+          id: string
+          is_sample: boolean
+          organization_id: string
+          room_created_at: string | null
+          room_name: string
+          started_at: string | null
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          created_by?: string | null
+          ended_at?: string | null
+          ended_by_host_at?: string | null
+          id?: string
+          is_sample?: boolean
+          organization_id: string
+          room_created_at?: string | null
+          room_name: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          created_by?: string | null
+          ended_at?: string | null
+          ended_by_host_at?: string | null
+          id?: string
+          is_sample?: boolean
+          organization_id?: string
+          room_created_at?: string | null
+          room_name?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       vo_drafts: {
         Row: {
           body: string
@@ -9558,6 +12827,7 @@ export type Database = {
           id: string
           is_sample: boolean
           kind: Database["public"]["Enums"]["vo_draft_kind"]
+          licensed_review_required: boolean
           matter_id: string
           model: string
           needs_rule: boolean
@@ -9581,6 +12851,7 @@ export type Database = {
           id?: string
           is_sample?: boolean
           kind: Database["public"]["Enums"]["vo_draft_kind"]
+          licensed_review_required?: boolean
           matter_id: string
           model: string
           needs_rule?: boolean
@@ -9604,6 +12875,7 @@ export type Database = {
           id?: string
           is_sample?: boolean
           kind?: Database["public"]["Enums"]["vo_draft_kind"]
+          licensed_review_required?: boolean
           matter_id?: string
           model?: string
           needs_rule?: boolean
@@ -9623,6 +12895,8 @@ export type Database = {
       }
       vo_runs: {
         Row: {
+          booking_id: string | null
+          citations: Json
           cost_usd: number | null
           created_at: string
           failure: string | null
@@ -9632,7 +12906,8 @@ export type Database = {
           is_sample: boolean
           kind: Database["public"]["Enums"]["vo_run_kind"]
           latency_ms: number | null
-          matter_id: string
+          lead_id: string | null
+          matter_id: string | null
           model: string | null
           organization_id: string
           output_tokens: number | null
@@ -9646,6 +12921,8 @@ export type Database = {
           version_id: string | null
         }
         Insert: {
+          booking_id?: string | null
+          citations?: Json
           cost_usd?: number | null
           created_at?: string
           failure?: string | null
@@ -9655,7 +12932,8 @@ export type Database = {
           is_sample?: boolean
           kind: Database["public"]["Enums"]["vo_run_kind"]
           latency_ms?: number | null
-          matter_id: string
+          lead_id?: string | null
+          matter_id?: string | null
           model?: string | null
           organization_id: string
           output_tokens?: number | null
@@ -9669,6 +12947,8 @@ export type Database = {
           version_id?: string | null
         }
         Update: {
+          booking_id?: string | null
+          citations?: Json
           cost_usd?: number | null
           created_at?: string
           failure?: string | null
@@ -9678,7 +12958,8 @@ export type Database = {
           is_sample?: boolean
           kind?: Database["public"]["Enums"]["vo_run_kind"]
           latency_ms?: number | null
-          matter_id?: string
+          lead_id?: string | null
+          matter_id?: string | null
           model?: string | null
           organization_id?: string
           output_tokens?: number | null
@@ -9690,6 +12971,90 @@ export type Database = {
           useful?: boolean | null
           user_id?: string
           version_id?: string | null
+        }
+        Relationships: []
+      }
+      vo_crm_drafts: {
+        Row: {
+          body: string
+          booking_id: string | null
+          created_at: string
+          created_by: string
+          edited: boolean | null
+          id: string
+          is_sample: boolean
+          kind: Database["public"]["Enums"]["vo_draft_kind"]
+          lead_id: string | null
+          lead_note_id: string | null
+          left_out: number
+          marketing_consent: boolean | null
+          matter_id: string | null
+          matter_note_id: string | null
+          model: string
+          needs_rule: boolean
+          organization_id: string
+          prompt_version: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          run_id: string
+          sources: Json
+          status: Database["public"]["Enums"]["vo_draft_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          booking_id?: string | null
+          created_at?: string
+          created_by: string
+          edited?: boolean | null
+          id?: string
+          is_sample?: boolean
+          kind: Database["public"]["Enums"]["vo_draft_kind"]
+          lead_id?: string | null
+          lead_note_id?: string | null
+          left_out?: number
+          marketing_consent?: boolean | null
+          matter_id?: string | null
+          matter_note_id?: string | null
+          model: string
+          needs_rule?: boolean
+          organization_id: string
+          prompt_version: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id: string
+          sources: Json
+          status?: Database["public"]["Enums"]["vo_draft_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          booking_id?: string | null
+          created_at?: string
+          created_by?: string
+          edited?: boolean | null
+          id?: string
+          is_sample?: boolean
+          kind?: Database["public"]["Enums"]["vo_draft_kind"]
+          lead_id?: string | null
+          lead_note_id?: string | null
+          left_out?: number
+          marketing_consent?: boolean | null
+          matter_id?: string | null
+          matter_note_id?: string | null
+          model?: string
+          needs_rule?: boolean
+          organization_id?: string
+          prompt_version?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id?: string
+          sources?: Json
+          status?: Database["public"]["Enums"]["vo_draft_status"]
+          title?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -9856,8 +13221,10 @@ export type Database = {
           inconsistency_flags: boolean
           missing_fields: boolean
           ocr_normalisation: boolean
+          letter_drafts: boolean
         }
         Insert: {
+          letter_drafts?: boolean
           composio_accepted_at?: string | null
           composio_accepted_by?: string | null
           composio_enabled?: boolean
@@ -9880,6 +13247,7 @@ export type Database = {
           updated_by: string
         }
         Update: {
+          letter_drafts?: boolean
           doc_classification?: boolean
           inconsistency_flags?: boolean
           missing_fields?: boolean
@@ -9900,6 +13268,30 @@ export type Database = {
           composio_accepted_at?: string | null
           composio_accepted_by?: string | null
           composio_enabled?: boolean
+        }
+        Relationships: []
+      }
+      vo_vendor_terms_acknowledgements: {
+        Row: {
+          acknowledged_at: string
+          acknowledged_by: string
+          id: string
+          organization_id: string
+          terms_version: string
+        }
+        Insert: {
+          acknowledged_at?: string
+          acknowledged_by: string
+          id?: string
+          organization_id: string
+          terms_version: string
+        }
+        Update: {
+          acknowledged_at?: string
+          acknowledged_by?: string
+          id?: string
+          organization_id?: string
+          terms_version?: string
         }
         Relationships: []
       }
@@ -10279,6 +13671,54 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_client_matter_for_program: {
+        Args: {
+          p_applicant_date_of_birth?: string | null
+          p_applicant_email: string | null
+          p_applicant_name: string
+          p_consultant_membership_id: string
+          p_program_key: string
+          p_sponsor_date_of_birth?: string | null
+          p_sponsor_email: string | null
+          p_sponsor_name: string | null
+        }
+        Returns: Json
+      }
+      decide_matter_rule_upgrade: {
+        Args: {
+          p_decision: string
+          p_expected_version: number
+          p_matter_id: string
+          p_reason: string
+          p_to_pack_id: string
+        }
+        Returns: Json
+      }
+      matter_rule_state: {
+        Args: { p_matter_id: string }
+        Returns: Json
+      }
+      save_support_catalogue_entry: {
+        Args: {
+          p_active?: boolean
+          p_acting_admin?: string | null
+          p_case_type_key?: string | null
+          p_jurisdiction?: string | null
+          p_label: string
+          p_note?: string | null
+          p_official_name?: string | null
+          p_position?: number | null
+          p_scope_key: string
+          p_scope_kind: string
+          p_snapshot_id?: string | null
+          p_source_section?: string | null
+        }
+        Returns: string
+      }
+      support_catalogue: {
+        Args: { p_org?: string | null }
+        Returns: Json
+      }
       accept_invitation: { Args: { token: string }; Returns: string }
       accept_portal_invitation: {
         Args: { p_payload: Json; p_token: string }
@@ -10288,54 +13728,8 @@ export type Database = {
         Args: { p_agreement_id: string }
         Returns: undefined
       }
-      booking_agreement_for_signing: {
-        Args: { p_ref: string }
-        Returns: Json
-      }
-      create_quote: {
-        Args: { p_matter_id: string; p_template_id: string | null; p_title: string | null }
-        Returns: string
-      }
-      edit_agreement_clause: {
-        Args: { p_agreement_id: string; p_body: string; p_clause_id: string }
-        Returns: string
-      }
-      quote_to_agreement: {
-        Args: { p_agreement_id: string; p_template_id: string }
-        Returns: string
-      }
-      save_quote: {
-        Args: {
-          p_agreement_id: string
-          p_deliverables: string | null
-          p_exclusions: string | null
-          p_fee_structure: string | null
-          p_government_fee_note: string | null
-          p_instalments: Json
-          p_lines: Json
-          p_quote_expires_on: string
-          p_refund_policy: string | null
-          p_scope: string
-          p_services: string | null
-        }
-        Returns: string
-      }
-      send_booking_agreement: {
-        Args: { p_booking_id: string; p_template_id: string }
-        Returns: string
-      }
-      note_booking_agreement_opened: { Args: { p_ref: string }; Returns: undefined }
-      note_booking_agreement_request: { Args: { p_kind: string; p_ref: string }; Returns: Json }
-      issue_booking_agreement_code: { Args: { p_code_id: string; p_code_sha256: string; p_ref: string; p_sealed: string }; Returns: Json }
-      verify_booking_agreement_code: { Args: { p_code_sha256: string; p_ref: string; p_session_sha256: string }; Returns: Json }
-      decline_booking_agreement: { Args: { p_reason: string; p_ref: string }; Returns: Json }
-      remind_booking_agreement: { Args: { p_booking_id: string }; Returns: number }
-      set_booking_type_agreement: {
-        Args: { p_event_type_id: string; p_template_id: string | null }
-        Returns: undefined
-      }
-      send_quote: {
-        Args: { p_agreement_id: string }
+      accept_vo_doc_proposal: {
+        Args: { p_due_on?: string | null; p_proposal_id: string; p_value?: string | null }
         Returns: Json
       }
       access_grant_choices: {
@@ -10352,6 +13746,10 @@ export type Database = {
         Args: { p_message_id: string; p_organization_id: string }
         Returns: string
       }
+      acknowledge_vo_vendor_terms: {
+        Args: { p_organization_id: string; p_terms_version: string }
+        Returns: Json
+      }
       add_consultant_licence: {
         Args: {
           p_college_id: string
@@ -10366,6 +13764,17 @@ export type Database = {
           p_document_version_id: string
           p_due_on: string
           p_owner_membership_id?: string | null
+        }
+        Returns: string
+      }
+      add_invoice_government_fee: {
+        Args: {
+          p_amount_cents: number | null
+          p_checked_on: string | null
+          p_invoice_id: string
+          p_name: string | null
+          p_reference_id: string | null
+          p_source_url: string | null
         }
         Returns: string
       }
@@ -10399,6 +13808,18 @@ export type Database = {
         Args: { p_membership_id: string; p_task_id: string }
         Returns: string
       }
+      add_tax_rate: {
+        Args: {
+          p_approved_by: string
+          p_effective_from: string
+          p_effective_to: string | null
+          p_name: string
+          p_org: string
+          p_rate_percent: number
+          p_source_note: string | null
+        }
+        Returns: string
+      }
       agreement_certificate_pdf: {
         Args: { p_envelope_id: string }
         Returns: string
@@ -10415,9 +13836,22 @@ export type Database = {
         Args: { p_batch: string; p_first_row: number; p_org: string; p_rows: Json }
         Returns: number
       }
+      apply_client_credit: {
+        Args: {
+          p_amount_cents: number
+          p_credit_id: string
+          p_idempotency_key: string
+          p_target_invoice_id: string
+        }
+        Returns: string
+      }
       apply_document_scan: {
         Args: { p_result: string; p_version_id: string }
         Returns: Database["public"]["Enums"]["document_upload_state"]
+      }
+      apply_livekit_event: {
+        Args: { p_event: Json }
+        Returns: Json
       }
       apply_stripe_payment_event: {
         Args: {
@@ -10455,6 +13889,10 @@ export type Database = {
         }
         Returns: Json
       }
+      apply_stripe_subscription_event: {
+        Args: { p_event: Json }
+        Returns: Json
+      }
       approve_agreement_template: {
         Args: { p_template_id: string }
         Returns: undefined
@@ -10464,6 +13902,10 @@ export type Database = {
           p_entry_id: string
         }
         Returns: Json
+      }
+      approve_support_access_request: {
+        Args: { p_id: string }
+        Returns: string
       }
       archive_booking_event_type: {
         Args: {
@@ -10487,6 +13929,15 @@ export type Database = {
       assign_unsorted_email_file: {
         Args: { p_item_id: string; p_matter_id: string; p_person_id: string }
         Returns: Json
+      }
+      attach_correspondence_evidence: {
+        Args: {
+          p_correspondence_id: string
+          p_evidence_locator: string | null
+          p_evidence_version_id: string | null
+          p_expected_version: number
+        }
+        Returns: number
       }
       attach_invitation_email_link: {
         Args: {
@@ -10542,6 +13993,16 @@ export type Database = {
         Args: { p_batch: string; p_org: string; p_plan_hash: string }
         Returns: Json
       }
+      begin_migration_pilot: {
+        Args: {
+          p_batch: string
+          p_org: string
+          p_plan_hash: string
+          p_size?: number
+          p_source_system?: string
+        }
+        Returns: Json
+      }
       begin_verified_inbound_message: {
         Args: {
           p_domain: string
@@ -10553,6 +14014,121 @@ export type Database = {
           p_text: string
           p_to: string
         }
+        Returns: Json
+      }
+      begin_vo_call_summary: {
+        Args: { p_booking_id: string; p_organization_id: string }
+        Returns: Json
+      }
+      begin_vo_document_review: {
+        Args: { p_organization_id: string; p_version_id: string }
+        Returns: Json
+      }
+      begin_vo_lead_follow_up: {
+        Args: { p_lead_id: string; p_organization_id: string }
+        Returns: Json
+      }
+      begin_vo_letter_draft: {
+        Args: { p_letter_type: string; p_matter_id: string; p_organization_id: string }
+        Returns: Json
+      }
+      commit_migration_kind_chunk: {
+        Args: { p_batch: string; p_limit?: number; p_org: string }
+        Returns: Json
+      }
+      create_matter_letter: {
+        Args: { p_body: string; p_letter_type: string; p_matter_id: string; p_organization_id: string; p_title: string }
+        Returns: string
+      }
+      migration_document_rows: {
+        Args: { p_batch: string; p_limit?: number; p_org: string }
+        Returns: Json
+      }
+      record_migration_document: {
+        Args: { p_batch: string; p_org: string; p_row: number; p_version: string }
+        Returns: Json
+      }
+      review_opening_balance: {
+        Args: { p_approve: boolean; p_id: string; p_note: string; p_org: string }
+        Returns: Json
+      }
+      revise_matter_letter: {
+        Args: { p_body: string; p_expected_version: number; p_letter_id: string; p_title: string }
+        Returns: number
+      }
+      approve_matter_letter: {
+        Args: { p_expected_version: number; p_letter_id: string }
+        Returns: Json
+      }
+      discard_matter_letter: {
+        Args: { p_expected_version: number; p_letter_id: string }
+        Returns: undefined
+      }
+      release_matter_letter: {
+        Args: { p_letter_id: string }
+        Returns: Json
+      }
+      set_migration_kind: {
+        Args: { p_batch: string; p_kind: string; p_org: string }
+        Returns: undefined
+      }
+      stage_migration_files: {
+        Args: {
+          p_batch: string
+          p_bytes: number
+          p_files: Json
+          p_name: string
+          p_org: string
+          p_sha256: string
+        }
+        Returns: number
+      }
+      vo_letter_facts: {
+        Args: { p_run_id: string }
+        Returns: Json
+      }
+      vo_letter_official_content: {
+        Args: { p_run_id: string }
+        Returns: Json
+      }
+      vo_run_facts: {
+        Args: { p_run_id: string }
+        Returns: Json
+      }
+      vo_run_official_content: {
+        Args: { p_run_id: string }
+        Returns: Json
+      }
+      save_vo_letter_draft: {
+        Args: {
+          p_body: string
+          p_cost_usd?: number | null
+          p_facts: Json
+          p_input_tokens?: number | null
+          p_latency_ms?: number | null
+          p_left_out: Json
+          p_letter_type: string
+          p_model: string
+          p_official: Json
+          p_output_tokens?: number | null
+          p_prompt_version: string
+          p_run_id: string
+          p_title: string
+          p_tools?: string[] | null
+        }
+        Returns: string
+      }
+      begin_vo_run: {
+        Args: {
+          p_kind: Database["public"]["Enums"]["vo_run_kind"]
+          p_matter_id?: string | null
+          p_organization_id: string
+          p_thread_id: string | null
+        }
+        Returns: Json
+      }
+      booking_agreement_for_signing: {
+        Args: { p_ref: string }
         Returns: Json
       }
       booking_public_busy: {
@@ -10581,9 +14157,16 @@ export type Database = {
         }
         Returns: Json
       }
-      approve_support_access_request: {
-        Args: { p_id: string }
-        Returns: string
+      cache_subscription_stripe_prices: {
+        Args: { p_mode: string; p_prices: Json }
+        Returns: undefined
+      }
+      cancel_instalment_plan: {
+        Args: {
+          p_plan_id: string
+          p_reason: string
+        }
+        Returns: number
       }
       cancel_matter_export: {
         Args: { p_export_id: string }
@@ -10596,6 +14179,14 @@ export type Database = {
           p_reason: string
         }
         Returns: number
+      }
+      cancel_support_access_request: {
+        Args: { p_id: string; p_reason: string }
+        Returns: undefined
+      }
+      change_responsible_consultant: {
+        Args: { p_expected_version: number; p_matter_id: string; p_membership_id: string }
+        Returns: Json
       }
       change_staff_role: {
         Args: {
@@ -10629,76 +14220,384 @@ export type Database = {
         Args: { p_as_of: string; p_limit: number }
         Returns: string[]
       }
-      claim_whatsapp_events: {
+      claim_mail_events: {
         Args: { p_limit?: number; p_worker: string }
         Returns: Json
       }
-      connect_firm_whatsapp: {
-        Args: { p_account_id: string; p_display_phone?: string; p_organization_id: string; p_sandbox?: boolean }
-        Returns: undefined
-      }
-      disconnect_firm_whatsapp: {
-        Args: { p_organization_id: string }
-        Returns: Json
-      }
-      finish_whatsapp_delivery: {
-        Args: {
-          p_conversation_id?: string
-          p_delivery_id: string
-          p_error?: string
-          p_outcome: string
-          p_provider_message_id?: string
-          p_worker: string
-        }
-        Returns: undefined
-      }
-      prepare_whatsapp_delivery: {
-        Args: { p_event_id: string; p_worker: string }
-        Returns: Json
-      }
-      receive_whatsapp_message: {
-        Args: {
-          p_account_id: string
-          p_bsuid: string
-          p_conversation_id: string
-          p_event_id: string
-          p_has_attachments: boolean
-          p_phone: string
-          p_platform_message_id: string
-          p_sender_name: string
-          p_sent_at: string
-          p_text: string
-        }
-        Returns: Json
-      }
-      record_whatsapp_status: {
-        Args: { p_account_id: string; p_at?: string; p_error?: string; p_provider_message_id: string; p_status: string }
-        Returns: boolean
-      }
-      save_firm_zernio_profile: {
-        Args: { p_organization_id: string; p_profile_id: string }
-        Returns: undefined
-      }
-      set_my_whatsapp_notices: {
-        Args: { p_channel: Database["public"]["Enums"]["whatsapp_notice_channel"]; p_organization_id: string }
-        Returns: Json
-      }
-      set_person_whatsapp: {
-        Args: {
-          p_channel: Database["public"]["Enums"]["whatsapp_notice_channel"]
-          p_organization_id: string
-          p_person_id: string
-          p_phone: string
-        }
-        Returns: Json
-      }
-      claim_mail_events: {
+      claim_whatsapp_events: {
         Args: { p_limit?: number; p_worker: string }
         Returns: Json
       }
       clear_matter_on_hold: {
         Args: { p_expected_version: number; p_matter_id: string; p_reason: string }
         Returns: number
+      }
+      add_reconciliation_adjustment: {
+        Args: { p_amount_cents: number; p_description: string; p_item_date: string; p_kind: string; p_reconciliation_id: string; p_reference: string | null }
+        Returns: string
+      }
+      complete_consent_review: {
+        Args: { p_expected_version: number; p_note: string; p_review_id: string }
+        Returns: number
+      }
+      confirm_submission_fees: {
+        Args: { p_confirmed: boolean; p_handoff_id: string; p_note: string }
+        Returns: string
+      }
+      create_firm_operating_account: {
+        Args: { p_institution: string; p_label: string; p_last4: string; p_org: string }
+        Returns: string
+      }
+      invoice_manual_payment_summary: {
+        Args: { p_invoice_ids: string[] }
+        Returns: { amount_cents: number; currency: string; invoice_id: string; method: string; number: string; payment_id: string; received_on: string; status: string }[]
+      }
+      list_payment_reviewers: {
+        Args: { p_org: string }
+        Returns: { display_name: string; matter_ids: string[] | null; role: string; user_id: string }[]
+      }
+      my_consents: { Args: never; Returns: Json }
+      my_two_step_state: { Args: never; Returns: string }
+      override_submission_gate: {
+        Args: { p_gate: string; p_handoff_id: string; p_reason: string }
+        Returns: string
+      }
+      person_consent_overview: {
+        Args: { p_organization_id: string; p_person_id: string }
+        Returns: Json
+      }
+      // SRC-01/02/03 claims and the review workbench (20261025400000_src_claims_review.sql).
+      add_rule_claim: {
+        Args: {
+          p_applicability_note: string
+          p_checked_on: string
+          p_claim: string
+          p_current_to: string
+          p_effective_from: string
+          p_effective_to: string
+          p_excerpt: string
+          p_form_modified_on: string
+          p_form_number: string
+          p_jurisdiction: string
+          p_last_amended_on: string
+          p_modified_on: string
+          p_org: string
+          p_program_key: string
+          p_published_on: string
+          p_snapshot: Json
+          p_source_section: string
+          p_source_url: string
+          p_stable_key: string
+          p_value: string
+        }
+        Returns: string
+      }
+      resolve_rule_applicability: {
+        Args: { p_expected_version: number; p_note: string; p_resolution: string; p_version_id: string }
+        Returns: number
+      }
+      review_rule_version: {
+        Args: {
+          p_decision: string
+          p_expected_version: number
+          p_next_review_on: string
+          p_note: string
+          p_page_opened_on: string
+          p_version_id: string
+        }
+        Returns: number
+      }
+      edit_rule_claim: {
+        Args: {
+          p_action: string
+          p_definition_id: string
+          p_expected_base_version_id: string
+          p_reason: string
+          p_text: string
+          p_value: string
+        }
+        Returns: string
+      }
+      unsuspend_rule_version: {
+        Args: { p_expected_version: number; p_reason: string; p_version_id: string }
+        Returns: number
+      }
+      official_claims: {
+        Args: { p_limit?: number; p_offset?: number; p_program?: string; p_query?: string }
+        Returns: Json
+      }
+      official_claim: {
+        Args: { p_definition_id: string }
+        Returns: Json
+      }
+      rule_claim_history: {
+        Args: { p_definition_id: string }
+        Returns: Json
+      }
+      matter_official_claims: {
+        Args: { p_category?: string; p_matter_id: string }
+        Returns: Json
+      }
+      suspend_rule_version: {
+        Args: { p_expected_version: number; p_reason: string; p_version_id: string }
+        Returns: number
+      }
+      propose_submission_requirement: {
+        Args: {
+          p_channel: Database["public"]["Enums"]["submission_channel"]
+          p_checked_on: string
+          p_current_to: string
+          p_form_modified_on: string
+          p_form_number: string
+          p_kind: string
+          p_label: string
+          p_org: string
+          p_program_key: string
+          p_snapshot: Json
+          p_source_section: string
+          p_source_url: string
+        }
+        Returns: string
+      }
+      // DEC-02 approval follow-up (20261025200000_dec_approval_follow_up.sql).
+      propose_approval_follow_up_step: {
+        Args: {
+          p_checked_on: string
+          p_current_to: string
+          p_form_modified_on: string
+          p_form_number: string
+          p_label: string
+          p_org: string
+          p_program_key: string
+          p_snapshot: Json
+          p_source_section: string
+          p_source_url: string
+          p_timing_text: string
+        }
+        Returns: string
+      }
+      review_approval_follow_up_step:
+        | {
+            Args: { p_decision: string; p_expected_version: number; p_note: string; p_step_id: string }
+            Returns: number
+          }
+        | {
+            Args: { p_decision: string; p_expected_version: number; p_note: string; p_page_opened_on: string | null; p_step_id: string }
+            Returns: number
+          }
+      record_my_two_step: { Args: { p_enabled: boolean }; Returns: string }
+      record_staff_activity: { Args: { p_active?: boolean }; Returns: Json }
+      reset_client_two_step: {
+        Args: {
+          p_identity_method: string
+          p_note?: string
+          p_organization_id: string
+          p_person_id: string
+        }
+        Returns: string
+      }
+      retire_approval_follow_up_step: {
+        Args: { p_expected_version: number; p_reason: string; p_step_id: string }
+        Returns: number
+      }
+      set_my_consent: {
+        Args: { p_granted: boolean; p_purpose: string }
+        Returns: Json
+      }
+      set_staff_idle_timeout: {
+        Args: { p_minutes: number; p_organization_id: string }
+        Returns: number
+      }
+      tick_approval_follow_up_step: {
+        Args: { p_matter_id: string; p_step_id: string; p_ticked: boolean }
+        Returns: string
+      }
+      draft_conditions_summary: { Args: { p_body: string; p_matter_id: string }; Returns: string }
+      revise_conditions_summary: {
+        Args: { p_body: string; p_expected_version: number; p_summary_id: string }
+        Returns: number
+      }
+      approve_conditions_summary: {
+        Args: { p_expected_version: number; p_summary_id: string }
+        Returns: number
+      }
+      record_decision_delivery: {
+        Args: { p_delivered_at: string; p_document_version_id: string; p_matter_id: string; p_method: string; p_note: string }
+        Returns: string
+      }
+      acknowledge_decision_delivery: { Args: { p_delivery_id: string }; Returns: undefined }
+      record_delivery_acknowledgement: {
+        Args: { p_acknowledged_on: string; p_delivery_id: string; p_evidence_note: string; p_evidence_version_id: string; p_expected_version: number }
+        Returns: number
+      }
+      portal_decision_follow_up: { Args: { p_org: string }; Returns: Json }
+      record_client_advance: {
+        Args: {
+          p_amount_cents: number
+          p_client_account_id: string
+          p_evidence_note: string | null
+          p_evidence_version_id: string | null
+          p_idempotency_key: string
+          p_matter_id: string
+          p_method: string
+          p_person_id: string
+          p_received_on: string
+          p_reference: string
+          p_reviewer_user_id: string
+        }
+        Returns: string
+      }
+      record_invoice_manual_payment: {
+        Args: {
+          p_amount_cents: number
+          p_evidence_note: string | null
+          p_evidence_version_id: string | null
+          p_idempotency_key: string
+          p_invoice_id: string
+          p_method: string
+          p_operating_account_id: string
+          p_received_on: string
+          p_reference: string
+          p_reviewer_user_id: string
+        }
+        Returns: string
+      }
+      record_reconciliation_export: {
+        Args: { p_reconciliation_id: string }
+        Returns: string
+      }
+      reject_invoice_manual_payment: {
+        Args: { p_payment_id: string; p_reason: string }
+        Returns: string
+      }
+      remove_reconciliation_adjustment: {
+        Args: { p_adjustment_id: string }
+        Returns: string
+      }
+      retire_submission_requirement: {
+        Args: {
+          p_expected_version: number
+          p_reason: string
+          p_requirement_id: string
+        }
+        Returns: number
+      }
+      // DEC-02 renewal follow-up (20261025210000_dec_renewal.sql)
+      propose_renewal_timing: {
+        Args: {
+          p_applies_to: string
+          p_checked_on: string
+          p_current_to: string | null
+          p_form_modified_on: string | null
+          p_form_number: string | null
+          p_lead_days: number | null
+          p_org: string
+          p_program_key: string | null
+          p_snapshot: Json | null
+          p_source_section: string | null
+          p_source_url: string
+          p_timing_text: string
+        }
+        Returns: string
+      }
+      review_renewal_timing:
+        | {
+            Args: {
+              p_decision: string
+              p_expected_version: number
+              p_note: string | null
+              p_timing_id: string
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              p_decision: string
+              p_expected_version: number
+              p_note: string | null
+              p_page_opened_on: string | null
+              p_timing_id: string
+            }
+            Returns: number
+          }
+      retire_renewal_timing: {
+        Args: { p_expected_version: number; p_reason: string; p_timing_id: string }
+        Returns: number
+      }
+      renewal_contact_state: { Args: { p_matter_id: string }; Returns: Json }
+      record_issued_expiry: {
+        Args: {
+          p_decision_id: string
+          p_document_label: string
+          p_document_version_id: string | null
+          p_expires_on: string
+          p_owner_membership_id: string | null
+          p_remind_on: string | null
+          p_timing_id: string | null
+        }
+        Returns: string
+      }
+      set_renewal_reminder: {
+        Args: {
+          p_expected_version: number
+          p_fee_reference_id: string | null
+          p_renewal_id: string
+          p_service_scope: string
+        }
+        Returns: number
+      }
+      cancel_decision_renewal: {
+        Args: { p_expected_version: number; p_reason: string; p_renewal_id: string }
+        Returns: number
+      }
+      portal_renewal_reminders: { Args: { p_org: string }; Returns: Json }
+      reverse_invoice_manual_payment: {
+        Args: { p_outcome: string; p_payment_id: string; p_reason: string }
+        Returns: Json
+      }
+      review_submission_requirement:
+        | {
+            Args: {
+              p_decision: string
+              p_expected_version: number
+              p_note: string
+              p_requirement_id: string
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              p_decision: string
+              p_expected_version: number
+              p_note: string
+              p_page_opened_on: string | null
+              p_requirement_id: string
+            }
+            Returns: number
+          }
+      submission_checklist: {
+        Args: { p_matter_id: string }
+        Returns: Json
+      }
+      tick_submission_step: {
+        Args: { p_handoff_id: string; p_requirement_id: string; p_ticked: boolean }
+        Returns: string
+      }
+      verify_invoice_manual_payment: {
+        Args: { p_payment_id: string }
+        Returns: Json
+      }
+      client_credit_available_cents: {
+        Args: {
+          p_credit_id: string
+        }
+        Returns: number
+      }
+      client_credit_refund_context: {
+        Args: {
+          p_credit_id: string
+        }
+        Returns: Json
       }
       client_fund_receipt: {
         Args: {
@@ -10714,6 +14613,10 @@ export type Database = {
           display_name: string
           user_id: string
         }[]
+      }
+      close_firm_transfer: {
+        Args: { p_note: string; p_status: string; p_transfer_id: string }
+        Returns: undefined
       }
       close_lead_lost: {
         Args: {
@@ -10787,6 +14690,12 @@ export type Database = {
         }
         Returns: number
       }
+      confirm_reused_fact: { Args: { p_reuse_id: string }; Returns: undefined }
+      connect_firm_whatsapp: {
+        Args: { p_account_id: string; p_display_phone?: string; p_organization_id: string; p_sandbox?: boolean }
+        Returns: undefined
+      }
+      consultant_change_audience: { Args: { p_matter_id: string }; Returns: Json }
       consume_recovery_code: {
         Args: { p_code: string }
         Returns: boolean
@@ -10896,45 +14805,6 @@ export type Database = {
         }
         Returns: Json
       }
-      create_invoice: {
-        Args: {
-          p_amount_cents: number
-          p_currency: string
-          p_description: string
-          p_due_on: string
-          p_idempotency_key: string
-          p_matter_id: string
-        }
-        Returns: string
-      }
-      create_lead: {
-        Args: {
-          p_country_now: string | null
-          p_email: string | null
-          p_language: string | null
-          p_marketing_consent: boolean
-          p_name: string
-          p_note: string | null
-          p_org: string
-          p_owner_membership_id: string | null
-          p_phone: string | null
-          p_preferred_contact: string | null
-          p_proposed_fee_cents: number | null
-          p_reply_consent: boolean
-          p_service_interest: string | null
-          p_source: Database["public"]["Enums"]["lead_source"]
-          p_source_detail: string | null
-          p_tags: string[]
-        }
-        Returns: string
-      }
-      create_lead_from_booking: {
-        Args: {
-          p_booking: string
-          p_org: string
-        }
-        Returns: string
-      }
       create_firm_with_licence: {
         Args: {
           college_id: string
@@ -10980,6 +14850,52 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      create_instalment_plan: {
+        Args: {
+          p_agreement_id: string
+          p_due_dates: string[]
+        }
+        Returns: string
+      }
+      create_invoice: {
+        Args: {
+          p_amount_cents: number
+          p_currency: string
+          p_description: string
+          p_due_on: string
+          p_idempotency_key: string
+          p_matter_id: string
+        }
+        Returns: string
+      }
+      create_lead: {
+        Args: {
+          p_country_now: string | null
+          p_email: string | null
+          p_language: string | null
+          p_marketing_consent: boolean
+          p_name: string
+          p_note: string | null
+          p_org: string
+          p_owner_membership_id: string | null
+          p_phone: string | null
+          p_preferred_contact: string | null
+          p_proposed_fee_cents: number | null
+          p_reply_consent: boolean
+          p_service_interest: string | null
+          p_source: Database["public"]["Enums"]["lead_source"]
+          p_source_detail: string | null
+          p_tags: string[]
+        }
+        Returns: string
+      }
+      create_lead_from_booking: {
+        Args: {
+          p_booking: string
+          p_org: string
+        }
+        Returns: string
       }
       create_organization: {
         Args: { display_name: string; legal_name: string; slug: string }
@@ -11034,15 +14950,39 @@ export type Database = {
         Args: { p_is_sample: boolean; p_title: string }
         Returns: Json
       }
-      cancel_support_access_request: {
-        Args: { p_id: string; p_reason: string }
-        Returns: undefined
+      create_quote: {
+        Args: { p_matter_id: string; p_template_id: string | null; p_title: string | null }
+        Returns: string
+      }
+      create_quote_invoice: {
+        Args: {
+          p_agreement_id: string
+          p_due_on: string
+          p_idempotency_key: string
+          p_tax_name: string | null
+        }
+        Returns: string
       }
       create_staff_invitation: {
         Args: {
           email: string
           organization_id: string
           role: Database["public"]["Enums"]["org_role"]
+        }
+        Returns: string
+      }
+      create_support_access_request: {
+        Args: {
+          p_organization_id: string
+          p_requester_name: string
+          p_requester_email: string
+          p_ticket_ref: string
+          p_scope: Database["public"]["Enums"]["support_access_scope"]
+          p_matter_id: string
+          p_not_included: string
+          p_reason: string
+          p_minutes?: number
+          p_requested_by_user_id?: string
         }
         Returns: string
       }
@@ -11060,6 +15000,16 @@ export type Database = {
           p_owner_person_id: string | null
           p_priority: Database["public"]["Enums"]["task_priority"]
           p_title: string
+        }
+        Returns: string
+      }
+      create_time_invoice: {
+        Args: {
+          p_due_on: string
+          p_entry_ids: string[] | null
+          p_idempotency_key: string
+          p_matter_id: string
+          p_tax_name: string | null
         }
         Returns: string
       }
@@ -11105,21 +15055,6 @@ export type Database = {
         }
         Returns: string
       }
-      create_support_access_request: {
-        Args: {
-          p_organization_id: string
-          p_requester_name: string
-          p_requester_email: string
-          p_ticket_ref: string
-          p_scope: Database["public"]["Enums"]["support_access_scope"]
-          p_matter_id: string
-          p_not_included: string
-          p_reason: string
-          p_minutes?: number
-          p_requested_by_user_id?: string
-        }
-        Returns: string
-      }
       decline_agreement: {
         Args: {
           p_envelope_id: string
@@ -11129,6 +15064,7 @@ export type Database = {
         }
         Returns: Json
       }
+      decline_booking_agreement: { Args: { p_reason: string; p_ref: string }; Returns: Json }
       decline_client_transfer: {
         Args: {
           p_entry_id: string
@@ -11144,17 +15080,81 @@ export type Database = {
         Args: { p_token: string }
         Returns: Json
       }
+      decline_support_access_request: {
+        Args: { p_id: string; p_reason: string }
+        Returns: undefined
+      }
       discard_client_reconciliation: {
         Args: { p_reason: string; p_reconciliation_id: string }
         Returns: string
+      }
+      discard_invoice_draft: {
+        Args: {
+          p_invoice_id: string
+          p_reason: string
+        }
+        Returns: undefined
       }
       discard_migration_batch: {
         Args: { p_batch: string; p_org: string }
         Returns: undefined
       }
+      discard_time_entry: {
+        Args: {
+          p_entry_id: string
+        }
+        Returns: undefined
+      }
+      discard_vo_crm_draft: { Args: { p_draft_id: string }; Returns: undefined }
+      discard_vo_doc_draft: { Args: { p_draft_id: string }; Returns: undefined }
+      discard_vo_draft: { Args: { p_draft_id: string }; Returns: undefined }
+      disconnect_firm_whatsapp: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      disconnect_staff_connection: { Args: { p_connection_id: string }; Returns: undefined }
       dismiss_inbound_email: {
         Args: { p_email_id: string; p_note?: string | null }
         Returns: undefined
+      }
+      dismiss_portal_notice: { Args: { p_notice_id: string }; Returns: undefined }
+      dismiss_service_notice: { Args: { p_notice_id: string }; Returns: boolean }
+      post_service_notice: {
+        Args: {
+          p_acting_admin?: string | null
+          p_body: string
+          p_ends_at?: string | null
+          p_kind: string
+          p_organization_ids?: string[] | null
+          p_publish?: boolean
+          p_severity: string
+          p_starts_at?: string | null
+          p_title: string
+        }
+        Returns: string
+      }
+      resolve_service_notice: {
+        Args: { p_acting_admin?: string | null; p_notice_id: string; p_resolution_note: string }
+        Returns: string
+      }
+      update_service_notice: {
+        Args: {
+          p_acting_admin?: string | null
+          p_body?: string | null
+          p_ends_at?: string | null
+          p_notice_id: string
+          p_publish?: boolean
+          p_severity?: string | null
+          p_starts_at?: string | null
+          p_title?: string | null
+        }
+        Returns: string
+      }
+      dispute_evidence_context: {
+        Args: {
+          p_dispute_id: string
+        }
+        Returns: Json
       }
       document_request_progress: {
         Args: { p_matter_id: string }
@@ -11174,30 +15174,10 @@ export type Database = {
       }
       booking_manage_view: { Args: { p_ref: string; p_sha256: string }; Returns: Json }
       issue_booking_manage_token: { Args: { p_delivery_id: string; p_sha256: string }; Returns: string }
-      public_privacy_notice: { Args: { p_firm_slug: string }; Returns: Json }
-      set_enquiry_page_enabled: {
-        Args: { p_enabled: boolean; p_organization_id: string }
-        Returns: undefined
-      }
-      close_firm_transfer: {
-        Args: { p_note: string; p_status: string; p_transfer_id: string }
-        Returns: undefined
-      }
-      firm_transfers_overview: { Args: { p_organization_id: string }; Returns: Json }
-      record_firm_transfer: {
-        Args: {
-          p_contact_email: string
-          p_contact_name: string
-          p_matter_ids: string[]
-          p_note: string
-          p_organization_id: string
-          p_receiving_firm: string
-        }
+      document_upload_limit: { Args: { p_organization_id: string }; Returns: number }
+      edit_agreement_clause: {
+        Args: { p_agreement_id: string; p_body: string; p_clause_id: string }
         Returns: string
-      }
-      review_firm_transfer_authority: {
-        Args: { p_authorised: boolean; p_item_id: string; p_note: string }
-        Returns: undefined
       }
       email_delivery_brands: {
         Args: { p_delivery_ids: string[] }
@@ -11206,6 +15186,17 @@ export type Database = {
       email_delivery_locales: {
         Args: { p_delivery_ids: string[] }
         Returns: Json
+      }
+      end_support_access: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
+      end_tax_rate: {
+        Args: {
+          p_effective_to: string
+          p_rate_id: string
+        }
+        Returns: undefined
       }
       enquiry_public_firm: { Args: { p_firm_slug: string }; Returns: Json }
       ensure_sample_case: { Args: never; Returns: string }
@@ -11221,8 +15212,21 @@ export type Database = {
         Args: { p_as_of?: string }
         Returns: number
       }
+      extend_support_access: {
+        Args: { p_id: string; p_minutes?: number }
+        Returns: string
+      }
       file_inbound_email: {
         Args: { p_email_id: string; p_matter_id: string; p_person_id: string }
+        Returns: Json
+      }
+      file_inbound_email_to_matter: {
+        Args: {
+          p_email_id: string
+          p_files: Json
+          p_matter_id: string
+          p_person_id: string
+        }
         Returns: Json
       }
       finish_cicc_register_import: {
@@ -11257,17 +15261,74 @@ export type Database = {
         }
         Returns: Json
       }
-      decline_support_access_request: {
-        Args: { p_id: string; p_reason: string }
-        Returns: undefined
+      finish_vo_crm_run: {
+        Args: {
+          p_body?: string | null
+          p_cost_usd?: number | null
+          p_failure?: string | null
+          p_input_tokens?: number | null
+          p_latency_ms?: number | null
+          p_left_out?: number
+          p_model?: string | null
+          p_needs_rule?: boolean
+          p_output_tokens?: number | null
+          p_prompt_version?: string | null
+          p_result: Database["public"]["Enums"]["vo_run_result"]
+          p_run_id: string
+          p_sources?: Json | null
+          p_title?: string | null
+          p_tools?: string[] | null
+        }
+        Returns: string | null
       }
-      end_support_access: {
-        Args: { p_id: string }
-        Returns: undefined
+      finish_vo_document_review: {
+        Args: {
+          p_body?: string | null
+          p_cost_usd?: number | null
+          p_failure?: string | null
+          p_input_tokens?: number | null
+          p_latency_ms?: number | null
+          p_model?: string | null
+          p_needs_rule?: boolean
+          p_output_tokens?: number | null
+          p_prompt_version?: string | null
+          p_proposals?: Json | null
+          p_result: Database["public"]["Enums"]["vo_run_result"]
+          p_run_id: string
+          p_title?: string | null
+          p_tools?: string[] | null
+        }
+        Returns: string | null
       }
-      extend_support_access: {
-        Args: { p_id: string; p_minutes?: number }
-        Returns: string
+      finish_vo_run: {
+        Args: {
+          p_body?: string | null
+          p_cost_usd?: number | null
+          p_failure?: string | null
+          p_input_tokens?: number | null
+          p_latency_ms?: number | null
+          p_model?: string | null
+          p_needs_rule?: boolean
+          p_output_tokens?: number | null
+          p_prompt_version?: string | null
+          p_result: Database["public"]["Enums"]["vo_run_result"]
+          p_run_id: string
+          p_sources?: Json | null
+          p_title?: string | null
+          p_tools?: string[] | null
+        }
+        Returns: string | null
+      }
+      finish_whatsapp_delivery: {
+        Args: {
+          p_conversation_id?: string
+          p_delivery_id: string
+          p_error?: string
+          p_outcome: string
+          p_provider_message_id?: string
+          p_worker: string
+        }
+        Returns: undefined
       }
       firm_access_grants: {
         Args: { p_organization_id: string }
@@ -11288,74 +15349,6 @@ export type Database = {
       firm_payment_account_for_owner: {
         Args: { p_org: string }
         Returns: string | null
-      }
-      firm_subscription_usage: {
-        Args: { p_organization_id: string }
-        Returns: Json
-      }
-      firm_support_access: {
-        Args: { p_organization_id: string }
-        Returns: Json
-      }
-      firm_subscription: {
-        Args: { p_organization_id: string }
-        Returns: Json
-      }
-      sign_booking_agreement:
-        | {
-            Args: { p_consent: boolean; p_ip: unknown; p_name: string; p_ref: string; p_sha256: string; p_user_agent: string }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_consent: boolean
-              p_ip: unknown
-              p_name: string
-              p_ref: string
-              p_session_sha256: string
-              p_sha256: string
-              p_signature_image: string | null
-              p_signature_kind: string
-              p_user_agent: string
-            }
-            Returns: Json
-          }
-      subscription_plan_catalog: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      subscription_entitlements: {
-        Args: { p_organization_id: string }
-        Returns: Json
-      }
-      subscription_checkout_allowed: {
-        Args: {
-          p_extra_seats: number
-          p_interval: Database["public"]["Enums"]["billing_interval"]
-          p_organization_id: string
-          p_plan: Database["public"]["Enums"]["subscription_plan"]
-        }
-        Returns: Json
-      }
-      subscription_portal_allowed: {
-        Args: { p_organization_id: string }
-        Returns: Json
-      }
-      record_subscription_customer: {
-        Args: { p_organization_id: string; p_stripe_customer_id: string }
-        Returns: undefined
-      }
-      apply_livekit_event: {
-        Args: { p_event: Json }
-        Returns: Json
-      }
-      apply_stripe_subscription_event: {
-        Args: { p_event: Json }
-        Returns: Json
-      }
-      cache_subscription_stripe_prices: {
-        Args: { p_mode: string; p_prices: Json }
-        Returns: undefined
       }
       firm_staff_directory: {
         Args: { p_organization_id: string }
@@ -11380,6 +15373,78 @@ export type Database = {
           second_factor: boolean
         }[]
       }
+      firm_subscription: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      firm_subscription_usage: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      firm_support_access: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      firm_transfers_overview: { Args: { p_organization_id: string }; Returns: Json }
+      firm_export_index: { Args: { p_organization_id: string }; Returns: Json }
+      retention_deletion_overview: { Args: { p_organization_id: string }; Returns: Json }
+      approve_deletion_job: {
+        Args: { p_idempotency_key: string; p_matter_id: string; p_reason: string }
+        Returns: string
+      }
+      service_claim_deletion_job: { Args: never; Returns: Json }
+      service_deletion_item_ready: { Args: { p_item_id: string }; Returns: boolean }
+      service_record_deletion_item: {
+        Args: { p_item_id: string; p_outcome: string }
+        Returns: boolean
+      }
+      service_finish_deletion_job: { Args: { p_job_id: string }; Returns: string }
+      scheduled_reports_overview: { Args: { p_organization_id: string }; Returns: Json }
+      save_scheduled_report: {
+        Args: {
+          p_organization_id: string
+          p_schedule_id: string | null
+          p_title: string
+          p_tab: string
+          p_range: string
+          p_frequency: string
+          p_weekday: number | null
+          p_month_day: number | null
+          p_send_time: string
+          p_recipients: string[]
+          p_expected_version?: number | null
+        }
+        Returns: string
+      }
+      set_scheduled_report_paused: {
+        Args: { p_schedule_id: string; p_paused: boolean }
+        Returns: boolean
+      }
+      delete_scheduled_report: { Args: { p_schedule_id: string }; Returns: boolean }
+      run_scheduled_report_now: { Args: { p_schedule_id: string }; Returns: Json }
+      service_run_scheduled_reports: { Args: { p_limit?: number }; Returns: Json }
+      subscription_continuity: { Args: { p_organization_id: string }; Returns: Json }
+      subscription_cancel_allowed: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      service_record_subscription_cancel: {
+        Args: {
+          p_actor: string
+          p_cancel_at: string
+          p_organization_id: string
+          p_period_end: string | null
+        }
+        Returns: undefined
+      }
+      choose_subscription_end_arrangement: {
+        Args: {
+          p_arrangement: string
+          p_organization_id: string
+          p_transfer_id: string | null
+        }
+        Returns: undefined
+      }
       freeze_intake_response: {
         Args: { p_response_id: string }
         Returns: undefined
@@ -11391,6 +15456,10 @@ export type Database = {
       import_cicc_register: {
         Args: { p_import_id: string; p_rows: Json }
         Returns: number
+      }
+      imported_record_provenance: {
+        Args: { p_ids: string[]; p_org: string; p_table: string }
+        Returns: Json
       }
       import_leads: {
         Args: {
@@ -11415,9 +15484,24 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: { matters: number; stable_key: string }[]
       }
+      invoice_card_checkout_check: {
+        Args: {
+          p_invoice_id: string
+        }
+        Returns: Json
+      }
       invoice_credit_note: {
         Args: { p_credit_note_id: string }
         Returns: Json
+      }
+      invoice_instalment: {
+        Args: {
+          p_due_on: string
+          p_idempotency_key: string
+          p_item_id: string
+          p_tax_name: string | null
+        }
+        Returns: string
       }
       invoice_payment_context: {
         Args: { p_invoice_id: string }
@@ -11433,8 +15517,16 @@ export type Database = {
         Args: { p_payment_id: string }
         Returns: Json
       }
+      issue_booking_agreement_code: { Args: { p_code_id: string; p_code_sha256: string; p_ref: string; p_sealed: string }; Returns: Json }
       issue_credit_note: {
         Args: { p_credit_note_id: string }
+        Returns: Json
+      }
+      issue_invoice_draft: {
+        Args: {
+          p_due_on: string | null
+          p_invoice_id: string
+        }
         Returns: Json
       }
       lead_conflict_matches: {
@@ -11464,6 +15556,13 @@ export type Database = {
           p_org: string
         }
         Returns: undefined
+      }
+      link_client_credit_refund: {
+        Args: {
+          p_credit_id: string
+          p_refund_id: string
+        }
+        Returns: string
       }
       link_correspondence_work: {
         Args: {
@@ -11533,6 +15632,21 @@ export type Database = {
           user_agent: string | null
         }[]
       }
+      log_time_entry: {
+        Args: {
+          p_billable: boolean
+          p_description: string
+          p_matter_id: string
+          p_minutes: number
+          p_rate_cents: number
+          p_worked_on: string
+        }
+        Returns: string
+      }
+      mark_government_checked: {
+        Args: { p_correspondence_id: string | null; p_matter_id: string }
+        Returns: string
+      }
       mark_message_thread_read: {
         Args: { p_organization_id: string; p_thread_id: string }
         Returns: number
@@ -11541,9 +15655,25 @@ export type Database = {
         Args: { p_ids?: string[] | null; p_organization_id: string }
         Returns: number
       }
+      mark_vo_lead_follow_up_sent: {
+        Args: { p_body: string; p_draft_id: string }
+        Returns: string
+      }
       matter_closure_check: {
         Args: { p_matter_id: string }
         Returns: Json
+      }
+      matter_inbound_address: {
+        Args: { p_domain?: string; p_matter_id: string }
+        Returns: Json
+      }
+      matter_time_invoices: {
+        Args: { p_matter_id: string }
+        Returns: {
+          invoice_number: string
+          invoice_status: string
+          time_entry_id: string
+        }[]
       }
       migration_column_values: {
         Args: { p_batch: string; p_column: number; p_org: string }
@@ -11563,6 +15693,8 @@ export type Database = {
         }
         Returns: number
       }
+      note_booking_agreement_opened: { Args: { p_ref: string }; Returns: undefined }
+      note_booking_agreement_request: { Args: { p_kind: string; p_ref: string }; Returns: Json }
       note_migration_commit_failure: {
         Args: { p_batch: string; p_org: string; p_reason: string }
         Returns: undefined
@@ -11638,6 +15770,38 @@ export type Database = {
         Args: { p_org: string }
         Returns: { consultant_name: string | null; matter_id: string }[]
       }
+      portal_notices_for_me: { Args: { p_org: string }; Returns: Json }
+      announcement_audiences: { Args: { p_organization_id: string }; Returns: Json }
+      approve_message_template: {
+        Args: { p_expected_version: number; p_organization_id: string; p_template_id: string }
+        Returns: Json
+      }
+      archive_message_template: {
+        Args: { p_organization_id: string; p_template_id: string }
+        Returns: undefined
+      }
+      mark_portal_announcements_seen: { Args: { p_org: string }; Returns: number }
+      save_message_template: {
+        Args: {
+          p_body: string
+          p_expected_version?: number | null
+          p_name: string
+          p_organization_id: string
+          p_template_id: string | null
+          p_title: string | null
+          p_use_for: string
+        }
+        Returns: Json
+      }
+      send_announcement: {
+        Args: {
+          p_organization_id: string
+          p_program_key?: string | null
+          p_template_id: string
+          p_template_version: number
+        }
+        Returns: Json
+      }
       portal_reschedule_booking: {
         Args: { p_booking_id: string; p_expected_version: number | null; p_org: string; p_start: string; p_time_zone: string }
         Returns: undefined
@@ -11670,6 +15834,10 @@ export type Database = {
         }
         Returns: string
       }
+      prepare_whatsapp_delivery: {
+        Args: { p_event_id: string; p_worker: string }
+        Returns: Json
+      }
       preview_invitation: {
         Args: { p_token: string }
         Returns: {
@@ -11684,14 +15852,155 @@ export type Database = {
         Args: { p_token: string }
         Returns: string | null
       }
-      preview_portal_invitation: {
-        Args: { p_token: string }
+      preview_portal_invitation:
+        | {
+            Args: { p_token: string }
+            Returns: Json
+          }
+        | {
+            Args: { p_open: boolean; p_token: string }
+            Returns: Json
+          }
+      authorize_privacy_response_download: {
+        Args: {
+          p_delivery_id: string
+        }
         Returns: Json
+      }
+      authorize_privacy_response_preview: {
+        Args: {
+          p_response_id: string
+        }
+        Returns: Json
+      }
+      decide_privacy_item: {
+        Args: {
+          p_decision: string
+          p_fields: string[] | null
+          p_item_id: string
+          p_reason: string | null
+          p_third_party: string | null
+        }
+        Returns: undefined
+      }
+      deliver_privacy_response: {
+        Args: {
+          p_note: string | null
+          p_outcome: string
+          p_request_id: string
+          p_response_id: string
+        }
+        Returns: string
+      }
+      extend_privacy_request: {
+        Args: {
+          p_new_due_on: string
+          p_notice_method: string | null
+          p_reason: string
+          p_recourse: string | null
+          p_request_id: string
+          p_time_limit_id: string | null
+        }
+        Returns: undefined
+      }
+      mark_privacy_notices_seen: {
+        Args: {
+          p_org: string
+        }
+        Returns: number
+      }
+      privacy_requests_for_me: {
+        Args: {
+          p_org: string
+        }
+        Returns: Json
+      }
+      privacy_scope_search: {
+        Args: {
+          p_request_id: string
+        }
+        Returns: Json
+      }
+      propose_privacy_time_limit: {
+        Args: {
+          p_checked_on: string
+          p_current_to: string | null
+          p_days: number | null
+          p_kind: string
+          p_law_name: string
+          p_org: string
+          p_provision_text: string
+          p_snapshot: Json | null
+          p_source_section: string
+          p_source_url: string
+        }
+        Returns: string
+      }
+      retire_privacy_time_limit: {
+        Args: {
+          p_expected_version: number
+          p_limit_id: string
+          p_reason: string
+        }
+        Returns: number
+      }
+      review_privacy_time_limit: {
+        Args: {
+          p_decision: string
+          p_expected_version: number
+          p_limit_id: string
+          p_note: string | null
+          p_page_opened_on: string | null
+        }
+        Returns: number
+      }
+      service_complete_privacy_response: {
+        Args: {
+          p_byte_size: number
+          p_contents: Json
+          p_excluded: Json
+          p_file_count: number
+          p_manifest_sha256: string
+          p_record_count: number
+          p_response_id: string
+          p_sha256: string
+          p_storage_key: string
+          p_withheld_count: number
+        }
+        Returns: boolean
+      }
+      service_fail_privacy_response: {
+        Args: {
+          p_reason: string
+          p_response_id: string
+        }
+        Returns: undefined
+      }
+      start_privacy_response: {
+        Args: {
+          p_idempotency_key: string
+          p_request_id: string
+        }
+        Returns: string
       }
       privacy_request_kept_records: {
         Args: { p_request_id: string }
         Returns: Json
       }
+      propose_government_issuer: {
+        Args: {
+          p_checked_on: string
+          p_modified_on: string | null
+          p_name: string
+          p_name_on_page: boolean | null
+          p_org: string
+          p_retrieved_at: string | null
+          p_sha256: string | null
+          p_source_url: string
+        }
+        Returns: string
+      }
+      public_privacy_notice: { Args: { p_firm_slug: string }; Returns: Json }
       publish_intake_draft: {
         Args: { p_expected_version: number; p_template_id: string }
         Returns: string
@@ -11700,6 +16009,11 @@ export type Database = {
         Args: { p_body: string; p_kind: string; p_title: string; p_version_label: string }
         Returns: string
       }
+      quote_to_agreement: {
+        Args: { p_agreement_id: string; p_template_id: string }
+        Returns: string
+      }
+      rate_vo_run: { Args: { p_run_id: string; p_useful: boolean }; Returns: undefined }
       reassign_consultant_matters: {
         Args: {
           p_from_membership: string
@@ -11725,6 +16039,32 @@ export type Database = {
           p_task_id: string
         }
         Returns: number
+      }
+      receive_whatsapp_message: {
+        Args: {
+          p_account_id: string
+          p_bsuid: string
+          p_conversation_id: string
+          p_event_id: string
+          p_has_attachments: boolean
+          p_phone: string
+          p_platform_message_id: string
+          p_sender_name: string
+          p_sent_at: string
+          p_text: string
+        }
+        Returns: Json
+      }
+      record_client_credit_bank_refund: {
+        Args: {
+          p_amount_cents: number
+          p_credit_id: string
+          p_idempotency_key: string
+          p_method: string
+          p_reference: string
+          p_refunded_on: string
+        }
+        Returns: string
       }
       record_client_deposit: {
         Args: {
@@ -11826,6 +16166,19 @@ export type Database = {
         }
         Returns: string
       }
+      record_dispute_evidence: {
+        Args: {
+          p_content_type: string
+          p_dispute_id: string
+          p_explanation: string
+          p_file_name: string
+          p_livemode: boolean
+          p_size_bytes: number
+          p_stripe_file_id: string
+          p_submitted: boolean
+        }
+        Returns: string
+      }
       record_document_custody: {
         Args: {
           p_acknowledged: boolean
@@ -11840,6 +16193,33 @@ export type Database = {
       }
       record_firm_payment_account: {
         Args: { p_account_id: string; p_livemode: boolean; p_org: string }
+        Returns: string
+      }
+      record_stripe_unlink_cancellations: {
+        Args: { p_history_id: string; p_results: Json }
+        Returns: Json
+      }
+      record_firm_transfer: {
+        Args: {
+          p_contact_email: string
+          p_contact_name: string
+          p_matter_ids: string[]
+          p_note: string
+          p_organization_id: string
+          p_receiving_firm: string
+        }
+        Returns: string
+      }
+      record_processing_estimate: {
+        Args: {
+          p_application_type: string
+          p_checked_on: string
+          p_estimate: string
+          p_matter_id: string
+          p_retrieved_at: string | null
+          p_sha256: string | null
+          p_source_url: string
+        }
         Returns: string
       }
       record_government_check: {
@@ -11863,6 +16243,32 @@ export type Database = {
           p_received_on: string
           p_reference_text?: string | null
           p_stated_deadline?: string | null
+        }
+        Returns: string
+      }
+      record_government_fee_snapshot: {
+        Args: {
+          p_org: string
+          p_retrieved_at: string
+          p_rows: Json
+          p_sha256: string
+          p_source_url: string
+        }
+        Returns: number
+      }
+      record_government_letter: {
+        Args: {
+          p_action_requested: string | null
+          p_channel: Database["public"]["Enums"]["correspondence_channel"]
+          p_document_date: string | null
+          p_evidence_version_id: string | null
+          p_issuer: string | null
+          p_issuer_id: string | null
+          p_kind: Database["public"]["Enums"]["correspondence_kind"]
+          p_matter_id: string
+          p_received_on: string
+          p_stated_deadline: string | null
+          p_tasks: Json
         }
         Returns: string
       }
@@ -11944,6 +16350,16 @@ export type Database = {
         }
         Returns: string
       }
+      record_support_response: {
+        Args: {
+          p_first_response_at: string | null
+          p_organization_id: string
+          p_received_at: string
+          p_recorded_by?: string | null
+          p_ticket_ref: string
+        }
+        Returns: string
+      }
       record_matter_engagement: {
         Args: {
           p_agreement_locator: string | null
@@ -11971,6 +16387,14 @@ export type Database = {
           p_retention_on: string
         }
         Returns: number
+      }
+      record_migration_report_download: {
+        Args: { p_batch: string; p_format: string; p_org: string }
+        Returns: undefined
+      }
+      record_person_identity: {
+        Args: { p_data: Json; p_kind: string; p_person_id: string; p_replaces_id?: string; p_retire?: boolean }
+        Returns: string
       }
       record_person_section: {
         Args: {
@@ -12000,10 +16424,15 @@ export type Database = {
         Args: { p_note: string; p_request_id: string; p_step: string }
         Returns: undefined
       }
-      record_report_export: {
-        Args: { p_format: string; p_organization_id: string; p_range: string; p_tab: string }
-        Returns: string
-      }
+      record_report_export:
+        | {
+            Args: { p_format: string; p_organization_id: string; p_range: string; p_tab: string }
+            Returns: string
+          }
+        | {
+            Args: { p_format: string; p_organization_id: string; p_range: string; p_segment: string | null; p_tab: string }
+            Returns: string
+          }
       record_representation_authority: {
         Args: {
           p_agreement_id: string | null
@@ -12028,6 +16457,14 @@ export type Database = {
         }
         Returns: number
       }
+      record_subscription_customer: {
+        Args: { p_organization_id: string; p_stripe_customer_id: string }
+        Returns: undefined
+      }
+      record_whatsapp_status: {
+        Args: { p_account_id: string; p_at?: string; p_error?: string; p_provider_message_id: string; p_status: string }
+        Returns: boolean
+      }
       reject_client_deposit: {
         Args: {
           p_entry_id: string
@@ -12035,13 +16472,33 @@ export type Database = {
         }
         Returns: string
       }
+      reject_vo_doc_proposal: { Args: { p_proposal_id: string }; Returns: Json }
       release_legal_hold: {
         Args: { p_hold_id: string; p_reason: string }
         Returns: undefined
       }
+      remind_booking_agreement: { Args: { p_booking_id: string }; Returns: number }
       remove_firm_office: {
         Args: { p_office_id: string; p_organization_id: string }
         Returns: undefined
+      }
+      remove_invoice_line: {
+        Args: {
+          p_line_id: string
+        }
+        Returns: undefined
+      }
+      remove_task_dependency: {
+        Args: { p_depends_on_task_id: string; p_task_id: string }
+        Returns: boolean
+      }
+      remove_task_watcher: {
+        Args: { p_membership_id: string; p_task_id: string }
+        Returns: boolean
+      }
+      replace_external_busy_blocks: {
+        Args: { p_blocks: Json; p_from: string; p_organization_id: string; p_source: string; p_to: string }
+        Returns: number
       }
       report_licence_change: {
         Args: { p_credential_id: string; p_detail: string }
@@ -12093,10 +16550,11 @@ export type Database = {
         }
         Returns: undefined
       }
-      review_intake_answer: {
-        Args: { p_answer_id: string }
+      resolve_person_flag: {
+        Args: { p_detail: string; p_flag_key: string; p_note: string; p_person_id: string }
         Returns: string
       }
+      reuse_approved_facts: { Args: { p_response_id: string }; Returns: number }
       review_document_version: {
         Args: {
           p_annotations: string | null
@@ -12119,6 +16577,63 @@ export type Database = {
           p_version_id: string
         }
         Returns: number
+      }
+      review_processing_estimate:
+        | {
+            Args: {
+              p_decision: string
+              p_estimate_id: string
+              p_expected_version: number
+              p_note: string | null
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              p_decision: string
+              p_estimate_id: string
+              p_expected_version: number
+              p_note: string | null
+              p_page_opened_on: string | null
+            }
+            Returns: number
+          }
+      review_firm_transfer_authority: {
+        Args: { p_authorised: boolean; p_item_id: string; p_note: string }
+        Returns: undefined
+      }
+      review_government_fee_snapshot: {
+        Args: {
+          p_decision: string
+          p_note: string | null
+          p_org: string
+          p_sha256: string
+        }
+        Returns: number
+      }
+      review_government_issuer:
+        | {
+            Args: {
+              p_decision: string
+              p_expected_version: number
+              p_issuer_id: string
+              p_note: string | null
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              p_decision: string
+              p_expected_version: number
+              p_issuer_id: string
+              p_note: string | null
+              p_page_opened_on: string | null
+            }
+            Returns: number
+          }
+      review_intake_answer: {
+        Args: { p_answer_id: string }
+        Returns: string
       }
       revise_agreement: {
         Args: {
@@ -12231,6 +16746,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      save_firm_zernio_profile: {
+        Args: { p_organization_id: string; p_profile_id: string }
+        Returns: undefined
+      }
       save_intake_answer: {
         Args: {
           p_expected_version: number
@@ -12313,6 +16832,36 @@ export type Database = {
         }
         Returns: string
       }
+      save_quote: {
+        Args: {
+          p_agreement_id: string
+          p_deliverables: string | null
+          p_exclusions: string | null
+          p_fee_structure: string | null
+          p_government_fee_note: string | null
+          p_instalments: Json
+          p_lines: Json
+          p_quote_expires_on: string
+          p_refund_policy: string | null
+          p_scope: string
+          p_services: string | null
+        }
+        Returns: string
+      }
+      save_vo_call_summary: {
+        Args: { p_body: string; p_draft_id: string }
+        Returns: string
+      }
+      save_staff_connection: {
+        Args: {
+          p_connected_account_id?: string | null
+          p_mail_label?: string | null
+          p_organization_id: string
+          p_status: string
+          p_toolkit: string
+        }
+        Returns: string
+      }
       schedule_deadline_reminders: {
         Args: { p_as_of: string; p_deadline_id: string }
         Returns: number
@@ -12338,6 +16887,10 @@ export type Database = {
           p_signers: Json
         }
         Returns: Json
+      }
+      send_booking_agreement: {
+        Args: { p_booking_id: string; p_template_id: string }
+        Returns: string
       }
       send_intake_request: {
         Args: {
@@ -12373,6 +16926,14 @@ export type Database = {
         }
         Returns: Json
       }
+      send_quote: {
+        Args: { p_agreement_id: string }
+        Returns: Json
+      }
+      send_vo_draft: {
+        Args: { p_body: string; p_client_key?: string | null; p_draft_id: string }
+        Returns: Json
+      }
       service_complete_matter_export: {
         Args: {
           p_byte_size: number
@@ -12399,6 +16960,10 @@ export type Database = {
         Args: never
         Returns: boolean
       }
+      set_booking_type_agreement: {
+        Args: { p_event_type_id: string; p_template_id: string | null }
+        Returns: undefined
+      }
       set_complaint_handlers: {
         Args: { p_membership_ids: string[]; p_org: string }
         Returns: number
@@ -12411,6 +16976,10 @@ export type Database = {
           p_org: string
           p_privacy_response_days: number | null
         }
+        Returns: undefined
+      }
+      set_composio_enabled: {
+        Args: { p_accept_disclosure: boolean; p_enabled: boolean; p_organization_id: string }
         Returns: undefined
       }
       set_credential_proof: {
@@ -12428,6 +16997,10 @@ export type Database = {
       set_document_upload_limit: {
         Args: { p_bytes: number }
         Returns: number
+      }
+      set_enquiry_page_enabled: {
+        Args: { p_enabled: boolean; p_organization_id: string }
+        Returns: undefined
       }
       set_firm_continuity: {
         Args: {
@@ -12450,6 +17023,15 @@ export type Database = {
         }
         Returns: number
       }
+      set_lead_source: {
+        Args: {
+          p_expected_version: number
+          p_lead: string
+          p_org: string
+          p_source: Database["public"]["Enums"]["lead_source"]
+        }
+        Returns: number
+      }
       set_matter_on_hold: {
         Args: {
           p_expected_version: number
@@ -12460,9 +17042,30 @@ export type Database = {
         }
         Returns: number
       }
+      set_migration_pilot_max: {
+        Args: { p_max: number; p_org: string }
+        Returns: undefined
+      }
       set_migration_staging_days: {
         Args: { p_days: number; p_org: string }
         Returns: undefined
+      }
+      set_my_timezone: {
+        Args: { p_organization_id: string; p_timezone: string }
+        Returns: undefined
+      }
+      set_my_whatsapp_notices: {
+        Args: { p_channel: Database["public"]["Enums"]["whatsapp_notice_channel"]; p_organization_id: string }
+        Returns: Json
+      }
+      set_person_whatsapp: {
+        Args: {
+          p_channel: Database["public"]["Enums"]["whatsapp_notice_channel"]
+          p_organization_id: string
+          p_person_id: string
+          p_phone: string
+        }
+        Returns: Json
       }
       set_product_setting: {
         Args: { p_key: string; p_value: Json }
@@ -12472,21 +17075,12 @@ export type Database = {
         Args: { p_end: string | null; p_start: string | null }
         Returns: undefined
       }
-      set_my_timezone: {
-        Args: { p_organization_id: string; p_timezone: string }
-        Returns: undefined
-      }
-      set_lead_source: {
-        Args: {
-          p_expected_version: number
-          p_lead: string
-          p_org: string
-          p_source: Database["public"]["Enums"]["lead_source"]
-        }
-        Returns: number
-      }
       set_sample_mode: {
         Args: { p_enabled: boolean }
+        Returns: undefined
+      }
+      set_staff_notification_preference: {
+        Args: { p_email: boolean; p_kind: string; p_organization_id: string }
         Returns: undefined
       }
       set_staff_suspended: {
@@ -12497,6 +17091,10 @@ export type Database = {
         }
         Returns: number
       }
+      set_task_checklist: {
+        Args: { p_checklist: Json; p_expected_version: number; p_task_id: string }
+        Returns: number
+      }
       set_task_status: {
         Args: {
           p_blocker_note: string | null
@@ -12505,6 +17103,10 @@ export type Database = {
           p_task_id: string
         }
         Returns: number
+      }
+      set_vo_settings: {
+        Args: { p_changes: Json; p_organization_id: string }
+        Returns: Json
       }
       share_consultation_summary: {
         Args: { p_booking_id: string; p_expected_version: number }
@@ -12527,8 +17129,31 @@ export type Database = {
         }
         Returns: Json
       }
+      sign_booking_agreement:
+        | {
+            Args: { p_consent: boolean; p_ip: unknown; p_name: string; p_ref: string; p_sha256: string; p_user_agent: string }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_consent: boolean
+              p_ip: unknown
+              p_name: string
+              p_ref: string
+              p_session_sha256: string
+              p_sha256: string
+              p_signature_image: string | null
+              p_signature_kind: string
+              p_user_agent: string
+            }
+            Returns: Json
+          }
       sign_client_reconciliation: {
         Args: { p_notes: string | null; p_outcome: string; p_reconciliation_id: string }
+        Returns: Json
+      }
+      sign_off_migration_pilot: {
+        Args: { p_batch: string; p_note: string; p_org: string }
         Returns: Json
       }
       sign_off_submission_handoff: {
@@ -12604,6 +17229,21 @@ export type Database = {
         Args: { p_idempotency_key: string; p_matter_id: string }
         Returns: string
       }
+      start_timer: {
+        Args: {
+          p_billable: boolean
+          p_description: string
+          p_matter_id: string
+          p_rate_cents: number
+        }
+        Returns: string
+      }
+      stop_timer: {
+        Args: {
+          p_entry_id: string
+        }
+        Returns: number
+      }
       submit_enquiry: {
         Args: {
           p_client_hash: string | null
@@ -12629,6 +17269,31 @@ export type Database = {
         Args: { p_expected_version: number; p_response_id: string }
         Returns: number
       }
+      subscription_checkout_allowed: {
+        Args: {
+          p_extra_seats: number
+          p_interval: Database["public"]["Enums"]["billing_interval"]
+          p_organization_id: string
+          p_plan: Database["public"]["Enums"]["subscription_plan"]
+        }
+        Returns: Json
+      }
+      service_level_report: {
+        Args: { p_months?: number; p_organization_id: string }
+        Returns: Json
+      }
+      subscription_entitlements: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      subscription_plan_catalog: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      subscription_portal_allowed: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
       support_read_firm_settings: {
         Args: { p_request_id: string }
         Returns: Json
@@ -12644,6 +17309,18 @@ export type Database = {
           p_org: string
           p_payouts_status: string
           p_requirements_due: number
+        }
+        Returns: undefined
+      }
+      sync_firm_payment_account_status: {
+        Args: {
+          p_account_id: string
+          p_card_payments_status: string
+          p_fees_collector?: string
+          p_losses_collector?: string
+          p_org: string
+          p_payouts_status: string
+          p_requirements: Json
         }
         Returns: undefined
       }
@@ -12664,19 +17341,13 @@ export type Database = {
         Args: { p_reason: string; p_ref_id: string }
         Returns: undefined
       }
+      unlink_stripe_account: {
+        Args: { p_account_id: string; p_confirmation: string; p_org: string; p_reason: string }
+        Returns: Json
+      }
       update_firm_profile: {
         Args: { p_changes: Json; p_organization_id: string }
         Returns: undefined
-      }
-      update_task: {
-        Args: {
-          p_due_on: string | null
-          p_expected_version: number
-          p_priority: Database["public"]["Enums"]["task_priority"] | null
-          p_task_id: string
-          p_title: string
-        }
-        Returns: number
       }
       update_lead: {
         Args: {
@@ -12698,96 +17369,28 @@ export type Database = {
         }
         Returns: number
       }
-      begin_vo_run: {
+      update_task: {
         Args: {
-          p_kind: Database["public"]["Enums"]["vo_run_kind"]
-          p_matter_id?: string | null
-          p_organization_id: string
-          p_thread_id: string | null
+          p_due_on: string | null
+          p_expected_version: number
+          p_priority: Database["public"]["Enums"]["task_priority"] | null
+          p_task_id: string
+          p_title: string
         }
-        Returns: Json
-      }
-      discard_vo_draft: { Args: { p_draft_id: string }; Returns: undefined }
-      begin_vo_document_review: {
-        Args: { p_organization_id: string; p_version_id: string }
-        Returns: Json
-      }
-      finish_vo_document_review: {
-        Args: {
-          p_body?: string | null
-          p_cost_usd?: number | null
-          p_failure?: string | null
-          p_input_tokens?: number | null
-          p_latency_ms?: number | null
-          p_model?: string | null
-          p_needs_rule?: boolean
-          p_output_tokens?: number | null
-          p_prompt_version?: string | null
-          p_proposals?: Json | null
-          p_result: Database["public"]["Enums"]["vo_run_result"]
-          p_run_id: string
-          p_title?: string | null
-          p_tools?: string[] | null
-        }
-        Returns: string | null
-      }
-      accept_vo_doc_proposal: {
-        Args: { p_due_on?: string | null; p_proposal_id: string; p_value?: string | null }
-        Returns: Json
-      }
-      reject_vo_doc_proposal: { Args: { p_proposal_id: string }; Returns: Json }
-      discard_vo_doc_draft: { Args: { p_draft_id: string }; Returns: undefined }
-      finish_vo_run: {
-        Args: {
-          p_body?: string | null
-          p_cost_usd?: number | null
-          p_failure?: string | null
-          p_input_tokens?: number | null
-          p_latency_ms?: number | null
-          p_model?: string | null
-          p_needs_rule?: boolean
-          p_output_tokens?: number | null
-          p_prompt_version?: string | null
-          p_result: Database["public"]["Enums"]["vo_run_result"]
-          p_run_id: string
-          p_sources?: Json | null
-          p_title?: string | null
-          p_tools?: string[] | null
-        }
-        Returns: string | null
-      }
-      rate_vo_run: { Args: { p_run_id: string; p_useful: boolean }; Returns: undefined }
-      send_vo_draft: {
-        Args: { p_body: string; p_client_key?: string | null; p_draft_id: string }
-        Returns: Json
-      }
-      set_composio_enabled: {
-        Args: { p_accept_disclosure: boolean; p_enabled: boolean; p_organization_id: string }
-        Returns: undefined
-      }
-      save_staff_connection: {
-        Args: {
-          p_connected_account_id?: string | null
-          p_mail_label?: string | null
-          p_organization_id: string
-          p_status: string
-          p_toolkit: string
-        }
-        Returns: string
-      }
-      disconnect_staff_connection: { Args: { p_connection_id: string }; Returns: undefined }
-      replace_external_busy_blocks: {
-        Args: { p_blocks: Json; p_from: string; p_organization_id: string; p_source: string; p_to: string }
         Returns: number
       }
-      set_vo_settings: {
-        Args: { p_changes: Json; p_organization_id: string }
-        Returns: Json
+      update_task_details: {
+        Args: {
+          p_due_time: string | null
+          p_due_timezone: string | null
+          p_estimated_minutes: number | null
+          p_expected_version: number
+          p_recurrence: string | null
+          p_task_id: string
+        }
+        Returns: number
       }
-      set_staff_notification_preference: {
-        Args: { p_email: boolean; p_kind: string; p_organization_id: string }
-        Returns: undefined
-      }
+      verify_booking_agreement_code: { Args: { p_code_sha256: string; p_ref: string; p_session_sha256: string }; Returns: Json }
       verify_client_deposit: {
         Args: {
           p_entry_id: string
@@ -12797,15 +17400,6 @@ export type Database = {
       verify_government_correspondence: {
         Args: {
           p_correspondence_id: string
-          p_expected_version: number
-        }
-        Returns: number
-      }
-      attach_correspondence_evidence: {
-        Args: {
-          p_correspondence_id: string
-          p_evidence_locator: string | null
-          p_evidence_version_id: string | null
           p_expected_version: number
         }
         Returns: number
@@ -12859,6 +17453,15 @@ export type Database = {
       withdraw_section_share: {
         Args: { p_share_id: string }
         Returns: undefined
+      }
+      write_off_invoice: {
+        Args: {
+          p_amount_cents: number
+          p_idempotency_key: string
+          p_invoice_id: string
+          p_reason: string
+        }
+        Returns: Json
       }
     }
     Enums: {
@@ -12920,6 +17523,7 @@ export type Database = {
         | "ai_drafting"
         | "participation_declined"
         | "electronic_signature"
+        | "marketing"
       correspondence_channel:
         | "portal_message"
         | "email"
@@ -13008,6 +17612,10 @@ export type Database = {
         | "staff_message"
         | "support_requested"
         | "support_granted"
+        | "consultant_changed"
+        | "enquiry_received"
+        | "announcement"
+        | "refund_failed"
       engagement_status: "pending" | "engaged" | "exception" | "ended"
       firm_setup_step:
         | "firm_details"
@@ -13034,6 +17642,7 @@ export type Database = {
         | "declaration"
         | "file_request"
         | "choice"
+      intake_fact_reuse_status: "needs_reconfirmation" | "confirmed" | "replaced"
       intake_response_status: "draft" | "submitted"
       intake_template_status: "draft" | "published" | "superseded"
       intake_workflow_category:
@@ -13107,6 +17716,7 @@ export type Database = {
         | "consultant"
         | "case_manager"
         | "assistant"
+      manual_payment_status: "pending_verification" | "verified" | "rejected" | "reversed" | "failed"
       matter_stage:
         | "engagement_pending"
         | "intake"
@@ -13174,6 +17784,7 @@ export type Database = {
         | "sponsor"
         | "household"
         | "other"
+      person_identity_kind: "name" | "passport" | "address"
       person_section_key:
         | "passport_bio"
         | "school_transcript"
@@ -13200,6 +17811,7 @@ export type Database = {
         | "acknowledged"
         | "reassessed"
         | "dismissed"
+      rule_origin: "official_capture" | "firm_entry"
       rule_publication_status:
         | "draft"
         | "evidence_captured"
@@ -13274,11 +17886,23 @@ export type Database = {
       task_audience: "internal" | "client"
       task_priority: "low" | "normal" | "high" | "critical"
       task_status: "open" | "blocked" | "done" | "cancelled"
-      vo_draft_kind: "message_reply" | "document_request" | "document_review"
+      vo_draft_kind:
+        | "message_reply"
+        | "document_request"
+        | "document_review"
+        | "lead_follow_up"
+        | "call_summary"
       vo_draft_status: "draft" | "sent" | "discarded" | "reviewed"
       vo_proposal_kind: "classification" | "field" | "missing_field" | "inconsistency" | "deadline" | "needs_rule"
       vo_proposal_status: "proposed" | "accepted" | "rejected"
-      vo_run_kind: "message_reply" | "document_request" | "ask" | "document_review"
+      vo_run_kind:
+        | "message_reply"
+        | "document_request"
+        | "ask"
+        | "document_review"
+        | "letter_draft"
+        | "lead_follow_up"
+        | "call_summary"
       vo_run_result: "running" | "drafted" | "answered" | "abstained" | "failed"
       webhook_inbox_status:
         | "received"
@@ -13467,6 +18091,10 @@ export const Constants = {
         "staff_message",
         "support_requested",
         "support_granted",
+        "consultant_changed",
+        "enquiry_received",
+        "announcement",
+        "refund_failed",
       ],
       access_grant_kind: ["explicit", "guardian"],
       agreement_kind: ["quote", "consultation", "service", "amendment", "consent"],
@@ -13498,7 +18126,9 @@ export const Constants = {
         "ai_drafting",
         "participation_declined",
         "electronic_signature",
+        "marketing",
       ],
+      person_identity_kind: ["name", "passport", "address"],
       person_section_key: [
         "passport_bio",
         "school_transcript",
@@ -13548,6 +18178,7 @@ export const Constants = {
       ],
       migration_batch_status: ["staged", "checked", "committing", "committed", "rolled_back", "discarded"],
       migration_row_plan: ["create", "link", "confirm", "review", "error", "skip"],
+      manual_payment_status: ["pending_verification", "verified", "rejected", "reversed", "failed"],
       matter_stage: [
         "engagement_pending",
         "intake",
@@ -13604,6 +18235,7 @@ export const Constants = {
         "unspecified",
       ],
       intake_template_status: ["draft", "published", "superseded"],
+      intake_fact_reuse_status: ["needs_reconfirmation", "confirmed", "replaced"],
       intake_response_status: ["draft", "submitted"],
       intake_field_type: [
         "text",
@@ -13685,6 +18317,7 @@ export const Constants = {
         "reassessed",
         "dismissed",
       ],
+      rule_origin: ["official_capture", "firm_entry"],
       rule_publication_status: [
         "draft",
         "evidence_captured",
@@ -13735,11 +18368,25 @@ export const Constants = {
         "review_due",
         "suspended",
       ],
-      vo_draft_kind: ["message_reply", "document_request", "document_review"],
+      vo_draft_kind: [
+        "message_reply",
+        "document_request",
+        "document_review",
+        "lead_follow_up",
+        "call_summary",
+      ],
       vo_draft_status: ["draft", "sent", "discarded", "reviewed"],
       vo_proposal_kind: ["classification", "field", "missing_field", "inconsistency", "deadline", "needs_rule"],
       vo_proposal_status: ["proposed", "accepted", "rejected"],
-      vo_run_kind: ["message_reply", "document_request", "ask", "document_review"],
+      vo_run_kind: [
+        "message_reply",
+        "document_request",
+        "ask",
+        "document_review",
+        "letter_draft",
+        "lead_follow_up",
+        "call_summary",
+      ],
       vo_run_result: ["running", "drafted", "answered", "abstained", "failed"],
       webhook_inbox_status: [
         "received",

@@ -24,13 +24,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ invo
 
   const { data: invoice } = await supabase
     .from("invoices")
-    .select("id, matter_id, number, description, fee_category, amount_cents, currency, paid_cents, refunded_cents, credited_cents, status, issued_on, due_on, is_sample, created_at")
+    .select("id, matter_id, number, description, fee_category, amount_cents, currency, paid_cents, refunded_cents, credited_cents, written_off_cents, status, issued_on, due_on, is_sample, created_at")
     .eq("organization_id", organizationId)
     .eq("id", invoiceId)
     .maybeSingle();
   if (!invoice || invoice.status === "draft") return NextResponse.json({ error: "That invoice is not available." }, { status: 404 });
 
-  const [matter, firm] = await Promise.all([
+  const [matter, firm, lines] = await Promise.all([
     supabase
       .from("matters")
       .select("reference, title, responsible_consultant_membership_id, matter_participants(role, persons(display_name))")
@@ -38,6 +38,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ invo
       .eq("id", invoice.matter_id)
       .maybeSingle(),
     supabase.from("organizations").select("legal_name, display_name").eq("id", organizationId).maybeSingle(),
+    // FIN-06: an invoice drafted from lines shows each line, its tax and a government fee's source.
+    supabase
+      .from("invoice_lines")
+      .select("category, description, amount_cents, tax_name, tax_rate_percent, tax_cents, source_url, source_checked_on")
+      .eq("organization_id", organizationId)
+      .eq("invoice_id", invoice.id)
+      .order("position"),
   ]);
   const consultant = matter.data?.responsible_consultant_membership_id ?? null;
   const credential = consultant
@@ -73,6 +80,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ invo
     consultantName: null,
     consultantLicence: credential?.data ? `${credential.data.licence_type} ${credential.data.college_id}` : null,
     isSample: invoice.is_sample,
+    writtenOffCents: invoice.written_off_cents,
+    lines: (lines.data ?? []).map((line) => ({
+      category: line.category,
+      description: line.description,
+      amountCents: line.amount_cents,
+      taxLabel: line.tax_name ? `${line.tax_name}${line.tax_rate_percent !== null ? ` ${Number(line.tax_rate_percent)}%` : ""}` : null,
+      taxCents: line.tax_cents,
+      source: line.category === "government_fee" && line.source_url ? `source ${line.source_url}, checked ${line.source_checked_on ?? "—"}` : null,
+    })),
   });
   return new Response(Buffer.from(bytes), {
     headers: {

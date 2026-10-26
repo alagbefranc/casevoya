@@ -78,6 +78,41 @@ export function parseManagedBooking(raw: unknown): ManagedBooking | null {
   };
 }
 
+/**
+ * What /booking/<ref>?t=<token> shows (DES-04): the booking; "gone" when the link is wrong, replaced
+ * or past the appointment (the database answers null); "unavailable" when it couldn't be read at
+ * all, so a failed read never says the booker's link stopped working.
+ */
+export type ManageView = { kind: "booking"; booking: ManagedBooking } | { kind: "gone" } | { kind: "unavailable" };
+
+export async function loadManageView(
+  ref: string,
+  token: string,
+  view: ((ref: string, sha256: string) => Promise<{ data: unknown; error: unknown }>) | null,
+): Promise<ManageView> {
+  if (!isBookingRef(ref) || !isManageToken(token)) return { kind: "gone" };
+  if (!view) return { kind: "unavailable" };
+  try {
+    const { data, error } = await view(ref, await manageTokenHash(token));
+    if (error) return { kind: "unavailable" };
+    if (data === null || data === undefined) return { kind: "gone" };
+    const booking = parseManagedBooking(data);
+    return booking ? { kind: "booking", booking } : { kind: "unavailable" };
+  } catch {
+    return { kind: "unavailable" };
+  }
+}
+
+export const MANAGE_GONE_COPY = {
+  title: "This link doesn’t work any more",
+  copy: "Use the Manage your booking link in your latest email from the firm, or contact the firm. Links stop working after the appointment, or when a newer email replaces them.",
+};
+
+export const MANAGE_UNAVAILABLE_COPY = {
+  title: "Your booking isn’t available right now",
+  copy: "It couldn’t be loaded. Nothing was changed. Try again in a moment.",
+};
+
 /** A database refusal as words the booker can act on. */
 export function manageError(message: string): string {
   if (/slot_unavailable/.test(message)) return "That time is no longer free. Choose another.";

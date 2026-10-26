@@ -6,6 +6,7 @@ import { authorizeDocumentDownload } from "@/modules/documents/actions";
 import { acknowledgeMessage, markThreadRead, sendMessage } from "@/modules/messages/actions";
 import {
   MAX_BODY,
+  audienceBlocked,
   audienceLine,
   clockLabel,
   groupByDay,
@@ -15,9 +16,11 @@ import {
   type ChatDocument,
   type ChatMessage,
   type ChatThread,
+  readState,
   whatsappLine,
 } from "@/modules/messages/present";
-// HOOK(i18n/translate): "Draft in French". Null until src/modules/i18n/translate.ts lands; see the module.
+import { fillTemplate, firstNameOf, unfilledNotice } from "@/modules/messages/templates";
+// "Draft in French" (OPS-04): a machine draft the sender checks before sending; see the module.
 import { draftTranslation } from "@/modules/messages/translation-hook";
 import { draftWithVo, sendVoDraft } from "@/modules/vo/actions";
 import { NEEDS_RULE } from "@/modules/vo/prompt";
@@ -139,9 +142,13 @@ export function ChatView({ data }: { data: ChatData }) {
   const [voDraft, setVoDraft] = useState<string | null>(null);
   const [voBusy, setVoBusy] = useState(false);
   // The records Vo cited for the draft now in the composer (labels only).
-  const [voSources, setVoSources] = useState<string[]>([]);
+  const [voSources, setVoSources] = useState<{ label: string; href: string | null; attestation?: string | null; edit?: string | null }[]>([]);
   const [query, setQuery] = useState("");
   const voMenu = useRef<HTMLDetailsElement>(null);
+  // OPS-04: Insert template, and a French machine draft waiting for the sender's check.
+  const tplMenu = useRef<HTMLDetailsElement>(null);
+  const [french, setFrench] = useState<{ english: string; checked: boolean } | null>(null);
+  const [translating, setTranslating] = useState(false);
   useFit(root, view);
 
   const thread = data.threads.find((row) => row.id === selected) ?? null;
@@ -282,6 +289,10 @@ export function ChatView({ data }: { data: ChatData }) {
     const asVo = voDraft && thread ? voDraft : undefined;
     if (asVo && body.toLowerCase().includes(NEEDS_RULE)) return setNotice("Replace “[needs a sourced rule]” with a checked, sourced fact, or remove it, before sending.");
     if (asVo && (docs.length || critical)) return setNotice("Send the Vo draft on its own, then attach documents or mark a critical instruction in a new message.");
+    // OPS-04: a template field nobody filled, or a French draft nobody checked, isn't sent.
+    const gap = unfilledNotice(body);
+    if (gap) return setNotice(gap);
+    if (french && !french.checked) return setNotice("Check the French draft, then press “I checked it” before you send.");
     const row: Pending = {
       key: newKey(),
       threadId: thread?.id ?? NEW,
@@ -301,6 +312,7 @@ export function ChatView({ data }: { data: ChatData }) {
     setDocs([]);
     setCritical(false);
     setNotice(null);
+    setFrench(null);
     requestAnimationFrame(() => {
       grow();
       scrollToEnd(true);
@@ -346,7 +358,7 @@ export function ChatView({ data }: { data: ChatData }) {
     if ("error" in result) return setNotice(result.error);
     if ("abstained" in result) return showInfo("Vo didn’t draft this one: it needs a consultant (advice, eligibility or a rule without an approved source). Please answer it yourself.");
     setVoDraft(result.draftId);
-    setVoSources(result.sources.map((source) => source.label));
+    setVoSources(result.sources.map((source) => ({ label: source.label, href: source.href, attestation: source.attestation, edit: source.edit ?? null })));
     setText(result.text);
     if (result.needsRule) setNotice("Replace “[needs a sourced rule]” with a checked, sourced fact, or remove it, then review and send.");
     requestAnimationFrame(() => {
@@ -355,14 +367,44 @@ export function ChatView({ data }: { data: ChatData }) {
     });
   };
 
-  // A machine draft in French for the sender to review and edit; only the text they send is stored.
+  // A machine draft in French for the sender to review and edit; only the text they send is stored,
+  // and only after they say they checked it.
   const translate = async () => {
     const draft = draftTranslation;
-    if (!draft || !text.trim()) return;
-    const result = await draft(text, "fr-CA");
+    if (!draft || !text.trim() || translating) return;
+    setTranslating(true);
+    const english = text;
+    const result = await draft(english, data.organizationId);
+    setTranslating(false);
     if ("error" in result) return setNotice(result.error);
+    setFrench({ english, checked: false });
     setText(result.text);
+    setNotice(null);
     requestAnimationFrame(grow);
+  };
+
+  // Insert template (OPS-04): the firm's approved text with the fields the composer knows filled.
+  // A field it doesn't know stays as {field}, and the message isn't sent until it is filled.
+  const insertTemplate = (body: string) => {
+    if (tplMenu.current) tplMenu.current.open = false;
+    if (text.trim() && !window.confirm("Replace what you wrote with this template?")) return;
+    const readers = thread ? thread.audienceIds : people;
+    const only = readers.length === 1 ? (data.audienceOptions.find((option) => option.personId === readers[0])?.name ?? thread?.audience[0] ?? null) : null;
+    const filled = fillTemplate(body, {
+      client_first_name: firstNameOf(only),
+      matter_reference: data.merge?.matterReference ?? null,
+      firm_name: data.merge?.firmName ?? data.firmName,
+      consultant_name: data.merge?.consultantName ?? null,
+    });
+    setText(filled);
+    setFrench(null);
+    const gap = unfilledNotice(filled);
+    if (gap) showInfo(`${gap} Casevoya doesn’t know ${gap.includes(",") ? "these" : "this"} for this conversation.`);
+    else setNotice(null);
+    requestAnimationFrame(() => {
+      grow();
+      input.current?.focus();
+    });
   };
 
   const acknowledge = async (message: ChatMessage) => {
@@ -554,19 +596,23 @@ export function ChatView({ data }: { data: ChatData }) {
                   <fieldset className="cv-pick">
                     <legend className="cv-sr">Who can read it</legend>
                     <span className="cv-to" aria-hidden="true">To</span>
-                    {data.audienceOptions.map((option) => (
-                      <label key={option.personId}>
-                        <input
-                          type="checkbox"
-                          checked={people.includes(option.personId)}
-                          onChange={(event) =>
-                            setPeople((list) => (event.target.checked ? [...list, option.personId] : list.filter((id) => id !== option.personId)))
-                          }
-                        />
-                        {option.name}
-                        <span className="cv-role">{option.role}</span>
-                      </label>
-                    ))}
+                    {data.audienceOptions.map((option) => {
+                      const blocked = audienceBlocked(option);
+                      return (
+                        <label key={option.personId} title={blocked ? "An employer or sponsor needs portal access to this matter to be in a conversation." : undefined}>
+                          <input
+                            type="checkbox"
+                            disabled={Boolean(blocked)}
+                            checked={people.includes(option.personId)}
+                            onChange={(event) =>
+                              setPeople((list) => (event.target.checked ? [...list, option.personId] : list.filter((id) => id !== option.personId)))
+                            }
+                          />
+                          {option.name}
+                          <span className="cv-role">{blocked ? `${option.role} · ${blocked}` : option.role}</span>
+                        </label>
+                      );
+                    })}
                   </fieldset>
                 ) : null}
                 <p className="cv-aud" id="cv-aud">
@@ -591,8 +637,12 @@ export function ChatView({ data }: { data: ChatData }) {
                       <details className="cv-src">
                         <summary>{voSources.length === 1 ? "1 source" : `${voSources.length} sources`}</summary>
                         <ul>
-                          {voSources.map((label) => (
-                            <li key={label}>{label}</li>
+                          {voSources.map((source, index) => (
+                            <li key={index}>
+                              {source.href ? <a href={source.href}>{source.label}</a> : source.label}
+                              {source.attestation ? ` (${source.attestation})` : null}
+                              {source.edit ? ` (${source.edit})` : null}
+                            </li>
                           ))}
                         </ul>
                       </details>
@@ -609,6 +659,29 @@ export function ChatView({ data }: { data: ChatData }) {
                       }}
                     >
                       Clear
+                    </button>
+                  </div>
+                ) : null}
+                {french ? (
+                  <div className="cv-vo" role="status">
+                    <span className="cv-vo-t">
+                      {french.checked ? "French draft checked. You can send it." : "Machine draft in French. Check every word before you send."}
+                    </span>
+                    {french.checked ? null : (
+                      <button type="button" className="cv-retry" onClick={() => setFrench({ ...french, checked: true })}>
+                        I checked it
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="cv-retry"
+                      onClick={() => {
+                        setText(french.english);
+                        setFrench(null);
+                        requestAnimationFrame(grow);
+                      }}
+                    >
+                      Back to English
                     </button>
                   </div>
                 ) : null}
@@ -660,11 +733,28 @@ export function ChatView({ data }: { data: ChatData }) {
                       <span className="cv-sr">Critical instruction: ask them to acknowledge it</span>
                     </label>
                   ) : null}
-                  {/* HOOK(i18n/translate): shown once draftTranslation is set (src/modules/messages/translation-hook.ts). */}
-                  {draftTranslation ? (
-                    <button type="button" className="cv-tg" disabled={!text.trim()} onClick={() => void translate()}>
-                      <span>Draft in French</span>
+                  {/* Staff only: "Draft in French" (src/modules/messages/translation-hook.ts). */}
+                  {draftTranslation && data.mode === "staff" ? (
+                    <button type="button" className="cv-tg" disabled={!text.trim() || translating || Boolean(french)} onClick={() => void translate()}>
+                      <span>{translating ? "Drafting…" : "Draft in French"}</span>
                     </button>
+                  ) : null}
+                  {data.mode === "staff" && data.templates?.length ? (
+                    <details ref={tplMenu} className="cv-menu">
+                      <summary className="cv-vob" title="Insert one of the firm’s approved templates">
+                        <Icon name="file" />
+                        Insert template
+                        <Icon name="chevron-down" />
+                      </summary>
+                      <div className="cv-pop" role="menu">
+                        {data.templates.map((template) => (
+                          <button key={template.id} type="button" role="menuitem" onClick={() => insertTemplate(template.body)}>
+                            <b>{template.name}</b>
+                            <small>{template.body.length > 70 ? `${template.body.slice(0, 69)}…` : template.body}</small>
+                          </button>
+                        ))}
+                      </div>
+                    </details>
                   ) : null}
                   {data.mode === "staff" && data.vo?.enabled && thread ? (
                     <details ref={voMenu} className="cv-menu">
@@ -790,13 +880,9 @@ function Bubble({
   onDownload: (versionId: string) => void;
 }) {
   const staffAuthor = message.authorKind === "staff";
-  const status = message.mine
-    ? data.mode === "staff"
-      ? message.readBy.length
-        ? `Read by ${message.readBy.join(", ")}`
-        : "Sent"
-      : "Sent"
-    : null;
+  // Staff (OPS-04): delivered to their portal, then read by whom; and the email notice's state.
+  const status = data.mode === "staff" ? (message.authorKind === "staff" ? readState(message.readBy) : null) : message.mine ? "Sent" : null;
+  const email = data.mode === "staff" && message.authorKind === "staff" ? (message.email ?? null) : null;
   return (
     <>
       {newMarker ? <div className="cv-new">New</div> : null}
@@ -852,6 +938,7 @@ function Bubble({
             <time dateTime={message.createdAt}>{clockLabel(message.createdAt, data.timezone)}</time>
             {message.channel === "whatsapp" ? <span>· WhatsApp</span> : null}
             {status ? <span>· {status}</span> : null}
+            {email ? <span>· {email}</span> : null}
           </span>
         </div>
       </div>

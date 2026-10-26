@@ -105,7 +105,7 @@ New → Contacted → Consultation scheduled → Consultation completed → Qual
 - **Invoice:** Draft, Issued, Partially paid, Paid, Overdue, Voided, Credited. Refunds and disputes have their own states. Payment status is **derived from allocations**.
 - **Client-facing refund:** Requested, Processing, Completed, Failed.
 - **Subscription:** Trial, Active, Past due, Restricted, Cancelled, Archive.
-- **Rule/source:** Draft → Evidence captured → Professional review → Approved → Published. Published can move to Review due, Suspended or Superseded. Rejected stays traceable. Published versions are immutable.
+- **Rule/source:** Draft → Evidence captured → Professional review → Approved → Published. Published can move to Review due, Suspended or Superseded. Rejected stays traceable. Published versions are immutable. **Captured official claims (decision 2026-10-25):** live on load (operator's loader, maintenance session), platform-wide, no label; firm-only licensed edits (fresh step-up every time, stamped "Edited by <name>, licence <number>, <date>", history kept); a changed re-capture goes live and flags "Source changed since your edit"; suspended stays suspended (stamped step-up unsuspend); overdue after 7 days (fees, forms, checklists), 14 (program pages, guides), 30 (law), and Vo won't cite an overdue fee or advice.
 - **Integration adapter:** connected, degraded, expired, disconnected.
 
 ---
@@ -253,7 +253,7 @@ Staged import with mapping, validation, sensitivity classification, dedupe and a
 ## 6. Architecture, stack, hosting, residency
 
 - **TypeScript modular monolith.** Next.js/React web; route handlers call domain services; dedicated workers; PostgreSQL; private object storage; managed durable queue + DLQ. Split services only when measurements justify it. Pin current stable versions in a lockfile and keep Postgres portable.
-- **Repo layout:** `apps/web` (marketing, firm, client and admin routes + API), `apps/worker`, `packages/{domain, db, ui, contracts, integrations, rule-packs, testing}`, `infra`, `docs`.
+- **Repo layout:** `apps/web` (marketing, firm and client routes + API; platform admin is a separate portal and codebase), `apps/worker`, `packages/{domain, db, ui, contracts, integrations, rule-packs, testing}`, `infra`, `docs`.
 - **Module ownership:** Identity/tenancy · Practice · CRM/scheduling · Matters · Evidence · Content governance · Agreements · Preparation · Finance · Communications · Integrations · Administration. Each module has explicit "must not own" boundaries; for example, Matters doesn't own bank settlement and Finance never pools money.
 - **Runtime:** web app; transactional backend with policy layer + **transactional outbox**; scoped workers; file pipeline (quarantine → scan → metadata → preview → optional OCR → review → authorized retrieval); provider adapters; observability (redacted logs, traces, audit sink); AI gateway.
 - **Tenant isolation:** app authorization **plus** Postgres RLS (`ENABLE` + `FORCE`, policy on `current_setting('app.organization_id')`). A transaction-local tenant setting on a **non-owner** role; the app role never has `BYPASSRLS`. Migration credentials are separate and audited. Never trust a request-supplied org ID. Workers take tenant context from the stored job record, not the payload. Test pool reuse, search, exports, storage links, metrics and vector retrieval. Tenant-scoped storage and cache keys don't replace authorization checks.

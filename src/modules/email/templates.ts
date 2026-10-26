@@ -79,6 +79,10 @@ type Wired =
   | "EX07"
   | "EX15"
   | "EX16"
+  | "EX17"
+  | "EX18"
+  | "EX19"
+  | "EX20"
   | "EX11"
   | "EM17";
 
@@ -108,6 +112,9 @@ export function designFor(context: Context): Wired | "generic" {
       return "EX09";
     case "refund_complete":
       return "EX10";
+    // Bug #215 (20261025530100): a refund the client was told about failed afterwards.
+    case "refund_failed":
+      return "EX20";
     // Hook for the receipts work (EM11): needs the email_template value 'payment_receipt' and an
     // outbox event that queues it with receipt_number (and advance: true for client funds).
     case "payment_receipt":
@@ -133,6 +140,15 @@ export function designFor(context: Context): Wired | "generic" {
     // Signing flow (20261023230100): the six-digit code the worker opened from its sealed form.
     case "signing_code":
       return "EX16";
+    // ORG-06 (20261024120100): the matter's responsible consultant changed. Firm name only.
+    case "consultant_changed":
+      return "EX17";
+    // CRM-01 (20261024150100): a new web enquiry, to the firm's owners. Firm name only.
+    case "enquiry_received":
+      return "EX18";
+    // OPS-04 (20261025110100): an announcement to many clients. Firm name only.
+    case "announcement":
+      return "EX19";
     default:
       return "generic";
   }
@@ -192,9 +208,14 @@ function contextFor(design: Wired, context: Context, firm: string): EmailContext
     case "EX09":
     case "EX10":
     case "EX07":
+    case "EX17":
+    case "EX18":
+    case "EX19":
       return { firmName: firm };
     case "EX16":
       return { firmName: firm, code: textOf(context.code) || null };
+    case "EX20":
+      return { firmName: firm, refundReason: textOf(context.refund_reason) || null };
     // Support access: minutes asked for; on approval the approver, the minutes, the end and the firm's zone.
     case "EX11":
       return { firmName: firm, minutes: minutesOf(context.minutes) };

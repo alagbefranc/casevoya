@@ -90,11 +90,11 @@ describe("Matter dialog wiring", () => {
   it("sends a step-up to /mfa step 6 and back to the same matter with the dialog open", () => {
     const id = "6f1c2f9e-3b1a-4c2d-9e8f-0a1b2c3d4e5f";
     const location = stepUpLocation(`/sheet/matters/${id}`, "?tab=overview", "stage");
-    expect(location).toBe(`/mfa?step=6&next=${encodeURIComponent(`/sheet/matters/${id}?tab=overview&dlg=stage`)}`);
+    expect(location).toBe(`/mfa?step=6&next=${encodeURIComponent(`/sheet/matters/${id}?tab=overview&dlg=stage`)}&for=matter_stage`);
     const next = new URLSearchParams(location.split("?")[1]).get("next");
     expect(safeNext(next)).toBe(`/sheet/matters/${id}?tab=overview&dlg=stage`);
     expect(stepUpLocation("/sheet/matters/x", "?dlg=hold", null)).toBe(`/mfa?step=6&next=${encodeURIComponent("/sheet/matters/x")}`);
-    expect(stepUpLocation("/sheet/matters/x", "", "letter")).toBe(`/mfa?step=6&next=${encodeURIComponent("/sheet/matters/x?dlg=letter")}`);
+    expect(stepUpLocation("/sheet/matters/x", "", "letter")).toBe(`/mfa?step=6&next=${encodeURIComponent("/sheet/matters/x?dlg=letter")}&for=government_letter`);
     expect(withoutDialog("/sheet/matters/x", "?tab=people&dlg=hold")).toBe("/sheet/matters/x?tab=people");
     expect(withoutDialog("/sheet/matters/x", "?dlg=hold")).toBe("/sheet/matters/x");
   });

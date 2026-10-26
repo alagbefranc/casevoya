@@ -8,7 +8,7 @@ import { ManageBooking } from "@/components/sheet/manage-booking";
 import { manageLink } from "@/modules/email/designs/catalog";
 import { dispatchOutbound, type DispatchDeps } from "@/modules/email/dispatch";
 import { renderEmail } from "@/modules/email/templates";
-import { isManageToken, manageError, managePath, manageTokenHash, newManageToken, parseManagedBooking } from "@/modules/scheduling/manage-present";
+import { isManageToken, loadManageView, manageError, managePath, manageTokenHash, newManageToken, parseManagedBooking } from "@/modules/scheduling/manage-present";
 import { clientActorLabel } from "@/modules/scheduling/sheet-present";
 
 // CRM-03 (#176): Manage your booking for a booker without a portal. Everything here is synthetic.
@@ -124,6 +124,19 @@ describe("the page", () => {
     expect(html).not.toContain("Change the time");
     expect(parseManagedBooking({ ref: "bad" })).toBeNull();
     expect(manageError("booking access denied")).toMatch(/link no longer works/);
+  });
+
+  it("tells a failed read apart from a link that stopped working (DES-04)", async () => {
+    const token = newManageToken();
+    const row = { ref: REF, starts_at: "2026-10-30T14:00:00Z", ends_at: "2026-10-30T14:30:00Z" };
+    const view = vi.fn(async () => ({ data: row as unknown, error: null as unknown }));
+    expect((await loadManageView(REF, token, view)).kind).toBe("booking");
+    expect(view).toHaveBeenCalledWith(REF, await manageTokenHash(token));
+    expect((await loadManageView(REF, token, async () => ({ data: null, error: null }))).kind).toBe("gone");
+    expect((await loadManageView("bad", token, view)).kind).toBe("gone");
+    expect((await loadManageView(REF, token, async () => ({ data: null, error: { message: "boom" } }))).kind).toBe("unavailable");
+    expect((await loadManageView(REF, token, async () => { throw new Error("network"); })).kind).toBe("unavailable");
+    expect((await loadManageView(REF, token, null)).kind).toBe("unavailable");
   });
 
   it("the staff record says the booker used the Manage link", () => {

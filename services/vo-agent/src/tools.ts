@@ -12,6 +12,9 @@ import { dataBlock, oneLine } from "../../../src/modules/vo/prompt";
 import { guardVoOutput, type GuardResult } from "../../../src/modules/vo/guard";
 import type { VoSourceRef, VoTask, VoTaskRequest } from "../../../src/modules/vo/sign";
 import type { VoData, VoSettingsRow } from "./data";
+import { LETTER_TOOL_SPECS, type LetterContext, type LetterToolName } from "./letter-tools";
+import { GROUNDED_TOOL_SPECS, type GroundedToolName } from "./grounded-tools";
+import { cite } from "./cite";
 
 export type VoToolName =
   | "read_matter_summary"
@@ -20,15 +23,21 @@ export type VoToolName =
   | "read_messages_thread"
   | "search_approved_sources"
   | "find_free_slots"
-  | "save_draft";
+  | "save_draft"
+  | LetterToolName
+  | GroundedToolName;
 
 /** The tools each task may use. Ask Vo has no write at all. */
 export const TASK_TOOLS: Record<VoTask, readonly VoToolName[]> = {
   message_reply: ["read_matter_summary", "read_person", "read_messages_thread", "search_approved_sources", "find_free_slots", "save_draft"],
   document_request: ["read_matter_summary", "read_person", "read_messages_thread", "save_draft"],
-  ask: ["read_matter_summary", "read_person", "read_documents_index", "search_approved_sources"],
+  // SRC-09: Ask Vo cites what it read by marker ([R#] records, [F#] approved facts, [S#] approved
+  // official content); it can't write anything.
+  ask: ["read_matter_summary", "read_person", "read_documents_index", "read_intake_facts", "read_official_content"],
   // A document reading is one model call with no tools at all (vo-doc-read.ts).
   document_review: [],
+  // AI-01 letter drafts (letter-tools.ts): approved facts, approved official content, one save.
+  letter_draft: ["read_person", "read_approved_facts", "find_official_content", "save_letter_draft"],
 };
 
 export type ToolResult = { content: { type: "text"; text: string }[]; isError?: boolean };
@@ -40,10 +49,14 @@ export type RunContext = {
   settings: VoSettingsRow | null;
   /** Records shown to the model, cited by the draft. */
   sources: Map<string, VoSourceRef>;
+  /** SRC-09 (Ask Vo): the run's allowed set, by the marker each record was handed out with ("R1", "F2", "S1"). */
+  markers?: Map<string, VoSourceRef>;
   /** Tool names in call order (the run log). */
   calls: string[];
   draft: Extract<GuardResult, { kind: "draft" }> | null;
   abstainedByDraft: boolean;
+  /** letter_draft only: the facts and official content handed out, and the guarded letter. */
+  letter?: LetterContext;
 };
 
 export type ToolSpec = {
@@ -73,10 +86,6 @@ function text(value: string): ToolResult {
 function refused(value: string): ToolResult {
   return { content: [{ type: "text", text: value }], isError: true };
 }
-function cite(ctx: RunContext, ref: VoSourceRef) {
-  if (!ctx.sources.has(ref.id)) ctx.sources.set(ref.id, { ...ref, label: oneLine(ref.label, 120) || ref.kind });
-}
-
 /**
  * Identity numbers are redacted before anything reaches the model (AI-02): long digit runs and
  * passport-like codes become [number removed].
@@ -121,22 +130,22 @@ export const TOOL_SPECS: Record<VoToolName, ToolSpec> = {
         ctx.data.requests(matterId),
       ]);
       if (!matter) return refused("This matter can't be read.");
-      cite(ctx, { kind: "matter", id: matter.id, label: matter.reference || matter.title });
-      const lines = [`Matter: ${oneLine(matter.title)}${matter.reference ? ` (${oneLine(matter.reference, 40)})` : ""}; stage: ${oneLine(stageWords(matter.stage), 40)}`];
+      const matterMark = cite(ctx, { kind: "matter", id: matter.id, label: matter.reference || matter.title });
+      const lines = [`${matterMark}Matter: ${oneLine(matter.title)}${matter.reference ? ` (${oneLine(matter.reference, 40)})` : ""}; stage: ${oneLine(stageWords(matter.stage), 40)}`];
       lines.push(`Open tasks: ${tasks.length ? "" : "none"}`);
       for (const task of tasks) {
-        cite(ctx, { kind: "task", id: task.id, label: `Task: ${task.title}` });
-        lines.push(`- ${oneLine(redactIdentity(task.title), 200)}; due ${day(task.dueOn)}; ${task.status}`);
+        const mark = cite(ctx, { kind: "task", id: task.id, label: `Task: ${task.title}` });
+        lines.push(`- ${mark}${oneLine(redactIdentity(task.title), 200)}; due ${day(task.dueOn)}; ${task.status}`);
       }
       lines.push(`Deadlines: ${deadlines.length ? "" : "none"}`);
       for (const deadline of deadlines) {
-        cite(ctx, { kind: "deadline", id: deadline.id, label: `Deadline: ${deadline.label}` });
-        lines.push(`- ${oneLine(redactIdentity(deadline.label), 200)}; due ${day(deadline.dueOn)}; ${deadline.verification === "verified" ? "verified by a person" : "NOT verified (tentative)"}`);
+        const mark = cite(ctx, { kind: "deadline", id: deadline.id, label: `Deadline: ${deadline.label}` });
+        lines.push(`- ${mark}${oneLine(redactIdentity(deadline.label), 200)}; due ${day(deadline.dueOn)}; ${deadline.verification === "verified" ? "verified by a person" : "NOT verified (tentative)"}`);
       }
       lines.push(`Open document requests: ${requests.length ? "" : "none"}`);
       for (const request of requests) {
-        cite(ctx, { kind: "document_request", id: request.id, label: `Request: ${request.purpose}` });
-        lines.push(`- ${oneLine(request.purpose, 200)}; formats ${request.formats.map((f) => oneLine(f, 10)).join(", ")}; due ${day(request.dueOn)}; explanation:`);
+        const mark = cite(ctx, { kind: "document_request", id: request.id, label: `Request: ${request.purpose}` });
+        lines.push(`- ${mark}${oneLine(request.purpose, 200)}; formats ${request.formats.map((f) => oneLine(f, 10)).join(", ")}; due ${day(request.dueOn)}; explanation:`);
         lines.push(dataBlock(ctx.nonce, redactIdentity(request.explanation)));
       }
       return text(lines.join("\n"));
@@ -161,7 +170,11 @@ export const TOOL_SPECS: Record<VoToolName, ToolSpec> = {
       const docs = await ctx.data.documents(ctx.request.matterId);
       const allowed = docs.filter((doc) => ctx.settings?.[DOCUMENT_SWITCH[documentKind(doc.purpose, doc.sensitivity)]] === true);
       const hidden = docs.length - allowed.length;
-      const lines = allowed.map((doc) => `- ${oneLine(redactIdentity(doc.purpose), 200)}`);
+      // SRC-09: each listed document is cited by its current version (Ask Vo cites it as [R#]).
+      const lines = allowed.map((doc) => {
+        const mark = doc.versionId ? cite(ctx, { kind: "document_version", id: doc.versionId, label: `Document: ${redactIdentity(doc.purpose)}` }) : "";
+        return `- ${mark}${oneLine(redactIdentity(doc.purpose), 200)}`;
+      });
       if (hidden) lines.push(`${hidden} document(s) hidden by the firm's Vo settings.`);
       return text(lines.length ? lines.join("\n") : "No documents Vo may list.");
     },
@@ -177,8 +190,8 @@ export const TOOL_SPECS: Record<VoToolName, ToolSpec> = {
       const [people, messages] = await Promise.all([ctx.data.threadPeople(ctx.request.threadId), ctx.data.messages(ctx.request.threadId, 12)]);
       const lines = [`Client(s) who read this conversation: ${people.map((p) => oneLine(p, 80)).join(", ") || "unknown"}`];
       for (const message of messages) {
-        cite(ctx, { kind: "message", id: message.id, label: `${message.authorKind === "client" ? "Client message" : "Firm message"} ${day(message.createdAt)}` });
-        lines.push(`${message.authorKind === "client" ? "Client" : "Firm"} ${oneLine(message.authorName, 80)} on ${day(message.createdAt)}:`);
+        const mark = cite(ctx, { kind: "message", id: message.id, label: `${message.authorKind === "client" ? "Client message" : "Firm message"} ${day(message.createdAt)}` });
+        lines.push(`${mark}${message.authorKind === "client" ? "Client" : "Firm"} ${oneLine(message.authorName, 80)} on ${day(message.createdAt)}:`);
         lines.push(dataBlock(ctx.nonce, redactIdentity(message.body)));
       }
       if (!messages.length) lines.push("No messages yet.");
@@ -230,4 +243,6 @@ export const TOOL_SPECS: Record<VoToolName, ToolSpec> = {
       return text("Draft saved for review. Answer DONE.");
     },
   },
+  ...LETTER_TOOL_SPECS,
+  ...GROUNDED_TOOL_SPECS,
 };
