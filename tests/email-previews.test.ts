@@ -32,7 +32,8 @@ const WIRED: Record<string, Record<string, unknown>> = {
   EM10: { template: "invoice", firm: FIRM, invoice_id: INVOICE, invoice_number: "INV-0001", due_on: "2026-11-06" },
   EX08: { template: "payment_failed", firm: FIRM, invoice_id: INVOICE, invoice_number: "INV-0001", due_on: "2026-11-06" },
   EX09: { template: "refund_started", firm: FIRM, invoice_id: INVOICE, invoice_number: "INV-0001" },
-  EX10: { template: "refund_complete", firm: FIRM, invoice_id: INVOICE, invoice_number: "INV-0001" },
+  // Bug #215: the refund correction, with the one reason told in plain words.
+  EX20: { template: "refund_failed", firm: FIRM, refund_reason: "expired_or_canceled_card" },
   EX07: { template: "message", firm: FIRM },
   // Signing flow: dispatch.ts opens the sealed code and puts it in the context.
   EX16: { template: "signing_code", firm: FIRM, code: "482913" },

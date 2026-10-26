@@ -17601,6 +17601,7 @@ export type Database = {
         | "consultant_changed"
         | "enquiry_received"
         | "announcement"
+        | "refund_failed"
       engagement_status: "pending" | "engaged" | "exception" | "ended"
       firm_setup_step:
         | "firm_details"
@@ -18079,6 +18080,7 @@ export const Constants = {
         "consultant_changed",
         "enquiry_received",
         "announcement",
+        "refund_failed",
       ],
       access_grant_kind: ["explicit", "guardian"],
       agreement_kind: ["quote", "consultation", "service", "amendment", "consent"],

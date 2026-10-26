@@ -1016,6 +1016,18 @@ MIG follow-ups (gap #187, Francis's MIG decision 2), branch `feat/mig-followups`
 
 Tested in `tests/migration-followups.rls.test.ts` (the detection, refusal at staging for every kind chosen with nothing taken, refusal at mapping, a one-kind file through; and `imported_record_provenance` for imported key dates, relationships and opening balances, staff only, no values, no other firm) and `tests/migration-followups-present.test.tsx`.
 
+## Refund emails when a refund fails after "complete" (`20261025530000`, `20261025530100`, not applied on the live project)
+
+Bug #215 live check 6, branch `fix/refund-failed-email`. Additive. Apply in order.
+
+* `20261025530000_refund_failed_mail_enum.sql`: `email_template` gains `refund_failed` (own migration).
+* `20261025530100_refund_failed_mail.sql`:
+  * **Redefines** `app.mail_on_invoice_refund()` (only definition `20261019170100_email_design_events.sql`): a refund moving to succeeded no longer queues `invoice.refund_succeeded` (EX10 is not sent, see DECISIONS); a refund moving to failed or canceled queues `invoice.refund_failed` with idempotency key `invoice.refund_failed-email:<refund id>` (once per refund).
+  * New trigger `invoice_refunds_failed_mail` on `invoice_refunds` (after update of status, when the new status is failed or canceled and the old one was pending, requires_action or succeeded, the statuses that sent EX09).
+  * **Redefines** `public.claim_mail_events` and `public.prepare_email_delivery` (latest `20261025110100_ops_messaging.sql`): claim `invoice.refund_failed`; prepare maps it to `refund_failed`, sends it to the same people as the other refund mail (payer, else the matter's applicants) but regardless of their Email notices choice (suppressed and missing addresses still not sent) with `refund_reason` (the refund's `failure_reason` when it is a plain code), and marks any queued `invoice.refund_succeeded` published without sending (audit `email.skipped`, reason `refund_not_final`). Grants restated.
+  * `app.apply_stripe_reversal_event` is unchanged (it already records the failure and opens the owner's task).
+
+Tested in `tests/email-designs.rls.test.ts` (no complete event; one correction after succeeded then failed, also to a client who turned Email notices off, with the same event replayed and a refund.updated repeat; pending then failed; a refund recorded as failed sends nothing; a queued complete event is skipped).
 ## Viewing an imported matter doesn't block its rollback (`20261025520000`, not applied on the live project)
 
 DES-04 follow-up (#237 live checks), branch `fix/des-billing-call`. Additive; nothing seeded. Opening a matter reads `public.matter_inbound_address`, which makes the matter's reply address (`matter_reply_addresses`) on first use; for an imported matter that row made the rollback refuse ("1 new matter reply addresses linked to imported records since the import").
