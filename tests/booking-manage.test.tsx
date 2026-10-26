@@ -8,8 +8,9 @@ import { ManageBooking } from "@/components/sheet/manage-booking";
 import { manageLink } from "@/modules/email/designs/catalog";
 import { dispatchOutbound, type DispatchDeps } from "@/modules/email/dispatch";
 import { renderEmail } from "@/modules/email/templates";
-import { isManageToken, loadManageView, manageError, managePath, manageTokenHash, newManageToken, parseManagedBooking } from "@/modules/scheduling/manage-present";
-import { clientActorLabel } from "@/modules/scheduling/sheet-present";
+import { isGuestCallPath, isManageToken, loadManageView, manageError, managePath, manageTokenHash, newManageToken, parseManagedBooking } from "@/modules/scheduling/manage-present";
+import { clientActorLabel, RECORDING_NOT_AVAILABLE } from "@/modules/scheduling/sheet-present";
+import { guestCallProblem } from "@/modules/video/present";
 
 // CRM-03 (#176): Manage your booking for a booker without a portal. Everything here is synthetic.
 
@@ -142,5 +143,30 @@ describe("the page", () => {
   it("the staff record says the booker used the Manage link", () => {
     expect(clientActorLabel(false)).toBe("Booker, from the Manage link");
     expect(clientActorLabel(true)).toBe("Client");
+  });
+});
+
+describe("joining the call without a portal", () => {
+  it("lets /call/<ref>?t=<token> past sign-in by its shape only (the database checks the token)", () => {
+    expect(isGuestCallPath(`/call/${REF}`, `?t=${"a".repeat(43)}`)).toBe(true);
+    expect(isGuestCallPath(`/call/${REF}`, "")).toBe(false);
+    expect(isGuestCallPath(`/call/${REF}`, "?t=short")).toBe(false);
+    expect(isGuestCallPath(`/call/BAD`, `?t=${"a".repeat(43)}`)).toBe(false);
+    expect(isGuestCallPath(`/sheet/x`, `?t=${"a".repeat(43)}`)).toBe(false);
+  });
+
+  it("a guest's refused link points back to their email; a failed read says nothing changed (DES-04)", () => {
+    expect(guestCallProblem(403).title).toBe("This link doesn’t open the call");
+    expect(guestCallProblem(403).copy).not.toMatch(/sign in/i);
+    expect(guestCallProblem(429).title).toBe("Too many tries");
+    expect(guestCallProblem(500)).toEqual({ title: "The call isn’t available right now", copy: "It couldn’t be loaded. Nothing was changed. Try again in a moment." });
+  });
+
+  it("the Manage page offers Join the video call, and says the call isn't recorded", () => {
+    const booking = parseManagedBooking({ id: "b1", ref: REF, firm_name: "Test Firm", title: "Video test call", starts_at: "2026-10-30T14:00:00Z", ends_at: "2026-10-30T14:30:00Z", location_kind: "video", status: "confirmed", upcoming: true, version: 1 })!;
+    const html = renderToStaticMarkup(createElement(ManageBooking, { booking, token: "tok" }));
+    expect(html).toContain(`href="/call/${REF}?t=tok">Join the video call</a>`);
+    expect(html).toContain("the call opens 15 minutes before the start · it isn’t recorded");
+    expect(RECORDING_NOT_AVAILABLE).toBe("Not available: Casevoya calls aren’t recorded");
   });
 });
