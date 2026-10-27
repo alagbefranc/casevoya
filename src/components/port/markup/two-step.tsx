@@ -29,12 +29,15 @@ export function TwoStepMarkup({
   enrollment = null,
   stepUpLead = EXPORT_STEP_UP_LEAD,
   stepUpAction = EXPORT_STEP_UP_ACTION,
+  doneLabel = "Go to the Sheet",
 }: {
   email?: string | null;
   activeStep?: number;
   enrollment?: TotpEnrollment | null;
   stepUpLead?: string;
   stepUpAction?: StepUpAction;
+  /** The "All set" button (mfaDoneLabel): "Continue setup" when it goes on to firm setup. */
+  doneLabel?: string;
 } = {}) {
   const secret = (enrollment?.secret ?? "").replace(/\s/g, "").replace(/(.{4})/g, "$1 ").trim();
   // The first render's step only; see PortScreen. A refresh must not move `.on` to another panel.
@@ -66,7 +69,7 @@ export function TwoStepMarkup({
 <div style={{ "marginTop": "16px" }}><button className="btn p blk" data-go="4"><span className="lab">Finish setup</span><span className="spin" aria-hidden="true"></span></button></div></section>
 <section data-step="4" className={stepOn(4)} data-title="All set" data-vo="cheer"><div className="au-vo" data-size="72" data-pose="cheer"></div><div className="dots" aria-hidden="true"><i></i><i></i><i></i></div><h1>Two-step sign-in is on</h1><p className="lead">From now on you’ll enter a code, or use your passkey, when you sign in on a new device.</p>
 <div className="alert ok"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-check-circle" /></svg><div><b>Recorded in the audit log</b>Two-step sign-in is on for this account.</div></div>
-<button className="btn p blk" data-href="/sheet" data-novalidate="" data-instant=""><span className="lab">Go to the Sheet</span><span className="spin" aria-hidden="true"></span></button></section>
+<button className="btn p blk" data-href="/sheet" data-novalidate="" data-instant=""><span className="lab">{doneLabel}</span><span className="spin" aria-hidden="true"></span></button></section>
 <section data-step="5" className={stepOn(5)} data-title="Recovery code" data-vo="lock"><span className="au-art" aria-hidden="true"><img src="/assets/generated/b2/recovery-72@1x.webp" srcSet="/assets/generated/b2/recovery-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span><h1>Enter a recovery code</h1><p className="lead">Each code works once. After you’re in, we’ll ask you to set up two-step again.</p>
 <div className="fld" data-req="Enter one of your saved recovery codes"><label htmlFor="rc">Recovery code</label><input className="inp" id="rc" type="text" autoComplete="one-time-code" defaultValue="" placeholder="XXXX-XXXX" aria-describedby="rc-h rc-e" /><span className="emsg" id="rc-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter one of your saved recovery codes</span></span></div>
 <button className="btn p blk" data-href="/sheet"><span className="lab">Continue</span><span className="spin" aria-hidden="true"></span></button><p style={{ "marginTop": "14px" }}><button className="btn" data-go="1" data-novalidate="" data-instant=""><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-chevron-left" /></svg>Back</button></p></section>

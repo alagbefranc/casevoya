@@ -1125,3 +1125,12 @@ DOC-05 (#178), branch `feat/doc-vo-reading`. Already applied on the live project
 * `20261025000000_vo_read_on_upload.sql`: `vo_settings.read_on_upload` (`add column if not exists`, default false). In this branch it does not redefine `set_vo_settings` (left to `20261025240200`); the body the live project ran did, which `20261025240200` then replaced.
 
 Tested in `tests/vo-doc-review.rls.test.ts`, `tests/vo-doc-review-service.test.ts` and `tests/vo-read-on-upload.test.tsx`.
+
+## Firm setup saves the main office in place (`20261026120000`, `20261026120100`, not applied on the live project)
+
+Issue #259 fix 5, branch `fix/onboarding-259`. Apply in order. Each Continue on setup step 1 demoted the primary office and inserted a new one, so Back then Continue left two "Main office" rows.
+
+* `20261026120000_setup_office_update.sql` **redefines** `app.save_organization_office` (its only definition, `20261017140700_firm_onboarding.sql`): a primary save now updates the firm's existing primary office (label, address line, locality, region, postal code, country; `timezone` untouched) and returns its id; it inserts only when the firm has no primary office. A non-primary save still inserts. Same signature, `require_firm_owner_step_up`, grants kept. `public.save_organization_office` (the wrapper) is unchanged.
+* `20261026120100_setup_office_duplicates_cleanup.sql` is **destructive (deletes rows)** and optional: a `DO` block deletes a non-primary office only when it is labelled "Main office", its firm has a primary office, and every address field (label, address line, locality, region, postal code, country, timezone) equals that primary office's. No foreign key references `organization_offices` (checked across all migrations; the block re-checks `pg_constraint` and deletes nothing if one exists). Demoted "Main office" rows whose address differs are kept and only counted. It reports its counts with `RAISE NOTICE`; the audit trigger logs each deletion. `pnpm check:migrations` does not scan `$$` bodies, so it does not flag this block: review it before applying, or skip it.
+
+Tested in `tests/setup-office.rls.test.ts`.
