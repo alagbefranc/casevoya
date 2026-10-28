@@ -1134,3 +1134,13 @@ Issue #259 fix 5, branch `fix/onboarding-259`. Apply in order. Each Continue on 
 * `20261026120100_setup_office_duplicates_cleanup.sql` is **destructive (deletes rows)** and optional: a `DO` block deletes a non-primary office only when it is labelled "Main office", its firm has a primary office, and every address field (label, address line, locality, region, postal code, country, timezone) equals that primary office's. No foreign key references `organization_offices` (checked across all migrations; the block re-checks `pg_constraint` and deletes nothing if one exists). Demoted "Main office" rows whose address differs are kept and only counted. It reports its counts with `RAISE NOTICE`; the audit trigger logs each deletion. `pnpm check:migrations` does not scan `$$` bodies, so it does not flag this block: review it before applying, or skip it.
 
 Tested in `tests/setup-office.rls.test.ts`.
+
+## Vo reads a client's documents only with their AI consent (`20261028150000`, not applied on the live project)
+
+Decision #263-3, branch `fix/vo-ai-consent-default`. Additive (function bodies only, no data changes).
+
+* `20261028150000_vo_ai_consent_opt_in.sql` **redefines** `app.person_declines_ai` (latest in `20261025270100_sec_sessions_consent.sql`): true unless the person's latest AI drafting record is a yes that hasn't been withdrawn (was: true only for a no or a withdrawn yes). A person with no AI drafting record is now skipped by Vo. Signature and grants unchanged.
+* It **redefines** `public.begin_vo_document_review` (latest in `20261025270100_sec_sessions_consent.sql`): the `client_ai_off` result also carries `person_id`, so the app can name the client. Otherwise unchanged. It is the only caller of `app.person_declines_ai`.
+* `app.person_consent_state` is unchanged.
+
+Tested in `tests/sec-sessions-consent.rls.test.ts` and `tests/vo-doc-review.rls.test.ts`.
