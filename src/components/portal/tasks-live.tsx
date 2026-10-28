@@ -127,8 +127,8 @@ export function TasksLive({ viewer, tasks }: { viewer: PortalViewer; tasks: Port
     ) : null;
   return (
     <div id="pc">
-      {/* A long firm name in "Waiting on {firm}" shortens with an ellipsis instead of overlapping. */}
-      <style dangerouslySetInnerHTML={{ __html: "#pc>.seg.k2-rs{max-width:100%}#pc>.seg.k2-rs>button{min-width:0;overflow:hidden;text-overflow:ellipsis}" }} />
+      {/* A long "Waiting on {firm}" shortens with an ellipsis on a wide screen; on a phone the switch scrolls, so every label and count stays whole. */}
+      <style dangerouslySetInnerHTML={{ __html: "#pc>.seg.k2-rs{max-width:100%}#pc>.seg.k2-rs>button{min-width:0;overflow:hidden;text-overflow:ellipsis}@media (max-width:600px){#pc>.seg.k2-rs{display:flex;overflow-x:auto;scrollbar-width:none}#pc>.seg.k2-rs>button{flex:none;overflow:visible}}" }} />
       <div className="ph pp-h rv" style={i(0)}>
         <div>
           <h1 className="display" data-rb-done="1" aria-label="Tasks">

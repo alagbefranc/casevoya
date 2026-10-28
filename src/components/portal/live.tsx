@@ -619,7 +619,7 @@ function LiveMatters({ viewer, cards }: { viewer: PortalViewer; cards: MatterCar
           <div>
             {card.label ? <span className="lbl">{card.label}</span> : null}
             <h3>{card.title}</h3>
-            <p style={{ color: "var(--t2)", fontSize: 14, marginTop: 4 }}>{card.withLine}</p>
+            {card.withLine ? <p style={{ color: "var(--t2)", fontSize: 14, marginTop: 4 }}>{card.withLine}</p> : null}
             {card.steps ? (
               <div className="steps">
                 {card.steps.map((item) => (
@@ -824,7 +824,7 @@ function Account({ viewer, account }: { viewer: PortalViewer; account: PortalAcc
         <h2>{icon("laptop", "s")}Signing in</h2>
         <div className="pad">
           <div className="li">
-            <div><b>This device</b><small>You sign in with your email and a one-time code.</small></div>
+            <div><b>This device</b><small>You sign in with your email and password.</small></div>
             <span className="r">
               <form method="post" action="/sign-out">
                 <button className="btn sm" type="submit">{icon("logout", "s")}Sign out</button>

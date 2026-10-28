@@ -139,7 +139,8 @@ function Card({
       window.location.assign(result.url);
     });
   };
-  const whose = card.personId === self ? "You" : card.personName;
+  // A client sees another person's name only through an access grant; otherwise the load says "Person".
+  const whose = card.personId === self ? "You" : card.personName === "Person" ? "Someone on your file" : card.personName;
   const checking = card.labels.includes("Checking file");
 
   return (
@@ -695,7 +696,7 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
           <h2 id="up-s1" style={{ fontSize: 22, fontWeight: 400, marginBottom: 6 }}>Whose document is it?</h2>
           <p className="lbl" style={{ marginBottom: 14 }}>This decides who can see it. Private documents stay private, even inside your family.</p>
           <div className="pick">
-            <label>
+            <label style={{ gridTemplateColumns: "auto auto 1fr" }}>
               <input type="radio" name="up-whose" checked readOnly />
               <span className="av" aria-hidden="true">{ownerName ? ownerName.split(/\s+/).map((word) => word[0]).slice(0, 2).join("").toUpperCase() : "·"}</span>
               <span>
@@ -752,7 +753,10 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
             </div>
             <div>
               <label className="check">
-                <input type="checkbox" checked={readable} onChange={(event) => setReadable(event.target.checked)} />
+                <input type="checkbox" checked={readable} onChange={(event) => {
+                    setReadable(event.target.checked);
+                    setMessage("");
+                  }} />
                 <span>Every page is readable<small>Nothing cut off, no glare over text.</small></span>
               </label>
               {staff ? (
