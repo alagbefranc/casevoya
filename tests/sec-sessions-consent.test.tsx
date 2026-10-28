@@ -264,6 +264,6 @@ describe("SEC-05 the staff review on the person tab", () => {
   });
 
   it("tells staff why Vo skipped the document", () => {
-    expect(voError("client_ai_off")).toContain("hasn’t agreed to AI drafting");
+    expect(voError("client_ai_off")).toContain("hasn’t agreed to AI help with their documents yet");
   });
 });

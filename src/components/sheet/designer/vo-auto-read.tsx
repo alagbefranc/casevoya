@@ -33,7 +33,7 @@ function remember(ids: Set<string>) {
 export function VoAutoRead({ data }: { data: { organizationId: string; versionIds: string[] } }) {
   const router = useRouter();
   const started = useRef(false);
-  const [state, setState] = useState<{ reading: number; read: number; stepUp?: boolean } | null>(null);
+  const [state, setState] = useState<{ reading: number; read: number; stepUp?: boolean; noConsent?: string } | null>(null);
 
   useEffect(() => {
     if (started.current) return;
@@ -43,6 +43,8 @@ export function VoAutoRead({ data }: { data: { organizationId: string; versionId
     if (!queue.length) return;
     void (async () => {
       let read = 0;
+      // Decision #263-3: a client who hasn't agreed to AI help is said plainly, not as a failure.
+      let noConsent: string | undefined;
       for (const [at, versionId] of queue.entries()) {
         setState({ reading: queue.length - at, read });
         const result = await readDocumentWithVo({ organizationId: data.organizationId, versionId }).catch(() => null);
@@ -55,8 +57,9 @@ export function VoAutoRead({ data }: { data: { organizationId: string; versionId
         seen.add(versionId);
         remember(seen);
         if (result && "ok" in result && result.ok && !("abstained" in result)) read += 1;
+        if (result && "code" in result && result.code === "client_ai_off") noConsent = result.error;
       }
-      setState({ reading: 0, read });
+      setState({ reading: 0, read, noConsent });
       if (read) router.refresh();
     })();
   }, [data, router]);
@@ -69,8 +72,8 @@ export function VoAutoRead({ data }: { data: { organizationId: string; versionId
         : state.reading
           ? `Vo is reading ${state.reading} new upload${state.reading === 1 ? "" : "s"}. Its proposals appear here for you to confirm.`
           : state.read
-            ? `Vo read ${state.read} new upload${state.read === 1 ? "" : "s"}. Nothing changes until you accept a proposal.`
-            : "Vo couldn’t read the new uploads. Use Read with Vo on a document to see why."}
+            ? `Vo read ${state.read} new upload${state.read === 1 ? "" : "s"}. Nothing changes until you accept a proposal.${state.noConsent ? ` It skipped others: ${state.noConsent}` : ""}`
+            : (state.noConsent ?? "Vo couldn’t read the new uploads. Use Read with Vo on a document to see why.")}
     </p>
   );
 }
