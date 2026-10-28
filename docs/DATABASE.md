@@ -1138,3 +1138,15 @@ Issue #259 fix 5, branch `fix/onboarding-259`. Apply in order. Each Continue on 
 * `20261026120100_setup_office_duplicates_cleanup.sql` is **destructive (deletes rows)** and optional: a `DO` block deletes a non-primary office only when it is labelled "Main office", its firm has a primary office, and every address field (label, address line, locality, region, postal code, country, timezone) equals that primary office's. No foreign key references `organization_offices` (checked across all migrations; the block re-checks `pg_constraint` and deletes nothing if one exists). Demoted "Main office" rows whose address differs are kept and only counted. It reports its counts with `RAISE NOTICE`; the audit trigger logs each deletion. `pnpm check:migrations` does not scan `$$` bodies, so it does not flag this block: review it before applying, or skip it.
 
 Tested in `tests/setup-office.rls.test.ts`.
+
+## Possible match on a booking-page booking (`20261028140000`, not applied on the live project)
+
+Issue #263 item C, branch `feat/booking-possible-match`. One additive migration; it redefines no function (`booking_public_hold`, `app.place_booking` and `prepare_email_delivery` are untouched, so it merges cleanly with #264's redefinitions). No enum values.
+
+* New table `booking_person_matches` (booking, person, `status` open / linked / dismissed, who decided and when; unique per booking and person). RLS enabled and forced; staff read it only for people they can see (`app.can_read_scheduling` and `app.can_read_person`); no write policies (writes only through the functions below); audit and no-delete triggers; every FK indexed.
+* New trigger `booking_attendees_possible_match` (`app.record_booking_person_matches`): after a booking-page booking's primary attendee is added without a person, records every person of the firm with that email (same sample flag). Audit `booking.possible_match_recorded` (count only).
+* New `public.link_booking_to_person(booking, person, expected_version)` (authenticated): scheduling staff, booking version checked (PT409), only an open match the caller can see; sets `bookings.person_id` and the primary attendee's `person_id`; returns the new booking version. Audit `booking.linked_to_client`.
+* New `public.dismiss_booking_match(booking, person, expected_version)` (authenticated): same checks; "Not this person". Audit `booking.match_dismissed`.
+* Shared checks in `app.open_booking_match`.
+
+Tested in `tests/booking-possible-match.rls.test.ts` and `tests/booking-possible-match.test.tsx`.
