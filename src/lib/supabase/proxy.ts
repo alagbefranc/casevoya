@@ -7,6 +7,8 @@ import { isStaffArea, staffMfaRedirectPath } from "@/lib/auth/staff-session";
 import { REQUEST_ID_HEADER, resolveRequestId } from "@/lib/tenant/context";
 import { bookingPagePath, isBookablePublicEvent } from "@/modules/scheduling/public-api";
 import { enquiryPagePath, parsePublicFirm } from "@/modules/leads/enquiry";
+import { idleSignInLocation, isStaffPageLoad, readActivityState } from "@/modules/security/idle";
+import { isGuestCallPath } from "@/modules/scheduling/manage-present";
 
 function redirectKeepingSession(request: NextRequest, response: NextResponse, pathname: string, search: string) {
   const redirectUrl = request.nextUrl.clone();
@@ -110,6 +112,8 @@ export async function updateSession(request: NextRequest) {
     path === "/setup" ||
     path.startsWith("/accept/") ||
     path.startsWith("/call/") ||
+    // Manage your booking (CRM-03): the token in the address is the secret.
+    path.startsWith("/booking/") ||
     // A consultation agreement's private link: the booking reference is the secret.
     path.startsWith("/consultation/")
   ) {
@@ -117,9 +121,44 @@ export async function updateSession(request: NextRequest) {
     response.headers.set("Cache-Control", "no-store");
   }
 
-  if (!signedIn && isGatedPath(path)) {
+  // CRM-03: a booker without a portal opens their call with the token from their Manage link;
+  // the page checks it with the database (video_join_guest), so they aren't sent to sign in.
+  if (!signedIn && isGatedPath(path) && !isGuestCallPath(path, search)) {
     const destination = new URL(signInLocation(path, search), request.url);
     return redirectKeepingSession(request, response, destination.pathname, destination.search);
+  }
+
+  // SEC-01 idle sign-out, on the server: a full page load of the staff area counts as activity, and
+  // public.record_staff_activity ends the session when the last activity is older than the firm's
+  // idle time. Then the browser's session is cleared and the person signs in again.
+  if (
+    signedIn &&
+    isStaffPageLoad({
+      method: request.method,
+      pathname: path,
+      fetchDest: request.headers.get("sec-fetch-dest"),
+      prefetch: request.headers.has("next-router-prefetch") || request.headers.get("purpose") === "prefetch",
+    })
+  ) {
+    const { data: activity, error: activityError } = await supabase.rpc("record_staff_activity", { p_active: true });
+    if (!activityError && readActivityState(activity).state === "expired") {
+      await supabase.auth.signOut({ scope: "local" });
+      const destination = new URL(idleSignInLocation(`${path}${search}`), request.url);
+      return redirectKeepingSession(request, response, destination.pathname, destination.search);
+    }
+  }
+
+  // SEC-01 client two-step: a portal person who turned two-step on confirms a code before their
+  // portal, every sign-in. Read from the session (no extra request) unless a code is owed.
+  if (signedIn && (path === "/portal" || path.startsWith("/portal/"))) {
+    const { data: level } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (level?.nextLevel === "aal2" && level.currentLevel !== "aal2") {
+      const { data: satisfied, error: rpcError } = await supabase.rpc("session_mfa_satisfied");
+      if (rpcError || satisfied !== true) {
+        const destination = new URL(`/mfa?next=${encodeURIComponent(`${path}${search}`)}`, request.url);
+        return redirectKeepingSession(request, response, destination.pathname, destination.search);
+      }
+    }
   }
 
   // Staff need an assured session before the firm workspace. Clients are not redirected.

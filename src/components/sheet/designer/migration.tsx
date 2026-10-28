@@ -9,7 +9,15 @@
  * columns; Discard beside Continue; a Possible matches table with Same person / Different people
  * on Preview; an `alert ok` when no row has a problem; on Sign off, rows-checked and checksum lines,
  * the result after import, Roll back with the reasons it can't run, and the firm's earlier imports.
+ * MIG-02 (live only, from Designer parts): `.fld` fields in the summary panel (pilot size and the
+ * system the file came from, or the pilot sign-off note), an `.alert` saying where the pilot
+ * stands, a table of the pilot's records, and a Run report panel with its downloads.
  * Buttons carry `data-mig-act` (use-sheet runs them against /api/migration).
+ *
+ * MIG-01 live-only additions, from the same Designer parts: a "What’s in the file" `.fld` picker and
+ * a hidden ZIP input on the upload empty state; Map columns settings for the default assignee and the
+ * kind of date; a Sensitive columns table (`.sel` per column); Preview column headings for the other
+ * kinds; and an Opening balances table with Approve / Reject on Sign off.
  */
 import type { CSSProperties } from "react";
 import { Empty, Icon, Sep } from "./frame";
@@ -34,12 +42,16 @@ export type MapRow = {
 
 export type ValueRow = { column: string; value: string; rows: string; select: SelectData };
 
+export type SensitivityRow = { column: string; select: SelectData };
+
 export type MapData = {
   rows: MapRow[];
   /** Designer: a link to Preview. Live: the button that saves the mapping and runs the dry run. */
   next: { href: string } | { attrs: Attrs };
-  settings?: { dateOrder: SelectData; consultant: SelectData } | null;
+  settings?: { dateOrder: SelectData; consultant?: SelectData | null; owner?: SelectData | null; dateKind?: SelectData | null } | null;
   values?: ValueRow[];
+  /** Live (MIG-01): each column's sensitivity class. */
+  sensitivity?: SensitivityRow[];
   discard?: Attrs | null;
 };
 
@@ -48,23 +60,61 @@ export type MatchRow = { row: string; person: string; existing: string; same: st
 export type ErrorRow = { row: string; column: string; problem: string; fix: string };
 export type SummaryRow = { term: string; value: string | Pair2 };
 export type HistoryRow = { key: string; file: string; when: string; rows: string; state: MigrationBadge; href: string };
+export type BalanceRow = {
+  key: string;
+  matter: string;
+  kind: string;
+  amount: string;
+  asOf: string;
+  state: MigrationBadge;
+  actions: { label: string; attrs: Attrs }[];
+  /** Live (MIG follow-ups): "Imported from <system> on <date>" under the matter. */
+  imported?: string | null;
+};
+
+export type SignoffField = {
+  id: string;
+  label: string;
+  hint?: string;
+  kind: "number" | "text" | "textarea";
+  attrs: Attrs;
+  value: string;
+  min?: number;
+  max?: number;
+  maxLength?: number;
+};
+export type PilotRecordRow = { kind: string; name: string; row: string; reference: string; href: string | null };
+export type SignoffNotice = { tone: "ok" | "warn" | "bad"; title: string; copy: string };
 
 export type SignoffData = {
   summary: SummaryRow[];
   /** Designer: the data-run button. Live: Sign off and import, or nothing once imported. */
   action: { label: string; attrs: Attrs } | null;
-  rollback?: { attrs: Attrs | null; reasons: string[] } | null;
+  rollback?: { attrs: Attrs | null; reasons: string[]; label?: string } | null;
   history?: HistoryRow[];
+  /** Live (MIG-01): an opening-balances import's balances, held for review. */
+  balances?: BalanceRow[];
+  /** Live (MIG-02): the pilot's size and source system, or the pilot sign-off note. */
+  fields?: SignoffField[];
+  /** Live (MIG-02): where the pilot stands. */
+  notice?: SignoffNotice | null;
+  /** Live (MIG decision 7): a documents import can't be undone, said before each step that stores files. */
+  undo?: SignoffNotice | null;
+  /** Live (MIG-02): the records the pilot created, to check before signing off. */
+  pilot?: { rows: PilotRecordRow[]; more: string | null } | null;
+  /** Live (MIG-02): the run report once the import is done, with its downloads. */
+  report?: { rows: SummaryRow[]; downloads: { label: string; href: string }[] } | null;
 };
 
 export type MigrationData = {
   tab: MigrationTab;
-  /** Live: no import open, so Map columns shows the upload empty state. */
-  upload?: { attrs: Attrs } | null;
+  /** Live: no import open, so Map columns shows the upload empty state (MIG-01: with the kind picker). */
+  upload?: { attrs: Attrs; kinds?: SelectData; copy?: string } | null;
   /** Live: why there's nothing to show on this tab. */
   empty?: { title: string; copy: string } | null;
   map?: MapData | null;
-  preview?: { rows: PreviewRow[]; matches?: MatchRow[] } | null;
+  /** heads: live (MIG-01), the middle three column headings for a kind other than clients. */
+  preview?: { rows: PreviewRow[]; matches?: MatchRow[]; heads?: [string, string, string] } | null;
   errors?: { title: string; copy: string; ok?: boolean; rows: ErrorRow[] } | null;
   signoff?: SignoffData | null;
 };
@@ -206,12 +256,19 @@ function MapTab({ data }: { data: MigrationData }) {
         <EmptyPanel
           n={1}
           title={"No import in progress"}
-          copy={"Choose a CSV file of clients and matters, up to 5 MB and 5,000 rows. Nothing goes live until you sign off."}
+          copy={data.upload.copy ?? "Choose a CSV file of clients and matters, up to 5 MB and 5,000 rows. Nothing goes live until you sign off."}
         >
+          {data.upload.kinds ? (
+            <div className={"fld"}>
+              <label htmlFor={"migK"}>{"What’s in the file"}</label>
+              <Select data={data.upload.kinds} id={"migK"} />
+            </div>
+          ) : null}
           <button className={"btn p sm"} {...data.upload.attrs}>
             {"Choose a CSV file"}
           </button>
           <input type={"file"} accept={".csv,text/csv"} hidden data-mig-file={"1"} />
+          {data.upload.kinds ? <input type={"file"} accept={".zip,application/zip"} hidden data-mig-zip={"1"} /> : null}
         </EmptyPanel>
       ) : null}
       {!data.upload && data.empty ? <EmptyPanel n={1} title={data.empty.title} copy={data.empty.copy} /> : null}
@@ -247,12 +304,49 @@ function MapTab({ data }: { data: MigrationData }) {
                   <label htmlFor={"migD"}>{"Dates in your file"}</label>
                   <Select data={map.settings.dateOrder} id={"migD"} />
                 </div>
-                <div className={"fld"}>
-                  <label htmlFor={"migC"}>{"Responsible consultant when a row names none"}</label>
-                  <Select data={map.settings.consultant} id={"migC"} />
-                </div>
+                {map.settings.consultant ? (
+                  <div className={"fld"}>
+                    <label htmlFor={"migC"}>{"Responsible consultant when a row names none"}</label>
+                    <Select data={map.settings.consultant} id={"migC"} />
+                  </div>
+                ) : null}
+                {map.settings.owner ? (
+                  <div className={"fld"}>
+                    <label htmlFor={"migO"}>{"Assignee when a row names none"}</label>
+                    <Select data={map.settings.owner} id={"migO"} />
+                  </div>
+                ) : null}
+                {map.settings.dateKind ? (
+                  <div className={"fld"}>
+                    <label htmlFor={"migT"}>{"Kind of date when a row doesn’t say"}</label>
+                    <Select data={map.settings.dateKind} id={"migT"} />
+                  </div>
+                ) : null}
               </div>
             </section>
+          ) : null}
+          {map.sensitivity?.length ? (
+            <div className={"tw rv"} role={"region"} aria-label={"Sensitive columns"} tabIndex={0} style={{ marginTop: "12px", ...i(2) }}>
+              <table className={"t"}>
+                <caption className={"sr"}>{"Sensitive columns"}</caption>
+                <thead>
+                  <tr>
+                    <th scope={"col"}>{"Your column"}</th>
+                    <th scope={"col"}>{"Sensitivity"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {map.sensitivity.map((row, index) => (
+                    <tr key={`${index}-${row.column}`}>
+                      <td>{row.column}</td>
+                      <td>
+                        <Select data={row.select} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : null}
           {map.values?.length ? (
             <div className={"tw rv"} role={"region"} aria-label={"Value mapping"} tabIndex={0} style={{ marginTop: "12px", ...i(2) }}>
@@ -316,9 +410,9 @@ function PreviewTab({ data }: { data: MigrationData }) {
               <thead>
                 <tr>
                   <th scope={"col"}>{"Row"}</th>
-                  <th scope={"col"}>{"Person"}</th>
-                  <th scope={"col"}>{"Date of birth"}</th>
-                  <th scope={"col"}>{"Matter"}</th>
+                  <th scope={"col"}>{preview.heads?.[0] ?? "Person"}</th>
+                  <th scope={"col"}>{preview.heads?.[1] ?? "Date of birth"}</th>
+                  <th scope={"col"}>{preview.heads?.[2] ?? "Matter"}</th>
                   <th scope={"col"}>{"Result"}</th>
                 </tr>
               </thead>
@@ -344,7 +438,7 @@ function PreviewTab({ data }: { data: MigrationData }) {
                 <thead>
                   <tr>
                     <th scope={"col"}>{"Row"}</th>
-                    <th scope={"col"}>{"Person"}</th>
+                    <th scope={"col"}>{preview.heads?.[0] ?? "Person"}</th>
                     <th scope={"col"}>{"Possible match"}</th>
                     <th scope={"col"}>{"Same"}</th>
                     <th scope={"col"}>{"Decision"}</th>
@@ -426,6 +520,36 @@ function ErrorsTab({ data }: { data: MigrationData }) {
   );
 }
 
+function Field({ field }: { field: SignoffField }) {
+  const described = field.hint ? `${field.id}-h` : undefined;
+  return (
+    <div className={"fld"}>
+      <label htmlFor={field.id}>{field.label}</label>
+      {field.hint ? (
+        <small className={"hint"} id={described}>
+          {field.hint}
+        </small>
+      ) : null}
+      {field.kind === "textarea" ? (
+        <textarea className={"ta"} id={field.id} rows={3} maxLength={field.maxLength} aria-describedby={described} defaultValue={field.value} {...field.attrs}></textarea>
+      ) : (
+        <input
+          className={"inp"}
+          id={field.id}
+          type={field.kind}
+          min={field.min}
+          max={field.max}
+          maxLength={field.maxLength}
+          aria-describedby={described}
+          defaultValue={field.value}
+          autoComplete={"off"}
+          {...field.attrs}
+        />
+      )}
+    </div>
+  );
+}
+
 function SignoffTab({ data }: { data: MigrationData }) {
   const signoff = data.signoff;
   return (
@@ -447,6 +571,13 @@ function SignoffTab({ data }: { data: MigrationData }) {
                   </div>
                 ))}
               </dl>
+              {signoff.fields?.length ? (
+                <div style={{ marginTop: "12px" }}>
+                  {signoff.fields.map((field) => (
+                    <Field key={field.id} field={field} />
+                  ))}
+                </div>
+              ) : null}
               {signoff.action || signoff.rollback?.attrs ? (
                 <div className={"fp-row"} style={{ marginTop: "12px" }}>
                   {signoff.action ? (
@@ -457,13 +588,88 @@ function SignoffTab({ data }: { data: MigrationData }) {
                   ) : null}
                   {signoff.rollback?.attrs ? (
                     <button className={"btn sm"} {...signoff.rollback.attrs}>
-                      {"Roll back this import"}
+                      {signoff.rollback.label ?? "Roll back this import"}
                     </button>
                   ) : null}
                 </div>
               ) : null}
             </div>
           </section>
+          {signoff.notice ? (
+            <div className={`alert ${signoff.notice.tone} rv`} style={{ marginTop: "12px", ...i(2) }}>
+              <Icon name={signoff.notice.tone === "ok" ? "check-circle" : "alert"} />
+              <div>
+                <b>{signoff.notice.title}</b>
+                {signoff.notice.copy}
+              </div>
+            </div>
+          ) : null}
+          {signoff.undo ? (
+            <div className={`alert ${signoff.undo.tone} rv`} role={"note"} data-mig-undo={""} style={{ marginTop: "12px", ...i(2) }}>
+              <Icon name={"alert"} />
+              <div>
+                <b>{signoff.undo.title}</b>
+                {signoff.undo.copy}
+              </div>
+            </div>
+          ) : null}
+          {signoff.pilot ? (
+            <div className={"tw rv"} role={"region"} aria-label={"Pilot records"} tabIndex={0} style={{ marginTop: "12px", ...i(2) }}>
+              <table className={"t"}>
+                <caption className={"sr"}>{"Pilot records"}</caption>
+                <thead>
+                  <tr>
+                    <th scope={"col"}>{"Record"}</th>
+                    <th scope={"col"}>{"Kind"}</th>
+                    <th scope={"col"}>{"Row"}</th>
+                    <th scope={"col"}>{"Old reference"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {signoff.pilot.rows.map((row, index) => (
+                    <tr key={`${index}-${row.kind}-${row.row}`}>
+                      <td>{row.href ? <a href={row.href}>{row.name}</a> : row.name}</td>
+                      <td>{row.kind}</td>
+                      <td>{row.row}</td>
+                      <td>{row.reference}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {signoff.pilot.more ? (
+                <p className={"mu"} style={{ fontSize: "13px", margin: "8px 0 0" }}>
+                  {signoff.pilot.more}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {signoff.report ? (
+            <section className={"panel rv"} style={{ marginTop: "12px", ...i(2) }}>
+              <h2>
+                <Icon name={"signature"} />
+                {"Run report"}
+              </h2>
+              <div className={"fp-pad"}>
+                <dl className={"fp-dl"}>
+                  {signoff.report.rows.map((row) => (
+                    <div key={row.term}>
+                      <dt>{row.term}</dt>
+                      <dd>{typeof row.value === "string" ? row.value : <Pair value={row.value} />}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {signoff.report.downloads.length ? (
+                  <div className={"fp-row"} style={{ marginTop: "12px" }}>
+                    {signoff.report.downloads.map((link) => (
+                      <a key={link.href} className={"btn sm"} href={link.href} download>
+                        {link.label}
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
           {signoff.rollback?.reasons.length ? (
             <>
               <div className={"alert bad rv"} style={{ marginTop: "12px", ...i(2) }}>
@@ -491,6 +697,47 @@ function SignoffTab({ data }: { data: MigrationData }) {
                 </table>
               </div>
             </>
+          ) : null}
+          {signoff.balances?.length ? (
+            <div className={"tw rv"} role={"region"} aria-label={"Opening balances"} tabIndex={0} style={{ marginTop: "12px", ...i(3) }}>
+              <table className={"t"}>
+                <caption className={"sr"}>{"Opening balances"}</caption>
+                <thead>
+                  <tr>
+                    <th scope={"col"}>{"Matter"}</th>
+                    <th scope={"col"}>{"Kind"}</th>
+                    <th scope={"col"}>{"Amount"}</th>
+                    <th scope={"col"}>{"As of"}</th>
+                    <th scope={"col"}>{"Review"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {signoff.balances.map((row) => (
+                    <tr key={row.key}>
+                      <td>
+                        {row.matter}
+                        {row.imported ? (
+                          <span className={"mu"} style={{ display: "block", fontSize: "12px" }}>
+                            {row.imported}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td>{row.kind}</td>
+                      <td>{row.amount}</td>
+                      <td>{row.asOf}</td>
+                      <td>
+                        <Badge badge={row.state} />
+                        {row.actions.map((action) => (
+                          <button key={action.label} className={"btn sm"} {...action.attrs}>
+                            {action.label}
+                          </button>
+                        ))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : null}
           {signoff.history?.length ? (
             <div className={"tw rv"} role={"region"} aria-label={"Imports"} tabIndex={0} style={{ marginTop: "12px", ...i(4) }}>

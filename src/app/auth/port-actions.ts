@@ -11,7 +11,16 @@ import { clearPendingTotp, readPendingTotp, withQr, writePendingTotp, type TotpS
 import { firmSlug } from "@/lib/auth/slug";
 import { syncClaimedFirmSlug } from "@/modules/email/sync-routing";
 import { isInvitationToken, normalizeEmail } from "@/lib/auth/invitations";
+import {
+  EMAIL_TAKEN,
+  STAFF_EMAIL_TAKEN,
+  isRateLimited,
+  rateLimitSeconds,
+  rateLimitText,
+  signUpEmailTaken,
+} from "@/lib/auth/signup-errors";
 import { acceptWithClient } from "@/modules/portal-invitations/accept";
+import { portalPreviewProblem } from "@/modules/portal-invitations/errors";
 import type { PortalAcceptPayload } from "@/modules/portal-invitations/types";
 import {
   firmSetupDbPayload,
@@ -23,6 +32,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { DPA_AVAILABLE, DPA_VERSION } from "@/modules/firm-onboarding/legal";
+import { officeParts } from "@/modules/firm-onboarding/setup-saved";
 import { LICENCE_PROOF_BUCKET, ownLicenceProofKey } from "@/modules/firm-onboarding/licence-proof";
 import { FIRM_LOGO_BUCKET, ownFirmLogoKey } from "@/modules/firm-onboarding/firm-logo";
 import { todayIso } from "@/modules/sheet/birth-date";
@@ -32,7 +42,11 @@ import { isPortalInviteRole, type PortalInviteRole } from "@/modules/portal-invi
 
 export type PortResult =
   | { ok: true; href?: string; codes?: string[] }
-  | { ok: false; state?: "error" | "locked"; message: string };
+  /**
+   * `inline`: shown in the step's error summary (links as `[label](/path)`), not a toast.
+   * `retryAfter`: seconds the screen counts down before the button works again (a rate limit).
+   */
+  | { ok: false; state?: "error" | "locked"; message: string; inline?: boolean; retryAfter?: number | null };
 
 const STEPS = [
   "firm_details",
@@ -87,19 +101,6 @@ function isIsoDate(value: string) {
 function text(fields: Record<string, string | boolean>, id: string) {
   const value = fields[id];
   return typeof value === "string" ? value.trim() : "";
-}
-
-/** One address line on the firm-details screen. The office function stores the pieces separately. */
-function officeParts(raw: string) {
-  const postal = raw.match(/\b[A-Z]\d[A-Z][ -]?\d[A-Z]\d\b/i)?.[0]?.toUpperCase().replace("-", " ") ?? "";
-  const region = raw.match(/\b(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)\b/)?.[1] ?? "";
-  let rest = raw;
-  if (postal) rest = rest.replace(new RegExp(postal.replace(/\s+/g, "\\s*"), "i"), " ");
-  if (region) rest = rest.replace(new RegExp(`\\b${region}\\b`), " ");
-  const bits = rest.split(",").map((part) => part.trim()).filter(Boolean);
-  const locality = (bits.at(-1) || raw).slice(0, 120);
-  const addressLine = (bits.length > 1 ? bits.slice(0, -1).join(", ") : raw).slice(0, 300);
-  return { addressLine, locality, region, postal };
 }
 
 /**
@@ -169,8 +170,13 @@ export async function signInWithPassword(email: string, password: string, next: 
     return lockedMessage(error.message) ? fail(error.message, "locked") : fail("Email or password didn’t match", "error");
   }
   const dest = safeNext(next, "/app");
-  // Clients, sponsors and family sign in with a password only; two-step is for firm staff.
-  if ((await homeRoute()) === "/portal") return { ok: true, href: portalDestination(dest) };
+  // Clients, sponsors and family sign in with a password, plus their code when they turned on
+  // two-step on their Account page (SEC-01).
+  if ((await homeRoute()) === "/portal") {
+    const { data: factors } = await supabase.auth.mfa.listFactors();
+    const twoStep = (factors?.totp ?? []).some((factor) => factor.status === "verified");
+    return { ok: true, href: twoStep ? `/mfa?next=${encodeURIComponent(portalDestination(dest))}` : portalDestination(dest) };
+  }
   return { ok: true, href: `/mfa?next=${encodeURIComponent(dest)}` };
 }
 
@@ -244,8 +250,19 @@ export async function signUpForTrial(input: {
     password: input.password,
     options: { data: { display_name: name } },
   });
-  if (error) return lockedMessage(error.message) ? fail(error.message, "locked") : fail(error.message);
-  if (!data.session) return { ok: true };
+  if (error) {
+    if (error.code === "user_already_exists" || /already registered|already exists/i.test(error.message)) {
+      return { ok: false, message: EMAIL_TAKEN, inline: true };
+    }
+    if (isRateLimited(error)) {
+      const wait = rateLimitSeconds(error);
+      return { ok: false, message: rateLimitText(wait), inline: true, retryAfter: wait };
+    }
+    if (error.code === "weak_password") return fail("Choose a password that meets all three rules");
+    return fail("Your account could not be created. Try again.");
+  }
+  // A confirmed address: Supabase answers with a user that has no identities and sends nothing.
+  if (signUpEmailTaken(data)) return { ok: false, message: EMAIL_TAKEN, inline: true };
   return { ok: true };
 }
 
@@ -571,13 +588,21 @@ export async function joinStaffInvite(input: {
         emailRedirectTo: `${origin}/auth/confirm?next=${encodeURIComponent(`/invite/${input.token}`)}`,
       },
     });
-    if (signedUp.error && !/already/i.test(signedUp.error.message)) return fail(signedUp.error.message);
+    if (signedUp.error && isRateLimited(signedUp.error)) return fail(rateLimitText(rateLimitSeconds(signedUp.error)));
+    if (signedUp.error && !/already/i.test(signedUp.error.message)) return fail("Your sign-in could not be created. Try again.");
     if (!signedUp.data.session) {
+      // An account that already has this email signs in with its own password (#252: sign in first).
       const signedIn = await supabase.auth.signInWithPassword({
         email: row.email ?? input.email.trim(),
         password: input.password,
       });
-      if (signedIn.error) return fail("Confirm your email, then open this invitation again.");
+      if (signedIn.error) {
+        if (lockedMessage(signedIn.error.message)) return fail("Too many attempts. Wait and try again.");
+        // A confirmed account with another password: say so, instead of asking to confirm an email that is.
+        const taken = signUpEmailTaken(signedUp.data) || Boolean(signedUp.error);
+        if (taken && signedIn.error.code !== "email_not_confirmed") return { ok: false, message: STAFF_EMAIL_TAKEN, inline: true };
+        return fail("Confirm your email, then open this invitation again.");
+      }
     }
     claims = (await supabase.auth.getClaims()).data;
   }
@@ -593,7 +618,8 @@ export async function joinStaffInvite(input: {
 }
 
 export type PortalJoinResult =
-  | { ok: true; confirm: true }
+  /** `reused`: no new code was sent; the one already emailed still works ("Send a new code" sends another). */
+  | { ok: true; confirm: true; reused?: boolean }
   | { ok: true; confirm?: false; firstRequest: { purpose: string } | null }
   | { ok: false; message: string; reason?: "elsewhere" };
 
@@ -607,16 +633,19 @@ function joinFail(message: string): PortalJoinResult {
   return message === SIGNED_IN_ELSEWHERE ? { ok: false, message, reason: "elsewhere" } : { ok: false, message };
 }
 
-/** The invited person, from public.preview_portal_invitation; null unless the invitation is open. */
+/**
+ * The invited person, from public.preview_portal_invitation; null unless the invitation is open.
+ * A re-read (p_open false): the accept screen already opened it, so this doesn't count toward
+ * the invitation's rate limit, only checks it.
+ */
 async function openPortalInvitee(
   supabase: Awaited<ReturnType<typeof createClient>>,
   token: string,
 ): Promise<PortalInvitee | { error: string }> {
-  const { data, error } = await supabase.rpc("preview_portal_invitation", { p_token: token });
+  const { data, error } = await supabase.rpc("preview_portal_invitation", { p_token: token, p_open: false });
   if (error || !data || typeof data !== "object" || Array.isArray(data)) return { error: "This invitation could not be opened." };
   const preview = data as { status?: unknown; invitee?: { email?: unknown; display_name?: unknown } | null };
-  if (preview.status === "rate_limited") return { error: "Too many attempts. Wait and try again." };
-  if (preview.status !== "open") return { error: "This invitation can no longer be used." };
+  if (preview.status !== "open") return { error: portalPreviewProblem(preview.status) };
   const email = typeof preview.invitee?.email === "string" ? normalizeEmail(preview.invitee.email) : null;
   if (!email) return { error: "This invitation can no longer be used." };
   const displayName = typeof preview.invitee?.display_name === "string" ? preview.invitee.display_name.trim().slice(0, 200) : "";
@@ -745,31 +774,28 @@ export async function joinPortalInvite(input: {
     return acceptJoined(supabase, input.token, input.payload);
   }
 
-  const signIn = async (): Promise<PortalJoinResult | "signed-in"> => {
+  /**
+   * Signs in with the typed password. An account whose email isn't confirmed yet was emailed a
+   * code when it was made (an earlier Continue, maybe before a reload): that code still works, so
+   * none is sent here; sending one would make the code the person holds stop working (bug 5,
+   * 2026-10-25). The code step's "Send a new code" is the explicit way to get another.
+   */
+  const signIn = async (): Promise<PortalJoinResult | "signed-in" | "wrong-password"> => {
     const { error } = await supabase.auth.signInWithPassword({ email: invitee.email, password });
     if (!error) return "signed-in";
     if (error.code === "email_not_confirmed" || /not confirmed/i.test(error.message)) {
-      const resent = await supabase.auth.resend({
-        type: "signup",
-        email: invitee.email,
-        options: { emailRedirectTo: portalInviteRedirect(input.token, invitee.role) },
-      });
-      if (resent.error) {
-        return lockedMessage(resent.error.message)
-          ? joinFail("Too many codes were sent. Wait a minute, then try again.")
-          : joinFail("We couldn’t send a code to this email.");
-      }
-      return { ok: true, confirm: true };
+      return { ok: true, confirm: true, reused: true };
     }
     if (lockedMessage(error.message)) return joinFail("Too many attempts. Wait and try again.");
-    return joinFail(WRONG_PASSWORD);
+    return "wrong-password";
   };
 
-  if (input.mode === "existing") {
-    const signedIn = await signIn();
-    if (signedIn !== "signed-in") return signedIn;
-    return acceptJoined(supabase, input.token, input.payload);
-  }
+  const signedIn = await signIn();
+  if (signedIn === "signed-in") return acceptJoined(supabase, input.token, input.payload);
+  if (signedIn !== "wrong-password") return signedIn;
+  if (input.mode === "existing") return joinFail(WRONG_PASSWORD);
+  // No account with this email and password yet: create one (Supabase emails the first code).
+  const alreadyMade = "This email already has a Casevoya sign-in. Choose “Already have a Casevoya sign-in?” and use that password.";
 
   const signedUp = await supabase.auth.signUp({
     email: invitee.email,
@@ -780,30 +806,15 @@ export async function joinPortalInvite(input: {
     },
   });
   if (signedUp.error) {
-    if (/already/i.test(signedUp.error.message) || signedUp.error.code === "user_already_exists") {
-      const signedIn = await signIn();
-      if (signedIn !== "signed-in") {
-        return signedIn.ok
-          ? signedIn
-          : joinFail("This email already has a Casevoya sign-in. Choose “Already have a Casevoya sign-in?” and use that password.");
-      }
-      return acceptJoined(supabase, input.token, input.payload);
-    }
-    if (lockedMessage(signedUp.error.message)) return joinFail("Too many attempts. Wait and try again.");
+    // The typed password didn't sign in above, so this sign-in has a different password.
+    if (/already/i.test(signedUp.error.message) || signedUp.error.code === "user_already_exists") return joinFail(alreadyMade);
+    if (isRateLimited(signedUp.error)) return joinFail(rateLimitText(rateLimitSeconds(signedUp.error)));
     if (signedUp.error.code === "weak_password") return joinFail("Choose a password that meets all three rules");
     return joinFail("Your sign-in could not be created.");
   }
   if (signedUp.data.session) return acceptJoined(supabase, input.token, input.payload);
   // With email confirmation on, an address that already has an account comes back with no identities.
-  if (signedUp.data.user && signedUp.data.user.identities?.length === 0) {
-    const signedIn = await signIn();
-    if (signedIn !== "signed-in") {
-      return signedIn.ok
-        ? signedIn
-        : joinFail("This email already has a Casevoya sign-in. Choose “Already have a Casevoya sign-in?” and use that password.");
-    }
-    return acceptJoined(supabase, input.token, input.payload);
-  }
+  if (signUpEmailTaken(signedUp.data)) return joinFail(alreadyMade);
   // Supabase emailed a six-digit confirmation code; the same screen asks for it.
   return { ok: true, confirm: true };
 }

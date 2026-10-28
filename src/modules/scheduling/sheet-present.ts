@@ -19,7 +19,7 @@ export type StaffBooking = {
   agreement?: string;
 };
 
-/** A booking's live (sent or signed) consultation agreement, as the loader reads it. */
+/** A booking's latest consultation agreement (sent, signed or voided), as the loader reads it. */
 export type BookingAgreementRow = {
   booking_id: string;
   status: string;
@@ -27,20 +27,55 @@ export type BookingAgreementRow = {
   template_version: number;
   signed_name: string | null;
   signed_at: string | null;
+  sent_at?: string | null;
+  opened_at?: string | null;
+  reminded_at?: string | null;
+  voided_at?: string | null;
+  voided_by?: string | null;
+  void_reason?: string | null;
+  declined_at?: string | null;
+  decline_reason?: string | null;
+  last_request_kind?: string | null;
+  last_request_at?: string | null;
 };
 
-/** The Upcoming row's Agreement column for a booking's live agreement. */
+/** What the booker asked for from the signing link, for the record's "Client asked" row. */
+const CLIENT_REQUEST: Record<string, string> = {
+  wrong_recipient: "This link isn’t theirs",
+  code_help: "To check their email address",
+  link_requested: "For a new link",
+  message: "To talk to you",
+};
+
+/** The Upcoming row's Agreement column for a booking's latest agreement. */
 export function agreementLabel(row: BookingAgreementRow | null | undefined): string {
   if (!row) return "—";
+  if (row.status === "voided") return "Voided";
+  if (row.status === "declined") return "Declined";
   return row.status === "signed" ? `${row.title} v${row.template_version} signed` : "Sent, not signed";
 }
 
 const SENDABLE = new Set(["held", "pending_payment", "confirmed"]);
 
+/** "21 Oct" in the given zone. */
+function dayMonth(iso: string, zone: string): string {
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: zone }).format(new Date(iso));
+}
+
+/** The record's Agreement and fee panel (design review on #161). */
+export type AgreementPanel = {
+  chip: Chip | null;
+  items: { term: string; value: string; struck?: string }[];
+  note: string | null;
+  actions: RowAction[];
+  link: { href: string; label: string } | null;
+};
+
 /**
- * The record's Agreement detail and its buttons. Send (an upcoming booking with no agreement, when
- * the firm has an approved consultation template); Copy signing link and Void (sent, not signed);
- * a link to the signed copy (signed).
+ * The record's Agreement and fee panel. Signed: who and when, and the signed copy. Sent, not
+ * signed: sent to whom, first opened, the private-link note, Copy signing link, Remind and Void
+ * (with a reason). Voided: the struck send, who voided it and why, and Send a new one. None:
+ * Send, for an upcoming booking when the firm has an approved consultation template.
  */
 export function recordAgreement(input: {
   row: BookingAgreementRow | null;
@@ -51,35 +86,90 @@ export function recordAgreement(input: {
   template: { id: string; name: string; version: number } | null;
   signLink: string;
   wire: Record<string, string>;
-}): { detail: string; actions: RowAction[]; link: { href: string; label: string } | null } {
-  const { row } = input;
+  /** The attendee's first name. */
+  client: string;
+  recipient: string | null;
+  voidedBy: string | null;
+}): AgreementPanel {
+  const { row, zone } = input;
+  const when = (value: string | null | undefined) => (value ? shortWhen(Date.parse(value), zone) : null);
+  const fee = { term: "Fee", value: "No fee" };
+  const upcoming = SENDABLE.has(input.status) && Date.parse(input.startsAt) > input.now;
+  const send: RowAction[] =
+    upcoming && input.template
+      ? [{ label: "Send consultation agreement", data: { "data-agreement-send-booking": "1", "data-template": input.template.id, ...input.wire } }]
+      : [];
+  const name = row ? `${row.title} v${row.template_version}` : "";
+  const request =
+    row?.last_request_kind && CLIENT_REQUEST[row.last_request_kind]
+      ? [{ term: "Client asked", value: [CLIENT_REQUEST[row.last_request_kind], when(row.last_request_at)].filter(Boolean).join(", ") }]
+      : [];
   if (row?.status === "signed") {
-    const when = row.signed_at ? ` on ${shortWhen(Date.parse(row.signed_at), input.zone)}` : "";
-    return { detail: `${row.title} v${row.template_version}, signed by ${row.signed_name ?? "the client"}${when}`, actions: [], link: { href: input.signLink, label: "Open the signed agreement" } };
-  }
-  if (row) {
     return {
-      detail: `${row.title} v${row.template_version}, sent, not signed`,
+      chip: { tone: "ok", label: "Signed" },
+      items: [
+        { term: "Agreement", value: name },
+        { term: "Signed", value: `${row.signed_name ?? input.client}${when(row.signed_at) ? `, ${when(row.signed_at)}` : ""}` },
+        fee,
+      ],
+      note: null,
+      actions: [],
+      link: { href: input.signLink, label: "Open the signed agreement" },
+    };
+  }
+  if (row?.status === "sent") {
+    return {
+      chip: { tone: "rev", label: "Sent, not signed" },
+      items: [
+        { term: "Agreement", value: name },
+        { term: "Sent", value: [when(row.sent_at), input.recipient ? `to ${input.recipient}` : null].filter(Boolean).join(" ") || "Sent" },
+        { term: "Opened", value: when(row.opened_at) ?? "Not yet" },
+        ...(row.reminded_at ? [{ term: "Reminded", value: when(row.reminded_at) ?? "" }] : []),
+        ...request,
+        fee,
+      ],
+      note: `The link is private to ${input.client} and works until they sign or you void it. Voiding keeps it on record.`,
       actions: [
         { label: "Copy signing link", icon: "copy", toast: "Signing link copied", data: { "data-copy": input.signLink } },
-        { label: "Void", data: { "data-agreement-void-booking": "1", ...input.wire } },
+        ...(upcoming ? [{ label: "Remind", data: { "data-agreement-remind-booking": "1", ...input.wire } }] : []),
+        { label: "Void", dlg: "dlgBkVoid", tone: "danger" as const },
       ],
       link: null,
     };
   }
-  const upcoming = SENDABLE.has(input.status) && Date.parse(input.startsAt) > input.now;
-  // No approved consultation template the viewer can read: nothing to send.
-  if (!upcoming || !input.template) return { detail: "None sent", actions: [], link: null };
-  return {
-    detail: "None sent",
-    actions: [
-      {
-        label: "Send consultation agreement",
-        data: { "data-agreement-send-booking": "1", "data-template": input.template.id, ...input.wire },
-      },
-    ],
-    link: null,
-  };
+  if (row?.status === "voided") {
+    const sentDay = row.sent_at ? dayMonth(row.sent_at, zone) : null;
+    return {
+      chip: { tone: "bad", label: "Voided" },
+      items: [
+        { term: "Agreement", value: name, ...(sentDay ? { struck: `sent ${sentDay}` } : {}) },
+        { term: "Voided", value: [when(row.voided_at), `by ${input.voidedBy ?? "A staff member"}`].filter(Boolean).join(" ") },
+        ...(row.void_reason ? [{ term: "Reason", value: row.void_reason }] : []),
+        ...request,
+        fee,
+      ],
+      note: `The old link now tells ${input.client} this agreement was withdrawn. Send a fresh one when you’re ready.`,
+      actions: send.map((action) => ({ ...action, tone: "primary" as const })),
+      link: null,
+    };
+  }
+  if (row?.status === "declined") {
+    const sentDay = row.sent_at ? dayMonth(row.sent_at, zone) : null;
+    return {
+      chip: { tone: "bad", label: "Declined" },
+      items: [
+        { term: "Agreement", value: name, ...(sentDay ? { struck: `sent ${sentDay}` } : {}) },
+        { term: "Declined", value: when(row.declined_at) ?? "Declined" },
+        ...(row.decline_reason ? [{ term: "Their reason", value: row.decline_reason }] : []),
+        ...request,
+        fee,
+      ],
+      note: `${input.client} declined to sign, and the link no longer accepts a signature. Send a fresh one when you’re ready.`,
+      actions: send.map((action) => ({ ...action, tone: "primary" as const })),
+      link: null,
+    };
+  }
+  return { chip: null, items: [{ term: "Agreement", value: "None sent" }, fee], note: null, actions: send, link: null };
 }
 
 export function bookingChip(status: string, startsAt: number, now: number): Chip {
@@ -316,6 +406,17 @@ const EVENT_LABEL: Record<string, string> = {
   no_show: "Marked no-show",
   completed: "Marked attended",
 };
+
+/** CRM-03: recording (BUILD-SPEC slice 8) isn't built; the record says so plainly. */
+export const RECORDING_NOT_AVAILABLE = "Not available: Casevoya calls aren’t recorded";
+
+/**
+ * Who a client's change came from (CRM-03): a client with a portal login acts from the portal;
+ * a booker without one can only use the Manage your booking link from their email.
+ */
+export function clientActorLabel(hasPortal: boolean): string {
+  return hasPortal ? "Client" : "Booker, from the Manage link";
+}
 
 export function bookingEventLabel(kind: string): string {
   return EVENT_LABEL[kind] ?? "Updated";

@@ -14,8 +14,9 @@
  */
 import source from "@/modules/email/designs/i18n-source.json";
 import drafts from "@/modules/email/designs/fr-drafts.json";
-import { PATHS, type EmailContexts, type TemplateId } from "@/modules/email/designs/catalog";
+import { manageLink, PATHS, type EmailContexts, type TemplateId } from "@/modules/email/designs/catalog";
 import { appLink, cleanText, safeUrl, type Brand, type EmailCopy, type ShellText, type Spot } from "@/modules/email/designs/layout";
+import { TAGLINES } from "@/modules/email/designs/taglines";
 import {
   bookingRefOrNull,
   countOrNull,
@@ -26,6 +27,7 @@ import {
   documentNumber,
   longDate,
   longDateFr,
+  refundCardInactive,
   shortDate,
   shortDateFr,
   uuidOrNull,
@@ -374,13 +376,14 @@ const BUILDERS: Builders = {
         break;
       }
     }
-    const parts = [lead, meet, context.portal ? "" : t("_shared.contact_to_change", values)].filter(Boolean);
+    const manage = context.portal ? null : manageLink(context.manageUrl, origin);
+    const parts = [lead, meet, context.portal ? "" : manage ? t("_shared.manage_line") : t("_shared.contact_to_change", values)].filter(Boolean);
     return copy(kit, {
       subject: t("subject", values),
       preheader: t("preheader"),
       heading: t("heading"),
       body: parts.join(" "),
-      cta: context.portal ? cta(t("cta"), appLink(origin, PATHS.portalAppointments)) : null,
+      cta: context.portal ? cta(t("cta"), appLink(origin, PATHS.portalAppointments)) : manage ? cta(t("_shared.manage_cta"), manage) : null,
       spot: "reminder",
       brand: firmBrand(kit, context),
     });
@@ -390,6 +393,7 @@ const BUILDERS: Builders = {
     const firmName = firm(kit, context);
     const when = f.dateTimeIn(context.startsAt, context.timeZone);
     const moved = when ? t("moved_when", { date_time: when, time_zone_label: zoneLabel(kit, context.timeZone) }) : t("moved");
+    const manage = context.portal ? null : manageLink(context.manageUrl, origin);
     return copy(kit, {
       subject: t("subject", { firm_name: firmName }),
       preheader: context.portal ? t("preheader_portal") : t("preheader"),
@@ -398,8 +402,8 @@ const BUILDERS: Builders = {
         ? when
           ? `${moved} ${t("reminders_moved")}`
           : t("portal_no_time")
-        : `${moved} ${t("_shared.contact_to_change", { firm_name: firmName })}`,
-      cta: context.portal ? cta(t("cta"), appLink(origin, PATHS.portalAppointments)) : null,
+        : `${moved} ${manage ? t("_shared.manage_line") : t("_shared.contact_to_change", { firm_name: firmName })}`,
+      cta: context.portal ? cta(t("cta"), appLink(origin, PATHS.portalAppointments)) : manage ? cta(t("_shared.manage_cta"), manage) : null,
       spot: "reminder",
       brand: firmBrand(kit, context),
     });
@@ -630,6 +634,71 @@ const BUILDERS: Builders = {
       brand: firmBrand(kit, context),
     });
   },
+  EX20(kit, context) {
+    const { t, origin } = kit;
+    const firmName = firm(kit, context);
+    return copy(kit, {
+      subject: t("subject", { firm_name: firmName }),
+      preheader: t("preheader"),
+      heading: t("heading"),
+      body: refundCardInactive(context.refundReason) ? t("body_card", { firm_name: firmName }) : t("body", { firm_name: firmName }),
+      cta: cta(t("cta"), appLink(origin, PATHS.portalPayments)),
+      spot: "receipt",
+      brand: firmBrand(kit, context),
+    });
+  },
+  EX19(kit, context) {
+    const { t, origin } = kit;
+    const firmName = firm(kit, context);
+    return copy(kit, {
+      subject: t("subject", { firm_name: firmName }),
+      preheader: t("preheader"),
+      heading: t("heading", { firm_name: firmName }),
+      body: t("body", { firm_name: firmName }),
+      cta: cta(t("cta"), appLink(origin, PATHS.portal)),
+      spot: "reminder",
+      brand: firmBrand(kit, context),
+    });
+  },
+  EX18(kit, context) {
+    const { t, origin } = kit;
+    const firmName = firm(kit, context);
+    return copy(kit, {
+      subject: t("subject", { firm_name: firmName }),
+      preheader: t("preheader"),
+      heading: t("heading"),
+      body: t("body", { firm_name: firmName }),
+      cta: cta(t("cta"), appLink(origin, PATHS.sheetPipeline)),
+      spot: "reminder",
+      brand: PLATFORM,
+    });
+  },
+  EX17(kit, context) {
+    const { t, origin } = kit;
+    const firmName = firm(kit, context);
+    return copy(kit, {
+      subject: t("subject", { firm_name: firmName }),
+      preheader: t("preheader"),
+      heading: t("heading"),
+      body: t("body", { firm_name: firmName }),
+      cta: cta(t("cta"), appLink(origin, PATHS.portal)),
+      spot: "reminder",
+      brand: firmBrand(kit, context),
+    });
+  },
+  EX16(kit, context) {
+    const { t } = kit;
+    const firmName = firm(kit, context);
+    const code = typeof context.code === "string" && /^\d{6}$/.test(context.code.trim()) ? context.code.trim() : null;
+    return copy(kit, {
+      subject: t("subject", { firm_name: firmName }),
+      preheader: t("preheader"),
+      heading: code ?? t("heading"),
+      body: code ? t("body", { firm_name: firmName }) : t("body_missing", { firm_name: firmName }),
+      spot: "sign-in-code",
+      brand: firmBrand(kit, context),
+    });
+  },
   EX11(kit, context) {
     const { t, origin } = kit;
     const minutes = countOrNull(context.minutes, 1440);
@@ -715,7 +784,10 @@ export function buildLocalized<K extends LocalizedId>(
   drafted: DraftFile = FR_DRAFTS,
 ): EmailCopy {
   const kit: Kit = { t: translator(tableFor(lang, drafted), id), f: FORMATS[lang], lang, origin, drafted };
-  return (BUILDERS[id] as (kit: Kit, context: unknown) => EmailCopy)(kit, context);
+  const built = (BUILDERS[id] as (kit: Kit, context: unknown) => EmailCopy)(kit, context);
+  // English carries the same per-template tagline as catalog.ts; French keeps its shared one.
+  const tagline = lang === "en" ? TAGLINES[id] : undefined;
+  return tagline ? { ...built, tagline } : built;
 }
 
 /** The shell strings (header tagline, footers) in a language, for layout.ts. */

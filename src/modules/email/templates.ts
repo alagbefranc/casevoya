@@ -8,6 +8,7 @@ import {
 import { chooseEmailLanguage } from "@/modules/email/designs/french";
 import { DEFAULT_EMAIL_ORIGIN, appLink, cleanText, emailOrigin, renderCopy, safeUrl, type EmailCopy } from "@/modules/email/designs/layout";
 import { buildLocalized } from "@/modules/email/designs/localized";
+import { TAGLINES } from "@/modules/email/designs/taglines";
 
 export { INVITE_WITHOUT_LINK } from "@/modules/email/designs/catalog";
 
@@ -77,6 +78,11 @@ type Wired =
   | "EM16c"
   | "EX07"
   | "EX15"
+  | "EX16"
+  | "EX17"
+  | "EX18"
+  | "EX19"
+  | "EX20"
   | "EX11"
   | "EM17";
 
@@ -106,6 +112,9 @@ export function designFor(context: Context): Wired | "generic" {
       return "EX09";
     case "refund_complete":
       return "EX10";
+    // Bug #215 (20261025530100): a refund the client was told about failed afterwards.
+    case "refund_failed":
+      return "EX20";
     // Hook for the receipts work (EM11): needs the email_template value 'payment_receipt' and an
     // outbox event that queues it with receipt_number (and advance: true for client funds).
     case "payment_receipt":
@@ -128,6 +137,18 @@ export function designFor(context: Context): Wired | "generic" {
       return "EX11";
     case "support_granted":
       return "EM17";
+    // Signing flow (20261023230100): the six-digit code the worker opened from its sealed form.
+    case "signing_code":
+      return "EX16";
+    // ORG-06 (20261024120100): the matter's responsible consultant changed. Firm name only.
+    case "consultant_changed":
+      return "EX17";
+    // CRM-01 (20261024150100): a new web enquiry, to the firm's owners. Firm name only.
+    case "enquiry_received":
+      return "EX18";
+    // OPS-04 (20261025110100): an announcement to many clients. Firm name only.
+    case "announcement":
+      return "EX19";
     default:
       return "generic";
   }
@@ -164,10 +185,11 @@ function contextFor(design: Wired, context: Context, firm: string): EmailContext
         portal: context.portal === true,
         locationKind: textOf(context.location_kind) || null,
         address: textOf(context.address) || null,
+        manageUrl: textOf(context.manage_link) || null,
       };
     // The portal button only when the database says the attendee has a portal login.
     case "EM16b":
-      return { firmName: firm, startsAt: textOf(context.starts_at) || null, timeZone: textOf(context.time_zone) || null, portal: context.portal === true };
+      return { firmName: firm, startsAt: textOf(context.starts_at) || null, timeZone: textOf(context.time_zone) || null, portal: context.portal === true, manageUrl: textOf(context.manage_link) || null };
     case "EM16c":
       return {
         firmName: firm,
@@ -186,7 +208,14 @@ function contextFor(design: Wired, context: Context, firm: string): EmailContext
     case "EX09":
     case "EX10":
     case "EX07":
+    case "EX17":
+    case "EX18":
+    case "EX19":
       return { firmName: firm };
+    case "EX16":
+      return { firmName: firm, code: textOf(context.code) || null };
+    case "EX20":
+      return { firmName: firm, refundReason: textOf(context.refund_reason) || null };
     // Support access: minutes asked for; on approval the approver, the minutes, the end and the firm's zone.
     case "EX11":
       return { firmName: firm, minutes: minutesOf(context.minutes) };
@@ -220,7 +249,22 @@ function genericEnglish(firm: string, origin: string): EmailCopy {
     heading: "There’s an update on your file",
     body: `${firm} has an update for you. For your privacy, the details are in your portal.`,
     cta: { label: "Open your portal", href: appLink(origin, PATHS.portal) ?? "" },
+    tagline: TAGLINES.generic,
   };
+}
+
+/**
+ * The firm's logo link and colour on a firm email's header (ORG-01): context.firm_logo_url is the
+ * public /api/firm/logo link the mail worker built from the firm's own stored logo, and
+ * context.firm_accent its colour. Anything else is ignored.
+ */
+function withFirmLook(copy: EmailCopy, context: Context, origin: string): EmailCopy {
+  if (copy.brand.kind !== "firm") return copy;
+  const logo = typeof context.firm_logo_url === "string" ? safeUrl(context.firm_logo_url) : null;
+  const ours = logo && new URL(logo).origin === new URL(origin).origin && new URL(logo).pathname.startsWith("/api/firm/logo/") ? logo : null;
+  const accent = typeof context.firm_accent === "string" && /^#[0-9A-Fa-f]{6}$/.test(context.firm_accent) ? context.firm_accent : null;
+  if (!ours && !accent) return copy;
+  return { ...copy, brand: { ...copy.brand, logoUrl: ours, accent } };
 }
 
 /**
@@ -252,6 +296,6 @@ export function renderEmail(context: Context, options: { origin?: string } = {})
     const typed = contextFor(design, context, firm);
     copy = lang === "fr" ? buildLocalized(design, "fr", typed as never, origin) : renderTemplate(design, typed as never, origin);
   }
-  const rendered = renderCopy(copy, origin);
+  const rendered = renderCopy(withFirmLook(copy, context, origin), origin);
   return { ...rendered, design, lang };
 }

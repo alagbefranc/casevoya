@@ -187,7 +187,7 @@ export async function bookForClient(input: {
 
 /** A consultation agreement refusal as words a person can act on. */
 function agreementError(message: string): { error: string } {
-  if (/approved consultation|already has an agreement|only an upcoming|no unsigned agreement|give a reason/.test(message)) {
+  if (/approved consultation|already has an agreement|only an upcoming|no unsigned agreement|give a reason|no unsigned agreement to remind/.test(message)) {
     return { error: message.charAt(0).toUpperCase() + message.slice(1) + "." };
   }
   if (/staff access denied|booking denied/.test(message)) return { error: "You can’t change this consultation." };
@@ -206,11 +206,26 @@ export async function sendBookingAgreement(input: { organizationId: string; book
 }
 
 /** Withdraws an unsigned consultation agreement; it stays on record as voided. */
-export async function voidBookingAgreement(input: { organizationId: string; bookingId: string }): Promise<Result> {
+export async function voidBookingAgreement(input: { organizationId: string; bookingId: string; reason: string }): Promise<Result> {
+  if (!isUuid(input.bookingId)) return { error: "Reload and try again." };
+  const reason = (input.reason ?? "").trim();
+  if (reason.length < 3 || reason.length > 500) return { error: "Give a reason (3 to 500 characters)." };
+  const supabase = await session(input.organizationId);
+  if (!supabase) return { error: "Sign in first." };
+  const { error } = await supabase.rpc("void_booking_agreement", { p_booking_id: input.bookingId, p_reason: reason });
+  if (error) return agreementError(error.message);
+  refresh();
+  return { ok: true };
+}
+
+/** Emails the booker the signing link again; the database allows one reminder an hour. */
+export async function remindBookingAgreement(input: { organizationId: string; bookingId: string }): Promise<Result> {
   if (!isUuid(input.bookingId)) return { error: "Reload and try again." };
   const supabase = await session(input.organizationId);
   if (!supabase) return { error: "Sign in first." };
-  const { error } = await supabase.rpc("void_booking_agreement", { p_booking_id: input.bookingId, p_reason: "Withdrawn from the consultation record" });
+  const { error } = await supabase.rpc("remind_booking_agreement", { p_booking_id: input.bookingId });
+  if (error && /once an hour/.test(error.message)) return { error: "A reminder already went out in the last hour. Try again later." };
+  if (error && /email notices are off/.test(error.message)) return { error: "Email notices are off for this client" };
   if (error) return agreementError(error.message);
   refresh();
   return { ok: true };

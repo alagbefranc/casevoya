@@ -7,7 +7,7 @@ import { dayLabel, clockLabel } from "@/modules/messages/present";
 
 export type NotificationItem = {
   id: string;
-  kind: "message" | "document" | "payment" | "booking" | "booking_cancelled" | "booking_rescheduled" | "deadline" | "support" | "intake_submitted" | "intake_correction";
+  kind: "message" | "document" | "payment" | "booking" | "booking_cancelled" | "booking_rescheduled" | "deadline" | "support" | "intake_submitted" | "intake_correction" | "task" | "report";
   occurred_at: string;
   matter_id: string | null;
   actor_name: string | null;
@@ -17,12 +17,12 @@ export type NotificationItem = {
   read: boolean;
 };
 
-const KINDS = new Set(["message", "document", "payment", "booking", "booking_cancelled", "booking_rescheduled", "deadline", "support", "intake_submitted", "intake_correction"]);
+const KINDS = new Set(["message", "document", "payment", "booking", "booking_cancelled", "booking_rescheduled", "deadline", "support", "intake_submitted", "intake_correction", "task", "report"]);
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /** What the System tab lists: the rows Casevoya itself raises (card payments, deadline reminders, support requests). */
-export const SYSTEM_KINDS = new Set<NotificationItem["kind"]>(["payment", "deadline", "support"]);
+export const SYSTEM_KINDS = new Set<NotificationItem["kind"]>(["payment", "deadline", "support", "report"]);
 
 /** How many notifications the page and the sidebar read: the most public.staff_notifications returns. */
 export const NOTIFICATION_READ_LIMIT = 200;
@@ -107,6 +107,30 @@ export function notificationParts(item: NotificationItem, matterName: (id: strin
       return [`${first(item.actor_name)} sent `, { b: item.subject ?? "an intake form" }, " on ", { b: matterName(item.matter_id) }];
     case "intake_correction":
       return [`${first(item.actor_name)} asked for a correction to `, { b: item.subject ?? "an intake form" }, item.detail ? ` (${item.detail})` : ""].filter(Boolean);
+    // OPS-01 (20261025100100): a task you own, watch or lead changed status, moved or was escalated.
+    case "task":
+      return taskParts(item, matterName);
+    // REP-03 (20261025320100): a scheduled report's link (or its test run). Link only; sign-in shows it.
+    case "report":
+      return [item.detail === "test" ? "Test of scheduled report " : "Scheduled report ", { b: item.subject ?? "a report" }, " is ready to open in Reports"];
+  }
+}
+
+const TASK_STATUS: Record<string, string> = { open: "reopened", blocked: "marked blocked", done: "marked done", cancelled: "cancelled" };
+
+function taskParts(item: NotificationItem, matterName: (id: string | null) => string): NotificationPart[] {
+  const who = item.actor_name?.trim() || "Someone";
+  const task = { b: item.subject ?? "a task" };
+  const where: NotificationPart[] = item.matter_id ? [" on ", { b: matterName(item.matter_id) }] : [];
+  switch (item.detail) {
+    case "reassigned_you":
+      return [`${who} gave you `, task, ...where];
+    case "reassigned":
+      return [`${who} reassigned `, task, ...where];
+    case "escalated":
+      return ["Overdue and escalated: ", task, ...where];
+    default:
+      return [`${who} ${TASK_STATUS[item.detail ?? ""] ?? "changed"} `, task, ...where];
   }
 }
 

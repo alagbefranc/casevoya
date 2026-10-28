@@ -55,6 +55,10 @@ export type PortalDocuments = {
   progressLine: string;
   canReview: boolean;
   people: { id: string; displayName: string }[];
+  /** DOC-02: the firm's per-file upload limit in bytes (public.document_upload_limit). */
+  maxBytes?: number;
+  /** DES-04: parts that couldn't be read (a partial page); absent when everything loaded. */
+  unavailable?: "review notes"[];
 };
 
 const UPLOADS = new Set<UploadState>(["uploading", "scanning", "quarantined", "clean", "failed"]);
@@ -85,7 +89,7 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
   const supabase = await createClient({ organizationId: viewer.organizationId });
   const canReview = REVIEW_ROLES.has(viewer.role);
   const matterId = viewer.matters[0]?.id ?? null;
-  const [{ data: requests }, { data: documents }, { data: versions }, { data: refs }, { data: reviews }, { data: translations }, progress] =
+  const [{ data: requests, error: requestsError }, { data: documents, error: documentsError }, { data: versions, error: versionsError }, { data: refs }, { data: reviews, error: reviewsError }, { data: translations }, progress, limit] =
     await Promise.all([
       supabase
         .from("document_requests")
@@ -106,7 +110,10 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
       matterId
         ? supabase.rpc("document_request_progress", { p_matter_id: matterId })
         : Promise.resolve({ data: null }),
+      supabase.rpc("document_upload_limit", { p_organization_id: viewer.organizationId }),
     ]);
+  // DES-04: unreadable is not "no documents requested"; the page shows its couldn't-load state.
+  if (requestsError || documentsError || versionsError) throw new Error("portal documents unreadable");
 
   const names = new Map(viewer.people.map((person) => [person.id, person.displayName]));
   const docs = new Map((documents ?? []).map((row) => [row.id, row]));
@@ -240,5 +247,8 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
     progressLine: progressLine({ requestCount, acceptedCount, uploadedUnacceptedCount: uploadedUnaccepted }),
     canReview,
     people: viewer.people.map((person) => ({ id: person.id, displayName: person.displayName })),
+    ...(typeof limit.data === "number" && limit.data > 0 ? { maxBytes: limit.data } : {}),
+    // DES-04: the firm's reasons for "Changes needed" couldn't be read; the page says so.
+    ...(reviewsError ? { unavailable: ["review notes" as const] } : {}),
   };
 }

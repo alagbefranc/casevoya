@@ -90,6 +90,8 @@ export async function loadSheetSample(staff: SheetStaff, now: Date = new Date(),
       : null,
     // A live firm taking the optional tour: its invitations are open.
     firmLive: !staff.sampleMode,
+    // Until both portal policies are published an invited client can't accept (same check as Home).
+    policiesMissing: base.missingPolicies.length > 0,
   };
 
   const days = subscription.data?.status === "trial" ? trialDaysLeft(subscription.data.trial_ends_at, now) : null;

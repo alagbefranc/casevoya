@@ -2,7 +2,8 @@
  * Pure helpers for the Sheet's Documents page: which version is a document's current one,
  * what the To review queue shows for it, and the chips on the All documents cards.
  * Upload state and firm review stay separate (DOC-02, DOC-04): "Clean" is a file check,
- * "Accepted" is the firm's acceptance for its purpose, never a government validation.
+ * "Accepted" is the firm's acceptance for its purpose, never a government validation. Live, a file
+ * only type-checked (no malware scanner connected, `structural_only`) says so instead of "Clean".
  */
 import type { DocChip, DocTone, DocumentsTab } from "@/components/sheet/designer/documents";
 import { documentCardFlags, type ReviewState, type UploadState } from "@/modules/documents/present";
@@ -23,6 +24,8 @@ export type VersionFacts = {
   versionNumber: number;
   uploadState: string;
   scanResult: string | null;
+  /** documents.scan_engine: "structural_only" (type check only) or "worker" (a scanner). Absent: the Designer's sample. */
+  scanEngine?: string | null;
   reviewState: string;
   declaredMediaType: string;
   expiresOn: string | null;
@@ -91,6 +94,15 @@ export type QueueEntry = {
   reviewable: boolean;
 };
 
+/**
+ * A passed file check, honestly (DOC-02): "Clean" only when a malware scanner checked it. Without
+ * one the file's real type was checked, and nothing more.
+ */
+export function scanChip(engine: string | null | undefined): DocChip {
+  if (engine === undefined || engine === "worker") return { tone: "ok", label: "Clean" };
+  return { tone: "unv", label: "Type checked, not virus-scanned" };
+}
+
 /** What To review shows for a document's current version, or null when it needs nothing. */
 export function queueEntry(version: VersionFacts, today: string): QueueEntry | null {
   if (version.supersededAt) return null;
@@ -101,7 +113,7 @@ export function queueEntry(version: VersionFacts, today: string): QueueEntry | n
     return { scan: { tone: "bad", pair: ["Check failed", fileProblem(version.scanResult, version.declaredMediaType)] }, review: "Can’t open", flag: "quarantined", reviewable: false };
   }
   if (version.uploadState !== "clean") return null;
-  const clean: DocChip = { tone: "ok", label: "Clean" };
+  const clean = scanChip(version.scanEngine);
   if (version.reviewState === "pending") return { scan: clean, review: { tone: "rev", label: "Awaiting review" }, flag: "review", reviewable: true };
   if (version.reviewState === "accepted" && version.expiresOn) {
     if (version.expiresOn < today) return { scan: clean, review: { tone: "bad", label: "Expired" }, flag: "expiring", reviewable: true };
@@ -181,4 +193,165 @@ export function firstName(name: string): string {
 /** "Marriage certificate v2": the version number once there is more than one. */
 export function versionTitle(purpose: string, versionNumber: number): string {
   return versionNumber > 1 ? `${purpose} v${versionNumber}` : purpose;
+}
+
+/** DOC-06: the sensitivity choices a document can have, in plain words. */
+export const SENSITIVITIES = [
+  { value: "ordinary", label: "Ordinary" },
+  { value: "narrative", label: "Personal statement or narrative" },
+  { value: "medical", label: "Medical" },
+  { value: "criminal", label: "Police or court record" },
+] as const;
+
+/** DOC-06: the languages a translation can be marked as, by ISO 639-1 code. */
+export const TRANSLATION_LANGUAGES = [
+  { value: "en", label: "English" },
+  { value: "fr", label: "French" },
+] as const;
+
+export type DocumentDetails = {
+  organizationId: string;
+  documentId: string;
+  /** documents.version, for a classification change. */
+  documentVersion: number;
+  versionId: string;
+  /** document_versions.version, for the translation and expiry changes. */
+  versionRow: number;
+  title: string;
+  person: string;
+  purpose: string;
+  sensitivity: string;
+  expiresOn: string | null;
+  /** Matters using it now: each removable (public.unlink_document_matter). */
+  refs: { id: string; label: string }[];
+  /** The person's other matters it can be used on; empty when its file hasn't passed its check. */
+  candidates: { id: string; label: string }[];
+  /** A note when it can't be used on another matter yet. */
+  linkNote: string | null;
+  /** The person's other documents' current versions, as originals it can translate. */
+  originals: { versionId: string; label: string }[];
+  translationOf: string | null;
+  languageTag: string | null;
+  /** "Passport bio page (English)": the documents that translate this one. */
+  translations: string[];
+};
+
+const LANGUAGE_LABEL = new Map<string, string>(TRANSLATION_LANGUAGES.map((language) => [language.value, language.label]));
+
+export function languageLabel(tag: string | null): string {
+  if (!tag) return "";
+  return LANGUAGE_LABEL.get(tag.slice(0, 2)) ?? tag;
+}
+
+/** The All documents card's Details (DOC-06), for staff who review documents. */
+export function documentDetails(input: {
+  organizationId: string;
+  document: { id: string; purpose: string; sensitivity: string; version: number; personId: string };
+  person: string;
+  version: { id: string; rowVersion: number; expiresOn: string | null; uploadState: string; translationOf: string | null; languageTag: string | null };
+  refs: { id: string; matterId: string }[];
+  personMatters: string[];
+  others: { versionId: string; title: string; translationOf: string | null; languageTag: string | null }[];
+  matterName: (id: string) => string;
+}): DocumentDetails {
+  const linked = new Set(input.refs.map((ref) => ref.matterId));
+  const checked = input.version.uploadState === "clean";
+  const candidates = checked
+    ? [...new Set(input.personMatters)].filter((id) => !linked.has(id)).map((id) => ({ id, label: input.matterName(id) })).sort((a, b) => a.label.localeCompare(b.label))
+    : [];
+  return {
+    organizationId: input.organizationId,
+    documentId: input.document.id,
+    documentVersion: input.document.version,
+    versionId: input.version.id,
+    versionRow: input.version.rowVersion,
+    title: input.document.purpose,
+    person: input.person,
+    purpose: input.document.purpose,
+    sensitivity: input.document.sensitivity,
+    expiresOn: input.version.expiresOn,
+    refs: input.refs.map((ref) => ({ id: ref.id, label: input.matterName(ref.matterId) })),
+    candidates,
+    linkNote: checked ? (candidates.length ? null : `${input.person} isn’t on another matter you can open.`) : "Only a file that passed its check can be used on another matter.",
+    // A document that already translates this one can't also be its original.
+    originals: input.others.filter((other) => other.translationOf !== input.version.id).map((other) => ({ versionId: other.versionId, label: other.title })),
+    translationOf: input.version.translationOf,
+    languageTag: input.version.languageTag,
+    translations: input.others.filter((other) => other.translationOf === input.version.id).map((other) => `${other.title}${other.languageTag ? ` (${languageLabel(other.languageTag)})` : ""}`),
+  };
+}
+
+export type CustodyEvent = {
+  versionId: string;
+  kind: string | null;
+  receivedOn: string | null;
+  location: string | null;
+  purpose: string;
+  recipient: string | null;
+  returnOn: string | null;
+  acknowledgedAt: string | null;
+  createdAt: string;
+};
+
+export type CustodyStep = "moved" | "returned" | "acknowledged";
+
+export type CustodyLine = {
+  versionId: string;
+  original: string;
+  owner: string;
+  received: string;
+  location: string | [string, string];
+  purpose: string;
+  returnBy: string | [string, string];
+  acknowledged: DocChip | string;
+  next: CustodyStep[];
+  history: string[];
+};
+
+/**
+ * Originals we hold (DOC-07): one row per original, from its custody steps. The row shows its
+ * latest custody: received, where it is now, and its return and acknowledgement. `next` is the
+ * steps a reviewer may take now; `history` lists every step with its date. Newest activity first.
+ */
+export function custodyRows(events: readonly CustodyEvent[], describe: (versionId: string) => { original: string; owner: string } | null, dayOf: (iso: string) => string): CustodyLine[] {
+  const byVersion = new Map<string, CustodyEvent[]>();
+  for (const event of [...events].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+    const list = byVersion.get(event.versionId) ?? [];
+    list.push(event);
+    byVersion.set(event.versionId, list);
+  }
+  const rows: { latest: string; line: CustodyLine }[] = [];
+  for (const [versionId, list] of byVersion) {
+    const doc = describe(versionId);
+    if (!doc) continue;
+    // The latest time the firm received it; earlier holdings stay in the history.
+    let start = 0;
+    list.forEach((event, index) => {
+      if (event.kind === "received" || event.kind === null) start = index;
+    });
+    const held = list.slice(start);
+    const received = held[0];
+    const moved = held.filter((event) => event.kind === "moved").at(-1);
+    const returned = held.find((event) => event.kind === "returned");
+    const acknowledged = held.find((event) => event.kind === "acknowledged");
+    const legacy = received.kind === null;
+    const location: string | [string, string] = returned ? ["Returned", returned.recipient ?? "—"] : (moved?.location ?? received.location ?? "—");
+    const returnBy: string | [string, string] = returned?.returnOn ? ["Returned", dayOf(returned.returnOn)] : legacy && received.returnOn ? dayOf(received.returnOn) : "—";
+    const ack = acknowledged ?? (legacy && received.acknowledgedAt ? received : null);
+    const acknowledgedCell: DocChip | string = ack?.acknowledgedAt
+      ? `${ack.recipient ? `Signed by ${ack.recipient}` : "Acknowledged"}, ${dayOf(ack.acknowledgedAt.slice(0, 10))}`
+      : { tone: "chg", label: "Waiting" };
+    const next: CustodyStep[] = legacy ? [] : returned ? (acknowledged ? [] : ["acknowledged"]) : ["moved", "returned"];
+    const history = list.map((event) => {
+      if (event.kind === "moved") return `Moved to ${event.location ?? "—"}, ${dayOf(event.createdAt.slice(0, 10))}`;
+      if (event.kind === "returned") return `Returned to ${event.recipient ?? "—"}${event.returnOn ? `, ${dayOf(event.returnOn)}` : ""}`;
+      if (event.kind === "acknowledged") return `Return acknowledged${event.recipient ? ` by ${event.recipient}` : ""}, ${dayOf(event.createdAt.slice(0, 10))}`;
+      return `Received${event.receivedOn ? ` ${dayOf(event.receivedOn)}` : ""}${event.location ? `, kept in ${event.location}` : ""}`;
+    });
+    rows.push({
+      latest: list.at(-1)?.createdAt ?? "",
+      line: { versionId, original: doc.original, owner: doc.owner, received: received.receivedOn ? dayOf(received.receivedOn) : "—", location, purpose: received.purpose, returnBy, acknowledged: acknowledgedCell, next, history },
+    });
+  }
+  return rows.sort((a, b) => b.latest.localeCompare(a.latest)).map((entry) => entry.line);
 }

@@ -6,7 +6,10 @@ import {
   FIRM_LOGO_BUCKET,
   FIRM_LOGO_MAX_BYTES,
   FIRM_LOGO_PREVIEW_SECONDS,
+  FIRM_LOGO_TOO_SMALL,
+  firmLogoBigEnough,
   firmLogoKey,
+  firmLogoSize,
   firmLogoLocator,
   firmLogoType,
 } from "@/modules/firm-onboarding/firm-logo";
@@ -52,6 +55,8 @@ export async function POST(request: Request) {
   if (bytes.byteLength > FIRM_LOGO_MAX_BYTES) return refuse("Use a logo under 2 MB.", 413);
   const type = firmLogoType(bytes);
   if (!type) return refuse("Use a PNG or JPG file.", 415);
+  // The Branding hint promises at least 256 px; a file whose size can't be read is refused too.
+  if (!firmLogoBigEnough(firmLogoSize(bytes, type))) return refuse(FIRM_LOGO_TOO_SMALL, 422);
 
   const key = firmLogoKey(membership.organization_id, randomUUID(), type);
   let service: ReturnType<typeof createServiceClient>;

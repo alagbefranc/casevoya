@@ -4,6 +4,7 @@
  * shown, values below the confirm threshold say so, and every row is something a person ticks,
  * corrects and accepts, or leaves to reject (PRD AI-01..AI-03).
  */
+import { PREVIEWABLE } from "@/modules/documents/previewable";
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import type { MatterDocumentReviewData, VoDocPaperPart, VoDocReviewRow } from "@/components/sheet/designer/vo-doc-review";
 import { VO_DOC_CATEGORY_LABEL, type VoDocCategory } from "@/modules/vo/vo-doc";
@@ -33,6 +34,8 @@ export type VoReadingView = {
   sha256: string | null;
   needsRule: boolean;
   proposals: VoProposalRow[];
+  /** DOC-05, live: the version read, so a proposal's page opens the secure preview at that page. */
+  versionId?: string;
 };
 
 /** Values Vo is less sure of than this stay unconfirmed until a person checks the page. */
@@ -137,7 +140,14 @@ export function readingPanel(reading: VoReadingView): MatterDocumentReviewData |
     pill,
     paper: { title: [reading.purpose, `version ${reading.versionNumber}`], text, note: ["Vo’s reading, not the original", "open the file to check it against the page"] },
     heading: ["Vo’s proposals", "confirm before they become facts"],
-    rows: waiting.map(proposalRow),
+    rows: waiting.map((proposal) => {
+      const row = proposalRow(proposal);
+      // DOC-05: a page opens the secure preview at that page (PDFs keep their pages; an image is page 1).
+      if (reading.versionId && proposal.page && PREVIEWABLE.has(reading.mediaType)) {
+        row.pageHref = `/api/documents/preview/${reading.versionId}?org=${reading.organizationId}#page=${proposal.page}`;
+      }
+      return row;
+    }),
     note: `Tick what is right, correct a value by typing over it, then accept. ${
       low ? `Values under ${CONFIRM_THRESHOLD}% stay unconfirmed until you check them against the page. ` : ""
     }Rejecting leaves the document and the matter as they are.`,

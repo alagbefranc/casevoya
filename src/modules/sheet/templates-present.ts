@@ -10,6 +10,8 @@ import { longDate } from "@/modules/sheet/matter-present";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
 import { chooseEmailLanguage } from "@/modules/email/designs/french";
 import { designFor } from "@/modules/email/templates";
+import type { AddClaimData, ClaimReviewData } from "@/components/sheet/designer/source-claims";
+import { awaitingReview, captureLine, claimDates, claimExpired, claimStatus, resolutionLabel, UNKNOWN, type ClaimFacts } from "@/modules/sheet/source-claims-present";
 
 export type PackRow = { id: string; programKey: string; jurisdiction: string; packVersion: number; status: string; firm: boolean; nextReviewAt: string | null };
 export type AgreementTemplateRow = { id: string; name: string; kind: string; status: string; approvedAt: string | null; approvedBy: string | null; version: number };
@@ -37,7 +39,12 @@ export type RuleRow = {
   lastChecked: string | null;
   affected: number;
   source: { publisher: string; url: string; title: string | null; retrievedAt: string; section: string | null } | null;
+  /** Live (SRC-01/02/03): the claim's evidence, dates, applicability and review state. */
+  facts?: ClaimFacts & { version: number; value: string | null };
 };
+
+/** Who is looking (live): what the review panel offers them. */
+export type ClaimViewer = { organizationId: string; role: string; today: string; timeZone: string; now: Date };
 
 const DASH = "—";
 
@@ -148,20 +155,44 @@ export function messageRows(catalog: readonly CatalogRow[], use: ReadonlyMap<str
   });
 }
 
+export type FirmMessageTemplateRow = { id: string; useFor: string; name: string; status: string; approvedAt: string | null; approvedBy: string | null };
+
+/**
+ * OPS-04: the firm's own message and announcement templates, as Message templates rows above the
+ * email catalog. Each opens its edit dialog (?view=). Written in English only.
+ */
+export function firmMessageRows(rows: readonly FirmMessageTemplateRow[], timeZone = "America/Toronto"): MessageRow[] {
+  return rows.map((row) => ({
+    template: row.name,
+    channel: row.useFor === "announcement" ? { left: "Announcement", right: "portal and email notice" } : "Portal message",
+    usedBy: row.useFor === "announcement" ? "Firm owner or licensed consultant" : "Staff composer",
+    languages: "English",
+    state:
+      row.status === "approved"
+        ? {
+            tone: "ok",
+            label: "Approved",
+            ...(row.approvedAt ? { detail: `${row.approvedBy ? `${row.approvedBy}, ` : ""}${dayMonth(isoDateInTimeZone(new Date(row.approvedAt), timeZone))}` } : {}),
+          }
+        : { tone: "rev", label: "Draft, needs approval" },
+    href: `/sheet/templates?tab=messages&view=${row.id}`,
+  }));
+}
+
 const NEEDS_REVIEW = new Set(["review_due", "evidence_captured", "professional_review", "draft"]);
 
 function day(iso: string | null): string {
   return iso ? longDate(iso.slice(0, 10)) : DASH;
 }
 
-export function sourceRows(rules: readonly RuleRow[], today: string): SourceRow[] {
+export function sourceRows(rules: readonly RuleRow[], today: string, now: Date = new Date(`${today}T12:00:00Z`)): SourceRow[] {
   return rules.map((rule) => {
     const next = rule.nextReviewAt ? rule.nextReviewAt.slice(0, 10) : null;
     return {
       rule: `${rule.stableKey} (v${rule.versionNumber})`,
       href: `?tab=rule&view=${rule.id}`,
       jurisdiction: rule.programKey ? { left: rule.jurisdiction, right: rule.programKey } : rule.jurisdiction,
-      state: statusBadge(rule.status),
+      state: rule.facts ? claimStatus(rule.facts, now) : statusBadge(rule.status),
       effective: day(rule.effectiveFrom),
       reviewer: rule.reviewer ?? DASH,
       lastChecked: day(rule.lastChecked),
@@ -189,28 +220,76 @@ export function sourceKpis(rules: readonly RuleRow[], packs: number, today: stri
   ];
 }
 
-export function ruleDetail(rule: RuleRow | null): RuleDetail | null {
+export function ruleDetail(rule: RuleRow | null, viewer: ClaimViewer | null = null): RuleDetail | null {
   if (!rule) return null;
-  return {
+  const facts = rule.facts;
+  const effective = rule.effectiveFrom ? longDate(rule.effectiveFrom.slice(0, 10)) : facts ? UNKNOWN : "date not recorded";
+  const base: RuleDetail = {
     title: { left: rule.stableKey, right: `v${rule.versionNumber}` },
-    summary: `${statusBadge(rule.status).label}. ${rule.programKey ? `${rule.jurisdiction}, ${rule.programKey}` : rule.jurisdiction}. Effective ${rule.effectiveFrom ? longDate(rule.effectiveFrom.slice(0, 10)) : "date not recorded"}.`,
+    summary: `${facts && viewer ? claimStatus(facts, viewer.now).label : statusBadge(rule.status).label}. ${rule.programKey ? `${rule.jurisdiction}, ${rule.programKey}` : rule.jurisdiction}. Effective ${effective}.`,
     claim: rule.claim ?? "No claim recorded yet.",
     note: rule.applicabilityNote ? `Applicability note: ${rule.applicabilityNote}` : null,
     diff: null,
     tests: null,
-    source: rule.source
-      ? {
-          publisher: rule.source.publisher,
-          url: rule.source.url,
-          linkText: rule.source.title ?? rule.source.url,
-          appliesTo: rule.source.section ?? DASH,
-          version: `Page as captured ${longDate(rule.source.retrievedAt.slice(0, 10))}`,
-          checked: longDate((rule.lastChecked ?? rule.source.retrievedAt).slice(0, 10)),
-          reviewer: rule.reviewer ?? "Not reviewed yet",
-          state: rule.status === "published" ? { tone: "ok", label: "Checked" } : { tone: "unv", label: "Not yet checked" },
-        }
-      : null,
+    source:
+      rule.source && !facts
+        ? {
+            publisher: rule.source.publisher,
+            url: rule.source.url,
+            linkText: rule.source.title ?? rule.source.url,
+            appliesTo: rule.source.section ?? DASH,
+            version: `Page as captured ${longDate(rule.source.retrievedAt.slice(0, 10))}`,
+            checked: longDate((rule.lastChecked ?? rule.source.retrievedAt).slice(0, 10)),
+            reviewer: rule.reviewer ?? "Not reviewed yet",
+            state: rule.status === "published" ? { tone: "ok", label: "Checked" } : { tone: "unv", label: "Not yet checked" },
+          }
+        : null,
     actions: null,
+  };
+  if (!facts || !viewer) return base;
+  const timeZone = viewer.timeZone;
+  base.evidence = facts.evidence.map((item) => ({
+    publisher: item.snapshot?.publisher ?? (item.sourceUrl && /justice\.gc\.ca/.test(item.sourceUrl) ? "Justice Laws" : "Government of Canada"),
+    url: item.sourceUrl ?? item.snapshot?.finalUrl ?? "",
+    section: item.section ?? DASH,
+    excerpt: item.excerpt,
+    form: item.formNumber ? `${item.formNumber}, date modified ${item.formModifiedOn ? longDate(item.formModifiedOn) : UNKNOWN}` : null,
+    capture: captureLine(item),
+    captured: Boolean(item.snapshot),
+    dates: claimDates(item, facts, timeZone),
+  }));
+  base.review = claimReview(rule, facts, viewer);
+  return base;
+}
+
+const LICENSED = new Set(["firm_owner", "licensed_consultant"]);
+
+/** SRC-03: the review panel: status, reason, applicability, and the steps this viewer can take. */
+export function claimReview(rule: RuleRow, claim: NonNullable<RuleRow["facts"]>, viewer: ClaimViewer): ClaimReviewData {
+  const licensed = LICENSED.has(viewer.role);
+  const waiting = rule.status === "draft" || rule.status === "evidence_captured" || rule.status === "professional_review";
+  const resolved = claim.resolution === "applies" || claim.resolution === "partly";
+  const label = resolutionLabel(claim.resolution);
+  const next = new Date(`${viewer.today}T12:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 90);
+  return {
+    organizationId: viewer.organizationId,
+    id: rule.id,
+    version: claim.version,
+    status: claimStatus(claim, viewer.now),
+    reason: claim.statusReason,
+    value: claim.value,
+    applicability: label ? `${label}${claim.applicabilityNote ? `. ${claim.applicabilityNote}` : ""}` : "Not resolved yet. A licensed reviewer resolves it before approval.",
+    licensed,
+    canResolve: licensed && waiting,
+    canApprove: licensed && waiting && resolved && !claimExpired({ status: "published", effectiveTo: claim.effectiveTo }, viewer.now) && claim.evidence.length > 0,
+    canReject: licensed && waiting,
+    canSuspend: licensed && (rule.status === "published" || rule.status === "review_due"),
+    // Decision 7 (2026-10-25): a suspended claim stays suspended until a licensed member unsuspends it.
+    canUnsuspend: licensed && rule.status === "suspended",
+    needsAttestation: claim.evidence.some((item) => !item.snapshot),
+    today: viewer.today,
+    nextReviewDefault: next.toISOString().slice(0, 10),
   };
 }
 
@@ -222,18 +301,28 @@ export function templatesData(input: {
   packs: number;
   selected: RuleRow | null;
   today: string;
+  /** Live (SRC-01/03): who is looking, and the Add claim dialog. */
+  viewer?: ClaimViewer;
+  addClaim?: AddClaimData;
 }): TemplatesData {
   const review = input.rules.filter((rule) => NEEDS_REVIEW.has(rule.status)).length;
+  // The workbench queue: versions waiting for a reviewer first, then the rest, each newest first.
+  const rules = input.viewer ? [...input.rules].sort((a, b) => Number(awaitingReview(b.status)) - Number(awaitingReview(a.status))) : input.rules;
   return {
     tab: input.tab,
     pills: [review === 1 ? "1 source needs review" : `${review} sources need review`],
     reviewCount: review,
     newTemplateHref: "/sheet/agreements?dlg=template",
-    newTemplateLabel: "New agreement template",
+    newTemplateLabel: input.tab === "messages" ? "New message template" : "New agreement template",
+    ...(input.tab === "messages" ? { newTemplateDialog: "dlgMt" } : {}),
     program: { rows: input.program, note: "Firm templates are labelled so you can tell them apart from centrally reviewed content." },
     messages: { rows: input.messages },
     checklists: { cards: [] },
-    sources: { kpis: sourceKpis(input.rules, input.packs, input.today), rows: sourceRows(input.rules, input.today) },
-    rule: ruleDetail(input.selected),
+    sources: {
+      kpis: sourceKpis(input.rules, input.packs, input.today),
+      rows: sourceRows(rules, input.today, input.viewer?.now),
+      ...(input.addClaim ? { addClaim: input.addClaim } : {}),
+    },
+    rule: ruleDetail(input.selected, input.viewer ?? null),
   };
 }

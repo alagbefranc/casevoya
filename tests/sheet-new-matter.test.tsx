@@ -108,7 +108,7 @@ describe("newMatterError", () => {
 describe("step-up round trip", () => {
   it("comes back to the same page with the dialog open, and closing drops the flag", () => {
     const location = newMatterStepUpLocation("/sheet/matters", "?view=due");
-    expect(location).toBe(`/mfa?step=6&next=${encodeURIComponent("/sheet/matters?view=due&new=1")}`);
+    expect(location).toBe(`/mfa?step=6&next=${encodeURIComponent("/sheet/matters?view=due&new=1")}&for=new_matter`);
     expect(withoutNew("/sheet/matters", "?view=due&new=1")).toBe("/sheet/matters?view=due");
     expect(withoutNew("/sheet/matters", "?new=1")).toBe("/sheet/matters");
   });

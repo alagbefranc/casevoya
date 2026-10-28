@@ -14,6 +14,14 @@ export type PortalMatter = {
   title: string;
   stage: string;
   onHold: boolean;
+  /** The firm's matter reference ("NL-2026-0142"), when it has one. */
+  reference: string | null;
+  /** When the firm opened it (ISO). */
+  openedAt?: string;
+  /** Until when its records are kept (a date), once the firm set it. */
+  retentionOn?: string | null;
+  /** The people on it, with their role ("sponsor"); `self` is the signed-in person. */
+  people?: { name: string; role: string; self: boolean }[];
 };
 
 export type PortalPerson = {
@@ -53,6 +61,8 @@ export type PortalPrefs = {
 export type PortalViewer = {
   organizationId: string;
   organizationName: string;
+  /** The firm's public slug (its logo and booking page). */
+  organizationSlug: string;
   timezone: string;
   role: string;
   person: PortalPerson | null;
@@ -90,7 +100,7 @@ export async function loadPortalAccess(): Promise<PortalAccess> {
   const scoped = await createClient({ organizationId: membership.organization_id });
   const { data: org } = await scoped
     .from("organizations")
-    .select("id, display_name, sample_mode, timezone")
+    .select("id, display_name, slug, sample_mode, timezone")
     .eq("id", membership.organization_id)
     .maybeSingle();
   if (!org) return { kind: "empty" };
@@ -100,7 +110,7 @@ export async function loadPortalAccess(): Promise<PortalAccess> {
 
   const [{ data: matters }, { data: persons }, { data: participants }, { data: grants }, { data: shares }, { data: sections }] =
     await Promise.all([
-      scoped.from("matters").select("id, title, stage, on_hold").order("updated_at", { ascending: false }).limit(40),
+      scoped.from("matters").select("id, title, reference, stage, on_hold, created_at, retention_on").order("updated_at", { ascending: false }).limit(40),
       scoped.from("persons").select("id, display_name, email, contact_phone, is_minor, user_id").limit(80),
       scoped.from("matter_participants").select("person_id, role, matter_id").limit(200),
       scoped.from("access_grants").select("id, kind, purpose, subject_person_id, grantee_person_id, revoked_at").is("revoked_at", null).limit(40),
@@ -147,6 +157,7 @@ export async function loadPortalAccess(): Promise<PortalAccess> {
   return { kind: "live", viewer: {
     organizationId: org.id,
     organizationName: org.display_name,
+    organizationSlug: org.slug,
     timezone: org.timezone,
     role: membership.role,
     person,
@@ -155,6 +166,12 @@ export async function loadPortalAccess(): Promise<PortalAccess> {
       title: matter.title,
       stage: matter.stage.replaceAll("_", " "),
       onHold: matter.on_hold,
+      reference: matter.reference,
+      openedAt: matter.created_at,
+      retentionOn: matter.retention_on,
+      people: (participants ?? [])
+        .filter((row) => row.matter_id === matter.id && row.person_id)
+        .map((row) => ({ name: names.get(row.person_id as string) ?? "Person", role: row.role, self: row.person_id === person?.id })),
     })),
     people,
     grants: (grants ?? []).map((grant) => ({

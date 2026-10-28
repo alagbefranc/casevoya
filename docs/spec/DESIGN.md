@@ -117,7 +117,7 @@ Adult family members receive their own scoped views. A family selector must not 
 
 ### Platform administration
 
-Use the same visual system with a clearly labelled Platform administration header. Default cards contain firm count, subscription exceptions, queue health, verification workload, and incident status. Support grants show scope and expiry. Access to client content is an exceptional, explicit action and is never the default landing view.
+It is a separate portal with its own codebase, deployment and sign-in (Francis, 2026-10-19; see `docs/DECISIONS.md` and `docs/integrations/support-access.md`), not part of the firm or client app. Use the same visual system with a clearly labelled Platform administration header. Default cards contain firm count, subscription exceptions, queue health, verification workload, and incident status. Support grants show scope and expiry. Access to client content is an exceptional, explicit action and is never the default landing view.
 
 ## 6 Core component contracts
 
@@ -182,6 +182,8 @@ Clients select a request, confirm whose document it is, upload or capture, previ
 ### Source review and program template editor
 
 Provide a source register with rule status, jurisdiction, program, effective date, reviewer, last checked, next review, and affected matters. The detail view presents the draft claim, exact source section, interpretation notes, tests, and version comparison. Actions are Capture evidence, Request review, Approve version, Publish, or Suspend according to role. No generic Verified switch.
+
+**Live official claims (decision 2026-10-25).** Source review lists the live official claims below the firm's register: a search, each claim's key and wording, its program, last checked date, a Live badge (or amber "Overdue for a re-check, last checked <date>"), and Edit and History. A captured official claim carries no Draft, Not reviewed or Approve and publish label. A claim's detail shows its wording (the firm's when edited, with the stamp "Edited by <name>, licence <number>, <date>" under it and nothing else), its evidence block (page, section, excerpt, every date on its own line, capture hash) and its History table (the capture, each re-capture with its evidence, each edit and revert with the stamp and reason). When a re-capture changed the claim after the firm's edit, a "Source changed since your edit" panel shows the new official text beside the firm's wording, with Keep my edit and Revert to official. The Edit dialog shows the official text, the firm's wording, an optional value and a reason, and says saving needs a fresh step-up every time; after the step-up the dialog reopens with what was typed. A suspended firm claim shows Unsuspend (licensed, step-up, reason). Built only from the Designer's existing parts (`.panel`, `.t` tables, `.dlg`, `.fld`, badges, `details.src`).
 
 Client-facing guidance offers a compact Official source link and Checked date. Professional review history is available to staff. If evidence is missing, show Review required and the responsible owner; do not display a fabricated recommendation as an empty-state placeholder.
 

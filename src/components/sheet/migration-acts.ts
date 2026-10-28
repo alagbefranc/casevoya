@@ -1,6 +1,10 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
+import { acceptChosen, failUpload } from "./upload-failure";
+import { stepUpHref } from "@/lib/auth/mfa-step";
+import { documentsIrreversibleConfirm } from "@/modules/migration/irreversible";
 
 type Router = { refresh(): void; push(href: string): void };
 type Reply = { ok: boolean; data: Record<string, unknown> };
@@ -34,7 +38,7 @@ function n(value: unknown): number {
 function stepUp(batch: string) {
   const next = `${window.location.pathname}?tab=signoff&id=${encodeURIComponent(batch)}`;
   toast2("Confirm it’s you", { kind: "warn", sub: "Then choose the button again." });
-  window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`), 900);
+  window.setTimeout(() => goStepUp(stepUpHref(next, "import_signoff")), 900);
 }
 
 function withTab(tab: string, batch: string): string {
@@ -45,8 +49,11 @@ function withTab(tab: string, batch: string): string {
   return `${window.location.pathname}?${params.toString()}`;
 }
 
-/** The mapping on Map columns: each column's field, the date order, the default consultant, and each value's choice. */
-function readMapping(root: HTMLElement): { mapping: Record<string, unknown> } | { error: string } {
+/**
+ * The mapping on Map columns: each column's field, the date order, the default consultant, and each
+ * value's choice. MIG-01: the sensitive columns, and for tasks and key dates their defaults.
+ */
+function readMapping(root: HTMLElement, kind: string): { mapping: Record<string, unknown> } | { error: string } {
   const columns: Record<string, number | null> = {};
   for (const select of root.querySelectorAll<HTMLSelectElement>("select[data-mig-col]")) {
     const field = select.value;
@@ -54,7 +61,16 @@ function readMapping(root: HTMLElement): { mapping: Record<string, unknown> } | 
     if (field in columns) return { error: "Each Casevoya field can come from one column only." };
     columns[field] = Number(select.dataset.migCol);
   }
-  if (!("name" in columns)) return { error: "Map a column to the person’s legal name." };
+  if (kind === "clients_matters" && !("name" in columns)) return { error: "Map a column to the person’s legal name." };
+  const sensitivity: Record<string, string> = {};
+  for (const select of root.querySelectorAll<HTMLSelectElement>("select[data-mig-sens]")) {
+    if (select.value) sensitivity[select.dataset.migSens ?? ""] = select.value;
+  }
+  const extra: Record<string, unknown> = { sensitivity };
+  const owner = root.querySelector<HTMLSelectElement>("select[data-mig-owner]");
+  if (owner) extra.default_owner = owner.value || null;
+  const dateKind = root.querySelector<HTMLSelectElement>("select[data-mig-datekind]");
+  if (dateKind) extra.default_date_kind = dateKind.value || null;
   const values: Record<string, Record<string, string>> = {};
   for (const select of root.querySelectorAll<HTMLSelectElement>("select[data-mig-val]")) {
     const field = select.dataset.migVal ?? "";
@@ -64,40 +80,80 @@ function readMapping(root: HTMLElement): { mapping: Record<string, unknown> } | 
   }
   const consultant = root.querySelector<HTMLSelectElement>("select[data-mig-default]")?.value || null;
   const order = root.querySelector<HTMLSelectElement>("select[data-mig-date]")?.value || "dmy";
-  return { mapping: { columns, date_order: order, default_consultant: consultant, values } };
+  return { mapping: { columns, date_order: order, default_consultant: consultant, values, ...extra } };
+}
+
+/** Opens a file picker on a hidden input (or a new one) and resolves with the chosen file. */
+function pick(input: HTMLInputElement | null, accept: string): Promise<File | null> {
+  const target = input ?? Object.assign(document.createElement("input"), { type: "file", accept, hidden: true });
+  return new Promise<File | null>((resolve) => {
+    target.value = "";
+    target.onchange = () => resolve(target.files?.[0] ?? null);
+    target.click();
+  });
 }
 
 async function upload(button: HTMLElement, root: HTMLElement, router: Router) {
   const input = root.querySelector<HTMLInputElement>("input[data-mig-file]");
   if (!input) return;
-  const file = await new Promise<File | null>((resolve) => {
-    input.value = "";
-    input.onchange = () => resolve(input.files?.[0] ?? null);
-    input.click();
-  });
+  const kind = root.querySelector<HTMLSelectElement>("select[data-mig-kind]")?.value || "clients_matters";
+  const file = await pick(input, ".csv,text/csv");
   if (!file) return;
-  if (file.size > 5 * 1024 * 1024) {
-    toast2("The file is too large", { kind: "warn", sub: "Import up to 5 MB at a time. Split it and import each part." });
-    return;
+  // DES-04: a file the import can't take (wrong type, empty, over 5 MB) is refused here with a retry.
+  const again = () => void upload(button, root, router);
+  if (!acceptChosen(button, file, "migrationCsv", again)) return;
+  // MIG-01: a documents import is a CSV manifest plus a ZIP of the files.
+  let zip: File | null = null;
+  if (kind === "documents") {
+    toast2("Now choose the ZIP", { sub: "The ZIP of the files your manifest names, up to 25 MB." });
+    zip = await pick(root.querySelector<HTMLInputElement>("input[data-mig-zip]"), ".zip,application/zip");
+    if (!zip) return;
+    if (!acceptChosen(button, zip, "migrationZip", again)) return;
   }
   const form = new FormData();
   form.set("organizationId", button.dataset.org ?? "");
   form.set("file", file);
+  form.set("kind", kind);
+  if (zip) form.set("zip", zip);
   toast2("Checking the file", { sub: "Counting rows and checking the checksum." });
   const result = await send("/api/migration/upload", form, false);
   if (!result.ok) {
-    toast2("File not uploaded", { kind: "warn", sub: errorOf(result.data) });
+    failUpload(button, errorOf(result.data), "migrationCsv", again);
     return;
   }
   toast2("File checked", { kind: "ok", sub: "Every row arrived intact. Map the columns next." });
   router.push(withTab("map", typeof result.data.id === "string" ? result.data.id : ""));
 }
 
-async function commit(button: HTMLElement, router: Router) {
+type Files = { zip: File; pilot?: { size: number; system: string } };
+
+async function commit(button: HTMLElement, router: Router, first?: Reply, files?: Files) {
   const org = button.dataset.org ?? "";
   const batch = button.dataset.batch ?? "";
+  const kind = button.dataset.kind || "clients_matters";
+  // MIG-01: a documents import sends the same ZIP again, at the pilot and at the full run; its
+  // checksum must match the upload's. MIG-02's pilot and sign-off apply to it as to every kind.
+  let zip = files?.zip ?? null;
+  if (kind === "documents" && !zip && !first) {
+    toast2("Choose the same ZIP", { sub: "The files are stored from it; it must be the ZIP you uploaded." });
+    zip = await pick(null, ".zip,application/zip");
+    if (!zip) return;
+  }
+  let result = first;
   for (;;) {
-    const result = await post("commit", { org, batch });
+    if (!result && zip) {
+      const form = new FormData();
+      form.set("org", org);
+      form.set("batch", batch);
+      form.set("zip", zip);
+      if (files?.pilot) {
+        form.set("step", "pilot");
+        form.set("size", String(files.pilot.size));
+        if (files.pilot.system) form.set("system", files.pilot.system);
+      }
+      result = await send("/api/migration/commit-documents", form, false);
+    }
+    result ??= await post("commit", { org, batch });
     if (!result.ok) {
       if (result.data.stepUp) return stepUp(batch);
       toast2("Import stopped", { kind: "warn", sub: errorOf(result.data) });
@@ -106,9 +162,67 @@ async function commit(button: HTMLElement, router: Router) {
     }
     const remaining = n(result.data.remaining);
     if (remaining <= 0) break;
-    toast2("Importing", { sub: `${remaining.toLocaleString("en-CA")} matters to go.` });
+    toast2("Importing", { sub: kind !== "clients_matters" ? "Still importing. Keep this page open." : `${remaining.toLocaleString("en-CA")} matters to go.` });
+    result = undefined;
   }
-  toast2("Import finished", { kind: "ok", sub: "A copy of the report is in the audit trail." });
+  // MIG-02: a pilot stops at its last matter and waits for the firm owner's sign-off.
+  if (result.data.status === "pilot_done") toast2("Pilot finished", { kind: "ok", sub: "Check its records below, then sign off. The full import waits for it." });
+  else toast2("Import finished", { kind: "ok", sub: "The run report is on Sign off. A copy is in the audit trail." });
+  router.refresh();
+}
+
+/** MIG-02: run the pilot with the size and source system on Sign off. */
+async function pilot(button: HTMLElement, root: HTMLElement, router: Router) {
+  const org = button.dataset.org ?? "";
+  const batch = button.dataset.batch ?? "";
+  const kind = button.dataset.kind || "clients_matters";
+  const matters = kind === "clients_matters";
+  const sizeInput = root.querySelector<HTMLInputElement>("input[data-mig-pilot]");
+  const size = Number(sizeInput?.value ?? "");
+  const max = Number(sizeInput?.max || 50);
+  if (!Number.isInteger(size) || size < 1 || size > max) {
+    toast2("Check the pilot size", { kind: "warn", sub: `A pilot is 1 to ${max} ${matters ? "matters" : "records"}.` });
+    return;
+  }
+  const system = root.querySelector<HTMLInputElement>("input[data-mig-system]")?.value.trim() ?? "";
+  const what = matters ? (size === 1 ? "matter" : "matters") : size === 1 ? "record" : "records";
+  const creates = matters ? "real matters and people" : "real records";
+  // MIG decision 7: a documents pilot can't be rolled back; the dialog says so before the owner confirms.
+  const after =
+    kind === "documents"
+      ? `You check them and sign off before the rest can be imported.\n\n${documentsIrreversibleConfirm("pilot")}`
+      : "You check them and sign off before the rest can be imported, or roll the pilot back.";
+  if (!window.confirm(`Run a pilot of the first ${size} ${what}?\n\nThe pilot creates ${creates}. ${after}`)) return;
+  // MIG-01: a documents pilot stores its files from the same ZIP as the upload.
+  if (kind === "documents") {
+    toast2("Choose the same ZIP", { sub: "The pilot’s files are stored from it; it must be the ZIP you uploaded." });
+    const zip = await pick(null, ".zip,application/zip");
+    if (!zip) return;
+    return commit(button, router, undefined, { zip, pilot: { size, system } });
+  }
+  const result = await post("pilot", { org, batch, size, ...(system ? { system } : {}) });
+  return commit(button, router, result);
+}
+
+/** MIG-02: the firm owner signs the pilot off, with a note. */
+async function signoff(button: HTMLElement, root: HTMLElement, router: Router) {
+  const org = button.dataset.org ?? "";
+  const batch = button.dataset.batch ?? "";
+  const note = root.querySelector<HTMLTextAreaElement>("textarea[data-mig-note]")?.value.trim() ?? "";
+  if (note.length < 3 || note.length > 1000) {
+    toast2("Add a note", { kind: "warn", sub: "Say what you checked in the pilot’s records (3 to 1,000 characters)." });
+    return;
+  }
+  const rest = !button.dataset.kind || button.dataset.kind === "clients_matters" ? "matters" : "records";
+  const undo = button.dataset.kind === "documents" ? `\n\n${documentsIrreversibleConfirm("signoff")}` : "";
+  if (!window.confirm(`Sign off the pilot? The full import can then create the rest of the ${rest}.${undo}`)) return;
+  const result = await post("signoff", { org, batch, note });
+  if (!result.ok) {
+    if (result.data.stepUp) return stepUp(batch);
+    toast2("Not signed off", { kind: "warn", sub: errorOf(result.data) });
+    return;
+  }
+  toast2("Pilot signed off", { kind: "ok", sub: "Run the full import next." });
   router.refresh();
 }
 
@@ -149,9 +263,37 @@ export async function runMigrationAct(button: HTMLElement, root: HTMLElement, ro
   const batch = button.dataset.batch ?? "";
 
   if (act === "upload") return upload(button, root, router);
+  if (act === "pilot") return pilot(button, root, router);
+  if (act === "signoff") return signoff(button, root, router);
+
+  if (act === "review-balance") {
+    // MIG-01: an imported opening balance, reviewed with a step-up. Nothing is posted either way.
+    const approve = button.dataset.approve === "1";
+    let note: string | null = null;
+    if (approve) {
+      if (!window.confirm("Approve this opening balance? Approval records your review only: nothing is posted to an invoice or a client account.")) return;
+    } else {
+      note = window.prompt("Why is this balance rejected? (3 to 500 characters)")?.trim() ?? null;
+      if (!note) return;
+    }
+    const result = await post("review", { org, id: button.dataset.id ?? "", approve, note });
+    if (!result.ok) {
+      if (result.data.stepUp) {
+        toast2("Confirm it’s you", { kind: "warn", sub: "Then choose the button again." });
+        const next = `${window.location.pathname}${window.location.search}`;
+        window.setTimeout(() => goStepUp(stepUpHref(next, "import_signoff")), 900);
+        return;
+      }
+      toast2("Not saved", { kind: "warn", sub: errorOf(result.data) });
+      return;
+    }
+    toast2(approve ? "Opening balance approved" : "Opening balance rejected", { kind: "ok", sub: "Nothing was posted to invoices or client accounts." });
+    router.refresh();
+    return;
+  }
 
   if (act === "map") {
-    const read = readMapping(root);
+    const read = readMapping(root, button.dataset.kind ?? "clients_matters");
     if ("error" in read) {
       toast2("Check the mapping", { kind: "warn", sub: read.error });
       return;
@@ -175,7 +317,11 @@ export async function runMigrationAct(button: HTMLElement, root: HTMLElement, ro
       toast2("Not saved", { kind: "warn", sub: errorOf(result.data) });
       return;
     }
-    toast2(same ? "Marked as the same person" : "Marked as different people", { kind: "ok", sub: "Nothing is merged. The preview is updated." });
+    const people = !button.dataset.kind || button.dataset.kind === "clients_matters";
+    toast2(same ? (people ? "Marked as the same person" : "Marked as the same record") : people ? "Marked as different people" : "Marked as different", {
+      kind: "ok",
+      sub: "Nothing is merged. The preview is updated.",
+    });
     router.refresh();
     return;
   }
@@ -183,12 +329,19 @@ export async function runMigrationAct(button: HTMLElement, root: HTMLElement, ro
   if (act === "commit") {
     // Signing off creates real matters and people: it asks first, like Roll back and Discard.
     const summary = [...root.querySelectorAll<HTMLElement>(".fp-dl dt")].map((term) => `${term.textContent}: ${term.nextElementSibling?.textContent ?? ""}`).slice(0, 3).join("\n");
-    if (!window.confirm(`Sign off and import these records?${summary ? `\n\n${summary}` : ""}\n\nThe import creates the matters and people above. You can roll it back while no one has changed them.`)) return;
+    const label = button.textContent?.trim() || "Continue the import";
+    const creates = !button.dataset.kind || button.dataset.kind === "clients_matters" ? "matters and people" : "records";
+    const undo =
+      button.dataset.kind === "documents"
+        ? documentsIrreversibleConfirm(/pilot/i.test(label) ? "pilot" : "full")
+        : "You can roll the import back while no one has changed them.";
+    if (!window.confirm(`${label}?${summary ? `\n\n${summary}` : ""}\n\nThis creates ${creates}. ${undo}`)) return;
     return commit(button, router);
   }
 
   if (act === "rollback") {
-    if (!window.confirm("Roll back this import? Every matter and person it created is removed. Records someone changed since stop the rollback.")) return;
+    const removed = !button.dataset.kind || button.dataset.kind === "clients_matters" ? "Every matter and person it created is removed." : "Every record it created is removed.";
+    if (!window.confirm(`Roll back this import? ${removed} Records someone changed since stop the rollback.`)) return;
     const result = await post("rollback", { org, batch });
     if (!result.ok) {
       if (result.data.stepUp) return stepUp(batch);

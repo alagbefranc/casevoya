@@ -8,6 +8,7 @@ import {
   previewPortalInvitation,
   savePortalInvitationDraft,
 } from "@/modules/portal-invitations/actions";
+import { PORTAL_RATE_LIMITED, portalPreviewProblem } from "@/modules/portal-invitations/errors";
 import type { PortalAcceptPayload, PortalShareSection } from "@/modules/portal-invitations/types";
 import {
   createTrialFirm,
@@ -31,6 +32,7 @@ import {
   verifyTotpCode,
 } from "@/app/auth/port-actions";
 import { toast2 } from "./kit";
+import { showSignupEmail } from "./signup-email";
 import type { PortEvent, PortResult } from "./use-port";
 
 type Ctx = Awaited<ReturnType<typeof getAuthContext>>;
@@ -49,12 +51,37 @@ function checked(root: ParentNode, id: string) {
 type InvitePreview = {
   status?: string;
   invitee?: { display_name?: string; email?: string };
-  organization?: { display_name?: string };
+  organization?: { display_name?: string; default_locale?: string };
   policies?: { portal_terms?: { id?: string } | null; privacy_notice?: { id?: string } | null };
 };
 
 function asPreview(value: unknown): InvitePreview | null {
   return value && typeof value === "object" ? (value as InvitePreview) : null;
+}
+
+/**
+ * Creates the firm the start-trial screen kept in sessionStorage, once two-step is on. Null when
+ * nothing is pending. Storage is cleared once the firm exists.
+ */
+async function createPendingTrialFirm(): Promise<PortResult> {
+  const raw = sessionStorage.getItem("cv-trial");
+  if (!raw) return null;
+  let pending: PendingTrial = {};
+  try {
+    pending = JSON.parse(raw) as PendingTrial;
+  } catch {
+    sessionStorage.removeItem("cv-trial");
+    return null;
+  }
+  if (!pending.firmName) return null;
+  const created = await createTrialFirm({
+    firmName: pending.firmName,
+    sampleMode: Boolean(pending.sampleMode),
+    licenceNumber: pending.licenceNumber,
+    licenceClass: pending.licenceClass,
+  });
+  if (created?.ok && created.href === "/setup") sessionStorage.removeItem("cv-trial");
+  return created;
 }
 
 function mfaDestination() {
@@ -66,6 +93,17 @@ function portalLocale(root: ParentNode): "en-CA" | "fr-CA" {
     (button) => button.getAttribute("aria-pressed") === "true" && /fran/i.test(button.textContent || ""),
   );
   return french ? "fr-CA" : "en-CA";
+}
+
+/** Presses the firm's default language (ORG-01) on the invite's Language switch; the client can still change it. */
+function presetPortalLocale(root: ParentNode, locale: string | undefined) {
+  if (locale !== "fr-CA" && locale !== "en-CA") return;
+  root.querySelectorAll<HTMLElement>(".seg[aria-label='Language']").forEach((seg) => {
+    seg.querySelectorAll<HTMLElement>("button").forEach((button) => {
+      const french = /fran/i.test(button.textContent || "");
+      button.setAttribute("aria-pressed", String(french === (locale === "fr-CA")));
+    });
+  });
 }
 
 function portalAcceptPayload(root: HTMLElement, preview: InvitePreview, page: string): PortalAcceptPayload | { error: string } {
@@ -237,11 +275,30 @@ export function usePortActions(page: string, token?: string) {
   const ctx = useRef<Ctx | null>(null);
   const enrolled = useRef<string | null>(null);
   const invite = useRef<InvitePreview | null>(null);
+  // Whether this page load has opened the invitation yet (the one read that counts toward its limit).
+  const opened = useRef(false);
 
   return useCallback(
     async (event: PortEvent): Promise<PortResult> => {
       if (!ctx.current) ctx.current = await getAuthContext();
       const session = ctx.current;
+
+      /**
+       * The invitation, read once and kept. Only the first read of this page load is an open
+       * (counted toward the invitation's rate limit); steps and retries reuse it or re-read
+       * without counting. A rate-limited read is not kept, so a later try reads it again.
+       */
+      const loadInvite = async (): Promise<{ preview: InvitePreview | null } | { error: string }> => {
+        if (invite.current) return { preview: invite.current };
+        if (!token) return { error: "This invitation could not be opened." };
+        const read = await previewPortalInvitation(token, !opened.current);
+        if ("error" in read) return { error: read.error ?? "This invitation could not be opened." };
+        opened.current = true;
+        const preview = asPreview(read.preview);
+        if (preview?.status === "rate_limited") return { error: PORTAL_RATE_LIMITED };
+        invite.current = preview;
+        return { preview };
+      };
 
       /**
        * Whether this invitation was already accepted by the person signed in here. The email's
@@ -266,21 +323,18 @@ export function usePortActions(page: string, token?: string) {
        */
       const continueFromLink = async (root: HTMLElement, quiet: boolean): Promise<"done" | "stop" | "retry"> => {
         if (!token) return "stop";
-        if (!invite.current) {
-          const opened = await previewPortalInvitation(token);
-          if ("error" in opened) {
-            if (!quiet) toast2(opened.error ?? "This invitation could not be opened.", { kind: "bad" });
-            return "retry";
-          }
-          invite.current = asPreview(opened.preview);
+        const loaded = await loadInvite();
+        if ("error" in loaded) {
+          if (!quiet) toast2(loaded.error, { kind: "bad" });
+          return "retry";
         }
-        const preview = invite.current;
+        const preview = loaded.preview;
         if (!preview || preview.status !== "open") {
           if (await acceptedHere()) {
             leaveCodeStep(root, page, null);
             return "done";
           }
-          if (!quiet) toast2("This invitation can no longer be used.", { kind: "bad" });
+          if (!quiet) toast2(portalPreviewProblem(preview?.status), { kind: "bad" });
           return "stop";
         }
         const draft = portalAcceptPayload(root, preview, page);
@@ -340,32 +394,19 @@ export function usePortActions(page: string, token?: string) {
             }
           }
         }
+        if (page === "start-trial" && event.step === 1) showSignupEmail(event.root);
         if (page === "setup" && event.step === 0 && session.assured) {
-          const raw = sessionStorage.getItem("cv-trial");
-          if (raw) {
-            let pending: PendingTrial = {};
-            try {
-              pending = JSON.parse(raw) as PendingTrial;
-            } catch {
-              sessionStorage.removeItem("cv-trial");
-            }
-            if (pending.firmName) {
-              const created = await createTrialFirm({
-                firmName: pending.firmName,
-                sampleMode: Boolean(pending.sampleMode),
-                licenceNumber: pending.licenceNumber,
-                licenceClass: pending.licenceClass,
-              });
-              if (created?.ok && created.href === "/setup") sessionStorage.removeItem("cv-trial");
-              if (created && created.ok === false) return created;
-            }
-          }
+          // Normally made before /setup opened (the two-step "Continue setup"). If not, this page
+          // rendered without the firm, so it reloads once to show the firm name and saved answers.
+          const created = await createPendingTrialFirm();
+          if (created && created.ok === false) return created;
+          if (created?.ok && created.href === "/setup" && !val(event.root, "dn")) location.reload();
         }
         if ((page === "accept-client" || page === "accept-family" || page === "accept-sponsor") && token && event.step === 0) {
           if (!invite.current) {
-            const opened = await previewPortalInvitation(token);
-            if ("error" in opened) return { ok: false, message: opened.error ?? "This invitation could not be opened." };
-            invite.current = asPreview(opened.preview);
+            const loaded = await loadInvite();
+            if ("error" in loaded) return { ok: false, message: loaded.error };
+            presetPortalLocale(event.root, loaded.preview?.organization?.default_locale);
           }
           const preview = invite.current;
           const heading = event.root.querySelector("h1");
@@ -377,17 +418,14 @@ export function usePortActions(page: string, token?: string) {
           if (preview?.status && preview.status !== "open") {
             // Opened from the email's link after the other tab accepted: they're in already.
             if (await acceptedHere()) event.root.dispatchEvent(new CustomEvent("port-go", { detail: "/portal" }));
-            return { ok: false, message: "This invitation can no longer be used." };
+            return { ok: false, message: portalPreviewProblem(preview.status) };
           }
         }
         if (PORTAL_ACCEPT.has(page) && token) {
           bindPortalSignIn(event.root);
           bindLinkConfirmed(event.root);
           if (event.step === portalSignInStep(page) && signInPart(event.root) !== "code") {
-            if (!invite.current) {
-              const opened = await previewPortalInvitation(token);
-              if (!("error" in opened)) invite.current = asPreview(opened.preview);
-            }
+            await loadInvite();
             const invited = invite.current?.invitee?.email?.trim().toLowerCase();
             // Already signed in as the invited person: nothing to create, Continue accepts.
             if (session.signedIn && invited && session.email?.trim().toLowerCase() === invited) showSignIn(event.root, "none");
@@ -439,15 +477,12 @@ export function usePortActions(page: string, token?: string) {
       if (event.type === "otp") {
         if (PORTAL_ACCEPT.has(page) && token) {
           if (!session.configured) return null;
-          if (!invite.current) {
-            const opened = await previewPortalInvitation(token);
-            if ("error" in opened) return { ok: false, message: opened.error ?? "This invitation could not be opened." };
-            invite.current = asPreview(opened.preview);
-          }
-          const preview = invite.current;
+          const loaded = await loadInvite();
+          if ("error" in loaded) return { ok: false, message: loaded.error };
+          const preview = loaded.preview;
           if (!preview || preview.status !== "open") {
             if (await acceptedHere()) return { ok: true, href: "/portal" };
-            return { ok: false, message: "This invitation can no longer be used." };
+            return { ok: false, message: portalPreviewProblem(preview?.status) };
           }
           const draft = portalAcceptPayload(event.root, preview, page);
           if ("error" in draft) return { ok: false, message: draft.error };
@@ -516,7 +551,14 @@ export function usePortActions(page: string, token?: string) {
         return { ok: true, href: mfaDestination() };
       }
       if (page === "mfa" && el.dataset.href?.startsWith("/sheet")) {
-        return { ok: true, href: mfaDestination() };
+        const destination = mfaDestination();
+        // A new sign-up's firm is made now, signed in with two-step, so /setup opens with it.
+        if (destination.split(/[?#]/)[0] === "/setup") {
+          const created = await createPendingTrialFirm();
+          if (created && created.ok === false) return created;
+          if (created?.ok && created.href && created.href !== "/setup") return created;
+        }
+        return { ok: true, href: destination };
       }
       if (page === "start-trial" && el.hasAttribute("data-next") && event.step === 0) {
         return signUpForTrial({
@@ -572,15 +614,12 @@ export function usePortActions(page: string, token?: string) {
         return saveSetupStep(event.step, fields);
       }
       if ((page === "accept-client" || page === "accept-family" || page === "accept-sponsor") && token && el.hasAttribute("data-next")) {
-        if (!invite.current) {
-          const opened = await previewPortalInvitation(token);
-          if ("error" in opened) return { ok: false, message: opened.error ?? "This invitation could not be opened." };
-          invite.current = asPreview(opened.preview);
-        }
-        const preview = invite.current;
+        const loaded = await loadInvite();
+        if ("error" in loaded) return { ok: false, message: loaded.error };
+        const preview = loaded.preview;
         if (!preview || preview.status !== "open") {
           if (await acceptedHere()) return { ok: true, href: "/portal" };
-          return { ok: false, message: "This invitation can no longer be used." };
+          return { ok: false, message: portalPreviewProblem(preview?.status) };
         }
         const draft = portalAcceptPayload(event.root, preview, page);
         if ("error" in draft) return { ok: false, message: draft.error };
@@ -628,6 +667,10 @@ export function usePortActions(page: string, token?: string) {
           if (joined.confirm) {
             showCodeStep(event.root);
             event.root.querySelector<HTMLInputElement>('[data-signin="code"] .otp input')?.focus();
+            // A code sent earlier still works; no new one went out (a new one would replace it).
+            if (joined.reused) {
+              return { ok: true, stay: true, message: "Enter the six-digit code we already emailed you. Need another? Choose “Send a new code”." };
+            }
             return { ok: true, stay: true, message: "Check your email for a six-digit code." };
           }
           firstRequest = joined.firstRequest;

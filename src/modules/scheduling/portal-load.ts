@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { PortalViewer } from "@/modules/portal/load";
+import type { PortalPart } from "@/modules/portal/states";
 
 export type PortalAppointment = {
   id: string;
@@ -33,6 +34,8 @@ export type PortalAppointments = {
   now: number;
   /** The firm's published booking types, for "Book a call". */
   bookable: { title: string; href: string; durationMin: number }[];
+  /** DES-04: parts that couldn't be read (a partial page); absent when everything loaded. */
+  unavailable?: PortalPart[];
 };
 
 function rulesFrom(raw: unknown): Map<string, { minNoticeMin: number; late: boolean }> {
@@ -67,6 +70,8 @@ export async function loadPortalAppointments(viewer: PortalViewer): Promise<Port
     // Only summaries a licensed consultant shared, and only the viewer's own (never a draft).
     supabase.rpc("portal_consultation_summaries", { p_org: viewer.organizationId }),
   ]);
+  // DES-04: unreadable is not "no appointments"; the page shows its couldn't-load state.
+  if (bookings.error) throw new Error("portal appointments unreadable");
   const summaryOf = new Map((summaries.error ? [] : (summaries.data ?? [])).map((row) => [row.booking_id, row.summary]));
   const slug = org.data?.slug ?? null;
   let bookable: PortalAppointments["bookable"] = [];
@@ -101,5 +106,9 @@ export async function loadPortalAppointments(viewer: PortalViewer): Promise<Port
     })),
     now: Date.now(),
     bookable,
+    // DES-04: shared summaries or the change rules that couldn't be read are named, not hidden.
+    ...(summaries.error || rules.error
+      ? { unavailable: [...(summaries.error ? ["consultation summaries" as const] : []), ...(rules.error ? ["change rules" as const] : [])] as PortalPart[] }
+      : {}),
   };
 }

@@ -91,3 +91,47 @@ Subaddressing is already on. `<slug>+<32 hex>@docs.casevoya.ca` uses the base ru
 `POST /api/email/routing/reconcile` with `Authorization: Bearer $EMAIL_ROUTING_RECONCILE_SECRET` lists the zone's rules, adds a missing rule for each organization slug, and deletes stale rules. It only edits rules whose names start with `casevoya-firm:`. The `casevoya-test@docs.casevoya.ca` rule and the catch-all are left alone.
 
 A body with `failures` is HTTP 502 so the caller can run it again. A clean run is HTTP 200.
+
+## Platform operations
+
+Casevoya staff in `public.platform_admins` act through RPCs and service-role scripts in `scripts/ops/`; there is no platform admin web UI. Each script takes `--by <platform-admin-user-id>` (or `--imported-by`) so the audit trail names the person who acted, and needs `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SECRET_KEY` in the environment (never pasted into commands that are logged).
+
+### Service notices (ADM-04)
+
+`scripts/ops/service-notice.mjs` posts a maintenance, incident or information notice. Staff of the firms it reaches see a banner on every Sheet page while it is current, and it stays in Settings › Security › Service notices. Client (portal) users never see notices.
+
+```
+# Maintenance for one firm (times with an offset; firms see their own timezone)
+node scripts/ops/service-notice.mjs post --by <admin-id> --kind maintenance --severity minor \
+  --title "Scheduled maintenance" --body "Casevoya will be read-only while we upgrade the database." \
+  --starts 2026-10-26T22:00:00-04:00 --ends 2026-10-27T00:00:00-04:00 --firm test-firm
+
+# An incident for every firm, then its resolution
+node scripts/ops/service-notice.mjs post --by <admin-id> --kind incident --severity major \
+  --title "Email delays" --body "Some emails from Casevoya are arriving late." --all-firms
+node scripts/ops/service-notice.mjs resolve <notice-id> --by <admin-id> --note "Email delivery caught up at 14:20."
+
+# Change wording or times, publish a draft (--draft on post), list open notices (--all for resolved too)
+node scripts/ops/service-notice.mjs update <notice-id> --by <admin-id> --ends 2026-10-27T01:00:00-04:00
+node scripts/ops/service-notice.mjs list
+```
+
+`--firm` takes a firm's slug or id and repeats; `--dry-run` checks the arguments without sending. Notice text is plain text (title 3-120 characters, body up to 1000). Every post, update and resolve is audited (`service_notice.*`) with the acting admin.
+
+### Support catalogue (SRC-12)
+
+`scripts/ops/support-catalogue.mjs` keeps "What Casevoya supports" (`/supported`, and Practice › Templates in the Sheet). It never marks anything supported: a program is Supported only when an approved, sourced rule pack exists for it.
+
+```
+# A program from its own official page (a homepage or landing page is refused). Stores a platform
+# source and a draft snapshot (SHA-256, the page's "Date modified" as shown) and IRCC's name from
+# the page heading; the name and link show publicly once the snapshot is verified in source review.
+node scripts/ops/support-catalogue.mjs capture --by <admin-id> --key <program_key> --label "Working label" \
+  --jurisdiction CA --case-type ircc_application --url <official page URL> [--section <anchor>] [--dry-run]
+
+# A program without a source yet (shows "Source not captured"), or a jurisdiction or case type
+node scripts/ops/support-catalogue.mjs entry --by <admin-id> --kind program --key <program_key> --label "..." --jurisdiction CA
+node scripts/ops/support-catalogue.mjs list
+```
+
+If the page can't be fetched nothing is saved. Every save is audited (`support_catalogue.saved`) with the acting admin.

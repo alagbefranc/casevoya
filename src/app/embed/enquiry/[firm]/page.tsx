@@ -3,7 +3,8 @@ import { Suspense } from "react";
 import { EnquiryLive } from "@/components/sheet/enquiry-live";
 import { QuietSheet } from "@/components/sheet/live";
 import { SheetScreen } from "@/components/sheet/screen";
-import { loadEnquiryPage } from "@/modules/leads/enquiry-page";
+import { ENQUIRY_UNAVAILABLE, loadEnquiryPage } from "@/modules/leads/enquiry-page";
+import { ENQUIRY_CLOSED_COPY, enquiryClosedTitle } from "@/modules/leads/enquiry-present";
 
 export const metadata: Metadata = {
   title: "Enquiry · Casevoya",
@@ -14,11 +15,28 @@ const TRANSPARENT = "html,body{background:transparent!important;min-height:0!imp
 
 async function Body({ params }: { params: Promise<{ firm: string }> }) {
   const loaded = await loadEnquiryPage((await params).firm, true);
+  if (loaded === "unavailable") {
+    return (
+      <SheetScreen page="enquiry" tone="public">
+        <style dangerouslySetInnerHTML={{ __html: TRANSPARENT }} />
+        <QuietSheet title={ENQUIRY_UNAVAILABLE.title} copy={ENQUIRY_UNAVAILABLE.copy} />
+      </SheetScreen>
+    );
+  }
   if (!loaded) {
     return (
       <SheetScreen page="enquiry" tone="public">
         <style dangerouslySetInnerHTML={{ __html: TRANSPARENT }} />
         <QuietSheet title="This form isn’t available" copy="The firm hasn’t turned on its enquiry form, or the link is out of date." />
+      </SheetScreen>
+    );
+  }
+  // CRM-01: the firm turned its enquiry page off in Settings.
+  if (!loaded.open) {
+    return (
+      <SheetScreen page="enquiry" tone="public">
+        <style dangerouslySetInnerHTML={{ __html: TRANSPARENT }} />
+        <QuietSheet title={enquiryClosedTitle(loaded.firmName)} copy={ENQUIRY_CLOSED_COPY} />
       </SheetScreen>
     );
   }

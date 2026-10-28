@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import {
   addClientAccount,
@@ -15,6 +16,7 @@ import {
 } from "@/modules/finance/client-funds-actions";
 import { FUNDS_DIALOG, readBankTransfer, readDeposit, readReason, readRefundToClient, readTransfer } from "@/modules/finance/client-funds-present";
 import { financeNeedsStepUp, financeStepUpLocation } from "@/modules/sheet/finance-present";
+import { runAdvance, syncReviewers } from "./manual-pay-acts";
 
 /**
  * The Client funds tab's dialogs. Openers fill a dialog from their data attributes; submit buttons
@@ -90,7 +92,14 @@ export function openVerify(opener: HTMLElement, root: ParentNode, open: Open) {
   setText(dialog, "vD", data.received);
   setText(dialog, "vE", data.evidence);
   setText(dialog, "vB", data.by);
+  setText(dialog, "vV", data.reviewer);
   setText(dialog, "vT", data.dest);
+  // FIN-09: the advance's evidence file, when one was uploaded.
+  const file = dialog.querySelector<HTMLElement>("[data-mp-evidence]");
+  if (file) {
+    file.dataset.mpEvidence = data.evidenceFile ?? "";
+    file.toggleAttribute("hidden", !data.evidenceFile);
+  }
   const check = dialog.querySelector<HTMLInputElement>("#vOk");
   if (check) check.checked = false;
   // Second person: whoever recorded it can't verify it, unless they are the firm owner.
@@ -147,7 +156,7 @@ function stepUp(dialog: HTMLDialogElement, button: HTMLElement) {
   } catch {
     // Storage can be unavailable; the person opens the dialog again.
   }
-  window.location.assign(financeStepUpLocation(window.location.pathname, window.location.search, FUNDS_DIALOG));
+  goStepUp(financeStepUpLocation(window.location.pathname, window.location.search, FUNDS_DIALOG, "client_funds"));
 }
 
 function failed(dialog: HTMLDialogElement, button: HTMLElement, error: string, sub: string): void {
@@ -191,15 +200,26 @@ export function reopenFundsDialog(root: ParentNode, open: Open) {
     if (field && typeof saved === "boolean") field.checked = saved;
   }
   syncFundsLedger(dialog);
+  syncReviewers(dialog);
   if (typeof draft.key === "string") {
     for (const button of dialog.querySelectorAll<HTMLElement>(".df .btn.p")) button.dataset.key = draft.key;
   }
   open(dialog.id);
 }
 
+/**
+ * Record a bank payment (#dlgPay). With the FIN-09 fields (a Reviewer select is in the dialog) it
+ * records an advance with its reference, evidence file or note and reviewer (`record_client_advance`);
+ * otherwise the plain deposit, as before.
+ */
 export async function runDeposit(button: HTMLElement, router: Router) {
   const dialog = button.closest("dialog");
   if (!dialog) return;
+  if (dialog.querySelector("select[data-reviewers]")) {
+    const refused = await runAdvance(button, router);
+    if (refused) failed(dialog, button, refused.error, "Nothing was recorded.");
+    return;
+  }
   const today = button.dataset.today ?? "";
   const typed = { party: value(dialog, "mpC"), amount: value(dialog, "mpA"), method: value(dialog, "mpM"), reference: value(dialog, "mpR"), received: value(dialog, "mpD"), account: value(dialog, "mpB"), evidence: value(dialog, "mpE") };
   const read = readDeposit(typed, today);

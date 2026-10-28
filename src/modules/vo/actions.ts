@@ -7,7 +7,8 @@ import { callVoAgent, voAgentConfigured } from "./agent-client";
 import { draftStale } from "@/modules/sheet/vo-present";
 import { MAX_DRAFT_CHARS } from "./guard";
 import { voError, voSettingChanges, type VoSwitchKey } from "./errors";
-import type { VoSourceRef, VoTask, VoTaskRequest } from "./sign";
+import type { VoAbstainReason, VoSourceRef, VoTask, VoTaskRequest } from "./sign";
+import { citationsFor, withStoredAttestation, type VoCitation } from "./grounding";
 
 type Result<T extends object = object> = ({ ok: true } & T) | { error: string };
 
@@ -70,6 +71,21 @@ function request(organizationId: string, kind: VoTask, started: Started, threadI
   };
 }
 
+/**
+ * The run's citations as public.finish_vo_run stored them, read only when official content was
+ * cited: attested official content is shown with the attestation the database keeps, never the
+ * one the Vo service sent (decided 2026-10-25). Null when the run can't be read.
+ */
+async function storedCitations(supabase: Awaited<ReturnType<typeof createClient>>, runId: string, sources: VoSourceRef[]): Promise<unknown> {
+  if (!sources.some((source) => source.kind === "official")) return null;
+  try {
+    const { data } = await supabase.from("vo_runs").select("citations").eq("id", runId).maybeSingle();
+    return (data as { citations?: unknown } | null)?.citations ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** If the service never answered, the run is closed here so it doesn't look in progress. */
 async function closeIfOpen(supabase: Awaited<ReturnType<typeof createClient>>, runId: string, failure: string) {
   await supabase.rpc("finish_vo_run", { p_run_id: runId, p_result: "failed", p_failure: failure === "unavailable" ? "unavailable" : "failed" });
@@ -84,14 +100,18 @@ export async function draftWithVo(input: {
   organizationId: string;
   threadId: string;
   kind: "message_reply" | "document_request";
-}): Promise<Result<{ draftId: string; text: string; needsRule: boolean; sources: VoSourceRef[] }> | { ok: true; abstained: true }> {
+}): Promise<Result<{ draftId: string; text: string; needsRule: boolean; sources: VoCitation[] }> | { ok: true; abstained: true; reason: VoAbstainReason }> {
   if (!isUuid(input.organizationId) || !isUuid(input.threadId)) return { error: "Choose a conversation." };
   if (input.kind !== "message_reply" && input.kind !== "document_request") return { error: "Choose what Vo should draft." };
   const begun = await start(input.organizationId, input.kind, { threadId: input.threadId });
   if ("error" in begun) return begun;
   const out = await callVoAgent(request(input.organizationId, input.kind, begun.started, input.threadId, null));
-  if (out.result === "drafted") return { ok: true, draftId: out.draftId, text: out.text, needsRule: out.needsRule, sources: out.sources };
-  if (out.result === "abstained") return { ok: true, abstained: true };
+  if (out.result === "drafted") {
+    const stored = await storedCitations(begun.supabase, begun.started.runId, out.sources);
+    const sources = citationsFor(withStoredAttestation(out.sources, stored), { matterId: begun.started.matterId, threadId: input.threadId });
+    return { ok: true, draftId: out.draftId, text: out.text, needsRule: out.needsRule, sources };
+  }
+  if (out.result === "abstained") return { ok: true, abstained: true, reason: out.reason ?? "consultant" };
   if (out.result === "answered") return { error: voError("failed") };
   if (out.failure === "unavailable") await closeIfOpen(begun.supabase, begun.started.runId, out.failure);
   return { error: voError(out.failure === "nothing_to_draft" ? (input.kind === "document_request" ? "no_requests" : "no_message") : out.failure) };
@@ -106,15 +126,21 @@ export async function askVo(input: {
   organizationId: string;
   matterId: string;
   question: string;
-}): Promise<Result<{ text: string; needsRule: boolean; sources: VoSourceRef[] }> | { ok: true; abstained: true }> {
+}): Promise<Result<{ text: string; needsRule: boolean; sources: VoCitation[] }> | { ok: true; abstained: true; reason: VoAbstainReason }> {
   if (!isUuid(input.organizationId) || !isUuid(input.matterId)) return { error: "Choose a matter." };
   const question = (input.question ?? "").trim();
   if (!question || question.length > 1000) return { error: "Ask a question of up to 1,000 characters." };
   const begun = await start(input.organizationId, "ask", { matterId: input.matterId });
   if ("error" in begun) return begun;
   const out = await callVoAgent(request(input.organizationId, "ask", begun.started, null, question));
-  if (out.result === "answered") return { ok: true, text: out.text, needsRule: out.needsRule, sources: out.sources };
-  if (out.result === "abstained") return { ok: true, abstained: true };
+  // SRC-09: an answer always cites; one that cites nothing on file or approved is an abstention.
+  if (out.result === "answered") {
+    const stored = await storedCitations(begun.supabase, begun.started.runId, out.sources);
+    const sources = citationsFor(withStoredAttestation(out.sources, stored), { matterId: begun.started.matterId });
+    if (!sources.length) return { ok: true, abstained: true, reason: "unsupported" };
+    return { ok: true, text: out.text, needsRule: out.needsRule, sources };
+  }
+  if (out.result === "abstained") return { ok: true, abstained: true, reason: out.reason ?? "unsupported" };
   if (out.result === "drafted") return { error: voError("failed") };
   if (out.failure === "unavailable") await closeIfOpen(begun.supabase, begun.started.runId, out.failure);
   return { error: voError(out.failure) };
@@ -139,6 +165,8 @@ export async function sendVoDraft(input: {
   if (error) {
     if (/placeholder/i.test(error.message)) return { error: voError("placeholder") };
     if (/already reviewed/i.test(error.message)) return { error: voError("reviewed") };
+    if (/licensed member's review/i.test(error.message)) return { error: voError("licensed_review") };
+    if (/step-up is required/i.test(error.message)) return { error: voError("step_up") };
     if (/vo denied/i.test(error.message)) return { error: voError("denied") };
     return { error: messageError(error.message) };
   }
@@ -199,6 +227,6 @@ export async function saveVoSetting(input: { organizationId: string; setting: Vo
   if (!changes) return { error: "Choose a setting." };
   const supabase = await createClient({ organizationId: input.organizationId });
   const { error } = await supabase.rpc("set_vo_settings", { p_organization_id: input.organizationId, p_changes: changes });
-  if (error) return { error: voError("owner_only") };
+  if (error) return { error: voError(/AI vendor terms/i.test(error.message) ? "vendor_terms" : "owner_only") };
   return { ok: true };
 }

@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { FIRM_LOGO_BUCKET, FIRM_LOGO_PREVIEW_SECONDS, brandingAccent, brandingLogoLocator, ownFirmLogoKey } from "@/modules/firm-onboarding/firm-logo";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
+import { emailRuntimeConfig } from "@/lib/email/env";
+import { firmAddress } from "@/modules/email/addresses";
+import { firmInboundAddress } from "@/modules/sheet/inbound-present";
 import type { SheetStaff } from "@/modules/sheet/load";
 import {
   brandingPage,
@@ -22,7 +25,7 @@ import {
 const STAFF_ROLES = ["firm_owner", "licensed_consultant", "case_manager", "assistant", "finance_user"] as const;
 
 const FIRM_COLUMNS =
-  "id, legal_name, display_name, timezone, jurisdiction_codes, billing_contact_name, billing_contact_email, privacy_contact_name, privacy_contact_email, continuity_contact_name, continuity_contact_email, succession_note, branding";
+  "id, legal_name, display_name, timezone, default_locale, jurisdiction_codes, billing_contact_name, billing_contact_email, privacy_contact_name, privacy_contact_email, continuity_contact_name, continuity_contact_email, succession_note, branding";
 
 /** A short-lived link to the firm's own saved logo in the private bucket, or null. */
 async function logoUrl(branding: unknown, organizationId: string): Promise<string | null> {
@@ -79,7 +82,10 @@ export async function loadSheetSettingsFirm(staff: SheetStaff, tab: SettingsTab)
     const data = firmOk
       ? page
       : { ...page, rows: page.rows.map((row) => (row.label === "Organisation ID" || row.label === "Display name" ? row : { ...row, value: "Couldn’t load. Reload the page." })) };
-    return { chrome, header, dialogs, page: { tab, data } as const };
+    // OPS-06: the firm's inbound address, slug@ the inbound domain (the inbound worker's own rule).
+    const slug = await supabase.from("organizations").select("slug").eq("id", org).maybeSingle();
+    const withInbound = slug.data?.slug ? { ...data, inbound: firmInboundAddress(firmAddress(slug.data.slug, emailRuntimeConfig().inboundDomain)) } : data;
+    return { chrome, header, dialogs, page: { tab, data: withInbound } as const };
   }
 
   if (tab === "offices") {
@@ -120,7 +126,7 @@ export async function loadSheetSettingsFirm(staff: SheetStaff, tab: SettingsTab)
   const me = await supabase.auth.getClaims();
   const myId = me.data?.claims?.sub;
   const mine = (myId ? byId.get(myId)?.timezone : null) ?? firm.timezone;
-  dialogs.timezone = { mine, firm: owner ? firm.timezone : null };
+  dialogs.timezone = { mine, firm: owner ? firm.timezone : null, locale: owner && firmOk ? (firm.default_locale === "fr-CA" ? "fr-CA" : "en-CA") : null };
   dialogs.zones = timezoneSuggestions([mine, firm.timezone]);
-  return { chrome, header, dialogs, page: { tab: "language" as const, data: languagePage(people, firm.timezone) } };
+  return { chrome, header, dialogs, page: { tab: "language" as const, data: languagePage(people, firm.timezone, firm.default_locale) } };
 }

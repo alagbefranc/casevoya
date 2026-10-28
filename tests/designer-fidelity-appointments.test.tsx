@@ -26,6 +26,7 @@ vi.mock("@/modules/scheduling/format", async (importOriginal) => {
 const DESIGNER_VIEWER = {
   organizationId: "00000000-0000-4000-8000-00000000000a",
   organizationName: "Northline",
+  organizationSlug: "example-firm",
   timezone: "Asia/Kolkata",
   role: "client",
   person: null,

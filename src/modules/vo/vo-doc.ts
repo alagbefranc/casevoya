@@ -58,6 +58,7 @@ export type VoDocSettings = {
   read_medical?: boolean;
   read_criminal?: boolean;
   read_narratives?: boolean;
+  read_on_upload?: boolean;
 };
 
 export type VoDocCapabilities = { classification: boolean; fields: boolean; missing: boolean; inconsistencies: boolean };
@@ -82,18 +83,29 @@ export function voCategoryAllowed(settings: VoDocSettings | null, category: stri
   return settings?.[VO_DOC_CATEGORY_SWITCH[category as VoDocCategory]] === true;
 }
 
-/** Media types Claude can read directly: PDFs as a document block, these images as image blocks. */
+/** Media types Claude can read directly: PDFs as a document block, these images as image blocks. A DOCX is sent as its extracted text. */
 export const VO_DOC_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
 /** Size limits for one reading (the API takes 32 MB a request and 5 MB an image). */
 export const VO_DOC_MAX_PDF_BYTES = 20 * 1024 * 1024;
 export const VO_DOC_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+export const VO_DOC_MAX_DOCX_BYTES = 20 * 1024 * 1024;
+export const VO_DOC_DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-export type VoDocMedia = { kind: "pdf"; mediaType: "application/pdf" } | { kind: "image"; mediaType: (typeof VO_DOC_IMAGE_TYPES)[number] };
+export type VoDocMedia =
+  | { kind: "pdf"; mediaType: "application/pdf" }
+  | { kind: "image"; mediaType: (typeof VO_DOC_IMAGE_TYPES)[number] }
+  | { kind: "docx"; mediaType: typeof VO_DOC_DOCX_TYPE };
 
-/** What Vo can read, from the media type the upload check detected. HEIC and DOCX: not yet. */
+/** The size limit for one reading of this kind of file. */
+export function voDocMaxBytes(media: VoDocMedia | null): number {
+  return media?.kind === "pdf" ? VO_DOC_MAX_PDF_BYTES : media?.kind === "docx" ? VO_DOC_MAX_DOCX_BYTES : VO_DOC_MAX_IMAGE_BYTES;
+}
+
+/** What Vo can read, from the media type the upload check detected. HEIC: not yet (no decoder). */
 export function voDocMedia(mediaType: string | null | undefined): VoDocMedia | null {
   const type = (mediaType ?? "").toLowerCase().split(";")[0].trim();
   if (type === "application/pdf") return { kind: "pdf", mediaType: "application/pdf" };
+  if (type === VO_DOC_DOCX_TYPE) return { kind: "docx", mediaType: VO_DOC_DOCX_TYPE };
   const image = VO_DOC_IMAGE_TYPES.find((value) => value === (type === "image/jpg" ? "image/jpeg" : type));
   return image ? { kind: "image", mediaType: image } : null;
 }
@@ -104,6 +116,8 @@ export function voDocMagicMatches(media: VoDocMedia, bytes: Uint8Array): boolean
   switch (media.mediaType) {
     case "application/pdf":
       return starts(0x25, 0x50, 0x44, 0x46);
+    case VO_DOC_DOCX_TYPE:
+      return starts(0x50, 0x4b, 0x03, 0x04);
     case "image/jpeg":
       return starts(0xff, 0xd8, 0xff);
     case "image/png":

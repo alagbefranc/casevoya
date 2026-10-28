@@ -67,7 +67,8 @@ export function mountDocOpen(root: HTMLElement, run: (card: HTMLElement) => Prom
     "click",
     (event) => {
       const card = (event.target as HTMLElement).closest<HTMLElement>("[data-doc-open]");
-      if (!card || !root.contains(card)) return;
+      // DOC-06: the card's Details button opens its dialog, not the file.
+      if (!card || !root.contains(card) || (event.target as HTMLElement).closest("[data-doc-details]")) return;
       event.preventDefault();
       go(card);
     },

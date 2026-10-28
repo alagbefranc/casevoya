@@ -71,6 +71,11 @@ Subjects and preheaders must not reveal a program, document name, amount or deci
 | EX08 | Payment failed | machine_draft | — | — | No (not_approved) |
 | EX09 | Refund started | machine_draft | — | — | No (not_approved) |
 | EX10 | Refund complete | machine_draft | — | — | No (not_approved) |
+| EX20 | Refund didn’t go through | machine_draft | — | — | No (not_approved) |
+| EX19 | New notice (announcement) | machine_draft | — | — | No (not_approved) |
+| EX18 | New enquiry (staff) | machine_draft | — | — | No (not_approved) |
+| EX17 | Consultant changed | machine_draft | — | — | No (not_approved) |
+| EX16 | Signing code | machine_draft | — | — | No (not_approved) |
 | EX11 | Support access requested | machine_draft | — | — | No (not_approved) |
 | EX12 | Licence check attention | machine_draft | — | — | No (not_approved) |
 | EX13 | Privacy request received | machine_draft | — | — | No (not_approved) |
@@ -79,7 +84,7 @@ Subjects and preheaders must not reveal a program, document name, amount or deci
 
 ## _shared: header, footers and phrases used in every email
 
-Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:0f2d34633cbb…`
+Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:2392d7d1cd0a…`
 
 - These strings appear in every French email (header tagline, footers, zone label, role phrases). Approve them first: no French email is sent while _shared is not approved.
 
@@ -103,6 +108,8 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:0f2d34633cb
 | `role_assistant` | an Assistant | adjointe ou adjoint | Hand draft. Article-free (EM01). |
 | `role_finance_user` | a Finance user | responsable des finances | Hand draft. Article-free (EM01). |
 | `role_other` | a member of the team | membre de l’équipe | Hand draft. Article-free (EM01). |
+| `manage_line` | To change the time or cancel, use Manage your booking. | Pour changer l’heure ou annuler, utilisez Gérer votre réservation. | Hand draft. CRM-03 hand draft (#176). |
+| `manage_cta` | Manage your booking | Gérer votre réservation | Hand draft. CRM-03 hand draft (#176). |
 
 ## EM01: Staff invite
 
@@ -604,7 +611,7 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:fbb471777ea
 
 ## EX10: Refund complete
 
-Stripe confirms the refund (refund.updated succeeded; outbox invoice.refund_succeeded, template refund_complete). Honours email_notices. Audience: client. [French preview](../email/previews/fr/EX10.html)
+Not sent since 20261025530100: a card refund Stripe reports succeeded can still fail for up to 30 days and Stripe gives no final signal (docs.stripe.com/refunds#failed-refunds), so “complete” could be untrue. The client keeps EX09 (“on its way”) and gets EX20 if the refund fails. The renderer still maps template refund_complete here for mail queued before. Audience: client. [French preview](../email/previews/fr/EX10.html)
 
 Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:5609f6110cbf…`
 
@@ -615,6 +622,77 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:5609f6110cb
 | `heading` | Your refund is complete | Votre remboursement est complet | Machine draft |
 | `body` | {firm_name}’s refund has been sent. The details are in your portal. | Le remboursement de {firm_name} a été envoyé. Les détails se trouvent dans votre portail. | Machine draft. Keep {firm_name} |
 | `cta` | View payments | Afficher les paiements | Machine draft. Same English as another template; same French reused. |
+
+## EX20: Refund didn’t go through
+
+Stripe reports a refund failed or canceled after the client was told it was on its way (refund.failed / refund.updated; invoice_refunds moves from pending, requires_action or succeeded to failed or canceled; outbox invoice.refund_failed, template refund_failed), to the same people as EX09. Once per refund, also when Stripe replays the event. Sent even when the client turned Email notices off (a money correction; Francis 2026-10-25); suppressed (bounced or complained) addresses are not. A plain-words reason only for a closed, expired, lost or stolen card; never Stripe's code (bug #215 check 6; copy approved by Francis 2026-10-25). Audience: client. [French preview](../email/previews/fr/EX20.html)
+
+Status `machine_draft` · drafted 2026-10-25 · English hash `sha256:34b3867edc59…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject` | Your refund from {firm_name} didn’t go through | Votre remboursement de {firm_name} n’a pas abouti | Hand draft. EX20 hand draft (bug #215 refund correction). Not reviewed. Keep {firm_name} |
+| `preheader` | The money hasn’t reached you. The firm will contact you. | L’argent ne vous est pas parvenu. Le cabinet communiquera avec vous. | Hand draft. EX20 hand draft (bug #215 refund correction). Not reviewed. |
+| `heading` | Your refund didn’t go through | Votre remboursement n’a pas abouti | Hand draft. EX20 hand draft (bug #215 refund correction). Not reviewed. |
+| `body` | The refund from {firm_name} didn’t go through, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way. | Le remboursement de {firm_name} n’a pas abouti; l’argent ne vous est donc pas parvenu. Veuillez ne pas tenir compte de notre courriel précédent au sujet de ce remboursement. {firm_name} communiquera avec vous pour le faire autrement. | Hand draft. EX20 hand draft (bug #215 refund correction). Not reviewed. Keep {firm_name} |
+| `body_card` | The refund from {firm_name} didn’t go through because the card it was sent to is no longer active, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way. | Le remboursement de {firm_name} n’a pas abouti parce que la carte visée n’est plus active; l’argent ne vous est donc pas parvenu. Veuillez ne pas tenir compte de notre courriel précédent au sujet de ce remboursement. {firm_name} communiquera avec vous pour le faire autrement. | Hand draft. EX20 hand draft (bug #215 refund correction). Not reviewed. Keep {firm_name} |
+| `cta` | View payments | Afficher les paiements | Hand draft. EX20 hand draft (bug #215 refund correction). Not reviewed. |
+
+## EX19: New notice (announcement)
+
+Staff with permission send an announcement from an approved firm template (send_announcement; outbox announcement.sent, template announcement), to each chosen client with a portal account. Honours email_notices. Never for a sample-mode firm. Firm name only: the announcement itself is in the portal (OPS-04). Audience: client. [French preview](../email/previews/fr/EX19.html)
+
+Status `machine_draft` · drafted 2026-10-24 · English hash `sha256:1a45496c2bab…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject` | A new notice from {firm_name} | Un nouvel avis de {firm_name} | Hand draft. EX19 hand draft (OPS-04, #179). Not reviewed. Keep {firm_name} |
+| `preheader` | Read it in your portal. | Lisez-le dans votre portail. | Hand draft. EX19 hand draft (OPS-04, #179). Not reviewed. |
+| `heading` | You have a new notice from {firm_name} | Vous avez un nouvel avis de {firm_name} | Hand draft. EX19 hand draft (OPS-04, #179). Not reviewed. Keep {firm_name} |
+| `body` | {firm_name} posted a notice for its clients. For your privacy, it is in your portal. | {firm_name} a publié un avis pour ses clients. Pour protéger votre vie privée, il se trouve dans votre portail. | Hand draft. EX19 hand draft (OPS-04, #179). Not reviewed. Keep {firm_name} |
+| `cta` | Open your portal | Ouvrir votre portail | Hand draft. EX19 hand draft (OPS-04, #179). Not reviewed. |
+
+## EX18: New enquiry (staff)
+
+Someone sends an enquiry from the firm's hosted page or website form (trigger leads_enquiry_notice; outbox lead.enquiry_received, template enquiry_received), to the firm's active owners and the lead's owner when set. Not for sample (practice) enquiries. Firm name only: never the enquirer's name or what they wrote (CRM-01). Audience: staff. [French preview](../email/previews/fr/EX18.html)
+
+Status `machine_draft` · drafted 2026-10-24 · English hash `sha256:05b5307ba082…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject` | New enquiry for {firm_name} | Nouvelle demande pour {firm_name} | Hand draft. EX18 hand draft (CRM-01, #176). Keep {firm_name} |
+| `preheader` | Open the Pipeline in Casevoya to read it. | Ouvrez le pipeline dans Casevoya pour la lire. | Hand draft. EX18 hand draft (CRM-01, #176). |
+| `heading` | You have a new enquiry | Vous avez une nouvelle demande | Hand draft. EX18 hand draft (CRM-01, #176). |
+| `body` | Someone sent {firm_name} an enquiry from your enquiry page or website form. For their privacy, the details are in the Pipeline. | Quelqu’un a envoyé une demande à {firm_name} depuis votre page de demande ou le formulaire de votre site. Pour protéger sa vie privée, les détails sont dans le pipeline. | Hand draft. EX18 hand draft (CRM-01, #176). Keep {firm_name} |
+| `cta` | Open the Pipeline | Ouvrir le pipeline | Hand draft. EX18 hand draft (CRM-01, #176). |
+
+## EX17: Consultant changed
+
+Staff change a matter's responsible consultant from the matter's People tab (change_responsible_consultant; outbox matter.consultant_changed, template consultant_changed), to each person on the matter with a portal account. Honours email_notices. Firm name only: the new consultant's name is in the portal, not the email (ORG-06). Audience: client. [French preview](../email/previews/fr/EX17.html)
+
+Status `machine_draft` · drafted 2026-10-24 · English hash `sha256:aec282098709…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject` | An update on your file from {firm_name} | Une mise à jour de votre dossier de {firm_name} | Hand draft. EX17 hand draft (ORG-06, #175). Keep {firm_name} |
+| `preheader` | Your consultant has changed. See who in your portal. | Votre consultant a changé. Voyez qui dans votre portail. | Hand draft. EX17 hand draft (ORG-06, #175). |
+| `heading` | Your consultant has changed | Votre consultant a changé | Hand draft. EX17 hand draft (ORG-06, #175). |
+| `body` | A different consultant at {firm_name} is now responsible for your file, and your file stays with {firm_name}. For your privacy, their name is in your portal, along with anything you may need to sign. If you have questions or don't agree with this change, contact {firm_name}. | Un autre consultant de {firm_name} est maintenant responsable de votre dossier, qui reste chez {firm_name}. Pour protéger votre vie privée, son nom figure dans votre portail, avec tout document que vous pourriez avoir à signer. Si vous avez des questions ou n'êtes pas d'accord avec ce changement, communiquez avec {firm_name}. | Hand draft. EX17 hand draft (ORG-06, #175). Keep {firm_name} |
+| `cta` | Open your portal | Ouvrir votre portail | Hand draft. EX17 hand draft (ORG-06, #175). |
+
+## EX16: Signing code
+
+The booker asks for a code on a consultation agreement's private signing page (issue_booking_agreement_code; outbox booking_agreement.code, template signing_code), to the booking's primary attendee. The code is sealed by the app and opened by the mail worker; it works for 10 minutes. Honours email_notices. Copy pending Francis (#166). Audience: client. [French preview](../email/previews/fr/EX16.html)
+
+Status `machine_draft` · drafted 2026-10-23 · English hash `sha256:cf8ca1398997…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject` | Your signing code from {firm_name} | Votre code de signature de {firm_name} | Hand draft. EX16 hand draft (#166). Keep {firm_name} |
+| `preheader` | It works for 10 minutes. | Il est valide pendant 10 minutes. | Hand draft. EX16 hand draft (#166). |
+| `heading` | Your signing code | Votre code de signature | Hand draft. EX16 hand draft (#166). |
+| `body` | Enter this code to confirm it’s you and sign your consultation agreement from {firm_name}. It works for 10 minutes. If you didn’t ask for it, you can ignore this email. | Entrez ce code pour confirmer votre identité et signer votre convention de consultation de {firm_name}. Il est valide pendant 10 minutes. Si vous ne l’avez pas demandé, vous pouvez ignorer ce courriel. | Hand draft. EX16 hand draft (#166). Keep {firm_name} |
+| `body_missing` | Your code from {firm_name} couldn’t be added to this email. Go back to the signing page and ask for a new code. | Votre code de {firm_name} n’a pas pu être ajouté à ce courriel. Retournez à la page de signature et demandez un nouveau code. | Hand draft. EX16 hand draft (#166). Keep {firm_name} |
 
 ## EX11: Support access requested
 
