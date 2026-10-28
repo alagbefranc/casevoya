@@ -57,8 +57,8 @@ const MESSAGES: Record<string, string> = {
   failed: "Vo couldn’t finish. Nothing was sent. Write it yourself, or try again.",
   // Document reading.
   category_off: "The firm owner hasn’t let Vo read this kind of document. Review it yourself; nothing was read.",
-  // SEC-05: the client said no to AI drafting, or withdrew it, in their portal.
-  client_ai_off: "This client hasn’t agreed to AI drafting, so Vo doesn’t read their documents. Review it yourself; nothing was read.",
+  // SEC-05, decision #263-3: the client hasn't said yes to AI drafting (never asked, said no, or withdrew it).
+  client_ai_off: "This client hasn’t agreed to AI help with their documents yet. Nothing was read; review it yourself.",
   not_clean: "Vo reads only files that passed the upload check.",
   already_read: "Vo already read this version. Its proposals are waiting on the matter’s Documents tab.",
   unsupported_file: "Vo can read PDFs and JPEG, PNG, WebP or GIF images up to 20 MB (5 MB for an image). Review this one yourself.",
@@ -74,4 +74,17 @@ const MESSAGES: Record<string, string> = {
 
 export function voError(code: string): string {
   return MESSAGES[code] ?? MESSAGES.failed;
+}
+
+/**
+ * Decision #263-3: Vo reads a client's documents only after the client said yes to AI drafting help.
+ * Names the client, and points to the one place a client gives that consent: their portal's Account
+ * page (a client without a portal sign-in needs a portal invitation first).
+ */
+export function clientAiOffMessage(name: string | null, hasPortal: boolean): string {
+  const who = name?.trim() || "This client";
+  const how = hasPortal
+    ? "They can turn on AI drafting help in their client portal, under Account."
+    : "Invite them to the client portal; they can turn on AI drafting help under Account.";
+  return `${who} hasn’t agreed to AI help with their documents yet. ${how} Nothing was read; review it yourself.`;
 }
