@@ -64,6 +64,7 @@ export function fileProblem(scanResult: string | null, declaredMediaType: string
   if (scanResult === "extension_mismatch") return `not a ${TYPE_LABEL[declaredMediaType] ?? "matching file"}`;
   if (scanResult === "size_mismatch") return "size doesn’t match";
   if (scanResult === "unrecognized_type") return "unknown file type";
+  if (scanResult === "infected") return "a virus was found";
   return "can’t be checked";
 }
 
@@ -96,24 +97,35 @@ export type QueueEntry = {
 
 /**
  * A passed file check, honestly (DOC-02): "Clean" only when a malware scanner checked it. Without
- * one the file's real type was checked, and nothing more.
+ * one the file's real type was checked, and nothing more. #263-B: once virus scanning is on
+ * (`scanningOn`), a type-checked file was stored before it and says so. A sealed agreement
+ * (scan_result in_house_seal) is made by Casevoya itself and keeps the type-check label.
  */
-export function scanChip(engine: string | null | undefined): DocChip {
+export function scanChip(engine: string | null | undefined, options: { scanningOn?: boolean; scanResult?: string | null } = {}): DocChip {
   if (engine === undefined || engine === "worker") return { tone: "ok", label: "Clean" };
+  if (options.scanningOn && options.scanResult !== "in_house_seal") return { tone: "unv", label: "Not virus-scanned (uploaded before scanning)" };
   return { tone: "unv", label: "Type checked, not virus-scanned" };
 }
 
 /** What To review shows for a document's current version, or null when it needs nothing. */
-export function queueEntry(version: VersionFacts, today: string): QueueEntry | null {
+export function queueEntry(version: VersionFacts, today: string, options: { scanningOn?: boolean } = {}): QueueEntry | null {
   if (version.supersededAt) return null;
+  if (version.uploadState === "quarantined" && version.scanResult === "infected") {
+    // #263-B: the virus scanner found one. Nobody can open it; the client is asked for another copy.
+    return { scan: { tone: "bad", pair: ["Blocked", "a virus was found"] }, review: "Can’t open", flag: "quarantined", reviewable: false };
+  }
   if (version.uploadState === "quarantined") {
     return { scan: { tone: "bad", pair: ["Quarantined", fileProblem(version.scanResult, version.declaredMediaType)] }, review: "Can’t open", flag: "quarantined", reviewable: false };
   }
   if (version.uploadState === "failed") {
     return { scan: { tone: "bad", pair: ["Check failed", fileProblem(version.scanResult, version.declaredMediaType)] }, review: "Can’t open", flag: "quarantined", reviewable: false };
   }
+  if (version.uploadState === "scan_failed") {
+    // #263-B: the scanner couldn't check it after every retry; Casevoya keeps trying.
+    return { scan: { tone: "chg", pair: ["Couldn’t be checked yet", "virus check didn’t run"] }, review: "Can’t open", flag: "quarantined", reviewable: false };
+  }
   if (version.uploadState !== "clean") return null;
-  const clean = scanChip(version.scanEngine);
+  const clean = scanChip(version.scanEngine, { scanningOn: options.scanningOn, scanResult: version.scanResult });
   if (version.reviewState === "pending") return { scan: clean, review: { tone: "rev", label: "Awaiting review" }, flag: "review", reviewable: true };
   if (version.reviewState === "accepted" && version.expiresOn) {
     if (version.expiresOn < today) return { scan: clean, review: { tone: "bad", label: "Expired" }, flag: "expiring", reviewable: true };
@@ -137,9 +149,13 @@ const CARD_TONE: Record<string, DocTone> = {
   "Checking file": "unv",
   Requested: "chg",
   Superseded: "unv",
+  // #263-B
+  "Checking for viruses…": "unv",
+  "Blocked: a virus was found": "bad",
+  "Couldn’t be checked yet": "chg",
 };
 
-const UPLOADS = new Set(["uploading", "scanning", "quarantined", "clean", "failed"]);
+const UPLOADS = new Set(["uploading", "scanning", "quarantined", "clean", "failed", "scan_failed"]);
 const REVIEWS = new Set(["pending", "accepted", "rejected"]);
 
 /** The All documents card chips, in the Designer's words ("Check failed" reads "Upload failed"). */
@@ -149,6 +165,7 @@ export function cardStates(version: VersionFacts | null, today: string): DocChip
     reviewState: version && REVIEWS.has(version.reviewState) ? (version.reviewState as ReviewState) : null,
     superseded: Boolean(version?.supersededAt),
     expired: Boolean(version?.expiresOn && version.expiresOn < today),
+    scanResult: version?.scanResult ?? null,
   });
   return flags.labels.map((label) => {
     const text = label === "Check failed" ? "Upload failed" : label;
