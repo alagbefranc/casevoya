@@ -1139,6 +1139,15 @@ Issue #259 fix 5, branch `fix/onboarding-259`. Apply in order. Each Continue on 
 
 Tested in `tests/setup-office.rls.test.ts`.
 
+## Vo reads a client's documents only with their AI consent (`20261028150000`, not applied on the live project)
+
+Decision #263-3, branch `fix/vo-ai-consent-default`. Additive (function bodies only, no data changes).
+
+* `20261028150000_vo_ai_consent_opt_in.sql` **redefines** `app.person_declines_ai` (latest in `20261025270100_sec_sessions_consent.sql`): true unless the person's latest AI drafting record is a yes that hasn't been withdrawn (was: true only for a no or a withdrawn yes). A person with no AI drafting record is now skipped by Vo. Signature and grants unchanged.
+* It **redefines** `public.begin_vo_document_review` (latest in `20261025270100_sec_sessions_consent.sql`): the `client_ai_off` result also carries `person_id`, so the app can name the client. Otherwise unchanged. It is the only caller of `app.person_declines_ai`.
+* `app.person_consent_state` is unchanged.
+
+Tested in `tests/sec-sessions-consent.rls.test.ts` and `tests/vo-doc-review.rls.test.ts`.
 ## Possible match on a booking-page booking (`20261028140000`, not applied on the live project)
 
 Issue #263 item C, branch `feat/booking-possible-match`. One additive migration; it redefines no function (`booking_public_hold`, `app.place_booking` and `prepare_email_delivery` are untouched, so it merges cleanly with #264's redefinitions). No enum values.
