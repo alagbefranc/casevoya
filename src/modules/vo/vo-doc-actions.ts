@@ -4,7 +4,7 @@ import { safeAccessError } from "@/lib/auth/step-up";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { callVoAgent, voAgentConfigured } from "./agent-client";
-import { voError } from "./errors";
+import { clientAiOffMessage, voError } from "./errors";
 import { VO_DOC_CATEGORY_LABEL, type VoDocCategory } from "./vo-doc";
 
 type Result<T extends object = object> = ({ ok: true } & T) | { error: string };
@@ -24,7 +24,9 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export async function readDocumentWithVo(input: {
   organizationId: string;
   versionId: string;
-}): Promise<Result<{ draftId: string; matterId: string; text: string; needsRule: boolean }> | { ok: true; abstained: true } | { error: string; draftId?: string; matterId?: string }> {
+}): Promise<
+  Result<{ draftId: string; matterId: string; text: string; needsRule: boolean }> | { ok: true; abstained: true } | { error: string; draftId?: string; matterId?: string; code?: "client_ai_off" }
+> {
   if (!isUuid(input.organizationId) || !isUuid(input.versionId)) return { error: "Open a document to review first." };
   if (!voAgentConfigured()) return { error: voError("unavailable") };
   const supabase = await createClient({ organizationId: input.organizationId });
@@ -45,8 +47,15 @@ export async function readDocumentWithVo(input: {
 
   const begun = await supabase.rpc("begin_vo_document_review", { p_organization_id: input.organizationId, p_version_id: input.versionId });
   if (begun.error) return { error: /step-up|aal2/i.test(begun.error.message) ? safeAccessError(begun.error.message) : voError("denied") };
-  const run = (begun.data ?? {}) as { ok?: boolean; error?: string; run_id?: string; matter_id?: string; draft_id?: string; category?: string };
+  const run = (begun.data ?? {}) as { ok?: boolean; error?: string; run_id?: string; matter_id?: string; draft_id?: string; category?: string; person_id?: string };
   if (run.ok !== true || !run.run_id || !run.matter_id) {
+    if (run.error === "client_ai_off") {
+      // Decision #263-3: name the client (read as this staff member; RLS decides) and say how they consent.
+      const { data: person } = run.person_id && isUuid(run.person_id)
+        ? await supabase.from("persons").select("display_name, user_id").eq("organization_id", input.organizationId).eq("id", run.person_id).maybeSingle()
+        : { data: null };
+      return { error: clientAiOffMessage(person?.display_name ?? null, Boolean(person?.user_id)), code: "client_ai_off" };
+    }
     if (run.error === "already_read" && run.draft_id && run.matter_id) return { error: voError("already_read"), draftId: run.draft_id, matterId: run.matter_id };
     if (run.error === "category_off" && run.category && run.category in VO_DOC_CATEGORY_LABEL) {
       return { error: `${voError("category_off")} (${VO_DOC_CATEGORY_LABEL[run.category as VoDocCategory]})` };
