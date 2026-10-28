@@ -24,7 +24,7 @@ export async function loadEnquiryShare(staff: SheetStaff): Promise<EnquiryShareD
   const org = staff.organizationId;
   const supabase = await createClient({ organizationId: org });
   const [orgRow, privacy, types] = await Promise.all([
-    supabase.from("organizations").select("slug, display_name, sample_mode").eq("id", org).maybeSingle(),
+    supabase.from("organizations").select("slug, display_name, sample_mode, enquiry_page_enabled").eq("id", org).maybeSingle(),
     supabase.from("portal_policy_documents").select("id").eq("organization_id", org).eq("kind", "privacy_notice").limit(1),
     supabase
       .from("booking_event_types")
@@ -46,5 +46,6 @@ export async function loadEnquiryShare(staff: SheetStaff): Promise<EnquiryShareD
     practice: orgRow.data?.sample_mode === true,
     privacyMissing: !privacy.error && (privacy.data ?? []).length === 0,
     bookings: bookingLinks(origin, slug, types.data ?? []),
+    page: { enabled: orgRow.data?.enquiry_page_enabled !== false, owner: staff.role === "firm_owner", organizationId: org },
   };
 }

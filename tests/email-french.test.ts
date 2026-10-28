@@ -12,7 +12,7 @@
  *   was not re-drafted (node scripts/i18n/draft-email-fr.mjs --check reports the same thing).
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { EMAIL_TEMPLATES, type EmailContexts, type TemplateId } from "@/modules/email/designs/catalog";
+import { EMAIL_TEMPLATES, renderTemplate, type EmailContexts, type TemplateId } from "@/modules/email/designs/catalog";
 import { chooseEmailLanguage, frenchApproved, frenchBlocker } from "@/modules/email/designs/french";
 import { renderCopy } from "@/modules/email/designs/layout";
 import {
@@ -118,6 +118,10 @@ const VARIANTS: { [K in Catalogued]: EmailContexts[K][] } = {
   EX12: [{ firmName: FIRM, consultantName: "Sam Example" }, { firmName: FIRM }],
   EX13: [{ firmName: FIRM, replyBy: "2026-11-11" }, { firmName: FIRM }],
   EX16: [{ firmName: FIRM, code: "482913" }, { firmName: FIRM }, { firmName: FIRM, code: "12ab56" }],
+  EX17: [{ firmName: FIRM }],
+  EX20: [{ firmName: FIRM, refundReason: "expired_or_canceled_card" }, { firmName: FIRM, refundReason: "lost_or_stolen_card" }, { firmName: FIRM, refundReason: "unknown" }, { firmName: FIRM }],
+  EX18: [{ firmName: FIRM }],
+  EX19: [{ firmName: FIRM }],
   EX14: [
     { firmName: FIRM, respondBy: "2026-10-23", handlerName: "Sam Example" },
     { firmName: FIRM, respondBy: "2026-10-23" },
@@ -155,7 +159,8 @@ describe("localized builders", () => {
 
   it.each(CATALOGUED)("%s in English equals the approved English builder in every branch", (id) => {
     for (const context of VARIANTS[id]) {
-      const english = (EMAIL_TEMPLATES[id].build as (c: unknown, o: string) => unknown)(context, ORIGIN);
+      // renderTemplate: the build plus its English header tagline (ORG-01).
+      const english = renderTemplate(id as TemplateId, context as never, ORIGIN);
       expect(buildLocalized(id, "en", context as never, ORIGIN), JSON.stringify(context)).toEqual(english);
     }
   });

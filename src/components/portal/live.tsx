@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { AccountForm } from "./account-form";
+import { ConsentsPanel, TwoStepRow } from "./account-privacy";
+import type { PortalAccountExtras } from "@/modules/portal/account-present";
 import { AgreementsLive } from "./agreements-live";
 import { AppointmentsLive } from "./appointments-live";
 import { ChatError, ChatView } from "@/components/messages/chat";
@@ -11,6 +13,7 @@ import { PaymentsLive } from "./payments-live";
 import { WithdrawShare } from "./withdraw-share";
 import { PrintButton } from "./print-button";
 import type { ReceiptView } from "@/modules/finance/portal-receipt";
+import { accentInk } from "@/modules/firm-onboarding/firm-logo";
 import { HOME_CSS } from "./markup/portal";
 import { homeView, matterCards, type HomeView, type MatterCard } from "@/modules/portal/home-present";
 import type { PortalAgreements } from "@/modules/agreements/load";
@@ -21,6 +24,12 @@ import type { PortalAppointments } from "@/modules/scheduling/portal-load";
 import type { ChatData } from "@/modules/messages/present";
 import type { PortalIntake } from "@/modules/intake/portal-load";
 import type { PortalTask } from "@/modules/portal/tasks-load";
+import type { PortalNotice } from "@/modules/portal/notices";
+import { DismissNotice } from "./dismiss-notice";
+import { AcknowledgeDelivery } from "./acknowledge-delivery";
+import { PrivacyDownload } from "./privacy-download";
+import { DeniedNotice, PartialNotice, PortalDenied, PortalUnavailable } from "./states";
+import type { PortalDenied as Denied, PortalPart } from "@/modules/portal/states";
 
 export type PortalPayments = { data: PortalInvoices; invoiceId: string | null };
 
@@ -42,6 +51,20 @@ function icon(name: string, size?: "s") {
     </svg>
   );
 }
+
+/** DES-04: the invoice or receipt is the whole page, so a denied one replaces it. */
+const WHOLE_PAGE_DENIED = new Set<Denied>(["invoice", "receipt"]);
+
+/** DES-04: each page's heading and what it holds, for its couldn't-load state. */
+const UNAVAILABLE: Record<string, [string, string]> = {
+  documents: ["Documents", "documents"],
+  upload: ["Upload a document", "document requests"],
+  agreements: ["Agreements", "agreements"],
+  payments: ["Payments", "invoices"],
+  pay: ["Pay", "invoice"],
+  appointments: ["Appointments", "appointments"],
+  tasks: ["Tasks", "tasks"],
+};
 
 /** The sidebar chrome every live page shares with the designs (logo tile, matter pill). */
 /** The receipt page: the design's two columns (receipt card, then its actions). */
@@ -76,9 +99,14 @@ function roleLabel(role: string | null | undefined): string {
   return text ? text[0].toUpperCase() + text.slice(1) : "";
 }
 
-function FirmLogo({ name, logo }: { name: string; logo: string | null }) {
+/**
+ * The firm's tile (ORG-01): its logo on white, or its initials on the firm colour (text in
+ * whichever of white or near-black reads). Buttons keep Casevoya's blue either way.
+ */
+function FirmLogo({ name, logo, accent }: { name: string; logo: string | null; accent: string | null }) {
+  const tint = !logo && accent ? { background: accent, color: accentInk(accent) } : undefined;
   return (
-    <span className="firmlogo">
+    <span className="firmlogo" style={tint}>
       {logo ? <img src={logo} alt="" width={22} height={22} /> : initials(name)}
     </span>
   );
@@ -98,8 +126,14 @@ export function LivePortal({
   unread,
   home,
   logo,
+  accent,
   matters,
   receipt,
+  notices,
+  account,
+  denied = null,
+  failed = false,
+  partial,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -121,10 +155,22 @@ export function LivePortal({
   home?: HomeView | null;
   /** A short-lived link to the firm's logo, or null for its initials. */
   logo?: string | null;
+  /** The firm colour (#RRGGBB) for the initials tile, or null. */
+  accent?: string | null;
   /** The My matters cards (src/modules/portal/home-present.ts); built without tasks when not loaded. */
   matters?: MatterCard[] | null;
   /** The on-screen receipt (/portal/receipt?id=), or null when it can't be read. */
   receipt?: ReceiptView | null;
+  /** ORG-06: the person's own notices (their consultant changed), shown on Home. */
+  notices?: PortalNotice[] | null;
+  /** SEC-01, SEC-05: the Account page's two-step state and optional consents. */
+  account?: PortalAccountExtras | null;
+  /** DES-04: a record the address named that isn't the person's own (src/modules/portal/states.ts). */
+  denied?: Denied | null;
+  /** DES-04: this page's own records couldn't be read; it says so instead of showing them empty. */
+  failed?: boolean;
+  /** DES-04: parts of this page that couldn't be read (My matters' tasks or consultant). */
+  partial?: PortalPart[];
 }) {
   const name = viewer.person?.displayName ?? "Your account";
   const matter = viewer.matters[0];
@@ -136,13 +182,13 @@ export function LivePortal({
       <style dangerouslySetInnerHTML={{ __html: page === "receipt" ? CHROME_CSS + RECEIPT_CSS : CHROME_CSS }} />
       <a className="sr" href="#main">Skip to content</a>
       <header className="mhead">
-        <span style={{ display: "flex", gap: 12, alignItems: "center" }}><FirmLogo name={viewer.organizationName} logo={logo ?? null} />{viewer.organizationName}</span>
+        <span style={{ display: "flex", gap: 12, alignItems: "center" }}><FirmLogo name={viewer.organizationName} logo={logo ?? null} accent={accent ?? null} />{viewer.organizationName}</span>
         <button aria-label="Open menu" aria-expanded="false" style={{ color: "#fff", padding: 8 }} id="mOpen">{icon("menu")}</button>
       </header>
       <div className="frame">
         <aside className="side" id="side" aria-label="Portal">
           <div className="brand" style={{ justifyContent: "flex-start", gap: 12, fontWeight: 500, color: "#fff", fontSize: 15 }}>
-            <FirmLogo name={viewer.organizationName} logo={logo ?? null} />
+            <FirmLogo name={viewer.organizationName} logo={logo ?? null} accent={accent ?? null} />
             {viewer.organizationName}
             <button id="mClose" aria-label="Close menu" style={{ marginLeft: "auto", color: "#8b8680" }}>{icon("close")}</button>
           </div>
@@ -184,7 +230,16 @@ export function LivePortal({
               </span>
               <span className="acts"><a className="btn s sm" href="/help/client-home-screen" id="help">{icon("help", "s")}Help</a></span>
             </header>
-            <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} messages={messages} intake={intake ?? null} tasks={tasks ?? null} home={home ?? null} matters={matters ?? null} receipt={receipt ?? null} />
+            {/* DES-04: a matter, conversation or form the link named that isn't theirs; the page shows their own. */}
+            {denied && !WHOLE_PAGE_DENIED.has(denied) ? <DeniedNotice what={denied} firm={viewer.organizationName} /> : null}
+            {partial?.length ? <PartialNotice parts={partial} /> : null}
+            {denied && WHOLE_PAGE_DENIED.has(denied) && (page === "pay" || page === "receipt") ? (
+              <PortalDenied what={denied} firm={viewer.organizationName} />
+            ) : failed && UNAVAILABLE[page] ? (
+              <PortalUnavailable title={UNAVAILABLE[page][0]} part={UNAVAILABLE[page][1]} href={current} />
+            ) : (
+              <LiveMain page={page} viewer={viewer} documents={documents ?? null} agreements={agreements ?? null} payments={payments ?? null} appointments={appointments ?? null} messages={messages} intake={intake ?? null} tasks={tasks ?? null} home={home ?? null} matters={matters ?? null} receipt={receipt ?? null} notices={notices ?? null} account={account ?? null} />
+            )}
           </div>
         </main>
         <footer className="statusbar">
@@ -210,6 +265,8 @@ function LiveMain({
   home,
   matters,
   receipt,
+  notices,
+  account = null,
 }: {
   page: string;
   viewer: PortalViewer;
@@ -223,6 +280,8 @@ function LiveMain({
   home: HomeView | null;
   matters: MatterCard[] | null;
   receipt: ReceiptView | null;
+  notices: PortalNotice[] | null;
+  account?: PortalAccountExtras | null;
 }) {
   // Messages: the chat view (redesigned as a chat view at the owner's request, 2026-10-18).
   if (page === "messages" && messages !== undefined) {
@@ -240,15 +299,17 @@ function LiveMain({
     );
   }
   if (page === "appointments") {
-    return appointments ? <AppointmentsLive viewer={viewer} data={appointments} /> : <Stub page={page} />;
+    return appointments ? <><PartialNotice parts={appointments.unavailable ?? []} /><AppointmentsLive viewer={viewer} data={appointments} /></> : <Stub page={page} />;
   }
   if (page === "payments") {
-    return payments ? <PaymentsLive viewer={viewer} data={payments.data} /> : <Stub page={page} />;
+    return payments ? <><PartialNotice parts={payments.data.unavailable ?? []} /><PaymentsLive viewer={viewer} data={payments.data} /></> : <Stub page={page} />;
   }
   if (page === "pay") {
     const invoice = payments?.data.invoices.find((row) => row.id === payments.invoiceId);
     if (!payments || !invoice) return <Stub page={page} />;
     return (
+      <>
+      <PartialNotice parts={payments.data.unavailable ?? []} />
       <PayLive
         invoice={invoice}
         organizationId={viewer.organizationId}
@@ -257,22 +318,23 @@ function LiveMain({
         publishableKey={payments.data.publishableKey}
         payable={payments.data.payable}
       />
+      </>
     );
   }
   if (page === "documents" || page === "upload") {
-    return documents ? <DocumentsLive page={page} viewer={viewer} documents={documents} /> : <Stub page={page} />;
+    return documents ? <><PartialNotice parts={documents.unavailable ?? []} /><DocumentsLive page={page} viewer={viewer} documents={documents} /></> : <Stub page={page} />;
   }
   if (page === "agreements") {
     return agreements ? <AgreementsLive viewer={viewer} agreements={agreements} /> : <Stub page={page} />;
   }
   if (page === "receipt") return receipt ? <LiveReceipt view={receipt} /> : <Stub page={page} />;
-  if (page === "home") return <LiveHome viewer={viewer} view={home ?? emptyHome(viewer)} />;
+  if (page === "home") return <LiveHome viewer={viewer} view={home ?? emptyHome(viewer)} notices={notices ?? []} />;
   if (page === "matters") {
     return <LiveMatters viewer={viewer} cards={matters ?? matterCards({ matters: viewer.matters, tasks: [], consultants: new Map(), timezone: viewer.timezone })} />;
   }
   if (page === "family" || page === "rafael" || page === "olena") return <People viewer={viewer} />;
   if (page === "guardian") return <Guardian viewer={viewer} />;
-  if (page === "account") return <Account viewer={viewer} />;
+  if (page === "account") return <Account viewer={viewer} account={account} />;
   if ((page === "intake" || page === "correction") && intake) return <IntakeLive viewer={viewer} data={intake.data} correction={page === "correction"} field={intake.field} />;
   if (page === "intake" || page === "correction") return <Sections viewer={viewer} correction={page === "correction"} />;
   if (page === "tasks" && tasks) return <TasksLive viewer={viewer} tasks={tasks} />;
@@ -339,9 +401,12 @@ function emptyHome(viewer: PortalViewer): HomeView {
 }
 
 /** The client's Home, laid out as design/portal/pages/portal.html (HomeMarkup), from their own records. */
-function LiveHome({ viewer, view }: { viewer: PortalViewer; view: HomeView }) {
+function LiveHome({ viewer, view, notices }: { viewer: PortalViewer; view: HomeView; notices: PortalNotice[] }) {
   const hello = view.firstName ? `Hi ${view.firstName}.` : "Hi.";
   const step = { done: "d", current: "c", todo: "" } as const;
+  // DES-04: a part that couldn't be read says so where it would be, never "nothing".
+  const missing = new Set(view.unavailable ?? []);
+  const notShown = (what: string) => `${what} couldn’t be shown just now.`;
   return (
     <div id="pc">
       {/* The design indents Payments under Messages on a phone; stacked, both start at the edge. */}
@@ -350,6 +415,22 @@ function LiveHome({ viewer, view }: { viewer: PortalViewer; view: HomeView }) {
         <h1 className="display" id="hi">{hello}</h1>
         <p>Here’s what to do next, and where your application stands.</p>
       </div>
+      <PartialNotice parts={view.unavailable ?? []} />
+      {notices.map((notice) => (
+        <div key={notice.id} className="alert info rv" role="status" style={{ marginBottom: 16, alignItems: "center" }}>
+          {icon("info")}
+          <div style={{ flex: 1 }}>
+            <b>{notice.title}</b>
+            {notice.body}
+          </div>
+          {/* SEC-06: a privacy response to download, or an extension notice that stays while it applies. */}
+          {"download" in notice && notice.download ? (
+            <PrivacyDownload organizationId={viewer.organizationId} deliveryId={(notice.download as { deliveryId: string }).deliveryId} />
+          ) : "fixed" in notice ? null : (
+            <DismissNotice organizationId={viewer.organizationId} noticeId={notice.id} />
+          )}
+        </div>
+      ))}
       <section className={view.next.calm ? "next rv calm" : "next rv"} style={{ "--i": "1" } as CSSProperties}>
         <img className="nx-vo" src="/assets/vo/vo-point-96.png" srcSet="/assets/vo/vo-point-192.png 2x" width={56} height={56} alt="" />
         <div>
@@ -381,6 +462,86 @@ function LiveHome({ viewer, view }: { viewer: PortalViewer; view: HomeView }) {
           </p>
         </>
       ) : null}
+      {view.government?.length ? (
+        <div className="panel rv" style={{ "--i": "3", marginBottom: 24 } as CSSProperties} id="gov">
+          <h2>Updates from {viewer.organizationName}</h2>
+          <div className="rank">
+            {view.government.map((record, index) => (
+              <div key={index}>
+                {icon("info", "s")}
+                <span>
+                  <b style={{ fontWeight: 500, display: "block" }}>{record.title}</b>
+                  {record.lines.map((line) => <span key={line} style={{ display: "block", fontSize: 14 }}>{line}</span>)}
+                  <small style={{ display: "block", color: "var(--t2)", fontSize: 13, marginTop: 4 }}>{record.recorded}</small>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {view.renewals?.length ? (
+        <div className="panel rv" style={{ "--i": "3", marginBottom: 24 } as CSSProperties} id="renewals">
+          <h2>Renewal reminders</h2>
+          <div className="rank">
+            {view.renewals.map((renewal, index) => (
+              <div key={index}>
+                {icon("calendar", "s")}
+                <span>
+                  <b style={{ fontWeight: 500, display: "block" }}>{renewal.title}</b>
+                  {renewal.lines.map((line) => <span key={line} style={{ display: "block", fontSize: 14 }}>{line}</span>)}
+                  {renewal.timing ? (
+                    <small style={{ display: "block", color: "var(--t2)", fontSize: 13, marginTop: 4 }}>
+                      {renewal.timing.text} <a href={renewal.timing.href} target="_blank" rel="noopener noreferrer">Official page</a>, {renewal.timing.facts}
+                    </small>
+                  ) : null}
+                  {renewal.fee ? (
+                    <small style={{ display: "block", color: "var(--t2)", fontSize: 13, marginTop: 4 }}>
+                      {renewal.fee.text} <a href={renewal.fee.href} target="_blank" rel="noopener noreferrer">IRCC fee list</a>
+                    </small>
+                  ) : null}
+                  {/* DES-04 stale-source: the official timing or fee above may no longer be current. */}
+                  {renewal.stale?.length ? (
+                    <small style={{ display: "block", color: "var(--t2)", fontSize: 13, marginTop: 6 }} role="note" data-state="stale-source">
+                      <span className="bd chg"><i></i>May be out of date</span> {renewal.stale.join(" ")} Ask {viewer.organizationName} to confirm it before you rely on it.
+                    </small>
+                  ) : null}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {view.followUp ? (
+        <div className="panel rv" style={{ "--i": "3", marginBottom: 24 } as CSSProperties} id="decision">
+          <h2>After your decision</h2>
+          {view.followUp.summary ? (
+            <>
+              <h3>Summary of your conditions, from {viewer.organizationName}</h3>
+              <p style={{ fontSize: 14, whiteSpace: "pre-wrap", margin: "0 0 6px" }}>{view.followUp.summary.body}</p>
+              <small style={{ display: "block", color: "var(--t2)", fontSize: 13, marginBottom: 14 }}>{view.followUp.summary.line}</small>
+            </>
+          ) : null}
+          {view.followUp.deliveries.length ? (
+            <>
+              <h3>Decision documents sent to you</h3>
+              <div className="rank">
+                {view.followUp.deliveries.map((row) => (
+                  <div key={row.id}>
+                    {icon("file", "s")}
+                    <span style={{ flex: 1 }}>
+                      <b style={{ fontWeight: 500, display: "block" }}>{row.title}</b>
+                      <small style={{ display: "block", color: "var(--t2)", fontSize: 13 }}>{row.acknowledged ?? row.detail}</small>
+                    </span>
+                    <span className="r">
+                      {row.acknowledged ? <span className="bd ok"><i></i>Received</span> : <AcknowledgeDelivery organizationId={viewer.organizationId} deliveryId={row.id} />}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </div>
+      ) : null}
       <div className="panel rv" style={{ "--i": "3" } as CSSProperties}>
         <h2>Documents you’ve sent<span className="r" style={{ fontSize: 13, color: "var(--t2)" }}>Uploaded and accepted are shown separately</span></h2>
         <div className="split" style={{ "--n": "2" } as CSSProperties} id="docs">
@@ -389,7 +550,7 @@ function LiveHome({ viewer, view }: { viewer: PortalViewer; view: HomeView }) {
             <div className="rank">
               {view.docs.accepted.length ? view.docs.accepted.map((doc) => (
                 <div key={doc.key}>{icon("check-circle", "s")}{doc.title}<span className="r"><span className="bd ok"><i></i>Accepted</span></span></div>
-              )) : <div style={{ color: "var(--t2)" }}>Nothing accepted yet.</div>}
+              )) : <div style={{ color: "var(--t2)" }}>{missing.has("documents") ? notShown("Your documents") : "Nothing accepted yet."}</div>}
             </div>
           </div>
           <div>
@@ -397,7 +558,7 @@ function LiveHome({ viewer, view }: { viewer: PortalViewer; view: HomeView }) {
             <div className="rank">
               {view.docs.pending.length ? view.docs.pending.map((doc) => (
                 <div key={doc.key}>{icon(doc.tone === "chg" ? "alert" : "clock", "s")}{doc.title}<span className="r"><span className={`bd ${doc.tone}`}><i></i>{doc.label}</span></span></div>
-              )) : <div style={{ color: "var(--t2)" }}>Nothing waiting for review.</div>}
+              )) : <div style={{ color: "var(--t2)" }}>{missing.has("documents") ? notShown("Your documents") : "Nothing waiting for review."}</div>}
             </div>
           </div>
         </div>
@@ -412,7 +573,11 @@ function LiveHome({ viewer, view }: { viewer: PortalViewer; view: HomeView }) {
               <span className="r"><small className="num" style={{ color: "var(--t2)" }}>{view.message.when}</small></span>
             </a>
           ) : (
-            <div className="li"><div><b>No messages yet</b><small>Write to {viewer.organizationName} from Messages.</small></div></div>
+            missing.has("messages") ? (
+              <a className="li" href="/portal/messages"><div><b>{notShown("Messages")}</b><small>Open Messages to try again.</small></div></a>
+            ) : (
+              <div className="li"><div><b>No messages yet</b><small>Write to {viewer.organizationName} from Messages.</small></div></div>
+            )
           )}
         </div>
         <div>
@@ -423,7 +588,11 @@ function LiveHome({ viewer, view }: { viewer: PortalViewer; view: HomeView }) {
               <span className="r"><b className="num">{view.invoice.amount}</b><a className="btn p sm" href={view.invoice.href}>Pay</a></span>
             </div>
           ) : (
-            <div className="li"><div><b>Nothing to pay</b><small>Invoices from {viewer.organizationName} appear here.</small></div></div>
+            missing.has("payments") ? (
+              <a className="li" href="/portal/payments"><div><b>{notShown("Payments")}</b><small>Open Payments to try again.</small></div></a>
+            ) : (
+              <div className="li"><div><b>Nothing to pay</b><small>Invoices from {viewer.organizationName} appear here.</small></div></div>
+            )
           )}
         </div>
       </div>
@@ -641,7 +810,7 @@ function Shares({ viewer }: { viewer: PortalViewer }) {
   );
 }
 
-function Account({ viewer }: { viewer: PortalViewer }) {
+function Account({ viewer, account }: { viewer: PortalViewer; account: PortalAccountExtras | null }) {
   const person = viewer.person;
   return (
     <div id="pc">
@@ -662,8 +831,10 @@ function Account({ viewer }: { viewer: PortalViewer }) {
               </form>
             </span>
           </div>
+          {person ? <TwoStepRow organizationId={viewer.organizationId} firm={viewer.organizationName} state={account?.twoStep ?? null} /> : null}
         </div>
       </div>
+      {person && account?.consents ? <ConsentsPanel organizationId={viewer.organizationId} firm={viewer.organizationName} consents={account.consents} /> : null}
     </div>
   );
 }
@@ -695,11 +866,11 @@ function Sections({ viewer, correction }: { viewer: PortalViewer; correction: bo
 
 function Stub({ page }: { page: string }) {
   const copy: Record<string, [string, string]> = {
-    tasks: ["No tasks yet", "Your tasks couldn’t be shown just now. Try again in a moment."],
+    tasks: ["Tasks", "Your tasks couldn’t be shown just now. Try again in a moment."],
     documents: ["No documents yet", "When your firm asks for a document, it appears here."],
     upload: ["Nothing to upload", "Your firm has not requested a document."],
-    messages: ["No messages yet", "Messages aren’t stored yet."],
-    appointments: ["No appointments yet", "Appointments aren’t stored yet."],
+    messages: ["Messages", "Your messages couldn’t be shown just now. Try again in a moment."],
+    appointments: ["Appointments", "Your appointments couldn’t be shown just now. Try again in a moment."],
     agreements: ["No agreements yet", "When your firm sends an agreement, it appears here."],
     payments: ["Nothing to pay", "When your firm sends an invoice, it appears here."],
     pay: ["Choose an invoice", "Open Payments and choose the invoice you want to pay."],

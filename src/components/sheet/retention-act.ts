@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { k2Slider, toast2 } from "@/components/port/kit";
 import { saveRetentionPolicy } from "@/modules/settings/retention-actions";
 import { RETENTION_DRAFT, retentionStepUpLocation } from "@/modules/settings/retention";
@@ -48,7 +49,7 @@ export async function runRetentionSave(button: HTMLElement, router: Router) {
       } catch {
         // The slider then starts at the saved period after the step-up.
       }
-      window.location.assign(retentionStepUpLocation());
+      goStepUp(retentionStepUpLocation());
       return;
     }
     toast2(result.error, { kind: "bad", sub: "Nothing was changed." });

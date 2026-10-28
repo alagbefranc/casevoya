@@ -21,6 +21,37 @@ const FIELD_OF: Record<string, EnquiryField> = {
   consent_required: "ok",
 };
 
+/**
+ * CRM-01: where the visitor came from: the utm_* in this page's address (the embed script copies
+ * the website page's into the iframe's), and the referrer's host, or for the embed the host of the
+ * page it sits on.
+ */
+export function pageAttribution(embedded: boolean, location: { search: string; hostname: string } = window.location, referrer: string = document.referrer): Record<string, string> {
+  const params = new URLSearchParams(location.search);
+  const out: Record<string, string> = {};
+  for (const key of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"]) {
+    const value = params.get(key);
+    if (value) out[key] = value.slice(0, 200);
+  }
+  const host = (value: string | null) => {
+    try {
+      return value ? new URL(value.includes("://") ? value : `https://${value}`).hostname : null;
+    } catch {
+      return null;
+    }
+  };
+  if (embedded) {
+    const site = host(params.get("cv_host")) ?? host(referrer);
+    if (site) out.embed_host = site;
+    const came = host(params.get("cv_ref"));
+    if (came && came !== site) out.referrer_host = came;
+  } else {
+    const came = host(referrer);
+    if (came && came !== location.hostname) out.referrer_host = came;
+  }
+  return out;
+}
+
 function newKey(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `k${Date.now()}${Math.random().toString(36).slice(2)}`;
 }
@@ -117,6 +148,7 @@ export function EnquiryLive({ base, firmSlug, firmName }: EnquiryLiveProps) {
           key: key.current,
           website: String(form.get("website") ?? ""),
           elapsedMs: Math.max(0, Date.now() - opened.current),
+          attribution: pageAttribution(base.embedded === true),
         }),
       });
       const body = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string; message?: string };

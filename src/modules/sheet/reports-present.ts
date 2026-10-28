@@ -5,11 +5,11 @@
  * government processing estimate is invented: firm work time and government processing are
  * measured separately, from the firm's own stage history.
  */
-import type { ReportBar, ReportRange, ReportsTab, OutcomeRow, FirmTimeRow } from "@/components/sheet/designer/reports";
-import { programLabel } from "@/modules/sheet/matters-present";
+import type { ReportBar, ReportRange, ReportsTab } from "@/components/sheet/designer/reports";
 import { plusDays, stageLabel } from "@/modules/sheet/present";
 import { safeZone } from "@/modules/scheduling/format";
 import { localToUtc } from "@/modules/scheduling/slots";
+import { isOverdue } from "@/modules/sheet/tasks-present";
 
 export const REPORT_TABS: readonly ReportsTab[] = ["ops", "money", "outcomes", "scheduled"];
 
@@ -123,7 +123,7 @@ export function stageAgeing(matters: OpenMatterInput[], stageOrder: readonly str
     });
 }
 
-export type WorkloadTask = { ownerMembershipId: string | null; matterId: string | null; dueOn: string | null; status: string };
+export type WorkloadTask = { ownerMembershipId: string | null; matterId: string | null; dueOn: string | null; dueAt?: string | null; status: string };
 export type WorkloadMatter = { id: string; consultantMembershipId: string | null };
 
 /** Per active staff member: open internal tasks they own, how many are overdue, and their matters. */
@@ -132,7 +132,10 @@ export function workload(
   tasks: WorkloadTask[],
   openMatters: WorkloadMatter[],
   today: string,
+  /** With `now`, overdue follows the Tasks page's rule (a due time before now counts too). */
+  now?: Date,
 ) {
+  const late = (task: WorkloadTask) => (now ? isOverdue(task.dueOn, task.dueAt ?? null, today, now) : task.dueOn !== null && task.dueOn < today);
   return staff
     .map((person) => {
       const own = tasks.filter((task) => task.ownerMembershipId === person.id && (task.status === "open" || task.status === "blocked"));
@@ -142,7 +145,7 @@ export function workload(
       return {
         person: person.name,
         open: own.length,
-        overdue: own.filter((task) => task.dueOn !== null && task.dueOn < today).length,
+        overdue: own.filter(late).length,
         matters: matters.size,
       };
     })
@@ -197,14 +200,15 @@ export function receivablesAgeing(invoices: InvoiceInput[], today: string) {
     { age: "Not due", invoices: 0, cents: 0 },
     { age: "1–30 days overdue", invoices: 0, cents: 0 },
     { age: "31–60 days", invoices: 0, cents: 0 },
-    { age: "Over 60 days", invoices: 0, cents: 0 },
+    { age: "61–90 days", invoices: 0, cents: 0 },
+    { age: "Over 90 days", invoices: 0, cents: 0 },
   ];
   for (const invoice of invoices) {
     if (invoice.currency.toUpperCase() !== "CAD" || !OPEN_INVOICE.has(invoice.status)) continue;
     const owed = owedCents(invoice);
     if (owed <= 0) continue;
     const late = invoice.dueOn >= today ? 0 : daysBetween(invoice.dueOn, today);
-    const index = late === 0 ? 0 : late <= 30 ? 1 : late <= 60 ? 2 : 3;
+    const index = late === 0 ? 0 : late <= 30 ? 1 : late <= 60 ? 2 : late <= 90 ? 3 : 4;
     buckets[index].invoices++;
     buckets[index].cents += owed;
   }
@@ -247,69 +251,7 @@ export function localMidnightIso(date: string, timeZone: string): string {
   return new Date(localToUtc(date, "00:00", safeZone(timeZone))).toISOString();
 }
 
-// ---------- Processing and outcomes ----------
-
-export type OutcomeMatterInput = {
-  program: string | null;
-  createdAt: string;
-  submittedAt: string | null;
-  decidedAt: string | null;
-  outcome: string | null;
-};
-
-/**
- * Government processing (submitted → decision review) and firm work time (opened → submitted),
- * grouped by program and the year the file was submitted. Pending files (no outcome) are
- * counted apart and never in a median. A median with fewer than MIN_DECIDED files is hidden.
- */
-export function processingRows(matters: OutcomeMatterInput[]): { rows: OutcomeRow[]; firm: FirmTimeRow[]; hidden: OutcomeRow[] } {
-  type Group = { program: string; year: string; decidedDays: number[]; decided: number; pending: number; firmDays: number[] };
-  const groups = new Map<string, Group>();
-  for (const matter of matters) {
-    if (!matter.submittedAt) continue;
-    const program = matter.program ? programLabel(matter.program) : "No program selected";
-    const year = matter.submittedAt.slice(0, 4);
-    const key = `${program}|${year}`;
-    const group = groups.get(key) ?? { program, year, decidedDays: [], decided: 0, pending: 0, firmDays: [] };
-    group.firmDays.push(daysBetween(matter.createdAt, matter.submittedAt));
-    if (matter.outcome) {
-      group.decided++;
-      if (matter.decidedAt && matter.decidedAt >= matter.submittedAt) group.decidedDays.push(daysBetween(matter.submittedAt, matter.decidedAt));
-    } else {
-      group.pending++;
-    }
-    groups.set(key, group);
-  }
-  const ordered = [...groups.values()].sort((a, b) => a.program.localeCompare(b.program) || b.year.localeCompare(a.year));
-  const rows: OutcomeRow[] = ordered.map((group) => {
-    const value = group.decided >= MIN_DECIDED ? median(group.decidedDays) : null;
-    return {
-      program: group.program,
-      cohort: `Submitted ${group.year}`,
-      decided: group.decided,
-      median: value === null ? "—" : String(value),
-      pending: group.pending,
-    };
-  });
-  const firm: FirmTimeRow[] = ordered.map((group) => ({
-    program: group.program,
-    cohort: `Submitted ${group.year}`,
-    files: group.firmDays.length,
-    median: String(median(group.firmDays) ?? 0),
-  }));
-  return { rows, firm, hidden: rows.filter((row) => row.decided < MIN_DECIDED) };
-}
-
-export function outcomesNote(hidden: OutcomeRow[], total: number): string {
-  const tail = "Outcomes by type are on the Decisions tab of each matter.";
-  if (!total) return `No file has been recorded as submitted yet. ${tail}`;
-  if (!hidden.length) return tail;
-  if (hidden.length === 1) {
-    const row = hidden[0];
-    return `${row.program} (${row.cohort.toLowerCase()}) has only ${row.decided} decided ${row.decided === 1 ? "file" : "files"}, so its median is hidden. ${tail}`;
-  }
-  return `${hidden.length} rows have fewer than ${MIN_DECIDED} decided files, so their medians are hidden. ${tail}`;
-}
+// ---------- Processing and outcomes: see reports-outcomes.ts ----------
 
 // ---------- Definitions shown on screen and in exports ----------
 
@@ -331,8 +273,6 @@ export const DEFINITIONS = {
   balances:
     "Definition: per client, held is verified deposits less approved transfers and refunds in the client-account ledger. Pending is deposits waiting for verification. This is the firm’s bookkeeping, not a bank statement.",
   recon: "Definition: signed client-account reconciliations that recorded exceptions, plus reconciliations still waiting for review.",
-  outcomes:
-    "Definition: government processing counts days from the move to Submitted to the move to Decision review, for files with a consultant-recorded outcome. Pending files are shown apart and never in the median. Cohort is the year of submission; the period chips don’t apply here.",
   firm:
     "Firm work time is measured separately: days from opening the matter to the move to Submitted. It is the firm’s own preparation time, not government processing.",
 } as const;

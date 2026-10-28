@@ -105,6 +105,8 @@ A rule may require multiple sources; use evidence links rather than cramming URL
 
 States: Draft → Evidence captured → Professional review → Approved → Published. Published versions can become Review due, Suspended, or Superseded. Rejected drafts remain traceable. No automatic publication from a crawler or model response.
 
+**Captured official claims (decision 2026-10-25, 11:42 and 11:50 CDT; confirmed 4:48 PM CDT).** A claim Casevoya captured from an official page (its exact URL and section, the page's SHA-256 and retrieval time, and the dates the page prints) goes live when the loader (`scripts/ops/load-official-claims.mjs`, run by an operator in a database maintenance session) loads it, with no review label. It is platform-wide: every firm sees the official text. A firm's licensed member (a firm owner or licensed consultant whose licence doesn't block) may edit **their firm's** wording only; each edit or revert needs a fresh step-up every time, is stamped "Edited by <name>, licence <number>, <date>", and is kept with every earlier version. A changed re-capture goes live and supersedes the old version; a firm's edit stays and shows "Source changed since your edit" until a licensed member keeps or reverts it. Suspended claims stay suspended until a licensed member unsuspends one with a stamped step-up. Licensed review stays for firm-entered claims (Add claim, including processing times), shared templates (ADM-03), package release approvals and the named content reviewer. The app, the service role, Vo, imports and jobs still cannot publish anything.
+
 If sources conflict, stop the affected rule's publication, capture both sources and dates, and assign a reviewer. Continue unrelated software work with clearly fictional fixtures. If a source is inaccessible, do not say it was checked or substitute an unrelated source. An archived snapshot may reproduce historical actions, but does not alone prove a rule is current.
 
 ## 7 Freshness policy
@@ -121,6 +123,8 @@ These are proposed **product controls**, not government-mandated update interval
 | Case-specific instructions | On receipt and whenever corrected | Consultant verifies evidence, interpretation, and due date |
 
 Monitoring failure does not reset last-checked dates. Record attempt, failure, and last successful retrieval separately. A hash change triggers review; an unchanged page hash does not prove all linked forms are unchanged. Fetch linked dependencies where permitted.
+
+**Overdue windows for captured official claims (decision 2026-10-25, 4:48 PM CDT).** Captures are run by hand today, so a source is overdue for a re-check when its last successful check is older than: 7 days for fees, forms and checklists; 14 days for program pages and guides; 30 days for law. These are product settings (`source.recheck_interval.fee`, `.form`, `.checklist`, `.program`, `.law`). An unchanged re-capture records a successful check; a failed fetch records the failure and doesn't move "last checked". The stale block stays: Vo won't cite a fee or advice-like claim whose source is overdue and says why ("The source for this was last checked <date> and is due for a re-check"); Source review and "What Casevoya supports" flag it.
 
 When review is overdue, retain historical data and allow unrelated tasks, but block new automated advice, fee issuance relying on the stale rule, and package release affected by it. A consultant may supply newly verified official evidence and create a reviewed replacement; they cannot bypass missing evidence by checking a generic override box.
 

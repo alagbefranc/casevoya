@@ -13,13 +13,16 @@ import { loadPortalDocuments } from "@/modules/documents/load";
 import { loadPortalInvoices, loadPortalReceipt } from "@/modules/finance/portal-load";
 import { isUuid } from "@/lib/tenant/context";
 import { countPortalUnread, loadPortalMessages } from "@/modules/messages/load";
-import { firmLogo } from "@/modules/firm-onboarding/public-logo";
-import { loadPortalHome, loadPortalMatters } from "@/modules/portal/home-load";
+import { firmLook } from "@/modules/firm-onboarding/public-logo";
+import { loadPortalHome, loadPortalMatters, loadPortalNotices } from "@/modules/portal/home-load";
 import { loadPortalAccess } from "@/modules/portal/load";
+import { loadPortalAccountExtras } from "@/modules/portal/account-load";
+import { loadPortalPrivacyNotices } from "@/modules/portal/privacy-load";
 import { payStateFromQuery } from "@/modules/portal/pay";
 import { loadPortalAppointments } from "@/modules/scheduling/portal-load";
 import { loadPortalIntake } from "@/modules/intake/portal-load";
 import { countPortalTasks, loadPortalTasks } from "@/modules/portal/tasks-load";
+import { deniedFor } from "@/modules/portal/states";
 
 export const metadata: Metadata = {
   title: "Portal · Casevoya",
@@ -69,14 +72,19 @@ async function Body({
   const opened = pick(matterValue);
   const chosen = opened ?? pick(remembered);
   if (chosen) access.viewer.matters = [chosen, ...access.viewer.matters.filter((matter) => matter !== chosen)];
-  const documents = page === "documents" || page === "upload" ? await loadPortalDocuments(access.viewer) : null;
-  const agreements = page === "agreements" ? await loadPortalAgreements(access.viewer) : null;
+  // DES-04: a page whose own records couldn't be read says so (failed), never "nothing here".
+  let failed = false;
+  const orFail = <T,>(load: Promise<T>): Promise<T | null> =>
+    load.catch(() => {
+      failed = true;
+      return null;
+    });
+  const documents = page === "documents" || page === "upload" ? await orFail(loadPortalDocuments(access.viewer)) : null;
+  const agreements = page === "agreements" ? await orFail(loadPortalAgreements(access.viewer)) : null;
   const invoiceValue = Array.isArray(query.invoice) ? query.invoice[0] : query.invoice;
-  const payments =
-    page === "payments" || page === "pay"
-      ? { data: await loadPortalInvoices(access.viewer), invoiceId: isUuid(invoiceValue) ? invoiceValue : null }
-      : null;
-  const appointments = page === "appointments" ? await loadPortalAppointments(access.viewer) : null;
+  const invoiceData = page === "payments" || page === "pay" ? await orFail(loadPortalInvoices(access.viewer)) : null;
+  const payments = invoiceData ? { data: invoiceData, invoiceId: isUuid(invoiceValue) ? invoiceValue : null } : null;
+  const appointments = page === "appointments" ? await orFail(loadPortalAppointments(access.viewer)) : null;
   const threadValue = Array.isArray(query.thread) ? query.thread[0] : query.thread;
   // A failed read shows the chat's error state (null), not a broken page.
   const messages = page === "messages" ? await loadPortalMessages(access.viewer, threadValue ?? null).catch(() => null) : undefined;
@@ -89,17 +97,39 @@ async function Body({
           .then((data) => ({ data, field: fieldValue && /^[a-z][a-z0-9_]{0,63}$/.test(fieldValue) ? fieldValue : null }))
           .catch(() => null)
       : null;
-  const tasks = page === "tasks" ? await loadPortalTasks(access.viewer).catch(() => null) : null;
-  // The sidebar on every page: the firm's logo, and the Tasks and Messages counts.
-  const [taskCount, unread, logo, home] = await Promise.all([
+  const tasks = page === "tasks" ? await orFail(loadPortalTasks(access.viewer)) : null;
+  // The sidebar on every page: the firm's logo or initials on its colour, and the Tasks and Messages counts.
+  const [taskCount, unread, look, home, notices] = await Promise.all([
     tasks ? tasks.filter((task) => task.status !== "done").length : countPortalTasks(access.viewer).catch(() => 0),
     countPortalUnread(access.viewer).catch(() => 0),
-    firmLogo(access.viewer.organizationSlug),
+    firmLook(access.viewer.organizationSlug),
     page === "home" ? loadPortalHome(access.viewer, null).catch(() => null) : null,
+    // SEC-06: privacy request notices (an extension, or records to download) come first.
+    page === "home"
+      ? Promise.all([loadPortalPrivacyNotices(access.viewer), loadPortalNotices(access.viewer)]).then(([privacy, other]) => [...privacy, ...other])
+      : null,
   ]);
   const matters = page === "matters" ? await loadPortalMatters(access.viewer).catch(() => null) : null;
   const receiptValue = Array.isArray(query.id) ? query.id[0] : query.id;
   const receipt = page === "receipt" && isUuid(receiptValue) ? await loadPortalReceipt(access.viewer, receiptValue).catch(() => null) : null;
+  // DES-04: a record the address named that isn't the person's own (a matter, an invoice, a
+  // receipt, a conversation, a form) is said plainly, not silently swapped or left blank.
+  const denied = deniedFor({
+    page,
+    matter: matterValue,
+    matterIds: access.viewer.matters.map((matter) => matter.id),
+    invoice: invoiceValue,
+    invoiceIds: payments ? payments.data.invoices.map((invoice) => invoice.id) : null,
+    receipt: receiptValue,
+    receiptFound: receipt != null,
+    thread: threadValue,
+    threadOpened: messages ? messages.opened : null,
+    response: responseValue,
+    responseSelected: intake ? intake.data.selected : null,
+    responseLoaded: Boolean(intake),
+  });
+  // SEC-01, SEC-05: the Account page's two-step sign-in and optional consents.
+  const account = page === "account" ? await loadPortalAccountExtras(access.viewer).catch(() => null) : null;
   return (
     <PortalScreen page={page}>
       <LivePortal
@@ -115,9 +145,15 @@ async function Body({
         taskCount={taskCount}
         unread={unread}
         home={home}
-        logo={logo}
-        matters={matters}
+        logo={look.logo}
+        accent={look.accent}
+        notices={notices}
+        matters={matters?.cards ?? null}
+        partial={matters?.unavailable}
         receipt={receipt}
+        account={account}
+        denied={denied}
+        failed={failed}
       />
       {opened ? <RememberMatter id={opened.id} /> : null}
     </PortalScreen>

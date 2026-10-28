@@ -3,6 +3,7 @@
 import { toast2 } from "@/components/port/kit";
 import { sendInboxEmail } from "@/modules/inbox/inbox-reply-actions";
 import { addStaffNote, sendMessage } from "@/modules/messages/actions";
+import { unfilledNotice } from "@/modules/messages/templates";
 import { messageSentToast, parseComposeValue, sentToast } from "@/modules/sheet/inbox-reply-present";
 
 type Router = { refresh: () => void };
@@ -117,6 +118,13 @@ export async function runInboxCompose(button: HTMLElement, root: HTMLElement, ro
   if (!field || !body.trim()) {
     toast2("Write a message first", { kind: "warn", sub: "Nothing was sent." });
     field?.focus();
+    return;
+  }
+  // OPS-04: a template field nobody filled is a gap, not something to send.
+  const gap = unfilledNotice(body);
+  if (gap) {
+    toast2(gap, { kind: "warn", sub: "Nothing was sent." });
+    field.focus();
     return;
   }
   const result = await sendInboxEmail({

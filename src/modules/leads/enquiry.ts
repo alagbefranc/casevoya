@@ -47,14 +47,15 @@ export function enquiryPagePath(pathname: string): { firm: string; embed: boolea
   return { firm: SLUG.test(firm) ? firm : "", embed: Boolean(match[1]) };
 }
 
-export type PublicEnquiryFirm = { firmName: string; firmSlug: string; practice: boolean; staff: boolean };
+/** `open`: the firm's enquiry page is switched on in Settings (CRM-01). */
+export type PublicEnquiryFirm = { firmName: string; firmSlug: string; practice: boolean; staff: boolean; open: boolean };
 
 /** What enquiry_public_firm returned, or null (unknown firm, no privacy notice, not open to this viewer). */
 export function parsePublicFirm(raw: unknown): PublicEnquiryFirm | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const row = raw as Record<string, unknown>;
   if (typeof row.firm_name !== "string" || typeof row.firm_slug !== "string" || !SLUG.test(row.firm_slug)) return null;
-  return { firmName: row.firm_name, firmSlug: row.firm_slug, practice: row.practice === true, staff: row.staff === true };
+  return { firmName: row.firm_name, firmSlug: row.firm_slug, practice: row.practice === true, staff: row.staff === true, open: row.open !== false };
 }
 
 export const ENQUIRY_SERVICES = ["Visit", "Study", "Work", "Permanent residence", "Sponsor a family member", "Citizenship", "Not sure"] as const;
@@ -70,7 +71,22 @@ export type EnquiryInput = {
   marketing: boolean;
   source: "hosted_page" | "web_form";
   key: string;
+  /** CRM-01: utm_*, the referrer's host and the embedding site's host. The database cleans them again. */
+  attribution: Record<string, string>;
 };
+
+export const ATTRIBUTION_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "referrer_host", "embed_host"] as const;
+
+/** Only the known keys, each a short single-line string. */
+export function readAttribution(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, string> = {};
+  for (const key of ATTRIBUTION_KEYS) {
+    const value = (raw as Record<string, unknown>)[key];
+    if (typeof value === "string" && value.trim()) out[key] = value.replace(/[\u0000-\u001f\u007f]+/g, " ").trim().slice(0, 200);
+  }
+  return out;
+}
 
 export type EnquiryRefusal = "name_required" | "contact_required" | "email_invalid" | "phone_invalid" | "consent_required" | "too_fast" | "invalid";
 
@@ -114,11 +130,12 @@ export function readEnquiry(body: unknown): { input: EnquiryInput } | { error: E
       marketing: raw.marketing === true,
       source: raw.source === "web_form" ? "web_form" : "hosted_page",
       key,
+      attribution: readAttribution(raw.attribution),
     },
   };
 }
 
-export const ENQUIRY_MESSAGES: Record<EnquiryRefusal | "form_unavailable" | "enquiry_rate_limited" | "unavailable", string> = {
+export const ENQUIRY_MESSAGES: Record<EnquiryRefusal | "form_unavailable" | "form_closed" | "enquiry_rate_limited" | "unavailable", string> = {
   name_required: "Enter your name.",
   contact_required: "Enter an email or phone number.",
   email_invalid: "Enter a valid email address.",
@@ -127,6 +144,7 @@ export const ENQUIRY_MESSAGES: Record<EnquiryRefusal | "form_unavailable" | "enq
   too_fast: "Please take a moment to check your details, then send again.",
   invalid: "Check the form and try again.",
   form_unavailable: "This form isn’t available.",
+  form_closed: "This firm isn’t taking enquiries online right now.",
   enquiry_rate_limited: "Too many enquiries from here. Try again in a few minutes.",
   unavailable: "Your enquiry couldn’t be sent. Try again.",
 };

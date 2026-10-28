@@ -95,7 +95,7 @@ describe("Settings > Subscription", () => {
       ["Active matters", "3 of 100 (1 sample, not counted)"],
       ["Storage", "0 of 25 GB"],
     ]);
-    expect(data.buttons?.map((button) => [button.label, button.act])).toEqual([["Change plan", "portal"], ["Manage billing", "portal"], ["Cancel at period end", "portal"]]);
+    expect(data.buttons?.map((button) => [button.label, button.act])).toEqual([["Change plan", "portal"], ["Manage billing", "portal"], ["Cancel subscription", "cancel"]]);
     expect(data.dialog).toBeNull();
     expect(data.note).toContain("Prices are in CAD and set by Casevoya");
     // A catalog with no prices shows no amount at all, and the dialog says "No price set".
@@ -169,7 +169,7 @@ describe("Subscription entitlements in the rest of the Sheet", () => {
     expect(subscriptionActionError("enterprise plans are arranged with Casevoya")).toMatch(/arranged with Casevoya/);
     expect(subscriptionActionError("the current subscription is changed in the billing portal")).toMatch(/Manage billing/);
     expect(subscriptionActionError("firm owner step-up is required")).toBeNull();
-    expect(subscriptionStepUpLocation(true)).toBe("/mfa?step=6&next=%2Fsheet%2Fsettings%3Ftab%3Dbilling%26dlg%3Dplan");
+    expect(subscriptionStepUpLocation(true)).toBe("/mfa?step=6&next=%2Fsheet%2Fsettings%3Ftab%3Dbilling%26dlg%3Dplan&for=plan");
   });
 
   it("shows the seat allowance on Team and seats, and a paused subscription on the setup banner", () => {
@@ -231,6 +231,6 @@ describe("Settings > Retention", () => {
     expect(retentionSaveError("retention policy version conflict")).toMatch(/Reload/);
     expect(retentionSaveError("that is already the firm retention period")).toMatch(/already/);
     expect(retentionSaveError("firm owner step-up is required")).toBeNull();
-    expect(retentionStepUpLocation()).toBe("/mfa?step=6&next=%2Fsheet%2Fsettings%3Ftab%3Dretention");
+    expect(retentionStepUpLocation()).toBe("/mfa?step=6&next=%2Fsheet%2Fsettings%3Ftab%3Dretention&for=retention");
   });
 });

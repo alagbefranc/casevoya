@@ -23,7 +23,7 @@ export async function loadPortalTasks(viewer: PortalViewer): Promise<PortalTask[
   const personId = viewer.person?.id;
   if (!personId) return [];
   const supabase = await createClient({ organizationId: viewer.organizationId });
-  const { data: tasks } = await supabase
+  const { data: tasks, error } = await supabase
     .from("tasks")
     .select("id, title, status, due_on, completed_at, blocker_note, matter_id")
     .eq("organization_id", viewer.organizationId)
@@ -32,6 +32,8 @@ export async function loadPortalTasks(viewer: PortalViewer): Promise<PortalTask[
     .in("status", ["open", "blocked", "done"])
     .order("due_on", { ascending: true, nullsFirst: false })
     .limit(100);
+  // DES-04: unreadable is not "no tasks"; callers show their couldn't-load state.
+  if (error) throw new Error("portal tasks unreadable");
   const rows = tasks ?? [];
   const ids = rows.map((row) => row.id);
   const { data: requests } = ids.length

@@ -1,7 +1,8 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
-import { freezeIntakeSnapshot, reviewIntakeAnswer, sendIntakeRequest } from "@/modules/intake/delivery-actions";
+import { freezeIntakeSnapshot, reuseApprovedFacts, reviewIntakeAnswer, sendIntakeRequest } from "@/modules/intake/delivery-actions";
 import { needsStepUp, stepUpLocation } from "@/modules/sheet/matter-wire";
 
 type Router = { replace: (href: string) => void; refresh: () => void };
@@ -68,12 +69,30 @@ export async function runIntakeFreeze(button: HTMLElement, router: Router) {
   const result = await freezeIntakeSnapshot({ organizationId: button.dataset.org ?? "", responseId: button.dataset.intakeFreeze ?? "" });
   if ("error" in result) {
     if (needsStepUp(result.error)) {
-      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, null));
+      goStepUp(stepUpLocation(window.location.pathname, window.location.search, null, "intake_send"));
       return;
     }
     toast2(result.error, { kind: "bad", sub: "Nothing was frozen." });
     return;
   }
   toast2("Snapshot frozen", { kind: "ok", sub: "The answers as submitted are fixed. A client correction still makes a new version beside it." });
+  router.refresh();
+}
+
+/**
+ * Reuse approved facts (INT-04): public.reuse_approved_facts copies the person's reviewed answers
+ * from their earlier forms into the empty questions of this draft, each waiting for the client.
+ */
+export async function runIntakeReuse(button: HTMLElement, router: Router) {
+  const result = await reuseApprovedFacts({ organizationId: button.dataset.org ?? "", responseId: button.dataset.intakeReuse ?? "" });
+  if ("error" in result) {
+    toast2(result.error, { kind: "bad", sub: "Nothing was copied." });
+    return;
+  }
+  if (result.count === 0) {
+    toast2("Nothing to reuse", { kind: "warn", sub: "No reviewed answer from this person’s earlier forms fits an empty question here." });
+    return;
+  }
+  toast2(`${result.count} answer${result.count === 1 ? "" : "s"} reused`, { kind: "ok", sub: "Each one waits for the client to confirm it in their portal before they can send the form." });
   router.refresh();
 }

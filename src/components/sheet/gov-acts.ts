@@ -1,5 +1,6 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { createClient } from "@/lib/supabase/client";
 import { completeDocumentUpload } from "@/modules/documents/actions";
@@ -19,8 +20,12 @@ import {
   verifySubmission,
 } from "@/modules/government/actions";
 import { letterChannel, letterKind, submittedInstant } from "@/modules/government/present";
+import { recordGovernmentLetter } from "@/modules/government/letter-actions";
+import { readLetterForm } from "./letter-acts";
 import { needsStepUp, stepUpLocation, withoutDialog, type MatterDialog } from "@/modules/sheet/matter-wire";
 import { setTaskStatus } from "@/modules/tasks/actions";
+import { acceptChosen, failUpload } from "./upload-failure";
+import { type StepUpActionKey } from "@/lib/auth/mfa-step";
 
 /**
  * The Sheet's government acts (T036 to T039): `data-gov` controls on the Government status page
@@ -54,6 +59,11 @@ export function chooseFile(): Promise<File | null> {
 export async function pickInto(holder: Element, label: Element | null) {
   const file = await chooseFile();
   if (!file) return;
+  // DES-04: a wrong type, empty or too large file is refused here with a next step and a retry.
+  if (!acceptChosen(holder, file, "evidence", () => void pickInto(holder, label))) {
+    picked.delete(holder);
+    return;
+  }
   picked.set(holder, file);
   if (label) label.textContent = file.name;
   if (holder instanceof HTMLInputElement) holder.value = file.name;
@@ -96,12 +106,33 @@ export async function recordLetter(scope: ParentNode, dialog: Element | null, re
   const receivedOn = value(scope, 'input[type="date"]');
   if (!kind || !channel) return { error: "Choose the letter type and how it arrived." };
   if (!receivedOn) return { error: "Add the date the firm received it." };
+  // GOV-04: the live dialog's issuer, letter date, filed-email file and tasks, checked before any upload.
+  const live = readLetterForm(scope);
+  if (live && "error" in live) return live;
   const file = pickedFile(dialog?.querySelector(".drop button") ?? null);
   let evidenceVersionId: string | null = null;
   if (file) {
     const uploaded = await uploadEvidence({ ...ref, file, purpose: `Government letter received ${receivedOn}` });
-    if ("error" in uploaded) return uploaded;
+    if ("error" in uploaded) {
+      const drop = dialog?.querySelector<HTMLElement>(".drop button") ?? null;
+      if (drop) failUpload(drop, uploaded.error, "evidence", () => void pickInto(drop, drop.closest(".drop")?.querySelector("b") ?? null));
+      return uploaded;
+    }
     evidenceVersionId = uploaded.versionId;
+  }
+  if (live) {
+    return recordGovernmentLetter({
+      ...ref,
+      kind,
+      channel,
+      receivedOn,
+      documentDate: live.documentDate,
+      issuerId: live.issuerId,
+      issuer: live.issuer,
+      statedDeadline: value(scope, "#ltD") || null,
+      evidenceVersionId: evidenceVersionId ?? live.filedVersionId,
+      tasks: live.tasks,
+    });
   }
   return recordCorrespondence({
     ...ref,
@@ -118,8 +149,8 @@ const DONE: Record<string, [string, string]> = {
   prepare: ["Handoff started", "A licensed consultant signs off this package next."],
   signoff: ["Package signed off", "The representative can now submit it and record the submission."],
   submit: ["Submission recorded", "It stays unverified until the receipt is on file."],
-  receipt: ["Submission verified", "The receipt is the evidence for the Submitted stage."],
-  "receipt-file": ["Submission verified", "The receipt is the evidence for the Submitted stage."],
+  receipt: ["Submitted to government", "The confirmation is the evidence for the Submitted stage."],
+  "receipt-file": ["Submitted to government", "The confirmation is the evidence for the Submitted stage."],
   "verify-letter": ["Letter verified", "The matter’s government status follows the verified letter."],
   "attach-letter": ["Evidence attached", "A staff member can now verify the letter against it."],
   status: ["Recorded", "It stays unverified until a staff member checks it against the evidence."],
@@ -200,6 +231,22 @@ export function bindGovControls(root: HTMLElement, router: Router, listen: { sig
 
 /** Which dialog a step-up should reopen when the person comes back. */
 const REOPEN: Record<string, MatterDialog> = { prepare: "handoff", submit: "submission", receipt: "receipt" };
+/** SEC-01: what the step-up page says each act's check is for. */
+const GOV_ACTION: Record<string, StepUpActionKey | undefined> = {
+  prepare: "submission",
+  signoff: "submission",
+  submit: "submission",
+  receipt: "submission",
+  "receipt-file": "submission",
+  "verify-letter": "government_letter",
+  "attach-letter": "government_letter",
+  status: "government_status",
+  confirm: "government_status",
+  decision: "decision",
+  step: "decision",
+  "task-done": "task_change",
+  expiry: "renewal",
+};
 
 export async function runGovAct(button: HTMLElement, root: HTMLElement, router: Router) {
   const act = button.dataset.gov ?? "";
@@ -229,10 +276,22 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
     result = await signOffHandoff({ organizationId: ref.organizationId, handoffId: data.id ?? "", version });
   } else if (act === "submit" || act === "receipt") {
     const file = pickedFile(dialog?.querySelector("[data-gov-pick]") ?? null);
+    // GOV-03: the government confirmation as a file, and its acknowledgement date, entered
+    // separately. Checked before anything is uploaded.
+    if (act === "receipt" && !file) return void toast2("Add the confirmation file", { kind: "warn", sub: "Choose the government confirmation (PDF or photo)." });
+    if (act === "submit" && !file && value(scope, "#srL")) {
+      return void toast2("Choose the confirmation file too", { kind: "warn", sub: "Where it is kept is noted with the file. Or leave it empty and add the receipt later." });
+    }
+    if ((act === "receipt" && !value(scope, "#rcA")) || (act === "submit" && file && !value(scope, "#srA"))) {
+      return void toast2("Add the acknowledgement date", { kind: "warn", sub: "As shown on the confirmation." });
+    }
     let receiptVersionId: string | null = null;
     if (file) {
       const uploaded = await upload({ ...ref, file, purpose: "Submission receipt" });
-      if ("error" in uploaded) return void toast2(uploaded.error, { kind: "bad", sub: "Nothing was saved." });
+      if ("error" in uploaded) {
+        const holder = dialog?.querySelector<HTMLElement>("[data-gov-pick]") ?? button;
+        return void failUpload(holder, uploaded.error, "evidence", () => void pickInto(holder, holder.closest(".drop")?.querySelector("[data-gov-name]") ?? null));
+      }
       receiptVersionId = uploaded.versionId;
     }
     if (act === "submit") {
@@ -249,7 +308,6 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
         acknowledgedOn: value(scope, "#srA") || null,
       });
     } else {
-      if (!receiptVersionId && !value(scope, "#rcL")) return void toast2("Add the receipt", { kind: "warn", sub: "Choose the file, or say where the receipt is kept." });
       result = await verifySubmission({
         organizationId: ref.organizationId,
         handoffId: data.id ?? "",
@@ -262,8 +320,10 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
   } else if (act === "receipt-file") {
     const file = await chooseFile();
     if (!file) return;
+    const again = () => void runGovAct(button, root, router);
+    if (!acceptChosen(button, file, "evidence", again)) return;
     const uploaded = await upload({ ...ref, file, purpose: "Submission receipt" });
-    if ("error" in uploaded) return void toast2(uploaded.error, { kind: "bad", sub: "Nothing was saved." });
+    if ("error" in uploaded) return void failUpload(button, uploaded.error, "evidence", again);
     result = await verifySubmission({ organizationId: ref.organizationId, handoffId: data.id ?? "", version, receiptVersionId: uploaded.versionId });
   } else if (act === "verify-letter") {
     result = await verifyCorrespondence({ organizationId: ref.organizationId, correspondenceId: data.id ?? "", version });
@@ -271,8 +331,10 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
     // A letter recorded without its evidence: choose the file, store it on the matter, attach it.
     const file = await chooseFile();
     if (!file) return;
+    const again = () => void runGovAct(button, root, router);
+    if (!acceptChosen(button, file, "evidence", again)) return;
     const uploaded = await upload({ ...ref, file, purpose: "Government letter" });
-    if ("error" in uploaded) return void toast2(uploaded.error, { kind: "bad", sub: "Nothing was attached." });
+    if ("error" in uploaded) return void failUpload(button, uploaded.error, "evidence", again);
     result = await attachCorrespondenceEvidence({ organizationId: ref.organizationId, correspondenceId: data.id ?? "", version, evidenceVersionId: uploaded.versionId });
   } else if (act === "status") {
     const kind = value(scope, "select");
@@ -283,7 +345,7 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
       const file = pickedFile(holder);
       if (!file) return void toast2("Attach the evidence", { kind: "warn", sub: "Click Evidence to choose the letter or screenshot." });
       const uploaded = await upload({ ...ref, file, purpose: "Government status evidence" });
-      if ("error" in uploaded) return void toast2(uploaded.error, { kind: "bad", sub: "Nothing was saved." });
+      if ("error" in uploaded) return void failUpload(holder ?? button, uploaded.error, "evidence", () => (holder ? void pickInto(holder, null) : undefined));
       result = await recordCorrespondence({ ...ref, kind, channel: "other", receivedOn: data.today || today(), evidenceVersionId: uploaded.versionId });
     }
   } else if (act === "decision") {
@@ -312,7 +374,7 @@ export async function runGovAct(button: HTMLElement, root: HTMLElement, router: 
   const error = result && "error" in result && typeof result.error === "string" ? result.error : null;
   if (error) {
     if (needsStepUp(error)) {
-      window.location.assign(stepUpLocation(window.location.pathname, window.location.search, REOPEN[act] ?? null));
+      goStepUp(stepUpLocation(window.location.pathname, window.location.search, REOPEN[act] ?? null, GOV_ACTION[act]));
       return;
     }
     toast2(error, { kind: "bad", sub: "Nothing was saved." });

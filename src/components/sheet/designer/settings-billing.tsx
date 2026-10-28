@@ -9,7 +9,7 @@
  * `.fp-row` Save button under the Retention policy carrying `data-retention-save`, `data-org` and
  * `data-version` so use-sheet saves through public.set_firm_retention_policy.
  */
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import { Icon, Sep } from "./frame";
 import { SETTINGS_TABS } from "./portal-policies";
 
@@ -29,8 +29,8 @@ export type SettingsBillingAlert = { tone: "warn" | "info"; icon: string; title:
 /** One Casevoya invoice line: "CV-0007 · 19 Oct 2026 · CAD 349 · Paid" with Stripe's hosted page or PDF. */
 export type SubscriptionInvoiceRow = { text: string; href: string | null };
 
-/** A live-only button under the Plan rows (firm owner): opens the plan dialog, or the Billing Portal. */
-export type SubscriptionButton = { label: string; act: "plan" | "portal"; primary: boolean; organizationId: string };
+/** A live-only button under the Plan rows (firm owner): opens the plan dialog, the Billing Portal, or Cancel subscription (SEC-10). */
+export type SubscriptionButton = { label: string; act: "plan" | "portal" | "cancel"; primary: boolean; organizationId: string };
 
 export type PlanDialogData = {
   organizationId: string;
@@ -135,7 +135,11 @@ function InvoiceLines({ invoices }: { invoices: SubscriptionInvoiceRow[] }) {
   );
 }
 
-export function SheetSubscription({ data }: { data: SubscriptionData }) {
+/**
+ * `children` (live only): what follows the Subscription panel on this tab, the firm's Stripe
+ * account card for clients' card payments (FIN-02, `StripeConnectCard`).
+ */
+export function SheetSubscription({ data, children }: { data: SubscriptionData; children?: ReactNode }) {
   const invoices = data.invoices ?? [];
   const buttons = data.buttons ?? [];
   return (
@@ -178,6 +182,7 @@ export function SheetSubscription({ data }: { data: SubscriptionData }) {
           {` ${data.note}`}
         </p>
       ) : null}
+      {children}
     </>
   );
 }

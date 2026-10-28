@@ -1,9 +1,23 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { FIRM_LOGO_TOO_SMALL, firmLogoBigEnough } from "@/modules/firm-onboarding/firm-logo";
 import { toast2 } from "./kit";
 
 const MAX_BYTES = 2 * 1024 * 1024;
+
+/** The picked image's pixel size, or null when this browser can't decode it. */
+async function imageSize(file: File): Promise<{ width: number; height: number } | null> {
+  if (typeof createImageBitmap !== "function") return null;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const size = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return size;
+  } catch {
+    return null;
+  }
+}
 
 export type FirmLogo = { locator: string; previewUrl: string };
 
@@ -26,6 +40,13 @@ export function FirmLogoUpload({
   const upload = async (file: File) => {
     if (file.size > MAX_BYTES) {
       toast2("Use a logo under 2 MB", { kind: "bad" });
+      return;
+    }
+    // "At least 256 px", as the hint says. The server checks it too; a file the browser can't
+    // read here is left to the server.
+    const size = await imageSize(file);
+    if (size && !firmLogoBigEnough(size)) {
+      toast2(FIRM_LOGO_TOO_SMALL, { kind: "bad", sub: `This one is ${size.width} × ${size.height} px.` });
       return;
     }
     setBusy(true);

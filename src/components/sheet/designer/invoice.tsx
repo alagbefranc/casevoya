@@ -54,6 +54,8 @@ export type LineRow = {
   qty: string | null;
   tax: string | null;
   amount: { bold?: boolean; text: string };
+  /** Live only (FIN-06): a draft's line can be removed (`data-billing-act="line-remove"`). */
+  remove?: Record<string, string>;
 };
 
 export type AllocationRow = { key?: string; date: string; source: string; evidence: string[]; amount: string; state: MatterBadge };
@@ -115,6 +117,14 @@ function Line({ row }: { row: LineRow }) {
         <Cell bold={row.description.bold}>
           <Parts parts={row.description.parts} />
         </Cell>
+        {row.remove ? (
+          <>
+            {" "}
+            <button className={"btn sm"} {...row.remove}>
+              {"Remove"}
+            </button>
+          </>
+        ) : null}
       </td>
       <td>{row.qty}</td>
       <td>{row.tax}</td>

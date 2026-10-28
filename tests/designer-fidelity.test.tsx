@@ -16,6 +16,7 @@ import {
 } from "@/components/sheet/designer/matter";
 import { MATTER_CSS } from "@/components/sheet/designer/matter-css";
 import { MatterDocuments } from "@/components/sheet/designer/matter";
+import { MatterTimeline } from "@/components/sheet/designer/matter";
 import { MatterDocumentReview, type MatterDocumentReviewData } from "@/components/sheet/designer/vo-doc-review";
 import { SheetSidebar, type SidebarData } from "@/components/sheet/designer/sidebar";
 import { IndexMarkup } from "@/components/sheet/markup/index";
@@ -3740,7 +3741,7 @@ describe("Designer fidelity: Settings, Team and seats and Security", () => {
     });
     const html = renderToStaticMarkup(createElement(SheetSettingsSecurity, { data: owner }));
     expect(html).toContain("Required for every staff account · 1 of 2 set up");
-    expect(html).toContain("No idle timeout yet");
+    expect(html).toContain("Staff are signed out after a period with no activity, with a warning 2 minutes before");
     expect(html).toContain("only after you approve a request");
     expect(html).toContain('<span class="bd gr"><i></i>None active</span>');
     expect(html).not.toContain("aren’t built yet");
@@ -4039,7 +4040,7 @@ describe("Designer fidelity: Settings, Subscription and Retention", () => {
     expect(html).toContain('<dt>Invoices from Casevoya</dt><dd>CV-0007 · 19 Oct 2026 · CAD 324 · Paid <a href="https://invoice.stripe.com/i/synthetic" target="_blank" rel="noreferrer">Download</a></dd>');
     // Live-only: the owner's .fp-row of Designer .btn buttons under the dl; a live subscription changes in the portal.
     expect(html).toContain(
-      '<div class="fp-row" style="margin-top:12px"><button class="btn p sm" data-subscription-act="portal" data-org="00000000-0000-4000-8000-000000000001">Change plan</button><button class="btn sm" data-subscription-act="portal" data-org="00000000-0000-4000-8000-000000000001">Manage billing</button><button class="btn sm" data-subscription-act="portal" data-org="00000000-0000-4000-8000-000000000001">Cancel at period end</button></div>',
+      '<div class="fp-row" style="margin-top:12px"><button class="btn p sm" data-subscription-act="portal" data-org="00000000-0000-4000-8000-000000000001">Change plan</button><button class="btn sm" data-subscription-act="portal" data-org="00000000-0000-4000-8000-000000000001">Manage billing</button><button class="btn sm" data-subscription-act="cancel" data-org="00000000-0000-4000-8000-000000000001">Cancel subscription</button></div>',
     );
     expect(data.dialog).toBeNull();
     // With the live-only row stripped, the panel closes exactly as the capture does.
@@ -4195,5 +4196,35 @@ describe("Designer fidelity: matter Documents review panel (Vo document reading)
     expect(live).toContain('<div class="fieldr" data-f="0" data-proposal="p1" data-kind="field" data-original="Priya">');
     expect(live).toContain('<b contentEditable="plaintext-only" data-vo-value="1">&lt;b&gt;Priya&lt;/b&gt;</b>');
     expect(live).toContain('<button class="btn p" id="acc" data-vo-doc-accept="d1" data-org="o1">Accept ticked</button>');
+  });
+});
+
+describe("Designer fidelity: matter Timeline tab (OPS-06)", () => {
+  it("renders the Timeline tab exactly as the captured Designer markup", () => {
+    const html = renderToStaticMarkup(createElement(MatterMarkup, { variant: "tab-timeline" }));
+    const start = html.indexOf('<div id="content">');
+    const captured = html.slice(start, html.indexOf('</div><aside id="rbar"', start));
+    const live = withoutPreloads(
+      renderToStaticMarkup(
+        createElement(
+          "div",
+          { id: "content" },
+          createElement(MatterTimeline, {
+            data: {
+              filters: ["All", "Documents", "Money", "Government", "Access"],
+              events: [
+                { dot: "#c9c5c0", title: "Rafael uploaded 3 relationship photos", parts: ["Client portal", "Rafael Sharma (sponsor)"], badge: { tone: "unv", label: "Unreviewed" }, when: "Today 08:41" },
+                { dot: "#0075DE", title: "Amara opened passport (download audited)", parts: ["Request req_8if2", "role consultant"], badge: { tone: "gr", label: "Read" }, when: "Today 08:12" },
+                { dot: "#2e9d5b", title: "Advance reconciled", parts: ["Bank statement", "Lena (finance)"], badge: { tone: "ok", label: "Reconciled" }, when: "15 Oct" },
+                { dot: "#2e9d5b", title: "Program source checked", parts: ["IRCC spousal sponsorship guide", "Amara"], badge: { tone: "ok", label: "Checked" }, when: "12 Oct" },
+                { dot: "#0075DE", title: "Stage: Intake → Evidence collection", parts: ["Reason: questionnaire assigned", "Daniel"], badge: { tone: "blue", label: "Stage" }, when: "2 Oct" },
+                { dot: "#2e9d5b", title: "Service agreement signed, 2 of 2", parts: ["DocuSign envelope (planned)", "hash 77ab…"], badge: { tone: "ok", label: "Signed" }, when: "28 Sep" },
+              ],
+            },
+          }),
+        ),
+      ),
+    );
+    expect(live).toBe(captured);
   });
 });

@@ -1,14 +1,30 @@
 /**
  * The Designer's Templates page (`markup/templates.tsx`): Program templates (default), Message
  * templates, Checklists, Source review and Rule detail tabs. Same DOM, classes and order; the
- * rows come from the firm's records and the approved email catalog. Read only here: rule review
- * and publication stay in the source-governance workflow (T013).
+ * rows come from the firm's records and the approved email catalog.
  *
  * Live-only addition: `data-nav` on New template (it opens the Agreements page's template
- * dialog, where firm templates are made).
+ * dialog, where firm templates are made). On Message templates (OPS-04) it opens the firm's own
+ * message template dialog instead (`newTemplateDialog`, `MessageTemplateDialog`), and the firm's
+ * templates are rows above the email catalog.
+ * DOC-01, also live only: the Checklists tab shows the firm's checklist templates with New checklist,
+ * Edit, New version and Approve (`ChecklistsLive`).
+ *
+ * Live-only additions (SRC-01/02/03, source-claims.tsx): Add claim on Source review
+ * (`sources.addClaim`), and on Rule detail the claim's evidence with every date on its own
+ * (`rule.evidence`) and the review panel (`rule.review`). The Designer's demo "Actions for your
+ * role" panel (`rule.actions`) stays demo-only; live data leaves it null.
+ *
+ * Live-only additions (#188, official-claims.tsx): the Live official claims list below the source
+ * register (`sources.live`), and one live official claim on Rule detail (`officialClaim`).
  */
+import type { ChecklistsLiveData } from "@/modules/sheet/checklist-present";
+import { ChecklistsLive } from "./checklists-live";
 import { Empty, Icon, Pair } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
+import { AddClaimButton, ClaimEvidenceList, ClaimReviewPanel, type AddClaimData, type ClaimEvidenceItem, type ClaimReviewData } from "./source-claims";
+import { LiveOfficialClaims, OfficialClaimDetail } from "./official-claims";
+import type { LiveClaimsData, OfficialClaimView } from "@/modules/sheet/official-claims-present";
 
 export type TemplatesTab = "program" | "messages" | "checklists" | "sources" | "rule";
 
@@ -30,6 +46,10 @@ export type RuleDetail = {
   tests: { case: string; expected: string; result: string | MatterBadge }[] | null;
   source: { publisher: string; url: string; linkText: string; appliesTo: string; version: string; checked: string; reviewer: Text; state: MatterBadge } | null;
   actions: { role: string } | null;
+  /** Live only (SRC-01/02): each piece of evidence with its capture and every date on its own. */
+  evidence?: ClaimEvidenceItem[];
+  /** Live only (SRC-03): the review workbench panel for this version. */
+  review?: ClaimReviewData;
 };
 
 export type TemplatesData = {
@@ -39,11 +59,18 @@ export type TemplatesData = {
   newTemplateHref?: string;
   /** Live: the button's honest label ("New agreement template": it can only make those). */
   newTemplateLabel?: string;
-  program: { rows: ProgramRow[]; note: string };
+  /** Live (OPS-04): the dialog New template opens instead of a toast or a page. */
+  newTemplateDialog?: string;
+  /** `supportHref` (live only, SRC-12): the link to "What Casevoya supports" after the note. */
+  program: { rows: ProgramRow[]; note: string; supportHref?: string };
   messages: { rows: MessageRow[] };
-  checklists: { cards: ChecklistCard[] };
-  sources: { kpis: SourceKpi[]; rows: SourceRow[] };
+  /** `live` (DOC-01): the firm's own checklist templates, with editing for staff who may. */
+  checklists: { cards: ChecklistCard[]; live?: ChecklistsLiveData };
+  /** `addClaim` (live only, SRC-01): the Add claim button and dialog. `live` (live only, #188): the live official claims. */
+  sources: { kpis: SourceKpi[]; rows: SourceRow[]; addClaim?: AddClaimData; live?: LiveClaimsData };
   rule: RuleDetail | null;
+  /** Live only (#188): one live official claim on the Rule tab (`?claim=`), with the firm's edit and history. */
+  officialClaim?: OfficialClaimView | null;
 };
 
 const UL: Record<TemplatesTab, React.CSSProperties> = {
@@ -86,10 +113,11 @@ export function TemplatesHeader({ data }: { data: TemplatesData }) {
         <span className={"acts"}>
           <button
             className={"btn p sm"}
-            data-toast={"New template"}
-            data-sub={"Starts as a draft. A licensed reviewer approves it before use."}
+            data-toast={data.newTemplateDialog ? undefined : "New template"}
+            data-sub={data.newTemplateDialog ? undefined : "Starts as a draft. A licensed reviewer approves it before use."}
             data-fpb={"1"}
-            data-nav={data.newTemplateHref}
+            data-nav={data.newTemplateDialog ? undefined : data.newTemplateHref}
+            data-dlg={data.newTemplateDialog}
           >
             <Icon name={"plus"} cls={"ic s"} />
             {data.newTemplateLabel ?? "New template"}
@@ -190,6 +218,12 @@ function Program({ data }: { data: TemplatesData }) {
       )}
       <p className={"fp-note rv"} style={i(2)}>
         {data.program.note}
+        {data.program.supportHref ? (
+          <>
+            {" "}
+            <a href={data.program.supportHref}>{"What Casevoya supports"}</a>
+          </>
+        ) : null}
       </p>
     </>
   );
@@ -248,7 +282,16 @@ function Checklists({ data }: { data: TemplatesData }) {
           <p>{"Per-person and per-matter checklists generated from the program template and the intake answers."}</p>
         </div>
       </div>
-      {data.checklists.cards.length === 0 ? (
+      {data.checklists.live && (data.checklists.live.templates.length || data.checklists.live.edit) ? (
+        <>
+          {data.checklists.live.templates.length === 0 ? (
+            <div className={"panel rv"} style={i(1)}>
+              <Empty art={"templates-empty"} title={"No checklist templates yet"} copy={"Make the firm’s first checklist: what to ask for, from whom, and when it applies. A licensed consultant approves it before it reaches clients."} />
+            </div>
+          ) : null}
+          <ChecklistsLive data={data.checklists.live} />
+        </>
+      ) : data.checklists.cards.length === 0 ? (
         <div className={"panel rv"} style={i(1)}>
           <Empty art={"templates-empty"} title={"No checklist templates yet"} copy={"Checklists come with a reviewed program template. None is published for your firm yet."} />
         </div>
@@ -283,6 +326,7 @@ function Sources({ data }: { data: TemplatesData }) {
           <p>{"The official sources behind every rule in your templates. If a source is missing or stale, the rule shows “Review required” and who owns it, never a made-up answer."}</p>
         </div>
       </div>
+      {data.sources.addClaim ? <AddClaimButton data={data.sources.addClaim} /> : null}
       <div className={"fp-kpi rv"} style={i(1)}>
         {data.sources.kpis.map((kpi) => (
           <a key={kpi.label} className={kpi.warn ? "fp-k warn k2-spot" : "fp-k k2-spot"} href={kpi.href} data-spot={"1"}>
@@ -357,6 +401,7 @@ function Sources({ data }: { data: TemplatesData }) {
           </table>
         </div>
       )}
+      {data.sources.live ? <LiveOfficialClaims data={data.sources.live} /> : null}
     </>
   );
 }
@@ -399,6 +444,7 @@ function Rule({ rule }: { rule: RuleDetail | null }) {
               {rule.note ? <p className={"fp-note"}>{rule.note}</p> : null}
             </div>
           </section>
+          {rule.evidence ? <ClaimEvidenceList items={rule.evidence} /> : null}
           {rule.diff ? (
             <section className={"panel"}>
               <h2>
@@ -516,6 +562,7 @@ function Rule({ rule }: { rule: RuleDetail | null }) {
               </div>
             </div>
           ) : null}
+          {rule.review ? <ClaimReviewPanel review={rule.review} /> : null}
         </div>
       </div>
     </>
@@ -526,7 +573,101 @@ export function SheetTemplates({ data }: { data: TemplatesData }) {
   if (data.tab === "messages") return <Messages data={data} />;
   if (data.tab === "checklists") return <Checklists data={data} />;
   if (data.tab === "sources") return <Sources data={data} />;
-  if (data.tab === "rule") return <Rule rule={data.rule} />;
+  if (data.tab === "rule") return data.officialClaim ? <OfficialClaimDetail view={data.officialClaim} /> : <Rule rule={data.rule} />;
   return <Program data={data} />;
 }
 
+
+export type MessageTemplateEdit = {
+  id: string;
+  version: number;
+  useFor: "message" | "announcement";
+  name: string;
+  title: string;
+  body: string;
+  status: "draft" | "approved";
+};
+
+export type MessageTemplateDialogData = {
+  organizationId: string;
+  /** The template opened from its row (?view=), or null for a new one. */
+  edit: MessageTemplateEdit | null;
+  /** Firm owner or licensed consultant: may approve a draft. */
+  canApprove: boolean;
+  /** Firm owner, licensed consultant or case manager: may write templates. */
+  canWrite: boolean;
+};
+
+const FIELD_HELP = "Fields: {client_first_name}, {matter_reference}, {firm_name}, {consultant_name}. An announcement can use {firm_name} only. A field Casevoya has no value for stays in the text for the sender to fill.";
+
+/**
+ * Live only (OPS-04): write or edit one of the firm's message templates (a message the composer can
+ * insert, or an announcement). Saving makes it a draft; a firm owner or licensed consultant
+ * approves it. Built from the Designer's dialog and field classes; buttons carry `data-mt-*`
+ * (message-template-acts.ts). Opened by New template, or straight away for `?view=<template>`.
+ */
+export function MessageTemplateDialog({ data }: { data: MessageTemplateDialogData }) {
+  const edit = data.edit;
+  const announcement = edit?.useFor === "announcement";
+  const ids = { "data-org": data.organizationId, "data-id": edit?.id ?? "", "data-v": edit ? String(edit.version) : "" };
+  return (
+    <dialog className={"dlg"} id={"dlgMt"} aria-labelledby={"dlgMtH"} data-autoopen={edit ? "1" : undefined}>
+      <div className={"dh"}>
+        <h2 id={"dlgMtH"}>{edit ? (edit.status === "approved" ? "Message template (approved)" : "Message template (draft)") : "New message template"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={"dlgMt"}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <div className={"fld"}>
+          <label htmlFor={"mtU"}>{"Use"}</label>
+          <select className={"sel"} id={"mtU"} defaultValue={edit?.useFor ?? "message"}>
+            <option value={"message"}>{"Message (the composer inserts it)"}</option>
+            <option value={"announcement"}>{"Announcement (to many clients)"}</option>
+          </select>
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"mtN"}>{"Name"}</label>
+          <input className={"inp"} id={"mtN"} maxLength={120} defaultValue={edit?.name ?? ""} />
+        </div>
+        <div className={"fld"} id={"mtTf"} hidden={announcement ? undefined : true}>
+          <label htmlFor={"mtT"}>{"Title clients see"}</label>
+          <input className={"inp"} id={"mtT"} maxLength={120} defaultValue={edit?.title ?? ""} />
+        </div>
+        <div className={"fld"}>
+          <label htmlFor={"mtB"}>{"Text"}</label>
+          <textarea className={"ta"} id={"mtB"} maxLength={4000} defaultValue={edit?.body ?? ""}></textarea>
+          <small style={{ color: "var(--t2)", display: "block", marginTop: "6px" }}>{FIELD_HELP}</small>
+        </div>
+        {edit?.status === "approved" ? (
+          <p className={"fp-note"} role={"note"}>
+            {"Saving a change makes it a draft again until it is approved."}
+          </p>
+        ) : null}
+        {data.canWrite ? null : (
+          <p className={"fp-note"} role={"note"}>
+            {"Only a firm owner, licensed consultant or case manager can write templates."}
+          </p>
+        )}
+      </div>
+      <div className={"df"}>
+        {edit && data.canWrite ? (
+          <button className={"btn"} data-mt-archive={"1"} {...ids}>
+            {"Archive"}
+          </button>
+        ) : null}
+        <button className={"btn"} data-close={"dlgMt"}>
+          {"Cancel"}
+        </button>
+        {edit?.status === "draft" && data.canApprove ? (
+          <button className={"btn"} data-mt-approve={"1"} {...ids}>
+            {"Approve"}
+          </button>
+        ) : null}
+        <button className={"btn p"} data-mt-save={"1"} {...ids} disabled={data.canWrite ? undefined : true}>
+          {"Save draft"}
+        </button>
+      </div>
+    </dialog>
+  );
+}

@@ -1,8 +1,9 @@
 /** Pure helpers for the matter page's dialogs: what to save, and where to send a step-up. */
 import { safeAccessError } from "@/lib/auth/step-up";
 import { MATTER_STAGES } from "@/modules/sheet/present";
+import { stepUpHref, type StepUpActionKey } from "@/lib/auth/mfa-step";
 
-export type MatterDialog = "stage" | "hold" | "letter" | "deadline" | "handoff" | "submission" | "receipt" | "request";
+export type MatterDialog = "stage" | "hold" | "letter" | "deadline" | "handoff" | "submission" | "receipt" | "request" | "consultant";
 
 /** The `<dialog>` each `?dlg=` value reopens. */
 export const DIALOG_ID: Record<MatterDialog, string> = {
@@ -16,6 +17,21 @@ export const DIALOG_ID: Record<MatterDialog, string> = {
   receipt: "dSubRcpt",
   // Request a document (doc-request).
   request: "dReq",
+  // ORG-06: Change consultant (People tab).
+  consultant: "dCons",
+};
+
+/** SEC-01: what the step-up page says each dialog's check is for. */
+const DIALOG_ACTION: Record<MatterDialog, StepUpActionKey> = {
+  stage: "matter_stage",
+  hold: "matter_hold",
+  letter: "government_letter",
+  deadline: "matter_deadline",
+  handoff: "submission",
+  submission: "submission",
+  receipt: "submission",
+  request: "document_request",
+  consultant: "matter_consultant",
 };
 
 export function dialogId(value: string | null | undefined): string | null {
@@ -33,13 +49,13 @@ export function needsStepUp(error: string | null | undefined): boolean {
  * The step-up screen, coming back to this matter with the dialog open again
  * (`?dlg=` reopens it). Without a dialog the page simply reloads.
  */
-export function stepUpLocation(pathname: string, search: string, dialog: MatterDialog | null): string {
+export function stepUpLocation(pathname: string, search: string, dialog: MatterDialog | null, action?: StepUpActionKey): string {
   const params = new URLSearchParams(search);
   if (dialog) params.set("dlg", dialog);
   else params.delete("dlg");
   const query = params.toString();
   const next = `${pathname}${query ? `?${query}` : ""}`;
-  return `/mfa?step=6&next=${encodeURIComponent(next)}`;
+  return stepUpHref(next, action ?? (dialog ? DIALOG_ACTION[dialog] : null));
 }
 
 /** The same URL without `?dlg=`, so a refresh after saving does not reopen the dialog. */

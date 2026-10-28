@@ -28,6 +28,11 @@ export type SampleCaseData = {
    * footer says real client invitations are open instead of locked. Same DOM and classes.
    */
   firmLive?: boolean;
+  /**
+   * Live addition (issue #259): the firm hasn't published both portal policies, so an invited
+   * client stops at the accept screen. A live firm's footer then says so instead of "open".
+   */
+  policiesMissing?: boolean;
 };
 
 /**
@@ -44,6 +49,10 @@ export const SAMPLE_COPY = {
   why: "Opens when the firm switches to live",
   whyLive: "Your firm is live",
   lockedLive: "Real client invitations are open",
+  /** A live firm without both portal policies published (the Sheet's PolicyMissingAlert says the same). */
+  leadPolicies: "Optional practice on fictional records. Your firm is live; publish your portal terms and privacy notice so invited clients can join.",
+  lockedPolicies: "Clients can’t accept portal invitations yet",
+  whyPolicies: "Publish your portal terms first",
 } as const;
 
 /**
@@ -199,7 +208,7 @@ export function SampleCasePanel({ data }: { data: SampleCaseData }) {
             {"Sample data"}
           </span>
           <h2 id={"smpH"}>{`Try the six key steps on ${data.applicant}’s sample case`}</h2>
-          <p>{data.firmLive ? SAMPLE_COPY.leadLive : SAMPLE_COPY.lead}</p>
+          <p>{data.firmLive ? (data.policiesMissing ? SAMPLE_COPY.leadPolicies : SAMPLE_COPY.leadLive) : SAMPLE_COPY.lead}</p>
         </div>
         <div className={"smp-n"}>
           <Counter value={done} />
@@ -221,7 +230,7 @@ export function SampleCasePanel({ data }: { data: SampleCaseData }) {
             <img src={"/assets/generated/b2/sandbox-160@1x.webp"} srcSet={"/assets/generated/b2/sandbox-160@2x.webp 2x"} width={36} height={36} alt={""} loading={"lazy"} decoding={"async"} />
           </span>
           <div>
-            <b>{data.firmLive ? SAMPLE_COPY.lockedLive : "Real client invitations are locked"}</b>
+            <b>{data.firmLive ? (data.policiesMissing ? SAMPLE_COPY.lockedPolicies : SAMPLE_COPY.lockedLive) : "Real client invitations are locked"}</b>
             {SAMPLE_COPY.left(left)}
             <Sep />
             {data.licence ? (
@@ -254,8 +263,8 @@ export function SampleCasePanel({ data }: { data: SampleCaseData }) {
             </button>
           )}
           <p className={"why"} id={"whyInv"}>
-            <Icon name={data.firmLive ? "check-circle" : "lock"} cls={"ic s"} />
-            {data.firmLive ? SAMPLE_COPY.whyLive : SAMPLE_COPY.why}
+            <Icon name={data.firmLive && !data.policiesMissing ? "check-circle" : "lock"} cls={"ic s"} />
+            {data.firmLive ? (data.policiesMissing ? SAMPLE_COPY.whyPolicies : SAMPLE_COPY.whyLive) : SAMPLE_COPY.why}
           </p>
         </div>
         {data.live ? <GoLiveSwitch data={data.live} /> : null}

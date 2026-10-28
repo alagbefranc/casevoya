@@ -24,8 +24,25 @@ export type DraftTimeline = {
   said: string;
   /** Seconds shown while still running. */
   clock: string;
-  items: string[];
+  /** Live: a cited record or official source is a link (SRC-09); the capture's items are text. */
+  items: (string | TimelineItem)[];
 };
+
+/** A citation in the sources list: where it opens, and (official sources) its section and dates. */
+export type TimelineItem = { label: string; href: string | null; detail?: string };
+
+function TimelineLink({ item }: { item: TimelineItem }) {
+  if (!item.href) return <>{item.detail ? `${item.label} (${item.detail})` : item.label}</>;
+  const external = item.href.startsWith("https://");
+  return (
+    <>
+      <a href={item.href} title={item.detail} {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
+        {item.label}
+      </a>
+      {item.detail ? ` (${item.detail})` : null}
+    </>
+  );
+}
 
 export type DraftCard = {
   id: string;
@@ -195,7 +212,7 @@ export function SourceTimeline({ data, style }: { data: DraftTimeline; style?: R
       <div className={"k2-tl-b"} id={data.id}>
         <ol>
           {data.items.map((item, index) => (
-            <li key={index}>{item}</li>
+            <li key={index}>{typeof item === "string" ? item : <TimelineLink item={item} />}</li>
           ))}
         </ol>
       </div>
@@ -347,8 +364,9 @@ export type AskVoData = { organizationId: string; matters: { id: string; label: 
 
 /**
  * Ask Vo (live-only, in the Designer's dialog anatomy): a question about one matter, answered for
- * the staff member only from the firm's records, with the records it read. Vo abstains when the
- * question needs a rule, a fee, a deadline or a legal judgement. The answer is shown, not stored.
+ * the staff member only from the matter's records, approved facts and the firm's approved official
+ * content, each cited and linked (SRC-09). Vo abstains when nothing supports an answer or it needs
+ * a legal judgement. The answer is shown, not stored; its citations are kept on the run.
  */
 export function AskVoDialog({ data }: { data: AskVoData }) {
   return (
@@ -373,7 +391,7 @@ export function AskVoDialog({ data }: { data: AskVoData }) {
         <div className={"fld"}>
           <label htmlFor={"askQ"}>{"Question"}</label>
           <small className={"hint"} id={"askQ-h"}>
-            {"Vo answers from this matter’s records only, for you. It won’t give legal advice or state a rule, fee or deadline."}
+            {"Vo answers for you from this matter’s records and the firm’s approved official sources only, and links each one it used. It won’t give legal advice, and says so when nothing supports an answer."}
           </small>
           <textarea className={"ta"} id={"askQ"} aria-describedby={"askQ-h"} maxLength={1000} rows={3}></textarea>
         </div>

@@ -1,9 +1,11 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { publishIntakeDraft, saveIntakeDraft, withdrawIntakeForm } from "@/modules/intake/builder-actions";
 import { saveQueue } from "@/modules/sheet/save-queue";
 import { fieldLabel, fieldToggles, moveField, newField, readSchema, relabel, removeField, toggleField, type IntakeField } from "@/modules/sheet/intake-builder-present";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 type Router = { refresh: () => void };
 
@@ -233,7 +235,7 @@ export function mountIntakeBuilder(root: HTMLElement, router: Router, signal: Ab
             if (result.stepUp) {
               toast2("Confirm it’s you", { kind: "warn", sub: "Then delete the form again." });
               const next = `${window.location.pathname}${window.location.search}`;
-              window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`), 900);
+              window.setTimeout(() => goStepUp(stepUpHref(next, "intake_delete")), 900);
               return;
             }
             toast2(result.error, { kind: "bad", sub: "The form is unchanged." });
@@ -267,7 +269,7 @@ export function mountIntakeBuilder(root: HTMLElement, router: Router, signal: Ab
             if (result.stepUp) {
               toast2("Confirm it’s you", { kind: "warn", sub: "Then publish again. Your draft is saved." });
               const next = `${window.location.pathname}${window.location.search}`;
-              window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`), 900);
+              window.setTimeout(() => goStepUp(stepUpHref(next, "intake_publish")), 900);
               return;
             }
             toast2(result.error, { kind: "bad", sub: "The draft is unchanged." });

@@ -31,6 +31,9 @@ import { MATTERS_READ } from "@/modules/sheet/matters-present";
 import type { SheetQuery } from "@/modules/sheet/present";
 import { firstName } from "@/modules/sheet/tasks-present";
 import { leadRow } from "@/modules/sheet/clients-present";
+import { loadPersonConsent } from "@/modules/sheet/person-consent-load";
+import { loadImportProvenance } from "@/modules/migration/provenance-load";
+import { importedFacts, importedRelationship } from "@/modules/sheet/imported-present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -81,11 +84,12 @@ async function loadPerson(
   matter: Map<string, MatterRecord>,
   portal: ReturnType<typeof portalState>,
   people: Map<string, PersonRecord>,
+  timeZone: string,
 ): Promise<PersonData> {
-  const [relationships, openTasks] = await Promise.all([
+  const [relationships, openTasks, consent, imports] = await Promise.all([
     supabase
       .from("person_relationships")
-      .select("from_person_id, to_person_id, relationship_type")
+      .select("id, from_person_id, to_person_id, relationship_type")
       .eq("organization_id", org)
       .or(`from_person_id.eq.${person.id},to_person_id.eq.${person.id}`)
       .limit(100),
@@ -95,8 +99,15 @@ async function loadPerson(
       .eq("organization_id", org)
       .eq("owner_person_id", person.id)
       .in("status", [...OPEN_TASK]),
+    // SEC-01, SEC-05: consent history, impact reviews and portal two-step, when the viewer may see them.
+    loadPersonConsent(supabase, org, person.id, timeZone).catch(() => null),
+    // MIG-02: where an imported person's recorded facts came from.
+    loadImportProvenance(supabase, org, "persons", [person.id]),
   ]);
+  const imported = imports.get(person.id) ?? null;
   const links = relationships.data ?? [];
+  // MIG follow-ups: a relationship an import brought in says where it came from.
+  const relationImports = await loadImportProvenance(supabase, org, "person_relationships", links.map((row) => row.id));
   const related = await morePeople(
     supabase,
     org,
@@ -107,7 +118,9 @@ async function loadPerson(
   const rows: RelationshipRow[] = links.flatMap((row) => {
     const fromHere = row.from_person_id === person.id;
     const other = related.get(fromHere ? row.to_person_id : row.from_person_id);
-    return other ? [{ person: { name: other.display_name }, label: relationshipLabel(row.relationship_type, fromHere) }] : [];
+    return other
+      ? [{ person: { name: other.display_name }, label: importedRelationship(relationshipLabel(row.relationship_type, fromHere), relationImports.get(row.id), timeZone) }]
+      : [];
   });
 
   const visible = parties.filter((party) => matter.has(party.matterId));
@@ -116,7 +129,7 @@ async function loadPerson(
   return {
     name: person.display_name,
     summary: personSummary(roles, references),
-    facts: personFacts(person.date_of_birth, person.birth_date_precision, { email: person.email, phone: person.contact_phone }),
+    facts: importedFacts(personFacts(person.date_of_birth, person.birth_date_precision, { email: person.email, phone: person.contact_phone }), imported, timeZone, person.version),
     // The firm keeps no per-fact history to show yet, so the panel is left out.
     superseded: null,
     relationships: {
@@ -132,6 +145,7 @@ async function loadPerson(
     },
     // Language, timezone and contact preferences are not stored for a person yet.
     preferences: null,
+    consent,
   };
 }
 
@@ -263,7 +277,7 @@ export async function loadSheetClients(staff: SheetStaff, query: SheetQuery, now
   const household = householdRows.find((row) => row.id === householdId) ?? null;
 
   const [personData, householdData] = await Promise.all([
-    tab === "person" && person ? loadPerson(supabase, org, person, parties.get(person.id) ?? [], matter, portalOf(person), people) : null,
+    tab === "person" && person ? loadPerson(supabase, org, person, parties.get(person.id) ?? [], matter, portalOf(person), people, staff.timezone) : null,
     tab === "household" && household
       ? loadHousehold(
           supabase,

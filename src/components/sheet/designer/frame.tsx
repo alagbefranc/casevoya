@@ -6,6 +6,10 @@
 import type { ReactNode } from "react";
 import type { SetupBannerData } from "@/modules/sheet/setup-present";
 import { SetupBanner } from "./setup-banner";
+import type { ContinuityBannerData } from "@/modules/sheet/sec-present";
+import { ContinuityBanner } from "./continuity-banner";
+import type { ServiceNoticeBannerData } from "@/modules/sheet/service-notices-present";
+import { ServiceNoticeBanner } from "./service-notice-banner";
 import { SheetSidebar, type SidebarData } from "./sidebar";
 
 const SPRITE = "/assets/icons-coreui/sprite.svg";
@@ -260,6 +264,10 @@ export type StatusbarData = {
    * staff page. Carried with the status bar's sample note because every page passes it through.
    */
   setup?: SetupBannerData | null;
+  /** Live addition (SEC-10): the subscription is ending, in its export window or archived; every staff page. */
+  continuity?: ContinuityBannerData | null;
+  /** Live addition (ADM-04): Casevoya's current service notice (maintenance, incident); every staff page, dismissible per person. */
+  notice?: ServiceNoticeBannerData | null;
 };
 
 export function SheetStatusbar({ data }: { data: StatusbarData }) {
@@ -358,6 +366,8 @@ export function SheetFrame({
             {header ?? (top ? <SheetTopBar data={top} /> : null)}
             <div id={"content"}>
               {statusbar.setup ? <SetupBanner data={statusbar.setup} /> : null}
+              {statusbar.continuity ? <ContinuityBanner data={statusbar.continuity} /> : null}
+              {statusbar.notice ? <ServiceNoticeBanner data={statusbar.notice} /> : null}
               {children}
             </div>
           </div>
