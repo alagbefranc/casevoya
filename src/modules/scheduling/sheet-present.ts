@@ -1,5 +1,5 @@
 /** Pure presentation for the Consultations and Calendar pages. No I/O. */
-import type { Chip, ConsultationRow, MonthCal, OutcomeSummaryData, RowAction, SummaryDialogData } from "@/components/sheet/designer/consultations";
+import type { Chip, ConsultationRow, MonthCal, OutcomeSummaryData, PossibleMatchData, RowAction, SummaryDialogData } from "@/components/sheet/designer/consultations";
 import type { WeekBlock, WeekGrid } from "@/components/sheet/designer/calendar";
 import { monthGrid } from "@/modules/sheet/home-present";
 import { clock, locationShort, shortWhen, zoneAbbr } from "./format";
@@ -17,6 +17,8 @@ export type StaffBooking = {
   attendee: string;
   /** Live: the Upcoming row's Agreement column ("Sent, not signed"). Absent shows "—". */
   agreement?: string;
+  /** Live (#263-C): an unlinked booking-page booking whose email matches someone of the firm. */
+  possibleMatch?: boolean;
 };
 
 /** A booking's latest consultation agreement (sent, signed or voided), as the loader reads it. */
@@ -201,7 +203,58 @@ export function recordHref(bookingId: string): string {
  */
 export function consultationRow(booking: StaffBooking, zone: string, now: number, options: { live?: boolean } = {}): ConsultationRow {
   const row = designerRow(booking, zone, now);
-  return options.live ? { ...row, client: { left: booking.attendee, right: booking.title }, href: recordHref(booking.id) } : row;
+  if (!options.live) return row;
+  return {
+    ...row,
+    client: { left: booking.attendee, right: booking.title },
+    href: recordHref(booking.id),
+    ...(booking.possibleMatch ? { match: POSSIBLE_MATCH_CHIP } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// #263-C: possible match on a booking-page booking
+// ---------------------------------------------------------------------------
+
+/** The Upcoming list's badge on a booking that has an open possible match. */
+export const POSSIBLE_MATCH_CHIP: Chip = { tone: "chg", label: "Possible match" };
+
+/**
+ * The record's Possible match panel: each person of the firm whose email matched an unlinked
+ * booking-page booking, with Link (confirmed on a second press) and Not this person. Null when
+ * the booking is linked or nothing open matched (or the viewer can't see the people who did).
+ */
+export function possibleMatchPanel(input: {
+  linked: boolean;
+  people: { id: string; name: string; portal: boolean }[];
+  wire: { organizationId: string; bookingId: string; version: number };
+}): PossibleMatchData | null {
+  if (input.linked || input.people.length === 0) return null;
+  const one = input.people.length === 1;
+  const base = { "data-org": input.wire.organizationId, "data-booking": input.wire.bookingId, "data-version": String(input.wire.version) };
+  return {
+    title: one ? `Possible match: ${input.people[0].name}` : `Possible matches: ${input.people.length} people`,
+    chip: { tone: "chg", label: "Not linked" },
+    copy: one
+      ? "Booked on the booking page with this person’s email. Anyone can type any email, so it isn’t linked: until you link it, it isn’t in their portal and its emails don’t point to one."
+      : "Booked on the booking page with the email these people share. Anyone can type any email, so it isn’t linked: until you link it, it isn’t in a portal and its emails don’t point to one.",
+    items: input.people.map((person) => ({
+      name: person.name,
+      detail: person.portal ? "Same email · has a portal login" : "Same email · no portal login",
+      link: { ...base, "data-match-link": person.id, "data-name": person.name },
+      dismiss: { ...base, "data-match-dismiss": person.id, "data-name": person.name },
+    })),
+  };
+}
+
+/** A Link or Not this person refusal as words a person can act on. Never the raw message. */
+export function possibleMatchError(message: string): string {
+  if (/changed by someone else/.test(message)) return "This booking changed since you opened it. Reload and try again.";
+  if (/already linked/.test(message)) return "This booking is already linked to a client. Reload to see it.";
+  if (/already decided|no possible match/.test(message)) return "This possible match is no longer open. Reload to see the latest.";
+  if (/no longer matches/.test(message)) return "This person’s email has changed, so it no longer matches the booking.";
+  if (/staff access denied|sign in/i.test(message)) return "You can’t change bookings in this firm.";
+  return "That couldn’t be saved. Try again.";
 }
 
 /** The Upcoming list (live): what's ahead, then the last two weeks; cancelled and expired bookings are left out. */

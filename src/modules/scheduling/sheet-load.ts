@@ -42,6 +42,7 @@ import {
   mondayOf,
   monthBox,
   recordAgreement,
+  possibleMatchPanel,
   recordHref,
   recordOutcome,
   shiftMonth,
@@ -124,6 +125,44 @@ async function loadBookings(supabase: Client, org: string, from: number, to: num
   }));
 }
 
+/**
+ * #263-C: the open possible matches of an unlinked booking-page booking, with each person's name
+ * and whether they have a portal login. RLS shows only people this staff member can see.
+ */
+async function possibleMatches(
+  supabase: Client,
+  org: string,
+  booking: { id: string; person_id: string | null; source: string },
+): Promise<{ id: string; name: string; portal: boolean }[]> {
+  if (booking.person_id || booking.source !== "public") return [];
+  const { data: rows } = await supabase
+    .from("booking_person_matches")
+    .select("person_id")
+    .eq("organization_id", org)
+    .eq("booking_id", booking.id)
+    .eq("status", "open")
+    .order("created_at", { ascending: true });
+  const ids = (rows ?? []).map((row) => row.person_id);
+  if (!ids.length) return [];
+  const { data: people } = await supabase.from("persons").select("id, display_name, user_id").eq("organization_id", org).in("id", ids);
+  const byId = new Map((people ?? []).map((person) => [person.id, person]));
+  return ids.flatMap((id) => {
+    const person = byId.get(id);
+    return person ? [{ id, name: person.display_name, portal: Boolean(person.user_id) }] : [];
+  });
+}
+
+/** #263-C: which of these bookings have an open possible match the viewer can see (the list badge). */
+async function bookingsWithMatches(supabase: Client, org: string, ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const { data } = await supabase.from("booking_person_matches").select("booking_id").eq("organization_id", org).eq("status", "open").in("booking_id", ids);
+  const open = [...new Set((data ?? []).map((row) => row.booking_id))];
+  if (!open.length) return new Set();
+  // A booking linked to one of several matching people keeps the others' rows open: no badge.
+  const { data: unlinked } = await supabase.from("bookings").select("id").eq("organization_id", org).in("id", open).is("person_id", null);
+  return new Set((unlinked ?? []).map((row) => row.id));
+}
+
 async function staffMembers(supabase: Client, org: string) {
   const [{ data }, names] = await Promise.all([
     supabase.from("memberships").select("id, role, user_id").eq("organization_id", org).eq("status", "active"),
@@ -174,9 +213,9 @@ async function loadRecord(
 
   // CRM-03: a client without a portal login can only act through the Manage your booking link.
   const portalPerson = booking.person_id
-    ? supabase.from("persons").select("user_id").eq("organization_id", org).eq("id", booking.person_id).maybeSingle()
+    ? supabase.from("persons").select("display_name, user_id").eq("organization_id", org).eq("id", booking.person_id).maybeSingle()
     : Promise.resolve({ data: null });
-  const [attendee, type, events, link, summaryRow, agreementRow, personRow] = await Promise.all([
+  const [attendee, type, events, link, summaryRow, agreementRow, personRow, possible] = await Promise.all([
     supabase.from("booking_attendees").select("display_name, time_zone, email").eq("organization_id", org).eq("booking_id", booking.id).eq("role", "primary").maybeSingle(),
     supabase.from("booking_event_types").select("title").eq("organization_id", org).eq("id", booking.event_type_id).maybeSingle(),
     supabase.from("booking_events").select("kind, actor, actor_user_id, created_at").eq("organization_id", org).eq("booking_id", booking.id).order("created_at", { ascending: false }).limit(30),
@@ -192,6 +231,7 @@ async function loadRecord(
       .limit(1)
       .maybeSingle(),
     portalPerson,
+    possibleMatches(supabase, org, booking),
   ]);
   const leadId = link.data?.lead_id ?? null;
   const [lead, notes] = leadId
@@ -264,6 +304,11 @@ async function loadRecord(
       agreement,
       voidDialog: live ? { organizationId: org, bookingId: booking.id, client: name } : null,
       vo,
+      possibleMatch: possibleMatchPanel({
+        linked: Boolean(booking.person_id),
+        people: possible,
+        wire: { organizationId: org, bookingId: booking.id, version: booking.version },
+      }),
       attendee: name,
       notes: { items: noteItems, copy: notesCopy, lead: notesLink },
       outcome: { chip: outcome.chip, copy: outcome.copy, actions },
@@ -277,6 +322,8 @@ async function loadRecord(
         // CRM-03, slice 8 not built: calls are never recorded, and the record says so.
         ...(booking.location_kind === "video" ? [{ term: "Recording", value: RECORDING_NOT_AVAILABLE }] : []),
         { term: "Booked", value: booking.source === "public" ? "On the booking page" : "By the firm" },
+        // #263-C: who the booking is for, once it is linked (by staff, or booked by the client signed in).
+        ...(personRow.data?.display_name ? [{ term: "Client", value: personRow.data.display_name }] : []),
         { term: "Lead", value: lead?.data ? lead.data.display_name : "Not linked" },
         ...(booking.is_sample ? [{ term: "Record", value: "Sample (practice)" }] : []),
       ],
@@ -368,7 +415,8 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
 
   // Upcoming: what's ahead first, then the last two weeks (outcomes to record, no-shows). Cancelled
   // bookings are left out (each one's record still shows on the Consultation record tab).
-  const rows = upcomingRows(upcoming.map((b) => ({ ...b, agreement: agreementLabel(agreementOf.get(b.id)) })), zone, now);
+  const matched = await bookingsWithMatches(supabase, org, upcoming.map((b) => b.id));
+  const rows = upcomingRows(upcoming.map((b) => ({ ...b, agreement: agreementLabel(agreementOf.get(b.id)), possibleMatch: matched.has(b.id) })), zone, now);
   const thisWeek = upcoming.filter((b) => b.status === "confirmed" && Date.parse(b.startsAt) > now && Date.parse(b.startsAt) < now + 7 * DAY).length;
   // A published sample type is a practice page (only the firm's staff can open it). The share link
   // and preview use a real page when there is one, otherwise the practice page.
