@@ -4217,7 +4217,7 @@ describe("Designer fidelity: matter Timeline tab (OPS-06)", () => {
                 { dot: "#2e9d5b", title: "Advance reconciled", parts: ["Bank statement", "Lena (finance)"], badge: { tone: "ok", label: "Reconciled" }, when: "15 Oct" },
                 { dot: "#2e9d5b", title: "Program source checked", parts: ["IRCC spousal sponsorship guide", "Amara"], badge: { tone: "ok", label: "Checked" }, when: "12 Oct" },
                 { dot: "#0075DE", title: "Stage: Intake → Evidence collection", parts: ["Reason: questionnaire assigned", "Daniel"], badge: { tone: "blue", label: "Stage" }, when: "2 Oct" },
-                { dot: "#2e9d5b", title: "Service agreement signed, 2 of 2", parts: ["DocuSign envelope (planned)", "hash 77ab…"], badge: { tone: "ok", label: "Signed" }, when: "28 Sep" },
+                { dot: "#2e9d5b", title: "Service agreement signed, 2 of 2", parts: ["Casevoya e-sign", "hash 77ab…"], badge: { tone: "ok", label: "Signed" }, when: "28 Sep" },
               ],
             },
           }),
