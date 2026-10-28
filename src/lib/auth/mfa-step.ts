@@ -14,6 +14,16 @@ export function mfaActiveStep(hasVerifiedFactor: boolean, requested: number | nu
   return 0;
 }
 
+/**
+ * The recovery-codes step (#3) has codes to show (issue #261). It only opens after a verified
+ * authenticator code returned fresh codes; anything else reaching it goes back to setup instead of
+ * showing an empty list.
+ */
+export function recoveryCodesShown(root: ParentNode): boolean {
+  const slots = [...root.querySelectorAll(".codes span")];
+  return slots.length > 0 && slots.every((slot) => Boolean(slot.textContent?.trim()));
+}
+
 /** The Designer's step-up line, written for exporting a client file. */
 export const EXPORT_STEP_UP_LEAD = "Exporting a whole client file needs a fresh check, even when you’re already signed in.";
 
