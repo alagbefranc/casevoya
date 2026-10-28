@@ -8,7 +8,18 @@ import { ConsentsPanel, TwoStepRow } from "@/components/portal/account-privacy";
 import { PersonConsentPanels } from "@/components/sheet/designer/person-consent";
 import { SheetSettingsSecurity } from "@/components/sheet/designer/settings";
 import { EXPORT_STEP_UP_LEAD, isStepUpActionKey, stepUpAction, stepUpHref, stepUpLead, type StepUpActionKey } from "@/lib/auth/mfa-step";
-import { countdown, idlePhase, idleSignInLocation, isStaffPageLoad, readActivityState, readIdleMinutes } from "@/modules/security/idle";
+import {
+  activityPayload,
+  countdown,
+  IDLE_MINUTES_DEFAULT,
+  IDLE_MINUTES_MAX,
+  IDLE_MINUTES_MIN,
+  idlePhase,
+  idleSignInLocation,
+  isStaffPageLoad,
+  readActivityState,
+  readIdleMinutes,
+} from "@/modules/security/idle";
 import { PROCESSING_WITHDRAWAL_NOTE, consentCopy, readConsents, readTwoStep, twoStepCopy, withdrawalToast } from "@/modules/portal/account-present";
 import { personConsentError, presentPersonConsent, readIdentityMethod, readReviewNote } from "@/modules/sheet/person-consent-present";
 import { securityData } from "@/modules/sheet/settings-present";
@@ -139,6 +150,16 @@ describe("SEC-01 idle sign-out", () => {
     expect(readActivityState({ state: "none" })).toEqual({ state: "none" });
     expect(readActivityState(null)).toEqual({ state: "none" });
     expect(readActivityState({ state: "active" })).toEqual({ state: "none" });
+    // #262: what the activity route sends back reads the same in the browser (one contract).
+    for (const state of [
+      { state: "active", timeoutMinutes: 30, idleSeconds: 12 },
+      { state: "expired", timeoutMinutes: 5 },
+      { state: "ended" },
+      { state: "none" },
+    ] as const) {
+      expect(readActivityState(JSON.parse(JSON.stringify(activityPayload(state))))).toEqual(state);
+    }
+    expect([IDLE_MINUTES_DEFAULT, IDLE_MINUTES_MIN, IDLE_MINUTES_MAX]).toEqual([30, 5, 480]);
     expect(readIdleMinutes("30")).toEqual({ minutes: 30 });
     expect(readIdleMinutes("4")).toHaveProperty("error");
     expect(readIdleMinutes("481")).toHaveProperty("error");
@@ -264,6 +285,6 @@ describe("SEC-05 the staff review on the person tab", () => {
   });
 
   it("tells staff why Vo skipped the document", () => {
-    expect(voError("client_ai_off")).toContain("hasn’t agreed to AI drafting");
+    expect(voError("client_ai_off")).toContain("hasn’t agreed to AI help with their documents yet");
   });
 });

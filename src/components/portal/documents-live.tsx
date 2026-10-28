@@ -483,6 +483,19 @@ export function formatsText(formats: readonly string[] | undefined): string {
   return formatList(formats ?? []);
 }
 
+/**
+ * Step 2's owner: the label ("Me" for the signed-in person) and the avatar's initials, which are
+ * always from the person's name, the same rule as the portal's other avatars (initials in
+ * live.tsx), never from "You"/"Me" (#262 item 5).
+ */
+export function uploadOwner(input: { ownerId: string | null; ownerName: string; selfId: string | null; selfName: string | null }): { label: string; initials: string; self: boolean } {
+  const self = Boolean(input.ownerId) && input.ownerId === input.selfId;
+  const name = (self ? input.selfName || input.ownerName : input.ownerName) ?? "";
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const initials = words.slice(0, 2).map((word) => word[0]?.toUpperCase() ?? "").join("") || "·";
+  return { label: self ? "Me" : input.ownerName, initials, self };
+}
+
 function audienceLine(audience: string, person: string, self: boolean, firm: string): string {
   if (audience === "matter") return "Shared on the matter. People on it can see it.";
   if (audience === "staff") return `Only ${firm} can see it.`;
@@ -643,7 +656,12 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
     }
     setAt(at + 1);
   };
-  const ownerName = request ? (request.personId === self ? "You" : request.personName) : documents.people.find((item) => item.id === person)?.displayName ?? "";
+  const owner = uploadOwner({
+    ownerId: request ? request.personId : person || null,
+    ownerName: request ? request.personName : documents.people.find((item) => item.id === person)?.displayName ?? "",
+    selfId: self,
+    selfName: viewer.person?.displayName ?? null,
+  });
   const step = (index: number) => (index < at ? "d" : index === at ? "c" : "");
 
   return (
@@ -698,10 +716,10 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
           <div className="pick">
             <label style={{ gridTemplateColumns: "auto auto 1fr" }}>
               <input type="radio" name="up-whose" checked readOnly />
-              <span className="av" aria-hidden="true">{ownerName ? ownerName.split(/\s+/).map((word) => word[0]).slice(0, 2).join("").toUpperCase() : "·"}</span>
+              <span className="av" aria-hidden="true">{owner.initials}</span>
               <span>
-                <b style={{ fontWeight: 500 }}>{ownerName === "You" ? "Me" : ownerName}</b>
-                <small>{audienceLine(request?.audience ?? "subject", ownerName, ownerName === "You", firm)}</small>
+                <b style={{ fontWeight: 500 }}>{owner.label}</b>
+                <small>{audienceLine(request?.audience ?? "subject", owner.label, owner.self, firm)}</small>
               </span>
             </label>
           </div>

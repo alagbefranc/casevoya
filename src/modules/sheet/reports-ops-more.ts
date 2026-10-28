@@ -6,7 +6,7 @@
  * benchmarked, extrapolated or ranked; with no rows a card says so.
  */
 import type { ReportBar, ReportLink, ReportsOpsMore } from "@/components/sheet/designer/reports";
-import { daysBetween, median, percent } from "@/modules/sheet/reports-present";
+import { MEDIAN_NOTE, daysBetween, median, medianLabel, percent } from "@/modules/sheet/reports-present";
 import type { ReportSection } from "@/modules/sheet/reports-export";
 import { isOverdue } from "@/modules/sheet/tasks-present";
 
@@ -161,7 +161,7 @@ export function readiness(matters: ReadinessInput[], notRecorded: number): { mat
   }
   return {
     matters: days.length,
-    median: String(value ?? 0),
+    median: medianLabel(value),
     longest: String(Math.max(...days)),
     recorded: true,
     note: `${days.length} ${days.length === 1 ? "matter" : "matters"} reached Ready to submit in this period.${missing}`,
@@ -200,7 +200,7 @@ export const MORE_DEFINITIONS = {
   intake:
     "Definition: intake forms sent to a client in the period. Completed: the client submitted the form. Waiting: not submitted yet; past the due date when the request’s due date is before today.",
   readiness:
-    "Definition: days from opening the matter to its first recorded move into Ready to submit, for matters that first reached it in the period. Matters with no recorded move into that stage can’t be measured and aren’t counted.",
+    `Definition: days from opening the matter to its first recorded move into Ready to submit, for matters that first reached it in the period. Matters with no recorded move into that stage can’t be measured and aren’t counted. ${MEDIAN_NOTE.replace("files", "matters")}`,
   renewals:
     "Definition: expiries recorded on an approved decision whose renewal review task is still open, by days until the recorded expiry date. Cancelled renewals are left out. Expiry dates are the ones the firm recorded from the decision document.",
 } as const;

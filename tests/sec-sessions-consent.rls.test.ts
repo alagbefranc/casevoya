@@ -1,14 +1,49 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { VO_VENDOR_TERMS } from "@/modules/vo/vendor-terms";
+import { idlePhase, readActivityState } from "@/modules/security/idle";
+
+// The activity route's Supabase client, backed by the PGlite database below (#262 contract test).
+const route = vi.hoisted(() => ({
+  userId: "",
+  signedOut: 0,
+  rpc: (async () => ({ data: null, error: null })) as (name: string, args: { p_active: boolean }) => Promise<{ data: unknown; error: unknown }>,
+}));
+vi.mock("@/lib/env", async (original) => ({ ...(await original<typeof import("@/lib/env")>()), hasPublicSupabaseEnv: () => true }));
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({
+    auth: {
+      getClaims: async () => ({ data: { claims: { sub: route.userId } } }),
+      signOut: async () => {
+        route.signedOut += 1;
+        return { error: null };
+      },
+    },
+    rpc: (name: string, args: { p_active: boolean }) => route.rpc(name, args),
+  }),
+}));
+const { POST: postActivity } = await import("@/app/api/session/activity/route");
+
+/** What the idle guard does: post to the route and read the JSON body. */
+async function post(active: boolean): Promise<unknown> {
+  const response = await postActivity(
+    new Request("https://app.casevoya.ca/api/session/activity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", origin: "https://app.casevoya.ca" },
+      body: JSON.stringify({ active }),
+    }),
+  );
+  return response.json();
+}
 
 /**
  * 20261025270000 / 20261025270100 (SEC-01, SEC-05) against the real migrations: the firm's idle
  * sign-out time (owner with step-up, audited) and its server-side enforcement per session; client
  * two-step state, the high-risk check and the staff-assisted reset; consent withdrawal opening an
  * impact review and task, the staff review (history, mark done), tenant isolation, and Vo skipping
- * a client who declines AI drafting. Synthetic data only.
+ * a client who hasn't said yes to AI drafting (20261028150000, decision #263-3: no record, a no or a
+ * withdrawn yes). Synthetic data only.
  */
 let db: TestDb;
 
@@ -166,6 +201,49 @@ describe("SEC-01 idle timeout", () => {
     const clientSid = await session(f.clientUser);
     await client(f, clientSid);
     expect((await db.query<{ r: Record<string, unknown> }>(`select public.record_staff_activity(true) as r`)).rows[0].r).toMatchObject({ state: "none" });
+  });
+
+  // #262: the browser's idle guard reads the activity route's JSON with readActivityState. The
+  // route used to send the camelCase ActivityState, which read as "none", so no timer ever started.
+  // This runs the real route against the real public.record_staff_activity and reads its answer
+  // exactly as the idle guard does.
+  it("the activity route's answer starts the browser's timer, warns before sign-out, and Stay signed in resets it", async () => {
+    const f = await firm();
+    await staff(f, f.owner, 0);
+    await db.query(`select public.set_staff_idle_timeout($1, 5)`, [f.orgId]);
+    const sid = await session(f.consultant);
+    route.rpc = async (_name, args) => {
+      await staff(f, f.consultant, 60, sid);
+      const r = (await db.query<{ r: unknown }>(`select public.record_staff_activity($1) as r`, [args.p_active])).rows[0].r;
+      return { data: r, error: null };
+    };
+    route.userId = f.consultant;
+
+    const first = readActivityState(await post(false));
+    expect(first).toEqual({ state: "active", timeoutMinutes: 5, idleSeconds: 0 });
+    if (first.state !== "active") return;
+
+    // The guard's clock: 3 minutes 30 seconds idle on a 5-minute time is inside the 2-minute warning.
+    const start = Date.now() - first.idleSeconds * 1000;
+    expect(idlePhase(start, start + 2 * 60_000, first.timeoutMinutes).phase).toBe("active");
+    expect(idlePhase(start, start + 210_000, first.timeoutMinutes)).toEqual({ phase: "warn", secondsLeft: 90 });
+
+    // Stay signed in: activity goes to the server, and the idle time starts again from zero.
+    await asMaintenance(db);
+    await db.query(`update public.staff_session_activity set last_active_at = now() - interval '210 seconds' where session_id = $1`, [sid]);
+    const idle = readActivityState(await post(false));
+    expect(idle).toMatchObject({ state: "active", timeoutMinutes: 5 });
+    if (idle.state !== "active") return;
+    expect(idle.idleSeconds).toBeGreaterThanOrEqual(210);
+    expect(idlePhase(Date.now() - idle.idleSeconds * 1000, Date.now(), idle.timeoutMinutes).phase).toBe("warn");
+    const stayed = readActivityState(await post(true));
+    expect(stayed).toEqual({ state: "active", timeoutMinutes: 5, idleSeconds: 0 });
+
+    // Past the time: the route answers expired and the guard leaves for sign-in.
+    await asMaintenance(db);
+    await db.query(`update public.staff_session_activity set last_active_at = now() - interval '6 minutes' where session_id = $1`, [sid]);
+    expect(readActivityState(await post(false))).toEqual({ state: "expired", timeoutMinutes: 5 });
+    expect(route.signedOut).toBe(1);
   });
 });
 
@@ -364,44 +442,105 @@ describe("SEC-05 consent withdrawal impact review", () => {
   });
 });
 
+/** A clean document of the firm's client on the matter, with Vo turned on by the owner. */
+async function voDocument(f: Firm) {
+  await asMaintenance(db);
+  const doc = await db.query<{ id: string }>(
+    `insert into public.documents (organization_id, person_id, purpose, sensitivity, audience, created_by)
+     values ($1, $2, 'Passport bio page', 'ordinary', 'subject', $3) returning id`,
+    [f.orgId, f.personId, f.clientUser],
+  );
+  const version = await db.query<{ id: string }>(
+    `insert into public.document_versions (
+       organization_id, document_id, version_number, storage_key, original_filename, declared_media_type,
+       declared_byte_size, upload_state, intent_expires_at, created_by
+     ) values ($1, $2, 1, $3, 'passport.pdf', 'application/pdf', 1000, 'clean', now() + interval '1 hour', $4) returning id`,
+    [f.orgId, doc.rows[0].id, `${f.orgId}/${randomUUID()}/passport.pdf`, f.clientUser],
+  );
+  await db.query(`insert into public.document_matter_refs (organization_id, document_id, matter_id, created_by) values ($1, $2, $3, $4)`, [
+    f.orgId,
+    doc.rows[0].id,
+    f.matterId,
+    f.clientUser,
+  ]);
+  await staff(f, f.owner);
+  // AI-06: the owner acknowledges the AI vendor terms before Vo can be turned on.
+  await db.query(`select public.acknowledge_vo_vendor_terms($1, $2)`, [f.orgId, VO_VENDOR_TERMS.version]);
+  await db.query(`select public.set_vo_settings($1, $2::jsonb)`, [f.orgId, JSON.stringify({ enabled: true, read_identity: true })]);
+  return version.rows[0].id;
+}
+
+async function readWithVo(f: Firm, versionId: string) {
+  await staff(f, f.consultant, 60);
+  return (await db.query<{ r: { ok: boolean; error?: string; person_id?: string } }>(`select public.begin_vo_document_review($1, $2) as r`, [f.orgId, versionId])).rows[0].r;
+}
+
 describe("SEC-05 Vo skips a client who declines AI drafting", () => {
   it("returns client_ai_off for that client's document", async () => {
     const f = await firm();
-    await asMaintenance(db);
-    const doc = await db.query<{ id: string }>(
-      `insert into public.documents (organization_id, person_id, purpose, sensitivity, audience, created_by)
-       values ($1, $2, 'Passport bio page', 'ordinary', 'subject', $3) returning id`,
-      [f.orgId, f.personId, f.clientUser],
-    );
-    const version = await db.query<{ id: string }>(
-      `insert into public.document_versions (
-         organization_id, document_id, version_number, storage_key, original_filename, declared_media_type,
-         declared_byte_size, upload_state, intent_expires_at, created_by
-       ) values ($1, $2, 1, $3, 'passport.pdf', 'application/pdf', 1000, 'clean', now() + interval '1 hour', $4) returning id`,
-      [f.orgId, doc.rows[0].id, `${f.orgId}/${randomUUID()}/passport.pdf`, f.clientUser],
-    );
-    await db.query(`insert into public.document_matter_refs (organization_id, document_id, matter_id, created_by) values ($1, $2, $3, $4)`, [
-      f.orgId,
-      doc.rows[0].id,
-      f.matterId,
-      f.clientUser,
-    ]);
-    await staff(f, f.owner);
-    // AI-06: the owner acknowledges the AI vendor terms before Vo can be turned on.
-    await db.query(`select public.acknowledge_vo_vendor_terms($1, $2)`, [f.orgId, VO_VENDOR_TERMS.version]);
-    await db.query(`select public.set_vo_settings($1, $2::jsonb)`, [f.orgId, JSON.stringify({ enabled: true })]);
+    const versionId = await voDocument(f);
 
     await client(f);
     await db.query(`select public.set_my_consent('ai_drafting', false)`);
-    await staff(f, f.consultant, 60);
-    const refused = (await db.query<{ r: { ok: boolean; error?: string } }>(`select public.begin_vo_document_review($1, $2) as r`, [f.orgId, version.rows[0].id])).rows[0].r;
-    expect(refused).toEqual({ ok: false, error: "client_ai_off" });
+    expect(await readWithVo(f, versionId)).toEqual({ ok: false, error: "client_ai_off", person_id: f.personId });
 
     await client(f);
     await db.query(`select public.set_my_consent('ai_drafting', true)`);
-    await staff(f, f.consultant, 60);
     // Consent given again: the client's choice no longer stops Vo (the firm's own switches still apply).
-    const next = (await db.query<{ r: { ok: boolean; error?: string } }>(`select public.begin_vo_document_review($1, $2) as r`, [f.orgId, version.rows[0].id])).rows[0].r;
+    const next = await readWithVo(f, versionId);
     expect(next.error).not.toBe("client_ai_off");
+  });
+});
+
+describe("Decision #263-3: Vo reads a client's documents only with their AI consent (opt-in)", () => {
+  it("skips a client with no AI drafting record (an existing client, or one without a portal)", async () => {
+    const f = await firm();
+    const versionId = await voDocument(f);
+    await asMaintenance(db);
+    expect((await db.query(`select id from public.consent_records where person_id = $1 and purpose = 'ai_drafting'`, [f.personId])).rows).toHaveLength(0);
+    expect(await readWithVo(f, versionId)).toEqual({ ok: false, error: "client_ai_off", person_id: f.personId });
+    // Nothing was started or counted.
+    await asMaintenance(db);
+    expect((await db.query(`select id from public.vo_runs where organization_id = $1`, [f.orgId])).rows).toHaveLength(0);
+  });
+
+  it("reads once the client said yes", async () => {
+    const f = await firm();
+    const versionId = await voDocument(f);
+    await client(f);
+    await db.query(`select public.set_my_consent('ai_drafting', true)`);
+    const read = await readWithVo(f, versionId);
+    expect(read).toMatchObject({ ok: true });
+  });
+
+  it("skips a client whose yes was withdrawn (withdrawn_at set, e.g. by a privacy request)", async () => {
+    const f = await firm();
+    const versionId = await voDocument(f);
+    await client(f);
+    await db.query(`select public.set_my_consent('ai_drafting', true)`);
+    await asMaintenance(db);
+    await db.query(`update public.consent_records set withdrawn_at = now() where person_id = $1 and purpose = 'ai_drafting' and granted`, [f.personId]);
+    expect(await readWithVo(f, versionId)).toEqual({ ok: false, error: "client_ai_off", person_id: f.personId });
+  });
+
+  it("keeps skipping a client who said no", async () => {
+    const f = await firm();
+    const versionId = await voDocument(f);
+    await client(f);
+    await db.query(`select public.set_my_consent('ai_drafting', false)`);
+    expect(await readWithVo(f, versionId)).toEqual({ ok: false, error: "client_ai_off", person_id: f.personId });
+  });
+
+  it("app.person_declines_ai is true unless the latest record is a yes", async () => {
+    const f = await firm();
+    await asMaintenance(db);
+    const declines = async () => (await db.query<{ d: boolean }>(`select app.person_declines_ai($1, $2) as d`, [f.orgId, f.personId])).rows[0].d;
+    expect(await declines()).toBe(true);
+    await db.query(
+      `insert into public.consent_records (organization_id, person_id, purpose, statement_text, statement_sha256, granted)
+       values ($1, $2, 'ai_drafting', 'The firm may use drafting help that a person at the firm reviews before it is used.', repeat('c', 64), true)`,
+      [f.orgId, f.personId],
+    );
+    expect(await declines()).toBe(false);
   });
 });

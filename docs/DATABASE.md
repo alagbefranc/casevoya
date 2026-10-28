@@ -1135,6 +1135,24 @@ Issue #259 fix 5, branch `fix/onboarding-259`. Apply in order. Each Continue on 
 
 Tested in `tests/setup-office.rls.test.ts`.
 
+## Launch must-fix: deleted exports and the Stripe retry window (`20261028100000`, `20261028100100`, not applied on the live project)
+
+Issue #262, branch `fix/launch-must-fix-262`. Apply in order. Additive.
+
+* `20261028100000_export_removed.sql` adds `matter_exports.removed_at` (when a retention deletion removed the export's ZIP), **redefines** `public.service_record_deletion_item` (latest: `20261025290000_sec_retention_deletion.sql`; an `export_file` item now stamps `removed_at`) and `public.authorize_matter_export_download` (latest: `20261019205100_matter_records_exports_closure.sql`; refuses a removed export with "this export was deleted", 22023), and backfills `removed_at` for exports whose deletion item is already deleted or missing.
+* `20261028100100_stripe_retry_window_2h.sql` **redefines** `app.apply_stripe_reversal_event` (latest: `20261025160000_stripe_webhook_dispute_race_refund_failed.sql`): the SQLSTATE 55000 retry window is `interval '2 hours'` instead of `'24 hours'`; nothing else changes.
+
+Tested in `tests/sec-retention-deletion.rls.test.ts`, `tests/export-download-gone.test.ts` and `tests/finance-stripe-disputes-credits.rls.test.ts`.
+
+## Vo reads a client's documents only with their AI consent (`20261028150000`, not applied on the live project)
+
+Decision #263-3, branch `fix/vo-ai-consent-default`. Additive (function bodies only, no data changes).
+
+* `20261028150000_vo_ai_consent_opt_in.sql` **redefines** `app.person_declines_ai` (latest in `20261025270100_sec_sessions_consent.sql`): true unless the person's latest AI drafting record is a yes that hasn't been withdrawn (was: true only for a no or a withdrawn yes). A person with no AI drafting record is now skipped by Vo. Signature and grants unchanged.
+* It **redefines** `public.begin_vo_document_review` (latest in `20261025270100_sec_sessions_consent.sql`): the `client_ai_off` result also carries `person_id`, so the app can name the client. Otherwise unchanged. It is the only caller of `app.person_declines_ai`.
+* `app.person_consent_state` is unchanged.
+
+Tested in `tests/sec-sessions-consent.rls.test.ts` and `tests/vo-doc-review.rls.test.ts`.
 ## Possible match on a booking-page booking (`20261028140000`, not applied on the live project)
 
 Issue #263 item C, branch `feat/booking-possible-match`. One additive migration; it redefines no function (`booking_public_hold`, `app.place_booking` and `prepare_email_delivery` are untouched, so it merges cleanly with #264's redefinitions). No enum values.

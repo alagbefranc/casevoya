@@ -81,6 +81,12 @@ async function firm(options: { sample?: boolean; sampleMatter?: boolean; purpose
     [orgId, clientUser, options.sampleMatter ?? false],
   );
   const personId = person.rows[0].id;
+  // Decision #263-3: Vo reads a client's documents only with their AI drafting consent.
+  await db.query(
+    `insert into public.consent_records (organization_id, person_id, purpose, statement_text, statement_sha256, granted)
+     values ($1, $2, 'ai_drafting', 'The firm may use drafting help that a person at the firm reviews before it is used.', repeat('c', 64), true)`,
+    [orgId, personId],
+  );
   await db.query(`insert into public.matter_participants (organization_id, matter_id, person_id, role) values ($1, $2, $3, 'applicant')`, [
     orgId,
     matterId,

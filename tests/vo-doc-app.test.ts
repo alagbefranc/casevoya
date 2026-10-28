@@ -21,6 +21,7 @@ const state = vi.hoisted(() => ({
   fetches: [] as { url: string; body: string }[],
   reply: {} as Record<string, unknown>,
   status: 200,
+  rows: {} as Record<string, unknown>,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -29,10 +30,10 @@ vi.mock("@/lib/supabase/server", () => ({
       getClaims: async () => ({ data: { claims: { sub: "77777777-7777-4777-8777-777777777777" } } }),
       getSession: async () => ({ data: { session: { access_token: "user-token-abcdefghijklmnopqrstuvwxyz" } } }),
     },
-    from: () => {
+    from: (table: string) => {
       const chain: Record<string, unknown> = {};
       for (const key of ["select", "eq", "order", "limit"]) chain[key] = () => chain;
-      chain.maybeSingle = async () => ({ data: { id: "88888888-8888-4888-8888-888888888888" } });
+      chain.maybeSingle = async () => ({ data: table in state.rows ? state.rows[table] : { id: "88888888-8888-4888-8888-888888888888" } });
       return chain;
     },
     rpc: async (name: string, args: Record<string, unknown>) => {
@@ -53,6 +54,7 @@ const { voSettingChanges } = await import("@/modules/vo/errors");
 
 beforeEach(() => {
   state.rpcCalls = [];
+  state.rows = {};
   state.rpc = { begin_vo_document_review: { data: { ok: true, run_id: RUN, matter_id: MATTER, category: "identity" }, error: null } };
   state.fetches = [];
   state.status = 200;
@@ -93,6 +95,23 @@ describe("Read with Vo", () => {
     expect(await readDocumentWithVo({ organizationId: ORG, versionId: VERSION })).toEqual({ error: expect.stringContaining("Medical record") });
     state.rpc.begin_vo_document_review = { data: { ok: false, error: "already_read", draft_id: DRAFT, matter_id: MATTER }, error: null };
     expect(await readDocumentWithVo({ organizationId: ORG, versionId: VERSION })).toMatchObject({ draftId: DRAFT, matterId: MATTER, error: expect.stringContaining("already read") });
+    expect(state.fetches).toEqual([]);
+  });
+
+  it("names a client who hasn't agreed to AI help, and says where they can (decision #263-3)", async () => {
+    const PERSON = "99999999-9999-4999-8999-999999999999";
+    state.rpc.begin_vo_document_review = { data: { ok: false, error: "client_ai_off", person_id: PERSON }, error: null };
+    state.rows.persons = { display_name: "Ana Silva", user_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" };
+    expect(await readDocumentWithVo({ organizationId: ORG, versionId: VERSION })).toEqual({
+      code: "client_ai_off",
+      error: "Ana Silva hasn’t agreed to AI help with their documents yet. They can turn on AI drafting help in their client portal, under Account. Nothing was read; review it yourself.",
+    });
+    state.rows.persons = { display_name: "Ana Silva", user_id: null };
+    const noPortal = await readDocumentWithVo({ organizationId: ORG, versionId: VERSION });
+    expect("error" in noPortal && noPortal.error).toContain("Invite them to the client portal");
+    state.rows.persons = null;
+    const unknown = await readDocumentWithVo({ organizationId: ORG, versionId: VERSION });
+    expect("error" in unknown && unknown.error).toMatch(/^This client hasn’t agreed to AI help with their documents yet\./);
     expect(state.fetches).toEqual([]);
   });
 

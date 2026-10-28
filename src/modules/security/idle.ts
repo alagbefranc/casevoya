@@ -39,6 +39,25 @@ export function readActivityState(value: unknown): ActivityState {
   return { state: "none" };
 }
 
+/** What the activity route sends and the browser reads: the database's own shape, one contract end to end. */
+export type ActivityPayload =
+  | { state: "active"; timeout_minutes: number; idle_seconds: number }
+  | { state: "expired"; timeout_minutes: number | null }
+  | { state: "ended" }
+  | { state: "none" };
+
+/**
+ * The activity route's answer to the browser. The idle guard reads it with readActivityState, the
+ * same reader the route and the proxy use on public.record_staff_activity, so it keeps the
+ * database's snake_case keys. (Sending the camelCase ActivityState read as "none" in the browser,
+ * so no timer started and the warning never showed: #262.)
+ */
+export function activityPayload(state: ActivityState): ActivityPayload {
+  if (state.state === "active") return { state: "active", timeout_minutes: state.timeoutMinutes, idle_seconds: state.idleSeconds };
+  if (state.state === "expired") return { state: "expired", timeout_minutes: state.timeoutMinutes };
+  return { state: state.state };
+}
+
 export type IdlePhase = { phase: "active" | "warn" | "expired"; secondsLeft: number };
 
 /** Where a person is, from their last activity: working, in the two-minute warning, or past the time. */
