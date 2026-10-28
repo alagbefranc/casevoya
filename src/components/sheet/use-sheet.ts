@@ -950,7 +950,7 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       const typeSubmit = target.closest<HTMLElement>("[data-type-submit]");
       if (typeSubmit && root.contains(typeSubmit)) {
         event.preventDefault();
-        busyRun(typeSubmit, () => runBookingType(typeSubmit, router));
+        busyRun(typeSubmit, () => runBookingType(typeSubmit, router, root));
         return;
       }
       // Notifications: a row is marked read and opens its record; Mark all read marks every row.

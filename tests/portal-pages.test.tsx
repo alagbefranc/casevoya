@@ -173,6 +173,20 @@ describe("Upload", () => {
     expect(page).toContain('capture="environment"');
   });
 
+  // #262 item 5: the client's own option showed "Y" (from "You"); it shows their initials, like everyone else's.
+  it("step 2 shows the client's initials for their own document, and another person's initials for theirs", () => {
+    const own = html({ page: "upload", documents });
+    expect(own).toContain('<span class="av" aria-hidden="true">CN</span>');
+    expect(own).not.toContain('<span class="av" aria-hidden="true">Y</span>');
+    expect(own).toContain('<b style="font-weight:500">Me</b>');
+    const theirs = html({
+      page: "upload",
+      documents: { ...documents, requests: [{ ...documents.requests[0], id: "q2", personId: "p2", personName: "Jordan Lee" }] },
+    });
+    expect(theirs).toContain('<span class="av" aria-hidden="true">JL</span>');
+    expect(theirs).toContain('<b style="font-weight:500">Jordan Lee</b>');
+  });
+
   it("says plainly when there's nothing to upload", () => {
     expect(html({ page: "upload", documents: { ...documents, requests: [] } })).toContain("Nothing to upload");
   });
