@@ -81,6 +81,8 @@ export function uploadFailure(input: {
   stage: "intent" | "transfer" | "check";
   message?: string | null;
   state?: string | null;
+  /** document_versions.scan_result when the check ran: "infected" is the virus scanner's (#263-B). */
+  scanResult?: string | null;
   /** The browser threw: no answer at all (offline, connection dropped). */
   thrown?: boolean;
 }): UploadFailure {
@@ -91,6 +93,14 @@ export function uploadFailure(input: {
       title: "The connection dropped",
       copy: "Your file didn’t reach us. Check your connection, then try again. Nothing was accepted.",
       retry: "resend",
+    };
+  }
+  if (input.state === "quarantined" && input.scanResult === "infected") {
+    return {
+      kind: "verification",
+      title: "Blocked: a virus was found",
+      copy: "Our virus check found a virus in this file, so it was blocked and nobody opened it. Please upload another copy, for example a fresh scan or photo of the same pages.",
+      retry: "choose",
     };
   }
   if (input.state === "quarantined") {

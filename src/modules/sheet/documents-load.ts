@@ -42,7 +42,7 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
   const today = isoDateInTimeZone(now, staff.timezone);
   const tab = documentsTab(query.tab);
 
-  const [chrome, versionRows, documentRows, refRows, requestRows] = await Promise.all([
+  const [chrome, versionRows, documentRows, refRows, requestRows, scanning] = await Promise.all([
     loadSheetChrome(staff, "/sheet/documents"),
     supabase
       .from("document_versions")
@@ -55,7 +55,10 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
     tab === "all"
       ? supabase.from("document_requests").select("id, matter_id, person_id, document_id, purpose, due_on, created_at").eq("organization_id", org).eq("status", "open").order("created_at", { ascending: false }).limit(READ)
       : null,
+    // #263-B: whether new uploads wait for the virus scanner (older type-checked files say so).
+    supabase.rpc("document_virus_scan_enabled"),
   ]);
+  const scanningOn = scanning?.data === true;
 
   const versions = (versionRows.data ?? []).map((row) => ({
     id: row.id,
@@ -123,7 +126,7 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
   for (const version of [...current.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt))) {
     const doc = documents.get(version.documentId);
     if (!doc) continue;
-    const entry = queueEntry(version, today);
+    const entry = queueEntry(version, today, { scanningOn });
     if (!entry) continue;
     if (entry.flag === "quarantined") quarantined++;
     const matterId = matterOf.get(doc.id);

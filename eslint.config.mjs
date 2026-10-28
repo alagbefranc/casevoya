@@ -19,6 +19,10 @@ const eslintConfig = defineConfig([
     "services/vo-agent/runtime/**",
     "services/vo-agent/dist/**",
     "services/vo-agent/node_modules/**",
+    // The virus scanner container runtime (services/av-scanner), likewise.
+    "services/av-scanner/runtime/**",
+    "services/av-scanner/dist/**",
+    "services/av-scanner/node_modules/**",
   ]),
   {
     files: ["src/components/port/**/*.{ts,tsx}", "src/components/portal/**/*.{ts,tsx}", "src/components/sheet/**/*.{ts,tsx}"],

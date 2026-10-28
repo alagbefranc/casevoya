@@ -2956,8 +2956,13 @@ export type Database = {
           quarantine_reason: string | null
           request_id: string | null
           review_state: Database["public"]["Enums"]["document_review_state"]
+          scan_attempts: number
           scan_engine: string | null
+          scan_engine_version: string | null
+          scan_next_attempt_at: string | null
           scan_result: string | null
+          scan_signature: string | null
+          scanned_at: string | null
           storage_bucket: string
           storage_key: string
           superseded_at: string | null
@@ -2988,8 +2993,13 @@ export type Database = {
           quarantine_reason?: string | null
           request_id?: string | null
           review_state?: Database["public"]["Enums"]["document_review_state"]
+          scan_attempts?: number
           scan_engine?: string | null
+          scan_engine_version?: string | null
+          scan_next_attempt_at?: string | null
           scan_result?: string | null
+          scan_signature?: string | null
+          scanned_at?: string | null
           storage_bucket?: string
           storage_key: string
           superseded_at?: string | null
@@ -3020,8 +3030,13 @@ export type Database = {
           quarantine_reason?: string | null
           request_id?: string | null
           review_state?: Database["public"]["Enums"]["document_review_state"]
+          scan_attempts?: number
           scan_engine?: string | null
+          scan_engine_version?: string | null
+          scan_next_attempt_at?: string | null
           scan_result?: string | null
+          scan_signature?: string | null
+          scanned_at?: string | null
           storage_bucket?: string
           storage_key?: string
           superseded_at?: string | null
@@ -15612,6 +15627,15 @@ export type Database = {
       delete_scheduled_report: { Args: { p_schedule_id: string }; Returns: boolean }
       run_scheduled_report_now: { Args: { p_schedule_id: string }; Returns: Json }
       service_run_scheduled_reports: { Args: { p_limit?: number }; Returns: Json }
+      service_claim_document_scans: {
+        Args: { p_backfill?: boolean; p_limit?: number; p_version_id?: string }
+        Returns: Json
+      }
+      service_record_document_scan: {
+        Args: { p_engine?: string; p_outcome: string; p_signature?: string; p_version_id: string }
+        Returns: Json
+      }
+      document_virus_scan_enabled: { Args: never; Returns: boolean }
       subscription_continuity: { Args: { p_organization_id: string }; Returns: Json }
       subscription_cancel_allowed: {
         Args: { p_organization_id: string }
@@ -17780,7 +17804,13 @@ export type Database = {
       document_review_decision: "accepted" | "changes_requested"
       document_review_state: "pending" | "accepted" | "rejected"
       document_sensitivity: "ordinary" | "narrative" | "medical" | "criminal"
-      document_upload_state: "uploading" | "scanning" | "quarantined" | "clean" | "failed"
+      document_upload_state:
+        | "uploading"
+        | "scanning"
+        | "quarantined"
+        | "clean"
+        | "failed"
+        | "scan_failed"
       domain_match_kind: "exact" | "suffix"
       email_delivery_status:
         | "pending"
@@ -18460,7 +18490,14 @@ export const Constants = {
       document_review_decision: ["accepted", "changes_requested"],
       document_review_state: ["pending", "accepted", "rejected"],
       document_sensitivity: ["ordinary", "narrative", "medical", "criminal"],
-      document_upload_state: ["uploading", "scanning", "quarantined", "clean", "failed"],
+      document_upload_state: [
+        "uploading",
+        "scanning",
+        "quarantined",
+        "clean",
+        "failed",
+        "scan_failed",
+      ],
       reminder_status: ["pending", "sent", "cancelled"],
       membership_status: ["invited", "active", "suspended", "revoked"],
       org_role: [

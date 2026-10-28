@@ -2,7 +2,7 @@
 
 import { useState, useTransition, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { badgeClass } from "@/modules/documents/present";
+import { badgeClass, VIRUS_LABELS } from "@/modules/documents/present";
 import {
   authorizeDocumentDownload,
   completeDocumentUpload,
@@ -141,7 +141,7 @@ function Card({
   };
   // A client sees another person's name only through an access grant; otherwise the load says "Person".
   const whose = card.personId === self ? "You" : card.personName === "Person" ? "Someone on your file" : card.personName;
-  const checking = card.labels.includes("Checking file");
+  const checking = card.labels.includes("Checking file") || card.labels.includes(VIRUS_LABELS.scanning);
 
   return (
     <>
@@ -169,6 +169,7 @@ function Card({
           {canReview && card.versionId && card.expectedVersion != null ? (
             <StaffTools card={card} organizationId={organizationId} />
           ) : null}
+          {card.note ? <p className="lbl">{card.note}</p> : null}
           {message ? <p className="lbl" role="status">{message}</p> : null}
         </div>
         <div className="states">
@@ -615,7 +616,7 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
         return;
       }
       if (done.uploadState === "quarantined" || done.uploadState === "failed") {
-        fail(uploadFailure({ stage: "check", state: done.uploadState }));
+        fail(uploadFailure({ stage: "check", state: done.uploadState, scanResult: done.scanResult }));
         return;
       }
       setStatus(done.uploadState === "scanning" ? "checking" : "sent");
@@ -681,7 +682,7 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
           <div className="pick">
             {documents.requests.map((item) => {
               const card = cardFor(item.id);
-              const label = card?.labels.includes("Changes needed") ? "Changes needed" : card?.labels.some((item) => item === "Uploaded" || item === "Checking file") ? "Uploaded" : "Requested";
+              const label = card?.labels.includes("Changes needed") ? "Changes needed" : card?.labels.some((item) => item === "Uploaded" || item === "Checking file" || item === VIRUS_LABELS.scanning || item === VIRUS_LABELS.failed) ? "Uploaded" : "Requested";
               return (
                 <label key={item.id}>
                   <input type="radio" name="up-request" checked={requestId === item.id} onChange={() => setRequestId(item.id)} />
@@ -791,7 +792,7 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
             <div className="pad" role="status">
               {status === "sending" || pending ? <p>Sending {file?.name}…</p> : null}
               {status === "sent" ? <p><b>Sent.</b> {firm} will check it. It shows as Being reviewed in Documents until they do.</p> : null}
-              {status === "checking" ? <p><b>Sent.</b> The file is stored and still being checked. It isn’t accepted yet.</p> : null}
+              {status === "checking" ? <p><b>Sent. {VIRUS_LABELS.scanning}</b> The file is stored, and nobody can open it until the check finishes. It isn’t accepted yet.</p> : null}
               {status === "failed" && failure && !pending ? <UploadFailed failure={failure} onRetry={retry} busy={pending} /> : null}
               {status === "sent" || status === "checking" ? <a className="btn p sm" href="/portal/documents" style={{ marginTop: 10 }}>Back to Documents</a> : null}
             </div>

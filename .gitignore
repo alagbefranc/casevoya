@@ -52,3 +52,6 @@ supabase/.branches/
 # OpenNext and Wrangler build output
 /.open-next/
 /.wrangler/
+
+# Service bundles (services/*/dist, built by each service's `pnpm bundle`)
+/services/*/dist/

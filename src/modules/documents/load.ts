@@ -1,6 +1,6 @@
 import "server-only";
 
-import { documentCardFlags, progressLine, type ReviewState, type UploadState } from "@/modules/documents/present";
+import { documentCardFlags, INFECTED_CLIENT_NOTE, progressLine, VIRUS_LABELS, type ReviewState, type UploadState } from "@/modules/documents/present";
 import { textForViewer, type ShownText } from "@/modules/i18n/display";
 import type { PortalViewer } from "@/modules/portal/load";
 import { todayIso } from "@/modules/sheet/birth-date";
@@ -34,6 +34,8 @@ export type PortalDocumentCard = {
   sensitivity: string;
   audience: string;
   canReview: boolean;
+  /** #263-B, live only: the plain line under a file the virus scanner blocked. */
+  note?: string;
 };
 
 export type PortalOpenRequest = {
@@ -61,7 +63,7 @@ export type PortalDocuments = {
   unavailable?: "review notes"[];
 };
 
-const UPLOADS = new Set<UploadState>(["uploading", "scanning", "quarantined", "clean", "failed"]);
+const UPLOADS = new Set<UploadState>(["uploading", "scanning", "quarantined", "clean", "failed", "scan_failed"]);
 const REVIEWS = new Set<ReviewState>(["pending", "accepted", "rejected"]);
 
 function asUpload(value: string): UploadState | null {
@@ -100,7 +102,7 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
       supabase.from("documents").select("id, person_id, purpose, sensitivity, audience, current_version_id").limit(80),
       supabase
         .from("document_versions")
-        .select("id, document_id, request_id, version_number, original_filename, upload_state, review_state, expires_on, superseded_at, created_at, version")
+        .select("id, document_id, request_id, version_number, original_filename, upload_state, scan_result, review_state, expires_on, superseded_at, created_at, version")
         .order("version_number", { ascending: false })
         .limit(160),
       supabase.from("document_matter_refs").select("id, document_id, matter_id, removed_at").is("removed_at", null).limit(160),
@@ -151,6 +153,7 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
       reviewState: version ? asReview(version.review_state) : null,
       superseded: Boolean(version?.superseded_at),
       expired: expired(version?.expires_on ?? request.expires_on, viewer.timezone),
+      scanResult: version?.scan_result ?? null,
     });
     const personName = names.get(request.person_id) ?? "Person";
     const ref = doc ? refByDocument.get(doc.id) : request.document_id ? refByDocument.get(request.document_id) : undefined;
@@ -178,6 +181,7 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
       sensitivity: doc?.sensitivity ?? request.sensitivity,
       audience: doc?.audience ?? request.audience,
       canReview: canReview && flags.labels.includes("Being reviewed"),
+      ...(flags.labels.includes(VIRUS_LABELS.infected) ? { note: INFECTED_CLIENT_NOTE } : {}),
     });
   }
 
@@ -190,6 +194,7 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
       reviewState: asReview(version.review_state),
       superseded: Boolean(version.superseded_at),
       expired: expired(version.expires_on, viewer.timezone),
+      scanResult: version.scan_result ?? null,
     });
     const ref = refByDocument.get(documentId);
     cards.push({
@@ -216,6 +221,7 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
       sensitivity: doc.sensitivity,
       audience: doc.audience,
       canReview: canReview && flags.labels.includes("Being reviewed"),
+      ...(flags.labels.includes(VIRUS_LABELS.infected) ? { note: INFECTED_CLIENT_NOTE } : {}),
     });
   }
 
