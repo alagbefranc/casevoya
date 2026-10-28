@@ -43,7 +43,7 @@ export async function uploadOwnFile(input: {
     if (uploaded.error) return said(uploadFailure({ stage: "transfer", message: uploaded.error.message }));
     const done = await completeDocumentUpload({ organizationId: input.organizationId, versionId: intent.versionId });
     if ("error" in done) return said(uploadFailure({ stage: "check", message: done.error ?? null }));
-    if (done.uploadState === "quarantined" || done.uploadState === "failed") return said(uploadFailure({ stage: "check", state: done.uploadState }));
+    if (done.uploadState === "quarantined" || done.uploadState === "failed") return said(uploadFailure({ stage: "check", state: done.uploadState, scanResult: done.scanResult }));
     return { documentId: intent.documentId, uploadState: done.uploadState ?? "scanning" };
   } catch {
     return said(uploadFailure({ stage: "transfer", thrown: true }));

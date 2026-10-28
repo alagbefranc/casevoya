@@ -1,0 +1,30 @@
+// casevoya-av-scanner: ClamAV virus scanning for uploads (#263-B) in a Cloudflare Container.
+// NOT DEPLOYED. A separate Worker from casevoya-app; the app reaches it only through its service
+// binding "AV_SCANNER" (see docs/integrations/av-scanner.md). No route, no workers.dev URL, no
+// secrets: the container receives a file's bytes and answers clean, infected or error.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "casevoya-av-scanner",
+  "main": "runtime/worker.ts",
+  "account_id": "c8010438fc56280e3ea5747a123e818a",
+  "compatibility_date": "2026-10-17",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "containers": [
+    {
+      "class_name": "AvScannerContainer",
+      "image": "./Dockerfile",
+      "max_instances": 2,
+      // clamd holds the full signature database in memory (about 1.5 GB); basic (1 GiB) is too small.
+      "instance_type": "standard-1"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "AV_SCANNER", "class_name": "AvScannerContainer" }]
+  },
+  "exports": {
+    "AvScannerContainer": { "type": "durable-object", "storage": "sqlite" }
+  },
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } }
+}

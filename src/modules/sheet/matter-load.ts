@@ -209,7 +209,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
   const [documents, versions, envelopes, agreementVersions, reminders, audit] = await Promise.all([
     documentIds.length ? supabase.from("documents").select("id, purpose, person_id, current_version_id").eq("organization_id", org).in("id", documentIds) : null,
     documentIds.length
-      ? supabase.from("document_versions").select("id, document_id, upload_state, review_state, version_number, expires_on").eq("organization_id", org).in("document_id", documentIds)
+      ? supabase.from("document_versions").select("id, document_id, upload_state, scan_result, scan_engine, review_state, version_number, expires_on").eq("organization_id", org).in("document_id", documentIds)
       : null,
     agreementIds.length
       ? supabase
@@ -286,7 +286,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     const doc = documentId ? documentById.get(documentId) : undefined;
     const version = doc?.current_version_id ? versionById.get(doc.current_version_id) : undefined;
     return version
-      ? { uploadState: version.upload_state, reviewState: version.review_state, versionNumber: version.version_number, expiresOn: version.expires_on }
+      ? { uploadState: version.upload_state, reviewState: version.review_state, versionNumber: version.version_number, expiresOn: version.expires_on, scanResult: version.scan_result, scanEngine: version.scan_engine }
       : null;
   };
   const requested = new Set(requestRows.map((row) => row.document_id).filter(Boolean));

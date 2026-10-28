@@ -1135,6 +1135,14 @@ Issue #259 fix 5, branch `fix/onboarding-259`. Apply in order. Each Continue on 
 
 Tested in `tests/setup-office.rls.test.ts`.
 
+## Virus scanning for uploads (`20261028130000`, `20261028130100`, not applied on the live project)
+
+Issue #263 item B, branch `feat/upload-virus-scan`. Apply in order. Nothing changes until `documents.accept_structural_inspection` is set to false (see `docs/integrations/av-scanner.md`).
+
+* `20261028130000_upload_virus_scan_enum.sql`: adds `scan_failed` to `public.document_upload_state` (its own migration: a new enum value can't be used in the transaction that adds it).
+* `20261028130100_upload_virus_scan.sql`: `document_versions` gains `scan_signature`, `scan_engine_version`, `scan_attempts` (default 0), `scan_next_attempt_at`, `scanned_at`, and the partial index `document_versions_scan_due_idx` (`scanning`, `scan_failed`). Product setting `documents.virus_scan_retry` (6 attempts, 60 s base, 300 s lease, 6 h after failure; pending confirmation); the description of `documents.accept_structural_inspection` now says what `false` does. New: `public.document_virus_scan_enabled()` (authenticated; the loaders' labels), `public.service_claim_document_scans(limit, version, backfill)` and `public.service_record_document_scan(version, outcome, signature, engine)` (service role only; the only way out of `scanning`; audits `document.scan_clean`, `document.scan_infected` with the signature, `document.scan_failed`; enqueues `document.uploaded` when a held file turns clean and `document.quarantined` when infected), helpers `app.document_scan_setting`, `app.document_version_matter`, `app.document_scan_give_up`, and `app.kick_document_scans()` (pg_cron `casevoya-document-scans` every minute, only while a scan is due; POSTs `/api/documents/scan/run` with the dispatch bearer from the vault, like the scheduled reports runner). **Redefines**, each copied from its latest definition: `app.apply_document_scan` (`20261017180000`: now delegates to `service_record_document_scan`), `public.finish_unsorted_email_file` (`20261017200200`: a type-checked unsorted attachment is `clean` even with scanning on), `public.complete_unsorted_assignment` (`20261017200200`: the copied version may still be `scanning`), `app.staff_notification_items` (`20261025320100`: a `document_blocked` branch from the scan audit rows, for staff who can open the matter). No read path changed: `authorize_document_download`, the storage read policy and the exports already require `clean`.
+
+Tested in `tests/upload-virus-scan.rls.test.ts` and `tests/upload-virus-scan.test.ts`.
 ## Launch must-fix: deleted exports and the Stripe retry window (`20261028100000`, `20261028100100`, not applied on the live project)
 
 Issue #262, branch `fix/launch-must-fix-262`. Apply in order. Additive.
