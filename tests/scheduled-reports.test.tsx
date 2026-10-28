@@ -80,8 +80,10 @@ describe("REP-03 scheduled reports (presentation)", () => {
     expect(rows[1]).toMatchObject({ every: "Month, the 1st 07:00", next: "Paused", recipients: "No one" });
     expect(JSON.parse(rows[0].live!.form)).toMatchObject({ id: "44444444-4444-4444-8444-444444444444", version: 2, recipients: [ME, LEFT] });
     expect(everyLabel({ frequency: "monthly", weekday: null, monthDay: 22, sendTime: "09:15" })).toBe("Month, the 22nd 09:15");
-    expect(scheduleMoment("2026-11-15T13:00:00Z", "America/Winnipeg")).toBe("15 Nov 07:00");
-    expect(scheduleMoment("2026-11-02T13:00:00Z", "America/Winnipeg")).toBe("2 Nov 07:00");
+    // America/Regina keeps UTC-6 all year, so this checks "on the firm's clock" without depending on
+    // the runner's time-zone data for a zone whose future daylight-time rules may change.
+    expect(scheduleMoment("2026-11-15T13:00:00Z", "America/Regina")).toBe("15 Nov 07:00");
+    expect(scheduleMoment("2026-07-02T13:00:00Z", "America/Regina")).toBe("2 Jul 07:00");
     expect(lastRunLabel(overview.schedules[0], "America/Toronto")).toBe(
       "Monday workload: Sent 19 Oct 08:00 to 1 person; 1 skipped because they can no longer see this report.",
     );

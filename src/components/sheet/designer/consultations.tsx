@@ -40,6 +40,8 @@ export type ConsultationRow = {
   fee: string | Chip;
   state: Chip;
   actions: RowAction[];
+  /** Live (#263-C): "Possible match" after the client, on an unlinked booking-page booking. */
+  match?: Chip;
 };
 
 export type DlItem = { term: string; value: string | { left: string; right: string } | "video-planned" };
@@ -254,7 +256,15 @@ function Upcoming({ data }: { data: NonNullable<ConsultationsData["upcoming"]> }
                   <td>
                     <span className={"num"}>{row.when}</span>
                   </td>
-                  <td>{typeof row.client === "string" ? row.client : <Pair left={row.client.left} right={row.client.right} />}</td>
+                  <td>
+                    {typeof row.client === "string" ? row.client : <Pair left={row.client.left} right={row.client.right} />}
+                    {row.match ? (
+                      <>
+                        {" "}
+                        <ChipView chip={row.match} />
+                      </>
+                    ) : null}
+                  </td>
                   <td>
                     <Pair left={row.with.left} right={row.with.right} />
                   </td>
@@ -715,11 +725,55 @@ export type ConsultationRecordData = {
     voidDialog?: { organizationId: string; bookingId: string; client: string } | null;
     /** Live addition (AI-01): "Call notes with Vo" on a Casevoya video call, after the call. */
     vo?: CallNotesData | null;
+    /** Live addition (#263-C): an unlinked booking-page booking whose email matches people of the firm. */
+    possibleMatch?: PossibleMatchData | null;
     details: DlItem[];
     history: { what: string; who: string; when: string }[];
   } | null;
   empty: { title: string; copy: string };
 };
+
+/** #263-C: who an unlinked booking-page booking may belong to; Link and Not this person each act on one. */
+export type PossibleMatchData = {
+  title: string;
+  chip: Chip;
+  copy: string;
+  items: { name: string; detail: string; link: Record<string, string>; dismiss: Record<string, string> }[];
+};
+
+/** Built from the record's own parts: a panel, the fp-mail rows of Notes and the fp-row buttons. */
+function PossibleMatchPanel({ data }: { data: PossibleMatchData }) {
+  return (
+    <section className={"panel"}>
+      <h2>
+        <Icon name={"users"} />
+        {data.title}
+        <span className={"r"}>
+          <ChipView chip={data.chip} />
+        </span>
+      </h2>
+      <div className={"fp-pad"}>
+        <p className={"fp-note"} style={{ margin: "0" }}>
+          {data.copy}
+        </p>
+        {data.items.map((item) => (
+          <div key={item.link["data-match-link"] ?? item.name} className={"fp-mail"} style={{ marginTop: "10px" }}>
+            <p style={{ fontSize: "14.5px" }}>{item.name}</p>
+            <small style={{ color: "var(--t2)" }}>{item.detail}</small>
+            <div className={"fp-row"} style={{ marginTop: "8px" }}>
+              <button className={"btn p sm"} type={"button"} {...item.link}>
+                {"Link"}
+              </button>
+              <button className={"btn sm"} type={"button"} {...item.dismiss}>
+                {"Not this person"}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 function OutcomeSummaryPanel({ data }: { data: OutcomeSummaryData }) {
   return (
@@ -859,6 +913,7 @@ export function SheetConsultationRecord({ data }: { data: ConsultationRecordData
             </section>
           </div>
           <div>
+            {record.possibleMatch ? <PossibleMatchPanel data={record.possibleMatch} /> : null}
             <section className={"panel"}>
               <h2>
                 <Icon name={"calendar"} />
