@@ -28,6 +28,7 @@ Do not commit secrets. Copy the names below into the host environment. Account i
 | `LIVEKIT_API_KEY` | LiveKit API key (the issuer of every token Casevoya signs). |
 | `LIVEKIT_API_SECRET` | LiveKit API secret. Signs join tokens and room calls, and verifies LiveKit webhooks. Never sent to the browser. |
 | `STRIPE_CONNECT_DASHBOARD` | Optional. `none` (default: the firm uses Connect embedded components in Casevoya only) or `full` (the firm also gets the Stripe Dashboard), for new connected accounts. Not a secret. |
+| `AV_SCANNER` (service binding) | Virus scanner (#263-B, `services/av-scanner`, ClamAV in a Cloudflare Container). Commented out in `wrangler.jsonc` until `casevoya-av-scanner` is deployed; then uncomment it and set the product setting `documents.accept_structural_inspection` to false. Without both, uploads are type-checked only. Steps: docs/integrations/av-scanner.md. `AV_SCANNER_URL` (optional) points a local `next dev` at a scanner run by hand; never set it in production. |
 
 ### Stripe (test mode only)
 

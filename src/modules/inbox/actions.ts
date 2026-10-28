@@ -66,7 +66,8 @@ async function assignFile(
   if (copied.error) return { error: "The file could not be moved. Try again." };
   const checked = await completeDocumentUpload({ organizationId, versionId });
   if ("error" in checked) return { error: checked.error ?? "The file could not be checked." };
-  if (checked.uploadState !== "clean") return { error: "The file didn’t pass the file check, so it stays out of the documents." };
+  // #263-B: a copy still being checked for viruses is filed; nobody can open it until it is clean.
+  if (checked.uploadState !== "clean" && checked.uploadState !== "scanning") return { error: "The file didn’t pass the file check, so it stays out of the documents." };
   const done = await supabase.rpc("complete_unsorted_assignment", { p_item_id: itemId });
   if (done.error) return { error: inboxError(done.error.message) };
   return { ok: true };

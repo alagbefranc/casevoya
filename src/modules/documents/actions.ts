@@ -2,6 +2,8 @@
 
 import { documentError } from "@/modules/documents/errors";
 import { mediaTypeForFilename, UPLOAD_CEILING_BYTES } from "@/modules/documents/files";
+import { runDocumentScans } from "@/modules/documents/scan-runner";
+import { serviceScanDeps } from "@/modules/documents/scan-service";
 import { verifyDocumentStream } from "@/modules/documents/verify";
 import { TRANSLATE_MODEL } from "@/modules/i18n/translate";
 import { verifyTotpCode } from "@/lib/auth/verify-totp";
@@ -165,10 +167,31 @@ export async function completeDocumentUpload(input: { organizationId: string; ve
   const uploadState = result?.upload_state;
   const scanResult = result?.scan_result;
   if (typeof uploadState !== "string") return { error: "The file could not be checked." };
+  if (uploadState === "scanning") return scanJustUploaded(service, input.versionId);
   return {
     uploadState,
     scanResult: typeof scanResult === "string" ? scanResult : null,
   };
+}
+
+/** How long the upload waits for the virus scanner before leaving the file to the retry job. */
+const INLINE_SCAN_TIMEOUT_MS = 20_000;
+
+/**
+ * #263-B: virus scanning is on, so the file is held as "scanning". Scan it now, so most people
+ * see the answer before they leave the page. If the scanner is slow or down the file simply stays
+ * held (fail closed) and the retry job (POST /api/documents/scan/run) tries again.
+ */
+async function scanJustUploaded(service: ReturnType<typeof createServiceClient>, versionId: string) {
+  try {
+    const summary = await runDocumentScans(serviceScanDeps(service, { timeoutMs: INLINE_SCAN_TIMEOUT_MS }), { limit: 1, versionId });
+    const state = summary.states[versionId];
+    if (state === "quarantined") return { uploadState: "quarantined", scanResult: "infected" };
+    if (state === "clean") return { uploadState: "clean", scanResult: "clean" };
+  } catch {
+    // The claim failed: the scheduler picks the file up.
+  }
+  return { uploadState: "scanning", scanResult: "awaiting_scanner" };
 }
 
 export async function authorizeDocumentDownload(input: {

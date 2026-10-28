@@ -79,7 +79,15 @@ export function dueIn(date: string, today: string): string {
 
 export type DocumentInput = {
   requestStatus: string | null;
-  version: { uploadState: string; reviewState: string; versionNumber: number; expiresOn: string | null } | null;
+  version: {
+    uploadState: string;
+    reviewState: string;
+    versionNumber: number;
+    expiresOn: string | null;
+    /** Live only (#263-B): document_versions.scan_result and scan_engine. Absent: the Designer's sample. */
+    scanResult?: string | null;
+    scanEngine?: string | null;
+  } | null;
 };
 
 export type DocumentState = {
@@ -98,16 +106,21 @@ export function documentState(input: DocumentInput, today: string): DocumentStat
     return { upload: { tone: "unv", label: "Not uploaded" }, review: { tone: "gr", label: "Requested" }, version: "—", bucket: "outstanding" };
   }
   const label = `v${version.versionNumber}`;
+  // #263-B: "scanned" only when the virus scanner checked it; a type check alone says so.
   const upload: MatterBadge =
     version.uploadState === "clean"
-      ? { tone: "gr", label: "Uploaded", detail: "scanned" }
+      ? { tone: "gr", label: "Uploaded", detail: version.scanEngine === undefined || version.scanEngine === "worker" ? "scanned" : "type checked" }
       : version.uploadState === "scanning"
-        ? { tone: "gr", label: "Uploaded", detail: "scanning" }
+        ? { tone: "gr", label: "Uploaded", detail: "checking for viruses" }
         : version.uploadState === "uploading"
           ? { tone: "gr", label: "Uploading" }
-          : version.uploadState === "quarantined"
-            ? { tone: "bad", label: "Held back" }
-            : { tone: "bad", label: "Upload failed" };
+          : version.uploadState === "quarantined" && version.scanResult === "infected"
+            ? { tone: "bad", label: "Blocked", detail: "a virus was found" }
+            : version.uploadState === "quarantined"
+              ? { tone: "bad", label: "Held back" }
+              : version.uploadState === "scan_failed"
+                ? { tone: "chg", label: "Couldn’t be checked yet" }
+                : { tone: "bad", label: "Upload failed" };
   if (version.expiresOn && version.expiresOn < today) return { upload, review: { tone: "bad", label: "Expired" }, version: label, bucket: "outstanding" };
   if (version.reviewState === "accepted") return { upload, review: { tone: "ok", label: "Accepted by firm" }, version: label, bucket: "accepted" };
   if (version.reviewState === "rejected") return { upload, review: { tone: "chg", label: "Changes requested" }, version: label, bucket: "outstanding" };

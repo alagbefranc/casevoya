@@ -24,7 +24,12 @@
     { "binding": "WORKER_SELF_REFERENCE", "service": "casevoya-app" },
     // Vo agent (Claude Agent SDK in a Cloudflare Container); requests are HMAC-signed with
     // VO_AGENT_SECRET (a Worker secret). See docs/integrations/vo-agent.md.
-    { "binding": "VO_AGENT", "service": "casevoya-vo-agent" }
+    { "binding": "VO_AGENT", "service": "casevoya-vo-agent" },
+    // Virus scanner (#263-B, ClamAV in a Cloudflare Container, services/av-scanner). Uncomment
+    // after `casevoya-av-scanner` is deployed (docs/integrations/av-scanner.md), then set the
+    // product setting documents.accept_structural_inspection to false. Until both, uploads are
+    // type-checked only, as before.
+    // { "binding": "AV_SCANNER", "service": "casevoya-av-scanner" },
   ],
   "vars": {
     "NEXT_PUBLIC_SUPABASE_URL": "https://aqjtvqmojfamtspzyeqm.supabase.co",
