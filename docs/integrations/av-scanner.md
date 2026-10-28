@@ -78,8 +78,8 @@ that is the fail-closed behaviour, not an outage of uploads themselves (files ar
 2. Check it from a machine with Wrangler access: `pnpm exec wrangler tail casevoya-av-scanner` while
    the app runs the next step, or temporarily `wrangler dev` locally and `curl localhost:8787/healthz`
    (expects `{"ok":true,"engine":"ClamAV …"}`).
-3. In the root `wrangler.jsonc` uncomment `{ "binding": "AV_SCANNER", "service": "casevoya-av-scanner" }`
-   and deploy the app: `git checkout main && git pull && pnpm run deploy:app`.
+3. Deploy the app: `git checkout main && git pull && pnpm run deploy:app`. The root `wrangler.jsonc`
+   binds `AV_SCANNER` to `casevoya-av-scanner`, so the scanner must be deployed first (step 1).
 4. Apply the migrations (Francis): `20261028130000_upload_virus_scan_enum.sql`, then
    `20261028130100_upload_virus_scan.sql`. The second schedules `casevoya-document-scans` in pg_cron;
    it reuses the vault secrets `email_dispatch_url` and `email_dispatch_secret` already used by the
