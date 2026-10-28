@@ -6,7 +6,8 @@ import { staffPerson } from "@/modules/sheet/avatar";
 import { loadSheetChrome, matterNames, memberNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { missingPolicies } from "@/modules/portal-policies/defaults";
-import { loadCurrentPolicies } from "@/modules/portal-policies/load";
+import { loadCurrentPolicies, loadPublicPagesState } from "@/modules/portal-policies/load";
+import { publicPagesWarning } from "@/modules/portal-policies/public-pages";
 import { NOTICE, ago, dayMonth, greeting, isoDate, localNow, monthGrid, summary, taskBadge, zoneCity } from "@/modules/sheet/home-present";
 import {
   HOME_QUICK,
@@ -172,5 +173,8 @@ export async function loadSheetHome(staff: SheetStaff, now: Date = new Date(), v
     vo: null,
   };
 
-  return { chrome, rbar, home, missingPolicies: missingPolicies(await policies) };
+  const current = await policies;
+  // #263-A: booking or enquiry pages on without a published privacy notice.
+  const publicPages = publicPagesWarning(await loadPublicPagesState(supabase, org, current), now.getTime(), staff.timezone);
+  return { chrome, rbar, home, missingPolicies: missingPolicies(current), publicPages };
 }

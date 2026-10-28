@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { publishTestPrivacyNotice } from "./helpers/privacy-notice";
 
 // In-app video calls (20261022100000): who may join a booking's LiveKit room, the join window,
 // the lobby (a host admits the client), cancelling closes the room, and LiveKit webhooks.
@@ -58,6 +59,8 @@ async function firm() {
   const orgId = (await db.query<{ id: string }>(`select (public.create_organization($1, $2, $3)).id as id`, ["Synthetic Legal", "Synthetic Firm", firmSlug])).rows[0].id;
   await asMaintenance(db);
   await db.query(`update public.organizations set sample_mode = false, timezone = $2 where id = $1`, [orgId, TZ]);
+  // #263-A: booking pages need the firm's published privacy notice.
+  await publishTestPrivacyNotice(db, orgId);
   const host = await createUser("host", "Synthetic Host");
   const hostMembership = await membership(orgId, host.id, "licensed_consultant");
   await asMaintenance(db);

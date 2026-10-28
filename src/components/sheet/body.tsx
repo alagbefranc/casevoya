@@ -34,7 +34,7 @@ import { PersonEditDialog } from "@/components/sheet/designer/person-edit";
 import { SampleCasePanel } from "@/components/sheet/designer/sample-case";
 import { SAMPLE_CASE_CSS } from "@/components/sheet/designer/sample-case-css";
 import { INVITATIONS_CSS, SheetClientsTab, SheetStaffTab, StaffAfter, StaffHeader } from "@/components/sheet/designer/invitations";
-import { PolicyMissingAlert, PortalPoliciesAfter, SettingsPortalHeader, SheetPortalPolicies } from "@/components/sheet/designer/portal-policies";
+import { PolicyMissingAlert, PortalPoliciesAfter, PublicPagesAlert, SettingsPortalHeader, SheetPortalPolicies } from "@/components/sheet/designer/portal-policies";
 import { SettingsFirmAfter, SettingsFirmHeader, SheetSettingsBranding, SheetSettingsFirm, SheetSettingsLanguage, SheetSettingsOffices } from "@/components/sheet/designer/settings-firm";
 import { loadSheetSettingsFirm } from "@/modules/sheet/settings-firm-load";
 import { settingsTab } from "@/modules/sheet/settings-firm-present";
@@ -183,9 +183,16 @@ export async function SheetBody({
     }
   }
   if (page === "index" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, rbar, home, missingPolicies } = await loadSheetHome(access.staff, undefined, { month: query.month });
+    const { chrome, rbar, home, missingPolicies, publicPages } = await loadSheetHome(access.staff, undefined, { month: query.month });
     // Until the firm publishes its portal terms and privacy notice, no invited client can join: say so here.
-    const lead = missingPolicies.length ? <PolicyMissingAlert kinds={missingPolicies} style={{ marginBottom: "18px" }} /> : undefined;
+    // #263-A: and when its booking or enquiry pages are on without a privacy notice.
+    const lead =
+      missingPolicies.length || publicPages ? (
+        <>
+          {publicPages ? <PublicPagesAlert warning={publicPages} link style={{ marginBottom: "18px" }} /> : null}
+          {missingPolicies.length ? <PolicyMissingAlert kinds={missingPolicies} style={{ marginBottom: "18px" }} /> : null}
+        </>
+      ) : undefined;
     return (
       <SheetScreen page={page}>
         <SheetFrame sidebar={chrome.sidebar} top={chrome.top} rbar={rbar} statusbar={chrome.statusbar}>
@@ -402,14 +409,14 @@ export async function SheetBody({
   }
   // Settings > Client portal: the firm's portal terms and privacy notice. The other Settings tabs keep their old view.
   if (page === "settings" && query.tab === "portal" && (access.kind === "live" || access.kind === "sample")) {
-    const { chrome, page: policies, dialogs } = await loadSheetPortalPolicies(access.staff);
+    const { chrome, page: policies, dialogs, unpublishOrg } = await loadSheetPortalPolicies(access.staff);
     return (
       <SheetScreen page={page}>
         <SheetFrame
           sidebar={chrome.sidebar}
           header={<SettingsPortalHeader firmName={policies.firmName} />}
           statusbar={chrome.statusbar}
-          after={<PortalPoliciesAfter dialogs={dialogs} />}
+          after={<PortalPoliciesAfter dialogs={dialogs} unpublishOrg={unpublishOrg} />}
         >
           <SheetPortalPolicies data={policies} />
         </SheetFrame>

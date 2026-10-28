@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asAnon, asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { publishTestPrivacyNotice } from "./helpers/privacy-notice";
 
 /**
  * 20261020101500_notifications_firm_timezone: a public booking's notification shows its time in the
@@ -37,6 +38,8 @@ async function firmWithBooking() {
   const orgId = created.rows[0].id;
   await asMaintenance(db);
   await db.query(`update public.organizations set sample_mode = false, timezone = $2 where id = $1`, [orgId, FIRM_TZ]);
+  // #263-A: booking pages need the firm's published privacy notice.
+  await publishTestPrivacyNotice(db, orgId);
   const host = await createUser("host");
   const hostMembership = (
     await db.query<{ id: string }>(

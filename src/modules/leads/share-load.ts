@@ -2,6 +2,7 @@ import "server-only";
 import QRCode from "qrcode";
 import { appOrigin } from "@/lib/email/env";
 import { createClient } from "@/lib/supabase/server";
+import { loadCurrentPolicies } from "@/modules/portal-policies/load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { bookingLinks, enquiryLinks, type EnquiryShareData } from "./share";
 
@@ -25,7 +26,8 @@ export async function loadEnquiryShare(staff: SheetStaff): Promise<EnquiryShareD
   const supabase = await createClient({ organizationId: org });
   const [orgRow, privacy, types] = await Promise.all([
     supabase.from("organizations").select("slug, display_name, sample_mode, enquiry_page_enabled").eq("id", org).maybeSingle(),
-    supabase.from("portal_policy_documents").select("id").eq("organization_id", org).eq("kind", "privacy_notice").limit(1),
+    // #263-A: an unpublished notice counts as none, as on the public pages.
+    loadCurrentPolicies(supabase, org),
     supabase
       .from("booking_event_types")
       .select("title, slug, is_sample")
@@ -44,7 +46,7 @@ export async function loadEnquiryShare(staff: SheetStaff): Promise<EnquiryShareD
     links,
     qr: await enquiryQr(links.page),
     practice: orgRow.data?.sample_mode === true,
-    privacyMissing: !privacy.error && (privacy.data ?? []).length === 0,
+    privacyMissing: privacy.privacy_notice === null,
     bookings: bookingLinks(origin, slug, types.data ?? []),
     page: { enabled: orgRow.data?.enquiry_page_enabled !== false, owner: staff.role === "firm_owner", organizationId: org },
   };

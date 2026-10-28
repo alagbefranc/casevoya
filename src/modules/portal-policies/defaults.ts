@@ -4,9 +4,9 @@
  * the starting drafts a firm edits before publishing, what the publish dialog sends,
  * the next version label, and where a step-up goes. The database decides every publish.
  *
- * The drafts are a starting point, not legal advice. The privacy notice follows the Office
- * of the Privacy Commissioner of Canada's guidance on PIPEDA's fair information principles
- * and meaningful consent (sources: docs/legal/portal-policy-sources.md).
+ * The drafts are a starting point, not legal advice. The privacy notice is also the firm's public
+ * notice (/privacy/<firm>, #263-A); its template is neutral and names no law (see
+ * defaultPrivacyNotice; sources for the terms: docs/legal/portal-policy-sources.md).
  */
 
 import { stepUpHref } from "@/lib/auth/mfa-step";
@@ -62,11 +62,15 @@ export type CurrentPolicies = Record<PolicyKind, CurrentPolicy | null>;
 /** The newest published row of each kind, as app.current_portal_policy picks it. */
 export function currentPolicies(
   rows: readonly { id: string; kind: string; version_label: string; title: string; body: string; published_at: string }[],
+  options: { privacyWithdrawnAt?: string | null } = {},
 ): CurrentPolicies {
   const current: CurrentPolicies = { portal_terms: null, privacy_notice: null };
   const sorted = [...rows].sort((a, b) => b.published_at.localeCompare(a.published_at) || b.id.localeCompare(a.id));
+  // #263-A: a privacy notice published at or before the firm's last unpublish is not current.
+  const withdrawn = options.privacyWithdrawnAt ? Date.parse(options.privacyWithdrawnAt) : Number.NaN;
   for (const row of sorted) {
     if (!isPolicyKind(row.kind) || current[row.kind]) continue;
+    if (row.kind === "privacy_notice" && Number.isFinite(withdrawn) && !(Date.parse(row.published_at) > withdrawn)) continue;
     current[row.kind] = { id: row.id, kind: row.kind, versionLabel: row.version_label, title: row.title, body: row.body, publishedAt: row.published_at };
   }
   return current;
@@ -152,63 +156,58 @@ Contact ${name} through the portal, or our privacy contact: ${contactLine(firm)}
 }
 
 /**
- * A plain-language privacy notice for a Canadian immigration consultancy's client portal, built on
- * PIPEDA's ten fair information principles (accountability, purposes, consent, limiting collection,
- * limiting use, disclosure and retention, accuracy, safeguards, openness, access, challenging
- * compliance) and the OPC's meaningful consent guidance (what, who, why, risks, choices, withdrawal).
+ * The firm's privacy notice template (#263-A). One notice serves the public page (/privacy/<firm>,
+ * linked from the booking and enquiry pages) and the client portal. It is a template the firm
+ * reviews, not legal advice: plain, neutral wording, no claim about which law applies or what it
+ * requires, only that the firm is responsible. Every part the firm must decide is an `[Add …]`
+ * blank, and the first line asks for the review itself, so the publish check (readPolicyDraft)
+ * refuses the template until the firm has worked through it.
  */
+export const PRIVACY_TEMPLATE_REVIEW =
+  "[Add your review: this is a starting template, not legal advice. Read every section, change anything that doesn’t match how your firm works, then delete this line.]";
+
 export function defaultPrivacyNotice(firm: FirmFacts): { title: string; body: string } {
   const name = firmName(firm);
-  const body = `This notice explains how ${name} ("we", "us") handles your personal information when we work on your immigration file and when you use our client portal. We follow Canada's private-sector privacy law, the Personal Information Protection and Electronic Documents Act (PIPEDA), and any provincial privacy law that applies to us.
+  const body = `${PRIVACY_TEMPLATE_REVIEW}
+
+This notice explains how ${name} ("we", "us") handles personal information about people who contact us, book a consultation with us, or become our clients.
 
 Who is responsible
-${name} is responsible for the personal information we hold about you. Our privacy officer answers questions and handles requests: ${contactLine(firm)}.
+${name} is responsible for the personal information described here and for meeting the privacy obligations that apply to it. Questions and requests go to: ${contactLine(firm)}.
 
 What we collect
-We collect only what we need for your file. This can include:
-- your name, contact details, date of birth and identity documents, such as your passport;
-- your immigration, travel, education, work, family and financial history;
-- police certificates, and medical information when an application requires it;
-- information about family members, sponsors or employers who are part of your application;
-- portal records, such as when you sign in and what you upload, which we keep for security.
-If you give us information about another person, please make sure they know and agree.
+- When you send us an enquiry or book a consultation: your name, how to reach you, and what you choose to tell us about your situation.
+- When you become a client: the information and documents your file needs. [Add the main kinds of information your firm collects from clients.]
+- When you use our client portal: a record of when you sign in and what you upload, kept for security.
 
-Why we collect it
-We use your information to:
-- assess your options and give you immigration advice;
-- prepare, submit and follow up on your applications;
-- communicate with you and remind you of tasks and deadlines;
-- bill for our services under your retainer agreement;
-- meet our legal and professional obligations, including the rules of the College of Immigration and Citizenship Consultants;
-- keep the portal and your records secure.
-We will not use your information for any other purpose without asking you first, unless the law requires or allows it.
-
-Your choices and consent
-When you join the portal, you agree to these essential uses. Some uses are optional, such as text message reminders. You can say no to an optional use and we will still work on your file. You can withdraw your consent at any time by contacting us. If you withdraw consent that we need to do the work, we will explain what that means for your file. Legal and contract limits may apply.
+Why we use it
+- to reply to your enquiry and arrange consultations;
+- to provide the services you ask us for;
+- to keep you informed about your file;
+- [Add any other purposes your firm uses personal information for.]
+We don't use your information for a purpose not listed here without asking you first, unless we are required or allowed to.
 
 Who we share it with
-- Immigration, Refugees and Citizenship Canada and other government offices, when we submit or follow up on an application for you.
-- Service providers who help us run our practice, such as our client portal and case management software (Casevoya), email, e-signature and cloud hosting providers. They may use your information only to provide their service to us, and they must protect it.
-- Others only with your consent, or when the law requires it, for example our regulator during an audit or a complaint, or a court order.
-We do not sell your personal information.
+[Add who your firm shares personal information with, and why.]
+We use Casevoya for our case management, booking pages and client portal. It handles information on our behalf.
 
-Information stored outside your province or Canada
-Some of our service providers may store or process information outside your province or outside Canada. [Add where your providers store client data, for example: in Canada and the United States.] Information held in another country can be accessed by that country's courts, law enforcement and national security authorities under its laws.
+Where it is stored
+[Add where your firm and its service providers store personal information.]
 
 How long we keep it
-We keep your information only as long as we need it for the purposes above and as the law and our professional rules require. [Add your retention period, for example: we keep closed client files for at least six years after the file closes, then destroy them securely.]
+[Add how long you keep enquiries that don't become clients, and client files after they close.]
 
 How we protect it
-We use encrypted connections, two-step sign-in for our staff, access limited to the people who work on your file, and activity logs. Tell us right away if you think someone else has used your account. If a privacy breach creates a real risk of significant harm to you, we will tell you and report it to the Privacy Commissioner of Canada, as the law requires.
+Access is limited to the people who need it for their work, and our staff use two-step sign-in. [Add any other safeguards your firm uses.]
 
-Accuracy, access and correction
-Please help us keep your information accurate and up to date. You can ask to see the personal information we hold about you and ask us to correct it. Send your request to our privacy officer. We will answer within 30 days, or tell you if we need more time and why.
+Your choices
+You can ask us what personal information we hold about you, ask us to correct it, or withdraw your consent to a use that is optional, by contacting us at the address above. [Add how and when your firm answers these requests.]
 
 Questions and complaints
-Contact our privacy officer first: ${contactLine(firm)}. If you are not satisfied with our answer, you can complain to the Office of the Privacy Commissioner of Canada (www.priv.gc.ca, 1-800-282-1376) or, where it applies, to your provincial privacy commissioner.
+Contact us first at the address above. [Add where someone can take a complaint if they aren't satisfied with our answer.]
 
 Changes to this notice
-If we change this notice, we publish a new version and ask you to accept it before you continue. Earlier versions stay on record.`;
+If we change this notice, we publish a new version. Earlier versions stay on record.`;
   return { title: "Privacy notice", body };
 }
 

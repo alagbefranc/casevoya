@@ -9,6 +9,7 @@ import { parseAvailability, slotsFromAvailability } from "./availability";
 import { shortWhen } from "./format";
 import { isTimeZone } from "./slots";
 import { closeRoomForBooking } from "@/modules/video/service";
+import { NOTICE_REQUIRED, noticeRequiredError } from "@/modules/portal-policies/public-pages";
 
 type Result = { ok: true } | { error: string; stepUp?: boolean };
 
@@ -18,6 +19,7 @@ const LOCATIONS = ["video", "phone", "in_person", "meeting_link"] as const;
 /** A database refusal as words a person can act on. Never the raw message. */
 function bookingError(message: string): { error: string; stepUp?: boolean } {
   if (/step-up/i.test(message)) return { error: "Confirm with your authenticator, then save again.", stepUp: true };
+  if (noticeRequiredError(message) === "booking") return { error: NOTICE_REQUIRED.booking };
   if (/slot_unavailable/.test(message)) return { error: "That time is no longer free. Choose another." };
   if (/changed by someone else/.test(message)) return { error: "This booking changed since you opened it. Reload and try again." };
   if (/sample mode/.test(message)) return { error: message.charAt(0).toUpperCase() + message.slice(1) + "." };
