@@ -126,6 +126,8 @@ export async function saveBookingType(input: {
   if (input.agreementTemplateId !== undefined && typeId) {
     const set = await supabase.rpc("set_booking_type_agreement", { p_event_type_id: typeId, p_template_id: input.agreementTemplateId });
     if (set.error) {
+      // The type itself was saved: show it.
+      refresh();
       return /approved consultation/.test(set.error.message)
         ? { error: "The booking type was saved, but that agreement is no longer approved. Choose another one." }
         : bookingError(set.error.message);
