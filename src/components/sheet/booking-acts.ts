@@ -6,6 +6,8 @@ import {
   archiveBookingType,
   bookForClient,
   cancelBooking,
+  dismissBookingMatch,
+  linkBookingToPerson,
   recordBookingOutcome,
   remindBookingAgreement,
   rescheduleBooking,
@@ -206,6 +208,45 @@ export async function runBookingAgreementVoid(button: HTMLElement, router: Route
 export async function runBookingAgreementRemind(button: HTMLElement, router: Router) {
   const result = await remindBookingAgreement({ organizationId: button.dataset.org ?? "", bookingId: button.dataset.booking ?? "" });
   done(result, { title: "Reminder sent", sub: "They get the signing link again by email." }, null, router);
+}
+
+// ---------------------------------------------------------------------------
+// Possible match (#263-C)
+// ---------------------------------------------------------------------------
+
+function matchInput(button: HTMLElement, personId: string) {
+  return {
+    organizationId: button.dataset.org ?? "",
+    bookingId: button.dataset.booking ?? "",
+    personId,
+    version: Number(button.dataset.version ?? "0"),
+  };
+}
+
+/** Link: the first press asks to confirm (like Archive), the second links the booking to the person. */
+export async function runMatchLink(button: HTMLElement, router: Router) {
+  const name = button.dataset.name || "this person";
+  if (button.dataset.confirm !== "1") {
+    button.dataset.confirm = "1";
+    const label = button.textContent;
+    button.textContent = "Confirm link";
+    window.setTimeout(() => {
+      if (button.dataset.confirm !== "1") return;
+      delete button.dataset.confirm;
+      button.textContent = label;
+    }, 5000);
+    toast2(`Link this booking to ${name}?`, { kind: "warn", sub: "It becomes their booking: it shows in their portal and its emails follow their portal. Press Confirm link." });
+    return;
+  }
+  delete button.dataset.confirm;
+  const result = await linkBookingToPerson(matchInput(button, button.dataset.matchLink ?? ""));
+  done(result, { title: `Linked to ${name}`, sub: "It’s their booking now. The link is on the audit log." }, null, router);
+}
+
+/** Not this person: the match is set aside (audited); the booking stays unlinked. */
+export async function runMatchDismiss(button: HTMLElement, router: Router) {
+  const result = await dismissBookingMatch(matchInput(button, button.dataset.matchDismiss ?? ""));
+  done(result, { title: "Marked as not this person", sub: "The booking stays unlinked. This is on the audit log." }, null, router);
 }
 
 // ---------------------------------------------------------------------------

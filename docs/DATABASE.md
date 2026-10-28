@@ -1143,3 +1143,15 @@ Issue #262, branch `fix/launch-must-fix-262`. Apply in order. Additive.
 * `20261028100100_stripe_retry_window_2h.sql` **redefines** `app.apply_stripe_reversal_event` (latest: `20261025160000_stripe_webhook_dispute_race_refund_failed.sql`): the SQLSTATE 55000 retry window is `interval '2 hours'` instead of `'24 hours'`; nothing else changes.
 
 Tested in `tests/sec-retention-deletion.rls.test.ts`, `tests/export-download-gone.test.ts` and `tests/finance-stripe-disputes-credits.rls.test.ts`.
+
+## Possible match on a booking-page booking (`20261028140000`, not applied on the live project)
+
+Issue #263 item C, branch `feat/booking-possible-match`. One additive migration; it redefines no function (`booking_public_hold`, `app.place_booking` and `prepare_email_delivery` are untouched, so it merges cleanly with #264's redefinitions). No enum values.
+
+* New table `booking_person_matches` (booking, person, `status` open / linked / dismissed, who decided and when; unique per booking and person). RLS enabled and forced; staff read it only for people they can see (`app.can_read_scheduling` and `app.can_read_person`); no write policies (writes only through the functions below); audit and no-delete triggers; every FK indexed.
+* New trigger `booking_attendees_possible_match` (`app.record_booking_person_matches`): after a booking-page booking's primary attendee is added without a person, records every person of the firm with that email (same sample flag). Audit `booking.possible_match_recorded` (count only).
+* New `public.link_booking_to_person(booking, person, expected_version)` (authenticated): scheduling staff, booking version checked (PT409), only an open match the caller can see; sets `bookings.person_id` and the primary attendee's `person_id`; returns the new booking version. Audit `booking.linked_to_client`.
+* New `public.dismiss_booking_match(booking, person, expected_version)` (authenticated): same checks; "Not this person". Audit `booking.match_dismissed`.
+* Shared checks in `app.open_booking_match`.
+
+Tested in `tests/booking-possible-match.rls.test.ts` and `tests/booking-possible-match.test.tsx`.

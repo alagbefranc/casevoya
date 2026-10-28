@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { parseAvailability, slotsFromAvailability } from "./availability";
 import { shortWhen } from "./format";
+import { possibleMatchError } from "./sheet-present";
 import { isTimeZone } from "./slots";
 import { closeRoomForBooking } from "@/modules/video/service";
 
@@ -272,6 +273,32 @@ export async function recordBookingOutcome(input: { organizationId: string; book
   if (!supabase) return { error: "Sign in first." };
   const { error } = await supabase.rpc("staff_record_booking_outcome", { p_org: input.organizationId, p_booking_id: input.bookingId, p_outcome: input.outcome });
   if (error) return bookingError(error.message);
+  refresh();
+  return { ok: true };
+}
+
+/**
+ * #263-C: Link (one click, confirmed in the page) a booking-page booking to a person whose email
+ * matched it. From then on it is that client's booking: their portal shows it and its emails
+ * follow the portal rules. Audited (booking.linked_to_client).
+ */
+export async function linkBookingToPerson(input: { organizationId: string; bookingId: string; personId: string; version: number }): Promise<Result> {
+  if (!isUuid(input.bookingId) || !isUuid(input.personId) || !Number.isInteger(input.version) || input.version < 1) return { error: "Reload and try again." };
+  const supabase = await session(input.organizationId);
+  if (!supabase) return { error: "Sign in first." };
+  const { error } = await supabase.rpc("link_booking_to_person", { p_booking_id: input.bookingId, p_person_id: input.personId, p_expected_version: input.version });
+  if (error) return { error: possibleMatchError(error.message) };
+  refresh();
+  return { ok: true };
+}
+
+/** #263-C: Not this person. The booking stays unlinked; audited (booking.match_dismissed). */
+export async function dismissBookingMatch(input: { organizationId: string; bookingId: string; personId: string; version: number }): Promise<Result> {
+  if (!isUuid(input.bookingId) || !isUuid(input.personId) || !Number.isInteger(input.version) || input.version < 1) return { error: "Reload and try again." };
+  const supabase = await session(input.organizationId);
+  if (!supabase) return { error: "Sign in first." };
+  const { error } = await supabase.rpc("dismiss_booking_match", { p_booking_id: input.bookingId, p_person_id: input.personId, p_expected_version: input.version });
+  if (error) return { error: possibleMatchError(error.message) };
   refresh();
   return { ok: true };
 }
