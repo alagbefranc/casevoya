@@ -1134,3 +1134,12 @@ Issue #259 fix 5, branch `fix/onboarding-259`. Apply in order. Each Continue on 
 * `20261026120100_setup_office_duplicates_cleanup.sql` is **destructive (deletes rows)** and optional: a `DO` block deletes a non-primary office only when it is labelled "Main office", its firm has a primary office, and every address field (label, address line, locality, region, postal code, country, timezone) equals that primary office's. No foreign key references `organization_offices` (checked across all migrations; the block re-checks `pg_constraint` and deletes nothing if one exists). Demoted "Main office" rows whose address differs are kept and only counted. It reports its counts with `RAISE NOTICE`; the audit trigger logs each deletion. `pnpm check:migrations` does not scan `$$` bodies, so it does not flag this block: review it before applying, or skip it.
 
 Tested in `tests/setup-office.rls.test.ts`.
+
+## Launch must-fix: deleted exports and the Stripe retry window (`20261028100000`, `20261028100100`, not applied on the live project)
+
+Issue #262, branch `fix/launch-must-fix-262`. Apply in order. Additive.
+
+* `20261028100000_export_removed.sql` adds `matter_exports.removed_at` (when a retention deletion removed the export's ZIP), **redefines** `public.service_record_deletion_item` (latest: `20261025290000_sec_retention_deletion.sql`; an `export_file` item now stamps `removed_at`) and `public.authorize_matter_export_download` (latest: `20261019205100_matter_records_exports_closure.sql`; refuses a removed export with "this export was deleted", 22023), and backfills `removed_at` for exports whose deletion item is already deleted or missing.
+* `20261028100100_stripe_retry_window_2h.sql` **redefines** `app.apply_stripe_reversal_event` (latest: `20261025160000_stripe_webhook_dispute_race_refund_failed.sql`): the SQLSTATE 55000 retry window is `interval '2 hours'` instead of `'24 hours'`; nothing else changes.
+
+Tested in `tests/sec-retention-deletion.rls.test.ts`, `tests/export-download-gone.test.ts` and `tests/finance-stripe-disputes-credits.rls.test.ts`.

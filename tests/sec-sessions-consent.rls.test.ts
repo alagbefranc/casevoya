@@ -1,7 +1,41 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { VO_VENDOR_TERMS } from "@/modules/vo/vendor-terms";
+import { idlePhase, readActivityState } from "@/modules/security/idle";
+
+// The activity route's Supabase client, backed by the PGlite database below (#262 contract test).
+const route = vi.hoisted(() => ({
+  userId: "",
+  signedOut: 0,
+  rpc: (async () => ({ data: null, error: null })) as (name: string, args: { p_active: boolean }) => Promise<{ data: unknown; error: unknown }>,
+}));
+vi.mock("@/lib/env", async (original) => ({ ...(await original<typeof import("@/lib/env")>()), hasPublicSupabaseEnv: () => true }));
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({
+    auth: {
+      getClaims: async () => ({ data: { claims: { sub: route.userId } } }),
+      signOut: async () => {
+        route.signedOut += 1;
+        return { error: null };
+      },
+    },
+    rpc: (name: string, args: { p_active: boolean }) => route.rpc(name, args),
+  }),
+}));
+const { POST: postActivity } = await import("@/app/api/session/activity/route");
+
+/** What the idle guard does: post to the route and read the JSON body. */
+async function post(active: boolean): Promise<unknown> {
+  const response = await postActivity(
+    new Request("https://app.casevoya.ca/api/session/activity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", origin: "https://app.casevoya.ca" },
+      body: JSON.stringify({ active }),
+    }),
+  );
+  return response.json();
+}
 
 /**
  * 20261025270000 / 20261025270100 (SEC-01, SEC-05) against the real migrations: the firm's idle
@@ -166,6 +200,49 @@ describe("SEC-01 idle timeout", () => {
     const clientSid = await session(f.clientUser);
     await client(f, clientSid);
     expect((await db.query<{ r: Record<string, unknown> }>(`select public.record_staff_activity(true) as r`)).rows[0].r).toMatchObject({ state: "none" });
+  });
+
+  // #262: the browser's idle guard reads the activity route's JSON with readActivityState. The
+  // route used to send the camelCase ActivityState, which read as "none", so no timer ever started.
+  // This runs the real route against the real public.record_staff_activity and reads its answer
+  // exactly as the idle guard does.
+  it("the activity route's answer starts the browser's timer, warns before sign-out, and Stay signed in resets it", async () => {
+    const f = await firm();
+    await staff(f, f.owner, 0);
+    await db.query(`select public.set_staff_idle_timeout($1, 5)`, [f.orgId]);
+    const sid = await session(f.consultant);
+    route.rpc = async (_name, args) => {
+      await staff(f, f.consultant, 60, sid);
+      const r = (await db.query<{ r: unknown }>(`select public.record_staff_activity($1) as r`, [args.p_active])).rows[0].r;
+      return { data: r, error: null };
+    };
+    route.userId = f.consultant;
+
+    const first = readActivityState(await post(false));
+    expect(first).toEqual({ state: "active", timeoutMinutes: 5, idleSeconds: 0 });
+    if (first.state !== "active") return;
+
+    // The guard's clock: 3 minutes 30 seconds idle on a 5-minute time is inside the 2-minute warning.
+    const start = Date.now() - first.idleSeconds * 1000;
+    expect(idlePhase(start, start + 2 * 60_000, first.timeoutMinutes).phase).toBe("active");
+    expect(idlePhase(start, start + 210_000, first.timeoutMinutes)).toEqual({ phase: "warn", secondsLeft: 90 });
+
+    // Stay signed in: activity goes to the server, and the idle time starts again from zero.
+    await asMaintenance(db);
+    await db.query(`update public.staff_session_activity set last_active_at = now() - interval '210 seconds' where session_id = $1`, [sid]);
+    const idle = readActivityState(await post(false));
+    expect(idle).toMatchObject({ state: "active", timeoutMinutes: 5 });
+    if (idle.state !== "active") return;
+    expect(idle.idleSeconds).toBeGreaterThanOrEqual(210);
+    expect(idlePhase(Date.now() - idle.idleSeconds * 1000, Date.now(), idle.timeoutMinutes).phase).toBe("warn");
+    const stayed = readActivityState(await post(true));
+    expect(stayed).toEqual({ state: "active", timeoutMinutes: 5, idleSeconds: 0 });
+
+    // Past the time: the route answers expired and the guard leaves for sign-in.
+    await asMaintenance(db);
+    await db.query(`update public.staff_session_activity set last_active_at = now() - interval '6 minutes' where session_id = $1`, [sid]);
+    expect(readActivityState(await post(false))).toEqual({ state: "expired", timeoutMinutes: 5 });
+    expect(route.signedOut).toBe(1);
   });
 });
 

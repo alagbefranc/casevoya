@@ -155,6 +155,25 @@ describe("REP-01 intake, readiness and renewals", () => {
     );
     expect(result).toMatchObject({ matters: 3, median: "20", longest: "61", recorded: true });
     expect(result.note).toBe("3 matters reached Ready to submit in this period. 2 matters are past Ready to submit with no recorded move into it, so they aren’t counted.");
+    // #262: an even count is the average of the two middle values (10 and 20 days).
+    const even = readiness(
+      [
+        { createdAt: "2026-09-01T12:00:00Z", readyAt: "2026-09-11T12:00:00Z" },
+        { createdAt: "2026-10-01T12:00:00Z", readyAt: "2026-10-21T12:00:00Z" },
+        { createdAt: "2026-10-01T12:00:00Z", readyAt: "2026-10-04T12:00:00Z" },
+        { createdAt: "2026-08-01T12:00:00Z", readyAt: "2026-10-01T12:00:00Z" },
+      ],
+      0,
+    );
+    expect(even).toMatchObject({ matters: 4, median: "15", longest: "61" });
+    const half = readiness(
+      [
+        { createdAt: "2026-09-01T12:00:00Z", readyAt: "2026-09-11T12:00:00Z" },
+        { createdAt: "2026-10-01T12:00:00Z", readyAt: "2026-10-22T12:00:00Z" },
+      ],
+      0,
+    );
+    expect(half.median).toBe("15.5");
     const missing = readiness([], 1);
     expect(missing).toMatchObject({ matters: 0, median: "—", recorded: false });
     expect(missing.note).toMatch(/^Not recorded: /);

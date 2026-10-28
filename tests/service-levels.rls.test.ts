@@ -190,6 +190,24 @@ describe("The monthly service-level report", () => {
     expect(await audits(f.orgId, "service_level.report_read")).toHaveLength(0);
   });
 
+  // #262 (Francis, #185): the SQL median averages the two middle values too (percentile_cont), in whole seconds.
+  it("an even number of replies gives the average of the two middle times", async () => {
+    const f = await firm();
+    const admin = await platformAdmin();
+    const start = await ago("-5 minutes");
+    await asMaintenance(db);
+    const plus = async (minutes: number) =>
+      (await db.query<{ at: string }>(`select ($1::timestamptz - make_interval(mins => 70) + make_interval(mins => $2))::text as at`, [start, minutes])).rows[0].at;
+    const base = await plus(0);
+    await record({ orgId: f.orgId, ticket: "CS-20", received: base, responded: await plus(10), admin });
+    await record({ orgId: f.orgId, ticket: "CS-21", received: base, responded: await plus(25), admin });
+    await as(f.owner, f.orgId);
+    const page = await report(f.orgId, 2);
+    await asMaintenance(db);
+    const month = (await db.query<{ m: string }>(`select to_char($1::timestamptz at time zone 'America/Toronto', 'YYYY-MM') as m`, [base])).rows[0].m;
+    expect(page.months.find((row) => row.month === month)?.support).toMatchObject({ answered: 2, median_seconds: 1050, longest_seconds: 1500 });
+  });
+
   it("buckets by month in the firm's timezone", async () => {
     const f = await firm("Pacific/Kiritimati");
     const admin = await platformAdmin();

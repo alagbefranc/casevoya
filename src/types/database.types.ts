@@ -6668,6 +6668,7 @@ export type Database = {
           progress: number
           ready_at: string | null
           record_count: number | null
+          removed_at: string | null
           requested_at: string
           requested_by: string
           sha256: string | null
@@ -6705,6 +6706,7 @@ export type Database = {
           progress?: number
           ready_at?: string | null
           record_count?: number | null
+          removed_at?: string | null
           requested_at?: string
           requested_by: string
           sha256?: string | null
@@ -6742,6 +6744,7 @@ export type Database = {
           progress?: number
           ready_at?: string | null
           record_count?: number | null
+          removed_at?: string | null
           requested_at?: string
           requested_by?: string
           sha256?: string | null
