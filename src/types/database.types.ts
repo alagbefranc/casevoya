@@ -853,6 +853,39 @@ export type Database = {
         }
         Relationships: []
       }
+      booking_person_matches: {
+        Row: {
+          booking_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          organization_id: string
+          person_id: string
+          status: string
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          organization_id: string
+          person_id: string
+          status?: string
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          organization_id?: string
+          person_id?: string
+          status?: string
+        }
+        Relationships: []
+      }
       bookings: {
         Row: {
           attendee_time_zone: string
@@ -15234,6 +15267,10 @@ export type Database = {
         Returns: Json
       }
       disconnect_staff_connection: { Args: { p_connection_id: string }; Returns: undefined }
+      dismiss_booking_match: {
+        Args: { p_booking_id: string; p_expected_version: number; p_person_id: string }
+        Returns: undefined
+      }
       dismiss_inbound_email: {
         Args: { p_email_id: string; p_note?: string | null }
         Returns: undefined
@@ -15697,6 +15734,10 @@ export type Database = {
           kind: string
           result: string | null
         }[]
+      }
+      link_booking_to_person: {
+        Args: { p_booking_id: string; p_expected_version: number; p_person_id: string }
+        Returns: number
       }
       link_booking_to_lead: {
         Args: {

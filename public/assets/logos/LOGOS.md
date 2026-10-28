@@ -2,7 +2,7 @@
 
 | file | source | licence note |
 |---|---|---|
-| calendly, docusign, dropbox | earlier pass (Simple Icons style) | **Flagged for Francis**: confirm each vendor's brand terms before production. Left as they are. |
+| calendly, dropbox | earlier pass (Simple Icons style) | **Flagged for Francis**: confirm each vendor's brand terms before production. Left as they are. |
 | gmail, googlecalendar, quickbooks, stripe, zoom | earlier pass (Simple Icons) | Licence check before production. |
 | googlemeet, xero, twilio, whatsapp | Simple Icons 16.35.0 (CC0 SVG; trademarks stay with their owners) | Added 17 Oct 2026. Follow each vendor's brand guidelines; check before production. WhatsApp is labelled "Later". |
 | microsoftoutlook-wordmark, microsoft365-wordmark, microsoftteams-wordmark | Neutral Erode text wordmarks (no Microsoft artwork) | Microsoft logo use needs their permission, so plain text is used until Francis confirms. |

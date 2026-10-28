@@ -53,6 +53,8 @@ import {
   runBookingAgreementSend,
   runBookingAgreementRemind,
   runBookingAgreementVoid,
+  runMatchDismiss,
+  runMatchLink,
   runOutcome,
   runSummarySave,
   runSummaryShare,
@@ -918,6 +920,19 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       if (agreementRemind && root.contains(agreementRemind)) {
         event.preventDefault();
         busyRun(agreementRemind, () => runBookingAgreementRemind(agreementRemind, router));
+        return;
+      }
+      // #263-C: a booking-page booking's possible match: Link (confirmed) or Not this person.
+      const matchLink = target.closest<HTMLElement>("[data-match-link]");
+      if (matchLink && root.contains(matchLink)) {
+        event.preventDefault();
+        busyRun(matchLink, () => runMatchLink(matchLink, router));
+        return;
+      }
+      const matchDismiss = target.closest<HTMLElement>("[data-match-dismiss]");
+      if (matchDismiss && root.contains(matchDismiss)) {
+        event.preventDefault();
+        busyRun(matchDismiss, () => runMatchDismiss(matchDismiss, router));
         return;
       }
       const summarySave = target.closest<HTMLElement>("[data-summary-save]");
