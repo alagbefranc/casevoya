@@ -85,7 +85,7 @@ async function status(id: string) {
 
 async function audit(id: string, action: string) {
   await asMaintenance(db);
-  return (await db.query<{ context: Record<string, unknown> }>(`select context from public.audit_log where object_id = $1 and action = $2`, [id, action])).rows;
+  return (await db.query<{ context: Record<string, unknown> }>(`select context from public.audit_log where object_id = $1 and action = $2 order by occurred_at`, [id, action])).rows;
 }
 
 type Page = {
