@@ -304,11 +304,17 @@ describe("The job runner (service role)", () => {
     const ctx = await firm();
     const file = await storedFile(ctx, [ctx.matterId], "passport.pdf");
     const draftId = await voReading(ctx, ctx.matterId, file);
-    await readyExport(ctx, ctx.matterId);
+    const exportId = await readyExport(ctx, ctx.matterId);
     await closeMatter(ctx, ctx.matterId);
     const jobId = await approve(ctx, ctx.matterId);
 
     expect(await runAll()).toBe("completed");
+    // #262: the export inside its 24-hour window reads as deleted, and its download is refused.
+    await asMaintenance(db);
+    const exported = await db.query<{ status: string; removed: boolean }>(`select status::text, removed_at is not null as removed from public.matter_exports where id = $1`, [exportId]);
+    expect(exported.rows[0]).toEqual({ status: "ready", removed: true });
+    await as(ctx.owner, ctx.orgId);
+    await expectDbError(() => db.query(`select public.authorize_matter_export_download($1)`, [exportId]), /this export was deleted/);
     await asMaintenance(db);
     const reading = await db.query<{ title: string; body: string }>(`select title, body from public.vo_doc_drafts where id = $1`, [draftId]);
     expect(reading.rows[0]).toEqual({ title: "Deleted", body: "Removed under the firm's retention policy." });

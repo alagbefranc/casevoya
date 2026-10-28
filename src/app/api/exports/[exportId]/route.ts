@@ -3,7 +3,7 @@ import { verifyTotpCode } from "@/lib/auth/verify-totp";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isUuid } from "@/lib/tenant/context";
-import { exportError } from "@/modules/sheet/exports-present";
+import { EXPORT_FILE_MISSING, exportError, exportRefusalStatus, storageObjectMissing } from "@/modules/sheet/exports-present";
 
 function refuse(error: string, status: number) {
   return NextResponse.json({ error }, { status });
@@ -39,7 +39,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ exp
     if (!verified.ok) return refuse(verified.error, 403);
   }
   const grant = await supabase.rpc("authorize_matter_export_download", { p_export_id: exportId });
-  if (grant.error) return refuse(exportError(grant.error.message), 403);
+  // A deleted or expired export is gone (410), with words the page shows as they are.
+  if (grant.error) return refuse(exportError(grant.error.message), exportRefusalStatus(grant.error.message));
   const value = grant.data as { bucket?: unknown; storage_key?: unknown; seconds?: unknown } | null;
   if (typeof value?.bucket !== "string" || typeof value.storage_key !== "string" || typeof value.seconds !== "number") {
     return refuse("That export can't be downloaded.", 404);
@@ -51,6 +52,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ exp
     return refuse("Downloads are not available right now.", 503);
   }
   const signed = await service.storage.from(value.bucket).createSignedUrl(value.storage_key, value.seconds, { download: true });
-  if (signed.error || !signed.data?.signedUrl) return refuse("That export can't be downloaded.", 502);
+  // #262: the ZIP missing from storage is a clear 404, and any other storage failure says to retry, never a bare 502.
+  if (signed.error && storageObjectMissing(signed.error)) return refuse(EXPORT_FILE_MISSING, 404);
+  if (signed.error || !signed.data?.signedUrl) return refuse("Downloads aren’t working right now. Try again in a few minutes.", 503);
   return NextResponse.json({ url: signed.data.signedUrl, seconds: value.seconds });
 }

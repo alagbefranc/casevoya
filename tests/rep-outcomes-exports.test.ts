@@ -134,6 +134,14 @@ describe("REP-02 cohorts and segments", () => {
     expect(rows[0]).toMatchObject({ median: "50", range: "30–90 (5 timed)" });
     expect(rows[0].estimate?.text).toContain("IRCC’s estimate, checked 20 Oct 2026");
   });
+
+  // #262 (Francis, #185): an even count averages the two middle values; a half day shows one decimal.
+  it("an even number of decided files takes the average of the two middle values", () => {
+    const even = outcomeSegments(decided("e", "study_permit", "2026-02-10T15:00:00Z", [2, 5, 9, 20, 30, 41], ["approved"]), { timeZone: TZ }).rows;
+    expect(even[0]).toMatchObject({ median: "14.5", range: "2–41 (6 timed)" });
+    const whole = outcomeSegments(decided("w", "study_permit", "2026-02-10T15:00:00Z", [2, 5, 9, 11, 30, 41], ["approved"]), { timeZone: TZ }).rows;
+    expect(whole[0].median).toBe("10");
+  });
 });
 
 function outcomesData(outcomes: ReportsOutcomes): ReportsData {

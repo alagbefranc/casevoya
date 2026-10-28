@@ -454,6 +454,26 @@ describe("live test-mode fixes (#214, 20261025160000)", () => {
     expect(await reversal(f, { type: "charge.dispute.created", object: disputeId(), intent: intentId(), amount: 1_000, status: "needs_response" })).toMatchObject({ outcome: "ignored" });
   });
 
+  // #262 (Francis, on #214): the retry window is 2 hours from Stripe's `created`, not 24.
+  it("retries for 2 hours from Stripe's created, then stops; a late event for a payment not yet applied stays a failed event", async () => {
+    const f = await firm();
+    const minutes = (n: number) => nowSeconds() - n * 60;
+    await expectDbError(() => reversal(f, { type: "charge.dispute.created", object: disputeId(), intent: intentId(), amount: 1_000, status: "needs_response", created: minutes(115) }), /payment not applied yet/);
+    expect(await reversal(f, { type: "charge.dispute.created", object: disputeId(), intent: intentId(), amount: 1_000, status: "needs_response", created: minutes(125) })).toMatchObject({ outcome: "ignored", reason: "unknown_payment" });
+    expect(await reversal(f, { type: "refund.created", object: refundId(), intent: intentId(), amount: 1_000, status: "pending", created: minutes(3 * 60) })).toMatchObject({ outcome: "ignored" });
+
+    // A payment Casevoya knows but hasn't applied: retried inside the window, recorded as a failed event after it.
+    const invoiceId = await issue(f, 30_000);
+    const intent = intentId();
+    await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
+    await db.query(`select public.record_invoice_payment_intent($1, $2, $3, 30000, 'cad', 0, false)`, [invoiceId, intent, f.account]);
+    await expectDbError(() => reversal(f, { type: "charge.dispute.created", object: disputeId(), intent, amount: 30_000, status: "needs_response", created: minutes(90) }), /payment not applied yet/);
+    const late = { id: eventId(), type: "charge.dispute.created", object: disputeId(), intent, amount: 30_000, status: "needs_response", created: minutes(150) };
+    expect(await reversal(f, late)).toMatchObject({ outcome: "rejected" });
+    await asMaintenance(db);
+    expect((await db.query<{ status: string }>(`select status::text from public.webhook_inbox where provider = 'stripe' and event_id = $1`, [late.id])).rows[0].status).toBe("failed");
+  });
+
   it("still rejects a dispute amount above what a received payment took", async () => {
     const f = await firm();
     const { intent } = await paidInvoice(f, 30_000);

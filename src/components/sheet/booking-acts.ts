@@ -481,7 +481,7 @@ export async function runArchiveType(button: HTMLElement, router: Router) {
   done(result, { title: "Booking type archived", sub: "It’s no longer offered. Bookings already made stay." }, null, router);
 }
 
-export async function runBookingType(button: HTMLElement, router: Router) {
+export async function runBookingType(button: HTMLElement, router: Router, root: ParentNode = document) {
   const dialog = button.closest("dialog");
   if (!dialog) return;
   const int = (id: string, fallback: number) => {
@@ -510,7 +510,53 @@ export async function runBookingType(button: HTMLElement, router: Router) {
     // Only when the dialog offers the choice (the firm has an approved consultation agreement).
     agreementTemplateId: el(dialog, "etA") ? value(dialog, "etA") || null : undefined,
   });
+  if ("ok" in result) rememberSavedType(root, dialog, result);
   done(result, { title: "Booking type saved", sub: "The booking page shows published types only." }, dialog, router);
+}
+
+/**
+ * #262 item 6: the type's Edit button keeps what was just saved (with the new version), so the
+ * dialog reopened before the page's refresh lands shows the saved values, not the old ones. The
+ * refresh then replaces the row with the server's copy. Skipped when the version couldn't be read.
+ */
+function rememberSavedType(root: ParentNode, dialog: HTMLDialogElement, saved: { id: string | null; version: number | null }) {
+  if (!saved.id || saved.version == null) return;
+  const opener = [...root.querySelectorAll<HTMLElement>("[data-type-open]")].find((item) => item.dataset.typeOpen === saved.id);
+  if (!opener) return;
+  let previous: Partial<TypeDraft> = {};
+  try {
+    previous = JSON.parse(opener.dataset.type ?? "{}") as Partial<TypeDraft>;
+  } catch {
+    previous = {};
+  }
+  const int = (id: string, fallback: number) => (value(dialog, id) !== "" && Number.isFinite(Number(value(dialog, id))) ? Math.round(Number(value(dialog, id))) : fallback);
+  const optional = (id: string) => (value(dialog, id) === "" ? null : int(id, 0));
+  const draft: TypeDraft = {
+    ...NEW_TYPE,
+    ...previous,
+    id: saved.id,
+    version: saved.version,
+    title: value(dialog, "etT").trim(),
+    slug: value(dialog, "etS").trim().toLowerCase(),
+    description: value(dialog, "etD").trim(),
+    duration: int("etL", 30),
+    step: optional("etP"),
+    before: int("etBB", 0),
+    after: int("etBA", 0),
+    noticeHours: int("etN", 24),
+    advance: int("etW", 60),
+    capacity: optional("etC"),
+    kind: value(dialog, "etK"),
+    detail: value(dialog, "etX").trim(),
+    hosts: [...dialog.querySelectorAll<HTMLInputElement>('input[name="etH"]:checked')].map((box) => box.value),
+    published: Boolean(el(dialog, "etPub")?.checked),
+    // Without the agreement field (no approved agreement) the saved type kept its agreement.
+    agreement: el(dialog, "etA") ? value(dialog, "etA") : (previous.agreement ?? ""),
+  };
+  opener.dataset.type = JSON.stringify(draft);
+  // Its Archive button checks the same version.
+  const archive = [...root.querySelectorAll<HTMLElement>("[data-type-archive]")].find((item) => item.dataset.typeArchive === saved.id);
+  if (archive) archive.dataset.version = String(saved.version);
 }
 
 /** Copy link: the share URL to the clipboard (the Designer's toast still shows). */
