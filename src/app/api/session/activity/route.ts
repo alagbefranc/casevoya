@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
-import { readActivityState } from "@/modules/security/idle";
+import { activityPayload, readActivityState } from "@/modules/security/idle";
 
 /**
  * SEC-01: the Sheet's idle guard reports activity here (`{ active: true }`, at most once a minute
@@ -25,5 +25,6 @@ export async function POST(request: Request) {
     // The database already ended the session; this removes the browser's copy of it.
     await supabase.auth.signOut({ scope: "local" });
   }
-  return NextResponse.json(state, { headers: { "Cache-Control": "no-store" } });
+  // The browser reads this with readActivityState too, so it goes back in the database's shape.
+  return NextResponse.json(activityPayload(state), { headers: { "Cache-Control": "no-store" } });
 }

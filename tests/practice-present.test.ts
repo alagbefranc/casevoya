@@ -3,6 +3,7 @@ import {
   DEFINITIONS,
   leadFunnel,
   median,
+  medianLabel,
   monthLabel,
   monthsBetween,
   outstandingDocuments,
@@ -68,10 +69,16 @@ describe("Reports (REP-01..03)", () => {
     );
     expect(rows).toEqual([
       { stage: "Intake", matters: 1, median: "6", oldest: "6" },
-      { stage: "Evidence collection", matters: 2, median: "15", oldest: "40" },
+      // Two matters (15 and 40 days): the average of the two middle values, to one decimal (#262).
+      { stage: "Evidence collection", matters: 2, median: "27.5", oldest: "40" },
     ]);
-    expect(median([1, 2, 3, 4])).toBe(2);
+    expect(median([1, 2, 3, 4])).toBe(2.5);
+    expect(median([2, 5, 9, 20])).toBe(7);
+    expect(median([20, 2, 9])).toBe(9);
+    expect(median([7])).toBe(7);
     expect(median([])).toBeNull();
+    expect([medianLabel(7), medianLabel(12.5), medianLabel(null), medianLabel(null, "—")]).toEqual(["7", "12.5", "0", "—"]);
+    expect(DEFINITIONS.ageing).toContain("average of the two middle values");
   });
 
   it("measures workload for planning and outstanding documents by where they wait", () => {

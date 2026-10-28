@@ -58,11 +58,21 @@ export function daysBetween(fromIso: string, toIso: string): number {
   return Math.max(0, Math.floor((b - a) / 86_400_000));
 }
 
-/** The middle value (the lower of the two middles for an even count, so it is a real file's figure). */
+/**
+ * The middle value; for an even count, the average of the two middle values (Francis, 2026-10-25,
+ * #185 / #262), as SQL's percentile_cont(0.5) gives. Whole-day inputs give a whole or a half day.
+ */
 export function median(values: number[]): number | null {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.floor((sorted.length - 1) / 2)];
+  const mid = sorted.length / 2;
+  return sorted.length % 2 ? sorted[Math.floor(mid)] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/** A median for the page and the CSV/PDF exports alike: whole values stay whole, a half shows one decimal ("12.5"). */
+export function medianLabel(value: number | null, empty = "0"): string {
+  if (value === null) return empty;
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 export function percent(part: number, whole: number): number {
@@ -119,7 +129,7 @@ export function stageAgeing(matters: OpenMatterInput[], stageOrder: readonly str
     .filter((stage) => byStage.has(stage))
     .map((stage) => {
       const days = byStage.get(stage) ?? [];
-      return { stage: stageLabel(stage), matters: days.length, median: String(median(days) ?? 0), oldest: String(Math.max(...days)) };
+      return { stage: stageLabel(stage), matters: days.length, median: medianLabel(median(days)), oldest: String(Math.max(...days)) };
     });
 }
 
@@ -255,11 +265,15 @@ export function localMidnightIso(date: string, timeZone: string): string {
 
 // ---------- Definitions shown on screen and in exports ----------
 
+/** How every report median is worked out and shown (Francis, 2026-10-25, #185 / #262). */
+export const MEDIAN_NOTE =
+  "A median of an even number of files is the average of the two middle values, shown to one decimal when it falls on a half day.";
+
 export const DEFINITIONS = {
   leads:
     "Definition: booked consultations that started in the period, up to now (confirmed, completed, no-show or cancelled; unpaid holds and expired holds are left out; upcoming ones are not counted yet). Matter opened: the booking is linked to a matter. Engaged: that matter’s engagement is recorded as engaged.",
   ageing:
-    "Definition: matters not closed, by current stage. Days in stage count from the latest move into that stage (or from opening, if it never moved), to now.",
+    `Definition: matters not closed, by current stage. Days in stage count from the latest move into that stage (or from opening, if it never moved), to now. ${MEDIAN_NOTE.replace("files", "matters")}`,
   workload:
     "Definition: open and blocked internal tasks each active staff member owns; overdue means a due date before today in the firm’s timezone. Matters: matters they are the responsible consultant for, plus matters of their open tasks.",
   documents:
@@ -274,7 +288,7 @@ export const DEFINITIONS = {
     "Definition: per client, held is verified deposits less approved transfers and refunds in the client-account ledger. Pending is deposits waiting for verification. This is the firm’s bookkeeping, not a bank statement.",
   recon: "Definition: signed client-account reconciliations that recorded exceptions, plus reconciliations still waiting for review.",
   firm:
-    "Firm work time is measured separately: days from opening the matter to the move to Submitted. It is the firm’s own preparation time, not government processing.",
+    `Firm work time is measured separately: days from opening the matter to the move to Submitted. It is the firm’s own preparation time, not government processing. ${MEDIAN_NOTE}`,
 } as const;
 
 export function freshness(at: string, timezone: string, sources: string): string {

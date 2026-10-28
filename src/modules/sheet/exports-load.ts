@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loadSheetChrome, matterNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
-import { byteSize, excludedWarning, exportState, jobSteps } from "@/modules/sheet/exports-present";
+import { byteSize, excludedWarning, exportDownloadable, exportState, jobSteps } from "@/modules/sheet/exports-present";
 import { partialAlert } from "@/modules/sheet/states-present";
 
 const EXPORT_ROLES = new Set(["firm_owner", "licensed_consultant", "case_manager"]);
@@ -41,7 +41,7 @@ export async function loadSheetExports(staff: SheetStaff, query: SheetQuery, now
     loadSheetChrome(staff, "/sheet/exports"),
     supabase
       .from("matter_exports")
-      .select("id, matter_id, status, stage, progress, requested_by, requested_at, file_count, byte_size, ready_at, expires_at, failure_reason, last_downloaded_at, excluded")
+      .select("id, matter_id, status, stage, progress, requested_by, requested_at, file_count, byte_size, ready_at, expires_at, failure_reason, last_downloaded_at, excluded, removed_at")
       .eq("organization_id", org)
       .order("requested_at", { ascending: false })
       .limit(HISTORY),
@@ -63,7 +63,7 @@ export async function loadSheetExports(staff: SheetStaff, query: SheetQuery, now
   const ref = (id: string) => referenceOf.get(id) || name(id);
   const userId = (await supabase.auth.getClaims()).data?.claims?.sub ?? null;
   const isOwner = staff.role === "firm_owner";
-  const open = (row: (typeof jobRows)[number]) => row.status === "ready" && row.expires_at !== null && Date.parse(row.expires_at) > now.getTime();
+  const open = (row: (typeof jobRows)[number]) => exportDownloadable({ status: row.status, expiresAt: row.expires_at, removedAt: row.removed_at }, now);
   const mayDownload = (row: (typeof jobRows)[number]) => open(row) && (row.requested_by === userId || isOwner);
 
   const excludedOf = (row: (typeof jobRows)[number]) => (Array.isArray(row.excluded) ? (row.excluded as { path?: unknown; reason?: unknown }[]) : []);
@@ -82,6 +82,7 @@ export async function loadSheetExports(staff: SheetStaff, query: SheetQuery, now
         failureReason: row.failure_reason,
         expiresLabel: row.expires_at ? stamp(row.expires_at, staff.timezone) : null,
         excludedCount: excludedOf(row).length,
+        removedOn: row.removed_at ? stamp(row.removed_at, staff.timezone, false) : null,
       },
       now,
     ),
@@ -109,7 +110,7 @@ export async function loadSheetExports(staff: SheetStaff, query: SheetQuery, now
       }
     : null;
 
-  const latestReady = jobRows.find((row) => row.status === "ready");
+  const latestReady = jobRows.find((row) => row.status === "ready" && row.removed_at === null);
   const warning = latestReady ? excludedWarning(ref(latestReady.matter_id), excludedOf(latestReady)) : null;
 
   // A matter linked to directly (its Closure tab's Export the client file), even one older than

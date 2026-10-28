@@ -19,7 +19,7 @@ import type { FirmTimeRow, OutcomeRow } from "@/components/sheet/designer/report
 import { ESTIMATE_NOTE, estimateSource, fullDay, type EstimateRow } from "@/modules/government/status-provenance";
 import { programLabel } from "@/modules/sheet/matters-present";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
-import { MIN_DECIDED, daysBetween, median } from "@/modules/sheet/reports-present";
+import { MEDIAN_NOTE, MIN_DECIDED, daysBetween, median, medianLabel } from "@/modules/sheet/reports-present";
 
 export type OutcomeRecord = {
   matterId: string;
@@ -164,7 +164,7 @@ export function outcomeSegments(
       program: group.program,
       cohort: group.cohort,
       decided: group.decided,
-      median: value === null ? "—" : String(value),
+      median: medianLabel(value, "—"),
       pending: group.pending,
       range: shown ? `${Math.min(...group.timedDays)}–${Math.max(...group.timedDays)} (${group.timedDays.length} timed)` : `— (${group.timedDays.length} timed)`,
       outcomes: shown ? outcomeCounts(group.outcomes) : "—",
@@ -178,7 +178,7 @@ export function outcomeSegments(
     program: group.program,
     cohort: group.cohort,
     files: group.firmDays.length,
-    median: String(median(group.firmDays) ?? 0),
+    median: medianLabel(median(group.firmDays)),
   }));
   return { rows, firm, hidden: hiddenRows };
 }
@@ -196,7 +196,7 @@ export function segmentsNote(hidden: OutcomeRow[], total: number): string {
 }
 
 export const OUTCOMES_DEFINITION =
-  "Definition: government processing counts days from the first move to Submitted to the first move to Decision review, for files with a consultant-recorded outcome. Pending files are shown apart and never counted in a median, range or outcome count. Cohort is the calendar quarter of the move to Submitted, in the firm’s timezone; the period chips don’t apply here. Range is the shortest and longest of the timed files; n is how many files were timed.";
+  `Definition: government processing counts days from the first move to Submitted to the first move to Decision review, for files with a consultant-recorded outcome. Pending files are shown apart and never counted in a median, range or outcome count. Cohort is the calendar quarter of the move to Submitted, in the firm’s timezone; the period chips don’t apply here. Range is the shortest and longest of the timed files; n is how many files were timed. ${MEDIAN_NOTE}`;
 
 export const ESTIMATE_DEFINITION =
   "IRCC’s estimate is not the firm’s figure. It is only shown when a staff member entered it from IRCC’s processing-times page on a matter of that program and a licensed member approved it (the newest one per program), with the date it was checked and its source. IRCC says these times are not a maximum or a guarantee.";

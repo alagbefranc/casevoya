@@ -88,7 +88,7 @@ export async function saveBookingType(input: {
   publish: boolean;
   /** The consultation agreement sent with each booking from the booking page; null for none, undefined to leave it. */
   agreementTemplateId?: string | null;
-}): Promise<Result> {
+}): Promise<{ ok: true; id: string | null; version: number | null } | { error: string; stepUp?: boolean }> {
   const slug = (input.slug || "").trim().toLowerCase();
   if (!input.title?.trim()) return { error: "Give the booking type a name." };
   if (!/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(slug)) return { error: "Use lowercase letters, numbers and dashes for the link name." };
@@ -135,7 +135,10 @@ export async function saveBookingType(input: {
     }
   }
   refresh();
-  return { ok: true };
+  // #262 item 6: the saved type's version, so the Edit dialog can reopen with what was saved
+  // before the page's refresh lands (and a second save still passes the version check).
+  const saved = typeId ? await supabase.from("booking_event_types").select("version").eq("id", typeId).maybeSingle() : null;
+  return { ok: true, id: typeId, version: saved?.data?.version ?? null };
 }
 
 /** The firm owner archives a booking type (step-up): it is unpublished and leaves the lists. Bookings already made stay. */
