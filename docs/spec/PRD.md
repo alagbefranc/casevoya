@@ -383,7 +383,7 @@ SEC-03: All tenant tables use organization-scoped access controls and database r
 
 SEC-04: Audit authentication, grants, reads of sensitive records, downloads, exports, changes, signatures, financial events, template publication, and support access. Store actor, tenant, object, action, time, result, request ID, and redacted change summary. Do not duplicate full sensitive values into the audit stream. Protect logs from routine modification and alert on bulk access.
 
-SEC-05: Use purpose-specific notices and consent or other documented authority as appropriate. Separate core processing, optional AI, optional channels, and marketing. Withdrawal starts an impact review; it does not automatically destroy records subject to retention or hold.
+SEC-05: Use purpose-specific notices and consent or other documented authority as appropriate. Separate core processing, optional AI, optional channels, and marketing. Withdrawal starts an impact review; it does not automatically destroy records subject to retention or hold. Decided 2026-10-28 (Francis): Vo skips the documents of clients without AI consent, existing clients included.
 
 SEC-06: Maintain subject-access and correction workflows with identity verification, scope search, redaction of third-party information, reviewer, applicable due date, export, and delivery proof. Requests across firms are handled independently. A closed user login does not erase the firm's professional record.
 
@@ -393,7 +393,7 @@ SEC-08: Provide incident detection, containment, investigation, impact assessmen
 
 SEC-09: Support access is time-limited, scoped to a matter or record set, justified, and auditable. Default duration is 60 minutes. Firm approval is required unless an approved emergency procedure applies. Show the firm when access occurred and automatically revoke grants on expiry.
 
-SEC-10: On subscription cancellation, stop new work after the contracted period, retain necessary continuity access and export, and provide a defined custodial archive or verified transfer arrangement. Proposed export window is at least 90 days, subject to the retention contract. This window is not a permission to delete six-year records. No routine cancellation or nonpayment process may silently destroy client records.
+SEC-10: On subscription cancellation, stop new work after the contracted period, retain necessary continuity access and export, and provide a defined custodial archive or verified transfer arrangement. Proposed export window is at least 90 days, subject to the retention contract. This window is not a permission to delete six-year records. No routine cancellation or nonpayment process may silently destroy client records. Decided 2026-10-28 (Francis): after the paid period matters go read-only, exports stay open for 90 days, and nothing is deleted; archive-or-transfer has no automatic deletion, and the terms wording needs a lawyer's review before launch.
 
 SEC-11: Maintain encrypted backups, point-in-time database recovery, object versioning, and quarterly restoration exercises. Proposed production objectives are recovery point within 15 minutes and recovery time within 4 hours for core records; verify both through exercises before promising them commercially.
 
@@ -650,6 +650,8 @@ Support priorities: suspected exposure, missing critical records, payment-integr
 | Competing feature parity | Validate client experience and operational savings with paid pilots | Product lead |
 
 Decisions required before engineering commitments: exact launch jurisdictions; which 3 to 5 program packs receive initial deep coverage; accepted government form output formats; payment provider and client-account arrangement; signing provider; Canadian hosting procurement; support coverage; final pricing allowances; and confirmed brand name. The core architecture and user journeys do not depend on the final name.
+
+**Launch decisions (Francis, 2026-10-28, issue #263; details in `docs/DECISIONS.md`).** (1) #163 and #164 ship on automated checks; Francis does the MFA-only live checks himself. (2) Staff idle sign-out defaults to 30 minutes, range 5 to 480 (SEC-01). (3) Vo skips the documents of clients without AI consent, existing clients included (SEC-05). (4) After the paid period, matters go read-only, exports stay open for 90 days, and nothing is deleted (SEC-10). (5) Archive-or-transfer has no automatic deletion; the terms wording needs a lawyer's review before launch (SEC-10). (6) The privacy-request download window is 30 days, as built (SEC-06). (7) The reports cohort, export header and definitions are accepted as built (REP-01..03). (8) The first program is Study permit, with a named licensed reviewer (to be named by Francis). (9) Platform admin is Francis only, to start, set up through the separate admin portal; this repo creates no `platform_admins` rows. (10) Stripe goes live only after an accountant signs off on the client-money flow (including tax on professional-fee lines) and the must-fix bugs ship; on 2026-10-28 Francis reported the accountant's sign-off, and the must-fix bugs (#262, PR #266) are not yet merged. In progress: a privacy notice per firm (PR #264), upload virus scanning, and a possible-match Link for public bookings that use a portal client's email.
 
 ## 27 Engineering handoff and definition of done
 

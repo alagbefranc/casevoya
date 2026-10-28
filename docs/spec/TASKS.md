@@ -25,7 +25,7 @@ These completion marks mean documents were authored, not that the product, compl
 
 | ID | Owner | Depends on | Task and concrete acceptance evidence |
 | --- | --- | --- | --- |
-| T001 | PO, PRO | — | Confirm initial country, provinces, client segment, and first program(s). Record included/excluded case types, responsible reviewer, and pilot firms. Canada-first remains an assumption until recorded. PRD 1, 26. |
+| T001 | PO, PRO | — | Confirm initial country, provinces, client segment, and first program(s). Record included/excluded case types, responsible reviewer, and pilot firms. Canada-first remains an assumption until recorded. PRD 1, 26. Decided 2026-10-28 (Francis): the first program is Study permit, with a named licensed reviewer (reviewer to be named by Francis). |
 | T002 | PO | — | Conduct brand clearance for Casevoya and alternatives: exact/similar trademarks, business names, domains, social handles, language/pronunciation. Record dated outcomes; do not claim availability from web silence. PRD 2. |
 | T003 | PO, PRO, FIN, SEC | T001 | Map responsibilities and contracts: software provider, consultancy, client, processors; review agreement/signature, client funds, privacy, retention, and record transfer requirements. Produce launch decision register with unresolved blockers. PRD 10, 13, 16. |
 | T004 | UX, PO | — | Interview at least three target firms and test consultant/client workflow prototypes. Record findings and revise assumptions without reducing the authorized end-to-end scope silently. PRD 6, 22. |

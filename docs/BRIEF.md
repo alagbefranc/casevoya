@@ -201,12 +201,12 @@ New → Contacted → Consultation scheduled → Consultation completed → Qual
 - SEC-02: encryption in transit and at rest, managed secrets and KMS with rotation, identity numbers masked in lists and logs, no keys in the browser.
 - SEC-03: org-scoped access + RLS, fresh authorization on every object fetch, short-lived links, private buckets, quarantine, cache isolation, private search indexes.
 - SEC-04: audit covers auth, grants, sensitive reads, downloads, exports, changes, signatures, finance, template publishing and support access. Each entry has actor, tenant, object, action, time, result, request ID and a **redacted** diff. Logs are tamper-resistant with bulk-access alerts.
-- SEC-05: purpose-specific consent (core, AI, channels and marketing kept separate). Withdrawal starts an impact review and doesn't auto-delete.
+- SEC-05: purpose-specific consent (core, AI, channels and marketing kept separate). Withdrawal starts an impact review and doesn't auto-delete. Decided 2026-10-28 (Francis): Vo skips the documents of clients without AI consent, existing clients included.
 - SEC-06: subject access and correction: ID verification, scope search, third-party redaction, due date, delivery proof. Handled per firm.
 - SEC-07: on closure record policy version, closure date, retention end, custodian, hold status. Retained records are read-only apart from annotations. Deletion needs approval and purges originals, derivatives, OCR text, embeddings, exports and caches. **Deletion tombstones are reapplied after restore.**
 - SEC-08: incident handling. **All breaches recorded, kept ≥24 months.** Report under RROSH "as soon as feasible". No generic 72-hour rule.
 - SEC-09: support grants (60 min default).
-- SEC-10: cancellation stops new work after the contract term, keeps continuity and export (≥90-day export window), offers a custodial archive or transfer. **No silent destruction.**
+- SEC-10: cancellation stops new work after the contract term, keeps continuity and export (≥90-day export window), offers a custodial archive or transfer. **No silent destruction.** Decided 2026-10-28 (Francis): matters go read-only after the paid period, exports stay open 90 days, nothing is deleted; archive-or-transfer never deletes automatically, and the terms wording goes to a lawyer before launch.
 - SEC-11: encrypted backups, PITR, object versioning, quarterly restore drills. RPO ≤15 min, RTO ≤4 h, proven by exercise.
 
 ### 4.10 Reports, platform ops, subscriptions (REP-01..03, ADM-01..05)
@@ -438,6 +438,8 @@ Smallest meaningful pilot: one narrow reviewed program, covering intake → evid
 ## 12. Open decisions and risks
 
 **Decisions the PRD requires before engineering commitments (§26):** launch jurisdictions/provinces; 3–5 deep program packs; government form output formats; payment provider and client-account arrangement; signing provider; Canadian hosting procurement; support coverage; pricing allowances; brand name (architecture doesn't depend on the name).
+
+**Launch decisions (Francis, 2026-10-28, issue #263; see `docs/DECISIONS.md`):** #163 and #164 ship on automated checks (Francis does the MFA-only live checks); idle sign-out 30 minutes by default, 5 to 480; Vo skips documents of clients without AI consent, existing clients included; after the paid period matters are read-only, exports open 90 days, nothing deleted; archive-or-transfer never deletes automatically (terms wording to a lawyer before launch); privacy-request download window 30 days; reports cohort, export header and definitions accepted as built; first program Study permit with a named licensed reviewer (to be named by Francis); platform admin Francis only, via the separate admin portal (no `platform_admins` rows from this repo); Stripe live only after the accountant's sign-off on the client-money flow (including tax on professional-fee lines; given, per Francis, 2026-10-28) and the must-fix bugs (#262, PR #266, not yet merged). In progress: per-firm privacy notice (PR #264), upload virus scanning, booking possible-match Link.
 
 **Risk register:** professional scope (founder + reviewer); client advances and processor suitability (manual workflow first); government integration expectations (manual handoff); regulatory and form drift (versioned sources); family confidentiality (person-level grants); brand; retention cost after cancellation; AI accuracy and data transfer; migration confidence; feature parity (paid pilots).
 
