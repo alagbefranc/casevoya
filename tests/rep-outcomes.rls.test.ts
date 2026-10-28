@@ -240,7 +240,8 @@ describe("REP-02 processing and outcomes with seeded decided matters", () => {
     const all = await readOutcomes(ctx.orgId);
     expect(all.records).toHaveLength(9);
     const firmWide = outcomeSegments(all.records, { timeZone: TZ });
-    expect(firmWide.rows.find((row) => row.program === "Synthetic program")).toMatchObject({ decided: 6, median: "50", pending: 2, range: "30–100 (6 timed)", outcomes: "4 approved, 2 refused" });
+    // Six timed files (30, 40, 50, 60, 90, 100): the average of the two middle values, 55 (#262).
+    expect(firmWide.rows.find((row) => row.program === "Synthetic program")).toMatchObject({ decided: 6, median: "55", pending: 2, range: "30–100 (6 timed)", outcomes: "4 approved, 2 refused" });
 
     // Another firm sees none of it.
     const outsider = await firm();
