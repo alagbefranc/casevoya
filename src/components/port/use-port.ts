@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { messageParts, rateLimitText } from "@/lib/auth/signup-errors";
 import { busyBtn, clearBtn, icon, k2Count, k2Slider, k2Spark, morphText, settleBtn, toast2, voPose } from "./kit";
 
 export type PortResult =
   /** `stay` keeps the person on this step (the step changed in place, e.g. a code was sent). */
   | { ok: true; href?: string; codes?: string[]; stay?: boolean; message?: string }
-  | { ok: false; state?: "error" | "locked"; message: string }
+  /**
+   * `inline`: shown in the step's error summary (`.errsum`), where `[label](/path)` becomes a link.
+   * `retryAfter`: a rate limit; the summary counts the seconds down and the button waits for it.
+   */
+  | { ok: false; state?: "error" | "locked"; message: string; inline?: boolean; retryAfter?: number | null }
   | null;
 
 export type PortEvent =
@@ -16,6 +21,9 @@ export type PortEvent =
   | { type: "resend"; page: string; el: HTMLElement; root: HTMLElement };
 
 const CHECK = `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
+
+/** The class that plays a step panel's slide-back animation (auth.css `[data-step].on.st-back`). */
+export const STEP_BACK = "st-back";
 
 function all<T extends Element>(root: ParentNode, selector: string) {
   return [...root.querySelectorAll<T>(selector)];
@@ -65,7 +73,8 @@ export function usePort(
       panels.forEach((panel) => {
         const on = Number(panel.dataset.step) === index;
         panel.classList.toggle("on", on);
-        panel.classList.toggle("back", on && back);
+        // Not "back": the Sheet's global `.back` (shell.css) is the 34px back-arrow link.
+        panel.classList.toggle(STEP_BACK, on && back);
       });
       all<HTMLElement>(root, ".stp li").forEach((item, i) => {
         item.classList.toggle("done", i < index);
@@ -147,6 +156,56 @@ export function usePort(
         pose("worried");
       } else summary?.remove();
       return !bad.length;
+    };
+
+    /**
+     * A server refusal shown in the step's error summary, the same `.errsum` that validate uses
+     * (an email that already has an account, a rate limit). Only `[label](/path)` becomes a link;
+     * everything else is text. With `retryAfter`, the wait counts down and `button` waits for it.
+     */
+    let countdown = 0;
+    const showProblem = (scope: HTMLElement, message: string, retryAfter: number | null | undefined, button: HTMLElement) => {
+      scope.querySelector(".errsum")?.remove();
+      window.clearTimeout(countdown);
+      const summary = document.createElement("div");
+      summary.className = "errsum";
+      summary.setAttribute("role", "alert");
+      summary.tabIndex = -1;
+      summary.innerHTML = `<h4>${icon("alert", "s")}One thing to fix</h4><ul><li></li></ul>`;
+      const item = summary.querySelector("li")!;
+      const write = (text: string) => {
+        item.replaceChildren(
+          ...messageParts(text).map((part) => {
+            if (!("href" in part)) return document.createTextNode(part.text);
+            const link = document.createElement("a");
+            link.href = part.href;
+            link.textContent = part.text;
+            return link;
+          }),
+        );
+      };
+      write(message);
+      scope.prepend(summary);
+      summary.focus();
+      pose("worried");
+      if (retryAfter && retryAfter > 0) {
+        let left = Math.min(Math.round(retryAfter), 3600);
+        button.setAttribute("aria-disabled", "true");
+        const tick = () => {
+          if (stopped || !summary.isConnected) {
+            button.removeAttribute("aria-disabled");
+            return;
+          }
+          left -= 1;
+          write(rateLimitText(left));
+          if (left <= 0) {
+            button.removeAttribute("aria-disabled");
+            return;
+          }
+          countdown = window.setTimeout(tick, 1000);
+        };
+        countdown = window.setTimeout(tick, 1000);
+      }
     };
 
     const showState = (state: string | null) => {
@@ -473,6 +532,7 @@ export function usePort(
         if (result && result.ok === false) {
           clearBtn(target);
           if (result.state) showState(result.state);
+          else if (result.inline) showProblem(scope, result.message, result.retryAfter, target);
           else toast2(result.message, { kind: "bad" });
           return;
         }

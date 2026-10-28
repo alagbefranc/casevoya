@@ -202,3 +202,12 @@ export function countOrNull(value: unknown, max = 10000): number | null {
   const number = typeof value === "number" ? value : typeof value === "string" && /^\d+$/.test(value.trim()) ? Number(value) : NaN;
   return Number.isInteger(number) && number > 0 && number <= max ? number : null;
 }
+
+/**
+ * EX20: whether Stripe's refund failure_reason means the card is no longer active (closed,
+ * expired, lost or stolen), the one reason the client is told in plain words. Any other code,
+ * or none, gives no reason. https://docs.stripe.com/refunds#failed-refunds
+ */
+export function refundCardInactive(reason: string | null | undefined): boolean {
+  return reason === "expired_or_canceled_card" || reason === "lost_or_stolen_card";
+}

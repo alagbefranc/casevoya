@@ -231,7 +231,28 @@ describe("Billing tab and the Money column", () => {
     expect(html).toContain("CAD 1,130.00 due 6 Nov");
     expect(html).not.toContain("No invoices yet");
     const none = renderToStaticMarkup(createElement(MatterBilling, { data: matterBilling({ invoices: [], entries: [], today: "2026-10-19", hidden: true }) }));
-    expect(none).toContain("Invoices are shown to billing staff");
+    // DES-04: the shared permission-denied view, in the Designer's own words for this case.
+    expect(none).toContain("You don’t have access to Billing on this matter");
+    expect(none).toContain('data-no-access="1"');
+  });
+
+  it("shows a failed card attempt as failed, with the reason, not as an open payment (DES-04)", () => {
+    const failed = { ...invoice("INV-0003", "issued", 113000, 0), card: { status: "failed", on: "2026-10-24" } };
+    const canceled = { ...invoice("INV-0004", "issued", 20000, 0), card: { status: "canceled", on: "2026-10-23" } };
+    const processing = { ...invoice("INV-0005", "issued", 10000, 0), card: { status: "processing", on: "2026-10-24" } };
+    // A failure followed by a successful payment: the invoice is paid, the old failure isn't shown.
+    const paidAfter = { ...invoice("INV-0006", "paid", 30000, 30000), card: { status: "failed", on: "2026-10-20" } };
+    const data = matterBilling({ invoices: [failed, canceled, processing, paidAfter], entries: [], today: "2026-10-25", hidden: false });
+    const row = (number: string) => data.invoices.find((item) => item.number.startsWith(number));
+    expect(row("INV-0003")).toMatchObject({ state: { tone: "bad", label: "Payment failed" }, payment: ["Card payment failed or declined 24 Oct", "CAD 1,130.00 owed"] });
+    expect(row("INV-0004")).toMatchObject({ state: { tone: "gr", label: "Canceled" }, payment: ["Card payment canceled 23 Oct", "CAD 200.00 owed"] });
+    expect(row("INV-0005")?.state).toEqual({ tone: "rev", label: "Payment processing" });
+    expect(row("INV-0006")).toMatchObject({ state: { tone: "ok", label: "Paid" }, payment: ["CAD 300.00 paid"] });
+    // The attempt is never counted as paid; what is owed is the invoices' own amounts.
+    expect(data.invoiced.note).toEqual(["CAD 300.00 paid", "CAD 1,430.00 due 6 Nov"]);
+    const html = renderToStaticMarkup(createElement(MatterBilling, { data }));
+    expect(html).toContain("Payment failed");
+    expect(html).toContain("Card payment failed or declined 24 Oct");
   });
 });
 

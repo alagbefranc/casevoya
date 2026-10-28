@@ -5,6 +5,7 @@ import { liveKitConfig } from "./env";
 import { ADMITTED_PERMISSION, participantToken, roomService, ROOM_OPTIONS } from "./livekit";
 import { after } from "next/server";
 import { CALL_REF, isRoomName, parseJoinView, roomNameFor, type JoinView } from "./present";
+import { isManageToken, manageTokenHash } from "@/modules/scheduling/manage-present";
 
 /**
  * In-app video calls (BUILD-SPEC §7). The database decides who may join and when
@@ -140,4 +141,55 @@ export function closeRoomForBooking(bookingId: string): void {
       // The room closes on its own 60 seconds after the last person leaves (ROOM_OPTIONS).
     }
   });
+}
+
+// ---------------------------------------------------------------------------
+// CRM-03: a booker without a portal, with their Manage your booking token
+// ---------------------------------------------------------------------------
+
+async function guestProof(ref: string, token: string): Promise<string | null> {
+  if (!CALL_REF.test(ref) || !isManageToken(token)) return null;
+  return manageTokenHash(token);
+}
+
+/** What the call page shows a guest before they join (no writes, no token). */
+export async function readGuestCall(ref: string, token: string): Promise<JoinView | VideoFailure> {
+  const hash = await guestProof(ref, token);
+  if (!hash) return { error: "You can’t join this call.", status: 403 };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("video_join_guest", { p_ref: ref, p_sha256: hash, p_issue: false });
+  if (error) return failure(error.message);
+  return parseJoinView(data) ?? { error: "Something went wrong. Try again.", status: 500 };
+}
+
+/** A lobby token for a guest, inside the window, under the name they confirmed. */
+export async function joinGuestCall(ref: string, token: string, name: string): Promise<{ view: JoinView; grant: JoinGrant | null; configured: boolean } | VideoFailure> {
+  const hash = await guestProof(ref, token);
+  if (!hash) return { error: "You can’t join this call.", status: 403 };
+  const config = liveKitConfig();
+  if (!config) {
+    const view = await readGuestCall(ref, token);
+    return "error" in view ? view : { view, grant: null, configured: false };
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("video_join_guest", { p_ref: ref, p_sha256: hash, p_issue: true, p_name: name.slice(0, 200) });
+  if (error) return failure(error.message);
+  const view = parseJoinView(data);
+  if (!view) return { error: "Something went wrong. Try again.", status: 500 };
+  if (view.state !== "open" || !view.grant) return { view, grant: null, configured: true };
+  try {
+    await roomService(config).createRoom(view.grant.roomName, { ...ROOM_OPTIONS });
+  } catch {
+    return { error: "The video service didn’t answer. Try again in a moment.", status: 502 };
+  }
+  if (!view.grant.roomCreated) await supabase.rpc("video_room_created_guest", { p_ref: ref, p_sha256: hash });
+  const lobby = await participantToken(config, {
+    identity: view.grant.identity,
+    name: view.grant.name,
+    role: "client",
+    admitted: view.grant.admitted,
+    room: view.grant.roomName,
+    ttlSeconds: view.grant.ttlSeconds,
+  });
+  return { view, grant: { serverUrl: config.url, token: lobby, identity: view.grant.identity, role: "client", admitted: view.grant.admitted }, configured: true };
 }

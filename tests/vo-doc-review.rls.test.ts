@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { voDocumentCategory } from "@/modules/vo/vo-doc";
+import { VO_VENDOR_TERMS } from "@/modules/vo/vendor-terms";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 
 /**
@@ -113,6 +114,8 @@ const staff = (f: Firm, userId: string, totpAgeSeconds = 60) => asUser(db, { use
 
 async function settings(f: Firm, changes: Record<string, boolean>) {
   await staff(f, f.owner);
+  // AI-06: the owner acknowledges the AI vendor terms before Vo can be turned on.
+  if (changes.enabled) await db.query(`select public.acknowledge_vo_vendor_terms($1, $2)`, [f.orgId, VO_VENDOR_TERMS.version]);
   await db.query(`select public.set_vo_settings($1, $2::jsonb)`, [f.orgId, JSON.stringify(changes)]);
 }
 
@@ -442,5 +445,28 @@ describe("Vo document reading: review", () => {
     // A new reading may start once nothing waits.
     await staff(f, f.consultant);
     expect((await begin(f)).ok).toBe(true);
+  });
+});
+
+describe("Vo document reading: read on upload (DOC-05)", () => {
+  it("is off by default and only the owner turns it on, like every Vo switch", async () => {
+    const f = await firm();
+    await settings(f, { enabled: true });
+    await asMaintenance(db);
+    expect((await db.query<{ read_on_upload: boolean }>(`select read_on_upload from public.vo_settings where organization_id = $1`, [f.orgId])).rows[0].read_on_upload).toBe(false);
+    await settings(f, { read_on_upload: true });
+    await asMaintenance(db);
+    expect((await db.query<{ read_on_upload: boolean }>(`select read_on_upload from public.vo_settings where organization_id = $1`, [f.orgId])).rows[0].read_on_upload).toBe(true);
+    await staff(f, f.consultant);
+    await expectDbError(() => db.query(`select public.set_vo_settings($1, '{"read_on_upload": false}'::jsonb)`, [f.orgId]), /staff access denied/);
+  });
+
+  it("saving it leaves AI-01's letter_drafts as it was (set_vo_settings is 20261025240200's)", async () => {
+    const f = await firm();
+    await settings(f, { enabled: true, letter_drafts: false });
+    await settings(f, { read_on_upload: true });
+    await asMaintenance(db);
+    const row = (await db.query<{ read_on_upload: boolean; letter_drafts: boolean }>(`select read_on_upload, letter_drafts from public.vo_settings where organization_id = $1`, [f.orgId])).rows[0];
+    expect(row).toEqual({ read_on_upload: true, letter_drafts: false });
   });
 });

@@ -124,7 +124,9 @@ describe("approved email designs", () => {
     const firm = renderEmail({ template: "invoice", firm: "Maple & Birch Immigration", invoice_number: "INV-0007", due_on: "2026-11-06" });
     expect(firm.html).toContain("Maple &amp; Birch Immigration</td>");
     expect(firm.html).toContain(">M</td>");
-    expect(firm.html).toContain("Your immigration file");
+    // ORG-01: each firm email says what it is about, not one line for every email.
+    expect(firm.html).toContain(">Invoices</td>");
+    expect(firm.html).not.toContain("Your immigration file");
     expect(firm.html).toContain("Sent by Maple &amp; Birch Immigration via Casevoya");
     expect(firm.html).not.toContain("header-platform");
     expect(firm.html).not.toContain("header-firm");
@@ -155,6 +157,7 @@ describe("approved email designs", () => {
       [{ template: "payment_failed" }, "EX08"],
       [{ template: "refund_started" }, "EX09"],
       [{ template: "refund_complete" }, "EX10"],
+      [{ template: "refund_failed", refund_reason: "lost_or_stolen_card" }, "EX20"],
       [{ template: "payment_receipt" }, "EM11"],
       [{ template: "support_requested", minutes: 60 }, "EX11"],
       [{ template: "support_granted", approver: "Sam Example", minutes: 60, ends_at: "2026-10-22T15:40:00Z", time_zone: "America/Toronto" }, "EM17"],

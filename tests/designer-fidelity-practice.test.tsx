@@ -205,7 +205,9 @@ describe("Designer fidelity: Reports", () => {
     const money = renderToStaticMarkup(
       createElement(SheetReports, { data: { ...empty, tab: "money", denied: { title: "You don’t have permission to see money reports", copy: "Ask your firm owner." } } }),
     );
-    expect(money).toContain("privacy-shield");
+    // DES-04: the shared permission-denied view (the Designer's No permission panel).
+    expect(money).toContain('data-no-access="1"');
+    expect(money).toContain("You don’t have permission to see money reports");
     expect(money).not.toContain("Receivables ageing");
     const dialog = renderToStaticMarkup(createElement(ReportsExportDialog, { data: empty.dialog }));
     expect(dialog).toContain('data-report-export="/api/reports/export?tab=ops&amp;range=month"');

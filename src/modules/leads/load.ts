@@ -27,6 +27,7 @@ import {
   dueLabel,
   duplicateAlert,
   duplicateFor,
+  attributionItems,
   historyItems,
   leadSummary,
   listFee,
@@ -245,6 +246,8 @@ export type LeadPage = {
 };
 
 type FullLead = LeadRow & {
+  /** CRM-01: utm_*, referrer and embedding site of a web enquiry. */
+  attribution?: unknown;
   preferred_contact: string | null;
   country_now: string | null;
   language: string | null;
@@ -286,7 +289,7 @@ export async function loadSheetLead(staff: SheetStaff, leadId: string, options: 
   const supabase = await createClient({ organizationId: org });
   const leadResult = await supabase
     .from("leads")
-    .select(`${LEAD_COLUMNS}, preferred_contact, country_now, language, tags, conflict_result, conflict_note, conflict_checked_at, conflict_checked_by, lost_reason, converted_matter_id`)
+    .select(`${LEAD_COLUMNS}, preferred_contact, country_now, language, tags, conflict_result, conflict_note, conflict_checked_at, conflict_checked_by, lost_reason, converted_matter_id, attribution`)
     .eq("organization_id", org)
     .eq("id", leadId)
     .maybeSingle();
@@ -378,6 +381,7 @@ export async function loadSheetLead(staff: SheetStaff, leadId: string, options: 
   ];
   const enquiry: LeadDlItem[] = [
     { term: "Source", value: lead.source_detail ? { left: sourceLabel(lead.source), right: lead.source_detail } : sourceLabel(lead.source) },
+    ...attributionItems(lead.attribution),
     { term: "Service interest", value: lead.service_interest ?? "Not given" },
     { term: "Received", value: stamp(lead.created_at, tz) },
     ...(lead.date_of_birth ? [{ term: "Date of birth", value: lead.date_of_birth }] : []),

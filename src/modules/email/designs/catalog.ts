@@ -19,11 +19,13 @@ import {
   dayDate,
   documentNumber,
   longDate,
+  refundCardInactive,
   shortDate,
   staffRolePhrase,
   uuidOrNull,
 } from "@/modules/email/designs/format";
 import { buildLocalized } from "@/modules/email/designs/localized";
+import { TAGLINES } from "@/modules/email/designs/taglines";
 
 export type TemplateStatus = "wired" | "ready-not-wired" | "deferred";
 export type Audience = "staff" | "firm owner" | "client" | "adult dependant";
@@ -49,6 +51,7 @@ export const PATHS = {
   sheetSettings: "/sheet/settings",
   sheetExports: "/sheet/exports",
   sheetLicence: "/sheet/licence",
+  sheetPipeline: "/sheet/pipeline",
 } as const;
 
 type FirmContext = { firmName: string };
@@ -80,8 +83,10 @@ export type EmailContexts = {
     portal?: boolean;
     locationKind?: string | null;
     address?: string | null;
+    /** CRM-03: the booker's Manage your booking link (no portal), made by the mail worker. */
+    manageUrl?: string | null;
   };
-  EM16b: FirmContext & { startsAt?: string | null; timeZone?: string | null; portal?: boolean };
+  EM16b: FirmContext & { startsAt?: string | null; timeZone?: string | null; portal?: boolean; manageUrl?: string | null };
   /**
    * bookingPage: the firm's slug when it has a booking page this attendee can use (no portal).
    * cancelledBy: "client" when the attendee cancelled from their portal; otherwise the firm did.
@@ -112,6 +117,13 @@ export type EmailContexts = {
    * portal: the person has a portal login (only then a portal button).
    */
   EX15: FirmContext & { senderName?: string | null; body?: string | null; subject?: string | null; portal?: boolean };
+  /** code: the six-digit signing code, opened by the mail worker from its sealed form. */
+  EX16: FirmContext & { code?: string | null };
+  EX17: FirmContext;
+  EX18: FirmContext;
+  EX19: FirmContext;
+  /** refundReason: Stripe's refund failure_reason code; only known codes become plain words. */
+  EX20: FirmContext & { refundReason?: string | null };
 };
 
 export type TemplateId = keyof EmailContexts;
@@ -162,6 +174,11 @@ function copy(
   return { cta: null, ...parts };
 }
 
+/** A six-digit signing code, or null. */
+function signingCode(value: unknown): string | null {
+  return typeof value === "string" && /^\d{6}$/.test(value.trim()) ? value.trim() : null;
+}
+
 function invoiceHref(origin: string, invoiceId: string | null | undefined): string | null {
   const id = uuidOrNull(invoiceId);
   return appLink(origin, id ? `${PATHS.portalPayments}?invoice=${id}` : PATHS.portalPayments);
@@ -184,6 +201,22 @@ function meetingLine(firmName: string, kind: string | null | undefined, address:
     }
     default:
       return "";
+  }
+}
+
+/** CRM-03: the line and button for an attendee with no portal when the email carries their Manage link. */
+export const MANAGE_LINE = "To change the time or cancel, use Manage your booking.";
+export const MANAGE_CTA = "Manage your booking";
+
+/** A Manage your booking link only when it is this app's own /booking/<ref>?t=<token>. */
+export function manageLink(value: unknown, origin: string): string | null {
+  const url = safeUrl(value);
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    return parsed.origin === new URL(origin).origin && /^\/booking\/[a-z2-7]{26}$/.test(parsed.pathname) && parsed.searchParams.get("t") ? url : null;
+  } catch {
+    return null;
   }
 }
 
@@ -608,13 +641,14 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
       const consultant = name(context.consultantName);
       const lead = when ? `${when} (${zoneLabel(context.timeZone)})` : "Your consultation";
       const meet = meetingLine(firmName, context.locationKind, context.address);
-      const end = context.portal ? "" : ` ${contactToChange(firmName)}`;
+      const manage = context.portal ? null : manageLink(context.manageUrl, origin);
+      const end = context.portal ? "" : manage ? ` ${MANAGE_LINE}` : ` ${contactToChange(firmName)}`;
       return copy({
         subject: `Your consultation with ${firmName} is booked`,
         preheader: "Here’s when, and how you’ll meet.",
         heading: "Your consultation is booked",
         body: `${lead}${consultant ? ` with ${consultant}` : ""}.${meet ? ` ${meet}` : ""}${end}`,
-        cta: context.portal ? cta("View booking", appLink(origin, PATHS.portalAppointments)) : null,
+        cta: context.portal ? cta("View booking", appLink(origin, PATHS.portalAppointments)) : manage ? cta(MANAGE_CTA, manage) : null,
         spot: "reminder",
         brand: firmBrand(context),
       });
@@ -635,6 +669,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
       const firmName = firm(context);
       const when = dateTimeIn(context.startsAt, context.timeZone);
       const moved = when ? `Your consultation is now ${when} (${zoneLabel(context.timeZone)}).` : "Your consultation has a new time.";
+      const manage = context.portal ? null : manageLink(context.manageUrl, origin);
       return copy({
         subject: `Your appointment with ${firmName} moved`,
         preheader: context.portal ? "The new time is in your portal." : "Here’s the new time.",
@@ -643,8 +678,8 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
           ? when
             ? `${moved} Your reminders moved too.`
             : "Your consultation has a new time. It’s in your portal, and your reminders moved too."
-          : `${moved} ${contactToChange(firmName)}`,
-        cta: context.portal ? cta("View booking", appLink(origin, PATHS.portalAppointments)) : null,
+          : `${moved} ${manage ? MANAGE_LINE : contactToChange(firmName)}`,
+        cta: context.portal ? cta("View booking", appLink(origin, PATHS.portalAppointments)) : manage ? cta(MANAGE_CTA, manage) : null,
         spot: "reminder",
         brand: firmBrand(context),
       });
@@ -1023,8 +1058,9 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
     name: "Refund complete",
     audience: "client",
     brand: "firm",
-    trigger: "Stripe confirms the refund (refund.updated succeeded; outbox invoice.refund_succeeded, template refund_complete). Honours email_notices",
-    status: "wired",
+    trigger:
+      "Not sent since 20261025530100: a card refund Stripe reports succeeded can still fail for up to 30 days and Stripe gives no final signal (docs.stripe.com/refunds#failed-refunds), so “complete” could be untrue. The client keeps EX09 (“on its way”) and gets EX20 if the refund fails. The renderer still maps template refund_complete here for mail queued before",
+    status: "ready-not-wired",
     ctaTarget: PATHS.portalPayments,
     mergeFields: ["firm_name"],
     sample: { firmName: SYNTHETIC_FIRM },
@@ -1173,6 +1209,131 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
       });
     },
   },
+  EX16: {
+    id: "EX16",
+    name: "Signing code",
+    audience: "client",
+    brand: "firm",
+    trigger:
+      "The booker asks for a code on a consultation agreement's private signing page (issue_booking_agreement_code; outbox booking_agreement.code, template signing_code), to the booking's primary attendee. The code is sealed by the app and opened by the mail worker; it works for 10 minutes. Honours email_notices. Copy pending Francis (#166)",
+    status: "wired",
+    ctaTarget: null,
+    mergeFields: ["firm_name", "code"],
+    sample: { firmName: SYNTHETIC_FIRM, code: "482913" },
+    build(context) {
+      const firmName = firm(context);
+      const code = signingCode(context.code);
+      return copy({
+        subject: `Your signing code from ${firmName}`,
+        preheader: "It works for 10 minutes.",
+        heading: code ?? "Your signing code",
+        body: code
+          ? `Enter this code to confirm it’s you and sign your consultation agreement from ${firmName}. It works for 10 minutes. If you didn’t ask for it, you can ignore this email.`
+          : `Your code from ${firmName} couldn’t be added to this email. Go back to the signing page and ask for a new code.`,
+        spot: "sign-in-code",
+        brand: firmBrand(context),
+      });
+    },
+  },
+  EX17: {
+    id: "EX17",
+    name: "Consultant changed",
+    audience: "client",
+    brand: "firm",
+    trigger:
+      "Staff change a matter's responsible consultant from the matter's People tab (change_responsible_consultant; outbox matter.consultant_changed, template consultant_changed), to each person on the matter with a portal account. Honours email_notices. Firm name only: the new consultant's name is in the portal, not the email (ORG-06)",
+    status: "wired",
+    ctaTarget: PATHS.portal,
+    mergeFields: ["firm_name"],
+    sample: { firmName: SYNTHETIC_FIRM },
+    build(context, origin) {
+      const firmName = firm(context);
+      return copy({
+        subject: `An update on your file from ${firmName}`,
+        preheader: "Your consultant has changed. See who in your portal.",
+        heading: "Your consultant has changed",
+        body: `A different consultant at ${firmName} is now responsible for your file, and your file stays with ${firmName}. For your privacy, their name is in your portal, along with anything you may need to sign. If you have questions or don't agree with this change, contact ${firmName}.`,
+        cta: cta("Open your portal", appLink(origin, PATHS.portal)),
+        spot: "reminder",
+        brand: firmBrand(context),
+      });
+    },
+  },
+  EX18: {
+    id: "EX18",
+    name: "New enquiry (staff)",
+    audience: "staff",
+    brand: "platform",
+    trigger:
+      "Someone sends an enquiry from the firm's hosted page or website form (trigger leads_enquiry_notice; outbox lead.enquiry_received, template enquiry_received), to the firm's active owners and the lead's owner when set. Not for sample (practice) enquiries. Firm name only: never the enquirer's name or what they wrote (CRM-01)",
+    status: "wired",
+    ctaTarget: PATHS.sheetPipeline,
+    mergeFields: ["firm_name"],
+    sample: { firmName: SYNTHETIC_FIRM },
+    build(context, origin) {
+      const firmName = firm(context);
+      return copy({
+        subject: `New enquiry for ${firmName}`,
+        preheader: "Open the Pipeline in Casevoya to read it.",
+        heading: "You have a new enquiry",
+        body: `Someone sent ${firmName} an enquiry from your enquiry page or website form. For their privacy, the details are in the Pipeline.`,
+        cta: cta("Open the Pipeline", appLink(origin, PATHS.sheetPipeline)),
+        spot: "reminder",
+        brand: PLATFORM,
+      });
+    },
+  },
+  EX19: {
+    id: "EX19",
+    name: "New notice (announcement)",
+    audience: "client",
+    brand: "firm",
+    trigger:
+      "Staff with permission send an announcement from an approved firm template (send_announcement; outbox announcement.sent, template announcement), to each chosen client with a portal account. Honours email_notices. Never for a sample-mode firm. Firm name only: the announcement itself is in the portal (OPS-04)",
+    status: "wired",
+    ctaTarget: PATHS.portal,
+    mergeFields: ["firm_name"],
+    sample: { firmName: SYNTHETIC_FIRM },
+    build(context, origin) {
+      const firmName = firm(context);
+      return copy({
+        subject: `A new notice from ${firmName}`,
+        preheader: "Read it in your portal.",
+        heading: `You have a new notice from ${firmName}`,
+        body: `${firmName} posted a notice for its clients. For your privacy, it is in your portal.`,
+        cta: cta("Open your portal", appLink(origin, PATHS.portal)),
+        spot: "reminder",
+        brand: firmBrand(context),
+      });
+    },
+  },
+  EX20: {
+    id: "EX20",
+    name: "Refund didn’t go through",
+    audience: "client",
+    brand: "firm",
+    trigger:
+      "Stripe reports a refund failed or canceled after the client was told it was on its way (refund.failed / refund.updated; invoice_refunds moves from pending, requires_action or succeeded to failed or canceled; outbox invoice.refund_failed, template refund_failed), to the same people as EX09. Once per refund, also when Stripe replays the event. Sent even when the client turned Email notices off (a money correction; Francis 2026-10-25); suppressed (bounced or complained) addresses are not. A plain-words reason only for a closed, expired, lost or stolen card; never Stripe's code (bug #215 check 6; copy approved by Francis 2026-10-25)",
+    status: "wired",
+    ctaTarget: PATHS.portalPayments,
+    mergeFields: ["firm_name", "refund_reason"],
+    sample: { firmName: SYNTHETIC_FIRM, refundReason: "expired_or_canceled_card" },
+    build(context, origin) {
+      const firmName = firm(context);
+      const card = refundCardInactive(context.refundReason);
+      return copy({
+        subject: `Your refund from ${firmName} didn’t go through`,
+        preheader: "The money hasn’t reached you. The firm will contact you.",
+        heading: "Your refund didn’t go through",
+        body: card
+          ? `The refund from ${firmName} didn’t go through because the card it was sent to is no longer active, so the money hasn’t reached you. Please disregard our earlier email about this refund. ${firmName} will contact you to arrange it another way.`
+          : `The refund from ${firmName} didn’t go through, so the money hasn’t reached you. Please disregard our earlier email about this refund. ${firmName} will contact you to arrange it another way.`,
+        cta: cta("View payments", appLink(origin, PATHS.portalPayments)),
+        spot: "receipt",
+        brand: firmBrand(context),
+      });
+    },
+  },
 };
 
 /**
@@ -1206,5 +1367,7 @@ export function clientInviteLines(firmName: string, inviterName?: string | null)
 }
 
 export function renderTemplate<K extends TemplateId>(id: K, context: EmailContexts[K], origin: string): EmailCopy {
-  return (EMAIL_TEMPLATES[id] as TemplateDef<EmailContexts[K]>).build(context, origin);
+  const copy = (EMAIL_TEMPLATES[id] as TemplateDef<EmailContexts[K]>).build(context, origin);
+  const tagline = TAGLINES[id];
+  return tagline && !copy.shell ? { ...copy, tagline } : copy;
 }

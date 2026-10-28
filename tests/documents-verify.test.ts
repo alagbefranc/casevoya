@@ -99,6 +99,16 @@ describe("server-side document byte checks", () => {
     expect(inspectDocumentBytes(hex("504b03041400000008000000"))).toBeNull();
   });
 
+  it("refuses a Word package that declares macros (DOC-02): never opened, never run", () => {
+    const withVba = WORD_TYPES.replace(
+      "</Types>",
+      '<Override PartName="/word/vbaProject.bin" ContentType="application/vnd.ms-office.vbaProject"/>\n</Types>',
+    );
+    expect(inspectDocumentBytes(zip([{ name: "[Content_Types].xml", body: withVba }, { name: "word/document.xml", body: "<w:document/>" }]))).toBeNull();
+    const docm = WORD_TYPES.replace("officedocument.wordprocessingml.document.main+xml", "ms-word.document.macroEnabled.main+xml");
+    expect(inspectDocumentBytes(zip([{ name: "[Content_Types].xml", body: docm }]))).toBeNull();
+  });
+
   it("hashes and sizes the whole stream and reports the verified type", async () => {
     const pdf = new Uint8Array(Buffer.from("%PDF-1.4\n% synthetic\n%%EOF\n", "latin1"));
     const result = await verifyDocumentStream(streamOf(pdf), 1024);

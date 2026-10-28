@@ -23,6 +23,22 @@ export async function voReadOffered(supabase: Client, org: string, sampleMode: b
 }
 
 /**
+ * DOC-05: with "Read documents on upload" on, the matter's newest uploads that Vo hasn't read yet
+ * (clean, waiting for review, no reading), at most three per visit. Null when the switch is off or
+ * Vo can't read documents here; the Documents tab then reads nothing by itself.
+ */
+export async function loadVoAutoRead(supabase: Client, org: string, sampleMode: boolean, candidates: readonly string[]): Promise<{ organizationId: string; versionIds: string[] } | null> {
+  if (!candidates.length) return null;
+  const { data } = await supabase.from("vo_settings").select("*").eq("organization_id", org).maybeSingle();
+  const settings = effectiveSettings(data ?? null, sampleMode);
+  if (!settings.read_on_upload || !voCanReadDocuments(settings, { agentReady: voAgentConfigured() })) return null;
+  const { data: read } = await supabase.from("vo_doc_drafts").select("version_id").eq("organization_id", org).in("version_id", [...candidates]);
+  const done = new Set((read ?? []).map((row) => row.version_id));
+  const versionIds = candidates.filter((id) => !done.has(id)).slice(0, 3);
+  return versionIds.length ? { organizationId: org, versionIds } : null;
+}
+
+/**
  * The matter Documents tab's review panel: the reading asked for (`?vo=`), else the newest one
  * still waiting on this matter. Read as the staff member (RLS: the matter and the document).
  */
@@ -62,6 +78,7 @@ export async function loadVoReadingPanel(
     mediaType: version.data.detected_media_type ?? version.data.declared_media_type,
     sha256: version.data.checksum_sha256,
     needsRule: draft.needs_rule,
+    versionId: draft.version_id,
     proposals: (proposals.data ?? []).map(
       (row): VoProposalRow => ({
         id: row.id,

@@ -365,6 +365,131 @@ describe("offboarding", () => {
   });
 });
 
+describe("offboarding hands over leads and booking hosting (ORG-06)", () => {
+  async function seededHandover() {
+    const f = await firm();
+    await asMaintenance(db);
+    const stage = (await db.query<{ id: string }>(`select id from public.lead_stages where organization_id = $1 and kind = 'open' order by position limit 1`, [f.orgId])).rows[0].id;
+    const lost = (await db.query<{ id: string }>(`select id from public.lead_stages where organization_id = $1 and kind = 'lost' limit 1`, [f.orgId])).rows[0].id;
+    const lead = async (name: string, stageId: string, extra = "") =>
+      (
+        await db.query<{ id: string }>(
+          `insert into public.leads (organization_id, display_name, email, source, stage_id, owner_membership_id ${extra ? ", lost_reason, lost_at" : ""})
+           values ($1, $2, $3, 'web_form', $4, $5 ${extra ? ", 'Synthetic', now()" : ""}) returning id`,
+          [f.orgId, name, `${tag()}@example.test`, stageId, f.consultantMembership],
+        )
+      ).rows[0].id;
+    const openLead = await lead("Synthetic Lead A", stage);
+    const lostLead = await lead("Synthetic Lead B", lost, "lost");
+    const followUp = (
+      await db.query<{ id: string }>(`insert into public.lead_follow_ups (organization_id, lead_id, title, owner_membership_id) values ($1, $2, 'Call back', $3) returning id`, [
+        f.orgId,
+        openLead,
+        f.consultantMembership,
+      ])
+    ).rows[0].id;
+    const type = (
+      await db.query<{ id: string }>(`insert into public.booking_event_types (organization_id, slug, title, duration_min) values ($1, $2, 'Initial consultation', 30) returning id`, [
+        f.orgId,
+        `t${tag()}`,
+      ])
+    ).rows[0].id;
+    await db.query(`insert into public.booking_event_type_hosts (organization_id, event_type_id, membership_id) values ($1, $2, $3)`, [f.orgId, type, f.consultantMembership]);
+    const booking = async (offsetDays: number, host = f.consultantMembership, hostUser = f.consultant) =>
+      (
+        await db.query<{ id: string }>(
+          `insert into public.bookings (organization_id, public_ref, event_type_id, host_membership_id, host_user_id, title, starts_at, ends_at,
+             blocked_from, blocked_until, host_time_zone, attendee_time_zone, location_kind, status, confirmed_at, source, idempotency_key)
+           values ($1, app.booking_public_ref(), $2, $3, $4, 'Initial consultation', date_trunc('hour', now()) + make_interval(days => $5),
+             date_trunc('hour', now()) + make_interval(days => $5, mins => 30), date_trunc('hour', now()) + make_interval(days => $5),
+             date_trunc('hour', now()) + make_interval(days => $5, mins => 30), 'America/Toronto', 'America/Toronto', 'video', 'confirmed', now(), 'staff', $6) returning id`,
+          [f.orgId, type, host, hostUser, offsetDays, randomUUID()],
+        )
+      ).rows[0].id;
+    const upcoming = await booking(5);
+    const past = await booking(-5);
+    return { f, openLead, lostLead, followUp, type, upcoming, past, booking };
+  }
+
+  it("lists each open lead, hosted booking type and upcoming consultation in the preview", async () => {
+    const { f, openLead, type, upcoming } = await seededHandover();
+    await as(f.owner, f.orgId, false);
+    const p = (await db.query<{ p: Record<string, { id: string }[]> }>(`select public.staff_offboarding_preview($1, $2) as p`, [f.orgId, f.consultantMembership])).rows[0].p;
+    expect(p.leads.map((row) => row.id)).toEqual([openLead]);
+    expect(p.booking_types).toEqual([{ id: type, title: "Initial consultation", published: false, other_hosts: 0 }]);
+    expect(p.bookings.map((row) => row.id)).toEqual([upcoming]);
+  });
+
+  it("refuses without a choice for each item, and the old form refuses too; nothing moves", async () => {
+    const { f, openLead, type } = await seededHandover();
+    await as(f.owner, f.orgId);
+    await expectDbError(() => db.query(`select public.offboard_staff_member($1, $2, $3)`, [f.orgId, f.consultantMembership, f.otherMembership]), /new owner for each open lead/);
+    const partial = { leads: { [openLead]: f.managerMembership }, booking_types: { [type]: f.otherMembership } };
+    await expectDbError(
+      () => db.query(`select public.offboard_staff_member($1, $2, $3, $4::jsonb)`, [f.orgId, f.consultantMembership, f.otherMembership, JSON.stringify(partial)]),
+      /new host for each upcoming consultation/,
+    );
+    await expectDbError(
+      () =>
+        db.query(`select public.offboard_staff_member($1, $2, $3, $4::jsonb)`, [
+          f.orgId,
+          f.consultantMembership,
+          f.otherMembership,
+          JSON.stringify({ ...partial, leads: { [openLead]: f.consultantMembership } }),
+        ]),
+      /active team member/,
+    );
+    expect((await status(f.consultantMembership)).status).toBe("active");
+    await asMaintenance(db);
+    expect((await db.query<{ o: string }>(`select owner_membership_id as o from public.leads where id = $1`, [openLead])).rows[0].o).toBe(f.consultantMembership);
+  });
+
+  it("moves each item to its chosen person, audits each, and leaves closed leads and past consultations alone", async () => {
+    const { f, openLead, lostLead, followUp, type, upcoming, past } = await seededHandover();
+    await as(f.owner, f.orgId);
+    const handover = { leads: { [openLead]: f.managerMembership }, booking_types: { [type]: f.otherMembership }, bookings: { [upcoming]: f.otherMembership } };
+    const out = await db.query<{ r: Record<string, number> }>(`select public.offboard_staff_member($1, $2, $3, $4::jsonb) as r`, [
+      f.orgId,
+      f.consultantMembership,
+      f.otherMembership,
+      JSON.stringify(handover),
+    ]);
+    expect(out.rows[0].r).toMatchObject({ leads: 1, follow_ups: 1, booking_types: 1, bookings: 1, memberships: 1 });
+    await asMaintenance(db);
+    const owners = await db.query<{ id: string; o: string }>(`select id, owner_membership_id as o from public.leads where id = any($1::uuid[])`, [[openLead, lostLead]]);
+    expect(Object.fromEntries(owners.rows.map((row) => [row.id, row.o]))).toEqual({ [openLead]: f.managerMembership, [lostLead]: f.consultantMembership });
+    expect((await db.query<{ o: string }>(`select owner_membership_id as o from public.lead_follow_ups where id = $1`, [followUp])).rows[0].o).toBe(f.managerMembership);
+    expect((await db.query<{ m: string }>(`select membership_id as m from public.booking_event_type_hosts where event_type_id = $1`, [type])).rows.map((row) => row.m)).toEqual([f.otherMembership]);
+    const moved = await db.query<{ id: string; host: string; host_user: string; host_name: string; seq: number }>(
+      `select id, host_membership_id as host, host_user_id as host_user, host_name, ics_sequence as seq from public.bookings where id = any($1::uuid[])`,
+      [[upcoming, past]],
+    );
+    const byId = new Map(moved.rows.map((row) => [row.id, row]));
+    expect(byId.get(upcoming)).toMatchObject({ host: f.otherMembership, host_user: f.other, host_name: "Lee Other", seq: 1 });
+    expect(byId.get(past)?.host).toBe(f.consultantMembership);
+    expect((await audits(f.orgId, "lead.owner_reassigned"))[0].context).toMatchObject({ to_membership_id: f.managerMembership, reason: "offboarding" });
+    expect((await audits(f.orgId, "booking_type.host_reassigned")).length).toBe(1);
+    expect((await audits(f.orgId, "booking.host_reassigned"))[0].object_id).toBe(upcoming);
+    const events = await db.query<{ reason: string }>(`select reason from public.lead_events where lead_id = $1 and kind = 'assigned'`, [openLead]);
+    expect(events.rows.map((row) => row.reason)).toEqual(["offboarding"]);
+    expect((await status(f.consultantMembership)).status).toBe("revoked");
+  });
+
+  it("names the consultation when the new host is already booked then, and moves nothing", async () => {
+    const { f, openLead, type, upcoming, booking } = await seededHandover();
+    await booking(5, f.otherMembership, f.other);
+    await as(f.owner, f.orgId);
+    const handover = { leads: { [openLead]: f.managerMembership }, booking_types: { [type]: f.otherMembership }, bookings: { [upcoming]: f.otherMembership } };
+    await expectDbError(
+      () => db.query(`select public.offboard_staff_member($1, $2, $3, $4::jsonb)`, [f.orgId, f.consultantMembership, f.otherMembership, JSON.stringify(handover)]),
+      /already has a consultation at the time of Initial consultation/,
+    );
+    await asMaintenance(db);
+    expect((await db.query<{ o: string }>(`select owner_membership_id as o from public.leads where id = $1`, [openLead])).rows[0].o).toBe(f.consultantMembership);
+    expect((await status(f.consultantMembership)).status).toBe("active");
+  });
+});
+
 describe("set_firm_continuity", () => {
   it("saves the contact and succession note with a step-up, audits field names only, and clears", async () => {
     const f = await firm();

@@ -1,8 +1,11 @@
 "use client";
 
+import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
+import { acceptChosen, failUpload } from "./upload-failure";
 import { removeFirmOffice, saveFirmBranding, saveFirmDetails, saveFirmOffice, saveTimezones, type FirmSettingsResult } from "@/modules/settings/firm-actions";
 import { withoutDialog } from "@/modules/sheet/matter-wire";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 
 type Router = { refresh: () => void; replace: (href: string) => void };
 type Open = (id: string) => void;
@@ -10,10 +13,10 @@ type Open = (id: string) => void;
 /** What was typed survives a step-up round trip in this tab only. */
 const DRAFT = "cv-firm-settings";
 
-/** Every named field in the dialog: text values, and checkboxes as true/false. */
+/** Every named field in the dialog: text and choice values, and checkboxes as true/false. */
 function fieldsOf(dialog: ParentNode): Record<string, string | boolean> {
   const fields: Record<string, string | boolean> = {};
-  dialog.querySelectorAll<HTMLInputElement>("input[name]").forEach((input) => {
+  dialog.querySelectorAll<HTMLInputElement>("input[name], select[name]").forEach((input) => {
     if (input.type === "file") return;
     fields[input.name] = input.type === "checkbox" ? input.checked : input.value;
   });
@@ -30,7 +33,7 @@ function stepUp(dialogId: string, fields: Record<string, string | boolean>) {
   params.set("dlg", dialogId);
   const next = `${window.location.pathname}?${params.toString()}`;
   toast2("Confirm it’s you", { kind: "warn", sub: "Then the dialog opens again with what you typed." });
-  window.setTimeout(() => window.location.assign(`/mfa?step=6&next=${encodeURIComponent(next)}`), 900);
+  window.setTimeout(() => goStepUp(stepUpHref(next, "firm_settings")), 900);
 }
 
 function finish(result: FirmSettingsResult, dialog: HTMLDialogElement, fields: Record<string, string | boolean>, done: { title: string; sub: string }, router: Router): void {
@@ -105,12 +108,19 @@ export async function runFirmSave(button: HTMLElement, router: Router) {
     return finish(result, dialog, fields, { title: "Office removed", sub: "The change is in the audit log." }, router);
   }
   if (kind === "brand") {
-    const file = dialog.querySelector<HTMLInputElement>("input[type=file]")?.files?.[0] ?? null;
+    const input = dialog.querySelector<HTMLInputElement>("input[type=file]");
+    const file = input?.files?.[0] ?? null;
     let locator = typeof fields.logoLocator === "string" ? fields.logoLocator : "";
-    if (file) {
+    if (file && input) {
+      // DES-04: a failed upload says why and what to do next, with a retry that chooses the file again.
+      const again = () => {
+        input.value = "";
+        input.click();
+      };
+      if (!acceptChosen(input, file, "logo", again)) return;
       const uploaded = await uploadLogo(file);
       if ("error" in uploaded) {
-        toast2(uploaded.error, { kind: "bad", sub: "Nothing was changed." });
+        failUpload(input, uploaded.error, "logo", again);
         return;
       }
       locator = uploaded.locator;
@@ -124,13 +134,17 @@ export async function runFirmSave(button: HTMLElement, router: Router) {
   }
   if (kind === "timezone") {
     const firmInput = dialog.querySelector<HTMLInputElement>("input[name=firm]");
+    const localeInput = dialog.querySelector<HTMLSelectElement>("select[name=locale]");
+    const localeBefore = localeInput ? ([...localeInput.options].find((option) => option.defaultSelected)?.value ?? null) : null;
     const result = await saveTimezones({
       organizationId,
       mine: typeof fields.mine === "string" ? fields.mine : "",
       firm: firmInput ? firmInput.value : null,
       firmBefore: firmInput ? firmInput.defaultValue : null,
+      locale: localeInput ? localeInput.value : null,
+      localeBefore,
     });
-    return finish(result, dialog, fields, { title: "Timezone saved", sub: "Your reminders and times use it from now on." }, router);
+    return finish(result, dialog, fields, { title: "Language and time saved", sub: "Reminders, times and new client invites use it from now on." }, router);
   }
 }
 
@@ -149,7 +163,7 @@ export function reopenFirmDialog(root: ParentNode, open: Open) {
   } catch {
     fields = {};
   }
-  dialog.querySelectorAll<HTMLInputElement>("input[name]").forEach((input) => {
+  dialog.querySelectorAll<HTMLInputElement>("input[name], select[name]").forEach((input) => {
     const value = fields[input.name];
     if (input.type === "checkbox" && typeof value === "boolean" && !input.disabled) input.checked = value;
     else if (input.type !== "checkbox" && input.type !== "file" && typeof value === "string") input.value = value;

@@ -95,6 +95,11 @@ export async function createUploadIntent(input: {
     p_translation_of_version_id: input.translationOfVersionId ?? null,
     p_language_tag: input.languageTag ?? null,
   });
+  if (error && /above the upload limit/i.test(error.message)) {
+    // DOC-02: name the firm's limit in the refusal.
+    const { data: bytes } = await session.supabase.rpc("document_upload_limit", { p_organization_id: input.organizationId });
+    if (typeof bytes === "number") return { error: `That file is above your firm’s limit of ${Math.round((bytes / 1024 / 1024) * 10) / 10} MB per file.` };
+  }
   if (error) return { error: documentError(error.message) };
   const intent = objectRecord(data);
   const documentId = intent?.document_id;
@@ -377,4 +382,69 @@ export async function setDocumentUploadLimit(input: { organizationId: string; by
   const { data, error } = await session.supabase.rpc("set_document_upload_limit", { p_bytes: input.bytes });
   if (error) return { error: documentError(error.message) };
   return { bytes: data };
+}
+
+/** DOC-06: uses a checked document on another matter of the same person (public.link_document_matter). */
+export async function linkDocumentMatter(input: { organizationId: string; documentId: string; matterId: string }) {
+  if (!isUuid(input.documentId) || !isUuid(input.matterId)) return { error: "Choose a matter." };
+  const session = await clientFor(input.organizationId, null);
+  if ("error" in session) return { error: session.error };
+  const { error } = await session.supabase.rpc("link_document_matter", { p_document_id: input.documentId, p_matter_id: input.matterId });
+  if (error) return { error: documentError(error.message) };
+  return { ok: true as const };
+}
+
+/** DOC-06: marks a version as the translation of another version of the same person's documents, or clears it. */
+export async function setDocumentTranslation(input: { organizationId: string; versionId: string; expectedVersion: number; originalVersionId: string | null; languageTag: string | null }) {
+  if (!isUuid(input.versionId) || (input.originalVersionId && !isUuid(input.originalVersionId))) return { error: "Choose the original document." };
+  const session = await clientFor(input.organizationId, null);
+  if ("error" in session) return { error: session.error };
+  if (await staleVersion(session.supabase, input.versionId, input.expectedVersion)) return { error: STALE };
+  const { error } = await session.supabase.rpc("set_document_translation", {
+    p_version_id: input.versionId,
+    p_expected_version: input.expectedVersion,
+    ...(input.originalVersionId ? { p_original_version_id: input.originalVersionId, p_language_tag: input.languageTag ?? "" } : {}),
+  });
+  if (error) return { error: documentError(error.message) };
+  return { ok: true as const };
+}
+
+/** DOC-06: a document's type and sensitivity; a sensitivity change needs the six-digit code. */
+export async function setDocumentClassification(input: { organizationId: string; documentId: string; expectedVersion: number; purpose: string; sensitivity: string; code: string }) {
+  if (!isUuid(input.documentId)) return { error: "Choose a document." };
+  if (!SENSITIVITIES.includes(input.sensitivity as Sensitivity)) return { error: "Choose how sensitive the document is." };
+  const session = await clientFor(input.organizationId, input.code || null);
+  if ("error" in session) return { error: session.error };
+  const { error } = await session.supabase.rpc("set_document_classification", {
+    p_document_id: input.documentId,
+    p_expected_version: input.expectedVersion,
+    p_purpose: input.purpose,
+    p_sensitivity: input.sensitivity as Sensitivity,
+  });
+  if (error) return { error: documentError(error.message) };
+  return { ok: true as const };
+}
+
+/** DOC-07: one custody step on a paper original (public.record_custody_step). */
+export async function recordCustodyStep(input: { organizationId: string; versionId: string; kind: string; on: string | null; location: string | null; purpose: string | null; recipient: string | null }) {
+  if (!isUuid(input.versionId)) return { error: "Choose the document." };
+  if (!["received", "moved", "returned", "acknowledged"].includes(input.kind)) return { error: "Choose a custody step." };
+  const session = await clientFor(input.organizationId, null);
+  if ("error" in session) return { error: session.error };
+  const { error } = await session.supabase.rpc("record_custody_step", {
+    p_version_id: input.versionId,
+    p_kind: input.kind,
+    p_on: input.on as string,
+    p_location: input.location as string,
+    p_purpose: input.purpose as string,
+    p_recipient: input.recipient as string,
+  });
+  if (error) return { error: custodyError(error.message) };
+  return { ok: true as const };
+}
+
+/** The custody function's own refusals are already plain; anything else goes through documentError. */
+function custodyError(message: string): string {
+  if (/^(say |record |the firm already|that original|the return was|the received date|choose )/i.test(message)) return `${message.charAt(0).toUpperCase()}${message.slice(1)}.`;
+  return documentError(message);
 }

@@ -80,6 +80,7 @@ describe("Portal Appointments: the shared summary on a past consultation", () =>
     const viewer = {
       organizationId: "00000000-0000-4000-8000-00000000000a",
       organizationName: "Northline",
+      organizationSlug: "example-firm",
       timezone: "America/Toronto",
       role: "client",
       person: null,

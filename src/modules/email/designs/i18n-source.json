@@ -13,7 +13,9 @@
     "role_case_manager": "a Case manager",
     "role_assistant": "an Assistant",
     "role_finance_user": "a Finance user",
-    "role_other": "a member of the team"
+    "role_other": "a member of the team",
+    "manage_line": "To change the time or cancel, use Manage your booking.",
+    "manage_cta": "Manage your booking"
   },
   "EM01": {
     "subject_inviter": "{inviter_name} invited you to {firm_name}",
@@ -272,6 +274,13 @@
     "body": "{firm_name}’s refund has been sent. The details are in your portal.",
     "cta": "View payments"
   },
+  "EX16": {
+    "subject": "Your signing code from {firm_name}",
+    "preheader": "It works for 10 minutes.",
+    "heading": "Your signing code",
+    "body": "Enter this code to confirm it’s you and sign your consultation agreement from {firm_name}. It works for 10 minutes. If you didn’t ask for it, you can ignore this email.",
+    "body_missing": "Your code from {firm_name} couldn’t be added to this email. Go back to the signing page and ask for a new code."
+  },
   "EX11": {
     "subject": "Casevoya support asked for access",
     "preheader": "Nothing opens unless you approve.",
@@ -310,5 +319,34 @@
     "heading": "There’s an update on your file",
     "body": "{firm_name} has an update for you. For your privacy, the details are in your portal.",
     "cta": "Open your portal"
+  },
+  "EX17": {
+    "subject": "An update on your file from {firm_name}",
+    "preheader": "Your consultant has changed. See who in your portal.",
+    "heading": "Your consultant has changed",
+    "body": "A different consultant at {firm_name} is now responsible for your file, and your file stays with {firm_name}. For your privacy, their name is in your portal, along with anything you may need to sign. If you have questions or don't agree with this change, contact {firm_name}.",
+    "cta": "Open your portal"
+  },
+  "EX18": {
+    "subject": "New enquiry for {firm_name}",
+    "preheader": "Open the Pipeline in Casevoya to read it.",
+    "heading": "You have a new enquiry",
+    "body": "Someone sent {firm_name} an enquiry from your enquiry page or website form. For their privacy, the details are in the Pipeline.",
+    "cta": "Open the Pipeline"
+  },
+  "EX19": {
+    "subject": "A new notice from {firm_name}",
+    "preheader": "Read it in your portal.",
+    "heading": "You have a new notice from {firm_name}",
+    "body": "{firm_name} posted a notice for its clients. For your privacy, it is in your portal.",
+    "cta": "Open your portal"
+  },
+  "EX20": {
+    "subject": "Your refund from {firm_name} didn’t go through",
+    "preheader": "The money hasn’t reached you. The firm will contact you.",
+    "heading": "Your refund didn’t go through",
+    "body": "The refund from {firm_name} didn’t go through, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way.",
+    "body_card": "The refund from {firm_name} didn’t go through because the card it was sent to is no longer active, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way.",
+    "cta": "View payments"
   }
 }

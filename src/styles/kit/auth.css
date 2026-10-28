@@ -66,7 +66,7 @@ body.au{background:#0075DE;min-height:100dvh;height:auto;overflow-x:hidden}
 .sess small{display:block;color:var(--t2);font-size:13px}.sess .ic{color:var(--t2)}
 /* step panels shared by both layouts */
 [data-step]{display:none}[data-step].on{display:block;animation:stin 240ms var(--ease)}
-[data-step].on.back{animation-name:stback}
+[data-step].on.st-back{animation-name:stback}
 @keyframes stin{from{opacity:0;transform:translateX(18px)}}@keyframes stback{from{opacity:0;transform:translateX(-18px)}}
 @media (prefers-reduced-motion:reduce){[data-step].on{animation:fadein 150ms ease-out}@keyframes fadein{from{opacity:0}}}
 .dots{display:flex;gap:6px;margin-bottom:6px}.dots i{width:22px;height:4px;border-radius:4px;background:var(--muted);transition:background var(--norm)}.dots i.on{background:var(--blue)}

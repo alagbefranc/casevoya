@@ -8,7 +8,7 @@
       "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
       "promptVersion": "fr-ca-2026-10-18.3",
       "draftedOn": "2026-10-18",
-      "sourceHash": "sha256:0f2d34633cbb1c642066b8baf07c3dfdd2f958e602ab0f4ee2d4e242b18c3cb4",
+      "sourceHash": "sha256:2392d7d1cd0a2ba833dabd23561b927831d09cc3a246dfc26510eccb43016d77",
       "strings": {
         "your_firm": {
           "en": "Your firm",
@@ -87,6 +87,18 @@
           "fr": "membre de l’équipe",
           "origin": "hand",
           "note": "Article-free (EM01)."
+        },
+        "manage_line": {
+          "en": "To change the time or cancel, use Manage your booking.",
+          "fr": "Pour changer l’heure ou annuler, utilisez Gérer votre réservation.",
+          "origin": "hand",
+          "note": "CRM-03 hand draft (#176)."
+        },
+        "manage_cta": {
+          "en": "Manage your booking",
+          "fr": "Gérer votre réservation",
+          "origin": "hand",
+          "note": "CRM-03 hand draft (#176)."
         }
       }
     },
@@ -1633,6 +1645,217 @@
           "fr": "Ouvrir votre portail",
           "origin": "machine",
           "note": "Same English as another template; same French reused."
+        }
+      }
+    },
+    "EX16": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-23",
+      "sourceHash": "sha256:cf8ca1398997820bee979b4f46b9879be26f94bd29d3f4e790ad2cfc9535f18a",
+      "strings": {
+        "subject": {
+          "en": "Your signing code from {firm_name}",
+          "fr": "Votre code de signature de {firm_name}",
+          "origin": "hand",
+          "note": "EX16 hand draft (#166)."
+        },
+        "preheader": {
+          "en": "It works for 10 minutes.",
+          "fr": "Il est valide pendant 10 minutes.",
+          "origin": "hand",
+          "note": "EX16 hand draft (#166)."
+        },
+        "heading": {
+          "en": "Your signing code",
+          "fr": "Votre code de signature",
+          "origin": "hand",
+          "note": "EX16 hand draft (#166)."
+        },
+        "body": {
+          "en": "Enter this code to confirm it’s you and sign your consultation agreement from {firm_name}. It works for 10 minutes. If you didn’t ask for it, you can ignore this email.",
+          "fr": "Entrez ce code pour confirmer votre identité et signer votre convention de consultation de {firm_name}. Il est valide pendant 10 minutes. Si vous ne l’avez pas demandé, vous pouvez ignorer ce courriel.",
+          "origin": "hand",
+          "note": "EX16 hand draft (#166)."
+        },
+        "body_missing": {
+          "en": "Your code from {firm_name} couldn’t be added to this email. Go back to the signing page and ask for a new code.",
+          "fr": "Votre code de {firm_name} n’a pas pu être ajouté à ce courriel. Retournez à la page de signature et demandez un nouveau code.",
+          "origin": "hand",
+          "note": "EX16 hand draft (#166)."
+        }
+      }
+    },
+    "EX17": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-24",
+      "sourceHash": "sha256:aec2820987099aab4f457a63d9a2a6461a2a7159933d3a0a80dc2521aa1f396d",
+      "strings": {
+        "subject": {
+          "en": "An update on your file from {firm_name}",
+          "fr": "Une mise à jour de votre dossier de {firm_name}",
+          "origin": "hand",
+          "note": "EX17 hand draft (ORG-06, #175)."
+        },
+        "preheader": {
+          "en": "Your consultant has changed. See who in your portal.",
+          "fr": "Votre consultant a changé. Voyez qui dans votre portail.",
+          "origin": "hand",
+          "note": "EX17 hand draft (ORG-06, #175)."
+        },
+        "heading": {
+          "en": "Your consultant has changed",
+          "fr": "Votre consultant a changé",
+          "origin": "hand",
+          "note": "EX17 hand draft (ORG-06, #175)."
+        },
+        "body": {
+          "en": "A different consultant at {firm_name} is now responsible for your file, and your file stays with {firm_name}. For your privacy, their name is in your portal, along with anything you may need to sign. If you have questions or don't agree with this change, contact {firm_name}.",
+          "fr": "Un autre consultant de {firm_name} est maintenant responsable de votre dossier, qui reste chez {firm_name}. Pour protéger votre vie privée, son nom figure dans votre portail, avec tout document que vous pourriez avoir à signer. Si vous avez des questions ou n'êtes pas d'accord avec ce changement, communiquez avec {firm_name}.",
+          "origin": "hand",
+          "note": "EX17 hand draft (ORG-06, #175)."
+        },
+        "cta": {
+          "en": "Open your portal",
+          "fr": "Ouvrir votre portail",
+          "origin": "hand",
+          "note": "EX17 hand draft (ORG-06, #175)."
+        }
+      }
+    },
+    "EX18": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-24",
+      "sourceHash": "sha256:05b5307ba0827ce4499a4db063e1ef3bd3d1117d106dd22afa0120711e06c3e1",
+      "strings": {
+        "subject": {
+          "en": "New enquiry for {firm_name}",
+          "fr": "Nouvelle demande pour {firm_name}",
+          "origin": "hand",
+          "note": "EX18 hand draft (CRM-01, #176)."
+        },
+        "preheader": {
+          "en": "Open the Pipeline in Casevoya to read it.",
+          "fr": "Ouvrez le pipeline dans Casevoya pour la lire.",
+          "origin": "hand",
+          "note": "EX18 hand draft (CRM-01, #176)."
+        },
+        "heading": {
+          "en": "You have a new enquiry",
+          "fr": "Vous avez une nouvelle demande",
+          "origin": "hand",
+          "note": "EX18 hand draft (CRM-01, #176)."
+        },
+        "body": {
+          "en": "Someone sent {firm_name} an enquiry from your enquiry page or website form. For their privacy, the details are in the Pipeline.",
+          "fr": "Quelqu’un a envoyé une demande à {firm_name} depuis votre page de demande ou le formulaire de votre site. Pour protéger sa vie privée, les détails sont dans le pipeline.",
+          "origin": "hand",
+          "note": "EX18 hand draft (CRM-01, #176)."
+        },
+        "cta": {
+          "en": "Open the Pipeline",
+          "fr": "Ouvrir le pipeline",
+          "origin": "hand",
+          "note": "EX18 hand draft (CRM-01, #176)."
+        }
+      }
+    },
+    "EX19": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-24",
+      "sourceHash": "sha256:1a45496c2bab6e441615e4681a9ea168548bf576de41ed1ba1d638deb3768e24",
+      "strings": {
+        "subject": {
+          "en": "A new notice from {firm_name}",
+          "fr": "Un nouvel avis de {firm_name}",
+          "origin": "hand",
+          "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
+        },
+        "preheader": {
+          "en": "Read it in your portal.",
+          "fr": "Lisez-le dans votre portail.",
+          "origin": "hand",
+          "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
+        },
+        "heading": {
+          "en": "You have a new notice from {firm_name}",
+          "fr": "Vous avez un nouvel avis de {firm_name}",
+          "origin": "hand",
+          "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
+        },
+        "body": {
+          "en": "{firm_name} posted a notice for its clients. For your privacy, it is in your portal.",
+          "fr": "{firm_name} a publié un avis pour ses clients. Pour protéger votre vie privée, il se trouve dans votre portail.",
+          "origin": "hand",
+          "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
+        },
+        "cta": {
+          "en": "Open your portal",
+          "fr": "Ouvrir votre portail",
+          "origin": "hand",
+          "note": "EX19 hand draft (OPS-04, #179). Not reviewed."
+        }
+      }
+    },
+    "EX20": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-25",
+      "sourceHash": "sha256:34b3867edc59b2198640f3b452be8036dc485f8752b78c2f1e392442cf011a35",
+      "strings": {
+        "subject": {
+          "en": "Your refund from {firm_name} didn’t go through",
+          "fr": "Votre remboursement de {firm_name} n’a pas abouti",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        },
+        "preheader": {
+          "en": "The money hasn’t reached you. The firm will contact you.",
+          "fr": "L’argent ne vous est pas parvenu. Le cabinet communiquera avec vous.",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        },
+        "heading": {
+          "en": "Your refund didn’t go through",
+          "fr": "Votre remboursement n’a pas abouti",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        },
+        "body": {
+          "en": "The refund from {firm_name} didn’t go through, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way.",
+          "fr": "Le remboursement de {firm_name} n’a pas abouti; l’argent ne vous est donc pas parvenu. Veuillez ne pas tenir compte de notre courriel précédent au sujet de ce remboursement. {firm_name} communiquera avec vous pour le faire autrement.",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        },
+        "body_card": {
+          "en": "The refund from {firm_name} didn’t go through because the card it was sent to is no longer active, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way.",
+          "fr": "Le remboursement de {firm_name} n’a pas abouti parce que la carte visée n’est plus active; l’argent ne vous est donc pas parvenu. Veuillez ne pas tenir compte de notre courriel précédent au sujet de ce remboursement. {firm_name} communiquera avec vous pour le faire autrement.",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
+        },
+        "cta": {
+          "en": "View payments",
+          "fr": "Afficher les paiements",
+          "origin": "hand",
+          "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
         }
       }
     }

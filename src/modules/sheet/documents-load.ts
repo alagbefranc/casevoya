@@ -1,16 +1,21 @@
 import "server-only";
-import type { CustodyRow, DocCard, DocumentReviewDialogData, DocumentsData, ReviewRow } from "@/components/sheet/designer/documents";
+import type { CustodyRow, DocCard, DocChip, DocumentReviewDialogData, DocumentsData, ReviewRow } from "@/components/sheet/designer/documents";
+import { WAITING_LABEL, type RequestWaiting } from "@/modules/sheet/reports-ops-more";
+import { loadOpenRequests, sampleMatterIds } from "@/modules/sheet/reports-ops-more-load";
 import { createClient } from "@/lib/supabase/server";
+import { PREVIEWABLE } from "@/modules/documents/previewable";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import {
   cardOpenable,
   cardStates,
   currentVersions,
+  custodyRows,
   documentsTab,
   fileIcon,
   firstName,
   queueEntry,
   REVIEW_ROLES,
+  documentDetails,
   requestAnswered,
   versionTitle,
   whenLabel,
@@ -20,6 +25,8 @@ import { dayMonth } from "@/modules/sheet/home-present";
 import { voReadOffered } from "@/modules/sheet/vo-doc-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 import { isoDateInTimeZone, type SheetQuery } from "@/modules/sheet/present";
+import { loadImportProvenance } from "@/modules/migration/provenance-load";
+import { importedNote } from "@/modules/sheet/imported-present";
 
 /** How many versions, documents and requests the page reads. RLS decides which are visible. */
 const READ = 400;
@@ -39,12 +46,12 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
     loadSheetChrome(staff, "/sheet/documents"),
     supabase
       .from("document_versions")
-      .select("id, document_id, version_number, original_filename, declared_media_type, upload_state, scan_result, review_state, expires_on, superseded_at, intent_expires_at, completed_at, created_at, version")
+      .select("id, document_id, version_number, original_filename, declared_media_type, upload_state, scan_result, scan_engine, review_state, expires_on, superseded_at, intent_expires_at, completed_at, created_at, version, translation_of_version_id, language_tag")
       .eq("organization_id", org)
       .order("created_at", { ascending: false })
       .limit(READ),
-    supabase.from("documents").select("id, person_id, purpose").eq("organization_id", org).order("updated_at", { ascending: false }).limit(READ),
-    supabase.from("document_matter_refs").select("document_id, matter_id, created_at").eq("organization_id", org).is("removed_at", null).limit(READ),
+    supabase.from("documents").select("id, person_id, purpose, sensitivity, version").eq("organization_id", org).order("updated_at", { ascending: false }).limit(READ),
+    supabase.from("document_matter_refs").select("id, document_id, matter_id, created_at").eq("organization_id", org).is("removed_at", null).limit(READ),
     tab === "all"
       ? supabase.from("document_requests").select("id, matter_id, person_id, document_id, purpose, due_on, created_at").eq("organization_id", org).eq("status", "open").order("created_at", { ascending: false }).limit(READ)
       : null,
@@ -56,6 +63,7 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
     versionNumber: row.version_number,
     uploadState: row.upload_state as string,
     scanResult: row.scan_result,
+    scanEngine: row.scan_engine ?? null,
     reviewState: row.review_state as string,
     declaredMediaType: row.declared_media_type,
     expiresOn: row.expires_on,
@@ -64,6 +72,8 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
     createdAt: row.completed_at ?? row.created_at,
     filename: row.original_filename,
     rowVersion: row.version,
+    translationOf: row.translation_of_version_id,
+    languageTag: row.language_tag,
   }));
   const documents = new Map((documentRows.data ?? []).map((row) => [row.id, row]));
   const matterOf = new Map<string, string>();
@@ -73,7 +83,13 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
   const requests = requestRows?.data ?? [];
 
   const personIds = [...new Set([...[...documents.values()].map((doc) => doc.person_id), ...requests.map((row) => row.person_id)])];
-  const matterIds = [...new Set([...matterOf.values(), ...requests.map((row) => row.matter_id)])];
+  const canReview = (REVIEW_ROLES as readonly string[]).includes(staff.role);
+  // DOC-06: the matters each person is on (that this member can read), for "Use in another matter".
+  const participants =
+    tab === "all" && canReview && personIds.length
+      ? await supabase.from("matter_participants").select("matter_id, person_id").eq("organization_id", org).in("person_id", personIds).limit(READ)
+      : null;
+  const matterIds = [...new Set([...matterOf.values(), ...requests.map((row) => row.matter_id), ...(participants?.data ?? []).map((row) => row.matter_id)])];
   const [people, matters] = await Promise.all([
     personIds.length ? supabase.from("persons").select("id, display_name").eq("organization_id", org).in("id", personIds) : null,
     matterIds.length ? supabase.from("matters").select("id, reference, title").eq("organization_id", org).in("id", matterIds) : null,
@@ -84,7 +100,8 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
   const matterName = (id: string | undefined) => (id ? matterLabel.get(id) ?? "Matter" : "No matter");
 
   const current = currentVersions(versions, now);
-  const canReview = (REVIEW_ROLES as readonly string[]).includes(staff.role);
+  // MIG follow-ups: a document an import brought in says "Imported from <system> on <date>".
+  const imports = await loadImportProvenance(supabase, org, "documents", [...current.keys()]);
 
   // The last firm review of each version, for the reason shown when a replacement arrives.
   const previousIds = [...current.values()].filter((version) => version.versionNumber > 1).map((version) => version.documentId);
@@ -132,7 +149,7 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
       flags: [entry.flag],
       person,
       matter,
-      uploaded: whenLabel(version.createdAt, staff.timezone, today),
+      uploaded: importedNote(imports, doc.id, staff.timezone) ?? whenLabel(version.createdAt, staff.timezone, today),
       scan: entry.scan,
       review: entry.review,
     });
@@ -147,7 +164,9 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
 
   if (tab === "review") data.review = { rows: queue, filterEmpty: true };
 
-  if (tab === "all") {
+  if (tab === "all" && query.view === "requests") {
+    data.all = await loadRequestsView(supabase, staff, today);
+  } else if (tab === "all") {
     const cards: DocCard[] = [];
     const shown: { id: string; person_id: string; purpose: string; matterId: string | undefined }[] = [];
     for (const [documentId, version] of [...current.entries()].sort((a, b) => b[1].createdAt.localeCompare(a[1].createdAt))) {
@@ -157,10 +176,31 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
       cards.push({
         title: doc.purpose,
         thumb: { icon: fileIcon(version.declaredMediaType) },
-        meta: { parts: [matterName(matterOf.get(doc.id)), firstName(nameOf(doc.person_id))], version: `v${version.versionNumber}`, when: whenLabel(version.createdAt, staff.timezone, today) },
+        meta: {
+          parts: [matterName(matterOf.get(doc.id)), firstName(nameOf(doc.person_id)), ...[importedNote(imports, doc.id, staff.timezone)].filter((part): part is string => Boolean(part))],
+          version: `v${version.versionNumber}`,
+          when: whenLabel(version.createdAt, staff.timezone, today),
+        },
         states: cardStates(version as VersionFacts, today),
         // An accepted, clean file opens through a short-lived signed link after a fresh access check.
-        ...(cardOpenable(version) ? { open: { "data-doc-open": version.id, "data-org": org } } : {}),
+        // DOC-07: a PDF or image opens as the secure, watermarked preview.
+        ...(cardOpenable(version) ? { open: { "data-doc-open": version.id, "data-org": org, ...(PREVIEWABLE.has(version.declaredMediaType) ? { "data-doc-preview": "1" } : {}) } } : {}),
+        ...(canReview
+          ? {
+              details: documentDetails({
+                organizationId: org,
+                document: { id: doc.id, purpose: doc.purpose, sensitivity: doc.sensitivity, version: doc.version, personId: doc.person_id },
+                person: nameOf(doc.person_id),
+                version: { id: version.id, rowVersion: version.rowVersion, expiresOn: version.expiresOn, uploadState: version.uploadState, translationOf: version.translationOf, languageTag: version.languageTag },
+                refs: (refRows.data ?? []).filter((ref) => ref.document_id === doc.id).map((ref) => ({ id: ref.id, matterId: ref.matter_id })),
+                personMatters: (participants?.data ?? []).filter((row) => row.person_id === doc.person_id).map((row) => row.matter_id),
+                others: [...current.values()]
+                  .filter((other) => other.documentId !== doc.id && documents.get(other.documentId)?.person_id === doc.person_id)
+                  .map((other) => ({ versionId: other.id, title: documents.get(other.documentId)?.purpose ?? "Document", translationOf: other.translationOf, languageTag: other.languageTag })),
+                matterName,
+              }),
+            }
+          : {}),
       });
     }
     for (const request of requests) {
@@ -177,7 +217,22 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
     data.all = { cards };
   }
 
-  if (tab === "custody") data.custody = { rows: await loadCustody(supabase, org, documents, versions, nameOf, staff.timezone) };
+  if (tab === "custody") {
+    data.custody = { rows: await loadCustody(supabase, org, documents, versions, nameOf, canReview) };
+    // DOC-07: Record an original, from a document whose current file passed its check.
+    if (canReview) {
+      data.custody.record = {
+        organizationId: org,
+        originals: [...current.values()]
+          .filter((version) => version.uploadState === "clean" && documents.has(version.documentId))
+          .map((version) => {
+            const doc = documents.get(version.documentId) as { person_id: string; purpose: string };
+            return { versionId: version.id, label: `${doc.purpose} · ${nameOf(doc.person_id)} · ${matterName(matterOf.get(version.documentId))}` };
+          })
+          .sort((a, b) => a.label.localeCompare(b.label)),
+      };
+    }
+  }
 
   const dialog: DocumentReviewDialogData | null = canReview
     ? { organizationId: org, firmName: staff.organizationName, vo: await voReadOffered(supabase, org, staff.sampleMode).catch(() => false) }
@@ -187,17 +242,56 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
+const WAITING_TONE: Record<RequestWaiting, DocChip["tone"]> = { missing: "chg", review: "rev", changes: "chg", expired: "bad" };
+
+/**
+ * REP-01: All documents narrowed to the open document requests (`?tab=all&view=requests`), one
+ * card per request, read by the same loader as the Reports page's Outstanding documents card so
+ * the list and the figure are the same rows. Each card carries where it waits, in the report's words.
+ */
+async function loadRequestsView(supabase: Client, staff: SheetStaff, today: string): Promise<NonNullable<DocumentsData["all"]>> {
+  const org = staff.organizationId;
+  const sample = await sampleMatterIds(supabase, org, !staff.sampleMode);
+  const cap = { capped: false };
+  const requests = await loadOpenRequests(supabase, org, today, sample, cap);
+  const personIds = [...new Set(requests.map((row) => row.personId))];
+  const matterIds = [...new Set(requests.map((row) => row.matterId))];
+  const [people, matters] = await Promise.all([
+    personIds.length ? supabase.from("persons").select("id, display_name").eq("organization_id", org).in("id", personIds) : null,
+    matterIds.length ? supabase.from("matters").select("id, reference, title").eq("organization_id", org).in("id", matterIds) : null,
+  ]);
+  const personName = new Map((people?.data ?? []).map((row) => [row.id, row.display_name]));
+  const matterLabel = new Map((matters?.data ?? []).map((row) => [row.id, row.reference || row.title]));
+  const cards: DocCard[] = requests.map((request) => ({
+    title: request.purpose,
+    thumb: { icon: "file" },
+    meta: {
+      parts: [matterLabel.get(request.matterId) ?? "Matter", firstName(personName.get(request.personId) ?? "Person")],
+      when: request.dueOn ? `Due ${dayMonth(request.dueOn)}` : undefined,
+    },
+    states: [{ tone: WAITING_TONE[request.waiting], label: WAITING_LABEL[request.waiting] }],
+  }));
+  const n = cards.length;
+  return {
+    cards,
+    filter: {
+      text: `Showing ${n} open document ${n === 1 ? "request" : "requests"}, the rows the Reports page counts.${staff.sampleMode ? "" : " Requests on sample matters are left out."}${cap.capped ? " More requests exist than this page reads, so the list is partial." : ""}`,
+      clear: "/sheet/documents?tab=all",
+    },
+  };
+}
+
 async function loadCustody(
   supabase: Client,
   org: string,
   documents: Map<string, { id: string; person_id: string; purpose: string }>,
   versions: { id: string; documentId: string }[],
   nameOf: (id: string) => string,
-  timeZone: string,
+  live: boolean,
 ): Promise<CustodyRow[]> {
   const events = await supabase
     .from("document_custody_events")
-    .select("version_id, received_on, location, purpose, recipient, return_on, acknowledged_at, created_at")
+    .select("version_id, kind, received_on, location, purpose, recipient, return_on, acknowledged_at, created_at")
     .eq("organization_id", org)
     .order("created_at", { ascending: false })
     .limit(READ);
@@ -213,22 +307,22 @@ async function loadCustody(
     const more = await supabase.from("documents").select("id, person_id, purpose").eq("organization_id", org).in("id", missingDocs);
     for (const row of more.data ?? []) documents.set(row.id, row);
   }
-  return rows.flatMap((row) => {
-    const doc = documents.get(documentOf.get(row.version_id) ?? "");
-    if (!doc) return [];
-    const acknowledged = row.acknowledged_at
-      ? `${row.recipient ? `Signed by ${row.recipient}` : "Acknowledged"}, ${dayMonth(isoDateInTimeZone(new Date(row.acknowledged_at), timeZone))}`
-      : ({ tone: "chg", label: "Waiting" } as const);
-    return [
-      {
-        original: doc.purpose,
-        owner: nameOf(doc.person_id),
-        received: row.received_on ? dayMonth(row.received_on) : "—",
-        location: row.location ?? "—",
-        purpose: row.purpose,
-        returnBy: row.return_on ? dayMonth(row.return_on) : "—",
-        acknowledged,
-      },
-    ];
-  });
+  return custodyRows(
+    rows.map((row) => ({
+      versionId: row.version_id,
+      kind: row.kind,
+      receivedOn: row.received_on,
+      location: row.location,
+      purpose: row.purpose,
+      recipient: row.recipient,
+      returnOn: row.return_on,
+      acknowledgedAt: row.acknowledged_at,
+      createdAt: row.created_at,
+    })),
+    (versionId) => {
+      const doc = documents.get(documentOf.get(versionId) ?? "");
+      return doc ? { original: doc.purpose, owner: nameOf(doc.person_id) } : null;
+    },
+    dayMonth,
+  ).map(({ versionId, next, history, ...row }) => ({ ...row, ...(live ? { step: { versionId, organizationId: org, next }, history } : {}) }));
 }

@@ -286,13 +286,13 @@ export function NewMatterDialog({ data }: { data: NewMatterDialogData }) {
           <Field id={"nmSD"} label={"Sponsor date of birth"} hint={"Optional"} type={"date"} max={data.maxBirthDate} />
           <div className={"fld"}>
             <label htmlFor={"nmT"}>{"Program template"}</label>
-            <select className={"sel"} id={"nmT"} defaultValue={data.programs[0]?.value ?? ""}>
-              {data.programs.map((option) => (
+            <select className={"sel"} id={"nmT"} defaultValue={data.programChoices ? (data.programDefault ?? "") : (data.programs[0]?.value ?? "")}>
+              {(data.programChoices ?? data.programs).map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
-              <option value={""}>{data.programs.length ? "Choose later" : "No published template yet (choose later)"}</option>
+              <option value={""}>{(data.programChoices ?? data.programs).length ? "Choose later" : "No published template yet (choose later)"}</option>
             </select>
           </div>
           <div className={"fld"}>

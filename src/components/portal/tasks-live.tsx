@@ -32,7 +32,7 @@ function doneLabel(iso: string, timeZone: string): string {
   }
 }
 
-export type TaskCard = { id: string; title: string; line: string; due: string | null; done: boolean; href: string | null; action: string | null };
+export type TaskCard = { id: string; title: string; line: string; due: string | null; done: boolean; href: string | null; action: string | null; by?: string | null };
 
 export function taskCards(tasks: readonly PortalTask[], firm: string, timeZone: string): { todo: TaskCard[]; waiting: TaskCard[]; done: TaskCard[] } {
   const card = (task: PortalTask): TaskCard => ({
@@ -52,6 +52,7 @@ export function taskCards(tasks: readonly PortalTask[], firm: string, timeZone: 
     done: task.status === "done",
     href: task.intakeResponseId ? `/portal/intake?response=${task.intakeResponseId}` : null,
     action: task.intakeResponseId ? (task.status === "done" ? "View" : "Resume") : null,
+    by: task.status === "open" ? `Requested by ${firm}` : null,
   });
   return {
     todo: tasks.filter((task) => task.status === "open").map(card),
@@ -77,6 +78,7 @@ export function TaskCardView({ card, index, mine }: { card: TaskCard; index: num
               {`Due ${card.due}`}
             </span>
           ) : null}
+          {card.by ? <span className="lbl">{card.by}</span> : null}
         </div>
       </div>
       <span className="r">
@@ -125,6 +127,8 @@ export function TasksLive({ viewer, tasks }: { viewer: PortalViewer; tasks: Port
     ) : null;
   return (
     <div id="pc">
+      {/* A long firm name in "Waiting on {firm}" shortens with an ellipsis instead of overlapping. */}
+      <style dangerouslySetInnerHTML={{ __html: "#pc>.seg.k2-rs{max-width:100%}#pc>.seg.k2-rs>button{min-width:0;overflow:hidden;text-overflow:ellipsis}" }} />
       <div className="ph pp-h rv" style={i(0)}>
         <div>
           <h1 className="display" data-rb-done="1" aria-label="Tasks">
@@ -165,6 +169,14 @@ export function TasksLive({ viewer, tasks }: { viewer: PortalViewer; tasks: Port
           {section("todo", "To do", groups.todo)}
           {section("waiting", `Waiting on ${firm}`, groups.waiting)}
           {section("done", "Done", groups.done)}
+          {shown && groups[shown].length === 0 ? (
+            <div className="panel rv" style={i(2)}>
+              <div className="emp">
+                <b>{shown === "todo" ? "Nothing to do right now" : shown === "waiting" ? `Nothing waiting on ${firm}` : "Nothing done yet"}</b>
+                <small>{shown === "done" ? "Tasks you finish appear here." : "Pick another filter to see the rest."}</small>
+              </div>
+            </div>
+          ) : null}
         </>
       )}
     </div>

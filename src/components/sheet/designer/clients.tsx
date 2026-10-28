@@ -12,6 +12,8 @@ import { FilterEmpty } from "./filter-empty";
 import { Badge, type MatterBadge } from "./matters";
 import { personEditProps } from "./person-edit";
 import type { PersonEditData } from "@/modules/sheet/edit-person";
+import type { PersonConsentData } from "@/modules/sheet/person-consent-present";
+import { PersonConsentPanels } from "./person-consent";
 
 export type ClientsTab = "dir" | "person" | "household";
 
@@ -57,6 +59,8 @@ export type PersonData = {
   matters: { rows: PersonMatterRow[]; note: string[] };
   /** Contact and language preferences. Null when none are stored for the person. */
   preferences: PreferenceRow[] | null;
+  /** Live only (SEC-01, SEC-05): consent history, impact reviews and portal two-step; absent when not readable. */
+  consent?: PersonConsentData | null;
 };
 
 export type HouseholdData = {
@@ -435,6 +439,7 @@ function Person({ data }: { data: PersonData }) {
             </div>
           </Panel>
         ) : null}
+        {data.consent ? <PersonConsentPanels data={data.consent} /> : null}
       </div>
     </div>
   );

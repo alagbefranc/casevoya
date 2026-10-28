@@ -1,4 +1,15 @@
 /**
+ * The abuse limit on invitation links or invites (`rate_limited`, or a preview whose status is
+ * `rate_limited`). Says to wait, so it never reads like a dead invitation.
+ */
+export const PORTAL_RATE_LIMITED = "Too many tries. Please wait a few minutes and try again.";
+
+/** Why an invitation preview that isn't open can't go on: too many tries for now, or a closed invitation. */
+export function portalPreviewProblem(status: unknown): string {
+  return status === "rate_limited" ? PORTAL_RATE_LIMITED : "This invitation can no longer be used.";
+}
+
+/**
  * User-facing copy for the `error` codes the portal invitation functions return
  * (public.create_portal_invitation and friends). Never passes a database message through.
  */
@@ -14,7 +25,7 @@ export function portalError(code: string | undefined): string {
     case "guardian_subject_not_minor":
       return "A guardian invitation needs the minor they act for.";
     case "rate_limited":
-      return "Too many attempts. Wait and try again.";
+      return PORTAL_RATE_LIMITED;
     case "confirmed_email_required":
       return "Confirm the invited email before accepting.";
     case "portal_terms_required":

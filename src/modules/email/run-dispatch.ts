@@ -1,7 +1,7 @@
 import "server-only";
 import { sendCloudflareEmail } from "@/modules/email/cloudflare";
 import { dispatchOutbound, type MailDelivery, type PreparedMail } from "@/modules/email/dispatch";
-import { openInviteLink } from "@/modules/email/invite-link-seal";
+import { openInviteLink, openSigningCode } from "@/modules/email/invite-link-seal";
 import { appOrigin, emailRuntimeConfig } from "@/lib/email/env";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -63,8 +63,22 @@ export async function runEmailDispatch(limit = 20) {
         const record = asRecord(data);
         return Object.fromEntries(Object.entries(record).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
       },
+      async manageToken(deliveryId, sha256) {
+        const { data, error } = await supabase.rpc("issue_booking_manage_token", { p_delivery_id: deliveryId, p_sha256: sha256 });
+        if (error) throw new Error(error.message);
+        return typeof data === "string" ? data : null;
+      },
+      async brands(deliveryIds) {
+        const { data, error } = await supabase.rpc("email_delivery_brands", { p_delivery_ids: deliveryIds });
+        if (error) throw new Error(error.message);
+        const record = asRecord(data);
+        return Object.fromEntries(Object.entries(record).map(([id, look]) => [id, asRecord(look)]));
+      },
       openLink(sealed, invitationId) {
         return openInviteLink(config.dispatchSecret, sealed, invitationId);
+      },
+      openCode(sealed, codeId) {
+        return openSigningCode(config.dispatchSecret, sealed, codeId);
       },
       send(email) {
         return sendCloudflareEmail(email, { accountId: config.accountId, token: config.token });
