@@ -257,10 +257,13 @@ function monthYear(isoDate: string): string {
   return sep(new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }).format(date));
 }
 
-/** "With Jordan Lee (sponsor) and Sam Lee (dependant)", or "Only you". */
+/**
+ * "With Jordan Lee (sponsor) and Sam Lee (dependant)", or "" when the client can't see anyone else.
+ * A client reads other people only through an access grant, so no names never means "only you".
+ */
 function withLine(people: { name: string; role: string; self: boolean }[]): string {
-  const others = people.filter((person) => !person.self);
-  if (!others.length) return "Only you";
+  const others = people.filter((person) => !person.self && person.name !== "Person");
+  if (!others.length) return "";
   const named = others.map((person) => `${person.name} (${person.role.replaceAll("_", " ")})`);
   return `With ${named.length > 1 ? `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}` : named[0]}`;
 }
