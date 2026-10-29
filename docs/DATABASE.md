@@ -1172,3 +1172,14 @@ Issue #263 item C, branch `feat/booking-possible-match`. One additive migration;
 * Shared checks in `app.open_booking_match`.
 
 Tested in `tests/booking-possible-match.rls.test.ts` and `tests/booking-possible-match.test.tsx`.
+## Sponsor uploads for a co-applicant on the portal (`20261029100000`, not applied on the live project)
+
+Issue #272 item 1 (launch must-fix), branch `fix/launch-272`. Additive (function bodies and two new functions, no data changes, no enum values). Persons RLS is unchanged and still forced.
+
+* New `app.actor_may_fulfil_request_for(matter, person)`: true when the signed-in person is on the matter, can read it, and an **open** request for that person on that matter is one they can see through the matter branch of `document_requests_select` (audience `matter`, sensitivity `ordinary`). Nothing wider.
+* It **redefines** `app.actor_can_upload_for` (latest in `20261017200200_inbound_email.sql`): the subject and staff checks are unchanged; otherwise it falls back to `app.actor_may_fulfil_request_for`. Callers (`create_upload_intent`, `attach_upload_to_request`) unchanged.
+* It **redefines** `app.create_upload_intent` (latest in `20261017180000_document_storage.sql`): when the caller is neither the person nor staff (nor the email ingest), the file must be `matter` + `ordinary`, not a translation, and may add a version only to a document the caller can already read. Otherwise unchanged; signature and grants kept.
+* New `public.portal_request_person_names()` (authenticated, SECURITY DEFINER): `person_id` and `display_name` only, of people whose non-cancelled requests the caller can see through that same matter branch. The portal's documents loader uses it so a sponsor sees "Elias Lindqvist", not "Person".
+* `finish_verified_document_upload`, the virus-scan path (#271) and storage policies are unchanged.
+
+Tested in `tests/portal-co-applicant-upload.rls.test.ts` and `tests/portal-co-applicant-name.test.tsx`.

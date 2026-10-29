@@ -15626,6 +15626,13 @@ export type Database = {
         Returns: Json
       }
       document_virus_scan_enabled: { Args: never; Returns: boolean }
+      portal_request_person_names: {
+        Args: never
+        Returns: {
+          display_name: string
+          person_id: string
+        }[]
+      }
       subscription_continuity: { Args: { p_organization_id: string }; Returns: Json }
       subscription_cancel_allowed: {
         Args: { p_organization_id: string }
