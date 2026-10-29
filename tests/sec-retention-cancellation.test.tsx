@@ -185,7 +185,7 @@ describe("SEC-10 cancellation, export window and banner", () => {
     const transfers = [{ id: "x1", receivingFirm: "Receiving Firm", status: "open" }];
     const panel = continuityPanel(readContinuity(ending), { organizationId: ORG, timeZone: ZONE, isOwner: true, transfers })!;
     expect(panel.rows).toEqual([
-      ["Paid period ends", "19 Nov 2026 (from Stripe, test mode)"],
+      ["Paid period ends", "19 Nov 2026 (from Stripe)"],
       ["New work", "Stops on 19 Nov 2026: no new matters, staff or client invitations."],
       ["Read access", "Continues for everyone at the firm, read-only, for as long as the records are kept."],
       ["Export window", "At least 90 days: until 17 Feb 2027"],

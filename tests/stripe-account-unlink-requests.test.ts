@@ -35,9 +35,15 @@ vi.mock("@/lib/supabase/server", () => ({
       if (name === "record_stripe_unlink_cancellations") return state.recorded;
       return { data: null, error: { message: `unexpected ${name}` } };
     },
+    // The link is read before the unlink: its mode picks the Stripe key (test here).
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { account_id: OLD, livemode: false }, error: null }) }) }) }),
   }),
 }));
-vi.mock("@/lib/stripe/server", () => ({ stripeServer: () => state.stripe }));
+vi.mock("@/lib/stripe/server", () => ({
+  stripeServer: () => state.stripe,
+  stripeServerForMode: (mode: string) => (mode === "test" ? state.stripe : null),
+  stripeLive: () => false,
+}));
 
 import { disconnectStripeAccount } from "@/modules/finance/staff-actions";
 import { closeOpenRequests, readOpenRequests, type OpenRequest } from "@/modules/finance/stripe-unlink";

@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { secretList, verifyStripeEvent, type WebhookSecrets } from "@/modules/finance/webhook-verify";
 import type { Json } from "@/types/database.types";
 import {
   extraSeatsCents,
@@ -15,7 +16,7 @@ import {
 } from "@/modules/subscription/catalog";
 
 /**
- * Casevoya's own subscription on the Stripe PLATFORM account (test mode only; FIN-01: separate
+ * Casevoya's own subscription on the Stripe PLATFORM account (the server's Stripe mode; FIN-01: separate
  * from the firms' connected accounts and from client money). Three parts:
  *   1. Event summaries for the billing webhook: a verified Stripe event becomes a small JSON the
  *      database applies (public.apply_stripe_subscription_event). Ids, status, amounts, dates;
@@ -199,7 +200,10 @@ export function billingEventSummary(event: Stripe.Event): BillingEventSummary | 
 export type ApplyResult = { outcome: string } & Record<string, unknown>;
 
 export type BillingWebhookDeps = {
-  secret: string | null;
+  /** The billing destinations' signing secrets (live and test); any one may sign a delivery. */
+  secret: WebhookSecrets;
+  /** The server's Stripe mode: only events of this mode are applied. Defaults to test. */
+  livemode?: boolean;
   apply: ((summary: BillingEventSummary) => Promise<ApplyResult>) | null;
   cryptoProvider?: Stripe.CryptoProvider;
 };
@@ -208,18 +212,16 @@ export type WebhookResponse = { status: number; body: Record<string, unknown> };
 
 /**
  * Verifies and applies one delivery. 2xx tells Stripe to stop retrying: a verified event that is
- * not ours, a duplicate, a live-mode event. 5xx makes Stripe retry.
+ * not ours, a duplicate, an event of the other Stripe mode. 5xx makes Stripe retry.
  */
 export async function handleBillingWebhook(body: string, signature: string | null, deps: BillingWebhookDeps): Promise<WebhookResponse> {
-  if (!deps.secret || !deps.apply) return { status: 503, body: { error: "Stripe billing webhooks are not configured." } };
+  const secrets = secretList(deps.secret);
+  if (!secrets.length || !deps.apply) return { status: 503, body: { error: "Stripe billing webhooks are not configured." } };
   if (!signature) return { status: 400, body: { error: "Missing Stripe-Signature." } };
-  let event: Stripe.Event;
-  try {
-    event = await Stripe.webhooks.constructEventAsync(body, signature, deps.secret, undefined, deps.cryptoProvider ?? Stripe.createSubtleCryptoProvider());
-  } catch {
-    return { status: 400, body: { error: "Invalid signature." } };
-  }
-  if (event.livemode) return { status: 200, body: { received: true, outcome: "ignored", reason: "livemode" } };
+  const event = await verifyStripeEvent(body, signature, secrets, deps.cryptoProvider);
+  if (!event) return { status: 400, body: { error: "Invalid signature." } };
+  // The other mode's destination (test while live, or the reverse): verified, not applied.
+  if ((event.livemode === true) !== (deps.livemode === true)) return { status: 200, body: { received: true, outcome: "ignored", reason: "livemode" } };
   const summary = billingEventSummary(event);
   if (!summary) return { status: 200, body: { received: true, outcome: "ignored" } };
   try {
@@ -241,7 +243,10 @@ export function summaryJson(summary: BillingEventSummary): Json {
 
 /** The slice of the Stripe client these helpers use; tests pass fakes. */
 export type BillingStripe = {
-  customers: { create(params: Stripe.CustomerCreateParams, options?: Stripe.RequestOptions): Promise<{ id: string }> };
+  customers: {
+    create(params: Stripe.CustomerCreateParams, options?: Stripe.RequestOptions): Promise<{ id: string }>;
+    retrieve?(id: string): Promise<{ id: string; deleted?: unknown }>;
+  };
   prices: { list(params: Stripe.PriceListParams): Promise<{ data: Pick<Stripe.Price, "id" | "unit_amount" | "currency" | "lookup_key" | "active" | "recurring">[] }> };
   checkout: { sessions: { create(params: Stripe.Checkout.SessionCreateParams, options?: Stripe.RequestOptions): Promise<{ id: string; url: string | null }> } };
   billingPortal: { sessions: { create(params: Stripe.BillingPortal.SessionCreateParams): Promise<{ url: string }> } };
@@ -365,8 +370,35 @@ export async function createBillingCustomer(stripe: BillingStripe, input: { orga
   return customer.id;
 }
 
+/**
+ * Whether the stored customer exists in the server's Stripe mode. False only when Stripe says it
+ * doesn't (a test-mode customer after the server went live, or a deleted one); any other failure
+ * is thrown, so a Stripe outage never replaces a firm's customer.
+ */
+export async function billingCustomerExists(stripe: BillingStripe, customerId: string): Promise<boolean> {
+  if (!stripe.customers.retrieve) return true;
+  try {
+    const customer = await stripe.customers.retrieve(customerId);
+    return customer.deleted !== true;
+  } catch (cause) {
+    const code = (cause as { code?: unknown } | null)?.code;
+    if (code === "resource_missing") return false;
+    throw cause;
+  }
+}
+
+/** The portal configuration named by STRIPE_BILLING_PORTAL_CONFIGURATION (bpc_…), or Stripe's default. */
+export function portalConfiguration(env: Record<string, string | undefined> = process.env): string | null {
+  const value = env.STRIPE_BILLING_PORTAL_CONFIGURATION?.trim() ?? "";
+  return /^bpc_[A-Za-z0-9]{6,250}$/.test(value) ? value : null;
+}
+
 /** A Billing Portal session: payment method, seats, cancel at period end, invoices. */
-export async function createPortalSession(stripe: BillingStripe, input: { customerId: string; appOrigin: string }): Promise<string> {
-  const session = await stripe.billingPortal.sessions.create({ customer: input.customerId, return_url: billingReturnUrl(input.appOrigin) });
+export async function createPortalSession(stripe: BillingStripe, input: { customerId: string; appOrigin: string; configuration?: string | null }): Promise<string> {
+  const session = await stripe.billingPortal.sessions.create({
+    customer: input.customerId,
+    return_url: billingReturnUrl(input.appOrigin),
+    ...(input.configuration ? { configuration: input.configuration } : {}),
+  });
   return session.url;
 }

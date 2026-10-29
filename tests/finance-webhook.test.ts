@@ -300,3 +300,22 @@ describe("Stripe webhook: card brand and last 4 for the receipt", () => {
     expect(cardDetailsOf(null)).toBeNull();
   });
 });
+
+describe("Stripe webhook: live mode", () => {
+  const LIVE_SECRET = "whsec_syntheticLiveSecretForVitestOnly0000";
+
+  it("verifies with either destination's secret and applies only the server's own mode", async () => {
+    const db = fakeDatabase();
+    const deps = { secret: [LIVE_SECRET, SECRET], livemode: true, apply: db.apply, cryptoProvider: crypto };
+    const live = await signed(fixture({ id: "evt_3SyntheticLive01", livemode: true }), LIVE_SECRET);
+    expect(await handleStripeWebhook(live.body, live.header, deps)).toEqual({ status: 200, body: { received: true, outcome: "applied" } });
+    expect(db.calls.at(-1)).toMatchObject({ p_event_id: "evt_3SyntheticLive01", p_livemode: true });
+    // The test destination still delivers to the same URL: verified, answered 200, not applied.
+    const test = await signed(fixture({ id: "evt_3SyntheticTest01" }));
+    expect(await handleStripeWebhook(test.body, test.header, deps)).toEqual({ status: 200, body: { received: true, outcome: "ignored", reason: "livemode" } });
+    expect(db.calls).toHaveLength(1);
+    // A secret neither destination holds is refused.
+    const forged = await signed(fixture({ id: "evt_3SyntheticForged", livemode: true }), "whsec_syntheticSomeoneElse000000000000");
+    expect((await handleStripeWebhook(forged.body, forged.header, deps)).status).toBe(400);
+  });
+});

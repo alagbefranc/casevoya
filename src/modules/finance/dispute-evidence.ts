@@ -1,7 +1,7 @@
 import { EVIDENCE_MAX_BYTES, evidenceError, evidenceName, evidenceType, type EvidenceType } from "@/modules/finance/credits-present";
 
 /**
- * Sends evidence for a card dispute to Stripe (FIN-13, TEST MODE ONLY), in this order:
+ * Sends evidence for a card dispute to Stripe (FIN-13, in the server's Stripe mode), in this order:
  *   1. the database says who may (billing access to the matter, a recent step-up), that the
  *      dispute still takes evidence before its deadline, and which connected account it is on;
  *   2. the file (PDF, JPEG or PNG by its bytes, at most 4.5 MB) goes to Stripe's Files API on the
@@ -14,6 +14,8 @@ import { EVIDENCE_MAX_BYTES, evidenceError, evidenceName, evidenceType, type Evi
 export type EvidenceContext = { dispute_id: string; account_id: string; number?: string };
 
 export type EvidenceDeps = {
+  /** The server's Stripe mode (live in production). Defaults to test. */
+  livemode?: boolean;
   context: (disputeId: string) => Promise<{ data: EvidenceContext | null; error: string | null }>;
   uploadFile: (args: { accountId: string; bytes: Uint8Array; name: string; type: EvidenceType }) => Promise<{ id: string; livemode: boolean }>;
   submit: (args: { accountId: string; disputeId: string; fileId: string; explanation: string | null }) => Promise<{ livemode: boolean }>;
@@ -52,20 +54,21 @@ export async function submitDisputeEvidence(input: EvidenceInput, deps: Evidence
   const { dispute_id: stripeDispute, account_id: accountId } = context.data;
   if (!STRIPE_ID.test(stripeDispute) || !ACCOUNT.test(accountId)) return { error: "This dispute can’t take evidence here.", status: 409 };
 
+  const live = deps.livemode === true;
   let fileId: string;
   try {
     const file = await deps.uploadFile({ accountId, bytes: input.bytes, name, type });
-    if (file.livemode) return { error: "Only Stripe test mode is used here. Nothing was sent.", status: 409 };
+    if (file.livemode !== live) return { error: "Stripe answered in the other mode (test or live). Nothing was submitted.", status: 409 };
     fileId = file.id;
   } catch {
     return { error: "Stripe didn’t take the file. Nothing was submitted; try again.", status: 502 };
   }
   try {
     const updated = await deps.submit({ accountId, disputeId: stripeDispute, fileId, explanation: explanation || null });
-    if (updated.livemode) return { error: "Only Stripe test mode is used here.", status: 409 };
+    if (updated.livemode !== live) return { error: "Stripe answered in the other mode (test or live).", status: 409 };
   } catch {
     // The file is on Stripe but nothing was submitted: record it as not submitted so it is known.
-    await deps.record({ p_dispute_id: input.disputeId, p_stripe_file_id: fileId, p_file_name: name, p_content_type: type, p_size_bytes: input.bytes.byteLength, p_explanation: explanation, p_submitted: false, p_livemode: false }).catch(() => null);
+    await deps.record({ p_dispute_id: input.disputeId, p_stripe_file_id: fileId, p_file_name: name, p_content_type: type, p_size_bytes: input.bytes.byteLength, p_explanation: explanation, p_submitted: false, p_livemode: live }).catch(() => null);
     return { error: "Stripe didn’t accept the evidence. Nothing was submitted; check the dispute’s state and try again.", status: 502 };
   }
   const recorded = await deps.record({
@@ -76,7 +79,7 @@ export async function submitDisputeEvidence(input: EvidenceInput, deps: Evidence
     p_size_bytes: input.bytes.byteLength,
     p_explanation: explanation,
     p_submitted: true,
-    p_livemode: false,
+    p_livemode: live,
   });
   if (recorded.error) return { error: "Stripe has the evidence, but it wasn’t recorded here. Don’t submit it again; the dispute’s state updates when Stripe’s event arrives.", status: 500 };
   return { ok: true, fileName: name };

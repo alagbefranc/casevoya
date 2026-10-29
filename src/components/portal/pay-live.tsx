@@ -55,7 +55,7 @@ type Started = { clientSecret: string; stripeAccount: string } | { error: string
  * The Designer's pay page (`markup/portal-pay.tsx`) for one real invoice. The card form is Stripe's
  * Payment Element, mounted in the Designer's `#cv-payment` slot; the PaymentIntent is a direct
  * charge on the firm's connected account. Confirmation stays in the page (3-D Secure opens in
- * Stripe's own modal). TEST MODE ONLY. The invoice turns paid only when Stripe's webhook says so.
+ * Stripe's own modal). Test or live as the publishable key says. The invoice turns paid only when Stripe's webhook says so.
  */
 export function PayLive({
   invoice,
@@ -204,7 +204,7 @@ export function PayLive({
           )}
           <p className="sec">
             <Icon name="lock" />
-            <span>{`Secured by Stripe (test mode). Card details go straight to Stripe; ${firmName} and Casevoya never see your full card number.`}</span>
+            <span>{`Secured by Stripe${publishableKey?.startsWith("pk_live_") ? "" : " (test mode)"}. Card details go straight to Stripe; ${firmName} and Casevoya never see your full card number.`}</span>
           </p>
         </div>
       </div>

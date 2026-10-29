@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { checkPublishableKey, checkSecretKey, checkWebhookSecret } from "@/modules/finance/keys";
+import {
+  activeSecretKey,
+  billingWebhookSecrets,
+  checkPublishableKey,
+  checkSecretKey,
+  checkWebhookSecret,
+  connectWebhookSecrets,
+  publishableKey,
+  secretKeyForMode,
+  stripeMode,
+} from "@/modules/finance/keys";
 import { formatAmount, formatMoney, isInvoiceCurrency, minorDigits, normalizeCurrency, parseAmount } from "@/modules/finance/money";
 import { invoiceState, readNewInvoice } from "@/modules/sheet/finance-present";
 
@@ -80,5 +90,43 @@ describe("Stripe keys are test mode only", () => {
     expect(checkWebhookSecret("whsec_Synthetic0000000000")).toMatchObject({ ok: true });
     expect(checkWebhookSecret("whsec_live_Synthetic00000")).toEqual({ ok: false, reason: "not_test" });
     expect(checkWebhookSecret("")).toEqual({ ok: false, reason: "missing" });
+  });
+});
+
+describe("Stripe live mode keys", () => {
+  const TEST_SK = "sk_test_51Synthetic0000000000";
+  const LIVE_SK = "sk_live_51Synthetic0000000000";
+  const TEST_PK = "pk_test_51Synthetic0000000000";
+  const LIVE_PK = "pk_live_51Synthetic0000000000";
+
+  it("uses STRIPE_SECRET_KEY first (live or test), else the test key, and never falls back from a bad main key", () => {
+    expect(activeSecretKey({ STRIPE_SECRET_KEY: LIVE_SK, STRIPE_TEST_SECRET_KEY: TEST_SK })).toEqual({ key: LIVE_SK, mode: "live" });
+    expect(activeSecretKey({ STRIPE_SECRET_KEY: TEST_SK })).toEqual({ key: TEST_SK, mode: "test" });
+    expect(activeSecretKey({ STRIPE_TEST_SECRET_KEY: TEST_SK })).toEqual({ key: TEST_SK, mode: "test" });
+    expect(activeSecretKey({ STRIPE_TEST_SECRET_KEY: LIVE_SK })).toBeNull();
+    expect(activeSecretKey({ STRIPE_SECRET_KEY: "sk_live_bad", STRIPE_TEST_SECRET_KEY: TEST_SK })).toBeNull();
+    expect(activeSecretKey({ STRIPE_SECRET_KEY: LIVE_PK })).toBeNull();
+    expect(stripeMode({})).toBeNull();
+    expect(stripeMode({ STRIPE_SECRET_KEY: LIVE_SK })).toBe("live");
+    // The test key stays usable for cleaning up test-mode links after going live.
+    expect(secretKeyForMode("test", { STRIPE_SECRET_KEY: LIVE_SK, STRIPE_TEST_SECRET_KEY: TEST_SK })).toBe(TEST_SK);
+    expect(secretKeyForMode("live", { STRIPE_TEST_SECRET_KEY: TEST_SK })).toBeNull();
+  });
+
+  it("gives the browser a publishable key only of the server's mode", () => {
+    expect(publishableKey({ STRIPE_SECRET_KEY: LIVE_SK, STRIPE_PUBLISHABLE_KEY: LIVE_PK, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: TEST_PK })).toBe(LIVE_PK);
+    expect(publishableKey({ STRIPE_SECRET_KEY: LIVE_SK, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: TEST_PK })).toBeNull();
+    expect(publishableKey({ STRIPE_TEST_SECRET_KEY: TEST_SK, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: TEST_PK })).toBe(TEST_PK);
+    expect(publishableKey({ STRIPE_TEST_SECRET_KEY: TEST_SK, STRIPE_PUBLISHABLE_KEY: LIVE_PK })).toBeNull();
+    expect(publishableKey({ STRIPE_PUBLISHABLE_KEY: LIVE_PK })).toBeNull();
+  });
+
+  it("collects the live and test webhook secrets, live first", () => {
+    const live = "whsec_syntheticLive000000000";
+    const test = "whsec_syntheticTest000000000";
+    expect(connectWebhookSecrets({ STRIPE_LIVE_WEBHOOK_SECRET: live, STRIPE_WEBHOOK_SECRET: test })).toEqual([live, test]);
+    expect(connectWebhookSecrets({ STRIPE_WEBHOOK_SECRET: test })).toEqual([test]);
+    expect(billingWebhookSecrets({ STRIPE_LIVE_BILLING_WEBHOOK_SECRET: live, STRIPE_BILLING_WEBHOOK_SECRET: "nope" })).toEqual([live]);
+    expect(billingWebhookSecrets({})).toEqual([]);
   });
 });

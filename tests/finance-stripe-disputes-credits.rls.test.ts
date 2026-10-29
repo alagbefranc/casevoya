@@ -272,7 +272,7 @@ describe("disputes (FIN-13)", () => {
     expect(context).toMatchObject({ dispute_id: dispute, account_id: f.account });
     await expectDbError(
       () => db.query(`select public.record_dispute_evidence($1, $2, 'letter.pdf', 'application/pdf', 1200, 'Signed retainer', true, true)`, [id, fileId()]),
-      /only test-mode evidence/,
+      /other Stripe mode/,
     );
     await expectDbError(() => db.query(`select public.record_dispute_evidence($1, $2, 'letter.exe', 'application/x-msdownload', 1200, null, true, false)`, [id, fileId()]), /./);
     await db.query(`select public.record_dispute_evidence($1, $2, 'letter.pdf', 'application/pdf', 1200, 'Signed retainer and delivered work', true, false)`, [id, fileId()]);

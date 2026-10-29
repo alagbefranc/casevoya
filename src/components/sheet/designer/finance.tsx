@@ -412,7 +412,7 @@ export function NewInvoiceDialog({ data }: { data: NewInvoiceDialogData }) {
             </div>
             {live.sampleMode ? (
               <Alert tone={"warn"} icon={"info"} title={"This firm is in sample mode"}>
-                {"Only sample matters take invoices until sample mode is turned off. Payments run in Stripe test mode; no real card is charged."}
+                {"Only sample matters take invoices until sample mode is turned off."}
               </Alert>
             ) : null}
             {live.blocked ? (
@@ -1039,10 +1039,10 @@ export function CreditDialog({ data }: { data: CreditDialogData }) {
   );
 }
 
-export type EvidenceDialogData = { organizationId: string; disputes: { value: string; label: string }[] };
+export type EvidenceDialogData = { organizationId: string; disputes: { value: string; label: string }[]; /** Stripe live mode (real banks). Absent: test mode. */ live?: boolean };
 
 /**
- * Add evidence to a card dispute and submit it to Stripe (FIN-13, test mode). Follows `#dlgInv`'s
+ * Add evidence to a card dispute and submit it to Stripe (FIN-13). Follows `#dlgInv`'s
  * anatomy; the file goes to Stripe through the firm's account, never kept by Casevoya. Its submit
  * carries `data-evidence-submit`.
  */
@@ -1085,7 +1085,7 @@ export function EvidenceDialog({ data }: { data: EvidenceDialogData }) {
           <input className={"inp"} id={"evF"} type={"file"} accept={"application/pdf,image/jpeg,image/png"} aria-describedby={"evF-h"} />
         </div>
         <Alert tone={"warn"} icon={"info"} title={"Submitted once"}>
-          {"Stripe sends the evidence to the client’s bank when you submit it, and it can’t be changed after. Test mode: no real bank sees it. You’ll confirm it’s you first."}
+          {`Stripe sends the evidence to the client’s bank when you submit it, and it can’t be changed after.${data.live ? "" : " Test mode: no real bank sees it."} You’ll confirm it’s you first.`}
         </Alert>
       </div>
       <div className={"df"}>
@@ -1102,6 +1102,8 @@ export function EvidenceDialog({ data }: { data: EvidenceDialogData }) {
 
 export type RefundDialogData = {
   organizationId: string;
+  /** Stripe live mode (real cards). Absent: test mode. */
+  live?: boolean;
   /** The firm can refund: billing staff, with Stripe configured. Otherwise why not. */
   blocked: { title: string; copy: string } | null;
 };
@@ -1151,7 +1153,7 @@ export function RefundDialog({ data }: { data: RefundDialogData }) {
         ) : (
           <Alert tone={"info"} icon={"info"} title={"Returned to the client’s card"}>
             {
-              "Stripe sends the money back to the card that paid (test mode: no real card). The refund shows as processing until Stripe confirms it. The matter stage and government status don’t change."
+              `Stripe sends the money back to the card that paid${data.live ? "" : " (test mode: no real card)"}. The refund shows as processing until Stripe confirms it. The matter stage and government status don’t change.`
             }
           </Alert>
         )}

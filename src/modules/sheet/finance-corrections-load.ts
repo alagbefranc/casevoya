@@ -18,6 +18,7 @@ import {
   signedAmount,
 } from "@/modules/finance/corrections-present";
 import { MANUAL_METHODS, manualMethodLabel, manualPaymentState, pendingManualCents, reviewersFor } from "@/modules/finance/manual-payments-present";
+import { stripeMode } from "@/modules/finance/keys";
 import { formatAmount, formatMoney } from "@/modules/finance/money";
 import { cardBrandName } from "@/modules/finance/payment-receipt";
 import { creditNoteHref, invoicePdfHref, reconciliationPdfHref } from "@/modules/finance/receipt-links";
@@ -629,15 +630,15 @@ export async function loadInvoiceView(supabase: Supabase, staff: SheetStaff, can
 
 type ItemJson = { kind?: unknown; entry_id?: unknown; number?: unknown; ledger_id?: unknown; amount_cents?: unknown; date?: unknown };
 
-/** Stripe payouts on the firm's connected account (test mode), with what each contains, matched to Casevoya's card payments. */
+/** Stripe payouts on the firm's connected account (the server's Stripe mode), with what each contains, matched to Casevoya's card payments. */
 async function loadPayouts(stripe: Stripe, accountId: string, supabase: Supabase, staff: SheetStaff): Promise<NonNullable<ReconData["payouts"]>> {
   const note =
-    "Read from Stripe for the firm’s account (test mode): each payout to the firm’s operating account, with the card payments, refunds and Stripe fees in it. Card money never goes to the client account. Matched by PaymentIntent to the card payments Casevoya recorded.";
+    `Read from Stripe for the firm’s account${(stripeMode() === "live") ? "" : " (test mode)"}: each payout to the firm’s operating account, with the card payments, refunds and Stripe fees in it. Card money never goes to the client account. Matched by PaymentIntent to the card payments Casevoya recorded.`;
   try {
     const payouts = await stripe.payouts.list({ limit: 5 }, { stripeAccount: accountId });
     const rows: PayoutRow[] = [];
     for (const payout of payouts.data) {
-      if (payout.livemode) continue;
+      if (payout.livemode !== (stripeMode() === "live")) continue;
       const transactions = await stripe.balanceTransactions.list({ payout: payout.id, limit: 100, expand: ["data.source"] }, { stripeAccount: accountId });
       let paymentCount = 0;
       let gross = 0;

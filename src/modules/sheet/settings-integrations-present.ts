@@ -30,7 +30,7 @@ export type IntegrationsInput = {
   connections: StaffConnection[];
   /** When their Google Calendar busy times were last read, if ever. */
   busySyncedAt: string | null;
-  stripe: { canSee: boolean; isOwner: boolean; account: { cardPayments: string; requirementsDue: number } | null };
+  stripe: { canSee: boolean; isOwner: boolean; live?: boolean; account: { cardPayments: string; requirementsDue: number } | null };
   /** The firm's WhatsApp number through Zernio. Absent: shown as not available. */
   whatsapp?: WhatsAppInput;
   timeZone: string;
@@ -189,7 +189,7 @@ export function whatsappDialog(input: Pick<IntegrationsInput, "organizationId" |
 }
 
 function stripeRow(input: IntegrationsInput): IntegrationRow {
-  const base = { logo: "/assets/logos/stripe.svg", name: "Stripe", tag: "test mode", sub: "Client card payments" } as const;
+  const base = { logo: "/assets/logos/stripe.svg", name: "Stripe", tag: input.stripe.live ? "live" : "test mode", sub: "Client card payments" } as const;
   const manage = { label: "Manage", attrs: { "data-nav": "/sheet/settings?tab=billing#card-payments" } };
   if (!input.stripe.canSee) return { ...base, state: { tone: "gr", label: "Billing staff only" } };
   const account = input.stripe.account;
