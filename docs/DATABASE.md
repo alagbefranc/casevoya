@@ -1172,3 +1172,16 @@ Issue #263 item C, branch `feat/booking-possible-match`. One additive migration;
 * Shared checks in `app.open_booking_match`.
 
 Tested in `tests/booking-possible-match.rls.test.ts` and `tests/booking-possible-match.test.tsx`.
+
+## Form templates, evidence bundles and package snapshots (`20261029120000`, `20261029120100`, not applied on the live project)
+
+PREP-01, PREP-03 and PREP-04. No form identifier, version, field list, fee or processing time is inserted.
+
+* `form_templates` and `form_template_fields`: a firm’s transcription of one official form (jurisdiction, optional program key, identifier, version as printed, mapping version, effective date only when supplied, official URL, output `field_review` or `manual_completion`). Pending until a licensed member approves it (fresh step-up; snapshot hash, or the reviewer’s attestation when the page could not be fetched). One approved row per firm, jurisdiction and form identifier. Fields are append-only. Empty until a firm adds one.
+* `matter_form_pins`: the template a matter is using. Replacing a pin sets `superseded_at` on the previous pin for that form. A pin is stale when the template is no longer approved, its effective date is still in the future, or the official page is past `source.recheck_interval.form`.
+* `public.form_mapping_review(matter)`: each pinned field is filled, missing or manual, with the approved facts the value comes from.
+* `submission_channel_templates`: optional per-channel file-name pattern and size cap (1–100 MiB). Absent: `{reference}-evidence-bundle.pdf` and 25 MiB. A product setting, not an IRCC limit.
+* `matter_bundle_selections` and `matter_bundle_items`: the documents staff chose, in order. The PDF (cover, index, PDF/JPEG/PNG pages, page numbers) is built in the app and not stored.
+* `submission_manifest_forms` and `submission_manifest_facts`: copied at package release. The manifest hash adds those lines only when they exist, so a release with neither still hashes the file list alone. While the handoff is authorized, a change to the files, the form pins or the approved facts blocks the package gate (`scope_changed`).
+
+`app.sign_off_submission_handoff`, `app.gov_pin_manifest`, `app.submission_gates_for` and `app.record_submission` are redefined from `20261025170000`. Forced RLS on every new table. Tested in `tests/prep-forms-bundles.rls.test.ts`, `tests/prep-forms-bundle.test.ts` and `tests/gov-submission-checklist.rls.test.ts`.

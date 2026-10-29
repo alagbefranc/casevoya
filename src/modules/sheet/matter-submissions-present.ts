@@ -49,7 +49,7 @@ export type ChecklistInput = {
   /** Checklist events of the open handoff, newest first. */
   events: ChecklistEvent[];
   /** The handoff whose manifest is shown (open or latest submitted), and its pinned files. */
-  manifest: { handoff: ManifestHandoff; files: ManifestFile[] } | null;
+  manifest: { handoff: ManifestHandoff; files: ManifestFile[]; forms?: { name: string; note: string }[]; facts?: { name: string; note: string }[] } | null;
 };
 
 const STAFF = new Set(["firm_owner", "licensed_consultant", "case_manager", "assistant"]);
@@ -174,12 +174,14 @@ export function buildSubmissionChecklist(input: ChecklistInput): { card: Submiss
       hash: pinned.manifest_sha256 ? shortHash(pinned.manifest_sha256) : null,
       pinned: `Pinned when the package was released, ${when(pinned.manifest_pinned_at as string)}: ${pinned.manifest_file_count ?? input.manifest.files.length} ${
         (pinned.manifest_file_count ?? input.manifest.files.length) === 1 ? "file" : "files"
-      }, each with the SHA-256 it was stored with. The same list is written to the audit trail when the submission is recorded.`,
+      }, each with the SHA-256 it was stored with, plus the form versions in use and a snapshot of the approved facts. The same list is written to the audit trail when the submission is recorded.`,
       rows: input.manifest.files.map((file) => ({
         name: file.file_name,
         hash: shortHash(file.file_sha256),
         note: file.review_state === "accepted" ? "Accepted by the firm" : "Not reviewed yet",
       })),
+      forms: input.manifest.forms ?? [],
+      facts: input.manifest.facts ?? [],
     };
   }
 
