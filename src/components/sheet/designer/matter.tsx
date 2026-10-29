@@ -4,6 +4,7 @@
  * show the Designer's empty-state panel instead of sample rows.
  */
 import { Fragment, type ReactNode } from "react";
+import { StaffCapture, type StaffCaptureData } from "@/components/documents/staff-capture";
 import { gaugeArcs, percent } from "./home";
 import { Badge, type MatterBadge } from "./matters";
 import { Avatar, type SidebarPerson } from "./sidebar";
@@ -1302,6 +1303,7 @@ export function MatterDocuments({
   request = false,
   apply = null,
   autoRead = null,
+  capture = null,
   bundle = null,
 }: {
   checklist: string | null;
@@ -1316,6 +1318,8 @@ export function MatterDocuments({
   apply?: ApplyChecklistData | null;
   /** Live only (DOC-05): new uploads Vo reads now, with "Read documents on upload" on. */
   autoRead?: { organizationId: string; versionIds: string[] } | null;
+  /** Live only (DOC-03): capture several pages and save them as one PDF. */
+  capture?: StaffCaptureData | null;
   /** PREP-03: document index and evidence bundle. */
   bundle?: MatterBundleData | null;
 }) {
@@ -1331,6 +1335,7 @@ export function MatterDocuments({
               </button>
             ) : null}
             {apply?.templates.length ? <ApplyChecklist data={apply} /> : null}
+            {capture ? <StaffCapture data={capture} /> : null}
           </Empty>
         </Panel>
         {bundle ? <MatterBundle data={bundle} /> : null}
@@ -1340,6 +1345,11 @@ export function MatterDocuments({
   return (
     <>
       {autoRead ? <VoAutoRead data={autoRead} /> : null}
+      {capture ? (
+        <div className={"ph-act"}>
+          <StaffCapture data={capture} />
+        </div>
+      ) : null}
       {apply?.templates.length ? (
         <div className={"ph-act"}>
           <ApplyChecklist data={apply} />
@@ -2089,7 +2099,7 @@ export type MatterPageData = {
   people: { cards: MatterPersonCard[]; relationships: MatterRelationship[]; history?: PersonHistoryPanel[] };
   /** `vo`: Vo's reading of one document, in the Designer's review panel (`#ocr`). */
   /** `request` (live): the person may request documents, so the empty tab offers it (#dReq). */
-  documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[]; vo?: MatterDocumentReviewData | null; filter?: boolean; request?: boolean; apply?: ApplyChecklistData | null; autoRead?: { organizationId: string; versionIds: string[] } | null; bundle?: MatterBundleData | null };
+  documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[]; vo?: MatterDocumentReviewData | null; filter?: boolean; request?: boolean; apply?: ApplyChecklistData | null; autoRead?: { organizationId: string; versionIds: string[] } | null; capture?: StaffCaptureData | null; bundle?: MatterBundleData | null };
   /** PREP-01: form templates pinned on this matter, and which approved facts fill them. Absent, the tab keeps its empty state. */
   forms?: MatterFormsData | null;
   agreements: { rows: MatterAgreementRow[]; signing: MatterSigning | null; create?: string | null };
@@ -2131,6 +2141,7 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
           request={data.documents.request}
           apply={data.documents.apply}
           autoRead={data.documents.autoRead}
+          capture={data.documents.capture}
           bundle={data.documents.bundle}
         />
       );

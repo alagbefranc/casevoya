@@ -23,6 +23,8 @@ const eslintConfig = defineConfig([
     "services/av-scanner/runtime/**",
     "services/av-scanner/dist/**",
     "services/av-scanner/node_modules/**",
+    // Vendored pdf.js worker (minified third-party build).
+    "public/pdfjs/**",
   ]),
   {
     files: ["src/components/port/**/*.{ts,tsx}", "src/components/portal/**/*.{ts,tsx}", "src/components/sheet/**/*.{ts,tsx}"],
