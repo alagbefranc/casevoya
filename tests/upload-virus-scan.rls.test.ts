@@ -410,4 +410,43 @@ describe("upload virus scanning (#263-B)", () => {
     expect(grants.rows.every((row) => !row.anon && !row.authed)).toBe(true);
     expect(grants.rows.filter((row) => row.fn.includes("service_")).every((row) => row.service)).toBe(true);
   });
+
+  it("the ops step for a held file only makes it due: the next claim scans it, nothing makes it clean (2026-10-29)", async () => {
+    await scanning(true);
+    const ctx = await firm();
+    const { versionId } = await upload(ctx);
+    await setRetry({ max_attempts: 1, base_seconds: 60, lease_seconds: 300, failed_retry_seconds: 21600 });
+    await claim({ versionId });
+    expect(await record(versionId, "error")).toMatchObject({ upload_state: "scan_failed" });
+    // Due again only in 6 hours.
+    expect(await claim({ versionId })).toHaveLength(0);
+    // docs/integrations/av-scanner.md, "A held file now", as the project owner.
+    await asMaintenance(db);
+    await db.exec(`
+      begin;
+      select app.open_document_write(id) from public.document_versions where id = '${versionId}' and upload_state = 'scan_failed';
+      update public.document_versions set scan_next_attempt_at = now() where id = '${versionId}' and upload_state = 'scan_failed';
+      select app.close_document_write(id) from public.document_versions where id = '${versionId}';
+      commit;
+    `);
+    expect(await state(versionId)).toMatchObject({ upload_state: "scan_failed" });
+    expect(await clientCanDownload(ctx, versionId)).toBe(false);
+    expect(await claim({ versionId })).toHaveLength(1);
+    expect(await record(versionId, "clean")).toMatchObject({ upload_state: "clean" });
+  });
+
+  it("waits long enough for the runner's warm-up, but never past the claim lease (bug report 2026-10-29)", async () => {
+    await asMaintenance(db);
+    const kick = await db.query<{ src: string }>(
+      `select p.prosrc as src from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'app' and p.proname = 'kick_document_scans'`,
+    );
+    const timeout = Number(/timeout_milliseconds\s*:=\s*(\d+)/.exec(kick.rows[0].src)?.[1]);
+    const lease = await db.query<{ seconds: number }>(
+      `select (value ->> 'lease_seconds')::integer as seconds from public.product_settings where key = 'documents.virus_scan_retry'`,
+    );
+    // The runner's request is warm-up (90 s) + scan (50 s): RUNNER_SCAN_BUDGET.
+    expect(timeout).toBeGreaterThanOrEqual(140_000 + 30_000);
+    expect(timeout).toBeLessThan(lease.rows[0].seconds * 1000);
+  });
 });

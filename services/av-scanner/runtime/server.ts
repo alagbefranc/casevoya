@@ -92,9 +92,9 @@ const server = createServer(async (req, res) => {
       const bytes = await readBody(req);
       if (!bytes) return send(res, 413, { result: "error", reason: "too_large" });
       if (bytes.byteLength === 0) return send(res, 400, { result: "error", reason: "empty" });
-      // Don't hold the request while clamd loads. The app's scan aborts at 50s (20s on the
-      // upload itself); a long wait here is the cancellation the dashboard showed. 503 leaves
-      // the file held. clamd keeps loading, and the retry finds it.
+      // Don't hold the request while clamd loads. The Worker waits for /healthz before it
+      // forwards a scan (src/warm.ts; none on the upload itself, which aborts at 20s). A scan
+      // that still arrives cold gets 503 and the file stays held; clamd keeps loading.
       if (!(await ping())) return send(res, 503, { result: "error", reason: "starting" });
       const engine = await version();
       const reply = await talk([command("INSTREAM"), ...instreamFrames(bytes)], SCAN_TIMEOUT_MS);
