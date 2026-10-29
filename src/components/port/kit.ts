@@ -66,6 +66,37 @@ export function clearBtn(button: HTMLElement) {
 
 type ToastOpts = { kind?: string; sub?: string; undo?: boolean; icon?: string; duration?: number };
 
+/** Bars that hold a step's primary action (the wizard footer's Back and Continue). Toasts sit above them (issue #261). */
+export const TOAST_CLEAR_OF = ".wz-foot";
+
+/** Space kept between the toast stack and the bar under it. */
+const TOAST_GAP = 12;
+
+/**
+ * The toast stack's `bottom` in px: its CSS offset (`base`), or higher when an action bar would sit
+ * under the stack there, so a toast never covers Continue. `bars` are the bars' top and bottom
+ * edges in the viewport; `stack` is the stack's height. A bar elsewhere on the page doesn't move it.
+ */
+export function toastBottom(base: number, bars: { top: number; bottom: number }[], viewportHeight: number, stack: number): number {
+  const low = viewportHeight - base;
+  const high = low - Math.max(stack, 0);
+  const under = bars.filter((bar) => bar.bottom > bar.top && bar.top < low && bar.bottom > high);
+  if (!under.length) return base;
+  return Math.max(base, Math.ceil(viewportHeight - Math.min(...under.map((bar) => bar.top)) + TOAST_GAP));
+}
+
+/** Keeps the stack clear of any action bar, measured now (the footer is sticky, so scrolling moves it). */
+function liftToasts(wrap: HTMLElement) {
+  wrap.style.bottom = "";
+  const bars = [...document.querySelectorAll<HTMLElement>(TOAST_CLEAR_OF)].map((bar) => bar.getBoundingClientRect());
+  if (!bars.length) return;
+  const base = Number.parseFloat(getComputedStyle(wrap).bottom) || 0;
+  const bottom = toastBottom(base, bars, window.innerHeight, wrap.getBoundingClientRect().height);
+  if (bottom !== base) wrap.style.bottom = `${bottom}px`;
+}
+
+let liftBound = false;
+
 export function toast2(title: string, opts: ToastOpts = {}) {
   let wrap = document.querySelector<HTMLElement>(".toasts");
   if (!wrap) {
@@ -75,6 +106,15 @@ export function toast2(title: string, opts: ToastOpts = {}) {
     wrap.setAttribute("aria-live", "polite");
     document.body.append(wrap);
   }
+  if (!liftBound) {
+    liftBound = true;
+    const relift = () => {
+      const stack = document.querySelector<HTMLElement>(".toasts");
+      if (stack?.childElementCount) liftToasts(stack);
+    };
+    window.addEventListener("scroll", relift, { passive: true, capture: true });
+    window.addEventListener("resize", relift, { passive: true });
+  }
   const kind = opts.kind ?? "";
   const ic = opts.icon || ({ ok: "check-circle", bad: "x-circle", warn: "alert" } as Record<string, string>)[kind] || "info";
   const toast = document.createElement("div");
@@ -83,6 +123,7 @@ export function toast2(title: string, opts: ToastOpts = {}) {
   toast.setAttribute("aria-label", `${title}. Swipe down or press Escape to dismiss.`);
   toast.innerHTML = `${icon(ic, "s")}<span class="tx"><b>${escapeHtml(title)}</b>${opts.sub ? `<small>${escapeHtml(opts.sub)}</small>` : ""}</span>${opts.undo ? '<button type="button">Undo</button>' : ""}<i class="k2-fuse" aria-hidden="true"></i>`;
   wrap.append(toast);
+  liftToasts(wrap);
   const ms = opts.duration || (kind === "bad" ? 7000 : 4200);
   const fuseEl = toast.querySelector(".k2-fuse");
   const fuse = fuseEl?.animate([{ transform: "scaleX(1)" }, { transform: "scaleX(0)" }], {
