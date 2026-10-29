@@ -2,6 +2,7 @@ import "server-only";
 import type { SettingsTab } from "@/components/sheet/designer/settings-integrations";
 import { emailRuntimeConfig } from "@/lib/email/env";
 import { createClient } from "@/lib/supabase/server";
+import { stripeMode } from "@/modules/finance/keys";
 import { composioConfigured } from "@/modules/integrations/composio";
 import { loadSheetChrome } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
@@ -55,6 +56,7 @@ async function loadIntegrations(staff: SheetStaff) {
     stripe: {
       canSee: canBill,
       isOwner: staff.role === "firm_owner",
+      live: stripeMode() === "live",
       account: account?.data ? { cardPayments: account.data.card_payments_status, requirementsDue: account.data.requirements_due } : null,
     },
     whatsapp,

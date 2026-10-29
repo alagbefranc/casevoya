@@ -410,7 +410,7 @@ export function subscriptionPage(input: {
   const note = [
     detail
       ? catalog
-        ? "Prices are in CAD and set by Casevoya; payment goes through Stripe (test mode while Casevoya is in pilot) and no card is stored by Casevoya."
+        ? "Prices are in CAD and set by Casevoya; payment goes through Stripe and no card is stored by Casevoya."
         : "Casevoya hasn’t published prices yet. Nothing is charged here and no card is taken."
       : "Plans, prices and invoices are shown to the firm owner and finance.",
     usage ? "Usage counts are live." : "Usage counts are shown to the firm owner and finance.",

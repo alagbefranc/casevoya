@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { stripeServer } from "@/lib/stripe/server";
+import { stripeLive, stripeServer, stripeServerForMode } from "@/lib/stripe/server";
 import { isUuid } from "@/lib/tenant/context";
 import {
   correctionError,
@@ -82,7 +82,7 @@ export async function declineCreditNote(input: { organizationId: string; creditN
 
 /**
  * Voids an issued invoice with nothing allocated. After the database says yes, the card payments the
- * client had started but not completed are canceled in Stripe (test mode, the firm's connected
+ * client had started but not completed are canceled in Stripe (the firm's connected
  * account), best effort: a payment that still succeeds is kept on the voided invoice to refund.
  */
 export async function voidInvoice(input: { organizationId: string; invoiceId: string; reason: string }): Promise<{ voided: true; canceled: number; notCanceled: number } | { error: string }> {
@@ -97,14 +97,18 @@ export async function voidInvoice(input: { organizationId: string; invoiceId: st
   const intents = Array.isArray(row.cancel) ? row.cancel.filter((id): id is string => typeof id === "string" && /^pi_[A-Za-z0-9]{6,250}$/.test(id)) : [];
   const account = typeof row.account_id === "string" ? row.account_id : null;
   let canceled = 0;
-  const stripe = intents.length && account ? stripeServer() : null;
-  if (stripe && account) {
+  // The server's mode first; a request opened in test mode before going live is canceled with the test key.
+  const clients = intents.length && account ? [stripeServer(), stripeLive() ? stripeServerForMode("test") : null].filter((c) => c !== null) : [];
+  if (account) {
     for (const intent of intents) {
-      try {
-        await stripe.paymentIntents.cancel(intent, {}, { stripeAccount: account, idempotencyKey: `casevoya-void-${intent}` });
-        canceled += 1;
-      } catch {
-        // Already canceled, or no longer cancellable: Stripe's event decides what is recorded.
+      for (const stripe of clients) {
+        try {
+          await stripe.paymentIntents.cancel(intent, {}, { stripeAccount: account, idempotencyKey: `casevoya-void-${intent}` });
+          canceled += 1;
+          break;
+        } catch {
+          // Already canceled, no longer cancellable, or the other mode: Stripe's event decides what is recorded.
+        }
       }
     }
   }

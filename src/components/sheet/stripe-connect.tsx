@@ -160,22 +160,32 @@ function OnboardingDialog({
 
 /**
  * The firm's Stripe account on the Payments tab, shown only when something is needed:
- * - no account: the owner sets one up (test mode);
+ * - no account: the owner sets one up (in the server's Stripe mode);
  * - card payments not active, or Stripe has requirements due: a banner whose "Finish with Stripe"
  *   opens Stripe's own onboarding and notification banner (Connect embedded components; Stripe
  *   collects the identity and bank details) inside the Designer's `.dlg`.
  * The full status (requirements, payouts, refund and loss liability) is the Settings card,
  * `StripeConnectCard`, built on the same hook. Payments, payouts and the balance are Casevoya's
- * own page. TEST MODE ONLY.
+ * own page. Test or live, as the server runs Stripe (data.live).
  */
 export function StripeAccountStatus({ data }: { data: FinanceAccountData }) {
   const { error, pending, ready, needsMore, canFinish, instance, dialog, open, create, settle } = useStripeOnboarding(data);
+  const live = data.live === true;
 
   if (!data.canBill) return null;
   if (!data.configured) {
     return (
       <Banner tone={"warn"} icon={"info"} title={"Payments aren’t configured"}>
-        {"This environment has no Stripe test keys, so card payments are off. Nothing can be charged. Invoices can still be issued."}
+        {"This environment has no Stripe keys, so card payments are off. Nothing can be charged. Invoices can still be issued."}
+      </Banner>
+    );
+  }
+  if (data.account && data.otherModeLink) {
+    return (
+      <Banner tone={"warn"} icon={"info"} title={"Reconnect Stripe"}>
+        {data.isOwner
+          ? `${data.firmName}’s Stripe account was connected in ${live ? "test" : "live"} mode. Clients can’t pay by card until you disconnect it in Settings › Billing and set up the ${live ? "live" : "test"} account.`
+          : "The firm owner reconnects the firm’s Stripe account in Settings › Billing."}
       </Banner>
     );
   }
@@ -202,11 +212,11 @@ export function StripeAccountStatus({ data }: { data: FinanceAccountData }) {
           title={"Set up card payments"}
           action={
             <button className={"btn p sm"} type={"button"} onClick={create} disabled={pending} aria-busy={pending || undefined}>
-              {pending ? "Setting up…" : "Set up Stripe (test mode)"}
+              {pending ? "Setting up…" : live ? "Set up Stripe" : "Set up Stripe (test mode)"}
             </button>
           }
         >
-          {`Casevoya creates a Stripe account for ${data.firmName} in test mode. You finish it here, in Casevoya; clients’ payments go to that account, never to Casevoya. You’ll confirm with your authenticator first.`}
+          {`Casevoya creates a Stripe account for ${data.firmName}${live ? "" : " in test mode"}. You finish it here, in Casevoya; clients’ payments go to that account, never to Casevoya. You’ll confirm with your authenticator first.`}
         </Banner>
         {error ? (
           <Banner tone={"bad"} icon={"info"} title={"Not set up"}>
@@ -231,8 +241,8 @@ export function StripeAccountStatus({ data }: { data: FinanceAccountData }) {
         }
       >
         {ready
-          ? "Card payments are on, but Stripe asks for more details to keep them and payouts running. Stripe collects them; in test mode use Stripe’s test values."
-          : "Stripe needs the firm’s business and bank details before clients can pay by card. Stripe collects them; in test mode use Stripe’s test values."}
+          ? `Card payments are on, but Stripe asks for more details to keep them and payouts running. Stripe collects them${live ? "." : "; in test mode use Stripe’s test values."}`
+          : `Stripe needs the firm’s business and bank details before clients can pay by card. Stripe collects them${live ? "." : "; in test mode use Stripe’s test values."}`}
       </Banner>
       {error ? (
         <Banner tone={"bad"} icon={"info"} title={"Stripe"}>
@@ -317,7 +327,7 @@ function DisconnectDialog({ data }: { data: FinanceAccountData }) {
         </div>
         <div className={"db"}>
           <p className={"fp-note"}>
-            {`Casevoya stops using ${shortAccount(account.accountId)} (test mode) for ${data.firmName}. Stripe isn’t asked to close, delete or reject the account; it stays with Stripe as it is. Card payment requests still open on it are canceled at Stripe, so a page left open can’t pay it. Clients can’t pay by card until you set up a new account here. Card payments already received on it can’t be refunded from Casevoya afterwards. The disconnected account stays in the firm’s history and audit log.`}
+            {`Casevoya stops using ${shortAccount(account.accountId)} ${(data.otherModeLink ? data.live !== true : data.live === true) ? "(live)" : "(test mode)"} for ${data.firmName}. Stripe isn’t asked to close, delete or reject the account; it stays with Stripe as it is. Card payment requests still open on it are canceled at Stripe, so a page left open can’t pay it. Clients can’t pay by card until you set up a new account here. Card payments already received on it can’t be refunded from Casevoya afterwards. The disconnected account stays in the firm’s history and audit log.`}
           </p>
           <div className={"fld"}>
             <label htmlFor={"soR"}>{"Reason (kept in the audit log)"}</label>

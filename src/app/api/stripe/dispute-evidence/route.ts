@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { stripeServer } from "@/lib/stripe/server";
+import { stripeLive, stripeServer } from "@/lib/stripe/server";
 import { isUuid } from "@/lib/tenant/context";
 import { EVIDENCE_MAX_BYTES } from "@/modules/finance/credits-present";
 import { submitDisputeEvidence, type EvidenceContext } from "@/modules/finance/dispute-evidence";
@@ -10,7 +10,7 @@ function refuse(error: string, status: number) {
 }
 
 /**
- * Evidence for a card dispute (FIN-13), TEST MODE ONLY: multipart form data with `org`, `dispute`
+ * Evidence for a card dispute (FIN-13), in the server's Stripe mode: multipart form data with `org`, `dispute`
  * (the invoice_disputes id), `explanation` and one `file`. Run as the signed-in staff member; the
  * database decides who may (billing access, recent step-up) before Stripe is called with the
  * platform's test key on the firm's connected account. The file goes to Stripe only.
@@ -42,10 +42,12 @@ export async function POST(request: Request) {
   const stripe = stripeServer();
   if (!stripe) return refuse("Stripe isn’t configured for this environment. Nothing was sent to Stripe.", 503);
 
+  const live = stripeLive();
   const bytes = new Uint8Array(await file.arrayBuffer());
   const result = await submitDisputeEvidence(
     { disputeId: dispute, explanation, fileName: file.name, bytes },
     {
+      livemode: live,
       context: async (id) => {
         const { data, error } = await supabase.rpc("dispute_evidence_context", { p_dispute_id: id });
         return { data: (data ?? null) as EvidenceContext | null, error: error?.message ?? null };
@@ -55,7 +57,8 @@ export async function POST(request: Request) {
           { purpose: "dispute_evidence", file: { data: Buffer.from(data), name, type } },
           { stripeAccount: accountId },
         );
-        return { id: created.id, livemode: false };
+        // Created with the server's key, so it is in the server's mode.
+        return { id: created.id, livemode: live };
       },
       submit: async ({ accountId, disputeId, fileId, explanation: text }) => {
         const updated = await stripe.disputes.update(

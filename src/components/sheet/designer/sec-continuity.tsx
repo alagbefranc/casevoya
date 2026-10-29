@@ -67,7 +67,7 @@ export function CancelSubscriptionDialog({ data }: { data: CancelDialogData }) {
         <p style={{ margin: "0 0 10px" }}>{"Cancelling never deletes records."}</p>
         <p className={"why"}>
           <Icon name={"shield"} cls={"ic s"} />
-          {"Continuing asks you to confirm it’s you, then Stripe (test mode during the pilot) stops renewing at the end of the paid period. Before then you can keep the subscription from Manage billing."}
+          {"Continuing asks you to confirm it’s you, then Stripe stops renewing at the end of the paid period. Before then you can keep the subscription from Manage billing."}
         </p>
       </div>
       <div className={"df"}>

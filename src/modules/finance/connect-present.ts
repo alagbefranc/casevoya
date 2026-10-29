@@ -29,9 +29,13 @@ export type FinanceAccountData = {
   organizationId: string;
   firmName: string;
   isOwner: boolean;
-  /** Both the server's test secret key and the browser's test publishable key are set. */
+  /** Both the server's secret key and a publishable key of the same Stripe mode are set. */
   configured: boolean;
   publishableKey: string | null;
+  /** The server runs Stripe in live mode (real cards). Absent means test mode. */
+  live?: boolean;
+  /** The firm's link was made in the other mode (test, before the server went live). */
+  otherModeLink?: boolean;
   account: null | ConnectAccount;
   /** Firm owner or finance user: the staff who see the firm's billing. */
   canBill: boolean;
@@ -127,9 +131,15 @@ function checkedText(checkedAt: string | null, timeZone: string): string {
 }
 
 /** The Settings card for the firm's Stripe account. */
+/** "(test mode)" or "(live)" after an account id. */
+function modeTag(live: boolean): string {
+  return live ? "(live)" : "(test mode)";
+}
+
 export function connectCard(data: FinanceAccountData, timeZone: string): ConnectCardData {
   const account = data.account;
   const stage = connectStage(account);
+  const live = data.live === true;
   if (!data.canBill) {
     return {
       badge: { tone: "gr", label: "Billing staff only" },
@@ -142,10 +152,21 @@ export function connectCard(data: FinanceAccountData, timeZone: string): Connect
   if (!data.configured) {
     return {
       badge: account ? BADGE[stage] : { tone: "gr", label: "Not available" },
-      rows: account ? [["Stripe account", `${shortAccount(account.accountId)} (test mode)`]] : [],
+      rows: account ? [["Stripe account", `${shortAccount(account.accountId)}`]] : [],
       requirements: [],
       actions: [],
-      note: "This environment has no Stripe test keys, so Casevoya can’t read or finish the Stripe account here. Nothing can be charged.",
+      note: "This environment has no Stripe keys, so Casevoya can’t read or finish the Stripe account here. Nothing can be charged.",
+    };
+  }
+  if (account && data.otherModeLink) {
+    return {
+      badge: { tone: "chg", label: "Reconnect" },
+      rows: [["Stripe account", `${shortAccount(account.accountId)} ${modeTag(!live)}`]],
+      requirements: [],
+      actions: data.isOwner ? [{ act: "disconnect", label: "Disconnect Stripe account", primary: true }] : [],
+      note: data.isOwner
+        ? `This Stripe account was connected in ${live ? "test mode" : "live mode"}, and Casevoya now runs Stripe in ${live ? "live mode" : "test mode"}. Clients can’t pay by card until you disconnect it and set up ${data.firmName}’s ${live ? "live" : "test"} Stripe account. Disconnecting cancels the payment requests still open on the old account.`
+        : "The firm owner reconnects the firm’s Stripe account. Until then clients can’t pay by card.",
     };
   }
   if (!account) {
@@ -156,14 +177,14 @@ export function connectCard(data: FinanceAccountData, timeZone: string): Connect
         ["Refunds and losses", liabilityText(null)],
       ],
       requirements: [],
-      actions: data.isOwner ? [{ act: "setup", label: "Set up Stripe (test mode)", primary: true }] : [],
+      actions: data.isOwner ? [{ act: "setup", label: live ? "Set up Stripe" : "Set up Stripe (test mode)", primary: true }] : [],
       note: data.isOwner
-        ? `Casevoya creates a Stripe account for ${data.firmName} in test mode; you finish it here. Clients’ card payments go to that account, never to Casevoya. You’ll confirm with your authenticator first.`
+        ? `Casevoya creates a Stripe account for ${data.firmName}${live ? "" : " in test mode"}; you finish it here. Clients’ card payments go to that account, never to Casevoya. You’ll confirm with your authenticator first.`
         : "The firm owner sets up the firm’s Stripe account.",
     };
   }
   const rows: [string, string][] = [
-    ["Stripe account", `${shortAccount(account.accountId)} (test mode)`],
+    ["Stripe account", `${shortAccount(account.accountId)} ${modeTag(live)}`],
     ["Card payments", CAPABILITY[account.cardPayments] ?? account.cardPayments],
     ["Payouts", CAPABILITY[account.payouts] ?? account.payouts],
     ["Stripe still needs", account.requirements.length ? `${account.requirements.length} ${account.requirements.length === 1 ? "item" : "items"}, listed below` : account.requirementsDue > 0 ? `${account.requirementsDue} ${account.requirementsDue === 1 ? "item" : "items"}; check with Stripe to list them` : "Nothing"],
@@ -179,7 +200,7 @@ export function connectCard(data: FinanceAccountData, timeZone: string): Connect
   const note =
     stage === "onboarding"
       ? data.isOwner
-        ? "Stripe collects the firm’s business and bank details in its own form, opened here. In test mode use Stripe’s test values. Continuing asks you to confirm it’s you first."
+        ? `Stripe collects the firm’s business and bank details in its own form, opened here.${live ? "" : " In test mode use Stripe’s test values."} Continuing asks you to confirm it’s you first.`
         : "The firm owner finishes onboarding with Stripe. Until then clients can’t pay by card."
       : "Clients pay earned-fee invoices by card into this account (a direct charge: the firm is the merchant). Advances for the client account are never paid by card.";
   return { badge: BADGE[stage], rows, requirements: account.requirements.map(requirementLine), actions, note };
