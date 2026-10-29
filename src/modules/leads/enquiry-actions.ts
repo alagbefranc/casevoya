@@ -3,6 +3,7 @@
 import { safeAccessError } from "@/lib/auth/step-up";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
+import { NOTICE_REQUIRED, noticeRequiredError } from "@/modules/portal-policies/public-pages";
 
 /**
  * CRM-01: turns the firm's enquiry page (and its embed) on or off. The database checks the firm
@@ -16,6 +17,7 @@ export async function setEnquiryPageEnabled(input: { organizationId: string; ena
   const { error } = await supabase.rpc("set_enquiry_page_enabled", { p_organization_id: input.organizationId, p_enabled: input.enabled === true });
   if (!error) return { ok: true };
   if (/step-up/i.test(error.message)) return { error: "Confirm it’s you with your authenticator, then try again.", stepUp: true };
+  if (noticeRequiredError(error.message) === "enquiry") return { error: NOTICE_REQUIRED.enquiry };
   if (/denied|owner/i.test(error.message)) return { error: "Only the firm owner can turn the enquiry page on or off." };
   return { error: safeAccessError(error.message) };
 }

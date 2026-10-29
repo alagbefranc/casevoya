@@ -9,6 +9,10 @@
 import { Icon } from "./frame";
 import { Badge } from "./matters";
 import { POLICY_BODY_MAX, POLICY_DIALOG, POLICY_KINDS, POLICY_NAME, POLICY_PAGE, type PolicyKind } from "@/modules/portal-policies/defaults";
+import type { PublicPagesWarning } from "@/modules/portal-policies/public-pages";
+
+/** #263-A: the confirm dialog that unpublishes the privacy notice (firm owner). */
+export const PRIVACY_UNPUBLISH_DIALOG = "dlgPrivacyOff";
 
 /** The Designer's Settings tabs, in its order, then this one. */
 export const SETTINGS_TABS = [
@@ -39,6 +43,12 @@ export type PortalPoliciesData = {
   canPublish: boolean;
   /** The privacy contact is not set on the firm: the drafts carry blanks for it. */
   contactMissing: boolean;
+  /** #263-A: the public notice page (/privacy/<firm>), shown while the notice is published. */
+  publicHref?: string | null;
+  /** #263-A: the firm owner may unpublish the privacy notice (public.unpublish_privacy_notice decides). */
+  canUnpublish?: boolean;
+  /** #263-A: the firm's public pages are on without a published notice. */
+  publicPages?: PublicPagesWarning | null;
 };
 
 export type PolicyDialogData = {
@@ -82,8 +92,22 @@ export function SettingsPortalHeader({ firmName }: { firmName: string }) {
 
 const ICON: Record<PolicyKind, string> = { portal_terms: "file-check", privacy_notice: "privacy" };
 
-function Card({ card, canPublish, index }: { card: PolicyCard; canPublish: boolean; index: number }) {
+function Card({
+  card,
+  canPublish,
+  index,
+  publicHref,
+  canUnpublish,
+}: {
+  card: PolicyCard;
+  canPublish: boolean;
+  index: number;
+  publicHref?: string | null;
+  canUnpublish?: boolean;
+}) {
   const dialog = POLICY_DIALOG[card.kind].id;
+  const privacy = card.kind === "privacy_notice";
+  const unpublish = privacy && canUnpublish === true && card.current !== null;
   return (
     <section className={"panel rv"} style={i(index)}>
       <h2>
@@ -110,13 +134,34 @@ function Card({ card, canPublish, index }: { card: PolicyCard; canPublish: boole
             <dt>{"Published"}</dt>
             <dd>{card.current?.publishedOn ?? "—"}</dd>
           </div>
+          {privacy && publicHref !== undefined ? (
+            <div>
+              <dt>{"Public page"}</dt>
+              <dd>
+                {card.current && publicHref ? (
+                  <a className={"tl"} href={publicHref} target={"_blank"} rel={"noopener noreferrer"}>
+                    {"View the public notice"}
+                  </a>
+                ) : (
+                  "Not shown until published"
+                )}
+              </dd>
+            </div>
+          ) : null}
         </dl>
-        {canPublish ? (
+        {canPublish || unpublish ? (
           <div className={"fp-row"} style={{ marginTop: "12px" }}>
-            <button className={card.current ? "btn sm" : "btn p sm"} data-dlg={dialog}>
-              <Icon name={"edit"} cls={"ic s"} />
-              {card.current ? "Publish a new version" : "Review and publish"}
-            </button>
+            {canPublish ? (
+              <button className={card.current ? "btn sm" : "btn p sm"} data-dlg={dialog}>
+                <Icon name={"edit"} cls={"ic s"} />
+                {card.current ? "Publish a new version" : "Review and publish"}
+              </button>
+            ) : null}
+            {unpublish ? (
+              <button className={"btn sm"} data-dlg={PRIVACY_UNPUBLISH_DIALOG}>
+                {"Unpublish"}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -131,9 +176,10 @@ export function SheetPortalPolicies({ data }: { data: PortalPoliciesData }) {
       <div className={"ph rv"} style={i(0)}>
         <div>
           <h1 className={"display"}>{"Client portal"}</h1>
-          <p>{`The terms of use and privacy notice clients accept when they join ${data.firmName}’s portal. Published text never changes; publishing again adds a new version, and clients accept the newest one.`}</p>
+          <p>{`The terms of use and privacy notice clients accept when they join ${data.firmName}’s portal. The privacy notice is also public: your booking and enquiry pages link to it. Published text never changes; publishing again adds a new version, and clients accept the newest one.`}</p>
         </div>
       </div>
+      {data.publicPages ? <PublicPagesAlert warning={data.publicPages} cls={"rv"} index={1} /> : null}
       {missing.length ? (
         <div className={"alert warn rv"} style={i(1)} role={"status"}>
           <Icon name={"alert"} />
@@ -157,13 +203,13 @@ export function SheetPortalPolicies({ data }: { data: PortalPoliciesData }) {
       <div className={"fp-g2 rv"} style={i(2)}>
         {data.cards.map((card, index) => (
           <div key={card.kind}>
-            <Card card={card} canPublish={data.canPublish} index={index + 2} />
+            <Card card={card} canPublish={data.canPublish} index={index + 2} publicHref={data.publicHref} canUnpublish={data.canUnpublish} />
           </div>
         ))}
       </div>
       <p className={"fp-note rv"} style={i(3)}>
         <Icon name={"info"} cls={"ic s"} />
-        {" The starting drafts are plain-language templates for a Canadian immigration consultancy, based on the Privacy Commissioner of Canada’s PIPEDA guidance. They are not legal advice. Review them against your practice and retainer agreement before you publish."}
+        {" The starting drafts are plain-language templates, not legal advice. Your firm is responsible for its own notice and terms: review every part against how your practice works and your retainer agreement, and fill in each part in square brackets, before you publish."}
         {data.contactMissing ? " Your firm has no privacy contact on file, so the drafts leave a blank for it." : ""}
       </p>
     </>
@@ -225,13 +271,89 @@ export function PortalPolicyDialog({ data }: { data: PolicyDialogData }) {
   );
 }
 
-export function PortalPoliciesAfter({ dialogs }: { dialogs: PolicyDialogData[] }) {
+/**
+ * #263-A: confirm before the privacy notice comes down. The button carries `data-privacy-unpublish`
+ * and `data-org`; use-sheet calls public.unpublish_privacy_notice (owner, step-up, audited).
+ */
+export function PrivacyUnpublishDialog({ organizationId }: { organizationId: string }) {
+  const id = PRIVACY_UNPUBLISH_DIALOG;
+  return (
+    <dialog className={"dlg"} id={id} aria-labelledby={`${id}H`}>
+      <div className={"dh"}>
+        <h2 id={`${id}H`}>{"Unpublish the privacy notice?"}</h2>
+        <button className={"x"} aria-label={"Close"} data-close={id}>
+          <Icon name={"close"} cls={"ic s"} />
+        </button>
+      </div>
+      <div className={"db"}>
+        <div className={"alert warn"}>
+          <Icon name={"alert"} />
+          <div>
+            <b>{"Your public notice page and portal invitations stop"}</b>
+            {"The notice comes off its public page, and invited clients can’t join your portal until you publish one again. Clients who already accepted it keep their record, and every published version stays on record."}
+          </div>
+        </div>
+        <p className={"why"}>
+          <Icon name={"shield"} cls={"ic s"} />
+          {"Turn off your enquiry page and unpublish your booking pages first: they can’t be on without a privacy notice. Unpublishing asks you to confirm it’s you."}
+        </p>
+      </div>
+      <div className={"df"}>
+        <button className={"btn"} data-close={id}>
+          {"Cancel"}
+        </button>
+        <button className={"btn p"} data-privacy-unpublish={"1"} data-org={organizationId}>
+          {"Unpublish"}
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
+export function PortalPoliciesAfter({ dialogs, unpublishOrg }: { dialogs: PolicyDialogData[]; unpublishOrg?: string | null }) {
   return (
     <>
       {dialogs.map((dialog) => (
         <PortalPolicyDialog key={dialog.kind} data={dialog} />
       ))}
+      {unpublishOrg ? <PrivacyUnpublishDialog organizationId={unpublishOrg} /> : null}
     </>
+  );
+}
+
+/**
+ * #263-A: the firm's booking or enquiry pages are on without a published privacy notice (Home and
+ * Settings > Client portal). Built from the Designer's `.alert` part; `link` adds the way to publish.
+ */
+export function PublicPagesAlert({
+  warning,
+  style,
+  link,
+  cls,
+  index,
+}: {
+  warning: PublicPagesWarning;
+  style?: React.CSSProperties;
+  link?: boolean;
+  cls?: string;
+  index?: number;
+}) {
+  return (
+    <div className={`alert ${warning.tone}${cls ? ` ${cls}` : ""}`} style={index == null ? style : { ...i(index), ...style }} role={"status"}>
+      <Icon name={"alert"} />
+      <div>
+        <b>{warning.title}</b>
+        {warning.copy}
+        {link ? (
+          <>
+            {" "}
+            <a className={"tl"} href={POLICY_PAGE}>
+              {"Review and publish"}
+            </a>
+          </>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

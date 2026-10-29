@@ -8871,6 +8871,8 @@ export type Database = {
           legal_name: string
           privacy_contact_email: string | null
           privacy_contact_name: string | null
+          privacy_notice_due_at: string | null
+          privacy_notice_withdrawn_at: string | null
           quiet_hours_end: string | null
           quiet_hours_start: string | null
           retention_policy: Json | null
@@ -8905,6 +8907,8 @@ export type Database = {
           legal_name: string
           privacy_contact_email?: string | null
           privacy_contact_name?: string | null
+          privacy_notice_due_at?: string | null
+          privacy_notice_withdrawn_at?: string | null
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null
           retention_policy?: Json | null
@@ -8939,6 +8943,8 @@ export type Database = {
           legal_name?: string
           privacy_contact_email?: string | null
           privacy_contact_name?: string | null
+          privacy_notice_due_at?: string | null
+          privacy_notice_withdrawn_at?: string | null
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null
           retention_policy?: Json | null
@@ -15120,6 +15126,8 @@ export type Database = {
           legal_name: string
           privacy_contact_email: string | null
           privacy_contact_name: string | null
+          privacy_notice_due_at: string | null
+          privacy_notice_withdrawn_at: string | null
           retention_policy: Json | null
           sample_mode: boolean
           slug: string
@@ -15205,6 +15213,8 @@ export type Database = {
           legal_name: string
           privacy_contact_email: string | null
           privacy_contact_name: string | null
+          privacy_notice_due_at: string | null
+          privacy_notice_withdrawn_at: string | null
           retention_policy: Json | null
           sample_mode: boolean
           slug: string
@@ -17766,6 +17776,10 @@ export type Database = {
       unlink_stripe_account: {
         Args: { p_account_id: string; p_confirmation: string; p_org: string; p_reason: string }
         Returns: Json
+      }
+      unpublish_privacy_notice: {
+        Args: { p_organization_id: string }
+        Returns: undefined
       }
       update_firm_profile: {
         Args: { p_changes: Json; p_organization_id: string }

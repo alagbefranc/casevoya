@@ -2,7 +2,8 @@
 
 import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
-import { publishPortalPolicy } from "@/modules/portal-invitations/actions";
+import { publishPortalPolicy, unpublishPrivacyNotice } from "@/modules/portal-invitations/actions";
+import { stepUpHref } from "@/lib/auth/mfa-step";
 import { isPolicyKind, POLICY_DIALOG, POLICY_NAME, policyStepUpLocation, readPolicyDraft, type PolicyKind } from "@/modules/portal-policies/defaults";
 import { needsStepUp, withoutDialog } from "@/modules/sheet/matter-wire";
 
@@ -60,6 +61,27 @@ export async function runPublishPolicy(button: HTMLElement, router: Router) {
   }
   dialog.close();
   toast2(`${POLICY_NAME[kind]} published`, { kind: "ok", sub: `Version ${read.input.versionLabel}. Clients accept it when they join.` });
+  router.replace(withoutDialog(window.location.pathname, window.location.search));
+  router.refresh();
+}
+
+/**
+ * #263-A: Unpublish in the confirm dialog. The database checks the owner and the step-up and
+ * refuses while the enquiry page or a booking page is on; a step-up comes back with the dialog
+ * open (goStepUp keeps the pressed button).
+ */
+export async function runUnpublishPrivacy(button: HTMLElement, router: Router) {
+  const result = await unpublishPrivacyNotice({ organizationId: button.dataset.org ?? "" });
+  if ("error" in result) {
+    if (result.stepUp) {
+      goStepUp(stepUpHref(`${window.location.pathname}${window.location.search}`, "privacy_unpublish"));
+      return;
+    }
+    toast2(result.error, { kind: "bad", sub: "The privacy notice is still published." });
+    return;
+  }
+  button.closest("dialog")?.close();
+  toast2("Privacy notice unpublished", { kind: "ok", sub: "Its public page is off. Publish a new version to bring it back." });
   router.replace(withoutDialog(window.location.pathname, window.location.search));
   router.refresh();
 }

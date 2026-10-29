@@ -136,7 +136,7 @@ import { runExportAct } from "./export-acts";
 import { runMigrationAct, syncMigrationCheck } from "./migration-acts";
 import { inviteFromEdit, openPersonEdit, runPersonEdit } from "./person-edit-act";
 import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-invite-act";
-import { policyDialogId, restorePolicyDraft, runPublishPolicy } from "./portal-policy-act";
+import { policyDialogId, restorePolicyDraft, runPublishPolicy, runUnpublishPrivacy } from "./portal-policy-act";
 import { POLICY_KINDS, policyKindForDialog } from "@/modules/portal-policies/defaults";
 import { restoreStaffInvite, runStaffInvite, runStaffResend, runStaffRevoke } from "./staff-invite-act";
 import { openGrantRevoke, reopenGrantDialog, reopenSupport, runGrantCreate, runGrantRevoke, runSupportAct, runSupportDecline } from "./grants-acts";
@@ -788,6 +788,15 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (policy.getAttribute("aria-busy") === "true") return;
         policy.setAttribute("aria-busy", "true");
         void runPublishPolicy(policy, router).finally(() => policy.removeAttribute("aria-busy"));
+        return;
+      }
+      // #263-A: the firm owner unpublishes the privacy notice (step-up; the database decides).
+      const unpublish = target.closest<HTMLElement>("[data-privacy-unpublish][data-org]");
+      if (unpublish && root.contains(unpublish)) {
+        event.preventDefault();
+        if (unpublish.getAttribute("aria-busy") === "true") return;
+        unpublish.setAttribute("aria-busy", "true");
+        void runUnpublishPrivacy(unpublish, router).finally(() => unpublish.removeAttribute("aria-busy"));
         return;
       }
       // Consultations: row actions, the booking dialogs, working hours and booking types.

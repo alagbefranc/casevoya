@@ -37,6 +37,8 @@ export type PublicEvent = {
    * (signed in, with MFA), and bookings made on it are sample records.
    */
   practice: boolean;
+  /** #263-A: the firm has a published privacy notice; the page links it (/privacy/<firm>). */
+  privacyNotice?: boolean;
 };
 
 export type HoldArgs = {
@@ -84,6 +86,7 @@ export function parsePublicEvent(raw: unknown): PublicEvent | null {
     minNoticeMin: typeof row.min_notice_min === "number" ? row.min_notice_min : 0,
     maxAdvanceDays: typeof row.max_advance_days === "number" ? row.max_advance_days : 60,
     practice: row.practice === true,
+    privacyNotice: row.privacy_notice === true,
   };
 }
 

@@ -20,6 +20,8 @@ type Listing = {
   firm_slug: string;
   /** practice: a sample-mode firm's practice page, listed only for the firm's own staff. */
   types: { slug: string; title: string; description: string | null; duration_min: number; location_kind: string; practice?: boolean }[];
+  /** #263-A: live booking pages closed until the firm publishes its privacy notice. */
+  held?: boolean;
 };
 
 async function Body({ params }: { params: Promise<{ firm: string }> }) {
@@ -46,6 +48,13 @@ async function Body({ params }: { params: Promise<{ firm: string }> }) {
     return (
       <SheetScreen page="book" tone="public">
         <QuietSheet title="Booking isn’t available right now" copy="The firm’s booking pages couldn’t be loaded. Nothing was booked. Try again in a moment." />
+      </SheetScreen>
+    );
+  }
+  if (listing && listing.types.length === 0 && listing.held === true) {
+    return (
+      <SheetScreen page="book" tone="public">
+        <QuietSheet title="Online booking is paused" copy={`${listing.firm_name} needs to publish its privacy notice before it takes bookings online. Nothing was booked.`} />
       </SheetScreen>
     );
   }

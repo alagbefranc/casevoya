@@ -442,7 +442,8 @@ describe("leads: bookings, CSV import and the public enquiry", () => {
   }
 
   it("turns a public booking into a lead at Consultation scheduled, once", async () => {
-    const ctx = await firm();
+    // #263-A: a booking page needs the firm's published privacy notice.
+    const ctx = await firm({ privacy: true });
     const booking = await publicBooking(ctx);
     await as(ctx, ctx.manager);
     const created = await db.query<{ id: string }>(`select public.create_lead_from_booking($1, $2) as id`, [ctx.orgId, booking]);
@@ -455,7 +456,8 @@ describe("leads: bookings, CSV import and the public enquiry", () => {
   });
 
   it("links a booking to an existing lead and moves it forward, never back", async () => {
-    const ctx = await firm();
+    // #263-A: a booking page needs the firm's published privacy notice.
+    const ctx = await firm({ privacy: true });
     const booking = await publicBooking(ctx);
     const id = await createLead(ctx);
     await as(ctx, ctx.manager);

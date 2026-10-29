@@ -1,5 +1,11 @@
 # Client portal terms and privacy notice: sources
 
+> **2026-10-28 (#263-A):** the privacy notice template (`defaultPrivacyNotice`) no longer follows the sources
+> below. It is the firm's public notice too (`/privacy/<firm>`, linked from its booking and enquiry pages), and
+> at Francis's direction it is now plain and neutral: it names the firm as responsible and no law, regulator,
+> time limit or phone number, and leaves every decision to the firm as an `[Add …]` blank the publish check
+> refuses. The sources below still describe the portal terms and remain useful background for a firm's review.
+
 The starting drafts in `src/modules/portal-policies/defaults.ts` (`defaultPortalTerms`,
 `defaultPrivacyNotice`) are plain-language templates for a Canadian immigration consultancy
 (RCIC) client portal. They are **not legal advice**. Each firm reviews, edits and publishes its

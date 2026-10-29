@@ -64,6 +64,7 @@ const ACTIONS = {
   intake_publish: { phrase: "publish an intake form", icon: "file", title: "Publish an intake form", detail: "The questions clients are asked" },
   intake_delete: { phrase: "delete an intake form", icon: "trash", title: "Delete an intake form", detail: "The form stops being offered to clients" },
   portal_policy: { phrase: "publish a portal policy", icon: "privacy", title: "Publish a portal policy", detail: "Terms and privacy notice clients accept" },
+  privacy_unpublish: { phrase: "unpublish the privacy notice", icon: "privacy", title: "Unpublish the privacy notice", detail: "Your public notice page and portal acceptance" },
   portal_invite: { phrase: "invite a client to the portal", icon: "user-plus", title: "Invite a client to the portal", detail: "What this person can see once they join" },
   go_live: { phrase: "switch the firm to live", icon: "toggle", title: "Switch to live", detail: "Real clients and records from now on" },
   import_signoff: { phrase: "sign off an import", icon: "import", title: "Sign off an import", detail: "Records moving into Casevoya from another system" },

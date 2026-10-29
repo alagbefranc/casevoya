@@ -1139,6 +1139,13 @@ Issue #259 fix 5, branch `fix/onboarding-259`. Apply in order. Each Continue on 
 
 Tested in `tests/setup-office.rls.test.ts`.
 
+## Firm privacy notice for public pages (`20261028120000`, not applied on the live project)
+
+Issue #263 item A, branch `feat/firm-privacy-notice`. Additive.
+
+* `20261028120000_firm_privacy_notice.sql`: new columns `organizations.privacy_notice_withdrawn_at` (set by the new `unpublish_privacy_notice`) and `organizations.privacy_notice_due_at` (the warning period; backfilled to `now() + 30 days` for firms with a live, non-sample booking type and no privacy notice, null otherwise). Neither is writable through the API (no update grant on `organizations`). New `app.firm_privacy_notice_published(org)` and `app.firm_booking_pages_open(org)` (private). New `public.unpublish_privacy_notice(org)`: `require_firm_owner_step_up`; `P0002` when nothing is published; `55000` while the enquiry page or a live booking type is on; audited `privacy_notice.unpublished`. **Redefined** (latest definition copied, change only): `app.current_portal_policy` (latest `20261017140800_portal_invitations.sql`; skips a privacy notice published at or before the withdrawal), `public.set_enquiry_page_enabled` and `public.enquiry_public_firm` (latest `20261024140000_enquiry_page_controls.sql`; turning on needs a notice, a withdrawn notice counts as none), `public.save_booking_event_type` (latest `20261023090000_version_conflicts_not_retried.sql`; publishing a type that isn't live yet needs a notice, practice types exempt), `public.booking_public_event`, `public.booking_public_event_types`, `public.booking_public_busy` (latest `20261019190000_booking_practice_pages.sql`) and `public.booking_public_hold` (latest `20261023190000_booking_agreement_mail.sql`): a live firm's pages need `app.firm_booking_pages_open`; `booking_public_event` adds `privacy_notice`, `booking_public_event_types` adds `held`. Signatures and grants unchanged.
+
+Tested in `tests/firm-privacy-notice.rls.test.ts` and `tests/firm-privacy-notice.test.tsx`; booking fixtures publish a notice first (`tests/helpers/privacy-notice.ts`).
 ## Virus scanning for uploads (`20261028130000`, `20261028130100`, not applied on the live project)
 
 Issue #263 item B, branch `feat/upload-virus-scan`. Apply in order. Nothing changes until `documents.accept_structural_inspection` is set to false (see `docs/integrations/av-scanner.md`).

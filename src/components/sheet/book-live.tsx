@@ -5,6 +5,7 @@ import { BookPage, type BookPageData } from "@/components/sheet/designer/book";
 import { COMMON_ZONES, PRACTICE_NOTICE, locationLabel, longWhen, safeZone, slotLabel } from "@/modules/scheduling/format";
 import type { BookingSummary, PublicEvent } from "@/modules/scheduling/public-api";
 import { decodeStarts, isTimeZone } from "@/modules/scheduling/slots";
+import { privacyPath } from "@/modules/leads/privacy";
 
 const PAGE = 12;
 const RANGE_DAYS = 28;
@@ -33,7 +34,8 @@ export function bookPageBase(event: PublicEvent, zone: string): Omit<BookPageDat
     fee: null,
     meet: [locationLabel(event.locationKind, event.locationDetail)],
     note: "This consultation is free. You’ll get a confirmation email with the time in your timezone.",
-    footer: { firm: event.firmName, privacyHref: null },
+    // #263-A: the firm's published privacy notice, as on its enquiry page and booking list.
+    footer: { firm: event.firmName, privacyHref: event.privacyNotice && event.firmSlug ? privacyPath(event.firmSlug) : null },
     practice: event.practice ? { ...PRACTICE_NOTICE } : null,
   };
 }

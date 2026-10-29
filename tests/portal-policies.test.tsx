@@ -16,6 +16,7 @@ import {
   defaultPortalTerms,
   defaultPrivacyNotice,
   missingPolicies,
+  PRIVACY_TEMPLATE_REVIEW,
   nextVersionLabel,
   policyKindForDialog,
   policyPublishError,
@@ -65,24 +66,34 @@ describe("default portal policy drafts", () => {
     }
   });
 
-  it("follow PIPEDA's principles in the privacy notice: accountability, purposes, consent, sharing, retention, safeguards, access and complaints", () => {
+  it("give a neutral privacy notice template the firm must review: it names the firm as responsible and no law (#263-A)", () => {
     const { body } = defaultPrivacyNotice(FIRM);
     for (const heading of [
       "Who is responsible",
       "What we collect",
-      "Why we collect it",
-      "Your choices and consent",
+      "Why we use it",
       "Who we share it with",
+      "Where it is stored",
       "How long we keep it",
       "How we protect it",
-      "Accuracy, access and correction",
+      "Your choices",
       "Questions and complaints",
+      "Changes to this notice",
     ]) {
       expect(body).toContain(heading);
     }
-    expect(body).toContain("withdraw your consent");
-    expect(body).toContain("Office of the Privacy Commissioner of Canada");
-    expect(body).toContain("We do not sell your personal information.");
+    expect(body).toContain("Maple Immigration is responsible for the personal information described here");
+    // Plain and neutral: no named law, regulator, statutory time limit or phone number.
+    expect(body).not.toMatch(/PIPEDA|Personal Information Protection|Privacy Commissioner|College of Immigration|30 days|1-800|priv\.gc\.ca|real risk of significant harm/);
+    // It says plainly that it is a template, and the publish check refuses it until the review line is gone.
+    expect(body.startsWith(PRIVACY_TEMPLATE_REVIEW)).toBe(true);
+    expect(PRIVACY_TEMPLATE_REVIEW).toContain("not legal advice");
+    const read = readPolicyDraft({ kind: "privacy_notice", versionLabel: "1", title: "Privacy notice", body });
+    expect(read).toEqual({ error: expect.stringContaining("Next one: [Add your review") });
+    // Every decision is the firm's: what it collects, purposes, sharing, storage, retention, safeguards, requests, complaints.
+    expect(body.match(/\[Add [^\]]*\]/g)?.length).toBe(9);
+    // What the public booking and enquiry pages collect is described.
+    expect(body).toContain("When you send us an enquiry or book a consultation");
   });
 
   it("say the portal status is not a live IRCC feed and point to the retainer agreement", () => {

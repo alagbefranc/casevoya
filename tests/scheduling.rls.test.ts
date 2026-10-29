@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asAnon, asMaintenance, asServiceRole, asUser, countOf, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { publishTestPrivacyNotice } from "./helpers/privacy-notice";
 
 // Scheduling (20261019180000_scheduling_enums, 20261019180100_scheduling_core,
 // 20261019180200_scheduling_mail): RLS, the no-double-booking exclusion constraint, the public
@@ -58,6 +59,8 @@ async function firm(options: { sample?: boolean; hosts?: number } = {}) {
   const orgId = created.rows[0].id;
   await asMaintenance(db);
   if (!options.sample) await db.query(`update public.organizations set sample_mode = false where id = $1`, [orgId]);
+  // #263-A: booking pages need the firm's published privacy notice.
+  await publishTestPrivacyNotice(db, orgId);
   const hosts: { user: { id: string; email: string }; membershipId: string }[] = [];
   for (let i = 0; i < (options.hosts ?? 1); i++) {
     const user = await createUser(`host${i}`, `Synthetic Host ${i + 1}`);

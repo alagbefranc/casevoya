@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asAnon, asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { publishTestPrivacyNotice } from "./helpers/privacy-notice";
 
 // #263 item C (20261028140000_booking_possible_match.sql): a booking-page booking made with the
 // email of an existing person of the firm is never linked to them by itself. The match is recorded
@@ -61,6 +62,8 @@ async function firm() {
   const orgId = created.rows[0].id;
   await asMaintenance(db);
   await db.query(`update public.organizations set sample_mode = false, timezone = $2 where id = $1`, [orgId, TZ]);
+  // #263-A: booking pages need the firm's published privacy notice.
+  await publishTestPrivacyNotice(db, orgId);
   const host = await createUser("host", "Synthetic Host");
   const hostMembership = await membership(orgId, host.id, "licensed_consultant");
   await asUser(db, staff(host.id, orgId));

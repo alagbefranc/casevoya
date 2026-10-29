@@ -11,6 +11,7 @@ import { acceptLink } from "@/modules/sheet/portal-invite";
 import { acceptWithClient } from "@/modules/portal-invitations/accept";
 import { portalError } from "@/modules/portal-invitations/errors";
 import { policyPublishError, readPolicyDraft } from "@/modules/portal-policies/defaults";
+import { NOTICE_REQUIRED, noticeRequiredError } from "@/modules/portal-policies/public-pages";
 import { isPortalInviteRole, type PortalAcceptPayload, type PortalInviteRole } from "@/modules/portal-invitations/types";
 
 type RpcResult = { ok?: boolean; error?: string; status?: string; token?: string; invitation_id?: string; expires_at?: string; role?: string };
@@ -138,6 +139,23 @@ export async function publishPortalPolicy(input: {
   if (error) return { error: policyPublishError(error) ?? safeAccessError(error.message) };
   if (typeof data !== "string" || !isUuid(data)) return { error: "That policy could not be published." };
   return { id: data };
+}
+
+/**
+ * #263-A: the firm owner takes the privacy notice down (its public page and portal acceptance).
+ * The database checks the owner and the step-up, refuses while the enquiry page or a live booking
+ * page is on, and audits it. Published versions stay on record.
+ */
+export async function unpublishPrivacyNotice(input: { organizationId: string }): Promise<{ ok: true } | { error: string; stepUp?: boolean }> {
+  const session = await staffClient(input.organizationId, null);
+  if ("error" in session) return { error: session.error ?? "Sign in first." };
+  const { error } = await session.supabase.rpc("unpublish_privacy_notice", { p_organization_id: input.organizationId });
+  if (!error) return { ok: true };
+  if (/step-up/i.test(error.message)) return { error: "Confirm it’s you with your authenticator, then try again.", stepUp: true };
+  const required = noticeRequiredError(error.message);
+  if (required) return { error: NOTICE_REQUIRED[required] };
+  if (/no privacy notice is published/.test(error.message)) return { error: "There’s no published privacy notice to unpublish." };
+  return { error: safeAccessError(error.message) };
 }
 
 export async function recordPersonSection(input: {

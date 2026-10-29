@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asAnon, asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { publishTestPrivacyNotice } from "./helpers/privacy-notice";
 
 // 20261019235000_leads_calendar_fixes: Edit lead's Source (set_lead_source), archiving a booking
 // type (archive_booking_event_type), and a cancelled consultation moving its lead back
@@ -50,6 +51,8 @@ async function firm() {
   const orgId = created.rows[0].id;
   await asMaintenance(db);
   await db.query(`update public.organizations set sample_mode = false where id = $1`, [orgId]);
+  // #263-A: booking pages need the firm's published privacy notice.
+  await publishTestPrivacyNotice(db, orgId);
   const consultant = await createUser("consultant");
   const manager = await createUser("manager");
   const finance = await createUser("finance");

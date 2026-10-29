@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { publishTestPrivacyNotice } from "./helpers/privacy-notice";
 import { parseAvailability, slotsFromAvailability } from "@/modules/scheduling/availability";
 
 // Portal appointments (20261020150000–20261020150200): a client moves or cancels their own
@@ -60,6 +61,8 @@ async function firm(options: { notice?: number; capacity?: number | null } = {})
   const orgId = created.rows[0].id;
   await asMaintenance(db);
   await db.query(`update public.organizations set sample_mode = false, timezone = $2 where id = $1`, [orgId, TZ]);
+  // #263-A: booking pages need the firm's published privacy notice.
+  await publishTestPrivacyNotice(db, orgId);
   const host = await createUser("host", "Synthetic Host");
   const hostMembership = await membership(orgId, host.id, "licensed_consultant");
   await asUser(db, staff(host.id, orgId));
