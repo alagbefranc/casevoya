@@ -12,7 +12,7 @@ import { serviceScanDeps } from "@/modules/documents/scan-service";
  * scripts/rescan-legacy-documents.mjs with {"backfill": true} for files stored before scanning.
  * Each run takes a few files; the rest wait for the next minute. Each scan request lets the
  * scanner wake and load first (RUNNER_SCAN_BUDGET, up to 140 s), so the kick waits 240 s
- * (20261029200000): a Worker whose caller disconnects may be cancelled.
+ * (20261029200100): a Worker whose caller disconnects may be cancelled.
  */
 export async function POST(request: Request) {
   const config = emailRuntimeConfig();

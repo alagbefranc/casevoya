@@ -140,7 +140,7 @@ describe("app scan budgets (src/modules/documents/virus-scan.ts, scan-service.ts
   it("the runner waits for warm-up plus a scan; the upload keeps its short wait and asks for no warm-up", () => {
     expect(RUNNER_SCAN_BUDGET).toEqual({ warmupMs: SCANNER_WARMUP_MS, timeoutMs: SCANNER_WARMUP_MS + SCAN_TIMEOUT_MS });
     expect(INLINE_SCAN_BUDGET).toEqual({ warmupMs: 0, timeoutMs: 20_000 });
-    // The pg_net kick (20261029200000) waits 240 s; the runner's first scan fits inside it.
+    // The pg_net kick (20261029200100) waits 240 s; the runner's first scan fits inside it.
     expect(RUNNER_SCAN_BUDGET.timeoutMs).toBeLessThan(240_000);
   });
 

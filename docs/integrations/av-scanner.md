@@ -96,7 +96,7 @@ The fix (no change to fail closed: nothing becomes clean without a real scan):
    from pg_cron) sends 90 s and waits up to 140 s per scan (`RUNNER_SCAN_BUDGET`). The upload
    itself sends 0 and keeps its 20 s wait (`INLINE_SCAN_BUDGET`), so a cold scanner never slows
    the person's upload; the file stays held and the runner picks it up a minute later.
-3. Migration `20261029200000_document_scan_kick_timeout.sql`: `app.kick_document_scans` waits
+3. Migration `20261029200100_document_scan_kick_timeout.sql`: `app.kick_document_scans` waits
    240 s instead of 55 s. Nothing reads pg_net's response (it lands in `net._http_response`; the
    runner records each answer itself), but the connection matters: Cloudflare may cancel a Worker
    when its client disconnects, and there is no duration limit while it stays connected
