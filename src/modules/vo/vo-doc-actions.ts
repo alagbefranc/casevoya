@@ -14,6 +14,29 @@ const TOKEN_LIFETIME_MS = 2 * 60_000;
 const READ_TIMEOUT_MS = 150_000;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+type Client = Awaited<ReturnType<typeof createClient>>;
+
+/** Decision #263-3: name the client (read as this staff member; RLS decides) and say how they consent. */
+async function clientAiOff(supabase: Client, organizationId: string, personId: string | undefined): Promise<{ error: string; code: "client_ai_off" }> {
+  const { data: person } = personId && isUuid(personId)
+    ? await supabase.from("persons").select("display_name, user_id").eq("organization_id", organizationId).eq("id", personId).maybeSingle()
+    : { data: null };
+  return { error: clientAiOffMessage(person?.display_name ?? null, Boolean(person?.user_id)), code: "client_ai_off" };
+}
+
+/**
+ * #272: before "Read with Vo" says Vo is reading, whether the client hasn't agreed to AI help
+ * (public.vo_document_client_ai_off, the same test the reading makes). The refusal, or null when
+ * the reading may go ahead (it still checks everything itself).
+ */
+export async function voReadConsentRefusal(input: { organizationId: string; versionId: string }): Promise<{ error: string; code: "client_ai_off" } | null> {
+  if (!isUuid(input.organizationId) || !isUuid(input.versionId)) return null;
+  const supabase = await createClient({ organizationId: input.organizationId });
+  const { data, error } = await supabase.rpc("vo_document_client_ai_off", { p_organization_id: input.organizationId, p_version_id: input.versionId });
+  const row = (error ? null : data) as { client_ai_off?: boolean; person_id?: string } | null;
+  return row?.client_ai_off === true ? clientAiOff(supabase, input.organizationId, row.person_id) : null;
+}
+
 /**
  * "Read with Vo" from a document's review dialog (PRD AI-01..AI-06). The database checks the
  * person (staff, MFA and a fresh second factor, like Open file), the version and its matter, Vo
@@ -49,13 +72,7 @@ export async function readDocumentWithVo(input: {
   if (begun.error) return { error: /step-up|aal2/i.test(begun.error.message) ? safeAccessError(begun.error.message) : voError("denied") };
   const run = (begun.data ?? {}) as { ok?: boolean; error?: string; run_id?: string; matter_id?: string; draft_id?: string; category?: string; person_id?: string };
   if (run.ok !== true || !run.run_id || !run.matter_id) {
-    if (run.error === "client_ai_off") {
-      // Decision #263-3: name the client (read as this staff member; RLS decides) and say how they consent.
-      const { data: person } = run.person_id && isUuid(run.person_id)
-        ? await supabase.from("persons").select("display_name, user_id").eq("organization_id", input.organizationId).eq("id", run.person_id).maybeSingle()
-        : { data: null };
-      return { error: clientAiOffMessage(person?.display_name ?? null, Boolean(person?.user_id)), code: "client_ai_off" };
-    }
+    if (run.error === "client_ai_off") return clientAiOff(supabase, input.organizationId, run.person_id);
     if (run.error === "already_read" && run.draft_id && run.matter_id) return { error: voError("already_read"), draftId: run.draft_id, matterId: run.matter_id };
     if (run.error === "category_off" && run.category && run.category in VO_DOC_CATEGORY_LABEL) {
       return { error: `${voError("category_off")} (${VO_DOC_CATEGORY_LABEL[run.category as VoDocCategory]})` };

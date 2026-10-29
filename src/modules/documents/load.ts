@@ -86,6 +86,22 @@ function formatWhen(value: string | null, timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", { day: "numeric", month: "short", timeZone }).format(date);
 }
 
+/**
+ * Who each request is for, by person id: the people the viewer can read, then (#272) the names of
+ * others on their matter whose requests they can see (public.portal_request_person_names), so a
+ * sponsor sees "Elias Lindqvist", never "Person", on a co-applicant's request.
+ */
+export function portalPersonNames(
+  people: readonly { id: string; displayName: string }[],
+  requestNames: readonly { person_id: string; display_name: string }[] | null | undefined,
+): Map<string, string> {
+  const names = new Map(people.map((person) => [person.id, person.displayName]));
+  for (const row of requestNames ?? []) {
+    if (row.person_id && row.display_name && !names.has(row.person_id)) names.set(row.person_id, row.display_name);
+  }
+  return names;
+}
+
 /** Past its expiry on the firm's today, as app.request_version_satisfies counts it. */
 function expired(expiresOn: string | null, timeZone: string): boolean {
   if (!expiresOn) return false;
@@ -96,7 +112,7 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
   const supabase = await createClient({ organizationId: viewer.organizationId });
   const canReview = REVIEW_ROLES.has(viewer.role);
   const matterId = viewer.matters[0]?.id ?? null;
-  const [{ data: requests, error: requestsError }, { data: documents, error: documentsError }, { data: versions, error: versionsError }, { data: refs }, { data: reviews, error: reviewsError }, { data: translations }, progress, limit, sources] =
+  const [{ data: requests, error: requestsError }, { data: documents, error: documentsError }, { data: versions, error: versionsError }, { data: refs }, { data: reviews, error: reviewsError }, { data: translations }, progress, limit, sources, { data: requestNames }] =
     await Promise.all([
       supabase
         .from("document_requests")
@@ -119,12 +135,15 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
         : Promise.resolve({ data: null }),
       supabase.rpc("document_upload_limit", { p_organization_id: viewer.organizationId }),
       supabase.rpc("portal_claim_sources"),
+      // #272: persons RLS hides another adult on the matter (a co-applicant without a login) from
+      // the sponsor; this narrow read gives only the names on requests the viewer can already see.
+      supabase.rpc("portal_request_person_names"),
     ]);
   const sourceByRequest = claimSourcesFrom(sources.error ? null : sources.data);
   // DES-04: unreadable is not "no documents requested"; the page shows its couldn't-load state.
   if (requestsError || documentsError || versionsError) throw new Error("portal documents unreadable");
 
-  const names = new Map(viewer.people.map((person) => [person.id, person.displayName]));
+  const names = portalPersonNames(viewer.people, requestNames);
   const docs = new Map((documents ?? []).map((row) => [row.id, row]));
   const frenchByReview = new Map((translations ?? []).map((row) => [row.review_id, row.reason]));
   const reasonByVersion = new Map<string, ShownText>();

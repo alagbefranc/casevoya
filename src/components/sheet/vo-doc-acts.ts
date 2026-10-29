@@ -6,7 +6,7 @@ import { reviewStepUpLocation } from "@/modules/sheet/documents-review";
 import { keepReviewDraft } from "./documents-acts";
 import { needsStepUp } from "@/modules/sheet/matter-wire";
 import { readingHref } from "@/modules/sheet/vo-present";
-import { acceptVoDocProposal, discardVoDocDraft, readDocumentWithVo, rejectVoDocProposal } from "@/modules/vo/vo-doc-actions";
+import { acceptVoDocProposal, discardVoDocDraft, readDocumentWithVo, rejectVoDocProposal, voReadConsentRefusal } from "@/modules/vo/vo-doc-actions";
 
 type Router = { push: (href: string) => void; refresh: () => void };
 
@@ -17,6 +17,12 @@ type Router = { push: (href: string) => void; refresh: () => void };
 export async function runVoRead(button: HTMLElement, router: Router) {
   const dialog = button.closest("dialog");
   const versionId = dialog?.dataset.doc ?? "";
+  // #272: a client who hasn't agreed to AI help is refused before "Vo is reading" shows.
+  const refused = await voReadConsentRefusal({ organizationId: button.dataset.org ?? "", versionId }).catch(() => null);
+  if (refused) {
+    toast2(refused.error, { kind: "bad", sub: "Nothing was changed." });
+    return;
+  }
   toast2("Vo is reading the document", { kind: "", sub: "Usually under a minute. Nothing changes until you accept." });
   const result = await readDocumentWithVo({ organizationId: button.dataset.org ?? "", versionId });
   if ("error" in result) {

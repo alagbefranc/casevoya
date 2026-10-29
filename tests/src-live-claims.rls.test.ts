@@ -520,4 +520,25 @@ describe("the support catalogue", () => {
     const catalogue = (await db.query<{ c: { programs: Record<string, unknown>[] } }>(`select public.support_catalogue(null) as c`)).rows[0].c;
     expect(catalogue.programs.find((row) => row.key === program)).toMatchObject({ supported: true, official_claims: 1, stale: true });
   });
+
+  // #272 item 6: such a program (no catalogue entry, no rule pack) was offered in New matter as
+  // "v?" and then refused with "choose a program from the support catalogue".
+  it("opens a matter for a program listed only through live official claims, with no rule pack", async () => {
+    const program = `synthetic_${tag()}`;
+    await load([{ category: "checklist", program }]);
+    const f = await firm();
+    await as(f.owner, f.orgId, 0);
+    const created = (
+      await db.query<{ r: Record<string, unknown> }>(
+        `select public.create_client_matter_for_program('Synthetic Applicant', null, null, null, $1, $2) as r`,
+        [f.consultantMembership, program],
+      )
+    ).rows[0].r;
+    expect(created).toMatchObject({ ok: true, program_key: program, rule_pack_version_id: null });
+    // A program the catalogue doesn't list at all is still refused.
+    await expectDbError(
+      () => db.query(`select public.create_client_matter_for_program('Synthetic Applicant', null, null, null, $1, $2)`, [f.consultantMembership, `synthetic_unknown_${tag()}`]),
+      /choose a program from the support catalogue/,
+    );
+  });
 });
