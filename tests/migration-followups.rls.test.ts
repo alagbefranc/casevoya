@@ -277,7 +277,9 @@ describe("MIG follow-ups: key dates, relationships and opening balances say wher
     const opening = await provenance("opening_balances", balanceIds);
     expect(opening).toHaveLength(2);
     expect(opening.every((row) => row.system === SYSTEM && row.created && row.original_at)).toBe(true);
-    expect(JSON.stringify([deadlines, relationships, opening])).not.toMatch(/Synthetic permit|125|applicant\.a/);
+    // No label, amount or address leaks into provenance. The amount is matched as a whole JSON value:
+    // a random uuid or a millisecond timestamp can contain the digits 125.
+    expect(JSON.stringify([deadlines, relationships, opening])).not.toMatch(/Synthetic permit|[:"]125(\.0+)?[",}\]]|applicant\.a/);
 
     // Imported history is not a native audit event: no deadline, relationship or balance audit row
     // dated at the file's original date exists.

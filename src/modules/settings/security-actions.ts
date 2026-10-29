@@ -1,5 +1,6 @@
 "use server";
 
+import { refresh } from "next/cache";
 import { safeAccessError } from "@/lib/auth/step-up";
 import { verifyTotpCode } from "@/lib/auth/verify-totp";
 import { createClient } from "@/lib/supabase/server";
@@ -22,5 +23,7 @@ export async function setStaffIdleTimeout(input: { organizationId: string; minut
   if (!verified.ok) return { error: verified.error };
   const { data, error } = await supabase.rpc("set_staff_idle_timeout", { p_organization_id: input.organizationId, p_minutes: read.minutes });
   if (error) return { error: /5 to 480/.test(error.message) ? "Choose 5 to 480 minutes." : safeAccessError(error.message) };
+  // #272: refresh from the action too, so the Security tab's row can't keep the old time.
+  refresh();
   return { minutes: typeof data === "number" ? data : read.minutes };
 }

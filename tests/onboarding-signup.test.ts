@@ -5,8 +5,10 @@ import {
   isRateLimited,
   messageParts,
   plainMessage,
+  RATE_LIMIT_BUFFER_SECONDS,
   rateLimitSeconds,
   rateLimitText,
+  secondsLeft,
   signUpEmailTaken,
 } from "@/lib/auth/signup-errors";
 
@@ -106,7 +108,8 @@ describe("rate limit (fix 7)", () => {
   it("replaces Supabase's raw text with a friendly message and the seconds to count down", async () => {
     state.signUp = { session: null, user: null, error: RATE };
     const result = await signUpForTrial(TRIAL);
-    expect(result).toEqual({ ok: false, message: rateLimitText(16), inline: true, retryAfter: 16 });
+    const wait = 16 + RATE_LIMIT_BUFFER_SECONDS;
+    expect(result).toEqual({ ok: false, message: rateLimitText(wait), inline: true, retryAfter: wait });
     expect(JSON.stringify(result)).not.toContain("For security purposes");
   });
 
@@ -118,12 +121,39 @@ describe("rate limit (fix 7)", () => {
   it("reads the wait and counts it down in words", () => {
     expect(isRateLimited(RATE)).toBe(true);
     expect(isRateLimited({ message: "Invalid login credentials" })).toBe(false);
-    expect(rateLimitSeconds(RATE)).toBe(16);
+    expect(rateLimitSeconds(RATE)).toBe(16 + RATE_LIMIT_BUFFER_SECONDS);
     expect(rateLimitSeconds({ message: "Email rate limit exceeded" })).toBeNull();
     expect(rateLimitText(16)).toBe("We just sent you an email. You can try again in 16 seconds.");
     expect(rateLimitText(1)).toBe("We just sent you an email. You can try again in 1 second.");
     expect(rateLimitText(0)).toBe("You can try again now.");
     expect(rateLimitText(null)).toBe("We just sent you an email. Wait a minute, then try again.");
+  });
+
+  it("issue #261: the button waits until Supabase's wait has really passed", () => {
+    // Supabase rounds its remaining wait down to whole seconds. Whatever is really left, the
+    // countdown we start from its words must not end before it.
+    for (const remainingMs of [50, 400, 999, 1000, 1001, 15_200, 15_999, 59_999]) {
+      const named = Math.floor(remainingMs / 1000);
+      const wait = rateLimitSeconds({ message: `For security purposes, you can only request this after ${named} seconds.` });
+      expect(wait, `${remainingMs}ms left`).not.toBeNull();
+      expect(wait! * 1000, `${remainingMs}ms left`).toBeGreaterThan(remainingMs);
+    }
+  });
+
+  it("issue #261: a click that is still rate-limited restarts the countdown, not the generic words", async () => {
+    state.signUp = { session: null, user: null, error: { ...RATE, message: "For security purposes, you can only request this after 0 seconds." } };
+    const result = await signUpForTrial(TRIAL);
+    expect(result).toEqual({ ok: false, message: rateLimitText(RATE_LIMIT_BUFFER_SECONDS), inline: true, retryAfter: RATE_LIMIT_BUFFER_SECONDS });
+    expect(JSON.stringify(result)).not.toContain("Wait a minute");
+  });
+
+  it("issue #261: the countdown runs off the clock, so a late timer never re-enables early", () => {
+    const until = 1_000_000 + 18_000;
+    expect(secondsLeft(until, 1_000_000)).toBe(18);
+    expect(secondsLeft(until, 1_000_000 + 17_001)).toBe(1);
+    expect(secondsLeft(until, until - 1)).toBe(1);
+    expect(secondsLeft(until, until)).toBe(0);
+    expect(secondsLeft(until, until + 5_000)).toBe(0);
   });
 
   it("turns only same-site paths into links", () => {

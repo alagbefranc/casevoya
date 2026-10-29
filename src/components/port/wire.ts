@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import { safeNext } from "@/lib/auth/redirect";
+import { recoveryCodesShown } from "@/lib/auth/mfa-step";
 import { createClient } from "@/lib/supabase/client";
 import {
   acceptPortalInvitation,
@@ -393,6 +394,10 @@ export function usePortActions(page: string, token?: string) {
               status.textContent = "Setup couldn’t start. Reload this page to try again.";
             }
           }
+        }
+        // Never an empty recovery-codes list (issue #261): only a verified authenticator code fills it.
+        if (page === "mfa" && event.step === 3 && !recoveryCodesShown(event.root)) {
+          event.root.dispatchEvent(new CustomEvent("port-go", { detail: "#2" }));
         }
         if (page === "start-trial" && event.step === 1) showSignupEmail(event.root);
         if (page === "setup" && event.step === 0 && session.assured) {

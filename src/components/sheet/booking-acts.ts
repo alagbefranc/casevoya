@@ -511,7 +511,11 @@ export async function runBookingType(button: HTMLElement, router: Router, root: 
     agreementTemplateId: el(dialog, "etA") ? value(dialog, "etA") || null : undefined,
   });
   if ("ok" in result) rememberSavedType(root, dialog, result);
-  done(result, { title: "Booking type saved", sub: "The booking page shows published types only." }, dialog, router);
+  const saved = done(result, { title: "Booking type saved", sub: "The booking page shows published types only." }, dialog, router);
+  // #272: a new type (the first one most of all) could stay out of the list until a reload, when
+  // the refresh landed on the render from before the save (as on #149). A new type has no row to
+  // update in place, so the page is read again once the toast is up.
+  if (saved && !button.dataset.typeId) window.setTimeout(() => window.location.replace(`${window.location.pathname}${window.location.search}`), 600);
 }
 
 /**

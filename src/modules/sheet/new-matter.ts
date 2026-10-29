@@ -94,8 +94,12 @@ export function programChoices(programs: unknown): { options: NewMatterOption[];
       const official = row.official?.reviewed === true && typeof row.official.name === "string" ? row.official.name : null;
       const name = official ?? (typeof row.label === "string" && row.label.trim() ? row.label.trim() : programLabel(key));
       const supported = row.supported === true;
+      // #272: a program can be supported through live official form and checklist claims with no
+      // approved rule pack; it has no pack version to show (it read "v?"), so the label says so.
       const label = supported
-        ? `${name} · v${typeof row.pack_version === "number" ? row.pack_version : "?"}`
+        ? typeof row.pack_version === "number"
+          ? `${name} · v${row.pack_version}`
+          : `${name} · official forms and checklists, no rule pack`
         : `${name} (not supported: no approved rule pack)`;
       return [{ value: key, label, supported }];
     })

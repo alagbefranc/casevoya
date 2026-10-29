@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
-import { messageParts, rateLimitText } from "@/lib/auth/signup-errors";
+import { messageParts, rateLimitText, secondsLeft } from "@/lib/auth/signup-errors";
 import { busyBtn, clearBtn, icon, k2Count, k2Slider, k2Spark, morphText, settleBtn, toast2, voPose } from "./kit";
 
 export type PortResult =
@@ -24,6 +24,19 @@ const CHECK = `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true
 
 /** The class that plays a step panel's slide-back animation (auth.css `[data-step].on.st-back`). */
 export const STEP_BACK = "st-back";
+
+/**
+ * Which `[data-show]` notice a screen opens with, from its query: `?state=`, `?error=` (the sign-in
+ * error) or `?idle=1` (#272: the Sheet's idle guard signed the person out).
+ */
+export function portNoticeState(search: string): string | null {
+  const params = new URLSearchParams(search);
+  const state = params.get("state");
+  if (state) return state;
+  if (params.get("error")) return "error";
+  if (params.get("idle") === "1") return "idle";
+  return null;
+}
 
 function all<T extends Element>(root: ParentNode, selector: string) {
   return [...root.querySelectorAll<T>(selector)];
@@ -189,22 +202,23 @@ export function usePort(
       summary.focus();
       pose("worried");
       if (retryAfter && retryAfter > 0) {
-        let left = Math.min(Math.round(retryAfter), 3600);
+        // Off the clock, not by counting ticks: a throttled background tab must not re-enable early (#261).
+        const until = Date.now() + Math.min(Math.ceil(retryAfter), 3600) * 1000;
         button.setAttribute("aria-disabled", "true");
         const tick = () => {
           if (stopped || !summary.isConnected) {
             button.removeAttribute("aria-disabled");
             return;
           }
-          left -= 1;
+          const left = secondsLeft(until, Date.now());
           write(rateLimitText(left));
           if (left <= 0) {
             button.removeAttribute("aria-disabled");
             return;
           }
-          countdown = window.setTimeout(tick, 1000);
+          countdown = window.setTimeout(tick, (until - Date.now()) % 1000 || 1000);
         };
-        countdown = window.setTimeout(tick, 1000);
+        countdown = window.setTimeout(tick, (until - Date.now()) % 1000 || 1000);
       }
     };
 
@@ -455,9 +469,7 @@ export function usePort(
     });
 
     const params = new URLSearchParams(location.search);
-    let state = params.get("state");
-    if (!state && params.get("error")) state = "error";
-    showState(state);
+    showState(portNoticeState(location.search));
     if (params.get("sent") === "1") {
       toast2("Check your email", { kind: "ok", sub: "Use the newest sign-in message." });
     }

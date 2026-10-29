@@ -1,7 +1,7 @@
 "use client";
 
 import { toast2 } from "@/components/port/kit";
-import { readIdleMinutes } from "@/modules/security/idle";
+import { idleDetail, readIdleMinutes } from "@/modules/security/idle";
 import { setStaffIdleTimeout } from "@/modules/settings/security-actions";
 import { IDLE_TIMEOUT_DIALOG } from "@/modules/sheet/settings-present";
 
@@ -27,6 +27,23 @@ export async function runIdleTimeout(button: HTMLElement, router: Router) {
     return;
   }
   (document.getElementById(IDLE_TIMEOUT_DIALOG) as HTMLDialogElement | null)?.close();
+  showIdleMinutes(document, result.minutes);
   toast2(`Idle sign-out set to ${result.minutes} minutes`, { kind: "ok", sub: "It applies to every staff member from their next activity. It’s in the audit trail." });
   router.refresh();
+}
+
+/**
+ * #272: the Session timeout row and the dialog show the saved time at once. router.refresh alone
+ * could land on the render from before the save (the code check refreshes the session cookie, as
+ * on #149), so the row kept the old time until a reload; the server action also refreshes now.
+ */
+export function showIdleMinutes(scope: ParentNode, minutes: number) {
+  const opener = scope.querySelector<HTMLElement>(`[data-open="${IDLE_TIMEOUT_DIALOG}"]`);
+  const detail = opener?.closest(".li")?.querySelector("small");
+  if (detail) detail.textContent = idleDetail(minutes);
+  const input = scope.querySelector<HTMLInputElement>("#idMin");
+  if (input) {
+    input.defaultValue = String(minutes);
+    input.value = String(minutes);
+  }
 }

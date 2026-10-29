@@ -28,12 +28,27 @@ export function isRateLimited(error: AuthErrorLike): boolean {
   return /rate limit|too many|only request this after|security purposes/i.test(error.message ?? "");
 }
 
-/** The wait Supabase names ("you can only request this after 16 seconds"), or null when it names none. */
+/**
+ * Seconds added to the wait Supabase names (issue #261). Supabase rounds its wait down to whole
+ * seconds ("after 0 seconds" with up to a second still to go), so counting down only its number
+ * re-enabled the button a moment too early.
+ */
+export const RATE_LIMIT_BUFFER_SECONDS = 2;
+
+/**
+ * How long to wait after Supabase's "you can only request this after 16 seconds": its number plus
+ * the buffer. "After 0 seconds" is still a wait (issue #261). Null when it names no wait.
+ */
 export function rateLimitSeconds(error: AuthErrorLike): number | null {
   const match = /after\s+(\d{1,4})\s*seconds?/i.exec(error?.message ?? "");
   if (!match) return null;
   const seconds = Number(match[1]);
-  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds + RATE_LIMIT_BUFFER_SECONDS : null;
+}
+
+/** Whole seconds left until `until` (ms since the epoch), never below 0. The countdown runs off this clock, not timer ticks. */
+export function secondsLeft(until: number, now: number): number {
+  return Math.max(0, Math.ceil((until - now) / 1000));
 }
 
 /** The friendly words for a rate limit; with a wait, the screen counts it down. */

@@ -531,6 +531,28 @@ describe("Decision #263-3: Vo reads a client's documents only with their AI cons
     expect(await readWithVo(f, versionId)).toEqual({ ok: false, error: "client_ai_off", person_id: f.personId });
   });
 
+  // #272: "Read with Vo" asks first, so "Vo is reading" never shows before a consent refusal.
+  it("public.vo_document_client_ai_off answers as the reading would, read only, for staff who may read it", async () => {
+    const f = await firm();
+    const versionId = await voDocument(f);
+    const check = async () => (await db.query<{ r: Record<string, unknown> }>(`select public.vo_document_client_ai_off($1, $2) as r`, [f.orgId, versionId])).rows[0].r;
+    // No AI drafting record: refused, without a fresh second factor and without starting a run.
+    await staff(f, f.consultant, 3600);
+    expect(await check()).toEqual({ client_ai_off: true, person_id: f.personId });
+    await asMaintenance(db);
+    expect((await db.query(`select id from public.vo_runs where organization_id = $1`, [f.orgId])).rows).toHaveLength(0);
+    // The client and another firm's staff learn nothing.
+    await client(f);
+    expect(await check()).toEqual({ client_ai_off: false });
+    const other = await firm();
+    await staff(other, other.owner);
+    expect((await db.query<{ r: unknown }>(`select public.vo_document_client_ai_off($1, $2) as r`, [other.orgId, versionId])).rows[0].r).toEqual({ client_ai_off: false });
+    await client(f);
+    await db.query(`select public.set_my_consent('ai_drafting', true)`);
+    await staff(f, f.consultant);
+    expect(await check()).toEqual({ client_ai_off: false });
+  });
+
   it("app.person_declines_ai is true unless the latest record is a yes", async () => {
     const f = await firm();
     await asMaintenance(db);

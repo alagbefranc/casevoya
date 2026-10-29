@@ -1317,7 +1317,7 @@ export function MatterDocuments({
   /** Live only (DOC-01): Apply checklist, from the firm's approved checklists. */
   apply?: ApplyChecklistData | null;
   /** Live only (DOC-05): new uploads Vo reads now, with "Read documents on upload" on. */
-  autoRead?: { organizationId: string; versionIds: string[] } | null;
+  autoRead?: { organizationId: string; versionIds: string[]; names?: Record<string, string> } | null;
   /** Live only (DOC-03): capture several pages and save them as one PDF. */
   capture?: StaffCaptureData | null;
   /** PREP-03: document index and evidence bundle. */
@@ -2099,7 +2099,7 @@ export type MatterPageData = {
   people: { cards: MatterPersonCard[]; relationships: MatterRelationship[]; history?: PersonHistoryPanel[] };
   /** `vo`: Vo's reading of one document, in the Designer's review panel (`#ocr`). */
   /** `request` (live): the person may request documents, so the empty tab offers it (#dReq). */
-  documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[]; vo?: MatterDocumentReviewData | null; filter?: boolean; request?: boolean; apply?: ApplyChecklistData | null; autoRead?: { organizationId: string; versionIds: string[] } | null; capture?: StaffCaptureData | null; bundle?: MatterBundleData | null };
+  documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[]; vo?: MatterDocumentReviewData | null; filter?: boolean; request?: boolean; apply?: ApplyChecklistData | null; autoRead?: { organizationId: string; versionIds: string[]; names?: Record<string, string> } | null; capture?: StaffCaptureData | null; bundle?: MatterBundleData | null };
   /** PREP-01: form templates pinned on this matter, and which approved facts fill them. Absent, the tab keeps its empty state. */
   forms?: MatterFormsData | null;
   agreements: { rows: MatterAgreementRow[]; signing: MatterSigning | null; create?: string | null };
