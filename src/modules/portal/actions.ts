@@ -2,7 +2,7 @@
 
 import type Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
-import { stripeServer } from "@/lib/stripe/server";
+import { stripeLive, stripeServer } from "@/lib/stripe/server";
 import { isUuid } from "@/lib/tenant/context";
 import { retrieveAccountStatus } from "@/modules/finance/stripe-account";
 
@@ -25,7 +25,8 @@ type Context = {
 const REUSABLE = new Set<Stripe.PaymentIntent.Status>(["requires_payment_method", "requires_confirmation", "requires_action"]);
 
 /**
- * Starts (or resumes) the card payment of one invoice, as the signed-in client. TEST MODE ONLY.
+ * Starts (or resumes) the card payment of one invoice, as the signed-in client, in the server's
+ * Stripe mode (live in production). An account, intent or answer of the other mode is refused.
  *
  * A direct charge: the PaymentIntent is created on the firm's connected account (Stripe-Account
  * header), so the firm is the merchant and Stripe takes its fees from the firm
@@ -63,17 +64,18 @@ export async function createInvoicePayment(input: { organizationId: string; invo
   if (!context.account_id) return { error: "Your firm hasn’t finished setting up card payments.", reason: "not_ready" };
   const stripe = stripeServer();
   if (!stripe) return { error: "Card payments aren’t configured. Nothing was charged.", reason: "not_configured" };
+  const live = stripeLive();
   const stripeAccount = context.account_id;
   const currency = context.currency.toLowerCase();
 
   try {
     const account = await retrieveAccountStatus(stripe, stripeAccount);
-    if (account.livemode) return { error: "Card payments aren’t configured. Nothing was charged.", reason: "not_configured" };
+    if (account.livemode !== live) return { error: "Card payments aren’t configured. Nothing was charged.", reason: "not_configured" };
     if (account.cardPayments !== "active") return { error: "Your firm hasn’t finished setting up card payments.", reason: "not_ready" };
 
     if (context.open_payment_intent_id) {
       const open = await stripe.paymentIntents.retrieve(context.open_payment_intent_id, {}, { stripeAccount });
-      if (!open.livemode && REUSABLE.has(open.status) && open.amount === context.amount_due && open.currency === currency && open.client_secret) {
+      if (open.livemode === live && REUSABLE.has(open.status) && open.amount === context.amount_due && open.currency === currency && open.client_secret) {
         return { clientSecret: open.client_secret, stripeAccount, amountCents: open.amount, currency: context.currency };
       }
     }
@@ -97,7 +99,7 @@ export async function createInvoicePayment(input: { organizationId: string; invo
         idempotencyKey: `casevoya-pi-${context.invoice_id}-${context.amount_due}-${context.attempts}${context.open_payment_intent_id ? `-${context.open_payment_intent_id}` : ""}`,
       },
     );
-    if (intent.livemode || !intent.client_secret) return { error: "Card payments aren’t configured. Nothing was charged.", reason: "not_configured" };
+    if (intent.livemode !== live || !intent.client_secret) return { error: "Card payments aren’t configured. Nothing was charged.", reason: "not_configured" };
 
     const recorded = await supabase.rpc("record_invoice_payment_intent", {
       p_invoice_id: context.invoice_id,
@@ -106,7 +108,7 @@ export async function createInvoicePayment(input: { organizationId: string; invo
       p_amount_cents: intent.amount,
       p_currency: intent.currency,
       p_application_fee_cents: intent.application_fee_amount ?? 0,
-      p_livemode: false,
+      p_livemode: live,
     });
     if (recorded.error) return { error: "The payment couldn’t be started. Nothing was charged." };
     return { clientSecret: intent.client_secret, stripeAccount, amountCents: intent.amount, currency: context.currency };

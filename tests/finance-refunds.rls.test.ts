@@ -238,7 +238,7 @@ describe("refunding a card payment", () => {
 
     const { paymentId } = await paidInvoice(f);
     await asStepUp(f);
-    await expectDbError(() => db.query(`select public.record_invoice_refund($1, $2, 100, 'cad', null, true, null)`, [paymentId, refundId()]), /test-mode/);
+    await expectDbError(() => db.query(`select public.record_invoice_refund($1, $2, 100, 'cad', null, true, null)`, [paymentId, refundId()]), /other Stripe mode/);
     await expectDbError(() => db.query(`select public.record_invoice_refund($1, $2, 100, 'usd', null, false, null)`, [paymentId, refundId()]), /currency/);
     await expectDbError(() => db.query(`select public.record_invoice_refund($1, 'ch_notARefund01', 100, 'cad', null, false, null)`, [paymentId]), /refund id is invalid/);
     await expectDbError(() => db.query(`select public.record_invoice_refund($1, $2, 100, 'cad', 'because', false, null)`, [paymentId, refundId()]), /reason/);

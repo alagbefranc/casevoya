@@ -257,7 +257,7 @@ export function PlanDialog({ data }: { data: PlanDialogData }) {
           <Icon name={"shield"} cls={"ic s"} />
           {"Total "}
           <b id={"plT"}>{""}</b>
-          {". Continuing asks you to confirm it’s you, then opens Stripe’s secure checkout (test mode during the pilot). Casevoya never sees your card."}
+          {". Continuing asks you to confirm it’s you, then opens Stripe’s secure checkout. Casevoya never sees your card."}
         </p>
       </div>
       <div className={"df"}>

@@ -39,7 +39,7 @@ import {
   type Withdrawal,
 } from "@/modules/finance/client-funds-present";
 import { createClient } from "@/lib/supabase/server";
-import { stripeServer } from "@/lib/stripe/server";
+import { stripeLive, stripeModeLabel, stripeServer } from "@/lib/stripe/server";
 import { MANUAL_METHODS, manualPaymentState } from "@/modules/finance/manual-payments-present";
 import { formatAmount, formatMoney, INVOICE_CURRENCIES } from "@/modules/finance/money";
 import { paymentReceiptHref } from "@/modules/finance/receipt-links";
@@ -439,6 +439,7 @@ async function loadRefunds(supabase: Supabase, staff: SheetStaff, canBill: boole
     evidenceDialog: evidenceLive
       ? {
           organizationId: org,
+          live: stripeLive(),
           disputes: takingEvidence.map((row) => ({
             value: row.id,
             label: `${row.number} · ${labels.get(row.invoice_id)?.client ?? "Client"} · ${formatMoney(row.amount_cents, row.currency)}${row.evidence_due_by ? ` · due ${day(row.evidence_due_by)}` : ""}${row.evidence_submitted_at ? " · evidence already sent" : ""}`,
@@ -860,7 +861,7 @@ async function loadBalance(stripe: Stripe | null, account: { account_id: string;
   if (stripe) {
     try {
       const read = await stripe.balance.retrieve({}, { stripeAccount: account.account_id });
-      if (!read.livemode) balance = { available: sumCurrency(read.available, "CAD"), pending: sumCurrency(read.pending, "CAD") };
+      if (read.livemode === stripeLive()) balance = { available: sumCurrency(read.available, "CAD"), pending: sumCurrency(read.pending, "CAD") };
     } catch {
       balance = null;
     }
@@ -871,7 +872,7 @@ async function loadBalance(stripe: Stripe | null, account: { account_id: string;
       href,
       label: "Available in Stripe",
       value: { money: balance ? formatMoney(balance.available, "CAD") : "—" },
-      note: balance ? { left: "Stripe", right: "test mode" } : "Balance unavailable",
+      note: balance ? { left: "Stripe", right: stripeModeLabel() } : "Balance unavailable",
     },
     {
       href,
@@ -1043,14 +1044,14 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
           href: "?tab=payments",
           label: "Card payments",
           value: { money: cardReady ? "On" : account ? "Setting up" : "Off" },
-          note: cardReady ? { left: "Stripe", right: "test mode" } : account ? "Finish the Stripe account" : "Set up a Stripe account",
+          note: cardReady ? { left: "Stripe", right: stripeModeLabel() } : account ? "Finish the Stripe account" : "Set up a Stripe account",
           tone: cardReady ? undefined : "warn",
         }
       : { href: "?tab=payments", label: "Card payments", value: { money: "—" }, note: "Shown to the firm owner and finance users" },
   ];
 
   const page: FinanceData = {
-    intro: `Invoices for ${staff.organizationName}’s earned fees, paid by card into the firm’s own Stripe account (test mode). Advances held in the client account and government fees paid to IRCC stay separate. A payment never changes a government status.`,
+    intro: `Invoices for ${staff.organizationName}’s earned fees, paid by card into the firm’s own Stripe account${stripeLive() ? "" : " (test mode)"}. Advances held in the client account and government fees paid to IRCC stay separate. A payment never changes a government status.`,
     kpis,
     rows: tableRows,
     // The Draft chip only when this firm has a draft invoice: issued invoices are never drafts.
@@ -1105,6 +1106,7 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
   if (tab === "payments") {
     refundDialog = {
       organizationId: org,
+      live: stripeLive(),
       blocked: !canBill
         ? { title: "Billing staff only", copy: "The firm owner or the matter’s finance user refunds payments." }
         : !stripe
@@ -1138,7 +1140,7 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
     // Card payments first (newest first), then manual payments (newest first).
     const paymentRows: PaymentRow[] = [...cardRows, ...manualRows];
     payments = {
-      intro: `Money ${staff.organizationName} received by card, into the firm’s own Stripe account, and payments recorded by hand (e-transfer, cheque, wire, cash). A card payment counts only when Stripe’s signed event confirms it; a manual one only once its reviewer verifies it. Stripe runs in test mode: no real card is charged, and Casevoya never holds the money.`,
+      intro: `Money ${staff.organizationName} received by card, into the firm’s own Stripe account, and payments recorded by hand (e-transfer, cheque, wire, cash). A card payment counts only when Stripe’s signed event confirms it; a manual one only once its reviewer verifies it. ${stripeLive() ? "Casevoya never holds the money." : "Stripe runs in test mode: no real card is charged, and Casevoya never holds the money."}`,
       currency: "CAD",
       balance,
       rows: paymentRows,

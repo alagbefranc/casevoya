@@ -151,14 +151,14 @@ async function invoiceRow(id: string) {
 }
 
 describe("firm payment account", () => {
-  it("needs a firm owner with a recent step-up, and refuses a live account", async () => {
+  it("needs a firm owner with a recent step-up, and keeps the account's Stripe mode", async () => {
     const f = await firm();
     await asUser(db, { userId: f.owner, aal: "aal2", orgId: f.orgId, totpAgeSeconds: 20 * 60 });
     await expectDbError(() => db.query(`select public.record_firm_payment_account($1, $2, false)`, [f.orgId, ACCOUNT]), /step-up/);
     await asUser(db, { userId: f.finance, aal: "aal2", orgId: f.orgId, totpAgeSeconds: 0 });
     await expectDbError(() => db.query(`select public.firm_payment_account_for_owner($1)`, [f.orgId]), /step-up/);
     await asUser(db, { userId: f.owner, aal: "aal2", orgId: f.orgId, totpAgeSeconds: 0 });
-    await expectDbError(() => db.query(`select public.record_firm_payment_account($1, $2, true)`, [f.orgId, ACCOUNT]), /test-mode/);
+    await expectDbError(() => db.query(`select public.record_firm_payment_account($1, $2, null)`, [f.orgId, ACCOUNT]), /mode is required/);
     await db.query(`select public.record_firm_payment_account($1, $2, false)`, [f.orgId, ACCOUNT]);
     // Recording the same account again is a no-op; a second, different account is refused.
     await db.query(`select public.record_firm_payment_account($1, $2, false)`, [f.orgId, ACCOUNT]);
@@ -170,6 +170,13 @@ describe("firm payment account", () => {
     await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
     const seen = await db.query(`select id from public.firm_payment_accounts`);
     expect(seen.rows).toHaveLength(0);
+
+    // Live mode (Stripe live): the link records the mode of the account it names.
+    const g = await firm();
+    await asUser(db, { userId: g.owner, aal: "aal2", orgId: g.orgId, totpAgeSeconds: 0 });
+    await db.query(`select public.record_firm_payment_account($1, $2, true)`, [g.orgId, "acct_1SyntheticLiveAcct"]);
+    const live = await db.query<{ livemode: boolean }>(`select livemode from public.firm_payment_accounts where organization_id = $1`, [g.orgId]);
+    expect(live.rows).toEqual([{ livemode: true }]);
   });
 });
 
@@ -248,7 +255,7 @@ describe("paying an invoice", () => {
     );
     await expectDbError(
       () => db.query(`select public.record_invoice_payment_intent($1, 'pi_3Synthetic01', $2, 113000, 'cad', 0, true)`, [invoiceId, ACCOUNT]),
-      /test-mode/,
+      /other Stripe mode/,
     );
     await startPayment(f, invoiceId, "pi_3Synthetic01");
     await startPayment(f, invoiceId, "pi_3Synthetic01");
@@ -259,6 +266,28 @@ describe("paying an invoice", () => {
       () => db.query(`select public.record_invoice_payment_intent($1, 'pi_3Synthetic02', $2, 113000, 'cad', 0, false)`, [invoiceId, ACCOUNT]),
       /invoice not found/,
     );
+  });
+});
+
+describe("Stripe live mode", () => {
+  it("takes a live payment on a live link and applies only live events to it", async () => {
+    const f = await firm();
+    await asUser(db, { userId: f.owner, aal: "aal2", orgId: f.orgId, totpAgeSeconds: 0 });
+    await db.query(`select public.record_firm_payment_account($1, $2, true)`, [f.orgId, ACCOUNT]);
+    const invoiceId = await issue(f);
+    await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
+    // A test-mode payment can't start on a live link.
+    await expectDbError(
+      () => db.query(`select public.record_invoice_payment_intent($1, 'pi_3SyntheticLive1', $2, 113000, 'cad', 0, false)`, [invoiceId, ACCOUNT]),
+      /other Stripe mode/,
+    );
+    await db.query(`select public.record_invoice_payment_intent($1, 'pi_3SyntheticLive1', $2, 113000, 'cad', 0, true)`, [invoiceId, ACCOUNT]);
+    expect((await deliver({ id: "evt_live_test", type: "payment_intent.succeeded", intent: "pi_3SyntheticLive1", received: 113_000 })).outcome).toBe("ignored");
+    const paid = await deliver({ id: "evt_live_paid", type: "payment_intent.succeeded", intent: "pi_3SyntheticLive1", livemode: true, received: 113_000 });
+    expect(paid).toMatchObject({ outcome: "applied", invoice_status: "paid" });
+    await asServiceRole(db);
+    const row = await db.query<{ livemode: boolean }>(`select livemode from public.invoice_payments where payment_intent_id = 'pi_3SyntheticLive1'`);
+    expect(row.rows).toEqual([{ livemode: true }]);
   });
 });
 

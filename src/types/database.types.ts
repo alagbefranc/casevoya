@@ -16863,6 +16863,10 @@ export type Database = {
         Args: { p_blocks: Json; p_from: string; p_organization_id: string; p_source: string; p_to: string }
         Returns: number
       }
+      replace_subscription_customer: {
+        Args: { p_organization_id: string; p_previous_customer_id: string; p_stripe_customer_id: string }
+        Returns: undefined
+      }
       report_licence_change: {
         Args: { p_credential_id: string; p_detail: string }
         Returns: string

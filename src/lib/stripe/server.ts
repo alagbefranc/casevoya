@@ -1,31 +1,54 @@
 import "server-only";
 import Stripe from "stripe";
-import { checkSecretKey, checkWebhookSecret } from "@/modules/finance/keys";
+import { activeSecretKey, billingWebhookSecrets, connectWebhookSecrets, secretKeyForMode, stripeMode, type StripeMode } from "@/modules/finance/keys";
 
 /**
- * The platform's Stripe client, TEST MODE ONLY. It reads STRIPE_TEST_SECRET_KEY and nothing
- * else; a missing, live or malformed key returns null so callers say payments are not
- * configured. Uses fetch (Cloudflare Workers has no Node http) and the SDK's pinned API version.
+ * The platform's Stripe client in the server's mode (src/modules/finance/keys.ts): STRIPE_SECRET_KEY
+ * (live in production) wins over STRIPE_TEST_SECRET_KEY (test only). A missing or malformed key
+ * returns null so callers say payments are not configured. Uses fetch (Cloudflare Workers has no
+ * Node http) and the SDK's pinned API version.
  */
 export function stripeServer(): Stripe | null {
-  const key = checkSecretKey(process.env.STRIPE_TEST_SECRET_KEY);
-  if (!key.ok) return null;
-  return new Stripe(key.key, {
+  const active = activeSecretKey();
+  return active ? client(active.key) : null;
+}
+
+/**
+ * A client for one mode, when the server holds that mode's key. Used to clean up objects of the
+ * other mode, e.g. canceling test-mode payment requests when a test-mode link is disconnected
+ * after the server went live.
+ */
+export function stripeServerForMode(mode: StripeMode): Stripe | null {
+  const key = secretKeyForMode(mode);
+  return key ? client(key) : null;
+}
+
+/** True when the server runs Stripe in live mode. */
+export function stripeLive(): boolean {
+  return stripeMode() === "live";
+}
+
+/** The short label pages show next to Stripe figures: "live" or "test mode". */
+export function stripeModeLabel(): string {
+  return stripeLive() ? "live" : "test mode";
+}
+
+function client(key: string): Stripe {
+  return new Stripe(key, {
     httpClient: Stripe.createFetchHttpClient(),
     maxNetworkRetries: 2,
     appInfo: { name: "Casevoya" },
   });
 }
 
-export function stripeWebhookSecret(): string | null {
-  const secret = checkWebhookSecret(process.env.STRIPE_WEBHOOK_SECRET);
-  return secret.ok ? secret.key : null;
+/** Signing secrets of the Connect event destinations (/api/stripe/webhook), live and test. */
+export function stripeWebhookSecrets(): string[] {
+  return connectWebhookSecrets();
 }
 
-/** The platform-account (Casevoya subscription) event destination's signing secret: /api/stripe/billing. */
-export function stripeBillingWebhookSecret(): string | null {
-  const secret = checkWebhookSecret(process.env.STRIPE_BILLING_WEBHOOK_SECRET);
-  return secret.ok ? secret.key : null;
+/** Signing secrets of the platform-account (Casevoya subscription) destinations: /api/stripe/billing. */
+export function stripeBillingWebhookSecrets(): string[] {
+  return billingWebhookSecrets();
 }
 
 /** Web Crypto (SubtleCrypto) signature checks: Workers cannot run Node's synchronous HMAC. */

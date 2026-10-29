@@ -350,3 +350,18 @@ describe("Checkout and portal", () => {
     expect(readPriceCache({ test: [] }, "test")).toEqual({});
   });
 });
+
+describe("billing webhook: live mode", () => {
+  const LIVE_SECRET = "whsec_syntheticLiveBillingSecretForVitest0";
+
+  it("applies live events on a live server and ignores the test destination's", async () => {
+    const db = fakeDatabase();
+    const deps = { secret: [LIVE_SECRET, SECRET], livemode: true, apply: db.apply, cryptoProvider: crypto };
+    const live = await signed(event("customer.subscription.updated", subscriptionObject({ livemode: true }), { id: "evt_1SyntheticLiveBill1", livemode: true }), LIVE_SECRET);
+    expect((await handleBillingWebhook(live.body, live.header, deps)).body.outcome).toBe("applied");
+    expect(db.calls.at(-1)).toMatchObject({ id: "evt_1SyntheticLiveBill1", livemode: true });
+    const test = await signed(event("customer.subscription.updated", subscriptionObject(), { id: "evt_1SyntheticTestBill1" }));
+    expect((await handleBillingWebhook(test.body, test.header, deps)).body).toEqual({ received: true, outcome: "ignored", reason: "livemode" });
+    expect(db.calls).toHaveLength(1);
+  });
+});

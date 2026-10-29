@@ -3,24 +3,36 @@
 import { safeAccessError } from "@/lib/auth/step-up";
 import { appOrigin } from "@/lib/email/env";
 import { stripeServer } from "@/lib/stripe/server";
+import { stripeMode } from "@/modules/finance/keys";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isUuid } from "@/lib/tenant/context";
 import { isInterval, isPaidPlan, readCatalog } from "@/modules/subscription/catalog";
-import { createBillingCustomer, createPortalSession, createSubscriptionCheckout, PriceResolutionError, readPriceCache, type PriceCache } from "@/modules/subscription/stripe";
+import {
+  billingCustomerExists,
+  createBillingCustomer,
+  createPortalSession,
+  createSubscriptionCheckout,
+  portalConfiguration,
+  PriceResolutionError,
+  readPriceCache,
+  type PriceCache,
+} from "@/modules/subscription/stripe";
 import { subscriptionActionError } from "@/modules/subscription/errors";
 
 /**
  * Settings > Subscription (firm owner, step-up): Stripe Checkout for a plan and the Billing
  * Portal. The database decides first (public.subscription_checkout_allowed /
  * subscription_portal_allowed: owner, step-up, catalog, current state) and records the intent;
- * only then is Stripe called, in TEST mode, with the Prices that already exist in the Casevoya
- * account. Without a Stripe test key the action says so and changes nothing.
+ * only then is Stripe called, in the server's Stripe mode (live when STRIPE_SECRET_KEY is set),
+ * with the Prices that already exist in the Casevoya account. A customer recorded in the other mode
+ * (a test customer after going live) is replaced once, before any subscription exists. Without a
+ * Stripe key the action says so and changes nothing.
  */
 
 export type BillingLink = { url: string } | { error: string; stepUp?: boolean };
 
-const NOT_CONFIGURED = "Casevoya billing isn’t connected to Stripe on this server yet (no test key). Nothing was started.";
+const NOT_CONFIGURED = "Casevoya billing isn’t connected to Stripe on this server yet (no Stripe key). Nothing was started.";
 
 async function ownerClient(organizationId: string) {
   if (!isUuid(organizationId)) return { error: "Choose a firm." as const };
@@ -39,12 +51,13 @@ function refusal(message: string): BillingLink {
 /** The price-id cache in product_settings, written through the service role when it is configured. */
 async function priceCache(supabase: Awaited<ReturnType<typeof createClient>>): Promise<PriceCache | null> {
   const { data } = await supabase.from("product_settings").select("value").eq("key", "subscription.stripe_prices").maybeSingle();
-  const cached = readPriceCache(data?.value, "test");
+  const mode = stripeMode() ?? "test";
+  const cached = readPriceCache(data?.value, mode);
   return {
     get: (key) => cached[key] ?? null,
     put: async (prices) => {
       if (!process.env.SUPABASE_SECRET_KEY) return;
-      await createServiceClient().rpc("cache_subscription_stripe_prices", { p_mode: "test", p_prices: prices });
+      await createServiceClient().rpc("cache_subscription_stripe_prices", { p_mode: mode, p_prices: prices });
     },
   };
 }
@@ -72,7 +85,17 @@ export async function startSubscriptionCheckout(input: { organizationId: string;
   if (!stripe) return { error: NOT_CONFIGURED };
   try {
     let customerId = allowed.stripe_customer_id ?? null;
-    if (!customerId) {
+    if (customerId && !(await billingCustomerExists(stripe, customerId))) {
+      // Recorded in the other Stripe mode (or deleted at Stripe): a new customer in this mode.
+      const previous = customerId;
+      customerId = await createBillingCustomer(stripe, { organizationId: input.organizationId, name: allowed.firm_name ?? "Firm", email: allowed.billing_email ?? null });
+      const replaced = await supabase.rpc("replace_subscription_customer", {
+        p_organization_id: input.organizationId,
+        p_previous_customer_id: previous,
+        p_stripe_customer_id: customerId,
+      });
+      if (replaced.error) return refusal(replaced.error.message);
+    } else if (!customerId) {
       customerId = await createBillingCustomer(stripe, { organizationId: input.organizationId, name: allowed.firm_name ?? "Firm", email: allowed.billing_email ?? null });
       const recorded = await supabase.rpc("record_subscription_customer", { p_organization_id: input.organizationId, p_stripe_customer_id: customerId });
       if (recorded.error) return refusal(recorded.error.message);
@@ -86,7 +109,7 @@ export async function startSubscriptionCheckout(input: { organizationId: string;
       catalog,
       idempotencyKey: allowed.idempotency_key,
       appOrigin: appOrigin(),
-      mode: "test",
+      mode: stripeMode() ?? "test",
     });
     return { url: checkout.url };
   } catch (cause) {
@@ -105,7 +128,10 @@ export async function openBillingPortal(input: { organizationId: string }): Prom
   const stripe = stripeServer();
   if (!stripe) return { error: NOT_CONFIGURED };
   try {
-    return { url: await createPortalSession(stripe, { customerId: allowed.stripe_customer_id, appOrigin: appOrigin() }) };
+    if (!(await billingCustomerExists(stripe, allowed.stripe_customer_id))) {
+      return { error: "This firm’s billing account was set up in Stripe test mode. Choose a plan to set it up again; nothing was charged." };
+    }
+    return { url: await createPortalSession(stripe, { customerId: allowed.stripe_customer_id, appOrigin: appOrigin(), configuration: portalConfiguration() }) };
   } catch {
     return { error: "Stripe didn’t answer. Try again in a moment." };
   }

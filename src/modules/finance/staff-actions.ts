@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { stripeServer } from "@/lib/stripe/server";
+import { stripeLive, stripeServer, stripeServerForMode } from "@/lib/stripe/server";
 import { isUuid } from "@/lib/tenant/context";
 import { accountCreateParams, ACCOUNT_SESSION_COMPONENTS, retrieveAccountStatus, syncStatusArgs } from "@/modules/finance/stripe-account";
 import { financeError, readNewInvoice, readRefund, refundError, type NewInvoiceFields, type RefundFields } from "@/modules/sheet/finance-present";
@@ -13,10 +13,19 @@ import { closeOpenRequests, readOpenRequests, type ClosedRequest } from "@/modul
  * The Sheet's finance actions, run as the signed-in staff member. Who may do what is the
  * database's decision (security-invoker wrappers over SECURITY DEFINER functions): invoices need
  * billing access; the Stripe account needs the firm owner with a recent step-up. Stripe is
- * called only after the database has said yes, and only with the test-mode key.
+ * called only after the database has said yes, with the server's key (live in production, test
+ * elsewhere; src/modules/finance/keys.ts).
  */
 
 const NOT_CONFIGURED = "Stripe isn’t configured for this environment. Nothing was sent to Stripe.";
+const OTHER_MODE = "This firm’s Stripe account was connected in test mode. Disconnect it in Settings › Billing, then connect the firm’s live Stripe account.";
+const WRONG_MODE = "Stripe answered in the other mode (test or live). Nothing was changed.";
+
+/** The firm's linked account and the Stripe mode it was connected in (firm owner and finance users can read it). */
+async function linkedAccount(supabase: StaffSupabase, organizationId: string): Promise<{ account_id: string; livemode: boolean } | null> {
+  const row = await supabase.from("firm_payment_accounts").select("account_id, livemode").eq("organization_id", organizationId).maybeSingle();
+  return row.data ? { account_id: row.data.account_id, livemode: row.data.livemode === true } : null;
+}
 
 async function staffClient(organizationId: string) {
   if (!isUuid(organizationId)) return { error: "Choose a firm." as const };
@@ -133,7 +142,7 @@ async function refundCardPayment(
     p_amount_cents: input.amountCents,
     p_currency: payment.currency,
     p_reason: input.reason,
-    p_livemode: false,
+    p_livemode: stripeLive(),
     p_idempotency_key: input.idempotencyKey,
   });
   if (recorded.error || typeof recorded.data !== "string") {
@@ -201,7 +210,7 @@ export async function moveClientCredit(
 }
 
 /**
- * Creates the firm's Stripe connected account (Accounts v2, test mode) once, and records it.
+ * Creates the firm's Stripe connected account (Accounts v2, in the server's Stripe mode) once, and records it.
  * The idempotency key is the firm's id, so a retry never makes a second account.
  */
 export async function connectStripeAccount(input: { organizationId: string }): Promise<{ accountId: string } | { error: string }> {
@@ -210,7 +219,12 @@ export async function connectStripeAccount(input: { organizationId: string }): P
   const { supabase } = session;
   const existing = await supabase.rpc("firm_payment_account_for_owner", { p_org: input.organizationId });
   if (existing.error) return { error: financeError(existing.error.message) };
-  if (typeof existing.data === "string" && existing.data) return { accountId: existing.data };
+  const live = stripeLive();
+  if (typeof existing.data === "string" && existing.data) {
+    const link = await linkedAccount(supabase, input.organizationId);
+    if (link && link.livemode !== live) return { error: OTHER_MODE };
+    return { accountId: existing.data };
+  }
   const stripe = stripeServer();
   if (!stripe) return { error: NOT_CONFIGURED };
   const org = await supabase.from("organizations").select("display_name").eq("id", input.organizationId).maybeSingle();
@@ -223,12 +237,12 @@ export async function connectStripeAccount(input: { organizationId: string }): P
       accountCreateParams({ organizationId: input.organizationId, displayName: org.data?.display_name ?? "Firm", email: session.email }),
       { idempotencyKey: connectIdempotencyKey(input.organizationId, ended.count ?? 0) },
     );
-    if (account.livemode) return { error: "Only a Stripe test-mode account can be connected." };
+    if (account.livemode !== live) return { error: WRONG_MODE };
     accountId = account.id;
   } catch {
-    return { error: "Stripe didn’t create the account. Check the platform’s Connect settings in the Stripe test Dashboard." };
+    return { error: `Stripe didn’t create the account. Check the platform’s Connect settings in the Stripe ${live ? "live" : "test"} Dashboard.` };
   }
-  const recorded = await supabase.rpc("record_firm_payment_account", { p_org: input.organizationId, p_account_id: accountId, p_livemode: false });
+  const recorded = await supabase.rpc("record_firm_payment_account", { p_org: input.organizationId, p_account_id: accountId, p_livemode: live });
   if (recorded.error) return { error: financeError(recorded.error.message) };
   return { accountId };
 }
@@ -243,11 +257,14 @@ export async function createAccountSession(input: { organizationId: string }): P
   const account = await session.supabase.rpc("firm_payment_account_for_owner", { p_org: input.organizationId });
   if (account.error) return { error: financeError(account.error.message) };
   if (typeof account.data !== "string" || !account.data) return { error: "Set up the Stripe account first." };
+  const live = stripeLive();
+  const link = await linkedAccount(session.supabase, input.organizationId);
+  if (link && link.livemode !== live) return { error: OTHER_MODE };
   const stripe = stripeServer();
   if (!stripe) return { error: NOT_CONFIGURED };
   try {
     const created = await stripe.accountSessions.create({ account: account.data, components: ACCOUNT_SESSION_COMPONENTS });
-    if (created.livemode) return { error: "Only a Stripe test-mode account can be connected." };
+    if (created.livemode !== live) return { error: WRONG_MODE };
     return { clientSecret: created.client_secret };
   } catch {
     return { error: "Stripe didn’t open the account session. Try again." };
@@ -258,13 +275,15 @@ export async function createAccountSession(input: { organizationId: string }): P
 export async function refreshStripeAccount(input: { organizationId: string }): Promise<{ cardPayments: string } | { error: string }> {
   const session = await staffClient(input.organizationId);
   if ("error" in session) return { error: session.error ?? "Sign in first." };
-  const row = await session.supabase.from("firm_payment_accounts").select("account_id").eq("organization_id", input.organizationId).maybeSingle();
+  const row = await session.supabase.from("firm_payment_accounts").select("account_id, livemode").eq("organization_id", input.organizationId).maybeSingle();
   if (!row.data) return { error: "Set up the Stripe account first." };
+  const live = stripeLive();
+  if ((row.data.livemode === true) !== live) return { error: OTHER_MODE };
   const stripe = stripeServer();
   if (!stripe) return { error: NOT_CONFIGURED };
   try {
     const status = await retrieveAccountStatus(stripe, row.data.account_id);
-    if (status.livemode) return { error: "Only a Stripe test-mode account can be connected." };
+    if (status.livemode !== live) return { error: WRONG_MODE };
     const { error } = await session.supabase.rpc("sync_firm_payment_account_status", syncStatusArgs(input.organizationId, row.data.account_id, status));
     if (error) return { error: financeError(error.message) };
     return { cardPayments: status.cardPayments };
@@ -277,7 +296,7 @@ export async function refreshStripeAccount(input: { organizationId: string }): P
  * Disconnects the firm's Stripe account (firm owner, fresh step-up, typed DISCONNECT, a reason):
  * app.unlink_stripe_account ends the link, keeps it in the history and audits it, or refuses with
  * what still runs on the account. The account isn't deleted or rejected at Stripe; Casevoya stops
- * using it. TEST MODE ONLY.
+ * using it. A link made in test mode is cleaned up with the test key even after the server went live.
  *
  * Right after the unlink commits, the payment requests still open on the old account are canceled
  * at Stripe (Stripe-Account header) and the results recorded (rows canceled, audited, a task for
@@ -295,6 +314,8 @@ export async function disconnectStripeAccount(input: {
   if ("error" in read) return read;
   const session = await staffClient(input.organizationId);
   if ("error" in session) return { error: session.error ?? "Sign in first." };
+  // Read before the unlink: the open requests are canceled in the mode the link was made in.
+  const link = await linkedAccount(session.supabase, input.organizationId);
   const { data, error } = await session.supabase.rpc("unlink_stripe_account", {
     p_org: input.organizationId,
     p_account_id: input.accountId,
@@ -307,7 +328,7 @@ export async function disconnectStripeAccount(input: {
 
   const requests = readOpenRequests(result.open_requests);
   if (!requests.length || typeof result.history_id !== "string" || typeof result.account_id !== "string") return { ok: true, notCanceled: [], taskCreated: false };
-  const closed = await closeOpenRequests(stripeServer(), result.account_id, requests);
+  const closed = await closeOpenRequests(stripeServerForMode(link?.livemode ? "live" : "test"), result.account_id, requests);
   const notCanceled = closed.filter((request) => request.result === "failed");
   const recorded = await session.supabase.rpc("record_stripe_unlink_cancellations", {
     p_history_id: result.history_id,

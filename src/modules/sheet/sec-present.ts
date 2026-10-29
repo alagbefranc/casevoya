@@ -327,7 +327,7 @@ export function continuityPanel(
   if (!c || c.phase === "none") return null;
   const on = (iso: string | null) => (iso ? publishedOn(iso, input.timeZone) : "—");
   const rows: [string, string][] = [];
-  rows.push(["Paid period ends", c.phase === "ending" ? `${on(c.periodEnd)} (from Stripe, test mode)` : `Ended ${on(c.periodEnd ?? c.cancelledAt)}`]);
+  rows.push(["Paid period ends", c.phase === "ending" ? `${on(c.periodEnd)} (from Stripe)` : `Ended ${on(c.periodEnd ?? c.cancelledAt)}`]);
   rows.push(["New work", c.phase === "ending" ? `Stops on ${on(c.periodEnd)}: no new matters, staff or client invitations.` : "Stopped: no new matters, staff or client invitations."]);
   rows.push(["Read access", "Continues for everyone at the firm, read-only, for as long as the records are kept."]);
   if (c.phase !== "archived") rows.push(["Export window", `At least ${c.windowDays} days: until ${on(c.windowEndsAt)}`]);

@@ -297,18 +297,36 @@ describe("checkout and portal intents", () => {
     await as(ctx.finance, ctx.orgId);
     await expectDbError(() => db.query(`select public.subscription_portal_allowed($1)`, [ctx.orgId]), /step-up is required/);
     expect((await subscription(ctx.orgId)).stripe_customer_id).toBe("cus_SyntheticFirm02");
+
+    // Stripe live: a customer made in test mode is replaced once, by the owner, before any subscription.
+    await as(ctx.finance, ctx.orgId);
+    await expectDbError(
+      () => db.query(`select public.replace_subscription_customer($1, 'cus_SyntheticFirm02', 'cus_SyntheticLive01')`, [ctx.orgId]),
+      /step-up is required/,
+    );
+    await as(ctx.owner, ctx.orgId);
+    await expectDbError(
+      () => db.query(`select public.replace_subscription_customer($1, 'cus_SyntheticWrong', 'cus_SyntheticLive01')`, [ctx.orgId]),
+      /already has a billing account/,
+    );
+    await db.query(`select public.replace_subscription_customer($1, 'cus_SyntheticFirm02', 'cus_SyntheticLive01')`, [ctx.orgId]);
+    await db.query(`select public.replace_subscription_customer($1, 'cus_SyntheticFirm02', 'cus_SyntheticLive01')`, [ctx.orgId]);
+    expect((await subscription(ctx.orgId)).stripe_customer_id).toBe("cus_SyntheticLive01");
+    expect(await audits(ctx.orgId, "subscription.customer_replaced")).toHaveLength(1);
   });
 });
 
 describe("Stripe billing events", () => {
-  it("is service role only, dedupes on the event id, and ignores live-mode and unknown firms", async () => {
+  it("is service role only, dedupes on the event id, applies live-mode events and ignores unknown firms", async () => {
     const ctx = await firm();
     const event = subscriptionEvent(ctx.orgId, "customer.subscription.created", {});
     await as(ctx.owner, ctx.orgId);
     await expectDbError(() => db.query(`select public.apply_stripe_subscription_event($1::jsonb)`, [JSON.stringify(event)]), /permission denied/);
     expect(await applyEvent(event)).toEqual({ outcome: "applied", status: "active" });
     expect(await applyEvent(event)).toEqual({ outcome: "duplicate" });
-    expect(await applyEvent({ ...event, id: eventId(), livemode: true })).toEqual({ outcome: "ignored", reason: "livemode" });
+    // Stripe live: the webhook route drops the other mode's events; the database applies either.
+    const liveId = eventId();
+    expect((await applyEvent({ ...event, id: liveId, livemode: true })).outcome).not.toBe("ignored");
     expect(await applyEvent({ ...event, id: eventId(), organization_id: randomUUID(), customer: "cus_Nobody000" })).toEqual({ outcome: "ignored", reason: "unknown_firm" });
     await expectDbError(() => applyEvent({ ...event, id: "bogus" }), /event id is required/);
     const row = await subscription(ctx.orgId);
@@ -319,7 +337,7 @@ describe("Stripe billing events", () => {
       extra_seats: 1,
       stripe_customer_id: stripeIds(ctx.orgId).customer,
       stripe_subscription_id: stripeIds(ctx.orgId).subscription,
-      last_webhook_event_id: event.id,
+      last_webhook_event_id: liveId,
     });
     // The firm is found by its Stripe customer when the event carries no organization id.
     expect(await applyEvent({ ...subscriptionEvent(ctx.orgId, "customer.subscription.updated", { extra_seats: 3 }), organization_id: undefined })).toEqual({ outcome: "applied", status: "active" });

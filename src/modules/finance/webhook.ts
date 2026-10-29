@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { secretList, verifyStripeEvent, type WebhookSecrets } from "@/modules/finance/webhook-verify";
 import type { Json } from "@/types/database.types";
 
 /**
@@ -272,7 +273,10 @@ export function cardFromPaymentIntent(intent: Pick<Stripe.PaymentIntent, "latest
 }
 
 export type WebhookDeps = {
-  secret: string | null;
+  /** The Connect destinations' signing secrets (live and test); any one may sign a delivery. */
+  secret: WebhookSecrets;
+  /** The server's Stripe mode: only events of this mode are applied. Defaults to test. */
+  livemode?: boolean;
   apply: ((args: PaymentEventArgs) => Promise<ApplyResult>) | null;
   /** Refund and dispute events. Without it they are left for Stripe to retry (503). */
   applyReversal?: ((args: ReversalEventArgs) => Promise<ApplyResult>) | null;
@@ -294,15 +298,13 @@ export type WebhookResponse = { status: number; body: Record<string, unknown> };
  * not ours, a duplicate, or one the database refused for a mismatch. 5xx makes Stripe retry.
  */
 export async function handleStripeWebhook(body: string, signature: string | null, deps: WebhookDeps): Promise<WebhookResponse> {
-  if (!deps.secret || !deps.apply) return { status: 503, body: { error: "Stripe webhooks are not configured." } };
+  const secrets = secretList(deps.secret);
+  if (!secrets.length || !deps.apply) return { status: 503, body: { error: "Stripe webhooks are not configured." } };
   if (!signature) return { status: 400, body: { error: "Missing Stripe-Signature." } };
-  let event: Stripe.Event;
-  try {
-    event = await Stripe.webhooks.constructEventAsync(body, signature, deps.secret, undefined, deps.cryptoProvider ?? Stripe.createSubtleCryptoProvider());
-  } catch {
-    return { status: 400, body: { error: "Invalid signature." } };
-  }
-  if (event.livemode) return { status: 200, body: { received: true, outcome: "ignored", reason: "livemode" } };
+  const event = await verifyStripeEvent(body, signature, secrets, deps.cryptoProvider);
+  if (!event) return { status: 400, body: { error: "Invalid signature." } };
+  // The other mode's destination (test while live, or the reverse): verified, not applied.
+  if ((event.livemode === true) !== (deps.livemode === true)) return { status: 200, body: { received: true, outcome: "ignored", reason: "livemode" } };
   const args = paymentEventArgs(event);
   const reversal = args ? null : reversalEventArgs(event);
   if (!args && !reversal) return { status: 200, body: { received: true, outcome: "ignored" } };
@@ -339,7 +341,7 @@ async function recordCardBeforeApply(
   args: PaymentEventArgs,
   deps: WebhookDeps,
 ): Promise<{ args: RecordCardArgs; pending: boolean } | null> {
-  if (!CARD_EVENTS.has(args.p_event_type) || args.p_livemode || !deps.recordCard) return null;
+  if (!CARD_EVENTS.has(args.p_event_type) || args.p_livemode !== (deps.livemode === true) || !deps.recordCard) return null;
   let card = cardFromPaymentIntent(event.data.object as Stripe.PaymentIntent);
   if (!card && deps.lookupCard) {
     try {
@@ -354,7 +356,7 @@ async function recordCardBeforeApply(
     p_payment_intent_id: args.p_payment_intent_id,
     p_card_brand: card.brand,
     p_card_last4: card.last4,
-    p_livemode: false,
+    p_livemode: args.p_livemode,
   };
   const outcome = await recordCard(deps, recordArgs);
   return { args: recordArgs, pending: outcome === "unknown_payment" };
