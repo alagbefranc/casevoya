@@ -99,7 +99,7 @@ A rule may require multiple sources; use evidence links rather than cramming URL
 3. Record source provenance and a limited evidence excerpt or locator. Respect source licensing and access conditions.
 4. Draft the rule, exceptions, required inputs, and behavior when facts are unknown.
 5. Add positive, negative, boundary-date, missing-information, and exception tests.
-6. An appropriately qualified reviewer checks interpretation and scope. Record approval for the exact version; the coding agent cannot approve itself as a licensed reviewer.
+6. An appropriately qualified reviewer checks interpretation and scope. Record approval for the exact version; the coding agent cannot approve itself as a licensed reviewer. The first program is Study permit, reviewed by a named licensed reviewer (Francis, 2026-10-28; reviewer to be named by Francis). It is not supported until that reviewer approves its pack.
 7. Publish a versioned program pack with change notes, effective dates, and dependencies.
 8. Identify affected active matters. Notify the consultant and require reassessment where needed. Preserve submitted packages unchanged.
 

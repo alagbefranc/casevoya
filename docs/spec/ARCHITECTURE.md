@@ -46,7 +46,7 @@ The public marketing site reads approved public content only. It has no connecti
 ## 3 Repository layout
 
 - `apps/web`: marketing routes, firm routes, client routes, and API transport handlers. It has no platform-admin routes.
-- Platform administration is a separate codebase and deployment (Francis's admin portal, decided 2026-10-19; see `docs/DECISIONS.md` and `docs/integrations/support-access.md`). It has its own sign-in, and it reaches Casevoya data only through named, audited database functions (for example `create_support_access_request` and `support_read_matter`). It never gets RLS bypass on client content, and it has no "log in as this firm".
+- Platform administration is a separate codebase and deployment (Francis's admin portal, decided 2026-10-19; see `docs/DECISIONS.md` and `docs/integrations/support-access.md`). It has its own sign-in, and it reaches Casevoya data only through named, audited database functions (for example `create_support_access_request` and `support_read_matter`). It never gets RLS bypass on client content, and it has no "log in as this firm". To start, the only platform admin is Francis, set up through that portal; this repo creates no `platform_admins` rows (Francis, 2026-10-28).
 - `apps/worker`: queue consumers, source monitoring, file processing, reconciliation, reminders and exports.
 - `packages/domain`: application services, state transitions, finance rules, source gates and permission policies.
 - `packages/db`: schema, migrations, transactions, tenant context and repositories.

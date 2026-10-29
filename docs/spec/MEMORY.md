@@ -122,6 +122,6 @@ Finance (T030–T033, partial) is implemented, tested and deployed to app.casevo
 - Payment receipts (s. 33(3)) are in progress.
 - Receipt emails wait on the owner's HTML email templates, not yet supplied.
 - Reconciliation, credit notes and voids, and multi-line or tax invoices are not built.
-- Stripe live mode needs professional, finance and legal review (T048). Gate E remains open: no finance reviewer has approved the client-money workflow.
+- Stripe live mode needs professional, finance and legal review (T048). Gate E remains open: no finance reviewer has approved the client-money workflow. (2026-10-28, Francis: Stripe goes live only after an accountant signs off on the client-money flow, including tax on professional-fee lines, and the must-fix bugs ship. Francis reports the accountant has signed off; the must-fix bugs are #262, PR #266, not yet merged.)
 
 **Next:** finish payment receipts, then the calendar and bookings work from PR #73's spec.
