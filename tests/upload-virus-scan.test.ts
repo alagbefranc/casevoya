@@ -64,6 +64,34 @@ describe("scanner client (src/modules/documents/virus-scan.ts)", () => {
     expect(readScanResponse(413, { result: "error" })).toMatchObject({ result: "error", reason: "rejected" });
   });
 
+  it("holds the file when the scanner is still starting or does not answer: never clean", async () => {
+    const bytes = new Uint8Array([37, 80, 68, 70]);
+    // 503 is the cold container: clamd has not loaded yet. A body that says "clean" is still an error.
+    expect(await scanWithAvScanner(bytes, { transport: transport(() => json(503, { result: "clean", engine: null })) })).toEqual({
+      result: "error",
+      reason: "unavailable",
+      engine: null,
+    });
+    expect(await scanWithAvScanner(bytes, { transport: transport(() => json(503, { result: "error", reason: "starting" })) })).toMatchObject({
+      result: "error",
+      reason: "unavailable",
+    });
+
+    const busy = transport(
+      (_init) =>
+        new Promise((_resolve, reject) => {
+          const signal = _init.signal;
+          if (!signal) {
+            reject(new Error("missing abort signal"));
+            return;
+          }
+          if (signal.aborted) reject(signal.reason);
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        }),
+    );
+    expect(await scanWithAvScanner(bytes, { transport: busy, timeoutMs: 40 })).toEqual({ result: "error", reason: "timeout" });
+  });
+
   it("uses the AV_SCANNER binding, then a dev URL, else nothing", async () => {
     const fetcher = { fetch: vi.fn(async (request: Request | string) => json(200, { result: "clean", url: typeof request === "string" ? request : request.url })) };
     const bound = avScannerTransport({ AV_SCANNER: fetcher });
@@ -105,6 +133,26 @@ describe("scan runner (src/modules/documents/scan-runner.ts)", () => {
       { versionId: V1, outcome: "clean", signature: null, engine: "ClamAV" },
       { versionId: V2, outcome: "infected", signature: "Win.Test.EICAR_HDB-1", engine: "ClamAV" },
     ]);
+  });
+
+  it("holds a file when the scanner is cold or busy, and a later clean answer releases it", async () => {
+    const scan = vi
+      .fn<ScanRunnerDeps["scan"]>()
+      .mockResolvedValueOnce({ result: "error", reason: "unavailable" })
+      .mockResolvedValueOnce({ result: "error", reason: "timeout" })
+      .mockResolvedValueOnce({ result: "clean", engine: "ClamAV 1.4.3/27800" });
+    const first = deps({ claims: [claim(V1)], scan });
+    expect(await runDocumentScans(first.deps, { versionId: V1 })).toMatchObject({ claimed: 1, clean: 0, errors: 1, states: { [V1]: "scanning" } });
+    expect(first.recorded).toEqual([{ versionId: V1, outcome: "error", signature: null, engine: null }]);
+
+    const second = deps({ claims: [claim(V1, { attempt: 2 })], scan });
+    expect(await runDocumentScans(second.deps, { versionId: V1 })).toMatchObject({ errors: 1, states: { [V1]: "scanning" } });
+    expect(second.recorded[0].outcome).toBe("error");
+
+    const third = deps({ claims: [claim(V1, { attempt: 3 })], scan });
+    expect(await runDocumentScans(third.deps, { versionId: V1 })).toMatchObject({ clean: 1, errors: 0, states: { [V1]: "clean" } });
+    expect(third.recorded).toEqual([{ versionId: V1, outcome: "clean", signature: null, engine: "ClamAV 1.4.3/27800" }]);
+    expect(scan).toHaveBeenCalledTimes(3);
   });
 
   it("records an error (the database retries it) when the file can't be read or the scanner fails", async () => {

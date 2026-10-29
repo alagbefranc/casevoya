@@ -30,7 +30,15 @@ export type ChecklistGateView = {
 
 export type OutsideStepView = { id: string; label: string; done: boolean; wire: SubWire | null; source: Source; by: string | null; retire: SubWire | null };
 export type PendingView = { label: string; kind: string; source: Source; badge: Badge; approve: SubWire | null; reject: SubWire | null };
-export type ManifestView = { title: string; hash: string | null; pinned: string; rows: { name: string; hash: string; note: string }[] };
+export type ManifestView = {
+  title: string;
+  hash: string | null;
+  pinned: string;
+  rows: { name: string; hash: string; note: string }[];
+  /** PREP-04: form versions and the approved-facts snapshot pinned with the files. */
+  forms?: { name: string; note: string }[];
+  facts?: { name: string; note: string }[];
+};
 
 export type SubmissionChecklistData = {
   badge: Badge;
@@ -261,6 +269,33 @@ export function SubmissionChecklist({ data, index = 0 }: { data: SubmissionCheck
               </span>
             </div>
           ))}
+          {data.manifest.forms?.length ? (
+            <>
+              <h3 style={{ margin: "16px 0 8px" }}>{"Form versions at release"}</h3>
+              {data.manifest.forms.map((row) => (
+                <div key={row.name} className={"li"}>
+                  <div>
+                    <b>{row.name}</b>
+                    <small>{row.note}</small>
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : null}
+          {data.manifest.facts?.length ? (
+            <>
+              <h3 style={{ margin: "16px 0 8px" }}>{"Approved facts at release"}</h3>
+              <p className={"mu"} style={{ fontSize: "13px" }}>{"The values are kept with the package. This list shows the fact and its hash, not the value again."}</p>
+              {data.manifest.facts.map((row) => (
+                <div key={`${row.name}-${row.note}`} className={"li"}>
+                  <div>
+                    <b>{row.name}</b>
+                    <small>{row.note}</small>
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : null}
         </div>
       ) : null}
     </>

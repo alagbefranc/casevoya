@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { acceptQuote, declineAgreement, signAgreement } from "@/modules/agreements/actions";
 import type { PortalAgreement, PortalAgreements } from "@/modules/agreements/load";
 import type { PortalViewer } from "@/modules/portal/load";
+import { federalHost } from "@/modules/content-governance/claim-capture";
 
 export function AgreementsLive({ viewer, agreements }: { viewer: PortalViewer; agreements: PortalAgreements }) {
   const cards = [...agreements.open, ...agreements.done];
@@ -179,6 +180,19 @@ function money(cents: number, currency: string): string {
   return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(cents / 100);
 }
 
+function FeeSource({ note }: { note: string }) {
+  const match = note.match(/https:\/\/[^\s)]+/);
+  const href = match?.[0];
+  if (!href || !federalHost(href)) return <>, from {note}</>;
+  const rest = note.replace(href, "").replace(/^[\s,]+|[\s,]+$/g, "");
+  return (
+    <>
+      {rest ? `, ${rest} ` : " "}
+      <a href={href} target="_blank" rel="noopener noreferrer">Official page</a>
+    </>
+  );
+}
+
 function shortDate(iso: string): string {
   return new Intl.DateTimeFormat("en-CA", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${iso.slice(0, 10)}T12:00:00Z`));
 }
@@ -219,8 +233,8 @@ function Terms({ card }: { card: PortalAgreement }) {
             <dt>Government fee, separate</dt>
             <dd>
               {line.description}: <span className="num">{money(line.amountCents, card.currency)}</span>
-              {line.sourceNote ? `, from ${line.sourceNote}` : ""}
-              {line.enteredOn ? ` (checked ${shortDate(line.enteredOn)})` : ""}. Paid by you to IRCC, not through the firm.
+              {line.sourceNote ? <FeeSource note={line.sourceNote} /> : ""}
+              {line.enteredOn ? ` Checked ${shortDate(line.enteredOn)}.` : ""} Paid by you to IRCC, not through the firm.
             </dd>
           </Fragment>
         ))}

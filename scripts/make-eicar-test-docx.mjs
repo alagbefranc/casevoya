@@ -2,8 +2,8 @@
 // #263-B: writes eicar-test.docx, a harmless file for proving the virus scanner blocks uploads.
 // It is a minimal Word package (it passes Casevoya's type check, so it reaches the scanner) that
 // also holds eicar.com, the industry-standard EICAR anti-virus test file: not a virus, but every
-// scanner reports it as one (https://www.eicar.org/download-anti-malware-testfile/). ClamAV
-// unpacks the package and reports Win.Test.EICAR_HDB-1.
+// scanner reports it as one (https://www.eicar.org/download-anti-malware-testfile/). ClamAV 1.4
+// unpacks the package and reports Eicar-Test-Signature.
 //
 // Usage: node scripts/make-eicar-test-docx.mjs [output path]   (default ./eicar-test.docx)
 // The test string is assembled at run time, so this script itself isn't flagged by scanners.

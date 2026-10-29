@@ -101,6 +101,9 @@ const ACTIONS = {
   rule_approve: { phrase: "approve an official-source claim", icon: "file-check", title: "Approve a claim", detail: "The version becomes locked and live for its program" },
   claim_edit: { phrase: "edit an official claim for your firm", icon: "file-check", title: "Edit an official claim", detail: "Your firm’s wording, stamped with your name and licence" },
   rule_unsuspend: { phrase: "unsuspend a claim", icon: "file-check", title: "Unsuspend a claim", detail: "The version becomes live again for its program" },
+  pack_publish: { phrase: "publish a program pack", icon: "file-check", title: "Publish a program pack", detail: "You are the named reviewer. The source owner and the change note are stored with it" },
+  source_conflict: { phrase: "record that two official sources disagree", icon: "file-check", title: "Record a source conflict", detail: "The claim is blocked until a licensed member reviews it" },
+  rule_test: { phrase: "add a test case for a program rule", icon: "file-check", title: "Add a rule test", detail: "The case is stored. It does not create a rule" },
 } as const satisfies Record<string, { phrase: string } & StepUpAction>;
 
 export type StepUpActionKey = keyof typeof ACTIONS;

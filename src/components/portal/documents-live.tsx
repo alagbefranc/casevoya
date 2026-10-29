@@ -19,6 +19,7 @@ import {
 import { assemblePages } from "@/modules/documents/assemble";
 import { assemblyPages } from "@/modules/documents/capture";
 import type { PortalDocumentCard, PortalDocuments } from "@/modules/documents/load";
+import { claimSourceCopy, type ClaimSourceContext } from "@/modules/content-governance/claim-source-present";
 import { draftInFrench } from "@/modules/i18n/actions";
 import type { PortalViewer } from "@/modules/portal/load";
 import { createClient } from "@/lib/supabase/client";
@@ -27,6 +28,28 @@ import { Seg } from "./seg";
 import { UploadFailed } from "./upload-failed";
 
 const FORMATS = ["pdf", "jpeg", "png", "heic", "docx"] as const;
+
+function SourceNote({ source }: { source: ClaimSourceContext }) {
+  const checked = source.checkedOn
+    ? new Intl.DateTimeFormat("en-CA", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${source.checkedOn}T12:00:00Z`))
+    : null;
+  const copy = claimSourceCopy(source, checked);
+  const links = source.reviewPending && source.conflictUrls && source.conflictUrls.length > 1 ? source.conflictUrls : [source.url];
+  return (
+    <small style={{ display: "block", color: "var(--t2)", fontSize: 13, marginTop: 4 }}>
+      {links.map((href, index) => (
+        <span key={href}>
+          {index > 0 ? " " : null}
+          <a href={href} target="_blank" rel="noopener noreferrer">
+            {links.length > 1 ? (index === 0 ? "First official page" : "Second official page") : "Official page"}
+          </a>
+        </span>
+      ))}
+      {` ${copy.checked}.`}
+      {copy.pending ? ` ${copy.pending}` : null}
+    </small>
+  );
+}
 
 export function DocumentsLive({
   page,
@@ -158,6 +181,7 @@ function Card({
             <span>{whose}</span>
             {card.versionLabel && card.versionLabel !== "Requested" ? <><span className="sep" /><span className="num">{card.versionLabel}</span></> : null}
             {card.when ? <><span className="sep" /><time className="num">{card.when}</time></> : null}
+            {card.source ? <SourceNote source={card.source} /> : null}
             {!canReview && card.canDownload && card.versionId ? (
               <>
                 <span className="sep" />
@@ -749,6 +773,7 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
                   <span>
                     <b style={{ fontWeight: 500 }}>{item.purpose}</b>
                     <small>{item.explanation || `For ${item.personId === self ? "you" : item.personName}`}</small>
+                    {item.source ? <SourceNote source={item.source} /> : null}
                   </span>
                   <span className={badgeClass(label)}><i />{label}</span>
                 </label>
