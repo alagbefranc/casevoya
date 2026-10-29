@@ -343,6 +343,34 @@ describe("The job runner (service role)", () => {
     await expectDbError(() => db.query(`select public.approve_deletion_job($1, 'Retention period ended again', 'k-abcdefgh')`, [ctx.matterId]), /already deleted/);
   });
 
+  // #272 (#266): stamping removed_at on a failed or cancelled export with a stored file raised
+  // "this export is finished", so the job couldn't record the deleted file.
+  it("records the deleted file of a failed or cancelled export, which otherwise stays as it was", async () => {
+    const ctx = await firm();
+    const failed = await readyExport(ctx, ctx.matterId);
+    const cancelled = await readyExport(ctx, ctx.matterId);
+    await asMaintenance(db);
+    await db.exec("set session_replication_role = replica");
+    await db.query(`update public.matter_exports set status = 'failed', failed_at = now(), failure_reason = 'Synthetic failure' where id = $1`, [failed]);
+    await db.query(`update public.matter_exports set status = 'cancelled', cancelled_at = now(), cancelled_by = $2 where id = $1`, [cancelled, ctx.owner]);
+    await db.exec("set session_replication_role = origin");
+    await closeMatter(ctx, ctx.matterId);
+    await approve(ctx, ctx.matterId);
+
+    expect(await runAll()).toBe("completed");
+    await asMaintenance(db);
+    const rows = await db.query<{ status: string; removed: boolean }>(
+      `select status::text, removed_at is not null as removed from public.matter_exports where id = any($1::uuid[]) order by status`,
+      [[failed, cancelled]],
+    );
+    expect(rows.rows).toEqual([
+      { status: "cancelled", removed: true },
+      { status: "failed", removed: true },
+    ]);
+    // Anything else on a finished export is still refused.
+    await expectDbError(() => db.query(`update public.matter_exports set byte_size = 5 where id = $1`, [failed]), /this export is finished/);
+  });
+
   it("a legal hold placed after approval stops the job before anything is removed", async () => {
     const ctx = await firm();
     const file = await storedFile(ctx, [ctx.matterId], "passport.pdf");

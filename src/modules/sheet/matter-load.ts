@@ -333,7 +333,11 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
     .map((row) => (row.current_version_id ? versionById.get(row.current_version_id) : undefined))
     .filter((version): version is NonNullable<typeof version> => Boolean(version && version.upload_state === "clean" && version.review_state === "pending"))
     .map((version) => version.id);
-  const voAutoRead = matterTab(query.tab) === "documents" && mayRequestDocuments(staff.role) ? await loadVoAutoRead(supabase, org, staff.sampleMode, unread).catch(() => null) : null;
+  const unreadNames = new Map(
+    documentRows.filter((row) => row.current_version_id && row.purpose).map((row) => [row.current_version_id as string, row.purpose as string]),
+  );
+  const voAutoRead =
+    matterTab(query.tab) === "documents" && mayRequestDocuments(staff.role) ? await loadVoAutoRead(supabase, org, staff.sampleMode, unread, unreadNames).catch(() => null) : null;
   // MIG follow-ups: documents, relationships and key dates an import brought in say so.
   const [documentImports, relationImports, deadlineImports] = await Promise.all([
     loadImportProvenance(supabase, org, "documents", checklist.map((row) => row.documentId)),
