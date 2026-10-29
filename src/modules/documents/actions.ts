@@ -7,6 +7,7 @@ import { redactDocument, RedactionError, type RedactionRegion } from "@/modules/
 import { inspectDocumentBytes } from "@/modules/documents/verify";
 import { runDocumentScans } from "@/modules/documents/scan-runner";
 import { serviceScanDeps } from "@/modules/documents/scan-service";
+import { INLINE_SCAN_BUDGET } from "@/modules/documents/virus-scan";
 import { verifyDocumentStream } from "@/modules/documents/verify";
 import { TRANSLATE_MODEL } from "@/modules/i18n/translate";
 import { verifyTotpCode } from "@/lib/auth/verify-totp";
@@ -177,17 +178,15 @@ export async function completeDocumentUpload(input: { organizationId: string; ve
   };
 }
 
-/** How long the upload waits for the virus scanner before leaving the file to the retry job. */
-const INLINE_SCAN_TIMEOUT_MS = 20_000;
-
 /**
- * #263-B: virus scanning is on, so the file is held as "scanning". Scan it now, so most people
+ * #263-B: virus scanning is on, so the file is held as "scanning". Scan it now (INLINE_SCAN_BUDGET:
+ * 20 s and no warm-up wait, so a cold scanner doesn't slow the upload), so most people
  * see the answer before they leave the page. If the scanner is slow or down the file simply stays
  * held (fail closed) and the retry job (POST /api/documents/scan/run) tries again.
  */
 async function scanJustUploaded(service: ReturnType<typeof createServiceClient>, versionId: string) {
   try {
-    const summary = await runDocumentScans(serviceScanDeps(service, { timeoutMs: INLINE_SCAN_TIMEOUT_MS }), { limit: 1, versionId });
+    const summary = await runDocumentScans(serviceScanDeps(service, { budget: INLINE_SCAN_BUDGET }), { limit: 1, versionId });
     const state = summary.states[versionId];
     if (state === "quarantined") return { uploadState: "quarantined", scanResult: "infected" };
     if (state === "clean") return { uploadState: "clean", scanResult: "clean" };

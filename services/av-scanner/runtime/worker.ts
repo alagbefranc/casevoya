@@ -3,9 +3,11 @@
  * Containers, https://developers.cloudflare.com/containers/api/container-class/, read
  * 2026-10-28). It has no route and workers_dev is off: only the app Worker reaches it, through
  * its service binding AV_SCANNER. It forwards POST /v1/scan and GET /healthz to a container
- * instance. No secrets: the container holds no credentials and returns only a verdict.
+ * instance. Before a scan it wakes that one instance and waits (within the caller's budget) until
+ * clamd answers, then forwards the scan to the same instance (src/warm.ts). No secrets: the container holds no credentials and returns only a verdict.
  */
 import { Container, getRandom } from "@cloudflare/containers";
+import { forwardScan } from "../src/warm";
 
 // Workers runtime global. This package typechecks on its own, without @cloudflare/workers-types.
 interface DurableObjectNamespace<T> {
@@ -40,6 +42,9 @@ export default {
     const health = url.pathname === "/healthz" && request.method === "GET";
     if (!scan && !health) return new Response(null, { status: 404 });
     const container = await getRandom(env.AV_SCANNER, INSTANCES);
+    // One instance for both the warm-up and the scan: waking one and scanning on the other would
+    // land on a cold engine again.
+    if (scan) return forwardScan(container, request);
     return container.fetch(request);
   },
 };

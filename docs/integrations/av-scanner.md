@@ -56,10 +56,11 @@ the file to disk (clamd reads the stream from its local socket).
 - Nobody can open a file that isn't `clean`: `authorize_document_download` (downloads, the secure
   preview, Vo's reads), the storage read policy and the exports all require `upload_state = 'clean'`.
   The version row stays readable so people see "Checking for viruses…".
-- Scanner down, still starting (503), slow (20 s inline, 50 s in the runner), or an answer we don't
-  understand: an error. The file stays held. A cold start does not wait out clamd inside the request:
-  `/v1/scan` returns 503 `{reason:"starting"}` at once, the container keeps loading, and the retry
-  finds it. Retries wait 1, 2, 4, 8 and 16 minutes (`documents.virus_scan_retry`); after
+- Scanner down, still starting (503), slow (20 s inline; 90 s warm-up + 50 s scan in the runner),
+  or an answer we don't understand: an error. The file stays held. The upload itself does not wait
+  out a cold start: `/v1/scan` returns 503 `{reason:"starting"}` and the runner retries. The runner's
+  requests let the scanner Worker wake the instance and wait for clamd first (next section).
+  Retries wait 1, 2, 4, 8 and 16 minutes (`documents.virus_scan_retry`); after
   the 6th failed attempt it is `scan_failed` ("Couldn't be checked yet"), staff who can open the matter
   get a notice, and it is tried again every 6 hours. A later clean scan releases it. Nothing marks a
   file clean without a scan.
@@ -67,6 +68,69 @@ the file to disk (clamd reads the stream from its local socket).
 - A file too large or too deep to scan fully (`Heuristics.Limits.Exceeded`) is an error, not clean.
 - Email attachments: an unsorted inbox file is "ready to file" after its type check; it is never
   opened as it is. Filing copies it into a document version, which is scanned like any upload.
+
+## Why scan_failed retries never passed (2026-10-29)
+
+Reported on the live project: two Test Firm versions stayed `scan_failed` with
+`scanner_unavailable` after 9 attempts, while the dashboard showed 2 healthy instances and new
+uploads passed on their 60 second retry.
+
+- An instance sleeps after 15 idle minutes (`sleepAfter` in `runtime/worker.ts`).
+- `/v1/scan` answers 503 `{reason:"starting"}` at once while clamd loads (#274), and the app
+  records that as an error.
+- A `scan_failed` version is retried every `failed_retry_seconds` (6 hours,
+  `service_record_document_scan`). Every such retry found a sleeping instance, woke it, got
+  "starting", and was pushed another 6 hours. A new upload escapes only because its 60 second
+  retry finds the instance it just woke still awake.
+
+The fix (no change to fail closed: nothing becomes clean without a real scan):
+
+1. The scanner Worker (`src/warm.ts`) takes one instance for a `POST /v1/scan`, wakes it with
+   `GET /healthz` (the Container class starts a sleeping container on any request) and polls every
+   1.5 s until it is 200, then forwards the scan once to that same instance. The upload body is
+   passed through untouched (never buffered or replayed; files go up to 100 MB). Budget: 90 s, the
+   port check (20 s, `TIMEOUT_TO_GET_PORTS_MS`) plus clamd loading on half a vCPU (about a minute
+   in the live checks). Not warm by then: the same 503 starting as before. The caller sets the
+   budget with the `x-av-warmup-ms` header, clamped to 90 s; without it the full budget applies.
+2. The app (`src/modules/documents/virus-scan.ts`): the retry runner (`/api/documents/scan/run`,
+   from pg_cron) sends 90 s and waits up to 140 s per scan (`RUNNER_SCAN_BUDGET`). The upload
+   itself sends 0 and keeps its 20 s wait (`INLINE_SCAN_BUDGET`), so a cold scanner never slows
+   the person's upload; the file stays held and the runner picks it up a minute later.
+3. Migration `20261029200100_document_scan_kick_timeout.sql`: `app.kick_document_scans` waits
+   240 s instead of 55 s. Nothing reads pg_net's response (it lands in `net._http_response`; the
+   runner records each answer itself), but the connection matters: Cloudflare may cancel a Worker
+   when its client disconnects, and there is no duration limit while it stays connected
+   (https://developers.cloudflare.com/workers/platform/limits/, read 2026-10-29). 240 s is below
+   the 300 s claim lease, so a run that is cut off never outlives the leases it took. A service
+   binding call has no separate time limit; a Durable Object call has none while the caller stays
+   connected (same page). Each poll is a subrequest: at most about 60 per scan, far under the
+   10,000 per request on the paid plan.
+
+Deploy order: the migration, then the scanner Worker (`pnpm exec wrangler deploy` in
+`services/av-scanner` after `pnpm install && pnpm bundle`; in the image only a comment changed),
+then the app. Any order is safe: an old app sends no
+header and gets the full warm-up (its 50 s timeout then cuts it, as today); an old scanner ignores
+the header.
+
+Live check: leave the scanner idle for 20 minutes or more (the instances sleep), with a file held in
+`scan_failed`. Its next retry (or a due time brought forward, see "A held file now") wakes the
+instance, waits, scans, and releases it: `clean` (or `quarantined`) within about two minutes.
+
+### A held file now
+
+The run endpoint does not take a version id: it claims what is due. A `scan_failed` version is due
+at its `scan_next_attempt_at`. To retry one at once after the deploy, as the project owner in the
+Supabase SQL editor (this only makes it due; only a scan can make it clean):
+
+```
+begin;
+select app.open_document_write(id) from public.document_versions where id = '<version id>' and upload_state = 'scan_failed';
+update public.document_versions set scan_next_attempt_at = now() where id = '<version id>' and upload_state = 'scan_failed';
+select app.close_document_write(id) from public.document_versions where id = '<version id>';
+commit;
+```
+
+pg_cron kicks the runner within a minute.
 
 ## Switch
 

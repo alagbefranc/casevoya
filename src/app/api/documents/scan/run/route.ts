@@ -10,7 +10,9 @@ import { serviceScanDeps } from "@/modules/documents/scan-service";
  * The caller is the scheduler (app.kick_document_scans, every minute while one is due) with the
  * mail dispatch bearer (EMAIL_DISPATCH_SECRET), like the scheduled reports runner, or
  * scripts/rescan-legacy-documents.mjs with {"backfill": true} for files stored before scanning.
- * Each run takes a few files; the rest wait for the next minute.
+ * Each run takes a few files; the rest wait for the next minute. Each scan request lets the
+ * scanner wake and load first (RUNNER_SCAN_BUDGET, up to 140 s), so the kick waits 240 s
+ * (20261029200100): a Worker whose caller disconnects may be cancelled.
  */
 export async function POST(request: Request) {
   const config = emailRuntimeConfig();

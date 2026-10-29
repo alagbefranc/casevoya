@@ -1243,6 +1243,11 @@ AI-04, SRC-04, SRC-07, SRC-08, SRC-10, SRC-11 / INT-02. Additive. Does not load 
 
 Tested in `tests/src-recheck-packs.rls.test.ts` and `tests/source-recheck.test.ts`.
 
+## Scan retries wait for a warm scanner (`20261029200100`, not applied on the live project)
+
+* `20261029200100_document_scan_kick_timeout.sql` **redefines** `app.kick_document_scans` (only definition in `20261028130100_upload_virus_scan.sql`): the pg_net request to `/api/documents/scan/run` waits 240 s instead of 55 s, so a run whose scans wait for the scanner to warm up (up to 140 s each, `RUNNER_SCAN_BUDGET`) is not cut off. 240 s stays below the 300 s claim lease. Nothing else changes; grants unchanged. See docs/integrations/av-scanner.md, "Why scan_failed retries never passed".
+
+Tested in `tests/upload-virus-scan.rls.test.ts` and `tests/av-scanner-cold-retry.test.ts`.
 ## Stripe live mode (`20261029200000`)
 
 Drops the `livemode is false` checks on `firm_payment_accounts`, `firm_payment_account_history`, `invoice_payments`, `invoice_refunds`, `invoice_disputes` and `invoice_dispute_evidence`. `app.record_firm_payment_account` stores the mode it is given (null refused); `app.record_invoice_payment_intent` needs the firm's link in the same mode; `app.apply_stripe_payment_event` and `app.apply_stripe_reversal_event` apply an event only to a payment of the same mode (otherwise ignored, reason `livemode`), and recovered refunds and disputes take the payment's mode; `app.record_invoice_refund`, `app.record_invoice_payment_card` and `app.record_dispute_evidence` check the payment's or dispute's mode. `public.apply_stripe_subscription_event` no longer ignores live events (the billing route filters by the server's mode). New `public.replace_subscription_customer(org, previous, new)`: firm owner with step-up, only while the stored customer is `previous` and no subscription exists; audited `subscription.customer_replaced`. Existing rows keep `livemode = false`.

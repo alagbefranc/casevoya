@@ -2,12 +2,17 @@ import "server-only";
 
 import type { createServiceClient } from "@/lib/supabase/service";
 import type { ScanRunnerDeps } from "@/modules/documents/scan-runner";
-import { scanWithAvScanner, type ScanTransport } from "@/modules/documents/virus-scan";
+import { RUNNER_SCAN_BUDGET, scanWithAvScanner, type ScanBudget, type ScanTransport } from "@/modules/documents/virus-scan";
 
 type ServiceClient = ReturnType<typeof createServiceClient>;
 
-/** #263-B: the scan runner's database, storage and scanner calls, with the service role. */
-export function serviceScanDeps(service: ServiceClient, options: { timeoutMs?: number; transport?: ScanTransport } = {}): ScanRunnerDeps {
+/**
+ * #263-B: the scan runner's database, storage and scanner calls, with the service role. The
+ * scanner budget defaults to the retry runner's (warm-up, then scan); the upload passes
+ * INLINE_SCAN_BUDGET.
+ */
+export function serviceScanDeps(service: ServiceClient, options: { budget?: ScanBudget; transport?: ScanTransport } = {}): ScanRunnerDeps {
+  const budget = options.budget ?? RUNNER_SCAN_BUDGET;
   return {
     claim: async ({ limit, versionId, backfill }) =>
       service.rpc("service_claim_document_scans", {
@@ -20,7 +25,7 @@ export function serviceScanDeps(service: ServiceClient, options: { timeoutMs?: n
       if (downloaded.error || !downloaded.data) return null;
       return new Uint8Array(await downloaded.data.arrayBuffer());
     },
-    scan: (bytes) => scanWithAvScanner(bytes, { timeoutMs: options.timeoutMs, transport: options.transport }),
+    scan: (bytes) => scanWithAvScanner(bytes, { timeoutMs: budget.timeoutMs, warmupMs: budget.warmupMs, transport: options.transport }),
     record: async ({ versionId, outcome, signature, engine }) =>
       service.rpc("service_record_document_scan", {
         p_version_id: versionId,

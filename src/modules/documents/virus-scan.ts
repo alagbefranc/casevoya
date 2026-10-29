@@ -13,8 +13,9 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
  * eventually marks them scan_failed. Nothing here can mark a file clean on its own.
  *
  * A cold container (clamd still loading signatures) and a scanner that doesn't answer in time
- * are both errors. The file stays held and the retry job tries again. The container keeps
- * running (it sleeps after 15 idle minutes), so the next attempt usually finds clamd ready.
+ * are both errors. The file stays held and the retry job tries again. The retry job's requests
+ * ask the scanner Worker to wake the instance and wait for clamd first (RUNNER_SCAN_BUDGET), so a
+ * retry hours later, on an instance that has gone to sleep, still gets a real scan.
  */
 type Fetcher = { fetch: (input: Request | string, init?: RequestInit) => Promise<Response> };
 
@@ -64,15 +65,42 @@ export function readScanResponse(status: number, body: unknown): ScanOutcome {
   return { result: "error", reason: "scanner", engine };
 }
 
+/** How long a scan itself may take once the scanner is warm. */
 export const SCAN_TIMEOUT_MS = 50_000;
 
-export async function scanWithAvScanner(bytes: Uint8Array, deps: { transport?: ScanTransport; timeoutMs?: number } = {}): Promise<ScanOutcome> {
+/**
+ * Bug report 2026-10-29: the scanner Worker wakes a sleeping instance and waits for clamd before
+ * forwarding the scan (services/av-scanner/src/warm.ts), up to the budget sent in this header.
+ * Must match WARMUP_HEADER / WARMUP_MAX_MS there.
+ */
+export const SCANNER_WARMUP_HEADER = "x-av-warmup-ms";
+export const SCANNER_WARMUP_MS = 90_000;
+
+export type ScanBudget = { timeoutMs: number; warmupMs: number };
+
+/**
+ * The retry runner (cron, scan/run) lets the scanner warm up and then scan: a file in scan_failed
+ * is retried every 6 hours, always on a sleeping instance, so without the warm-up it never passed.
+ * The upload itself keeps its short wait and no warm-up: the person is waiting for the answer, and
+ * a cold scanner simply leaves the file held for the runner.
+ */
+export const RUNNER_SCAN_BUDGET: ScanBudget = { timeoutMs: SCANNER_WARMUP_MS + SCAN_TIMEOUT_MS, warmupMs: SCANNER_WARMUP_MS };
+export const INLINE_SCAN_BUDGET: ScanBudget = { timeoutMs: 20_000, warmupMs: 0 };
+
+export async function scanWithAvScanner(
+  bytes: Uint8Array,
+  deps: { transport?: ScanTransport; timeoutMs?: number; warmupMs?: number } = {},
+): Promise<ScanOutcome> {
   const transport = deps.transport === undefined ? avScannerTransport() : deps.transport;
   if (!transport) return { result: "error", reason: "unavailable" };
   try {
     const response = await transport.send("/v1/scan", {
       method: "POST",
-      headers: { "content-type": "application/octet-stream", "content-length": String(bytes.byteLength) },
+      headers: {
+        "content-type": "application/octet-stream",
+        "content-length": String(bytes.byteLength),
+        [SCANNER_WARMUP_HEADER]: String(deps.warmupMs ?? 0),
+      },
       body: bytes as unknown as BodyInit,
       signal: AbortSignal.timeout(deps.timeoutMs ?? SCAN_TIMEOUT_MS),
     });
