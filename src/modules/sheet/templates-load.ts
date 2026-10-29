@@ -15,6 +15,7 @@ import { fieldLabel, schemaFields } from "@/modules/intake/present";
 import { claimAddData, claimFactsFor } from "@/modules/sheet/source-claims-load";
 import { partialAlert } from "@/modules/sheet/states-present";
 import { liveClaimsData, OFFICIAL_CLAIMS_PAGE, officialClaimView, type OfficialClaimJson } from "@/modules/sheet/official-claims-present";
+import { readConflict, readConflictEvidence, readPackEditor, readRuleTests } from "@/modules/sheet/source-governance-present";
 import { assembleSharedTemplates } from "@/modules/sheet/shared-template-present";
 
 const READ = 200;
@@ -42,7 +43,7 @@ export async function loadSheetTemplates(
   const org = staff.organizationId;
   const [chrome, packs, pinnedMatters, agreementTemplates, agreements, versions, definitions, reviews, evidence, items, names] = await Promise.all([
     loadSheetChrome(staff, "/sheet/templates"),
-    supabase.from("rule_pack_versions").select("id, program_key, jurisdiction, pack_version, status, organization_id, next_review_at").order("updated_at", { ascending: false }).limit(READ),
+    supabase.from("rule_pack_versions").select("id, program_key, jurisdiction, pack_version, status, organization_id, next_review_at, reviewer_name, reviewer_licence, source_owner_name, effective_from").order("updated_at", { ascending: false }).limit(READ),
     supabase.from("matters").select("program_pack_id").eq("organization_id", org).not("program_pack_id", "is", null).limit(1000),
     supabase.from("agreement_templates").select("id, name, kind, status, approved_at, approved_by, version").eq("organization_id", org).order("updated_at", { ascending: false }).limit(READ),
     supabase.from("agreements").select("template_id, matter_id").eq("organization_id", org).not("template_id", "is", null).limit(1000),
@@ -155,6 +156,10 @@ export async function loadSheetTemplates(
     status: row.status,
     firm: row.organization_id !== null,
     nextReviewAt: row.next_review_at,
+    reviewerName: row.reviewer_name,
+    reviewerLicence: row.reviewer_licence,
+    sourceOwnerName: row.source_owner_name,
+    effectiveFrom: row.effective_from,
   }));
   const selected = view && isUuid(view) ? (rules.find((rule) => rule.id === view) ?? null) : null;
   // OPS-04: the firm's own message and announcement templates (not archived).
@@ -224,16 +229,40 @@ export async function loadSheetTemplates(
     liveFailed = Boolean(live.error);
     data.sources.live = liveClaimsData(live.error ? null : (live.data as { total?: unknown; rows?: unknown }), { query, offset, timeZone: staff.timezone });
   }
+  if (tab === "program") {
+    const editor = await supabase.rpc("program_pack_editor");
+    data.packEditor = editor.error ? null : readPackEditor(org, editor.data);
+  }
+  const ruleDefinitionId = tab === "rule"
+    ? (official.claim && isUuid(official.claim) ? official.claim : (versions.data ?? []).find((row) => row.id === view)?.definition_id ?? null)
+    : null;
   if (tab === "rule" && official.claim && isUuid(official.claim)) {
-    const [claim, history] = await Promise.all([
+    const [claim, history, conflict, tests, evidenceRows] = await Promise.all([
       supabase.rpc("official_claim", { p_definition_id: official.claim }),
       supabase.rpc("rule_claim_history", { p_definition_id: official.claim }),
+      supabase.rpc("source_conflict_for", { p_definition_id: official.claim }),
+      supabase.rpc("run_rule_tests", { p_definition_id: official.claim }),
+      supabase.from("rule_versions").select("id").eq("definition_id", official.claim).limit(20),
     ]);
     data.officialClaim = officialClaimView(claim.error ? null : (claim.data as OfficialClaimJson | null), history.error ? [] : history.data, {
       organizationId: org,
       role: staff.role,
       timeZone: staff.timezone,
     });
+    const versionIds = (evidenceRows.data ?? []).map((row) => row.id);
+    const evidence = versionIds.length
+      ? await supabase.from("rule_evidence").select("id, source_url, evidence_excerpt").in("rule_version_id", versionIds).limit(40)
+      : { data: [] };
+    data.conflict = {
+      organizationId: org,
+      definitionId: official.claim,
+      evidence: readConflictEvidence(evidence.data ?? []),
+      open: conflict.error ? null : readConflict(conflict.data),
+    };
+    data.ruleTests = tests.error ? null : { organizationId: org, definitionId: official.claim, cases: readRuleTests(tests.data) };
+  } else if (ruleDefinitionId) {
+    const tests = await supabase.rpc("run_rule_tests", { p_definition_id: ruleDefinitionId });
+    data.ruleTests = tests.error ? null : { organizationId: org, definitionId: ruleDefinitionId, cases: readRuleTests(tests.data) };
   }
   // DOC-01: the firm's checklist templates; a failed read shows as partial below (DES-04).
   let checklistsFailed = false;
