@@ -15,6 +15,7 @@ import type {
   EvidenceDialogData,
 } from "@/components/sheet/designer/finance";
 import { allocationLine, creditAvailableCents, creditState } from "@/modules/finance/credits-present";
+import { readOpeningBalanceRows } from "@/modules/sheet/opening-balance-present";
 import { FINANCE_CHIPS } from "@/components/sheet/designer/finance";
 import type {
   FundsAction,
@@ -1069,6 +1070,7 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
     recordPayment: false,
     invoiceTab: null,
     tab,
+    openingBalances: true,
   };
 
   const choices = billing.filter((row) => !staff.sampleMode || matterById.get(row.matter_id)?.is_sample);
@@ -1179,7 +1181,10 @@ export async function loadSheetFinance(staff: SheetStaff, tab: FinanceHeaderData
   // DES-04: IRCC's fee list read again and waiting for review while the approved one is used.
   if (billingPanels?.feesStale) states.push(billingPanels.feesStale);
 
+  const openingReview = tab === "balances" ? await supabase.rpc("opening_balance_review", { p_org: org }) : null;
+
   return {
+    openingBalances: openingReview ? { rows: openingReview.error ? [] : readOpeningBalanceRows(openingReview.data), failed: Boolean(openingReview.error) } : null,
     // DES-04: the tab's partial, stale-source and failed-payment banners (live only).
     states: states.filter((state): state is StateAlertData => Boolean(state)),
     chrome,
