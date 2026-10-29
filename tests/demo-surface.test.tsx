@@ -110,8 +110,19 @@ describe("public and live surfaces", () => {
   });
 
   it("renders public pages without demo copy", () => {
-    assertClean(createElement(HomePage), "home");
     assertClean(createElement(HelpPage), "help");
+  });
+
+  it("sends the root into the app, which handles sign-in", () => {
+    let digest = "";
+    try {
+      HomePage();
+    } catch (error) {
+      digest = String((error as { digest?: string }).digest ?? "");
+    }
+    expect(digest).toMatch(/^NEXT_REDIRECT;[a-z]+;\/app;307;/);
+    expect(isGatedPath("/app")).toBe(true);
+    expect(isGatedPath("/")).toBe(false);
   });
 
   it("renders auth pages with empty inputs and no demo copy", () => {
