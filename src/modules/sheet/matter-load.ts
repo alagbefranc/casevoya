@@ -91,7 +91,8 @@ import { fromChecklist } from "@/modules/sheet/checklist-present";
 import { importedLine } from "@/modules/migration/provenance";
 import { loadImportProvenance } from "@/modules/migration/provenance-load";
 import { importedDocumentKind, importedEvent, importedEvidence, importedOrigin, importedTask, withImport } from "@/modules/sheet/imported-present";
-import { docRequestPersonLabel, mayRequestDocuments } from "@/modules/sheet/doc-request";
+import { DEFAULT_UPLOAD_BYTES } from "@/modules/documents/files";
+import { docRequestPersonLabel, mayCapturePages, mayRequestDocuments } from "@/modules/sheet/doc-request";
 import {
   governmentLabel,
   isoDateInTimeZone,
@@ -787,6 +788,28 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       ? { options: MATTER_OUTCOMES.map((value) => ({ value, label: outcomeLabel(value) })), wire }
       : null;
 
+  const capturePeople: { id: string; name: string }[] = [];
+  const seenPeople = new Set<string>();
+  for (const row of ordered) {
+    if (!row.person_id || seenPeople.has(row.person_id)) continue;
+    seenPeople.add(row.person_id);
+    const name = person.get(row.person_id)?.display_name;
+    if (name) capturePeople.push({ id: row.person_id, name });
+  }
+  const uploadLimit =
+    matterTab(query.tab) === "documents" && mayCapturePages(staff.role) && matter.stage !== "closed"
+      ? await supabase.rpc("document_upload_limit", { p_organization_id: org })
+      : null;
+  const capture =
+    uploadLimit && capturePeople.length > 0
+      ? {
+          organizationId: org,
+          matterId: matter.id,
+          maxBytes: typeof uploadLimit.data === "number" ? uploadLimit.data : DEFAULT_UPLOAD_BYTES,
+          people: capturePeople,
+        }
+      : null;
+
   const page: MatterPageData = {
     tab,
     overview: {
@@ -835,6 +858,7 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       vo: voReading?.panel ?? null,
       filter: true,
       request: requestsDocuments,
+      capture,
     },
     // New agreement for those who can send one (the Agreements page's rule), on an open matter.
     agreements: {

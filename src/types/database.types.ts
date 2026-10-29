@@ -15175,6 +15175,16 @@ export type Database = {
         }
         Returns: string
       }
+      create_redacted_copy_intent: {
+        Args: {
+          p_declared_byte_size: number
+          p_filename: string
+          p_matter_id: string
+          p_regions: Json
+          p_source_version_id: string
+        }
+        Returns: Json
+      }
       create_upload_intent: {
         Args: {
           p_audience: Database["public"]["Enums"]["document_audience"]
@@ -15330,6 +15340,10 @@ export type Database = {
       set_document_translation: {
         Args: { p_expected_version: number; p_language_tag?: string; p_original_version_id?: string; p_version_id: string }
         Returns: number
+      }
+      record_camera_assembly: {
+        Args: { p_pages: Json; p_version_id: string }
+        Returns: Json
       }
       record_custody_step: {
         Args: { p_kind: string; p_location: string; p_on: string; p_purpose: string; p_recipient: string; p_version_id: string }

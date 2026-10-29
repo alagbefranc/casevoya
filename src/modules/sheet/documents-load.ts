@@ -188,6 +188,19 @@ export async function loadSheetDocuments(staff: SheetStaff, query: SheetQuery, n
         // An accepted, clean file opens through a short-lived signed link after a fresh access check.
         // DOC-07: a PDF or image opens as the secure, watermarked preview.
         ...(cardOpenable(version) ? { open: { "data-doc-open": version.id, "data-org": org, ...(PREVIEWABLE.has(version.declaredMediaType) ? { "data-doc-preview": "1" } : {}) } } : {}),
+        ...(canReview && version.uploadState === "clean" && PREVIEWABLE.has(version.declaredMediaType)
+          ? {
+              redact: {
+                versionId: version.id,
+                organizationId: org,
+                mediaType: version.declaredMediaType,
+                matters: (refRows.data ?? [])
+                  .filter((ref) => ref.document_id === doc.id)
+                  .filter((ref, index, all) => all.findIndex((other) => other.matter_id === ref.matter_id) === index)
+                  .map((ref) => ({ id: ref.matter_id, label: matterName(ref.matter_id) })),
+              },
+            }
+          : {}),
         ...(canReview
           ? {
               details: documentDetails({

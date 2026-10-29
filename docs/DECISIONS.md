@@ -2,6 +2,7 @@
 
 | Date | Decision | By |
 |---|---|---|
+| 2026-10-29 | DOC-07 redacted copies are a new staff-only document whose version parent is the original, which is not changed. Each marked area is removed from the copy: text-showing operators are dropped from the content stream and image samples under the area are rewritten, in the Worker (`src/modules/documents/redact.ts`). pdf-lib only paints over a page, so it cannot do this. MuPDF’s WASM build is about 14 MB and is not added on top of the OpenNext Worker. The virus-scan container is not used to make the copy, so redaction still works while that container is down; the copy then takes the same type check, virus-scan hold and retention path as any upload. DOC-03 saves camera pages as one PDF and records each page’s quarter turn on the version. | Engineering, pending Francis |
 | 2026-10-16 | Host on Supabase, region ca-central-1 (Canada Central), project `casevoya` | Francis |
 | 2026-10-16 | Auth: Supabase Auth (not Clerk) | Francis |
 | 2026-10-16 | Backend = Next.js server actions / route handlers + Supabase; jobs as Edge Functions / cron | Francis |

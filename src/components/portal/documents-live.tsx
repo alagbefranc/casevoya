@@ -3,17 +3,21 @@
 import { useState, useTransition, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { badgeClass, VIRUS_LABELS } from "@/modules/documents/present";
+import { PageList, PagePreview, imageMedia, readCaptureFiles, releasePages, type CapturePage } from "@/components/documents/page-capture";
 import {
   authorizeDocumentDownload,
   completeDocumentUpload,
   createDocumentRequest,
   createUploadIntent,
+  recordCameraAssembly,
   recordDocumentCustody,
   reviewDocumentVersion,
   setDocumentExpiry,
   unlinkDocumentMatter,
   waiveDocumentRequest,
 } from "@/modules/documents/actions";
+import { assemblePages } from "@/modules/documents/assemble";
+import { assemblyPages } from "@/modules/documents/capture";
 import type { PortalDocumentCard, PortalDocuments } from "@/modules/documents/load";
 import { draftInFrench } from "@/modules/i18n/actions";
 import type { PortalViewer } from "@/modules/portal/load";
@@ -505,8 +509,8 @@ function audienceLine(audience: string, person: string, self: boolean, firm: str
 
 /**
  * Upload a document, laid out as design/portal/pages/portal-upload.html: five steps (which
- * request, whose it is, the file, a readability check, then sending). One file per upload; the
- * same upload calls as before (intent, signed upload, completion check).
+ * request, whose it is, the pages, a readability check, then sending). Camera pages are turned,
+ * ordered and saved as one PDF. The same upload calls as before (intent, signed upload, completion check).
  */
 function Upload({ viewer, documents }: { viewer: PortalViewer; documents: PortalDocuments }) {
   const router = useRouter();
@@ -516,6 +520,7 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
   const [at, setAt] = useState(0);
   const [requestId, setRequestId] = useState<string>(documents.requests[0]?.id ?? "");
   const [file, setFile] = useState<File | null>(null);
+  const [pages, setPages] = useState<CapturePage[]>([]);
   const [preview, setPreview] = useState<string | null>(null);
   const [readable, setReadable] = useState(false);
   const [over, setOver] = useState(false);
@@ -555,6 +560,8 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
     }
     setFailure(null);
     setMessage("");
+    releasePages(pages);
+    setPages([]);
     setFile(picked);
     setReadable(false);
     setPreview((old) => {
@@ -563,8 +570,32 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
     });
   };
 
+  const addImages = async (list: FileList | undefined, source: "camera" | "library") => {
+    const files = [...(list ?? [])];
+    if (files.length === 0) return;
+    if (source === "library" && files.length === 1 && files[0] && !imageMedia(files[0])) {
+      choose(files[0]);
+      return;
+    }
+    const read = await readCaptureFiles(files, source, pages.length);
+    if (read.pages.length === 0) {
+      setMessage(read.error ?? "Choose a JPEG or PNG for each page.");
+      return;
+    }
+    if (file) {
+      setFile(null);
+      setPreview((old) => {
+        if (old) URL.revokeObjectURL(old);
+        return null;
+      });
+    }
+    setFailure(null);
+    setPages([...pages, ...read.pages]);
+    setMessage(read.error ?? "");
+  };
+
   const send = () => {
-    if (!file) return;
+    if (!file && pages.length === 0) return;
     setStatus("sending");
     setMessage("");
     setFailure(null);
@@ -575,7 +606,29 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
     start(async () => {
       // No answer at all (offline, a dropped connection) is a failure with a retry, not a stuck page.
       try {
-        await sendFile(file, fail);
+        if (pages.length > 0) {
+          const formats = request?.formats ?? null;
+          if (formats && formats.length > 0 && !formats.includes("pdf")) {
+            fail({
+              kind: "wrong_type",
+              title: "This request doesn’t accept a PDF",
+              copy: "Several pages are saved as one PDF. Ask your firm to allow PDF, or send one photo at a time. Nothing was uploaded.",
+              retry: "choose",
+            });
+            return;
+          }
+          const bytes = await assemblePages(pages.map((page) => ({ bytes: page.bytes, mediaType: page.mediaType, rotation: page.rotation, source: page.source })));
+          const assembled = new File([Uint8Array.from(bytes)], "pages.pdf", { type: "application/pdf" });
+          const refused = checkUploadFile(assembled, { maxBytes, formats: formats ? [...formats, "pdf"] : null });
+          if (refused) {
+            fail(refused);
+            return;
+          }
+          await sendFile(assembled, assemblyPages(pages), fail);
+          return;
+        }
+        if (!file) return;
+        await sendFile(file, null, fail);
       } catch {
         fail(uploadFailure({ stage: "transfer", thrown: true }));
       }
@@ -584,7 +637,7 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
 
   // The same upload calls as before (intent, signed upload, the server's file check); each failure
   // is named by uploadFailure so the person sees what happened and what to do next.
-  const sendFile = async (picked: File, fail: (reason: UploadFailure) => void) => {
+  const sendFile = async (picked: File, assembly: ReturnType<typeof assemblyPages> | null, fail: (reason: UploadFailure) => void) => {
     const file = picked;
     {
       const intent = await createUploadIntent({
@@ -609,6 +662,13 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
       if (uploaded.error) {
         fail(uploadFailure({ stage: "transfer", message: uploaded.error.message }));
         return;
+      }
+      if (assembly) {
+        const noted = await recordCameraAssembly({ organizationId: viewer.organizationId, versionId: intent.versionId, pages: assembly });
+        if ("error" in noted) {
+          fail(uploadFailure({ stage: "check", message: noted.error ?? null }));
+          return;
+        }
       }
       const done = await completeDocumentUpload({ organizationId: viewer.organizationId, versionId: intent.versionId });
       if ("error" in done) {
@@ -641,7 +701,7 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
   const canContinue =
     at === 0 ? Boolean(request) || (staff && purpose.trim().length > 1 && Boolean(person)) :
     at === 1 ? true :
-    at === 2 ? Boolean(file) :
+    at === 2 ? Boolean(file) || pages.length > 0 :
     at === 3 ? readable && (!staff || code.trim().length > 0) :
     false;
   const goNext = () => {
@@ -728,8 +788,8 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
         </section>
 
         <section className={at === 2 ? "fstep on" : "fstep"} aria-labelledby="up-s2">
-          <h2 id="up-s2" style={{ fontSize: 22, fontWeight: 400, marginBottom: 6 }}>Add the file</h2>
-          <p className="lbl" style={{ marginBottom: 14 }}>Take a photo with your phone or choose a file. A scan or PDF with every page works best.</p>
+          <h2 id="up-s2" style={{ fontSize: 22, fontWeight: 400, marginBottom: 6 }}>Add the pages</h2>
+          <p className="lbl" style={{ marginBottom: 14 }}>Take a photo of each page, turn it upright, and put the pages in order. They’re saved as one PDF. Or choose a file you already have.</p>
           <div
             className={over ? "drop over" : "drop"}
             onDragOver={(event) => {
@@ -740,18 +800,21 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
             onDrop={(event) => {
               event.preventDefault();
               setOver(false);
-              choose(event.dataTransfer.files?.[0]);
+              const dropped = event.dataTransfer.files;
+              if (dropped && dropped.length > 0 && [...dropped].every((item) => imageMedia(item))) void addImages(dropped, "library");
+              else choose(dropped?.[0]);
             }}
           >
             <span className="art bare" style={{ "--a": "64px" } as CSSProperties} aria-hidden="true">
               <img src="/assets/generated/b2/camera-capture-160@1x.webp" srcSet="/assets/generated/b2/camera-capture-160@2x.webp 2x" width={64} height={64} alt="" loading="lazy" decoding="async" />
             </span>
-            <b style={{ fontWeight: 500, fontSize: 16 }}>{file ? file.name : "Drop a file here, or"}</b>
+            <b style={{ fontWeight: 500, fontSize: 16 }}>{pages.length > 0 ? `${pages.length} ${pages.length === 1 ? "page" : "pages"}, saved as one PDF` : file ? file.name : "Drop a file here, or"}</b>
             <div className="kd-row" style={{ justifyContent: "center" }}>
-              <label className="btn p"><Glyph name="camera" />Use camera<input type="file" className="sr" accept="image/*" capture="environment" onChange={(event) => choose(event.target.files?.[0])} /></label>
-              <label className="btn"><Glyph name="paperclip" />{file ? "Choose another" : "Choose a file"}<input type="file" className="sr" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.docx,application/pdf,image/jpeg,image/png,image/heic" onChange={(event) => choose(event.target.files?.[0])} /></label>
+              <label className="btn p"><Glyph name="camera" />Use camera<input type="file" className="sr" accept="image/*" capture="environment" onChange={(event) => void addImages(event.target.files ?? undefined, "camera")} /></label>
+              <label className="btn"><Glyph name="paperclip" />{file || pages.length > 0 ? "Choose another" : "Choose a file"}<input type="file" className="sr" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.docx,application/pdf,image/jpeg,image/png,image/heic" multiple onChange={(event) => void addImages(event.target.files ?? undefined, "library")} /></label>
             </div>
-            <small className="lbl">{file ? bytes(file.size) : <>{request?.formats?.length ? formatList(request.formats) : "PDF, JPG, PNG, HEIC or DOCX"} <span className="sep" aria-hidden="true" /> {`up to ${limitText(maxBytes)}`}</>}</small>
+            <small className="lbl">{file ? bytes(file.size) : pages.length > 0 ? "JPEG or PNG pages, saved as one PDF" : <>{request?.formats?.length ? formatList(request.formats) : "PDF, JPG, PNG, HEIC or DOCX"} <span className="sep" aria-hidden="true" /> {`up to ${limitText(maxBytes)}`}</>}</small>
+            <PageList pages={pages} onChange={setPages} />
           </div>
           {failure && at === 2 ? (
             <div className="panel" style={{ marginTop: 12 }}>
@@ -766,7 +829,7 @@ function Upload({ viewer, documents }: { viewer: PortalViewer; documents: Portal
           <div className="grid2">
             <div className="pg" style={{ width: "100%" }}>
               <div className="im" style={{ height: 340, padding: 0, overflow: "hidden", display: "grid", placeItems: "center" }}>
-                {preview ? <img src={preview} alt={`Preview of ${file?.name ?? "your file"}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Glyph name="file" size="l" />}
+                {pages.length > 0 ? <PagePreview pages={pages} /> : preview ? <img src={preview} alt={`Preview of ${file?.name ?? "your file"}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Glyph name="file" size="l" />}
               </div>
               <div className="ctl"><span>{file?.name ?? ""}</span><span className="num">{file ? bytes(file.size) : ""}</span></div>
             </div>

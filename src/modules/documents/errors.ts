@@ -19,6 +19,15 @@ export function documentError(message: string): string {
   if (/not PDF, JPEG, PNG, HEIC|file header is missing|unrecognized/i.test(message)) {
     return "The file is not a PDF, JPEG, PNG, HEIC, or DOCX.";
   }
+  if (/document redaction denied/i.test(message)) return "Only firm staff can make a redacted copy.";
+  if (/only a checked file can be redacted/i.test(message)) return "Only a file that passed its check can be redacted.";
+  if (/not on this matter/i.test(message)) return "That document is not on this matter.";
+  if (/mark between 1 and 40|mark an area/i.test(message)) return "Mark between 1 and 40 areas on the page.";
+  if (/use a PDF, JPEG, or PNG file name/i.test(message)) return "The redacted copy must be a PDF, JPEG, or PNG.";
+  if (/document assembly denied/i.test(message)) return "Those pages could not be saved.";
+  if (/already finished/i.test(message)) return "That upload is already finished.";
+  if (/between 1 and 40 pages/i.test(message)) return "Add between 1 and 40 pages.";
+  if (/how each page is turned/i.test(message)) return "Turn each page by a quarter turn.";
   if (/size/i.test(message)) return "The file size does not match what was authorized.";
   if (/checksum/i.test(message)) return "The file could not be checked. Upload it again.";
   if (/stored object was not found/i.test(message)) return "The file did not finish uploading. Try again.";
