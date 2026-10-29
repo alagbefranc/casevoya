@@ -6,6 +6,7 @@ import { matterInboundAddress, timelineEmailEvents } from "@/modules/sheet/inbou
 import { loadVoComposer } from "@/modules/sheet/vo-load";
 import { loadVoAutoRead, loadVoReadingPanel } from "@/modules/sheet/vo-doc-load";
 import { loadMatterLetters } from "@/modules/sheet/letters-load";
+import { loadMatterBundle, loadMatterForms } from "@/modules/sheet/prep-load";
 import {
   matterTab,
   type MatterAgreementRow,
@@ -895,6 +896,21 @@ export async function loadSheetMatter(staff: SheetStaff, matterId: string, query
       closed: matter.stage === "closed",
       timeZone: staff.timezone,
     });
+  }
+
+  // PREP-01: form templates pinned on this matter, and which approved facts fill each field.
+  if (tab === "forms") {
+    page.forms = await loadMatterForms(supabase, {
+      organizationId: org,
+      matterId: matter.id,
+      today,
+      role: staff.role,
+      licensed: licensedHere,
+    }).catch(() => null);
+  }
+  // PREP-03: the document index and evidence bundle for the selected files.
+  if (tab === "documents") {
+    page.documents.bundle = await loadMatterBundle(supabase, { organizationId: org, matterId: matter.id, role: staff.role }).catch(() => null);
   }
 
   // Intake delivery: each person's forms, answers with provenance, review state and flags.

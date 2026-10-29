@@ -179,6 +179,7 @@ export function supportCatalogue(json: SupportCatalogueJson | null, input: { tim
       "Countries other than Canada are not supported.",
       "A matter for an unsupported program, province, tribunal or case type opens with no checklist or rules, and never takes them from another program.",
       "Casevoya doesn’t submit to IRCC or any other government, has no government integration, doesn’t verify licences on its own (firms record their College register checks), and doesn’t promise any approval or processing time.",
+      "Form templates are not published with Casevoya. A firm’s licensed reviewer adds one from the official form page, with the identifier, the version printed on it, and the fields as that page states them. Until then the form-template catalogue is empty. Casevoya does not fill government PDFs.",
     ],
     firm: input.staff && json?.firm_jurisdictions != null ? (firmCodes.length ? firmCodes.join(", ") : "None recorded on the firm profile") : null,
     publicHref: SUPPORT_PUBLIC_HREF,

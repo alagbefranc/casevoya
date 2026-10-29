@@ -17412,6 +17412,75 @@ export type Database = {
         }
         Returns: number
       }
+      propose_form_template: {
+        Args: {
+          p_checked_on: string
+          p_effective_on: string | null
+          p_fields: Json
+          p_form_version: string
+          p_jurisdiction: string
+          p_mapping_version: number | null
+          p_official_form_id: string
+          p_official_url: string
+          p_org: string
+          p_output_format: string
+          p_program_key: string | null
+          p_snapshot: Json | null
+          p_source_section: string | null
+        }
+        Returns: string
+      }
+      review_form_template: {
+        Args: {
+          p_decision: string
+          p_expected_version: number
+          p_note: string | null
+          p_page_opened_on: string | null
+          p_template_id: string
+        }
+        Returns: number
+      }
+      retire_form_template: {
+        Args: { p_expected_version: number; p_reason: string; p_template_id: string }
+        Returns: number
+      }
+      pin_form_template: {
+        Args: { p_matter_id: string; p_template_id: string }
+        Returns: string
+      }
+      form_mapping_review: {
+        Args: { p_matter_id: string }
+        Returns: Json
+      }
+      channel_export_rule: {
+        Args: { p_channel: Database["public"]["Enums"]["submission_channel"]; p_org: string }
+        Returns: Json
+      }
+      set_channel_export_rule: {
+        Args: {
+          p_channel: Database["public"]["Enums"]["submission_channel"]
+          p_max_bytes: number
+          p_name_pattern: string
+          p_org: string
+        }
+        Returns: string
+      }
+      save_bundle_selection: {
+        Args: { p_channel: Database["public"]["Enums"]["submission_channel"]; p_items: Json; p_matter_id: string }
+        Returns: string
+      }
+      bundle_index: {
+        Args: { p_matter_id: string }
+        Returns: Json
+      }
+      record_bundle_export: {
+        Args: { p_byte_size: number; p_file_name: string; p_matter_id: string; p_page_count: number }
+        Returns: string
+      }
+      submission_manifest_snapshot: {
+        Args: { p_handoff_id: string }
+        Returns: Json
+      }
       staff_book_consultation: {
         Args: {
           p_event_type_id: string
