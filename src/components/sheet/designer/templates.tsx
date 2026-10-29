@@ -28,8 +28,10 @@ import type { LiveClaimsData, OfficialClaimView } from "@/modules/sheet/official
 import { ProgramPackPublish, type PackEditorData } from "./program-pack-publish";
 import { RuleTestsPanel, type RuleTestRow } from "./rule-tests-panel";
 import { SourceConflictPanel, type ConflictEvidence, type OpenConflict } from "./source-conflict-panel";
+import type { SharedTemplatesView } from "@/modules/sheet/shared-template-present";
+import { SharedTemplatesPanel } from "@/components/sheet/shared-templates";
 
-export type TemplatesTab = "program" | "messages" | "checklists" | "sources" | "rule";
+export type TemplatesTab = "program" | "messages" | "checklists" | "sources" | "rule" | "shared";
 
 type Text = string | { left: string; right: string };
 
@@ -80,6 +82,9 @@ export type TemplatesData = {
   ruleTests?: { organizationId: string; definitionId: string; cases: RuleTestRow[] } | null;
   /** SRC-08: two stored captures that disagree, on the open official claim. */
   conflict?: { organizationId: string; definitionId: string; evidence: ConflictEvidence[]; open: OpenConflict | null } | null;
+  /** Live only (ADM-03): the Shared templates tab. Absent on the Designer's capture. */
+  showSharedTab?: boolean;
+  shared?: (SharedTemplatesView & { organizationId: string; failed?: boolean }) | null;
 };
 
 const UL: Record<TemplatesTab, React.CSSProperties> = {
@@ -88,6 +93,7 @@ const UL: Record<TemplatesTab, React.CSSProperties> = {
   checklists: { left: "271px", width: "60px" },
   sources: { left: "358px", width: "104px" },
   rule: { left: "488px", width: "63px" },
+  shared: { left: "570px", width: "130px" },
 };
 
 function i(n: number) {
@@ -149,6 +155,11 @@ export function TemplatesHeader({ data }: { data: TemplatesData }) {
         <button role={"tab"} data-t={"rule"} className={data.tab === "rule" ? "on" : undefined}>
           {"Rule detail"}
         </button>
+        {data.showSharedTab ? (
+          <button role={"tab"} data-t={"shared"} className={data.tab === "shared" ? "on" : undefined}>
+            {"Shared templates"}
+          </button>
+        ) : null}
         <i className={"ul"} style={UL[data.tab]}></i>
       </div>
     </>
@@ -592,6 +603,15 @@ export function SheetTemplates({ data }: { data: TemplatesData }) {
           <SourceConflictPanel organizationId={data.conflict.organizationId} definitionId={data.conflict.definitionId} evidence={data.conflict.evidence} conflict={data.conflict.open} />
         ) : null}
       </>
+    );
+  }
+  if (data.tab === "shared" && data.shared) {
+    return data.shared.failed ? (
+      <div className={"panel rv"}>
+        <Empty art={"templates-empty"} title={"Shared templates couldn’t load"} copy={"Reload the page. Nothing was changed. If it keeps happening, sign in again."} />
+      </div>
+    ) : (
+      <SharedTemplatesPanel organizationId={data.shared.organizationId} view={data.shared} />
     );
   }
   return <Program data={data} />;

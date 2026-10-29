@@ -1173,7 +1173,29 @@ Issue #263 item C, branch `feat/booking-possible-match`. One additive migration;
 
 Tested in `tests/booking-possible-match.rls.test.ts` and `tests/booking-possible-match.test.tsx`.
 
-## Official re-checks, conflicts and named program packs (`20261029180000`, not applied on the live project)
+## Form templates, evidence bundles and package snapshots (`20261029120000`, `20261029120100`, applied on the live project 2026-10-29)
+
+PREP-01, PREP-03 and PREP-04. No form identifier, version, field list, fee or processing time is inserted.
+
+* `form_templates` and `form_template_fields`: a firm’s transcription of one official form (jurisdiction, optional program key, identifier, version as printed, mapping version, effective date only when supplied, official URL, output `field_review` or `manual_completion`). Pending until a licensed member approves it (fresh step-up; snapshot hash, or the reviewer’s attestation when the page could not be fetched). One approved row per firm, jurisdiction and form identifier. Fields are append-only. Empty until a firm adds one.
+* `matter_form_pins`: the template a matter is using. Replacing a pin sets `superseded_at` on the previous pin for that form. A pin is stale when the template is no longer approved, its effective date is still in the future, or the official page is past `source.recheck_interval.form`.
+* `public.form_mapping_review(matter)`: each pinned field is filled, missing or manual, with the approved facts the value comes from.
+* `submission_channel_templates`: optional per-channel file-name pattern and size cap (1–100 MiB). Absent: `{reference}-evidence-bundle.pdf` and 25 MiB. A product setting, not an IRCC limit.
+* `matter_bundle_selections` and `matter_bundle_items`: the documents staff chose, in order. The PDF (cover, index, PDF/JPEG/PNG pages, page numbers) is built in the app and not stored.
+* `submission_manifest_forms` and `submission_manifest_facts`: copied at package release. The manifest hash adds those lines only when they exist, so a release with neither still hashes the file list alone. While the handoff is authorized, a change to the files, the form pins or the approved facts blocks the package gate (`scope_changed`).
+
+`app.sign_off_submission_handoff`, `app.gov_pin_manifest`, `app.submission_gates_for` and `app.record_submission` are redefined from `20261025170000`. Forced RLS on every new table. Tested in `tests/prep-forms-bundles.rls.test.ts`, `tests/prep-forms-bundle.test.ts` and `tests/gov-submission-checklist.rls.test.ts`.
+
+## Shared templates and opening-balance review (`20261029130000`, `20261029130100`, applied on the live project 2026-10-29)
+
+ADM-03 and MIG-03. Apply in order. Neither migration inserts a `platform_admins` row. Do not deploy this with the app until the migrations are applied; the new screens call the new functions.
+
+* `20261029130000_mig_opening_balance_review.sql`: `opening_balances` keeps the source-file amount, kind, currency, date, file name, SHA-256 and row count (backfilled from the batch; touch and audit triggers are disabled only for that backfill). A pending balance can be corrected with a reason (`opening_balance_corrections`, append-only). Once approved or rejected, the balance is locked. `public.review_opening_balance` is redefined so any firm owner or finance user of the firm can review, not only a finance user assigned to the matter. New: `public.correct_opening_balance` and `public.opening_balance_review`. Approval still posts nothing to an invoice or a client account.
+* `20261029130100_adm_shared_templates.sql`: platform-wide `shared_templates` and versions. The admin portal (service role) calls `public.draft_shared_template_version` and `public.revise_shared_template_draft`. It cannot publish. `public.approve_shared_template_version`, `public.reject_shared_template_version` and `public.rollback_shared_template_version` require a signed-in platform admin with a fresh step-up and an active licence, and the author cannot approve their own draft. Publishing notifies every existing firm. Firms adopt (`public.adopt_shared_template`); a matter pin (`public.pin_matter_shared_template`) stays when a newer version is published. A firm's wording is `firm_shared_template_overrides`, not a change to the reviewed body. `public.shared_template_diff` and `public.shared_template_history` are what the admin portal reads; `public.firm_shared_templates` is the firm screen. Official claims and Source review are unchanged.
+
+Tested in `tests/mig-opening-balance-review.rls.test.ts`, `tests/opening-balance-review.test.ts`, `tests/adm-shared-templates.rls.test.ts` and `tests/shared-templates-present.test.ts`.
+
+## Official re-checks, conflicts and named program packs (`20261029180000`, applied on the live project 2026-10-29)
 
 AI-04, SRC-04, SRC-07, SRC-08, SRC-10, SRC-11 / INT-02. Additive. Does not load capture files and does not seed a fee, form, processing time or program rule.
 

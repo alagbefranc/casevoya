@@ -42,7 +42,9 @@ export type FinanceHeaderData = {
   recordPayment: boolean;
   /** The Designer's last tab, one open invoice ("INV-0218"). */
   invoiceTab: string | null;
-  tab: "invoices" | "payments" | "funds" | "recon" | "refunds" | "invoice";
+  tab: "invoices" | "payments" | "funds" | "recon" | "refunds" | "invoice" | "balances";
+  /** Live only (MIG-03): the Opening balances tab. Absent on the Designer's capture. */
+  openingBalances?: boolean;
 };
 
 export type FinanceKpi = {
@@ -137,6 +139,7 @@ const UNDERLINE: Record<FinanceHeaderData["tab"], { left: string; width: string 
   funds: { left: "158px", width: "71px" },
   recon: { left: "255px", width: "85px" },
   refunds: { left: "365px", width: "124px" },
+  balances: { left: "510px", width: "140px" },
   invoice: { left: "515px", width: "58px" },
 };
 
@@ -182,7 +185,7 @@ export function FinanceHeader({ data }: { data: FinanceHeaderData }) {
         </span>
       </header>
       <div className={"tabs"} role={"tablist"}>
-        {TABS.map(([key, label]) => (
+        {(data.openingBalances ? [...TABS, ["balances", "Opening balances"] as [string, string]] : TABS).map(([key, label]) => (
           <button key={key} role={"tab"} data-t={key} className={data.tab === key ? "on" : undefined}>
             {label}
           </button>

@@ -14241,6 +14241,48 @@ export type Database = {
         Args: { p_approve: boolean; p_id: string; p_note: string; p_org: string }
         Returns: Json
       }
+      correct_opening_balance: {
+        Args: {
+          p_amount_cents: number
+          p_as_of: string
+          p_currency: string
+          p_description: string
+          p_expected_version: number
+          p_id: string
+          p_kind: string
+          p_org: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      opening_balance_review: {
+        Args: { p_org: string }
+        Returns: Json
+      }
+      adopt_shared_template: {
+        Args: { p_version_id: string }
+        Returns: Json
+      }
+      clear_firm_template_override: {
+        Args: { p_reason: string; p_template_id: string }
+        Returns: Json
+      }
+      dismiss_shared_template_notice: {
+        Args: { p_notice_id: string }
+        Returns: undefined
+      }
+      firm_shared_templates: {
+        Args: never
+        Returns: Json
+      }
+      pin_matter_shared_template: {
+        Args: { p_matter_id: string; p_template_id: string }
+        Returns: Json
+      }
+      save_firm_template_override: {
+        Args: { p_items: Json; p_reason: string; p_summary: string; p_template_id: string; p_title: string }
+        Returns: Json
+      }
       revise_matter_letter: {
         Args: { p_body: string; p_expected_version: number; p_letter_id: string; p_title: string }
         Returns: number
@@ -17448,6 +17490,75 @@ export type Database = {
           p_handoff_id: string
         }
         Returns: number
+      }
+      propose_form_template: {
+        Args: {
+          p_checked_on: string
+          p_effective_on: string | null
+          p_fields: Json
+          p_form_version: string
+          p_jurisdiction: string
+          p_mapping_version: number | null
+          p_official_form_id: string
+          p_official_url: string
+          p_org: string
+          p_output_format: string
+          p_program_key: string | null
+          p_snapshot: Json | null
+          p_source_section: string | null
+        }
+        Returns: string
+      }
+      review_form_template: {
+        Args: {
+          p_decision: string
+          p_expected_version: number
+          p_note: string | null
+          p_page_opened_on: string | null
+          p_template_id: string
+        }
+        Returns: number
+      }
+      retire_form_template: {
+        Args: { p_expected_version: number; p_reason: string; p_template_id: string }
+        Returns: number
+      }
+      pin_form_template: {
+        Args: { p_matter_id: string; p_template_id: string }
+        Returns: string
+      }
+      form_mapping_review: {
+        Args: { p_matter_id: string }
+        Returns: Json
+      }
+      channel_export_rule: {
+        Args: { p_channel: Database["public"]["Enums"]["submission_channel"]; p_org: string }
+        Returns: Json
+      }
+      set_channel_export_rule: {
+        Args: {
+          p_channel: Database["public"]["Enums"]["submission_channel"]
+          p_max_bytes: number
+          p_name_pattern: string
+          p_org: string
+        }
+        Returns: string
+      }
+      save_bundle_selection: {
+        Args: { p_channel: Database["public"]["Enums"]["submission_channel"]; p_items: Json; p_matter_id: string }
+        Returns: string
+      }
+      bundle_index: {
+        Args: { p_matter_id: string }
+        Returns: Json
+      }
+      record_bundle_export: {
+        Args: { p_byte_size: number; p_file_name: string; p_matter_id: string; p_page_count: number }
+        Returns: string
+      }
+      submission_manifest_snapshot: {
+        Args: { p_handoff_id: string }
+        Returns: Json
       }
       staff_book_consultation: {
         Args: {

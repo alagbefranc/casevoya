@@ -63,7 +63,7 @@ export function noAccess(area: string, holds: string, role: string, ask = "Ask y
 /** Finance (every tab): the firm owner and finance users only (app.can_read_matter_billing). */
 export function financeAccess(role: string): NoAccessData | null {
   if (BILLING.has(role)) return null;
-  return noAccess("Finance", "Invoices, payments, client funds, reconciliation and refunds are for the firm owner and finance staff.", role);
+  return noAccess("Finance", "Invoices, payments, client funds, reconciliation, refunds and opening balances are for the firm owner and finance staff.", role);
 }
 
 /** A matter's Billing tab for a role that can't read its invoices (the Designer's own example). */

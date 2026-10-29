@@ -2,6 +2,7 @@ import "server-only";
 import type { createClient } from "@/lib/supabase/server";
 import { channelName, readChecklist, type RequirementRow } from "@/modules/submissions/present";
 import { buildSubmissionChecklist, type ChecklistEvent, type ManifestFile, type ManifestHandoff } from "@/modules/sheet/matter-submissions-present";
+import { presentManifestExtras } from "@/modules/sheet/prep-present";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -34,7 +35,7 @@ export async function loadSubmissionChecklist(supabase: Client, input: Submissio
   const state = checklist.error ? null : readChecklist(checklist.data);
   const handoffId = state?.handoff_id ?? null;
   const manifestId = input.manifestHandoff?.manifest_pinned_at ? input.manifestHandoff.id : null;
-  const [events, files] = await Promise.all([
+  const [events, files, snapshot] = await Promise.all([
     handoffId
       ? supabase
           .from("submission_checklist_events")
@@ -53,14 +54,16 @@ export async function loadSubmissionChecklist(supabase: Client, input: Submissio
           .order("position")
           .limit(500)
       : null,
+    manifestId ? supabase.rpc("submission_manifest_snapshot", { p_handoff_id: manifestId }) : null,
   ]);
+  const extras = snapshot && !snapshot.error ? presentManifestExtras(snapshot.data) : { forms: [], facts: [] };
   const rows = (requirements.data ?? []) as RequirementRow[];
   const built = buildSubmissionChecklist({
     ...input,
     state,
     requirements: rows,
     events: (events?.data ?? []) as ChecklistEvent[],
-    manifest: manifestId && input.manifestHandoff ? { handoff: input.manifestHandoff, files: (files?.data ?? []) as ManifestFile[] } : null,
+    manifest: manifestId && input.manifestHandoff ? { handoff: input.manifestHandoff, files: (files?.data ?? []) as ManifestFile[], forms: extras.forms, facts: extras.facts } : null,
   });
   return {
     ...built,
