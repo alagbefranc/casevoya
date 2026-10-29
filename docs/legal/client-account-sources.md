@@ -4,6 +4,11 @@ What the Finance → Client funds ledger is built against, and what it deliberat
 Casevoya never holds client money: the ledger records what happens in the firm's own client
 account at its own bank.
 
+**Accountant sign-off (decision 2026-10-28, issue #263).** Stripe goes live only after an accountant
+signs off on the client-money flow, including tax on professional-fee lines, and the must-fix bugs
+ship. Francis reported on 2026-10-28 that the accountant has signed off; the must-fix bugs are
+issue #262, PR #266, not yet merged. Until then Casevoya stays in Stripe test mode.
+
 ## Sources
 
 | Source | URL | Retrieved |

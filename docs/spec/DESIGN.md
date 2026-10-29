@@ -117,7 +117,7 @@ Adult family members receive their own scoped views. A family selector must not 
 
 ### Platform administration
 
-It is a separate portal with its own codebase, deployment and sign-in (Francis, 2026-10-19; see `docs/DECISIONS.md` and `docs/integrations/support-access.md`), not part of the firm or client app. Use the same visual system with a clearly labelled Platform administration header. Default cards contain firm count, subscription exceptions, queue health, verification workload, and incident status. Support grants show scope and expiry. Access to client content is an exceptional, explicit action and is never the default landing view.
+It is a separate portal with its own codebase, deployment and sign-in (Francis, 2026-10-19; see `docs/DECISIONS.md` and `docs/integrations/support-access.md`; Francis is its only admin to start, 2026-10-28), not part of the firm or client app. Use the same visual system with a clearly labelled Platform administration header. Default cards contain firm count, subscription exceptions, queue health, verification workload, and incident status. Support grants show scope and expiry. Access to client content is an exceptional, explicit action and is never the default landing view.
 
 ## 6 Core component contracts
 
