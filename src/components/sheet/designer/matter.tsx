@@ -4,6 +4,7 @@
  * show the Designer's empty-state panel instead of sample rows.
  */
 import { Fragment, type ReactNode } from "react";
+import { StaffCapture, type StaffCaptureData } from "@/components/documents/staff-capture";
 import { gaugeArcs, percent } from "./home";
 import { Badge, type MatterBadge } from "./matters";
 import { Avatar, type SidebarPerson } from "./sidebar";
@@ -20,6 +21,8 @@ import { MatterIntake, type MatterIntakeData } from "./matter-intake";
 import { MatterWork, type MatterWorkData } from "./billing-live";
 import { InboundAddress, type InboundAddressData } from "./inbound-filing";
 import { MatterLetters, type LetterAttrs, type MatterLettersData } from "./matter-letters";
+import { MatterBundle, MatterForms } from "./matter-prep";
+import type { MatterBundleData, MatterFormsData } from "@/modules/sheet/prep-present";
 import { MatterRulePin } from "./matter-rule-pin";
 import type { MatterRulePinData } from "@/modules/sheet/rule-pin-present";
 import type { PolicyKind } from "@/modules/portal-policies/defaults";
@@ -1300,6 +1303,8 @@ export function MatterDocuments({
   request = false,
   apply = null,
   autoRead = null,
+  capture = null,
+  bundle = null,
 }: {
   checklist: string | null;
   people: string[];
@@ -1313,25 +1318,38 @@ export function MatterDocuments({
   apply?: ApplyChecklistData | null;
   /** Live only (DOC-05): new uploads Vo reads now, with "Read documents on upload" on. */
   autoRead?: { organizationId: string; versionIds: string[] } | null;
+  /** Live only (DOC-03): capture several pages and save them as one PDF. */
+  capture?: StaffCaptureData | null;
+  /** PREP-03: document index and evidence bundle. */
+  bundle?: MatterBundleData | null;
 }) {
   if (rows.length === 0) {
     return (
-      <Panel>
-        <Empty art={"review-queue-empty"} title={"No documents on this matter yet"} copy={"Requests and uploads appear here as the team works on the file."}>
-          {request ? (
-            <button className={"btn p sm"} data-open={DOC_REQUEST_DIALOG}>
-              <Icon name={"upload"} cls={"ic s"} />
-              {"Request a document"}
-            </button>
-          ) : null}
-          {apply?.templates.length ? <ApplyChecklist data={apply} /> : null}
-        </Empty>
-      </Panel>
+      <>
+        <Panel>
+          <Empty art={"review-queue-empty"} title={"No documents on this matter yet"} copy={"Requests and uploads appear here as the team works on the file."}>
+            {request ? (
+              <button className={"btn p sm"} data-open={DOC_REQUEST_DIALOG}>
+                <Icon name={"upload"} cls={"ic s"} />
+                {"Request a document"}
+              </button>
+            ) : null}
+            {apply?.templates.length ? <ApplyChecklist data={apply} /> : null}
+            {capture ? <StaffCapture data={capture} /> : null}
+          </Empty>
+        </Panel>
+        {bundle ? <MatterBundle data={bundle} /> : null}
+      </>
     );
   }
   return (
     <>
       {autoRead ? <VoAutoRead data={autoRead} /> : null}
+      {capture ? (
+        <div className={"ph-act"}>
+          <StaffCapture data={capture} />
+        </div>
+      ) : null}
       {apply?.templates.length ? (
         <div className={"ph-act"}>
           <ApplyChecklist data={apply} />
@@ -1420,6 +1438,7 @@ export function MatterDocuments({
         ) : null}
       </p>
       {vo ? <MatterDocumentReview data={vo} /> : null}
+      {bundle ? <MatterBundle data={bundle} /> : null}
     </>
   );
 }
@@ -2065,7 +2084,7 @@ export function MatterTimeline({ data }: { data: MatterTimelineData }) {
 export const MATTER_TAB_EMPTY: Partial<Record<MatterTab, { art: string; title: string; copy: string }>> = {
   // The Intake tab reads live forms and answers; this shows only when that read failed.
   intake: { art: "clients-empty", title: "Intake couldn’t load", copy: "Reload the page to try again. Questionnaire answers are kept on the client’s record." },
-  forms: { art: "templates-empty", title: "No prepared forms yet", copy: "Prepared government forms are not stored yet. Casevoya does not fill IRCC forms for you." },
+  forms: { art: "templates-empty", title: "Forms couldn’t load", copy: "Reload the page to try again. A licensed reviewer adds a form template from an official page. Casevoya does not ship a form list and does not fill government PDFs." },
   submissions: { art: "review-queue-empty", title: "No submission packages yet", copy: "Submission packages are not stored yet. Casevoya does not submit to IRCC." },
   messages: { art: "inbox-empty", title: "Inbox is clear", copy: "New emails linked to a matter will land here for triage." },
   billing: { art: "invoice-plain", title: "No invoices yet", copy: "Invoices you issue from a matter appear here." },
@@ -2080,7 +2099,9 @@ export type MatterPageData = {
   people: { cards: MatterPersonCard[]; relationships: MatterRelationship[]; history?: PersonHistoryPanel[] };
   /** `vo`: Vo's reading of one document, in the Designer's review panel (`#ocr`). */
   /** `request` (live): the person may request documents, so the empty tab offers it (#dReq). */
-  documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[]; vo?: MatterDocumentReviewData | null; filter?: boolean; request?: boolean; apply?: ApplyChecklistData | null; autoRead?: { organizationId: string; versionIds: string[] } | null };
+  documents: { checklist: string | null; people: string[]; rows: MatterDocumentRow[]; vo?: MatterDocumentReviewData | null; filter?: boolean; request?: boolean; apply?: ApplyChecklistData | null; autoRead?: { organizationId: string; versionIds: string[] } | null; capture?: StaffCaptureData | null; bundle?: MatterBundleData | null };
+  /** PREP-01: form templates pinned on this matter, and which approved facts fill them. Absent, the tab keeps its empty state. */
+  forms?: MatterFormsData | null;
   agreements: { rows: MatterAgreementRow[]; signing: MatterSigning | null; create?: string | null };
   /** Every upcoming deadline, soonest first. `record` and `add` offer Record a deadline and New task from the empty state. */
   tasks: { deadlines: MatterDeadline[]; tasks: MatterTaskRow[]; record?: boolean; add?: boolean };
@@ -2120,8 +2141,12 @@ export function SheetMatter({ data }: { data: MatterPageData }) {
           request={data.documents.request}
           apply={data.documents.apply}
           autoRead={data.documents.autoRead}
+          capture={data.documents.capture}
+          bundle={data.documents.bundle}
         />
       );
+    case "forms":
+      return data.forms ? <MatterForms data={data.forms} /> : <MatterTabEmpty tab={data.tab} />;
     case "agreements":
       return <MatterAgreements rows={data.agreements.rows} signing={data.agreements.signing} create={data.agreements.create} />;
     case "tasks":

@@ -13,6 +13,7 @@
  * with each original's custody history and its next steps (Move, Return, Acknowledge), and the
  * Custody dialog (`CustodyDialog`) they open; wired in custody-acts.
  */
+import { RedactHost } from "@/components/documents/redact-dialog";
 import { SENSITIVITIES, TRANSLATION_LANGUAGES, type CustodyStep, type DocumentDetails } from "@/modules/sheet/documents-present";
 import { Empty, Icon, Pair, Sep } from "./frame";
 import { FilterEmpty } from "./filter-empty";
@@ -44,6 +45,8 @@ export type DocCard = {
   open?: Record<string, string>;
   /** Live only (DOC-06): the Details button's facts, for a reviewer. */
   details?: DocumentDetails;
+  /** Live only (DOC-07): a checked PDF or image a reviewer can redact into a new copy. */
+  redact?: { versionId: string; organizationId: string; mediaType: string; matters: { id: string; label: string }[] };
 };
 
 export type CustodyRow = {
@@ -306,6 +309,20 @@ function Card({ card }: { card: DocCard }) {
             {"Details"}
           </button>
         ) : null}
+        {card.redact && card.redact.matters.length > 0 ? (
+          <button
+            type={"button"}
+            className={"btn s sm"}
+            data-redact={card.redact.versionId}
+            data-org={card.redact.organizationId}
+            data-type={card.redact.mediaType}
+            data-title={card.title}
+            data-matters={JSON.stringify(card.redact.matters)}
+            aria-label={`Redact a copy of ${card.title}`}
+          >
+            {"Redact"}
+          </button>
+        ) : null}
       </div>
     </article>
   );
@@ -553,6 +570,7 @@ export function SheetDocuments({ data }: { data: DocumentsData }) {
       <>
         <All cards={cards} filter={data.all?.filter} />
         {cards.some((card) => card.details) ? <DocumentDetailsDialog /> : null}
+        {cards.some((card) => card.redact && card.redact.matters.length > 0) ? <RedactHost /> : null}
       </>
     );
   }

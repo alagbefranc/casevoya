@@ -107,6 +107,7 @@ import { bindRenewalControls } from "./renewal-acts";
 import { bindRulePinControls } from "./rule-pin-acts";
 import { bindVoCrmControls } from "./vo-crm-acts";
 import { bindLetterControls } from "./letter-acts";
+import { bindPrepControls } from "./prep-acts";
 import { bindGovStatusControls } from "./gov-status-acts";
 import {
   openRedaction,
@@ -290,6 +291,8 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
     bindApprovalControls(root, router, listen);
     // GOV-04: Record a government letter's issuer and task rows, and the issuer list.
     bindLetterControls(root, router, listen);
+    // PREP-01 / PREP-03: form templates and the evidence bundle (`data-prep`).
+    bindPrepControls(root, router, listen);
     // GOV-05: Mark checked, Share with client, IRCC estimates (`data-govs`).
     if (page === "government") bindGovStatusControls(root, router, listen);
     // Task ticks and the Task dialog, Confirm on a deadline, Change stage's label, checklist person chips.

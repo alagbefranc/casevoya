@@ -73,6 +73,8 @@ const ACTIONS = {
   document_request: { phrase: "request a document", icon: "document-scan", title: "Request a document", detail: "What the client is asked to upload" },
   document_review: { phrase: "review a document", icon: "file-check", title: "Review a document", detail: "Accept or reject a client’s upload" },
   document_open: { phrase: "open a client document", icon: "eye", title: "Open a client document", detail: "The file is logged in the download audit" },
+  document_capture: { phrase: "save captured pages", icon: "camera", title: "Save captured pages", detail: "Several photos saved as one PDF" },
+  document_redact: { phrase: "make a redacted copy", icon: "eye-off", title: "Make a redacted copy", detail: "Marked areas are removed from the copy. The original stays" },
   file_email: { phrase: "file an email to a client", icon: "inbox", title: "File an email", detail: "The email joins this person’s matter" },
   intake_send: { phrase: "send a form to a client", icon: "send", title: "Send a form", detail: "Questions the client answers in their portal" },
   task_change: { phrase: "change a task", icon: "task", title: "Change a task", detail: "Its status, owner or due date" },
@@ -100,6 +102,9 @@ const ACTIONS = {
   rule_approve: { phrase: "approve an official-source claim", icon: "file-check", title: "Approve a claim", detail: "The version becomes locked and live for its program" },
   claim_edit: { phrase: "edit an official claim for your firm", icon: "file-check", title: "Edit an official claim", detail: "Your firm’s wording, stamped with your name and licence" },
   rule_unsuspend: { phrase: "unsuspend a claim", icon: "file-check", title: "Unsuspend a claim", detail: "The version becomes live again for its program" },
+  pack_publish: { phrase: "publish a program pack", icon: "file-check", title: "Publish a program pack", detail: "You are the named reviewer. The source owner and the change note are stored with it" },
+  source_conflict: { phrase: "record that two official sources disagree", icon: "file-check", title: "Record a source conflict", detail: "The claim is blocked until a licensed member reviews it" },
+  rule_test: { phrase: "add a test case for a program rule", icon: "file-check", title: "Add a rule test", detail: "The case is stored. It does not create a rule" },
 } as const satisfies Record<string, { phrase: string } & StepUpAction>;
 
 export type StepUpActionKey = keyof typeof ACTIONS;

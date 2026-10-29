@@ -12,6 +12,13 @@ export function mayRequestDocuments(role: string): boolean {
   return (DOC_REQUEST_ROLES as readonly string[]).includes(role);
 }
 
+/** Staff who can upload a file for someone on a matter (app.actor_can_upload_for). */
+export const CAPTURE_ROLES = ["firm_owner", "licensed_consultant", "case_manager", "assistant"] as const;
+
+export function mayCapturePages(role: string): boolean {
+  return (CAPTURE_ROLES as readonly string[]).includes(role);
+}
+
 /** The formats an upload can be (DOC-02), in the order the dialog lists them. */
 export const DOC_REQUEST_FORMATS: readonly { value: string; label: string; on: boolean }[] = [
   { value: "pdf", label: "PDF", on: true },

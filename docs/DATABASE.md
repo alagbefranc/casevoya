@@ -1179,3 +1179,42 @@ Issue #263 item C, branch `feat/booking-possible-match`. One additive migration;
 * Shared checks in `app.open_booking_match`.
 
 Tested in `tests/booking-possible-match.rls.test.ts` and `tests/booking-possible-match.test.tsx`.
+
+## Form templates, evidence bundles and package snapshots (`20261029120000`, `20261029120100`, applied on the live project 2026-10-29)
+
+PREP-01, PREP-03 and PREP-04. No form identifier, version, field list, fee or processing time is inserted.
+
+* `form_templates` and `form_template_fields`: a firm’s transcription of one official form (jurisdiction, optional program key, identifier, version as printed, mapping version, effective date only when supplied, official URL, output `field_review` or `manual_completion`). Pending until a licensed member approves it (fresh step-up; snapshot hash, or the reviewer’s attestation when the page could not be fetched). One approved row per firm, jurisdiction and form identifier. Fields are append-only. Empty until a firm adds one.
+* `matter_form_pins`: the template a matter is using. Replacing a pin sets `superseded_at` on the previous pin for that form. A pin is stale when the template is no longer approved, its effective date is still in the future, or the official page is past `source.recheck_interval.form`.
+* `public.form_mapping_review(matter)`: each pinned field is filled, missing or manual, with the approved facts the value comes from.
+* `submission_channel_templates`: optional per-channel file-name pattern and size cap (1–100 MiB). Absent: `{reference}-evidence-bundle.pdf` and 25 MiB. A product setting, not an IRCC limit.
+* `matter_bundle_selections` and `matter_bundle_items`: the documents staff chose, in order. The PDF (cover, index, PDF/JPEG/PNG pages, page numbers) is built in the app and not stored.
+* `submission_manifest_forms` and `submission_manifest_facts`: copied at package release. The manifest hash adds those lines only when they exist, so a release with neither still hashes the file list alone. While the handoff is authorized, a change to the files, the form pins or the approved facts blocks the package gate (`scope_changed`).
+
+`app.sign_off_submission_handoff`, `app.gov_pin_manifest`, `app.submission_gates_for` and `app.record_submission` are redefined from `20261025170000`. Forced RLS on every new table. Tested in `tests/prep-forms-bundles.rls.test.ts`, `tests/prep-forms-bundle.test.ts` and `tests/gov-submission-checklist.rls.test.ts`.
+
+## Shared templates and opening-balance review (`20261029130000`, `20261029130100`, applied on the live project 2026-10-29)
+
+ADM-03 and MIG-03. Apply in order. Neither migration inserts a `platform_admins` row. Do not deploy this with the app until the migrations are applied; the new screens call the new functions.
+
+* `20261029130000_mig_opening_balance_review.sql`: `opening_balances` keeps the source-file amount, kind, currency, date, file name, SHA-256 and row count (backfilled from the batch; touch and audit triggers are disabled only for that backfill). A pending balance can be corrected with a reason (`opening_balance_corrections`, append-only). Once approved or rejected, the balance is locked. `public.review_opening_balance` is redefined so any firm owner or finance user of the firm can review, not only a finance user assigned to the matter. New: `public.correct_opening_balance` and `public.opening_balance_review`. Approval still posts nothing to an invoice or a client account.
+* `20261029130100_adm_shared_templates.sql`: platform-wide `shared_templates` and versions. The admin portal (service role) calls `public.draft_shared_template_version` and `public.revise_shared_template_draft`. It cannot publish. `public.approve_shared_template_version`, `public.reject_shared_template_version` and `public.rollback_shared_template_version` require a signed-in platform admin with a fresh step-up and an active licence, and the author cannot approve their own draft. Publishing notifies every existing firm. Firms adopt (`public.adopt_shared_template`); a matter pin (`public.pin_matter_shared_template`) stays when a newer version is published. A firm's wording is `firm_shared_template_overrides`, not a change to the reviewed body. `public.shared_template_diff` and `public.shared_template_history` are what the admin portal reads; `public.firm_shared_templates` is the firm screen. Official claims and Source review are unchanged.
+
+Tested in `tests/mig-opening-balance-review.rls.test.ts`, `tests/opening-balance-review.test.ts`, `tests/adm-shared-templates.rls.test.ts` and `tests/shared-templates-present.test.ts`.
+
+## Official re-checks, conflicts and named program packs (`20261029180000`, applied on the live project 2026-10-29)
+
+AI-04, SRC-04, SRC-07, SRC-08, SRC-10, SRC-11 / INT-02. Additive. Does not load capture files and does not seed a fee, form, processing time or program rule.
+
+* `app.promote_official_claim_drafts()` publishes `official_capture` versions still in draft or evidence captured when their page already satisfies the loader. Maintenance session only. Idempotent. `scripts/ops/promote-official-claim-drafts.mjs` (dry run by default; `--apply` writes) runs it, then `scripts/ops/load-official-claims.mjs`. Do not run it from a build.
+* `public.service_sources_due` / `public.service_record_official_recheck` (service role) and `app.kick_source_rechecks`. Where pg_cron and pg_net exist, cron `casevoya-source-rechecks` runs at minute 17 of every hour and POSTs `/api/sources/recheck/run` with the mail dispatch bearer. An unchanged page moves last-checked. A failure does not. A changed page is published only with text read from that fetch; a missing section is `partial` and the claim text stays. Fee and law claims are refused unless this run includes their text and a fresh hash.
+* A changed page opens an internal task per affected matter and per checklist template that cites the claim (`task_key` `source_review:%`, matter optional for a template). The task lists packs, form pins, open document requests and released packages already on record.
+* `public.source_conflicts`, `public.record_source_conflict`, `public.resolve_source_conflict`. While open, Vo does not cite the claim, a new rule-derived document request is refused, and a pack that contains it is not selectable. Each open and each resolution needs a fresh step-up.
+* `public.rule_test_cases`, `public.save_rule_test_case`, `public.run_rule_tests`. A reviewer adds cases. No rule is seeded. Without an executable condition, supported / unsupported / missing-input cases stay unresolved.
+* `public.publish_reviewed_program_pack` and `public.program_pack_editor`. A licensed member publishes a firm pack of live claims, named as reviewer, with a licensed source owner, an effective date and a change-response note, after a fresh step-up. An authenticated update cannot publish a pack on its own.
+* `public.portal_claim_sources` returns the official link and the date checked for the signed-in client's open requests that cite a claim, and says when a review is pending. It does not return claim text.
+* `checklist_template_items.cited_definition_id` and `public.set_checklist_item_claim`. `public.apply_checklist` is redefined from `20261024230000`: an item that cites a live claim becomes a rule-derived request.
+* Redefined from `20261025600100`: `app.guard_rule_version` (the re-check may publish an existing official claim), `app.guard_rule_pack`, `app.rule_pack_is_live`, `app.vo_letter_official_items`, `public.vo_run_official_content`.
+
+Tested in `tests/src-recheck-packs.rls.test.ts` and `tests/source-recheck.test.ts`.
+

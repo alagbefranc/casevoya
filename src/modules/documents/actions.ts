@@ -1,7 +1,10 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { documentError } from "@/modules/documents/errors";
 import { mediaTypeForFilename, UPLOAD_CEILING_BYTES } from "@/modules/documents/files";
+import { redactDocument, RedactionError, type RedactionRegion } from "@/modules/documents/redact";
+import { inspectDocumentBytes } from "@/modules/documents/verify";
 import { runDocumentScans } from "@/modules/documents/scan-runner";
 import { serviceScanDeps } from "@/modules/documents/scan-service";
 import { verifyDocumentStream } from "@/modules/documents/verify";
@@ -464,6 +467,124 @@ export async function recordCustodyStep(input: { organizationId: string; version
   });
   if (error) return { error: custodyError(error.message) };
   return { ok: true as const };
+}
+
+/** DOC-03: page turns and sources, recorded while the upload is still open. */
+export async function recordCameraAssembly(input: {
+  organizationId: string;
+  versionId: string;
+  pages: { rotation_degrees: 0 | 90 | 180 | 270; source: "camera" | "library" }[];
+}) {
+  if (!isUuid(input.versionId) || input.pages.length < 1 || input.pages.length > 40) return { error: "Add between 1 and 40 pages." };
+  const session = await clientFor(input.organizationId, null);
+  if ("error" in session) return { error: session.error };
+  const { error } = await session.supabase.rpc("record_camera_assembly", {
+    p_version_id: input.versionId,
+    p_pages: input.pages as unknown as Json,
+  });
+  if (error) return { error: documentError(error.message) };
+  return { ok: true as const };
+}
+
+function redactedFilename(mediaType: string): string | null {
+  if (mediaType === "application/pdf") return "redacted.pdf";
+  if (mediaType === "image/png") return "redacted.png";
+  if (mediaType === "image/jpeg") return "redacted.jpg";
+  return null;
+}
+
+function regionRecord(region: RedactionRegion): { page_index: number; x: number; y: number; width: number; height: number } {
+  const round = (value: number) => Math.round(value * 100000) / 100000;
+  const x = round(Math.min(1, Math.max(0, region.x)));
+  const y = round(Math.min(1, Math.max(0, region.y)));
+  let width = round(region.width);
+  let height = round(region.height);
+  if (x + width > 1) width = round(1 - x);
+  if (y + height > 1) height = round(1 - y);
+  return { page_index: region.page, x, y, width, height };
+}
+
+/**
+ * DOC-07: staff mark areas; the Worker removes the text and image samples and stores a new
+ * document through the same check, virus-scan hold and retention path. The original is not written.
+ */
+export async function createRedactedCopy(input: {
+  organizationId: string;
+  sourceVersionId: string;
+  matterId: string;
+  regions: RedactionRegion[];
+  code?: string | null;
+}) {
+  if (!isUuid(input.sourceVersionId) || !isUuid(input.matterId)) return { error: "Choose a document." };
+  if (input.regions.length < 1 || input.regions.length > 40) return { error: "Mark between 1 and 40 areas." };
+  const session = await clientFor(input.organizationId, input.code ?? null);
+  if ("error" in session) return { error: session.error };
+  const { data: row, error: readError } = await session.supabase
+    .from("document_versions")
+    .select("storage_key, upload_state, declared_media_type, detected_media_type")
+    .eq("id", input.sourceVersionId)
+    .maybeSingle();
+  if (readError || !row || row.upload_state !== "clean") return { error: "Only a file that passed its check can be redacted." };
+  const sourceType = row.detected_media_type ?? row.declared_media_type;
+  let service: ReturnType<typeof createServiceClient>;
+  try {
+    service = createServiceClient();
+  } catch {
+    return { error: "The redacted copy could not be made right now." };
+  }
+  const downloaded = await service.storage.from("documents").download(row.storage_key);
+  if (downloaded.error || !downloaded.data) return { error: "That file could not be read." };
+  const sourceBytes = new Uint8Array(await downloaded.data.arrayBuffer());
+  let output: Uint8Array;
+  try {
+    output = await redactDocument(sourceBytes, sourceType, input.regions);
+  } catch (error) {
+    if (error instanceof RedactionError) return { error: error.message };
+    return { error: "The redacted copy could not be made." };
+  }
+  const detected = inspectDocumentBytes(output);
+  const filename = detected ? redactedFilename(detected) : null;
+  if (!detected || !filename) return { error: "The redacted copy could not be made." };
+  const regions = input.regions.map(regionRecord);
+  const { data, error } = await session.supabase.rpc("create_redacted_copy_intent", {
+    p_source_version_id: input.sourceVersionId,
+    p_matter_id: input.matterId,
+    p_filename: filename,
+    p_declared_byte_size: output.byteLength,
+    p_regions: regions as unknown as Json,
+  });
+  if (error) return { error: documentError(error.message) };
+  const intent = objectRecord(data);
+  const documentId = intent?.document_id;
+  const versionId = intent?.version_id;
+  const storageKey = intent?.storage_key;
+  if (typeof documentId !== "string" || typeof versionId !== "string" || typeof storageKey !== "string") {
+    return { error: "The redacted copy could not be saved." };
+  }
+  const uploaded = await service.storage.from("documents").upload(storageKey, output, { contentType: detected, upsert: false });
+  if (uploaded.error) return { error: "The redacted copy could not be saved." };
+  const sha256 = createHash("sha256").update(output).digest("hex");
+  const { data: finished, error: finishError } = await service.rpc("finish_verified_document_upload", {
+    p_version_id: versionId,
+    p_actor_user_id: session.userId,
+    p_sha256: sha256,
+    p_byte_size: output.byteLength,
+    p_detected_media_type: detected,
+  });
+  if (finishError) return { error: documentError(finishError.message) };
+  const result = objectRecord(finished);
+  const uploadState = result?.upload_state;
+  if (typeof uploadState !== "string") return { error: "The redacted copy could not be checked." };
+  if (uploadState === "scanning") {
+    const scanned = await scanJustUploaded(service, versionId);
+    return { documentId, versionId, uploadState: scanned.uploadState, scanResult: scanned.scanResult };
+  }
+  return {
+    documentId,
+    versionId,
+    uploadState,
+    scanResult: typeof result?.scan_result === "string" ? result.scan_result : null,
+  };
 }
 
 /** The custody function's own refusals are already plain; anything else goes through documentError. */

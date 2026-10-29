@@ -171,7 +171,9 @@ async function publishedPack(ctx: Firm, programKey: string, packVersion: number,
   );
   const id = pack.rows[0].id;
   for (const rule of ruleVersions) await db.query(`insert into public.rule_pack_items (pack_id, rule_version_id) values ($1, $2)`, [id, rule]);
+  await asMaintenance(db);
   await db.query(`update public.rule_pack_versions set status = 'published' where id = $1`, [id]);
+  await asUser(db, staff(ctx, "owner"));
   return id;
 }
 
