@@ -15,6 +15,7 @@ import { fieldLabel, schemaFields } from "@/modules/intake/present";
 import { claimAddData, claimFactsFor } from "@/modules/sheet/source-claims-load";
 import { partialAlert } from "@/modules/sheet/states-present";
 import { liveClaimsData, OFFICIAL_CLAIMS_PAGE, officialClaimView, type OfficialClaimJson } from "@/modules/sheet/official-claims-present";
+import { assembleSharedTemplates } from "@/modules/sheet/shared-template-present";
 
 const READ = 200;
 
@@ -249,6 +250,13 @@ export async function loadSheetTemplates(
     { label: "Live official claims", count: 0, cap: READ, failed: liveFailed },
     { label: "Checklist templates", count: data.checklists.live?.templates.length ?? 0, cap: READ, failed: checklistsFailed },
   ]);
+  data.showSharedTab = true;
+  if (tab === "shared") {
+    const shared = await supabase.rpc("firm_shared_templates");
+    data.shared = shared.error
+      ? { organizationId: staff.organizationId, failed: true, canAdopt: false, canOverride: false, canPin: false, notices: [], templates: [], matters: [] }
+      : { ...assembleSharedTemplates(shared.data), organizationId: staff.organizationId };
+  }
   return { chrome, data, messageDialog, partial };
 }
 

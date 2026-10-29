@@ -2,6 +2,7 @@
 
 | Date | Decision | By |
 |---|---|---|
+| 2026-10-29 | **ADM-03 shared templates are not the firm Source review workbench, and not official claims.** Platform-wide template versions are `shared_templates` / `shared_template_versions`. The separate admin portal drafts them with the service role (`draft_shared_template_version`). A licensed platform admin approves with a fresh step-up in their own session (`approve_shared_template_version`); the service role cannot publish; the author cannot approve their own draft. No `platform_admins` row is seeded. Firms are notified, adopt a published version, and pin it on a matter; a later publication does not move a pin. A firm's wording is a separate override. Official claims still go live when the loader runs (decision 2026-10-25). **MIG-03:** imported opening balances are reviewed on Finance › Opening balances by the firm owner or a finance user. The source-file amount is kept. Correct needs a reason and a step-up. Approve or reject locks the row and posts nothing to an invoice or a client account. | Engineering |
 | 2026-10-16 | Host on Supabase, region ca-central-1 (Canada Central), project `casevoya` | Francis |
 | 2026-10-16 | Auth: Supabase Auth (not Clerk) | Francis |
 | 2026-10-16 | Backend = Next.js server actions / route handlers + Supabase; jobs as Edge Functions / cron | Francis |

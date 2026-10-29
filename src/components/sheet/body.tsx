@@ -16,6 +16,7 @@ import { ClauseDialog, SheetAgreementEditor } from "@/components/sheet/designer/
 import { SheetAgreementCompare } from "@/components/sheet/designer/agreements-compare";
 import { ClientsHeader, DuplicateDialog, SheetClients } from "@/components/sheet/designer/clients";
 import { CreditDialog, CreditNoteDialog, EvidenceDialog, FinanceHeader, NewInvoiceDialog, RefundDialog, SheetFinance, SheetFinancePayments, SheetFinanceRefunds } from "@/components/sheet/designer/finance";
+import { OpeningBalancesPanel } from "@/components/sheet/opening-balances";
 import { CreditReviewDialog, SheetFinanceInvoice, VoidDialog } from "@/components/sheet/designer/invoice";
 import { ReconDialogs, SheetFinanceRecon } from "@/components/sheet/designer/recon";
 import { FinanceBillingDialogs, FinanceBillingPanels, InvoiceBillingDialogs, MatterWorkDialogs } from "@/components/sheet/designer/billing-live";
@@ -670,7 +671,7 @@ export async function SheetBody({
   }
   // Practice > Templates: program and agreement templates, the approved email catalog, checklists, and the rule source register (read only).
   if (page === "templates" && (access.kind === "live" || access.kind === "sample")) {
-    const tab = query.tab === "messages" || query.tab === "checklists" || query.tab === "sources" || query.tab === "rule" ? query.tab : "program";
+    const tab = query.tab === "messages" || query.tab === "checklists" || query.tab === "sources" || query.tab === "rule" || query.tab === "shared" ? query.tab : "program";
     // DES-04: where official content shows (program templates, Source review, a rule), say when its source is stale.
     const official = tab === "program" || tab === "sources" || tab === "rule";
     const [loaded, stale] = await Promise.all([
@@ -805,12 +806,12 @@ export async function SheetBody({
   // invoice's own tab (`?tab=invoice&view=<invoice id>`).
   if (
     page === "finance" &&
-    (!query.tab || ["invoices", "payments", "funds", "recon", "refunds", "invoice"].includes(query.tab)) &&
+    (!query.tab || ["invoices", "payments", "funds", "recon", "refunds", "invoice", "balances"].includes(query.tab)) &&
     (access.kind === "live" || access.kind === "sample")
   ) {
     const invoiceId = query.tab === "invoice" && query.view && isUuid(query.view) ? query.view : null;
     const tab =
-      query.tab === "payments" || query.tab === "funds" || query.tab === "refunds" || query.tab === "recon" ? query.tab : invoiceId ? "invoice" : "invoices";
+      query.tab === "payments" || query.tab === "funds" || query.tab === "refunds" || query.tab === "recon" || query.tab === "balances" ? query.tab : invoiceId ? "invoice" : "invoices";
     // DES-04: Finance is for the firm owner and finance staff; others see why instead of empty tables.
     const denied = financeAccess(access.staff.role);
     if (denied) return <NoAccessScreen page={page} staff={access.staff} path={"/sheet/finance"} denied={denied} />;
@@ -851,7 +852,9 @@ export async function SheetBody({
           }
         >
           <StateAlerts items={finance.states} />
-          {finance.invoiceView ? (
+          {finance.openingBalances ? (
+            <OpeningBalancesPanel organizationId={access.staff.organizationId} rows={finance.openingBalances.rows} failed={finance.openingBalances.failed} />
+          ) : finance.invoiceView ? (
             <SheetFinanceInvoice data={finance.invoiceView.view} />
           ) : finance.recon ? (
             <SheetFinanceRecon data={finance.recon.data} />

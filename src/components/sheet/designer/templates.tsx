@@ -25,8 +25,10 @@ import { Badge, type MatterBadge } from "./matters";
 import { AddClaimButton, ClaimEvidenceList, ClaimReviewPanel, type AddClaimData, type ClaimEvidenceItem, type ClaimReviewData } from "./source-claims";
 import { LiveOfficialClaims, OfficialClaimDetail } from "./official-claims";
 import type { LiveClaimsData, OfficialClaimView } from "@/modules/sheet/official-claims-present";
+import type { SharedTemplatesView } from "@/modules/sheet/shared-template-present";
+import { SharedTemplatesPanel } from "@/components/sheet/shared-templates";
 
-export type TemplatesTab = "program" | "messages" | "checklists" | "sources" | "rule";
+export type TemplatesTab = "program" | "messages" | "checklists" | "sources" | "rule" | "shared";
 
 type Text = string | { left: string; right: string };
 
@@ -71,6 +73,9 @@ export type TemplatesData = {
   rule: RuleDetail | null;
   /** Live only (#188): one live official claim on the Rule tab (`?claim=`), with the firm's edit and history. */
   officialClaim?: OfficialClaimView | null;
+  /** Live only (ADM-03): the Shared templates tab. Absent on the Designer's capture. */
+  showSharedTab?: boolean;
+  shared?: (SharedTemplatesView & { organizationId: string; failed?: boolean }) | null;
 };
 
 const UL: Record<TemplatesTab, React.CSSProperties> = {
@@ -79,6 +84,7 @@ const UL: Record<TemplatesTab, React.CSSProperties> = {
   checklists: { left: "271px", width: "60px" },
   sources: { left: "358px", width: "104px" },
   rule: { left: "488px", width: "63px" },
+  shared: { left: "570px", width: "130px" },
 };
 
 function i(n: number) {
@@ -140,6 +146,11 @@ export function TemplatesHeader({ data }: { data: TemplatesData }) {
         <button role={"tab"} data-t={"rule"} className={data.tab === "rule" ? "on" : undefined}>
           {"Rule detail"}
         </button>
+        {data.showSharedTab ? (
+          <button role={"tab"} data-t={"shared"} className={data.tab === "shared" ? "on" : undefined}>
+            {"Shared templates"}
+          </button>
+        ) : null}
         <i className={"ul"} style={UL[data.tab]}></i>
       </div>
     </>
@@ -574,6 +585,15 @@ export function SheetTemplates({ data }: { data: TemplatesData }) {
   if (data.tab === "checklists") return <Checklists data={data} />;
   if (data.tab === "sources") return <Sources data={data} />;
   if (data.tab === "rule") return data.officialClaim ? <OfficialClaimDetail view={data.officialClaim} /> : <Rule rule={data.rule} />;
+  if (data.tab === "shared" && data.shared) {
+    return data.shared.failed ? (
+      <div className={"panel rv"}>
+        <Empty art={"templates-empty"} title={"Shared templates couldn’t load"} copy={"Reload the page. Nothing was changed. If it keeps happening, sign in again."} />
+      </div>
+    ) : (
+      <SharedTemplatesPanel organizationId={data.shared.organizationId} view={data.shared} />
+    );
+  }
   return <Program data={data} />;
 }
 

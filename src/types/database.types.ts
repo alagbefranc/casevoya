@@ -14214,6 +14214,48 @@ export type Database = {
         Args: { p_approve: boolean; p_id: string; p_note: string; p_org: string }
         Returns: Json
       }
+      correct_opening_balance: {
+        Args: {
+          p_amount_cents: number
+          p_as_of: string
+          p_currency: string
+          p_description: string
+          p_expected_version: number
+          p_id: string
+          p_kind: string
+          p_org: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      opening_balance_review: {
+        Args: { p_org: string }
+        Returns: Json
+      }
+      adopt_shared_template: {
+        Args: { p_version_id: string }
+        Returns: Json
+      }
+      clear_firm_template_override: {
+        Args: { p_reason: string; p_template_id: string }
+        Returns: Json
+      }
+      dismiss_shared_template_notice: {
+        Args: { p_notice_id: string }
+        Returns: undefined
+      }
+      firm_shared_templates: {
+        Args: never
+        Returns: Json
+      }
+      pin_matter_shared_template: {
+        Args: { p_matter_id: string; p_template_id: string }
+        Returns: Json
+      }
+      save_firm_template_override: {
+        Args: { p_items: Json; p_reason: string; p_summary: string; p_template_id: string; p_title: string }
+        Returns: Json
+      }
       revise_matter_letter: {
         Args: { p_body: string; p_expected_version: number; p_letter_id: string; p_title: string }
         Returns: number
