@@ -493,6 +493,7 @@ describe("source governance access and versions", () => {
       `insert into public.rule_pack_items (pack_id, rule_version_id) values ($1, $2)`,
       [packId, versionId],
     );
+    await asMaintenance(db);
     await db.query(`update public.rule_pack_versions set status = 'published' where id = $1`, [
       packId,
     ]);
@@ -607,9 +608,11 @@ describe("source governance access and versions", () => {
       `insert into public.rule_pack_items (pack_id, rule_version_id) values ($1, $2)`,
       [packTwo.rows[0].id, versionId],
     );
+    await asMaintenance(db);
     await db.query(`update public.rule_pack_versions set status = 'published' where id = $1`, [
       packTwo.rows[0].id,
     ]);
+    await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
     const pin = await db.query<{ rule_pack_version_id: string }>(
       `select rule_pack_version_id from public.matter_rule_bindings where id = $1`,
       [binding.rows[0].id],

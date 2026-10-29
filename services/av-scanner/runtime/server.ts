@@ -2,22 +2,23 @@
  * The scanner's HTTP API inside the container (Node 22, next to clamd). Reached only from the
  * casevoya-av-scanner Worker, which the app reaches only through its AV_SCANNER service binding.
  *
- *   GET  /ping      the Container class's startup check: the server is listening.
+ *   GET  /ping      the Container class's startup check (pingEndpoint): the server is listening.
+ *                   200 as soon as this process has bound 0.0.0.0:8080. clamd is not required.
  *   GET  /healthz   clamd answers PING; 200 {ok, engine} or 503 {ok: false}.
  *   POST /v1/scan   body: the file's bytes (application/octet-stream, at most 100 MB).
  *                   200 {result: "clean", engine} | 200 {result: "infected", signature, engine}
  *                   | 413/503 {result: "error", reason}. Nothing is written to disk; the bytes
  *                   go straight to clamd over its local socket and are dropped.
+ *                   If clamd is still loading, this answers 503 immediately ({reason:"starting"}).
+ *                   The app holds the file and retries; an unscanned file is never returned as clean.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { connect } from "node:net";
 import { command, engineName, instreamFrames, parseScanReply, replyText, scanResponse } from "../src/clamd";
 
 const PORT = Number(process.env.PORT ?? 8080);
-const SOCKET = process.env.CLAMD_SOCKET ?? "/run/clamav/clamd.ctl";
+const SOCKET = process.env.CLAMD_SOCKET ?? "/var/lib/clamav/clamd.ctl";
 const MAX_BYTES = 104_857_600;
-/** clamd loads the signatures when the container starts; a scan waits this long for it. */
-const READY_WAIT_MS = 90_000;
 const SCAN_TIMEOUT_MS = 120_000;
 
 function talk(parts: Iterable<Uint8Array>, timeoutMs: number): Promise<string> {
@@ -52,15 +53,6 @@ async function ping(): Promise<boolean> {
   }
 }
 
-async function waitForClamd(): Promise<boolean> {
-  const until = Date.now() + READY_WAIT_MS;
-  while (Date.now() < until) {
-    if (await ping()) return true;
-    await new Promise((done) => setTimeout(done, 1_000));
-  }
-  return false;
-}
-
 async function version(): Promise<string | null> {
   try {
     return engineName(await talk([command("VERSION")], 3_000));
@@ -90,7 +82,8 @@ async function readBody(req: IncomingMessage): Promise<Uint8Array | null> {
 const server = createServer(async (req, res) => {
   const path = (req.url ?? "/").split("?")[0];
   try {
-    if (req.method === "GET" && path === "/ping") return send(res, 200, { ok: true });
+    // "/" is what the default pingEndpoint ("ping") requests: host "ping", path "/".
+    if (req.method === "GET" && (path === "/ping" || path === "/")) return send(res, 200, { ok: true });
     if (req.method === "GET" && path === "/healthz") {
       const ok = await ping();
       return send(res, ok ? 200 : 503, { ok, engine: ok ? await version() : null });
@@ -99,7 +92,10 @@ const server = createServer(async (req, res) => {
       const bytes = await readBody(req);
       if (!bytes) return send(res, 413, { result: "error", reason: "too_large" });
       if (bytes.byteLength === 0) return send(res, 400, { result: "error", reason: "empty" });
-      if (!(await waitForClamd())) return send(res, 503, { result: "error", reason: "starting" });
+      // Don't hold the request while clamd loads. The app's scan aborts at 50s (20s on the
+      // upload itself); a long wait here is the cancellation the dashboard showed. 503 leaves
+      // the file held. clamd keeps loading, and the retry finds it.
+      if (!(await ping())) return send(res, 503, { result: "error", reason: "starting" });
       const engine = await version();
       const reply = await talk([command("INSTREAM"), ...instreamFrames(bytes)], SCAN_TIMEOUT_MS);
       const answer = scanResponse(parseScanReply(reply), engine);
@@ -111,6 +107,9 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`av-scanner listening on ${PORT}`);
+// 0.0.0.0, not the default "::". Cloudflare's container proxy and the Docker health check
+// connect over IPv4 (127.0.0.1 / the instance address). A v6-only socket never answers them,
+// so the instance stays active and unhealthy. https://developers.cloudflare.com/containers/examples/status-hooks/
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`av-scanner listening on 0.0.0.0:${PORT}`);
 });

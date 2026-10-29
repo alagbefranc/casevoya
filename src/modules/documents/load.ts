@@ -5,6 +5,7 @@ import { textForViewer, type ShownText } from "@/modules/i18n/display";
 import type { PortalViewer } from "@/modules/portal/load";
 import { todayIso } from "@/modules/sheet/birth-date";
 import { createClient } from "@/lib/supabase/server";
+import { claimSourcesFrom, type ClaimSourceContext } from "@/modules/content-governance/claim-source-present";
 
 const REVIEW_ROLES = new Set(["firm_owner", "licensed_consultant", "case_manager"]);
 
@@ -26,6 +27,8 @@ export type PortalDocumentCard = {
   expectedVersion: number | null;
   requestId: string | null;
   requestVersion: number | null;
+  /** SRC-07: official link and date checked when this file answers a claim. */
+  source?: ClaimSourceContext;
   documentId: string | null;
   matterId: string;
   personId: string;
@@ -49,6 +52,8 @@ export type PortalOpenRequest = {
   formats: string[];
   sensitivity: string;
   audience: string;
+  /** SRC-07: official link and date checked when the request cites a claim. */
+  source?: ClaimSourceContext;
 };
 
 export type PortalDocuments = {
@@ -107,7 +112,7 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
   const supabase = await createClient({ organizationId: viewer.organizationId });
   const canReview = REVIEW_ROLES.has(viewer.role);
   const matterId = viewer.matters[0]?.id ?? null;
-  const [{ data: requests, error: requestsError }, { data: documents, error: documentsError }, { data: versions, error: versionsError }, { data: refs }, { data: reviews, error: reviewsError }, { data: translations }, progress, limit, { data: requestNames }] =
+  const [{ data: requests, error: requestsError }, { data: documents, error: documentsError }, { data: versions, error: versionsError }, { data: refs }, { data: reviews, error: reviewsError }, { data: translations }, progress, limit, sources, { data: requestNames }] =
     await Promise.all([
       supabase
         .from("document_requests")
@@ -129,10 +134,12 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
         ? supabase.rpc("document_request_progress", { p_matter_id: matterId })
         : Promise.resolve({ data: null }),
       supabase.rpc("document_upload_limit", { p_organization_id: viewer.organizationId }),
+      supabase.rpc("portal_claim_sources"),
       // #272: persons RLS hides another adult on the matter (a co-applicant without a login) from
       // the sponsor; this narrow read gives only the names on requests the viewer can already see.
       supabase.rpc("portal_request_person_names"),
     ]);
+  const sourceByRequest = claimSourcesFrom(sources.error ? null : sources.data);
   // DES-04: unreadable is not "no documents requested"; the page shows its couldn't-load state.
   if (requestsError || documentsError || versionsError) throw new Error("portal documents unreadable");
 
@@ -201,6 +208,7 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
       audience: doc?.audience ?? request.audience,
       canReview: canReview && flags.labels.includes("Being reviewed"),
       ...(flags.labels.includes(VIRUS_LABELS.infected) ? { note: INFECTED_CLIENT_NOTE } : {}),
+      ...(sourceByRequest.get(request.id) ? { source: sourceByRequest.get(request.id) } : {}),
     });
   }
 
@@ -257,6 +265,7 @@ export async function loadPortalDocuments(viewer: PortalViewer): Promise<PortalD
       formats: request.acceptable_formats,
       sensitivity: request.sensitivity,
       audience: request.audience,
+      ...(sourceByRequest.get(request.id) ? { source: sourceByRequest.get(request.id) } : {}),
     }));
 
   const progressRecord = progress.data && typeof progress.data === "object" && !Array.isArray(progress.data) ? progress.data : null;

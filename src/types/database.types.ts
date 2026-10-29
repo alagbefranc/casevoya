@@ -10769,9 +10769,11 @@ export type Database = {
       }
       rule_pack_versions: {
         Row: {
+          change_response: string | null
           content_frozen: boolean
           created_at: string
           created_by: string | null
+          effective_from: string | null
           form_mappings: Json | null
           id: string
           jurisdiction: string
@@ -10780,15 +10782,24 @@ export type Database = {
           pack_version: number
           program_key: string
           release_notes: string | null
+          reviewed_at: string | null
+          reviewer_licence: string | null
+          reviewer_membership_id: string | null
+          reviewer_name: string | null
           signature_policy: string | null
+          source_owner_licence: string | null
+          source_owner_membership_id: string | null
+          source_owner_name: string | null
           status: Database["public"]["Enums"]["rule_publication_status"]
           updated_at: string
           version: number
         }
         Insert: {
+          change_response?: string | null
           content_frozen?: boolean
           created_at?: string
           created_by?: string | null
+          effective_from?: string | null
           form_mappings?: Json | null
           id?: string
           jurisdiction: string
@@ -10797,15 +10808,24 @@ export type Database = {
           pack_version: number
           program_key: string
           release_notes?: string | null
+          reviewed_at?: string | null
+          reviewer_licence?: string | null
+          reviewer_membership_id?: string | null
+          reviewer_name?: string | null
           signature_policy?: string | null
+          source_owner_licence?: string | null
+          source_owner_membership_id?: string | null
+          source_owner_name?: string | null
           status?: Database["public"]["Enums"]["rule_publication_status"]
           updated_at?: string
           version?: number
         }
         Update: {
+          change_response?: string | null
           content_frozen?: boolean
           created_at?: string
           created_by?: string | null
+          effective_from?: string | null
           form_mappings?: Json | null
           id?: string
           jurisdiction?: string
@@ -10814,7 +10834,14 @@ export type Database = {
           pack_version?: number
           program_key?: string
           release_notes?: string | null
+          reviewed_at?: string | null
+          reviewer_licence?: string | null
+          reviewer_membership_id?: string | null
+          reviewer_name?: string | null
           signature_policy?: string | null
+          source_owner_licence?: string | null
+          source_owner_membership_id?: string | null
+          source_owner_name?: string | null
           status?: Database["public"]["Enums"]["rule_publication_status"]
           updated_at?: string
           version?: number
@@ -14214,6 +14241,48 @@ export type Database = {
         Args: { p_approve: boolean; p_id: string; p_note: string; p_org: string }
         Returns: Json
       }
+      correct_opening_balance: {
+        Args: {
+          p_amount_cents: number
+          p_as_of: string
+          p_currency: string
+          p_description: string
+          p_expected_version: number
+          p_id: string
+          p_kind: string
+          p_org: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      opening_balance_review: {
+        Args: { p_org: string }
+        Returns: Json
+      }
+      adopt_shared_template: {
+        Args: { p_version_id: string }
+        Returns: Json
+      }
+      clear_firm_template_override: {
+        Args: { p_reason: string; p_template_id: string }
+        Returns: Json
+      }
+      dismiss_shared_template_notice: {
+        Args: { p_notice_id: string }
+        Returns: undefined
+      }
+      firm_shared_templates: {
+        Args: never
+        Returns: Json
+      }
+      pin_matter_shared_template: {
+        Args: { p_matter_id: string; p_template_id: string }
+        Returns: Json
+      }
+      save_firm_template_override: {
+        Args: { p_items: Json; p_reason: string; p_summary: string; p_template_id: string; p_title: string }
+        Returns: Json
+      }
       revise_matter_letter: {
         Args: { p_body: string; p_expected_version: number; p_letter_id: string; p_title: string }
         Returns: number
@@ -14487,6 +14556,58 @@ export type Database = {
       unsuspend_rule_version: {
         Args: { p_expected_version: number; p_reason: string; p_version_id: string }
         Returns: number
+      }
+      service_sources_due: {
+        Args: { p_limit: number }
+        Returns: Json
+      }
+      service_record_official_recheck: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
+      record_source_conflict: {
+        Args: { p_definition_id: string; p_left_evidence: string; p_reason: string; p_right_evidence: string }
+        Returns: string
+      }
+      resolve_source_conflict: {
+        Args: { p_conflict_id: string; p_note: string }
+        Returns: string
+      }
+      source_conflict_for: {
+        Args: { p_definition_id: string }
+        Returns: Json
+      }
+      save_rule_test_case: {
+        Args: { p_definition_id: string; p_expected: string; p_inputs: Json; p_kind: string; p_title: string }
+        Returns: string
+      }
+      run_rule_tests: {
+        Args: { p_definition_id: string }
+        Returns: Json
+      }
+      program_pack_editor: {
+        Args: never
+        Returns: Json
+      }
+      publish_reviewed_program_pack: {
+        Args: {
+          p_change_response: string
+          p_effective_from: string
+          p_jurisdiction: string
+          p_next_review_at: string
+          p_program_key: string
+          p_source_owner: string
+          p_version_ids: string[]
+        }
+        Returns: string
+      }
+      set_checklist_item_claim: {
+        Args: { p_definition_id: string | null; p_item_id: string }
+        Returns: string
+      }
+      portal_claim_sources: {
+        Args: never
+        Returns: Json
       }
       official_claims: {
         Args: { p_limit?: number; p_offset?: number; p_program?: string; p_query?: string }
@@ -15179,6 +15300,16 @@ export type Database = {
         }
         Returns: string
       }
+      create_redacted_copy_intent: {
+        Args: {
+          p_declared_byte_size: number
+          p_filename: string
+          p_matter_id: string
+          p_regions: Json
+          p_source_version_id: string
+        }
+        Returns: Json
+      }
       create_upload_intent: {
         Args: {
           p_audience: Database["public"]["Enums"]["document_audience"]
@@ -15334,6 +15465,10 @@ export type Database = {
       set_document_translation: {
         Args: { p_expected_version: number; p_language_tag?: string; p_original_version_id?: string; p_version_id: string }
         Returns: number
+      }
+      record_camera_assembly: {
+        Args: { p_pages: Json; p_version_id: string }
+        Returns: Json
       }
       record_custody_step: {
         Args: { p_kind: string; p_location: string; p_on: string; p_purpose: string; p_recipient: string; p_version_id: string }
@@ -17380,6 +17515,75 @@ export type Database = {
           p_handoff_id: string
         }
         Returns: number
+      }
+      propose_form_template: {
+        Args: {
+          p_checked_on: string
+          p_effective_on: string | null
+          p_fields: Json
+          p_form_version: string
+          p_jurisdiction: string
+          p_mapping_version: number | null
+          p_official_form_id: string
+          p_official_url: string
+          p_org: string
+          p_output_format: string
+          p_program_key: string | null
+          p_snapshot: Json | null
+          p_source_section: string | null
+        }
+        Returns: string
+      }
+      review_form_template: {
+        Args: {
+          p_decision: string
+          p_expected_version: number
+          p_note: string | null
+          p_page_opened_on: string | null
+          p_template_id: string
+        }
+        Returns: number
+      }
+      retire_form_template: {
+        Args: { p_expected_version: number; p_reason: string; p_template_id: string }
+        Returns: number
+      }
+      pin_form_template: {
+        Args: { p_matter_id: string; p_template_id: string }
+        Returns: string
+      }
+      form_mapping_review: {
+        Args: { p_matter_id: string }
+        Returns: Json
+      }
+      channel_export_rule: {
+        Args: { p_channel: Database["public"]["Enums"]["submission_channel"]; p_org: string }
+        Returns: Json
+      }
+      set_channel_export_rule: {
+        Args: {
+          p_channel: Database["public"]["Enums"]["submission_channel"]
+          p_max_bytes: number
+          p_name_pattern: string
+          p_org: string
+        }
+        Returns: string
+      }
+      save_bundle_selection: {
+        Args: { p_channel: Database["public"]["Enums"]["submission_channel"]; p_items: Json; p_matter_id: string }
+        Returns: string
+      }
+      bundle_index: {
+        Args: { p_matter_id: string }
+        Returns: Json
+      }
+      record_bundle_export: {
+        Args: { p_byte_size: number; p_file_name: string; p_matter_id: string; p_page_count: number }
+        Returns: string
+      }
+      submission_manifest_snapshot: {
+        Args: { p_handoff_id: string }
+        Returns: Json
       }
       staff_book_consultation: {
         Args: {
