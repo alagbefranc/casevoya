@@ -16,7 +16,12 @@
       "class_name": "AvScannerContainer",
       "image": "./Dockerfile",
       "max_instances": 2,
-      // clamd holds the full signature database in memory (about 1.5 GB); basic (1 GiB) is too small.
+      // clamd's loaded engine is about 1.7 GiB (ClamAV, Dec 2025). basic (1 GiB) cannot hold it.
+      // standard-1 is 4 GiB / 1/2 vCPU / 8 GB disk (https://developers.cloudflare.com/containers/platform/limits/,
+      // read 2026-10-29). That fits the one engine. freshclam must not test a second copy
+      // (freshclam.conf TestDatabases no; clamd.conf ConcurrentDatabaseReload no). If a deploy's
+      // logs show clamd killed, move this to standard-2 (6 GiB, 1 vCPU) and redeploy the scanner
+      // before turning scanning on. The 0-healthy failure was the startup check, not this size.
       "instance_type": "standard-1"
     }
   ],

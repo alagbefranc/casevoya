@@ -7,6 +7,11 @@
  */
 import { Container, getRandom } from "@cloudflare/containers";
 
+// Workers runtime global. This package typechecks on its own, without @cloudflare/workers-types.
+interface DurableObjectNamespace<T> {
+  get(id: { toString(): string }): { fetch(request: Request): Promise<Response> };
+}
+
 type Env = {
   AV_SCANNER: DurableObjectNamespace<AvScannerContainer>;
 };
@@ -16,7 +21,13 @@ const INSTANCES = 2;
 
 export class AvScannerContainer extends Container<Env> {
   defaultPort = 8080;
-  // Signatures load in about half a minute; keep a warm instance for a while after a scan.
+  // fetch(`http://${pingEndpoint}`) during startup. The default "ping" is host "ping", path "/".
+  // Either path is fine: the server answers both 200 as soon as it is listening, which has to
+  // happen within TIMEOUT_TO_GET_PORTS_MS (20s). A 503 from /healthz would also count (the class
+  // does not check the status), but /ping does not wait on clamd.
+  pingEndpoint = "127.0.0.1/ping";
+  // clamd keeps loading after the port is open. Stay up long enough for the app's retry
+  // (first wait is 60s) to find a warm engine.
   sleepAfter = "15m";
   // freshclam fetches signature updates from the ClamAV mirror (database.clamav.net).
   enableInternet = true;
