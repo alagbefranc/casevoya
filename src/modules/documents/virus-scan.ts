@@ -11,6 +11,10 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
  *
  * Without a transport every scan is an error: uploads stay held ("scanning") and the retry job
  * eventually marks them scan_failed. Nothing here can mark a file clean on its own.
+ *
+ * A cold container (clamd still loading signatures) and a scanner that doesn't answer in time
+ * are both errors. The file stays held and the retry job tries again. The container keeps
+ * running (it sleeps after 15 idle minutes), so the next attempt usually finds clamd ready.
  */
 type Fetcher = { fetch: (input: Request | string, init?: RequestInit) => Promise<Response> };
 
