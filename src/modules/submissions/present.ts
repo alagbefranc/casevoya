@@ -26,6 +26,8 @@ export type GateRow = {
   label?: string | null;
   files?: number | null;
   changed?: number;
+  /** PREP-04: pinned form versions or approved facts no longer match the release. */
+  scope_changed?: number;
   candidates?: number;
   tentative?: number;
   waiting?: number;
@@ -93,7 +95,12 @@ export function gateDetail(gate: GateRow, date: (iso: string) => string): string
           : "Not released, and no stored files on this matter to release";
       }
       if (!gate.pinned) return "Released before manifests were kept. Cancel this handoff and start a new one to pin the files";
-      if (gate.changed) return `${plural(gate.changed, "pinned file was", "pinned files were")} replaced or removed after release. Start a new handoff`;
+      if (gate.changed || gate.scope_changed) {
+        const parts: string[] = [];
+        if (gate.changed) parts.push(`${plural(gate.changed, "pinned file was", "pinned files were")} replaced or removed after release`);
+        if (gate.scope_changed) parts.push("the form versions or approved facts no longer match the release");
+        return `${parts.join(", and ")}. Start a new handoff`;
+      }
       return `${gate.label ?? "Package"} released, ${plural(gate.files ?? 0, "file", "files")} pinned`;
     case "deadlines":
       return gate.tentative ? `${plural(gate.tentative, "legal or correspondence deadline is", "legal or correspondence deadlines are")} not confirmed yet` : "Every legal and correspondence deadline is confirmed";
