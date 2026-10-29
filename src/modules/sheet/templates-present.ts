@@ -13,7 +13,19 @@ import { designFor } from "@/modules/email/templates";
 import type { AddClaimData, ClaimReviewData } from "@/components/sheet/designer/source-claims";
 import { awaitingReview, captureLine, claimDates, claimExpired, claimStatus, resolutionLabel, UNKNOWN, type ClaimFacts } from "@/modules/sheet/source-claims-present";
 
-export type PackRow = { id: string; programKey: string; jurisdiction: string; packVersion: number; status: string; firm: boolean; nextReviewAt: string | null };
+export type PackRow = {
+  id: string;
+  programKey: string;
+  jurisdiction: string;
+  packVersion: number;
+  status: string;
+  firm: boolean;
+  nextReviewAt: string | null;
+  reviewerName?: string | null;
+  reviewerLicence?: string | null;
+  sourceOwnerName?: string | null;
+  effectiveFrom?: string | null;
+};
 export type AgreementTemplateRow = { id: string; name: string; kind: string; status: string; approvedAt: string | null; approvedBy: string | null; version: number };
 export type CatalogRow = {
   name: string;
@@ -78,9 +90,11 @@ export function programRows(packs: readonly PackRow[], pinned: ReadonlyMap<strin
     jurisdiction: pack.jurisdiction,
     version: `v${pack.packVersion}`,
     state: statusBadge(pack.status),
-    source: pack.firm ? "Firm template" : "Casevoya central",
-    reviewer: DASH,
-    effective: DASH,
+    source: pack.sourceOwnerName
+      ? { left: pack.firm ? "Firm template" : "Casevoya central", right: `Source owner ${pack.sourceOwnerName}` }
+      : pack.firm ? "Firm template" : "Casevoya central",
+    reviewer: pack.reviewerName ? `${pack.reviewerName}${pack.reviewerLicence ? `, ${pack.reviewerLicence}` : ""}` : DASH,
+    effective: pack.effectiveFrom ? longDate(pack.effectiveFrom.slice(0, 10)) : DASH,
     pinned: String(pinned.get(pack.id) ?? 0),
   }));
   // An agreement template has no jurisdiction of its own: its kind goes with its name, and

@@ -1172,3 +1172,20 @@ Issue #263 item C, branch `feat/booking-possible-match`. One additive migration;
 * Shared checks in `app.open_booking_match`.
 
 Tested in `tests/booking-possible-match.rls.test.ts` and `tests/booking-possible-match.test.tsx`.
+
+## Official re-checks, conflicts and named program packs (`20261029180000`, not applied on the live project)
+
+AI-04, SRC-04, SRC-07, SRC-08, SRC-10, SRC-11 / INT-02. Additive. Does not load capture files and does not seed a fee, form, processing time or program rule.
+
+* `app.promote_official_claim_drafts()` publishes `official_capture` versions still in draft or evidence captured when their page already satisfies the loader. Maintenance session only. Idempotent. `scripts/ops/promote-official-claim-drafts.mjs` (dry run by default; `--apply` writes) runs it, then `scripts/ops/load-official-claims.mjs`. Do not run it from a build.
+* `public.service_sources_due` / `public.service_record_official_recheck` (service role) and `app.kick_source_rechecks`. Where pg_cron and pg_net exist, cron `casevoya-source-rechecks` runs at minute 17 of every hour and POSTs `/api/sources/recheck/run` with the mail dispatch bearer. An unchanged page moves last-checked. A failure does not. A changed page is published only with text read from that fetch; a missing section is `partial` and the claim text stays. Fee and law claims are refused unless this run includes their text and a fresh hash.
+* A changed page opens an internal task per affected matter and per checklist template that cites the claim (`task_key` `source_review:%`, matter optional for a template). The task lists packs, form pins, open document requests and released packages already on record.
+* `public.source_conflicts`, `public.record_source_conflict`, `public.resolve_source_conflict`. While open, Vo does not cite the claim, a new rule-derived document request is refused, and a pack that contains it is not selectable. Each open and each resolution needs a fresh step-up.
+* `public.rule_test_cases`, `public.save_rule_test_case`, `public.run_rule_tests`. A reviewer adds cases. No rule is seeded. Without an executable condition, supported / unsupported / missing-input cases stay unresolved.
+* `public.publish_reviewed_program_pack` and `public.program_pack_editor`. A licensed member publishes a firm pack of live claims, named as reviewer, with a licensed source owner, an effective date and a change-response note, after a fresh step-up. An authenticated update cannot publish a pack on its own.
+* `public.portal_claim_sources` returns the official link and the date checked for the signed-in client's open requests that cite a claim, and says when a review is pending. It does not return claim text.
+* `checklist_template_items.cited_definition_id` and `public.set_checklist_item_claim`. `public.apply_checklist` is redefined from `20261024230000`: an item that cites a live claim becomes a rule-derived request.
+* Redefined from `20261025600100`: `app.guard_rule_version` (the re-check may publish an existing official claim), `app.guard_rule_pack`, `app.rule_pack_is_live`, `app.vo_letter_official_items`, `public.vo_run_official_content`.
+
+Tested in `tests/src-recheck-packs.rls.test.ts` and `tests/source-recheck.test.ts`.
+

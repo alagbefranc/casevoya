@@ -25,6 +25,9 @@ import { Badge, type MatterBadge } from "./matters";
 import { AddClaimButton, ClaimEvidenceList, ClaimReviewPanel, type AddClaimData, type ClaimEvidenceItem, type ClaimReviewData } from "./source-claims";
 import { LiveOfficialClaims, OfficialClaimDetail } from "./official-claims";
 import type { LiveClaimsData, OfficialClaimView } from "@/modules/sheet/official-claims-present";
+import { ProgramPackPublish, type PackEditorData } from "./program-pack-publish";
+import { RuleTestsPanel, type RuleTestRow } from "./rule-tests-panel";
+import { SourceConflictPanel, type ConflictEvidence, type OpenConflict } from "./source-conflict-panel";
 
 export type TemplatesTab = "program" | "messages" | "checklists" | "sources" | "rule";
 
@@ -71,6 +74,12 @@ export type TemplatesData = {
   rule: RuleDetail | null;
   /** Live only (#188): one live official claim on the Rule tab (`?claim=`), with the firm's edit and history. */
   officialClaim?: OfficialClaimView | null;
+  /** INT-02 / SRC-11: publish a firm pack of live claims. */
+  packEditor?: PackEditorData | null;
+  /** SRC-10: cases a reviewer added for the open rule. */
+  ruleTests?: { organizationId: string; definitionId: string; cases: RuleTestRow[] } | null;
+  /** SRC-08: two stored captures that disagree, on the open official claim. */
+  conflict?: { organizationId: string; definitionId: string; evidence: ConflictEvidence[]; open: OpenConflict | null } | null;
 };
 
 const UL: Record<TemplatesTab, React.CSSProperties> = {
@@ -216,6 +225,7 @@ function Program({ data }: { data: TemplatesData }) {
           </table>
         </div>
       )}
+      {data.packEditor ? <ProgramPackPublish data={data.packEditor} /> : null}
       <p className={"fp-note rv"} style={i(2)}>
         {data.program.note}
         {data.program.supportHref ? (
@@ -573,7 +583,17 @@ export function SheetTemplates({ data }: { data: TemplatesData }) {
   if (data.tab === "messages") return <Messages data={data} />;
   if (data.tab === "checklists") return <Checklists data={data} />;
   if (data.tab === "sources") return <Sources data={data} />;
-  if (data.tab === "rule") return data.officialClaim ? <OfficialClaimDetail view={data.officialClaim} /> : <Rule rule={data.rule} />;
+  if (data.tab === "rule") {
+    return (
+      <>
+        {data.officialClaim ? <OfficialClaimDetail view={data.officialClaim} /> : <Rule rule={data.rule} />}
+        {data.ruleTests ? <RuleTestsPanel organizationId={data.ruleTests.organizationId} definitionId={data.ruleTests.definitionId} cases={data.ruleTests.cases} /> : null}
+        {data.conflict ? (
+          <SourceConflictPanel organizationId={data.conflict.organizationId} definitionId={data.conflict.definitionId} evidence={data.conflict.evidence} conflict={data.conflict.open} />
+        ) : null}
+      </>
+    );
+  }
   return <Program data={data} />;
 }
 

@@ -10769,9 +10769,11 @@ export type Database = {
       }
       rule_pack_versions: {
         Row: {
+          change_response: string | null
           content_frozen: boolean
           created_at: string
           created_by: string | null
+          effective_from: string | null
           form_mappings: Json | null
           id: string
           jurisdiction: string
@@ -10780,15 +10782,24 @@ export type Database = {
           pack_version: number
           program_key: string
           release_notes: string | null
+          reviewed_at: string | null
+          reviewer_licence: string | null
+          reviewer_membership_id: string | null
+          reviewer_name: string | null
           signature_policy: string | null
+          source_owner_licence: string | null
+          source_owner_membership_id: string | null
+          source_owner_name: string | null
           status: Database["public"]["Enums"]["rule_publication_status"]
           updated_at: string
           version: number
         }
         Insert: {
+          change_response?: string | null
           content_frozen?: boolean
           created_at?: string
           created_by?: string | null
+          effective_from?: string | null
           form_mappings?: Json | null
           id?: string
           jurisdiction: string
@@ -10797,15 +10808,24 @@ export type Database = {
           pack_version: number
           program_key: string
           release_notes?: string | null
+          reviewed_at?: string | null
+          reviewer_licence?: string | null
+          reviewer_membership_id?: string | null
+          reviewer_name?: string | null
           signature_policy?: string | null
+          source_owner_licence?: string | null
+          source_owner_membership_id?: string | null
+          source_owner_name?: string | null
           status?: Database["public"]["Enums"]["rule_publication_status"]
           updated_at?: string
           version?: number
         }
         Update: {
+          change_response?: string | null
           content_frozen?: boolean
           created_at?: string
           created_by?: string | null
+          effective_from?: string | null
           form_mappings?: Json | null
           id?: string
           jurisdiction?: string
@@ -10814,7 +10834,14 @@ export type Database = {
           pack_version?: number
           program_key?: string
           release_notes?: string | null
+          reviewed_at?: string | null
+          reviewer_licence?: string | null
+          reviewer_membership_id?: string | null
+          reviewer_name?: string | null
           signature_policy?: string | null
+          source_owner_licence?: string | null
+          source_owner_membership_id?: string | null
+          source_owner_name?: string | null
           status?: Database["public"]["Enums"]["rule_publication_status"]
           updated_at?: string
           version?: number
@@ -14483,6 +14510,58 @@ export type Database = {
       unsuspend_rule_version: {
         Args: { p_expected_version: number; p_reason: string; p_version_id: string }
         Returns: number
+      }
+      service_sources_due: {
+        Args: { p_limit: number }
+        Returns: Json
+      }
+      service_record_official_recheck: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
+      record_source_conflict: {
+        Args: { p_definition_id: string; p_left_evidence: string; p_reason: string; p_right_evidence: string }
+        Returns: string
+      }
+      resolve_source_conflict: {
+        Args: { p_conflict_id: string; p_note: string }
+        Returns: string
+      }
+      source_conflict_for: {
+        Args: { p_definition_id: string }
+        Returns: Json
+      }
+      save_rule_test_case: {
+        Args: { p_definition_id: string; p_expected: string; p_inputs: Json; p_kind: string; p_title: string }
+        Returns: string
+      }
+      run_rule_tests: {
+        Args: { p_definition_id: string }
+        Returns: Json
+      }
+      program_pack_editor: {
+        Args: never
+        Returns: Json
+      }
+      publish_reviewed_program_pack: {
+        Args: {
+          p_change_response: string
+          p_effective_from: string
+          p_jurisdiction: string
+          p_next_review_at: string
+          p_program_key: string
+          p_source_owner: string
+          p_version_ids: string[]
+        }
+        Returns: string
+      }
+      set_checklist_item_claim: {
+        Args: { p_definition_id: string | null; p_item_id: string }
+        Returns: string
+      }
+      portal_claim_sources: {
+        Args: never
+        Returns: Json
       }
       official_claims: {
         Args: { p_limit?: number; p_offset?: number; p_program?: string; p_query?: string }
