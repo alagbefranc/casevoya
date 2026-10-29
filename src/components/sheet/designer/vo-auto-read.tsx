@@ -30,10 +30,28 @@ function remember(ids: Set<string>) {
   }
 }
 
-export function VoAutoRead({ data }: { data: { organizationId: string; versionIds: string[] } }) {
+export type AutoReadState = { reading: number; read: number; stepUp?: boolean; noConsent?: string; skipped?: string[] };
+
+/** "Skipped: Passport, Proof of funds." (#272), or "" when the skipped uploads have no names. */
+function skippedList(skipped: readonly string[] | undefined): string {
+  return skipped?.length ? ` Skipped: ${skipped.join(", ")}.` : "";
+}
+
+/** The Documents tab's line while and after Vo reads new uploads. */
+export function autoReadMessage(state: AutoReadState): string {
+  if (state.stepUp) return "Vo reads new uploads after you confirm with your authenticator. Use Read with Vo on a document once, then come back.";
+  if (state.reading) return `Vo is reading ${state.reading} new upload${state.reading === 1 ? "" : "s"}. Its proposals appear here for you to confirm.`;
+  if (state.read) {
+    return `Vo read ${state.read} new upload${state.read === 1 ? "" : "s"}. Nothing changes until you accept a proposal.${state.noConsent ? ` It skipped others: ${state.noConsent}${skippedList(state.skipped)}` : ""}`;
+  }
+  if (state.noConsent) return `${state.noConsent}${skippedList(state.skipped)}`;
+  return "Vo couldn’t read the new uploads. Use Read with Vo on a document to see why.";
+}
+
+export function VoAutoRead({ data }: { data: { organizationId: string; versionIds: string[]; names?: Record<string, string> } }) {
   const router = useRouter();
   const started = useRef(false);
-  const [state, setState] = useState<{ reading: number; read: number; stepUp?: boolean; noConsent?: string } | null>(null);
+  const [state, setState] = useState<AutoReadState | null>(null);
 
   useEffect(() => {
     if (started.current) return;
@@ -45,6 +63,8 @@ export function VoAutoRead({ data }: { data: { organizationId: string; versionId
       let read = 0;
       // Decision #263-3: a client who hasn't agreed to AI help is said plainly, not as a failure.
       let noConsent: string | undefined;
+      // #272: which uploads were skipped for consent, by their document names.
+      const skipped: string[] = [];
       for (const [at, versionId] of queue.entries()) {
         setState({ reading: queue.length - at, read });
         const result = await readDocumentWithVo({ organizationId: data.organizationId, versionId }).catch(() => null);
@@ -57,9 +77,13 @@ export function VoAutoRead({ data }: { data: { organizationId: string; versionId
         seen.add(versionId);
         remember(seen);
         if (result && "ok" in result && result.ok && !("abstained" in result)) read += 1;
-        if (result && "code" in result && result.code === "client_ai_off") noConsent = result.error;
+        if (result && "code" in result && result.code === "client_ai_off") {
+          noConsent = result.error;
+          const name = data.names?.[versionId];
+          if (name && !skipped.includes(name)) skipped.push(name);
+        }
       }
-      setState({ reading: 0, read, noConsent });
+      setState({ reading: 0, read, noConsent, skipped });
       if (read) router.refresh();
     })();
   }, [data, router]);
@@ -67,13 +91,7 @@ export function VoAutoRead({ data }: { data: { organizationId: string; versionId
   if (!state) return null;
   return (
     <p className={"lock"} role={"status"} style={{ fontSize: "13.5px", margin: "0 0 12px" }}>
-      {state.stepUp
-        ? "Vo reads new uploads after you confirm with your authenticator. Use Read with Vo on a document once, then come back."
-        : state.reading
-          ? `Vo is reading ${state.reading} new upload${state.reading === 1 ? "" : "s"}. Its proposals appear here for you to confirm.`
-          : state.read
-            ? `Vo read ${state.read} new upload${state.read === 1 ? "" : "s"}. Nothing changes until you accept a proposal.${state.noConsent ? ` It skipped others: ${state.noConsent}` : ""}`
-            : (state.noConsent ?? "Vo couldn’t read the new uploads. Use Read with Vo on a document to see why.")}
+      {autoReadMessage(state)}
     </p>
   );
 }

@@ -14245,6 +14245,10 @@ export type Database = {
         }
         Returns: number
       }
+      vo_document_client_ai_off: {
+        Args: { p_organization_id: string; p_version_id: string }
+        Returns: Json
+      }
       vo_letter_facts: {
         Args: { p_run_id: string }
         Returns: Json

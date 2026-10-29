@@ -207,6 +207,10 @@ describe("SRC-12: What Casevoya supports", () => {
     ]);
     expect(choices.defaultValue).toBe("fictional_reviewed");
     expect(programChoices([{ key: "fictional_x", supported: false }]).defaultValue).toBe("");
+    // #272: supported through live official claims only, with no pack: no "v?".
+    expect(programChoices([{ key: "fictional_claims", label: "Claims only", supported: true, pack_version: null }]).options).toEqual([
+      { value: "fictional_claims", label: "Claims only · official forms and checklists, no rule pack" },
+    ]);
     const read = readNewMatter({ applicantName: "Ana", consultant: "c", program: "fictional_draft" });
     expect(read).toMatchObject({ input: { programKey: "fictional_draft", rulePackVersionId: null } });
     const byPack = readNewMatter({ applicantName: "Ana", consultant: "c", program: PACK });

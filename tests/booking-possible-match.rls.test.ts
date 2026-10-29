@@ -215,6 +215,15 @@ describe("possible match on a public booking (#263-C)", () => {
     const stranger = (await db.query<{ id: string }>(`insert into public.persons (organization_id, display_name, email) values ($1, 'Stranger', 'stranger@example.test') returning id`, [ctx.orgId])).rows[0].id;
     await asUser(db, staff(ctx.owner.id, ctx.orgId));
     await expectDbError(() => db.query(`select public.link_booking_to_person($1, $2, $3)`, [booking.id, stranger, booking.version]), /no possible match/);
+    // #272 (#269): PT404, which PostgREST answers as 404; P0002 was answered as HTTP 500.
+    await expectDbError(
+      () =>
+        db.exec(`do $$ begin
+          perform public.dismiss_booking_match('${booking.id}'::uuid, '${stranger}'::uuid, ${Number(booking.version)});
+        exception when others then raise exception 'sqlstate %', sqlstate;
+        end $$`),
+      /sqlstate PT404/,
+    );
     expect(await portalBookings(ctx)).not.toContain(booking.id);
 
     // The firm owner links it.
