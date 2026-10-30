@@ -19,7 +19,8 @@ export async function sendMagicLink(formData: FormData) {
     email,
     options: {
       emailRedirectTo: `${origin}/auth/confirm?next=${encodeURIComponent(next)}`,
-      shouldCreateUser: true,
+      // Sign-in only: accounts are created by sign-up and invitations, never by a magic link.
+      shouldCreateUser: false,
     },
   });
   if (error) {

@@ -1,11 +1,14 @@
 import type { NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
 import { applyFraming } from "@/lib/security/framing";
+import { applyContentSecurityPolicy } from "@/lib/security/csp";
 
 export async function proxy(request: NextRequest) {
   const response = await updateSession(request);
   // Only a firm's embedded enquiry form may be framed by another site.
   applyFraming(response.headers, request.nextUrl.pathname);
+  // App-wide CSP for pages: a small enforced baseline plus the full policy in report-only mode.
+  applyContentSecurityPolicy(response.headers, request.nextUrl.pathname);
   return response;
 }
 

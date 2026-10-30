@@ -2949,6 +2949,7 @@ export type Database = {
           expires_on: string | null
           id: string
           intent_expires_at: string
+          intent_matter_id: string | null
           language_tag: string | null
           organization_id: string
           original_filename: string
@@ -2986,6 +2987,7 @@ export type Database = {
           expires_on?: string | null
           id?: string
           intent_expires_at: string
+          intent_matter_id?: string | null
           language_tag?: string | null
           organization_id: string
           original_filename: string
@@ -3023,6 +3025,7 @@ export type Database = {
           expires_on?: string | null
           id?: string
           intent_expires_at?: string
+          intent_matter_id?: string | null
           language_tag?: string | null
           organization_id?: string
           original_filename?: string
@@ -14369,6 +14372,14 @@ export type Database = {
       platform_step_up_check: {
         Args: never
         Returns: Json
+      }
+      platform_admin_reserve_attempt: {
+        Args: { p_kind: string; p_user: string }
+        Returns: Json
+      }
+      platform_admin_resolve_attempt: {
+        Args: { p_attempt: string; p_succeeded: boolean }
+        Returns: undefined
       }
       save_firm_template_override: {
         Args: { p_items: Json; p_reason: string; p_summary: string; p_template_id: string; p_title: string }

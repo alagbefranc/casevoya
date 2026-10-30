@@ -2,7 +2,6 @@
 
 import { useEffect, type RefObject } from "react";
 import { toast2 } from "@/components/port/kit";
-import { escapeHtml } from "@/lib/html";
 import { nextPrototypePayState } from "@/modules/portal/pay";
 import { noteStepUpTrigger, resumeStepUp, type ResumeNode } from "@/lib/auth/step-up-resume";
 
@@ -252,6 +251,27 @@ function armUpload(root: HTMLElement, listen: AddEventListenerOptions) {
   go(requested ? Number(requested) : 0);
 }
 
+/** A swipe row's action, built as DOM nodes (the row title is data and only set as an attribute). */
+export function swipeAction(card: boolean, accepted: boolean, title: string, doc: Document = document): HTMLElement {
+  if (card && !accepted) {
+    const upload = doc.createElement("a");
+    upload.href = "/portal/upload";
+    upload.className = "up";
+    upload.textContent = "Upload";
+    return upload;
+  }
+  const button = doc.createElement("button");
+  button.type = "button";
+  if (card) {
+    button.dataset.toast = `Opened ${title}`;
+    button.textContent = "Open";
+  } else {
+    button.className = "mr";
+    button.textContent = "Mark read";
+  }
+  return button;
+}
+
 function armSwipe(root: HTMLElement) {
   const rows = [
     ...root.querySelectorAll<HTMLElement>("#pc .fcard:not(.locked)"),
@@ -265,11 +285,7 @@ function armSwipe(root: HTMLElement) {
     actions.className = "k2-swr-a";
     const accepted = /Accepted/.test(row.querySelector(".states")?.textContent || "");
     const title = row.querySelector("h4")?.textContent || "this thread";
-    actions.innerHTML = row.matches(".fcard")
-      ? accepted
-        ? `<button type="button" data-toast="Opened ${escapeHtml(title)}">Open</button>`
-        : `<a href="/portal/upload" class="up">Upload</a>`
-      : `<button type="button" class="mr">Mark read</button>`;
+    actions.append(swipeAction(row.matches(".fcard"), accepted, title));
     const more = document.createElement("button");
     more.type = "button";
     more.className = "k2-swr-m";
