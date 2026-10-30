@@ -8,6 +8,8 @@ import type { SetupBannerData } from "@/modules/sheet/setup-present";
 import { SetupBanner } from "./setup-banner";
 import type { ContinuityBannerData } from "@/modules/sheet/sec-present";
 import { ContinuityBanner } from "./continuity-banner";
+import { BillingBanner } from "./billing-banner";
+import type { BillingBannerData } from "@/modules/sheet/billing-banner";
 import type { ServiceNoticeBannerData } from "@/modules/sheet/service-notices-present";
 import { ServiceNoticeBanner } from "./service-notice-banner";
 import { SheetSidebar, type SidebarData } from "./sidebar";
@@ -266,6 +268,8 @@ export type StatusbarData = {
   setup?: SetupBannerData | null;
   /** Live addition (SEC-10): the subscription is ending, in its export window or archived; every staff page. */
   continuity?: ContinuityBannerData | null;
+  /** Live addition (card trial): days left in the firm's trial, a card still needed, or a failed payment; every staff page. */
+  billing?: BillingBannerData | null;
   /** Live addition (ADM-04): Casevoya's current service notice (maintenance, incident); every staff page, dismissible per person. */
   notice?: ServiceNoticeBannerData | null;
 };
@@ -367,6 +371,7 @@ export function SheetFrame({
             <div id={"content"}>
               {statusbar.setup ? <SetupBanner data={statusbar.setup} /> : null}
               {statusbar.continuity ? <ContinuityBanner data={statusbar.continuity} /> : null}
+              {statusbar.billing && !statusbar.continuity ? <BillingBanner data={statusbar.billing} /> : null}
               {statusbar.notice ? <ServiceNoticeBanner data={statusbar.notice} /> : null}
               {children}
             </div>

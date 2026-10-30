@@ -10,6 +10,7 @@ import { FIRM_SETTINGS } from "@/modules/sheet/home-controls";
 import { voDraftsWaiting } from "@/modules/sheet/vo-present";
 import { loadSheetSetup } from "@/modules/sheet/setup-load";
 import { loadContinuityBanner } from "@/modules/sheet/sec-load";
+import { billingBanner } from "@/modules/sheet/billing-banner";
 import { loadServiceNoticeBanner } from "@/modules/sheet/service-notices-read";
 
 export type SheetChrome = { sidebar: SidebarData; top: TopBarData; statusbar: StatusbarData };
@@ -74,7 +75,7 @@ async function baseChrome(staff: SheetStaff, active: string): Promise<SheetChrom
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
   const count = { count: "exact" as const, head: true };
-  const [matterCount, recentMatters, openCount, unsorted, voDrafts, voReadings, setup, continuity] = await Promise.all([
+  const [matterCount, recentMatters, openCount, unsorted, voDrafts, voReadings, setup, continuity, billing] = await Promise.all([
     supabase.from("matters").select("id", count).eq("organization_id", org).neq("stage", "closed"),
     supabase.from("matters").select("id").eq("organization_id", org).order("updated_at", { ascending: false }).limit(2),
     supabase.from("tasks").select("id", count).eq("organization_id", org).in("status", [...OPEN_TASK]),
@@ -88,7 +89,24 @@ async function baseChrome(staff: SheetStaff, active: string): Promise<SheetChrom
     loadSheetSetup(supabase, staff),
     // SEC-10: the subscription is ending, in its export window or archived (banner on every page).
     loadContinuityBanner(supabase, staff),
+    // Card trial: days left in the firm's trial, a card still needed, or a failed payment.
+    supabase
+      .from("organization_subscriptions")
+      .select("status, trial_ends_at, card_required, cancel_at_period_end, past_due_since, stripe_subscription_id")
+      .eq("organization_id", org)
+      .maybeSingle(),
   ]);
+  const billingRow = billing.data
+    ? {
+        status: billing.data.status,
+        trial_ends_at: billing.data.trial_ends_at,
+        card_required: billing.data.card_required === true,
+        cancel_at_period_end: billing.data.cancel_at_period_end === true,
+        past_due_since: billing.data.past_due_since,
+        stripe: Boolean(billing.data.stripe_subscription_id),
+      }
+    : null;
+  const canManage = staff.role === "firm_owner" || staff.role === "finance_user";
   const pinned = (recentMatters.data ?? []).map((row) => row.id);
   const name = await matterNames(supabase, org, pinned);
 
@@ -116,6 +134,7 @@ async function baseChrome(staff: SheetStaff, active: string): Promise<SheetChrom
       sample: staff.sampleMode ? { label: "Sample mode", detail: "practice records are marked sample" } : null,
       setup: setup?.banner ?? null,
       continuity,
+      billing: billingBanner(billingRow, { now: new Date(), timeZone: staff.timezone, canManage, isOwner: staff.role === "firm_owner" }),
     },
   };
 }
