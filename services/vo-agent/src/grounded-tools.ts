@@ -36,9 +36,10 @@ export const GROUNDED_TOOL_SPECS: Record<GroundedToolName, ToolSpec> = {
       const read = ctx.data.runFacts ? await ctx.data.runFacts(ctx.request.runId) : { facts: [], hidden: 0 };
       const lines: string[] = [];
       for (const fact of read.facts.slice(0, 60)) {
-        const mark = cite(ctx, { kind: "fact", id: fact.answerId, label: `Intake: ${fact.person} · ${fact.label}` });
+        const shown = redact(factText(fact.fieldType, fact.value));
+        const mark = cite(ctx, { kind: "fact", id: fact.answerId, label: `Intake: ${fact.person} · ${fact.label}` }, shown);
         lines.push(`${mark}${oneLine(fact.person, 80)}: ${oneLine(fact.label, 120)} (form: ${oneLine(fact.form, 80)})`);
-        lines.push(dataBlock(ctx.nonce, redact(factText(fact.fieldType, fact.value)), 300));
+        lines.push(dataBlock(ctx.nonce, shown, 300));
       }
       if (!lines.length) lines.push("No approved facts on this matter.");
       if (read.hidden) lines.push(`${read.hidden} approved fact(s) are hidden by the firm's Vo settings. Don't ask for them or guess them.`);
@@ -87,7 +88,7 @@ export const GROUNDED_TOOL_SPECS: Record<GroundedToolName, ToolSpec> = {
           label: `${officialKindLabel(row.kind)}: ${row.label}`,
           ...(attested ? { attested: true, attestedBy: row.attestedBy ?? undefined, attestedOn: row.attestedOn ?? undefined } : {}),
           ...(edited && row.edit ? { edited: true, editedBy: row.edit.by ?? undefined, editedLicence: row.edit.licence ?? undefined, editedOn: row.edit.on ?? undefined } : {}),
-        });
+        }, row.content);
         lines.push(
           `${mark}${officialKindLabel(row.kind)}${row.checkedOn ? `, official page checked ${oneLine(row.checkedOn, 10)}` : ""}${attested ? `. ${oneLine(attested, 200)}` : ""}${edited ? `. Your firm's wording: ${oneLine(edited, 200)}` : ""}:`,
         );

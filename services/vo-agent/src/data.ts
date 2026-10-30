@@ -25,9 +25,23 @@ export type VoSettingsRow = {
 
 export type VoMessage = { id: string; body: string; createdAt: string; authorKind: "client" | "staff"; authorName: string };
 export type VoMatter = { id: string; title: string; reference: string | null; stage: string; isSample: boolean };
-export type VoRequestRow = { id: string; purpose: string; explanation: string; dueOn: string | null; formats: string[] };
-export type VoTaskRow = { id: string; title: string; dueOn: string | null; status: string };
-export type VoDeadlineRow = { id: string; label: string; dueOn: string | null; verification: string };
+/**
+ * The audience fields are optional so a row without them is treated as outside any conversation's
+ * audience (fail closed); Ask Vo (staff only, no conversation) still reads every row.
+ */
+export type VoRequestRow = {
+  id: string;
+  purpose: string;
+  explanation: string;
+  dueOn: string | null;
+  formats: string[];
+  personId?: string | null;
+  audience?: string | null;
+  sensitivity?: string | null;
+};
+export type VoTaskRow = { id: string; title: string; dueOn: string | null; status: string; audience?: string | null; personId?: string | null; ownerPersonId?: string | null };
+export type VoDeadlineRow = { id: string; label: string; dueOn: string | null; verification: string; kind?: string | null };
+export type VoPersonRow = { name: string; role: string; personId?: string | null };
 export type VoDocumentRow = { id: string; purpose: string; sensitivity: string; category: string | null; status: string | null; versionId?: string | null };
 export type VoSourceRow = { title: string; publisher: string; url: string; lastChecked: string | null };
 
@@ -36,8 +50,10 @@ export interface VoData {
   settings(): Promise<VoSettingsRow | null>;
   firm(): Promise<{ name: string; slug: string | null; sampleMode: boolean } | null>;
   matter(matterId: string): Promise<VoMatter | null>;
-  people(matterId: string): Promise<{ name: string; role: string }[]>;
+  people(matterId: string): Promise<VoPersonRow[]>;
   threadPeople(threadId: string): Promise<string[]>;
+  /** VO-1: the person ids a conversation is addressed to (message_thread_people). Missing: an empty audience. */
+  threadAudience?(threadId: string): Promise<string[]>;
   messages(threadId: string, limit: number): Promise<VoMessage[]>;
   requests(matterId: string): Promise<VoRequestRow[]>;
   tasks(matterId: string): Promise<VoTaskRow[]>;
@@ -86,6 +102,33 @@ export type VoOfficialSource = VoOfficialItem & {
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+/**
+ * VO-1: what a conversation's audience may see (the same rule as attachments in
+ * send_matter_message, and public.finish_vo_run checks it again). A document request: never
+ * staff-only, addressed to someone in the audience, and either the audience is only that person or
+ * the request is matter-shared and ordinary.
+ */
+export function requestInAudience(row: VoRequestRow, audience: readonly string[]): boolean {
+  if (!row.personId || !audience.includes(row.personId) || !row.audience || row.audience === "staff") return false;
+  return audience.every((person) => person === row.personId) || (row.audience === "matter" && row.sensitivity === "ordinary");
+}
+
+/** A task: a client task owned by someone in the audience (internal tasks never). */
+export function taskInAudience(row: VoTaskRow, audience: readonly string[]): boolean {
+  if (row.audience !== "client" || !row.ownerPersonId || !audience.includes(row.ownerPersonId)) return false;
+  return !row.personId || audience.includes(row.personId);
+}
+
+/** A deadline: legal and correspondence dates of the matter, never an internal target. */
+export function deadlineInAudience(row: VoDeadlineRow): boolean {
+  return row.kind === "legal" || row.kind === "correspondence";
+}
+
+/** A participant: only the people the conversation is addressed to. */
+export function personInAudience(row: VoPersonRow, audience: readonly string[]): boolean {
+  return Boolean(row.personId) && audience.includes(row.personId!);
 }
 
 /** The database's answers, field by field; anything malformed is dropped. */
@@ -174,7 +217,13 @@ export function supabaseVoData(input: { url: string; publishableKey: string; acc
       if (!ids.length) return [];
       const { data: persons } = await db.from("persons").select("id, display_name").eq("organization_id", org).in("id", ids);
       const name = new Map((persons ?? []).map((row) => [row.id, row.display_name]));
-      return (parties ?? []).filter((row) => row.person_id && name.has(row.person_id)).map((row) => ({ name: name.get(row.person_id!)!, role: String(row.role) }));
+      return (parties ?? [])
+        .filter((row) => row.person_id && name.has(row.person_id))
+        .map((row) => ({ name: name.get(row.person_id!)!, role: String(row.role), personId: row.person_id }));
+    },
+    async threadAudience(threadId) {
+      const { data } = await db.from("message_thread_people").select("person_id").eq("organization_id", org).eq("thread_id", threadId);
+      return (data ?? []).map((row) => row.person_id);
     },
     async threadPeople(threadId) {
       const { data } = await db.from("message_thread_people").select("person_id").eq("organization_id", org).eq("thread_id", threadId);
@@ -198,20 +247,43 @@ export function supabaseVoData(input: { url: string; publishableKey: string; acc
     async requests(matterId) {
       const { data } = await db
         .from("document_requests")
-        .select("id, purpose, explanation, due_on, acceptable_formats")
+        .select("id, purpose, explanation, due_on, acceptable_formats, person_id, audience, sensitivity")
         .eq("organization_id", org)
         .eq("matter_id", matterId)
         .eq("status", "open")
         .limit(10);
-      return (data ?? []).map((row) => ({ id: row.id, purpose: row.purpose, explanation: row.explanation, dueOn: row.due_on, formats: row.acceptable_formats ?? [] }));
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        purpose: row.purpose,
+        explanation: row.explanation,
+        dueOn: row.due_on,
+        formats: row.acceptable_formats ?? [],
+        personId: row.person_id,
+        audience: String(row.audience),
+        sensitivity: String(row.sensitivity),
+      }));
     },
     async tasks(matterId) {
-      const { data } = await db.from("tasks").select("id, title, due_on, status").eq("organization_id", org).eq("matter_id", matterId).in("status", ["open", "blocked"]).limit(15);
-      return (data ?? []).map((row) => ({ id: row.id, title: row.title, dueOn: row.due_on, status: String(row.status) }));
+      const { data } = await db
+        .from("tasks")
+        .select("id, title, due_on, status, audience, person_id, owner_person_id")
+        .eq("organization_id", org)
+        .eq("matter_id", matterId)
+        .in("status", ["open", "blocked"])
+        .limit(15);
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        title: row.title,
+        dueOn: row.due_on,
+        status: String(row.status),
+        audience: String(row.audience),
+        personId: row.person_id,
+        ownerPersonId: row.owner_person_id,
+      }));
     },
     async deadlines(matterId) {
-      const { data } = await db.from("deadlines").select("id, label, due_on, verification").eq("organization_id", org).eq("matter_id", matterId).limit(15);
-      return (data ?? []).map((row) => ({ id: row.id, label: row.label, dueOn: row.due_on, verification: String(row.verification) }));
+      const { data } = await db.from("deadlines").select("id, label, due_on, verification, kind").eq("organization_id", org).eq("matter_id", matterId).limit(15);
+      return (data ?? []).map((row) => ({ id: row.id, label: row.label, dueOn: row.due_on, verification: String(row.verification), kind: String(row.kind) }));
     },
     async documents(matterId) {
       const { data: refs } = await db.from("document_matter_refs").select("document_id").eq("organization_id", org).eq("matter_id", matterId).is("removed_at", null).limit(100);

@@ -14,7 +14,7 @@
  * The letter must still cite at least one approved fact. The database checks the citations again
  * (public.save_vo_letter_draft). React escapes the text when it is shown.
  */
-import { ALLOWED_LINK_ORIGINS } from "./guard";
+import { allowedVoLink } from "./guard";
 import { LETTER_MAX_CHARS } from "./letter";
 import { NEEDS_CONSULTANT, NEEDS_RULE } from "./prompt";
 
@@ -30,7 +30,7 @@ const PHONE = /(?:\+?\d[\d\s().-]{8,}\d)/g;
 const TAG = /<\/?[a-z][^>]{0,300}>/gi;
 export const MONEY = /(?:(?:CA?\$|C\$|\$|CAD|USD|EUR|€|£)\s?\d|\b\d[\d,\s]*(?:[.,]\d+)?\s?(?:\$|CAD|USD|dollars?)(?![a-z]))/i;
 /** Every money amount in full, as guard.ts matches it, for the left-out notes. */
-const MONEY_ALL = /(?:(?:CA?\$|C\$|\$|CAD|USD|EUR|€|£)\s?\d[\d,\s]*(?:[.,]\d+)?(?:\s?\$)?|\b\d[\d,\s]*(?:[.,]\d+)?\s?(?:\$|CAD|USD|dollars?)(?![a-z]))/gi;
+export const MONEY_ALL = /(?:(?:CA?\$|C\$|\$|CAD|USD|EUR|€|£)\s?\d[\d,\s]*(?:[.,]\d+)?(?:\s?\$)?|\b\d[\d,\s]*(?:[.,]\d+)?\s?(?:\$|CAD|USD|dollars?)(?![a-z]))/gi;
 /** Where a link, email address or phone number was removed: the sentence is left out. */
 export const REMOVED = "⟦removed⟧";
 export const DURATION =
@@ -39,13 +39,65 @@ export const REQUIREMENT =
   /\b(?:fees?|frais|processing\s+times?|délais?|deadlines?|requirements?|required|requires?|exigences?|eligib\w*|admissib\w*|regulations?|règlements?|IRPA|IRPR|LIPR|RIPR|subsection|paragraph\s+\d)\b/i;
 export const DATE = /\b(?:\d{4}-\d{2}(?:-\d{2})?|\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/i;
 
+/** A letter carries no firm booking link: only the client portal survives (guard.ts). */
 function allowed(url: string): boolean {
-  try {
-    const parsed = new globalThis.URL(url.startsWith("www.") ? `https://${url}` : url);
-    return parsed.protocol === "https:" && (ALLOWED_LINK_ORIGINS as readonly string[]).includes(parsed.origin) && !parsed.username && !parsed.password;
-  } catch {
-    return false;
-  }
+  return allowedVoLink(url);
+}
+
+const MONTH_NUMBER: Record<string, string> = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+
+function moneyKey(match: string): string {
+  const digits = match.replace(/[^\d.,]/g, "");
+  const decimal = /[.,](\d{1,2})$/.exec(digits);
+  const whole = (decimal ? digits.slice(0, decimal.index) : digits).replace(/[.,]/g, "").replace(/^0+(?=\d)/, "");
+  const cents = decimal && !/^0+$/.test(decimal[1]) ? `.${decimal[1].padEnd(2, "0")}` : "";
+  return `${whole}${cents}`;
+}
+
+function durationKey(match: string): string {
+  const numbers = (match.match(/\d+(?:[.,]\d+)?/g) ?? []).map((n) => n.replace(",", ".")).join("-");
+  const unit = /day|jour/i.test(match) ? "day" : /week|semaine/i.test(match) ? "week" : /month|mois/i.test(match) ? "month" : "year";
+  return `${numbers} ${unit}`;
+}
+
+function dateKey(match: string): string {
+  const value = match.trim();
+  const iso = /^(\d{4})-(\d{2})(?:-(\d{2}))?$/.exec(value);
+  if (iso) return iso[3] ? `${iso[1]}-${iso[2]}-${iso[3]}` : `${iso[1]}-${iso[2]}`;
+  const dmy = /^(\d{1,2})\s+([a-z]{3})[a-z]*\.?\s+(\d{4})$/i.exec(value);
+  if (dmy) return `${dmy[3]}-${MONTH_NUMBER[dmy[2].toLowerCase()]}-${dmy[1].padStart(2, "0")}`;
+  const mdy = /^([a-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})$/i.exec(value);
+  if (mdy) return `${mdy[3]}-${MONTH_NUMBER[mdy[1].toLowerCase()]}-${mdy[2].padStart(2, "0")}`;
+  return value.toLowerCase();
+}
+
+/** The money amounts, durations and calendar dates in a text, each in a comparable form. */
+export function claimTokens(text: string): { money: string[]; durations: string[]; dates: string[] } {
+  const plain = text.replace(/\[[RFS]\d{1,3}\]/g, " ");
+  return {
+    money: [...plain.matchAll(MONEY_ALL)].map((m) => moneyKey(m[0])).filter(Boolean),
+    durations: [...plain.matchAll(new RegExp(DURATION.source, "gi"))].map((m) => durationKey(m[0])),
+    dates: [...plain.matchAll(new RegExp(DATE.source, "gi"))].map((m) => dateKey(m[0])),
+  };
+}
+
+/**
+ * Whether every money amount in `sentence` appears in `support.money` (the cited official content),
+ * and every duration and date in `support.other` (official content or approved facts it cites).
+ * `support.dates` false skips the date check (a sentence that also cites a matter record).
+ */
+export function claimsSupported(sentence: string, support: { money: readonly string[]; other: readonly string[]; dates?: boolean }): boolean {
+  const said = claimTokens(sentence);
+  if (!said.money.length && !said.durations.length && !said.dates.length) return true;
+  const money = new Set(claimTokens(support.money.join("\n")).money);
+  const other = claimTokens(support.other.join("\n"));
+  const durations = new Set(other.durations);
+  const dates = new Set(other.dates);
+  return (
+    said.money.every((key) => money.has(key)) &&
+    said.durations.every((key) => durations.has(key)) &&
+    (support.dates === false || said.dates.every((key) => dates.has(key)))
+  );
 }
 
 /** Plain text, as guard.ts makes it, without its money and duration placeholders. */
@@ -85,9 +137,16 @@ export function sentences(paragraph: string): string[] {
 
 /**
  * Guards one letter draft. `facts` and `official` are the markers this run handed out ("F1",
- * "S2"...); `notes` are what the model itself said it left out.
+ * "S2"...); `notes` are what the model itself said it left out. `contents` (marker to the text the
+ * run handed out with it): a sentence citing [S#] keeps a money amount only if the cited official
+ * content states it, and a duration or date only if the cited official content or fact states it.
  */
-export function guardLetter(raw: unknown, refs: { facts: Iterable<string>; official: Iterable<string> }, notes: unknown = []): LetterGuardResult {
+export function guardLetter(
+  raw: unknown,
+  refs: { facts: Iterable<string>; official: Iterable<string> },
+  notes: unknown = [],
+  contents?: ReadonlyMap<string, string>,
+): LetterGuardResult {
   if (typeof raw !== "string") return { kind: "empty", reason: "empty" };
   const text = clean(raw);
   if (!text) return { kind: "empty", reason: "empty" };
@@ -125,6 +184,13 @@ export function guardLetter(raw: unknown, refs: { facts: Iterable<string>; offic
             if (placeholder || (regulated && !hasOfficial) || (dated && !hasOfficial && !hasFact)) {
               leftOut.push(`Left out (no approved official source or approved fact covers it): “${noteLine(kept) || "a statement"}”`);
               return "";
+            }
+            if (contents && hasOfficial) {
+              const text = (prefix: string) => cites.filter((ref) => ref.startsWith(prefix)).map((ref) => contents.get(ref) ?? "");
+              if (!claimsSupported(kept, { money: text("S"), other: [...text("S"), ...text("F")] })) {
+                leftOut.push(`Left out (the cited source doesn’t state it): “${noteLine(kept) || "a statement"}”`);
+                return "";
+              }
             }
             for (const ref of cites) {
               const list = ref.startsWith("F") ? usedFacts : usedOfficial;

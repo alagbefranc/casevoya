@@ -11,8 +11,11 @@ import { oneLine } from "../../../src/modules/vo/prompt";
 import type { VoSourceRef } from "../../../src/modules/vo/sign";
 import type { RunContext } from "./tools";
 
-/** Records a source; for Ask Vo, returns its marker ("[R3] ") to put before the line, otherwise "". */
-export function cite(ctx: RunContext, ref: VoSourceRef): string {
+/**
+ * Records a source; for Ask Vo, returns its marker ("[R3] ") to put before the line, otherwise "".
+ * `content`: the text shown with it, which the answer's amounts, durations and dates are checked against.
+ */
+export function cite(ctx: RunContext, ref: VoSourceRef, content?: string): string {
   const clean = { ...ref, label: oneLine(ref.label, 120) || ref.kind };
   if (!ctx.sources.has(ref.id)) ctx.sources.set(ref.id, clean);
   if (ctx.request.task !== "ask") return "";
@@ -21,5 +24,6 @@ export function cite(ctx: RunContext, ref: VoSourceRef): string {
   const prefix = markerPrefix(ref.kind);
   const marker = `${prefix}${[...ctx.markers.keys()].filter((key) => key.startsWith(prefix)).length + 1}`;
   ctx.markers.set(marker, { ...clean, marker });
+  if (content !== undefined) (ctx.markerContent ??= new Map()).set(marker, content);
   return `[${marker}] `;
 }

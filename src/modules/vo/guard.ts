@@ -1,7 +1,8 @@
 /**
  * The output guard for Vo drafts (PRD AI-03, AI-05, SRC-09; RULES.md). Pure. Whatever the model
  * returns is untrusted: it is reduced to plain text, links and contact details it could have
- * invented or been told to plant are removed (only app.casevoya.ca links survive), and any money
+ * invented or been told to plant are removed (only the portal and the firm's own booking pages on
+ * app.casevoya.ca survive), and any money
  * amount or duration (a fee, deadline or processing time it could only know from memory) is
  * replaced with the "[needs a sourced rule]" placeholder, which blocks sending until a person
  * replaces it. React escapes the text when it is shown; nothing here is ever rendered as HTML.
@@ -24,17 +25,34 @@ const DURATION =
   /\b\d+(?:[.,]\d+)?(?:\s*(?:-|–|to|à)\s*\d+(?:[.,]\d+)?)?\s*(?:business\s+|calendar\s+|working\s+)?(?:days?|weeks?|months?|years?|jours?|semaines?|mois|ans?|années?)\b/gi;
 const TAG = /<\/?[a-z][^>]{0,300}>/gi;
 
-function allowed(url: string): boolean {
+const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
+
+function underPath(pathname: string, base: string): boolean {
+  return pathname === base || pathname.startsWith(`${base}/`);
+}
+
+/**
+ * A link a Vo output may keep (VO-6): on the Casevoya app, no credentials, and only the client
+ * portal or this firm's own booking pages (`firmSlug`). Other firms' public pages are removed.
+ */
+export function allowedVoLink(url: string, firmSlug?: string | null): boolean {
   try {
-    const parsed = new globalThis.URL(url.startsWith("www.") ? `https://${url}` : url);
-    return parsed.protocol === "https:" && (ALLOWED_LINK_ORIGINS as readonly string[]).includes(parsed.origin) && !parsed.username && !parsed.password;
+    // Trailing sentence punctuation isn't part of the link.
+    const parsed = new globalThis.URL((url.startsWith("www.") ? `https://${url}` : url).replace(/[.,;:!?]+$/, ""));
+    if (parsed.protocol !== "https:" || !(ALLOWED_LINK_ORIGINS as readonly string[]).includes(parsed.origin) || parsed.username || parsed.password) return false;
+    if (underPath(parsed.pathname, "/portal")) return true;
+    return typeof firmSlug === "string" && SLUG.test(firmSlug) && underPath(parsed.pathname, `/book/${firmSlug}`);
   } catch {
     return false;
   }
 }
 
-/** The model's answer as a reviewable draft, an abstention, or nothing usable. */
-export function guardVoOutput(raw: unknown): GuardResult {
+/**
+ * The model's answer as a reviewable draft, an abstention, or nothing usable. `firmSlug`: the
+ * run's firm, whose booking pages a draft may link to.
+ */
+export function guardVoOutput(raw: unknown, options: { firmSlug?: string | null } = {}): GuardResult {
+  const allowed = (url: string) => allowedVoLink(url, options.firmSlug);
   if (typeof raw !== "string") return { kind: "empty" };
   let text = raw
     .normalize("NFC")

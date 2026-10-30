@@ -134,7 +134,12 @@ export const LETTER_TOOL_SPECS: Record<LetterToolName, ToolSpec> = {
     async run(ctx, args) {
       const letter = letterContext(ctx);
       if (letter.draft) return refused("A letter was already saved for this run.");
-      const guarded = guardLetter(String(args.text ?? ""), { facts: letter.facts.keys(), official: letter.official.keys() }, args.left_out ?? []);
+      // VO-3: amounts, durations and dates are checked against what each cited marker was handed out with.
+      const contents = new Map<string, string>([
+        ...[...letter.facts].map(([ref, fact]): [string, string] => [ref, redact(factText(fact.fieldType, fact.value))]),
+        ...[...letter.official].map(([ref, item]): [string, string] => [ref, item.content]),
+      ]);
+      const guarded = guardLetter(String(args.text ?? ""), { facts: letter.facts.keys(), official: letter.official.keys() }, args.left_out ?? [], contents);
       if (guarded.kind === "abstain") {
         ctx.abstainedByDraft = true;
         return text("Noted: this needs a consultant. No letter was saved.");
