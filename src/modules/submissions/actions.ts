@@ -4,6 +4,7 @@ import { safeAccessError } from "@/lib/auth/step-up";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { SUBMISSION_CHANNELS, type SubmissionChannel } from "@/modules/government/present";
+import { storeServerCapture } from "@/modules/content-governance/server-capture";
 import { federalOfficialUrl, snapshotOfficialPage } from "@/modules/submissions/official-page";
 import { checklistError, OVERRIDABLE, type GateKey } from "@/modules/submissions/present";
 
@@ -22,7 +23,7 @@ async function session(organizationId: string) {
   const supabase = await createClient({ organizationId });
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) return { error: "Sign in first." as const };
-  return { supabase };
+  return { supabase, userId: claims.claims.sub as string };
 }
 
 function refusal(message: string): string {
@@ -97,6 +98,10 @@ export async function proposeSubmissionRequirement(
   const s = await session(input.organizationId);
   if ("error" in s) return { error: s.error };
   const fetched = await snapshotOfficialPage(url, fetch);
+  // The fetched page is stored by the server (service role); the entry names that capture.
+  const stored = fetched.snapshot
+    ? await storeServerCapture({ organizationId: input.organizationId, actorUserId: s.userId, sourceUrl: url, title: text(input.sourceSection), page: fetched.snapshot })
+    : null;
   const { data, error } = await s.supabase.rpc("propose_submission_requirement", {
     p_org: input.organizationId,
     p_program_key: programKey as string,
@@ -109,10 +114,10 @@ export async function proposeSubmissionRequirement(
     p_form_modified_on: date(input.formModifiedOn) as string,
     p_checked_on: input.checkedOn,
     p_current_to: date(input.currentTo) as string,
-    p_snapshot: fetched.snapshot as unknown as never,
+    p_snapshot: stored as unknown as never,
   });
   if (error) return { error: refusal(error.message) };
-  return { id: data as string, snapshot: Boolean(fetched.snapshot), reason: fetched.snapshot ? null : fetched.reason };
+  return { id: data as string, snapshot: Boolean(stored), reason: fetched.snapshot ? (stored ? null : "The page capture couldn’t be stored.") : fetched.reason };
 }
 
 /**

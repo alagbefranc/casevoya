@@ -1,6 +1,5 @@
 "use server";
 
-import { headers } from "next/headers";
 import type { Json } from "@/types/database.types";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { passwordOk } from "@/lib/auth/password";
@@ -578,8 +577,8 @@ export async function joinStaffInvite(input: {
   if (!claims?.claims?.sub) {
     // The confirmation link brings them back to this invitation, not to the app home (where
     // someone with no firm yet is offered a new firm of their own).
-    // No Origin header would make the link relative, and Supabase would send it to the Site URL.
-    const origin = (await headers()).get("origin") || appOrigin();
+    // The emailed link uses the configured app origin, never a request header.
+    const origin = appOrigin();
     const signedUp = await supabase.auth.signUp({
       email: row.email ?? input.email.trim(),
       password: input.password,

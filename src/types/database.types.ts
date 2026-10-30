@@ -14571,6 +14571,11 @@ export type Database = {
         Args: { p_payload: Json }
         Returns: Json
       }
+      // Server page captures (20261030170000_source_conflict_owner_server_captures.sql). Service role only.
+      service_store_page_capture: {
+        Args: { p_actor: string; p_org: string; p_snapshot: Json; p_source_url: string; p_title: string }
+        Returns: string
+      }
       record_source_conflict: {
         Args: { p_definition_id: string; p_left_evidence: string; p_reason: string; p_right_evidence: string }
         Returns: string

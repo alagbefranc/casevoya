@@ -21,6 +21,7 @@ async function session(organizationId: string) {
 
 function refusal(message: string): string {
   if (/step-up|aal2|recovery code/i.test(message)) return safeAccessError(message);
+  if (/opened this review/i.test(message)) return "Only the firm that opened this review, or Casevoya, can close it.";
   if (/licence/i.test(message)) return "Your licence isn’t recorded, or the source owner’s isn’t. Add it in Settings.";
   if (/disagree/i.test(message)) return "A claim in this pack has two official sources that disagree. Resolve that review first.";
   if (/test case/i.test(message)) return "An executable rule in this pack has no test cases yet.";

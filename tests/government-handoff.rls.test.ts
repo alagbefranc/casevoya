@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asMaintenance, asUser, asUserInternal, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { firmDay } from "./helpers/firm-day";
 
 /**
@@ -46,6 +46,8 @@ async function activeMembership(orgId: string, userId: string, role: string, cre
 
 const fresh = (userId: string, orgId: string) => asUser(db, { userId, aal: "aal2", orgId, totpAgeSeconds: 0 });
 const stale = (userId: string, orgId: string) => asUser(db, { userId, aal: "aal2", orgId, totpAgeSeconds: 3600 });
+/** The user's claims without the authenticated role: transition_matter_stage is definer-only. */
+const internal = (userId: string, orgId: string) => asUserInternal(db, { userId, aal: "aal2", orgId, totpAgeSeconds: 0 });
 
 async function moveStage(matterId: string, stage: string) {
   await asMaintenance(db);
@@ -241,8 +243,8 @@ describe("T036 manual submission handoff", () => {
     expect(row.rows[0].status).toBe("submission_unverified");
     expect(await stageEvidence(ctx.matterId, "submission_confirmation")).toBe(0);
 
-    // The Submitted stage still refuses: no verified evidence yet.
-    await fresh(ctx.consultant, ctx.orgId);
+    // The Submitted stage still refuses: no verified evidence yet (transition driven as the definer workflows do).
+    await internal(ctx.consultant, ctx.orgId);
     const matterVersion = await db.query<{ version: number }>(`select version from public.matters where id = $1`, [ctx.matterId]);
     await expectDbError(
       () => db.query(`select public.transition_matter_stage($1, 'submitted', $2, 'Submitted')`, [ctx.matterId, matterVersion.rows[0].version]),
@@ -255,7 +257,7 @@ describe("T036 manual submission handoff", () => {
     await fresh(ctx.manager, ctx.orgId);
     await db.query(`select public.verify_submission_receipt($1, $2, $3, 'Synthetic confirmation page', $4::date)`, [id, unverified, receipt, firmDay()]);
     expect(await stageEvidence(ctx.matterId, "submission_confirmation")).toBe(1);
-    await fresh(ctx.consultant, ctx.orgId);
+    await internal(ctx.consultant, ctx.orgId);
     const latest = await db.query<{ version: number; government_status: string }>(
       `select version, government_status::text as government_status from public.matters where id = $1`,
       [ctx.matterId],

@@ -1251,3 +1251,15 @@ Tested in `tests/upload-virus-scan.rls.test.ts` and `tests/av-scanner-cold-retry
 ## Stripe live mode (`20261029200000`)
 
 Drops the `livemode is false` checks on `firm_payment_accounts`, `firm_payment_account_history`, `invoice_payments`, `invoice_refunds`, `invoice_disputes` and `invoice_dispute_evidence`. `app.record_firm_payment_account` stores the mode it is given (null refused); `app.record_invoice_payment_intent` needs the firm's link in the same mode; `app.apply_stripe_payment_event` and `app.apply_stripe_reversal_event` apply an event only to a payment of the same mode (otherwise ignored, reason `livemode`), and recovered refunds and disputes take the payment's mode; `app.record_invoice_refund`, `app.record_invoice_payment_card` and `app.record_dispute_evidence` check the payment's or dispute's mode. `public.apply_stripe_subscription_event` no longer ignores live events (the billing route filters by the server's mode). New `public.replace_subscription_customer(org, previous, new)`: firm owner with step-up, only while the stored customer is `previous` and no subscription exists; audited `subscription.customer_replaced`. Existing rows keep `livemode = false`.
+
+## Stage evidence only from definer workflows (`20261030150000`, not applied on the live project)
+
+* `20261030150000_stage_evidence_definer_only.sql`: `authenticated` loses INSERT on `matter_stage_evidence` (SELECT for matter readers stays); the `matter_stage_evidence_insert` policy now checks `false`. Evidence rows are written only by the definer workflows (engagement, e-sign, intake assignment, submission receipt, decision letter, decision confirmation, closure). EXECUTE on `app.transition_matter_stage`, `public.transition_matter_stage` and `public.attempt_matter_stage_transition` is revoked from `authenticated` (kept for `service_role`); staff change stages with `public.override_matter_stage` and close with `public.close_matter`. **Redefines** `app.override_matter_stage` (latest in `20261018100000_owner_licence_gates.sql`): a target of `closed` is refused (22023, "closed through close_matter"), so closing always runs the open-money checks and records the closure and retention date. Grants unchanged.
+
+Tested in `tests/security-review-stage-evidence.rls.test.ts`.
+
+## New document versions stay on their matter (`20261030180000`, not applied on the live project)
+
+* `20261030180000_upload_intent_existing_document_scope.sql` **redefines** `app.create_upload_intent` (latest in `20261029100000_portal_co_applicant_uploads.sql`): with `p_document_id`, the document must already be linked to `p_matter_id` (an unremoved `document_matter_refs` row), and `app.can_read_document` must be true for every caller except the email-ingest org path (whose callers never pass a document id). A new version therefore never adds a matter link. Otherwise unchanged; signature and grants kept.
+
+Tested in `tests/security-review-upload-intent.rls.test.ts`.

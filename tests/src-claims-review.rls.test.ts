@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { firmDay } from "./helpers/firm-day";
+import { serverCapture } from "./helpers/server-capture";
 
 /**
  * SRC-01, SRC-02, SRC-03 against the real migrations (20261025400000_src_claims_review.sql): adding
@@ -93,8 +94,11 @@ type Firm = Awaited<ReturnType<typeof firm>>;
 type Claim = { url?: string; section?: string | null; captured?: boolean; key?: string | null; effectiveTo?: string | null; currentTo?: string | null; lastAmended?: string | null; modified?: string | null };
 
 async function addClaim(ctx: Firm, claim: Claim = {}) {
+  // A captured page is stored by the server (service role) first; the claim names that capture.
   const snapshot =
-    claim.captured === false ? null : JSON.stringify({ sha256: HASH, retrieved_at: new Date().toISOString(), final_url: (claim.url ?? PAGE).split("#")[0], http_status: 200 });
+    claim.captured === false
+      ? null
+      : JSON.stringify(await serverCapture(db, { orgId: ctx.orgId, url: claim.url ?? PAGE, snapshot: { sha256: HASH, current_to: claim.currentTo ?? null } }));
   const row = await db.query<{ id: string }>(
     `select public.add_rule_claim($1, $2, 'CA', 'synthetic_program', 'Synthetic claim: a fictional fee per person.', '$0.00', $3, $4,
        'Synthetic excerpt.', null, null, null, null, $5::date, $6::date, $7::date, null, $8::date, $9::date, $10::jsonb) as id`,

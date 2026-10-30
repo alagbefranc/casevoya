@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   asMaintenance,
   asUser,
+  asUserInternal,
   countOf,
   createTestDb,
   expectDbError,
@@ -385,9 +386,10 @@ describe("manual register checks", () => {
       ["client_confirmation", "client_review_package", "Client review package"],
       ["ready_to_submit", "submission_approvals", "Submission approvals"],
     ];
+    // Evidence rows and transitions are definer-only in the app; driven here with the actor's claims.
     let version = 1;
     for (const [stage, kind, summary] of steps) {
-      await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
+      await asUserInternal(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
       await db.query(
         `insert into public.matter_stage_evidence (organization_id, matter_id, kind, summary)
          values ($1, $2, $3::public.matter_stage_evidence_kind, $4)`,
@@ -399,7 +401,7 @@ describe("manual register checks", () => {
       );
       version = countOf(next.rows[0].version);
     }
-    await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    await asUserInternal(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
     await db.query(
       `insert into public.matter_stage_evidence (
          organization_id, matter_id, kind, summary, external_reference, submission_at, receipt_locator
@@ -417,7 +419,7 @@ describe("manual register checks", () => {
       { registerStatus: "inactive" as const },
     ]) {
       await recordCheck(owner, orgId, credentialId, fields);
-      await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
+      await asUserInternal(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
       const blocked = await db.query<{ result: { ok: boolean; blocked: string } }>(
         `select public.attempt_matter_stage_transition($1, 'submitted', $2, 'Submission confirmed') as result`,
         [matter, version],
@@ -432,6 +434,7 @@ describe("manual register checks", () => {
           ]),
         /licence blocks/,
       );
+      await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
       const created = await db.query<{ result: { ok: boolean; blocked: string } }>(
         `select public.create_practice_matter('Blocked sample', true) as result`,
       );
@@ -498,7 +501,7 @@ describe("manual register checks", () => {
     );
     expect(firm.rows[0].status).toBe("verified");
 
-    await asUser(db, { userId: receiver, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    await asUserInternal(db, { userId: receiver, aal: "aal2", orgId, totpAgeSeconds: 0 });
     const filed = await db.query<{ result: { ok: boolean; version: number } }>(
       `select public.attempt_matter_stage_transition($1, 'submitted', $2, 'Submission confirmed') as result`,
       [matter, version],
