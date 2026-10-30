@@ -180,11 +180,14 @@ begin
   if existing.id is not null then
     -- Resume binding: the same Message-ID is the same message only for the same sender,
     -- verification result and content. A row stored without a digest is bound by sender and
-    -- verification result only; the first digest seen is then stored on it.
+    -- verification result only, and only when verified; the first digest seen is then stored on it.
     if existing.from_email is distinct from normalized_from
        or existing.sender_verified is distinct from verified_now
        or (existing.content_digest is not null
-           and existing.content_digest is distinct from digest_now) then
+           and existing.content_digest is distinct from digest_now)
+       -- A row stored without a digest resumes only for a verified sender (the original sender
+       -- passed DMARC); an unverified From could be forged by anyone.
+       or (existing.content_digest is null and existing.sender_verified is not true) then
       if not existing.attachments_done then
         perform app.record_audit_event(
           org, 'email.rejected', 'public.inbound_emails', existing.id, 'denied',
