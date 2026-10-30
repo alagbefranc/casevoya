@@ -151,7 +151,8 @@ export function deadlineBadge(
 /**
  * The stage moves the database accepts (app.matter_stage_transition_allowed, used by
  * public.override_matter_stage): one step forward or back, a few documented returns, and
- * reopening a closed matter.
+ * reopening a closed matter. Moving to "closed" goes through public.close_matter
+ * (changeMatterStage in sheet/actions.ts); the override refuses it.
  */
 export const STAGE_TRANSITIONS: Readonly<Record<string, readonly string[]>> = {
   engagement_pending: ["intake"],

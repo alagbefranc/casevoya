@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { isLicensedMembership } from "@/lib/tenant/roles";
-import { asMaintenance, asUser, countOf, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asMaintenance, asUser, asUserInternal, countOf, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 
 // A firm owner passes every licence-gated rule a licensed consultant passes. Since
 // 20261019219000_owner_full_access.sql (decision 2026-10-19: owners are regulated consultants) that
@@ -39,6 +39,11 @@ function collegeId() {
 
 async function as(userId: string, orgId: string) {
   await asUser(db, { userId, aal: "aal2", orgId, totpAgeSeconds: 0 });
+}
+
+/** The user's claims without the authenticated role: for definer-only evidence and transitions. */
+async function asInternal(userId: string, orgId: string) {
+  await asUserInternal(db, { userId, aal: "aal2", orgId, totpAgeSeconds: 0 });
 }
 
 async function createUser(label: string) {
@@ -178,7 +183,7 @@ async function walkToReady(userId: string, orgId: string, matterId: string) {
   ];
   for (const [to, kind] of steps) {
     const current = await matterVersion(matterId);
-    await as(userId, orgId);
+    await asInternal(userId, orgId);
     await db.query(
       `insert into public.matter_stage_evidence (organization_id, matter_id, kind, summary)
        values ($1, $2, $3::public.matter_stage_evidence_kind, 'Synthetic evidence')`,
@@ -312,6 +317,11 @@ describe("regulated matter actions", () => {
     );
     await expectDbError(
       () => db.query(`select public.transition_matter_stage($1, 'submitted', $2, 'Assistant cannot file')`, [matterId, ready.version]),
+      /permission denied/,
+    );
+    await asInternal(ctx.assistant, ctx.orgId);
+    await expectDbError(
+      () => db.query(`select public.transition_matter_stage($1, 'submitted', $2, 'Assistant cannot file')`, [matterId, ready.version]),
       /licensed consultant/,
     );
 
@@ -324,7 +334,7 @@ describe("regulated matter actions", () => {
     expect((await matterVersion(matterId)).stage).toBe("submitted");
 
     // Outcome: decision evidence, government status, then the licensed outcome.
-    await as(ctx.owner, ctx.orgId);
+    await asInternal(ctx.owner, ctx.orgId);
     await db.query(
       `insert into public.matter_stage_evidence (organization_id, matter_id, kind, summary)
        values ($1, $2, 'official_decision', 'Synthetic decision letter')`,
@@ -363,7 +373,7 @@ describe("regulated matter actions", () => {
       [noneMatter, noneReady.version],
     );
     expect(ownerFiled.rows[0].result).toMatchObject({ ok: true, permitted_role: "licensed_consultant" });
-    await as(none.owner, none.orgId);
+    await asInternal(none.owner, none.orgId);
     await db.query(
       `insert into public.matter_stage_evidence (organization_id, matter_id, kind, summary)
        values ($1, $2, 'official_decision', 'Synthetic decision letter')`,
@@ -390,7 +400,7 @@ describe("regulated matter actions", () => {
       [blockedMatter, blockedReady.version],
     );
     expect(blockedOverride.rows[0].result).toMatchObject({ ok: false, blocked: "licence" });
-    await as(blocked.owner, blocked.orgId);
+    await asInternal(blocked.owner, blocked.orgId);
     await expectDbError(
       () =>
         db.query(`select public.transition_matter_stage($1, 'submitted', $2, 'Suspended owner')`, [blockedMatter, blockedReady.version]),

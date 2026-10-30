@@ -1,8 +1,8 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { safeNext } from "@/lib/auth/redirect";
+import { appOrigin } from "@/lib/email/env";
 import { createClient } from "@/lib/supabase/server";
 
 export async function sendMagicLink(formData: FormData) {
@@ -12,7 +12,8 @@ export async function sendMagicLink(formData: FormData) {
     redirect(`/sign-in?error=invalid_email&next=${encodeURIComponent(next)}`);
   }
 
-  const origin = (await headers()).get("origin") ?? "";
+  // The emailed link uses the configured app origin, never a request header.
+  const origin = appOrigin();
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithOtp({
     email,

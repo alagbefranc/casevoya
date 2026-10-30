@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { firmDay } from "./helpers/firm-day";
+import { serverCapture } from "./helpers/server-capture";
 
 /**
  * The two review rules Francis delegated to engineering on 2026-10-24
@@ -110,7 +111,7 @@ async function firm(options: { consultant: boolean } = { consultant: true }) {
 type Firm = Awaited<ReturnType<typeof firm>>;
 
 async function proposeRequirement(ctx: Firm, captured: boolean, label = `Synthetic step ${randomUUID().slice(0, 6)}`) {
-  const snapshot = captured ? JSON.stringify({ sha256: HASH, retrieved_at: new Date().toISOString(), final_url: PAGE.split("#")[0], http_status: 200 }) : null;
+  const snapshot = captured ? JSON.stringify(await serverCapture(db, { orgId: ctx.orgId, url: PAGE, snapshot: { sha256: HASH } })) : null;
   const row = await db.query<{ id: string }>(
     `select public.propose_submission_requirement($1, null, 'online_portal'::public.submission_channel, 'outside_step', $2, $3, null, null, null, $4::date, null, $5::jsonb) as id`,
     [ctx.orgId, label, PAGE, firmDay(), snapshot],
@@ -298,7 +299,7 @@ describe("Several entries captured from the same official page", () => {
     const OTHER = "e".repeat(64);
     const enter = async (hash: string, label: string) => {
       await stale(ctx.manager, ctx.orgId);
-      const snapshot = JSON.stringify({ sha256: hash, retrieved_at: new Date().toISOString(), final_url: PAGE.split("#")[0], http_status: 200 });
+      const snapshot = JSON.stringify(await serverCapture(db, { orgId: ctx.orgId, url: PAGE, snapshot: { sha256: hash } }));
       const row = await db.query<{ id: string }>(
         `select public.propose_submission_requirement($1, null, 'online_portal'::public.submission_channel, 'outside_step', $2, $3, null, null, null, $4::date, null, $5::jsonb) as id`,
         [ctx.orgId, label, PAGE, firmDay(), snapshot],

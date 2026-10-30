@@ -192,8 +192,10 @@ describe("the owner's own records (creator path)", () => {
     ]);
     expect(edited.rows).toHaveLength(1);
 
-    // The person joins the consultant's matter; the owner records a section for the person they created.
-    await addApplicant(ctx.consultant, ctx, mine);
+    // The owner attaches their person to the consultant's matter (the consultant cannot read it yet,
+    // so cannot attach it) without joining the team, then records a section for that person.
+    await addApplicant(ctx.owner, ctx, mine);
+    expect(await ownerOnTeam(ctx)).toBe(false);
     await as(ctx.owner, ctx.orgId);
     const section = await db.query<{ id: string }>(
       `select public.record_person_section($1, $2, 'private_record', 'Synthetic summary') as id`,
@@ -214,7 +216,8 @@ describe("the owner's own records (creator path)", () => {
   it("lets the owner read back the intake answers they save, but not a colleague's on a matter they are not on", async () => {
     const ctx = await firm("none");
     const mine = await addPerson(ctx.owner, ctx.orgId, "Synthetic Intake Applicant");
-    await addApplicant(ctx.consultant, ctx, mine);
+    // Attached by the owner: the consultant cannot read (so cannot attach) the owner's person.
+    await addApplicant(ctx.owner, ctx, mine);
 
     await as(ctx.consultant, ctx.orgId);
     const template = await db.query<{ id: string }>(

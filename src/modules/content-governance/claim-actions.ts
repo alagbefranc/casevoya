@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { claimUrlProblem } from "@/modules/content-governance/claim-capture";
 import { captureClaimPage } from "@/modules/content-governance/claim-page";
+import { storeServerCapture } from "@/modules/content-governance/server-capture";
 import { officialClaimError } from "@/modules/sheet/official-claims-present";
 import { claimError } from "@/modules/sheet/source-claims-present";
 
@@ -25,7 +26,7 @@ async function session(organizationId: string) {
   const supabase = await createClient({ organizationId });
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) return { error: "Sign in first." as const };
-  return { supabase };
+  return { supabase, userId: claims.claims.sub as string };
 }
 
 function refusal(message: string): string {
@@ -78,9 +79,22 @@ export async function addRuleClaim(input: AddClaimInput) {
   if ("error" in s) return { error: s.error };
 
   const fetched = await captureClaimPage(url, fetch);
-  const snapshot = fetched.snapshot;
+  // The fetched page is stored by the server (service role); the claim names that capture. The
+  // database doesn't treat a hash sent with the claim as a capture.
+  const stored = fetched.snapshot
+    ? await storeServerCapture({
+        organizationId: input.organizationId,
+        actorUserId: s.userId,
+        sourceUrl: url,
+        title: text(input.section),
+        page: fetched.snapshot,
+        dates: { modifiedOn: fetched.dates.modifiedOn ?? fetched.dates.lastAmendedOn, currentTo: fetched.dates.currentTo },
+      })
+    : null;
+  const snapshot = stored;
   const dates = fetched.snapshot ? fetched.dates : { modifiedOn: date(input.modifiedOn), lastAmendedOn: date(input.lastAmendedOn), currentTo: date(input.currentTo) };
-  const via: "live" | null = fetched.snapshot ? "live" : null;
+  const via: "live" | null = stored ? "live" : null;
+  const reason = fetched.snapshot ? (stored ? null : "The page capture couldn’t be stored.") : fetched.reason;
 
   const { data, error } = await s.supabase.rpc("add_rule_claim", {
     p_org: input.organizationId,
@@ -105,7 +119,7 @@ export async function addRuleClaim(input: AddClaimInput) {
     p_snapshot: snapshot as unknown as never,
   });
   if (error) return { error: refusal(error.message) };
-  return { id: data as string, captured: via, reason: fetched.snapshot ? null : fetched.reason };
+  return { id: data as string, captured: via, reason };
 }
 
 export async function resolveRuleApplicability(input: Ref & { versionId: string; version: number; resolution: string; note: string }) {

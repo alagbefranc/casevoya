@@ -4,6 +4,7 @@ import {
   asMaintenance,
   asServiceRole,
   asUser,
+  asUserInternal,
   countOf,
   createTestDb,
   expectDbError,
@@ -366,7 +367,8 @@ describe("matter lifecycle", () => {
     ];
     for (const [to, kind] of steps) {
       const current = await version();
-      await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+      // Evidence rows and transitions are definer-only in the app; driven with the consultant's claims.
+      await asUserInternal(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
       if (to !== "intake") {
         await db.query(
           `insert into public.matter_stage_evidence (organization_id, matter_id, kind, summary)
@@ -440,12 +442,13 @@ describe("matter lifecycle", () => {
       outcome: null,
     });
 
-    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    await asUserInternal(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
     await db.query(
       `insert into public.matter_stage_evidence (organization_id, matter_id, kind, summary)
        values ($1, $2, 'official_decision', 'Synthetic decision letter')`,
       [ctx.orgId, matterId],
     );
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
     const current = await db.query<{ version: number }>(`select version from public.matters where id = $1`, [matterId]);
     await db.query(
       `select public.record_government_status($1, 'decision_evidence_on_file', $2, 'Letter on file')`,

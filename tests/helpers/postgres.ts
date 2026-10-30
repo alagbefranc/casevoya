@@ -228,6 +228,16 @@ export async function asUser(db: TestDb, session: Session) {
   await db.exec("set role authenticated");
 }
 
+/**
+ * The user's JWT claims under the maintenance role: drives internal functions that are not
+ * granted to authenticated (they still run their own auth.uid() and role checks), and sets up
+ * rows that only definer workflows write in the app.
+ */
+export async function asUserInternal(db: TestDb, session: Session) {
+  await asUser(db, session);
+  await db.exec("reset role");
+}
+
 export async function expectDbError(run: () => Promise<unknown>, pattern: RegExp) {
   try {
     await run();

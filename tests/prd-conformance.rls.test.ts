@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   asMaintenance,
   asUser,
+  asUserInternal,
   countOf,
   createTestDb,
   expectDbError,
@@ -354,6 +355,14 @@ describe("matter stage transitions", () => {
     );
     expect(countOf(renamed.rows[0].version)).toBe(2);
 
+    // The transition function and evidence rows are internal to definer workflows; staff cannot call them.
+    await expectDbError(
+      () => db.query(`select public.transition_matter_stage($1, 'intake', 2, 'Direct call')`, [matter]),
+      /permission denied/,
+    );
+
+    // The transition rules themselves, driven with the owner's claims as the definer workflows do.
+    await asUserInternal(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
     await expectDbError(
       () => db.query(`select public.transition_matter_stage($1, 'preparation', 2, 'Skip ahead')`, [matter]),
       /not allowed/,
@@ -383,7 +392,7 @@ describe("matter stage transitions", () => {
     );
     expect(history.rows.map((row) => row.to_stage)).toEqual(["intake"]);
 
-    await asUser(db, { userId: assistant, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    await asUserInternal(db, { userId: assistant, aal: "aal2", orgId, totpAgeSeconds: 0 });
     await expectDbError(
       () =>
         db.query(
@@ -391,7 +400,7 @@ describe("matter stage transitions", () => {
            values ($1, $2, 'submission_confirmation', 'Missing the receipt fields')`,
           [orgId, matter],
         ),
-      /check|submission/,
+      /matter_stage_evidence_submission_ck/,
     );
 
     const steps: Array<[string, string, string]> = [
@@ -403,7 +412,7 @@ describe("matter stage transitions", () => {
     ];
     let version = countOf(moved.rows[0].version);
     for (const [stage, kind, summary] of steps) {
-      await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
+      await asUserInternal(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
       await db.query(
         `insert into public.matter_stage_evidence (organization_id, matter_id, kind, summary)
          values ($1, $2, $3::public.matter_stage_evidence_kind, $4)`,
@@ -416,7 +425,7 @@ describe("matter stage transitions", () => {
       version = countOf(next.rows[0].version);
     }
 
-    await asUser(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    await asUserInternal(db, { userId: owner, aal: "aal2", orgId, totpAgeSeconds: 0 });
     await expectDbError(
       // The owner passes the licence gate (owners are regulated consultants, decision 2026-10-19);
       // filing still needs the submission evidence.
@@ -424,7 +433,7 @@ describe("matter stage transitions", () => {
       /evidence is missing/,
     );
 
-    await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    await asUserInternal(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
     await db.query(
       `insert into public.matter_stage_evidence (
          organization_id, matter_id, kind, summary, external_reference, submission_at, receipt_locator

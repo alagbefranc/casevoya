@@ -106,6 +106,16 @@ export async function holdMatterFromSheet(form: FormData) {
 }
 
 export async function stageMatterFromSheet(form: FormData) {
+  // Closing goes through close_matter (open-money checks, closure record); the override refuses it.
+  if (field(form, "stage") === "closed") {
+    const closed = await closeMatter({
+      organizationId: field(form, "organizationId"),
+      matterId: field(form, "matterId"),
+      version: Number(field(form, "version")),
+      reason: field(form, "reason"),
+    });
+    return "error" in closed && closed.error ? { error: closed.error } : {};
+  }
   return overrideMatterStage({
     organizationId: field(form, "organizationId"),
     matterId: field(form, "matterId"),

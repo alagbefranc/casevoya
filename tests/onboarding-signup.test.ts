@@ -21,6 +21,7 @@ const state = vi.hoisted(() => ({
   signUp: { session: null as unknown, user: null as unknown, error: null as AuthError },
   signIn: null as AuthError,
   calls: [] as string[],
+  redirects: [] as (string | undefined)[],
 }));
 
 vi.mock("@/lib/env", () => ({ hasPublicSupabaseEnv: () => true }));
@@ -29,8 +30,9 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: {
       getClaims: async () => ({ data: null }),
-      signUp: async () => {
+      signUp: async (input: { options?: { emailRedirectTo?: string } }) => {
         state.calls.push("signUp");
+        state.redirects.push(input?.options?.emailRedirectTo);
         return { data: { session: state.signUp.session, user: state.signUp.user }, error: state.signUp.error };
       },
       signInWithPassword: async () => {
@@ -57,6 +59,7 @@ beforeEach(() => {
   state.signUp = { session: null, user: { id: "u1", identities: [{ id: "i1" }] }, error: null };
   state.signIn = null;
   state.calls = [];
+  state.redirects = [];
 });
 
 describe("start a trial with an email that already has an account (fix 2)", () => {
@@ -94,6 +97,20 @@ describe("start a trial with an email that already has an account (fix 2)", () =
     state.signIn = { message: "Email not confirmed", code: "email_not_confirmed" };
     const result = await joinStaffInvite({ token: "a".repeat(64), name: "Sam Staff", email: "staff@example.test", password: GOOD });
     expect(result).toEqual({ ok: false, message: "Confirm your email, then open this invitation again." });
+  });
+
+  it("a staff invitation's confirmation link uses the configured app origin", async () => {
+    const before = process.env.APP_URL;
+    process.env.APP_URL = "https://app.example.test";
+    try {
+      state.signIn = { message: "Email not confirmed", code: "email_not_confirmed" };
+      const token = "a".repeat(64);
+      await joinStaffInvite({ token, name: "Sam Staff", email: "staff@example.test", password: GOOD });
+      expect(state.redirects).toEqual([`https://app.example.test/auth/confirm?next=${encodeURIComponent(`/invite/${token}`)}`]);
+    } finally {
+      if (before === undefined) delete process.env.APP_URL;
+      else process.env.APP_URL = before;
+    }
   });
 
   it("only a user with an empty identities list and no session counts as taken", () => {

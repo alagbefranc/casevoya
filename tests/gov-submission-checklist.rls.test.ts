@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { firmDay } from "./helpers/firm-day";
+import { serverCapture } from "./helpers/server-capture";
 
 /**
  * GOV-01 (submission checklist, outside steps, official requirements under review) and GOV-03
@@ -410,9 +411,13 @@ describe("GOV-01 official outside steps and GOV-03 channel names: entered from a
       formDate: null,
       ...overrides,
     };
+    // A fetched page is stored by the server (service role) first; the entry names that capture.
+    const captured = input.snapshot
+      ? JSON.stringify(await serverCapture(db, { orgId: ctx.orgId, url: input.url, snapshot: input.snapshot as { sha256: string } }))
+      : null;
     const row = await db.query<{ id: string }>(
       `select public.propose_submission_requirement($1, null, $2::public.submission_channel, $3, $4, $5, $6, $7, $8::date, $9::date, null, $10::jsonb) as id`,
-      [ctx.orgId, input.channel, input.kind, input.label, input.url, input.section, input.form, input.formDate, input.checked, input.snapshot ? JSON.stringify(input.snapshot) : null],
+      [ctx.orgId, input.channel, input.kind, input.label, input.url, input.section, input.form, input.formDate, input.checked, captured],
     );
     return row.rows[0].id;
   }

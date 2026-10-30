@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { loadOfficialClaims, preparedClaims } from "../scripts/ops/load-official-claims.mjs";
 import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { serverCapture } from "./helpers/server-capture";
 
 /**
  * Live official claims with firm-only licensed edits (#188, 20261025600100_src_live_claims.sql;
@@ -409,13 +410,11 @@ describe("unsuspend", () => {
   it("a suspended firm claim stays suspended until a licensed member unsuspends it with a fresh step-up", async () => {
     const f = await firm();
     await as(f.manager, f.orgId);
+    const page = "https://www.canada.ca/en/immigration-refugees-citizenship/services/synthetic/page.html#s1";
+    const captured = await serverCapture(db, { orgId: f.orgId, url: page, snapshot: { sha256: "1".repeat(64) } });
     const id = (await db.query<{ id: string }>(
       `select public.add_rule_claim($1, null, 'CA', 'synthetic_program', 'Synthetic claim.', null, $2, null, 'Synthetic excerpt.', null, null, null, null, null, null, null, null, null, (now() at time zone 'America/Toronto')::date, $3::jsonb) as id`,
-      [
-        f.orgId,
-        "https://www.canada.ca/en/immigration-refugees-citizenship/services/synthetic/page.html#s1",
-        JSON.stringify({ sha256: "1".repeat(64), retrieved_at: new Date().toISOString(), final_url: "https://www.canada.ca/en/immigration-refugees-citizenship/services/synthetic/page.html", http_status: 200 }),
-      ],
+      [f.orgId, page, JSON.stringify(captured)],
     )).rows[0].id;
     const v = async () => {
       await asMaintenance(db);

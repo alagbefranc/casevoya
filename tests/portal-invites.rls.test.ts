@@ -257,8 +257,9 @@ describe("portal invitations", () => {
        values ($1, $2, 'Real Applicant', '1988-01-02', 'day', false)`,
       [realPerson, orgId],
     );
-    await addParty(consultant, orgId, realMatter, realPerson, "applicant");
+    // The owner staffs the matter and attaches the person (the consultant could not read them).
     await addStaffParty(owner, orgId, realMatter, membershipId, "consultant");
+    await addParty(owner, orgId, realMatter, realPerson, "applicant");
     const realInvite = await invite(consultant, orgId, realPerson, realMatter, "client", email("real"));
     expect(realInvite.ok).toBe(false);
     expect(realInvite.error).toBe("real_client_invitations_locked");
