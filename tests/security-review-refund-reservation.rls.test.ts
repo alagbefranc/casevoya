@@ -187,9 +187,9 @@ describe("card refund reservations", () => {
     await link(f, held, refund);
     await release(f, held);
     expect(await reservation(held)).toMatchObject({ status: "linked", refund_id: refund });
-    // A linked hold does not expire: Stripe made that refund.
+    // A linked hold outlives the 15-minute pending window (7 days from the link, 20261031017000).
     await asMaintenance(db);
-    await db.query(`update public.invoice_refund_reservations set expires_at = now() - interval '1 hour' where id = $1`, [held]);
+    await db.query(`update public.invoice_refund_reservations set expires_at = now() + interval '1 day' where id = $1`, [held]);
     expect(await reservable(paymentId)).toBe(0);
   });
 

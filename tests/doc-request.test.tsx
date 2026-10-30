@@ -72,6 +72,7 @@ describe("Request a document: what the dialog sends", () => {
     expect(documentError("this firm is in sample mode; only sample matters accept new work")).toBe("This firm is in sample mode. Only sample matters accept new work.");
     expect(documentError("the request needs a person on this matter")).toBe("Choose someone who is on this matter.");
     expect(documentError("document request denied")).toBe("That action could not be completed.");
+    expect(documentError("upload rate limit reached")).toBe("Too many uploads in the last hour. Try again later.");
   });
 });
 

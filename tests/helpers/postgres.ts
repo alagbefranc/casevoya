@@ -238,6 +238,22 @@ export async function asUserInternal(db: TestDb, session: Session) {
   await db.exec("reset role");
 }
 
+/**
+ * One query under the maintenance role, keeping the current session's JWT claims, then back to
+ * the session's role: drives internal functions that are not granted to authenticated (they
+ * still run their own auth.uid() checks).
+ */
+export async function queryInternal<T = Record<string, unknown>>(db: TestDb, sql: string, params?: unknown[]) {
+  const roles = (await db.query<{ current: string; session: string }>(`select current_user::text as current, session_user::text as session`)).rows[0];
+  const { current, session } = roles;
+  await db.exec("reset role");
+  try {
+    return await db.query<T>(sql, params);
+  } finally {
+    if (current !== session && /^[a-z_]+$/.test(current)) await db.exec(`set role ${current}`);
+  }
+}
+
 export async function expectDbError(run: () => Promise<unknown>, pattern: RegExp) {
   try {
     await run();

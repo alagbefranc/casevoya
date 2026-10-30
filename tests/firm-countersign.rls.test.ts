@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, queryInternal, type TestDb } from "./helpers/postgres";
 import { pdfText } from "./helpers/pdf-text";
 import { renderAgreementPdf } from "@/modules/agreements/pdf-render";
 import { parseSealSource } from "@/modules/agreements/seal-source";
@@ -186,7 +186,7 @@ async function send(ctx: Ctx, agreementId: string, signers: string) {
 
 async function sign(userId: string, orgId: string, envelopeId: string, totpAgeSeconds?: number) {
   await asUser(db, { userId, aal: totpAgeSeconds == null ? "aal1" : "aal2", orgId, totpAgeSeconds });
-  const signed = await db.query<{ result: { status: string } }>(`select app.sign_agreement($1, true, $2, $3::inet, $4) as result`, [
+  const signed = await queryInternal<{ result: { status: string } }>(db, `select app.sign_agreement($1, true, $2, $3::inet, $4) as result`, [
     envelopeId,
     `sign-${randomUUID()}`,
     IP,
@@ -244,7 +244,7 @@ describe("the firm countersigns", () => {
     // The consultant cannot jump the queue.
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
     await expectDbError(
-      () => db.query(`select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `early-${randomUUID()}`, IP, AGENT]),
+      () => queryInternal(db, `select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `early-${randomUUID()}`, IP, AGENT]),
       /identity/i,
     );
 
@@ -285,18 +285,18 @@ describe("the firm countersigns", () => {
     // Another staff member cannot countersign for them.
     await asUser(db, { userId: ctx.owner, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
     await expectDbError(
-      () => db.query(`select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `owner-${randomUUID()}`, IP, AGENT]),
+      () => queryInternal(db, `select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `owner-${randomUUID()}`, IP, AGENT]),
       /identity/i,
     );
     // Not without a recent step-up, and not at aal1.
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 60 * 30 });
     await expectDbError(
-      () => db.query(`select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `stale-${randomUUID()}`, IP, AGENT]),
+      () => queryInternal(db, `select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `stale-${randomUUID()}`, IP, AGENT]),
       /step-up/i,
     );
     await asUser(db, { userId: ctx.consultant, aal: "aal1", orgId: ctx.orgId });
     await expectDbError(
-      () => db.query(`select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `aal1-${randomUUID()}`, IP, AGENT]),
+      () => queryInternal(db, `select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `aal1-${randomUUID()}`, IP, AGENT]),
       /denied|step-up/i,
     );
     await asMaintenance(db);
@@ -356,7 +356,7 @@ describe("the firm countersigns", () => {
     await db.query(`update public.memberships set role = 'case_manager' where id = $1`, [ctx.consultantMembership]);
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
     await expectDbError(
-      () => db.query(`select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `lapsed-${randomUUID()}`, IP, AGENT]),
+      () => queryInternal(db, `select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `lapsed-${randomUUID()}`, IP, AGENT]),
       /must be licensed/i,
     );
     await asMaintenance(db);

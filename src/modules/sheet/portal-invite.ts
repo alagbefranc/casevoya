@@ -9,6 +9,7 @@ import { readBirthDate, todayIso } from "@/modules/sheet/birth-date";
 import { dayMonth } from "@/modules/sheet/home-present";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
 import { stepUpHref } from "@/lib/auth/mfa-step";
+import { isAcceptableEmail } from "@/lib/auth/invitations";
 
 /** The Designer's "Their role" options, in its order. The option text is what the dialog reads. */
 export const PORTAL_ROLE_OPTIONS: readonly (readonly [PortalInviteRole, string])[] = [
@@ -54,7 +55,6 @@ export function acceptLink(origin: string, role: PortalInviteRole, token: string
   return origin ? `${origin.replace(/\/+$/, "")}${path}` : path;
 }
 
-const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type PortalInviteInput = {
@@ -84,7 +84,7 @@ export function readPortalInvite(fields: {
   if (!UUID.test(personId)) return { error: "Open the invitation from a person on this matter." };
   if (!role) return { error: "Choose their role." };
   if (!email) return { error: "Add their email address." };
-  if (!EMAIL.test(email) || email.length > 320) return { error: "Enter a valid email address." };
+  if (!isAcceptableEmail(email)) return { error: "Enter a valid email address." };
   let dateOfBirth: string | null = null;
   if (typeof fields.dateOfBirth === "string") {
     const birth = readBirthDate(fields.dateOfBirth, fields.today ?? todayIso());

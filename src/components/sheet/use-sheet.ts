@@ -8,6 +8,7 @@ import { dialogId, withoutDialog } from "@/modules/sheet/matter-wire";
 import { withoutNew } from "@/modules/sheet/new-matter";
 import { HOME_TASK_SHOWN, filterHidden, nextHomeChip, withoutParam } from "@/modules/sheet/home-controls";
 import { sheetStateCopy } from "@/modules/sheet/present";
+import { escapeHtml } from "@/lib/html";
 import { INVITE_DIALOG } from "@/modules/sheet/staff-present";
 import {
   prefillAgreementTerms,
@@ -2113,8 +2114,9 @@ function openPalette(root: HTMLElement, go: (href: string) => void, group: HTMLE
 function applyState(root: HTMLElement, page: string, state: string) {
   const content = root.querySelector("#content");
   if (!content) return;
-  const copy = sheetStateCopy(page);
-  const heading = content.querySelector("h1")?.textContent || "This screen";
+  // The heading (a client or matter name) and the page name are data: escaped before markup.
+  const copy = sheetStateCopy(page).map(escapeHtml) as ReturnType<typeof sheetStateCopy>;
+  const heading = escapeHtml(content.querySelector("h1")?.textContent || "This screen");
   if (state === "loading") {
     content.innerHTML = `<div class="fp-st" role="status"><span class="sr">Loading ${copy[4]}…</span><div class="sk h"></div><div class="sk" style="width:60%"></div>${'<div class="sk r"></div>'.repeat(4)}</div>`;
     return;

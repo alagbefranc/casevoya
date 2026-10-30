@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { firmDay } from "./helpers/firm-day";
+import { serverCapture } from "./helpers/server-capture";
 
 /**
  * GOV-04 against the real migrations: the firm's issuer list (official URL, date checked, licensed
@@ -104,10 +105,17 @@ type Firm = Awaited<ReturnType<typeof firm>>;
 
 async function propose(ctx: Firm, name: string, read = true) {
   await stale(ctx.manager, ctx.orgId);
-  const row = await db.query<{ id: string }>(
-    `select public.propose_government_issuer($1, $2, $3, $4::date, $5::timestamptz, $6, $7::date, $8) as id`,
-    read ? [ctx.orgId, name, OFFICIAL, firmDay(), new Date().toISOString(), HASH, "2026-09-01", true] : [ctx.orgId, name, OFFICIAL, firmDay(), null, null, null, null],
-  );
+  // A read page is a server capture (20261031010000_server_captures_issuers_estimates.sql).
+  const snapshot = read
+    ? JSON.stringify(await serverCapture(db, { orgId: ctx.orgId, url: OFFICIAL, snapshot: { sha256: HASH, modified_on: "2026-09-01" } }))
+    : null;
+  const row = await db.query<{ id: string }>(`select public.propose_government_issuer($1, $2, $3, $4::date, $5::jsonb) as id`, [
+    ctx.orgId,
+    name,
+    OFFICIAL,
+    firmDay(),
+    snapshot,
+  ]);
   return row.rows[0].id;
 }
 
@@ -137,8 +145,8 @@ describe("GOV-04 issuer list", () => {
       /date checked/,
     );
     await expectDbError(
-      () => db.query(`select public.propose_government_issuer($1, 'Synthetic Office', $2, $3::date, now(), null, null, null)`, [ctx.orgId, OFFICIAL, firmDay()]),
-      /both its time and its hash/,
+      () => db.query(`select public.propose_government_issuer($1, 'Synthetic Office', $2, $3::date, $4::jsonb)`, [ctx.orgId, OFFICIAL, firmDay(), JSON.stringify({ snapshot_id: randomUUID() })]),
+      /not stored by Casevoya/,
     );
     const id = await propose(ctx, "Synthetic Office");
     await expectDbError(() => propose(ctx, "synthetic office"), /already on the list/);

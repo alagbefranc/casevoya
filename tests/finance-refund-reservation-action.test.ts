@@ -35,7 +35,9 @@ vi.mock("@/lib/supabase/server", () => ({
           error: null,
         };
       }
-      if (name === "reserve_invoice_refund") return state.reserve;
+      if (name === "reserve_invoice_refund" || name === "reserve_client_credit_refund") return state.reserve;
+      if (name === "client_credit_refund_context") return { data: { payment_id: PAYMENT, refundable: 40_000, available: 5_000 }, error: null };
+      if (name === "link_client_credit_refund") return { data: "66666666-6666-4666-8666-666666666666", error: null };
       if (name === "link_invoice_refund_reservation" || name === "release_invoice_refund_reservation") return { data: null, error: null };
       if (name === "record_invoice_refund") return { data: RECORDED, error: null };
       return { data: null, error: { message: `unexpected ${name}` } };
@@ -48,7 +50,7 @@ vi.mock("@/lib/stripe/server", () => ({
   stripeLive: () => false,
 }));
 
-import { refundPayment } from "@/modules/finance/staff-actions";
+import { moveClientCredit, refundPayment } from "@/modules/finance/staff-actions";
 
 function fakeStripe(result: { id: string } | Error) {
   return {
@@ -110,6 +112,29 @@ describe("refundPayment reserves before Stripe", () => {
       expect("error" in (await refund())).toBe(true);
       expect(names()).toEqual(["invoice_refund_context", "reserve_invoice_refund"]);
     }
+  });
+
+  it("reserves a client credit's card refund against the credit (20261031017000)", async () => {
+    const CREDIT = "77777777-7777-4777-8777-777777777777";
+    const move = () =>
+      moveClientCredit({ organizationId: ORG, idempotencyKey: KEY, today: "", maxCents: null, credit: CREDIT, mode: "card", amount: "30.00", target: "", method: "", reference: "", refundedOn: "" });
+    expect(await move()).toEqual({ mode: "card" });
+    expect(names()).toEqual([
+      "client_credit_refund_context",
+      "invoice_refund_context",
+      "reserve_client_credit_refund",
+      "link_invoice_refund_reservation",
+      "record_invoice_refund",
+      "link_client_credit_refund",
+    ]);
+    expect(state.calls[2].args).toEqual({ p_credit_id: CREDIT, p_payment_id: PAYMENT, p_amount_cents: 3_000, p_currency: "CAD", p_livemode: false, p_idempotency_key: KEY });
+
+    // The database refuses more than the credit has left: Stripe is not called.
+    state.calls = [];
+    state.stripeCalls = [];
+    state.reserve = { data: null, error: { message: "amount is more than the credit available" } };
+    expect(await move()).toEqual({ error: "That’s more than is left on this credit." });
+    expect(state.stripeCalls).toHaveLength(0);
   });
 
   it("reserves nothing when Stripe isn't configured", async () => {

@@ -26,10 +26,20 @@ function failure(message: string): VideoFailure {
   return { error: "Something went wrong. Try again.", status: 500 };
 }
 
-async function session(organizationId: string) {
+async function signedIn(organizationId: string) {
   const supabase = await createClient({ organizationId });
   const { data } = await supabase.auth.getClaims();
-  return data?.claims?.sub ? supabase : null;
+  const userId = data?.claims?.sub;
+  return typeof userId === "string" && userId ? { supabase, userId } : null;
+}
+
+async function session(organizationId: string) {
+  return (await signedIn(organizationId))?.supabase ?? null;
+}
+
+/** The join identity must be the signed-in person's own, under their role in the call. */
+function ownIdentity(identity: string, role: "host" | "client", userId: string): boolean {
+  return identity === `${role === "host" ? "staff" : "client"}:${userId.toLowerCase()}`;
 }
 
 /** What the call page shows before anyone joins (no writes, no token). */
@@ -52,8 +62,9 @@ export type JoinGrant = {
 /** A join token for the signed-in person, inside the window. Makes sure the LiveKit room exists first. */
 export async function joinCall(organizationId: string, ref: string): Promise<{ view: JoinView; grant: JoinGrant | null; configured: boolean } | VideoFailure> {
   const config = liveKitConfig();
-  const supabase = await session(organizationId);
-  if (!supabase) return { error: "Sign in first.", status: 401 };
+  const caller = await signedIn(organizationId);
+  if (!caller) return { error: "Sign in first.", status: 401 };
+  const { supabase, userId } = caller;
   if (!config) {
     // Answer what the call is without counting a join, so the page can say video isn't set up.
     const view = await readCall(organizationId, ref);
@@ -64,6 +75,7 @@ export async function joinCall(organizationId: string, ref: string): Promise<{ v
   const view = parseJoinView(data);
   if (!view) return { error: "Something went wrong. Try again.", status: 500 };
   if (view.state !== "open" || !view.grant) return { view, grant: null, configured: true };
+  if (!ownIdentity(view.grant.identity, view.role, userId)) return { error: "You can’t join this call.", status: 403 };
   // CreateRoom on every join (it is idempotent: an existing room is answered as it is). The room
   // may have closed on its own since the last join (everyone left, or nobody came), and a room
   // LiveKit creates implicitly on join wouldn't have ROOM_OPTIONS. The token is only signed once
@@ -177,6 +189,11 @@ export async function joinGuestCall(ref: string, token: string, name: string): P
   const view = parseJoinView(data);
   if (!view) return { error: "Something went wrong. Try again.", status: 500 };
   if (view.state !== "open" || !view.grant) return { view, grant: null, configured: true };
+  // A guest's identity is their booking's (client:<booking id>), which is also what names the room.
+  const bookingId = view.grant.identity.startsWith("client:") ? view.grant.identity.slice("client:".length) : "";
+  if (view.role !== "client" || !isUuid(bookingId) || roomNameFor(bookingId) !== view.grant.roomName) {
+    return { error: "You can’t join this call.", status: 403 };
+  }
   try {
     await roomService(config).createRoom(view.grant.roomName, { ...ROOM_OPTIONS });
   } catch {

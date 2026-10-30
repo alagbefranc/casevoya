@@ -9,7 +9,7 @@ import { safeNext } from "@/lib/auth/redirect";
 import { clearPendingTotp, readPendingTotp, withQr, writePendingTotp, type TotpSetup } from "@/lib/auth/mfa-pending";
 import { firmSlug } from "@/lib/auth/slug";
 import { syncClaimedFirmSlug } from "@/modules/email/sync-routing";
-import { isInvitationToken, normalizeEmail } from "@/lib/auth/invitations";
+import { isAcceptableEmail, isInvitationToken, normalizeEmail } from "@/lib/auth/invitations";
 import {
   EMAIL_TAKEN,
   STAFF_EMAIL_TAKEN,
@@ -240,7 +240,7 @@ export async function signUpForTrial(input: {
   if (!hasPublicSupabaseEnv()) return nullResult();
   const email = input.email.trim();
   const name = input.name.trim().slice(0, 200);
-  if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !passwordOk(input.password)) {
+  if (!name || !isAcceptableEmail(email) || !passwordOk(input.password)) {
     return fail("Check your name, email and password.");
   }
   const supabase = await createClient();

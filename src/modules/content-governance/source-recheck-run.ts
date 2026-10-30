@@ -1,5 +1,5 @@
 import { readPageDates } from "./claim-capture";
-import { fetchOfficialPage, hashPage, isDueSource, recheckBody, type DueClaim, type DueSource } from "./source-recheck";
+import { fetchOfficialPage, hashPage, isDueSource, movedOffHost, recheckBody, type DueClaim, type DueSource } from "./source-recheck";
 
 type Query = {
   due: (limit: number) => Promise<unknown>;
@@ -39,41 +39,69 @@ function sourcesOf(data: unknown): DueSource[] {
   });
 }
 
-/** One pass of the scheduled re-check. A failed fetch is recorded and does not change a claim. */
+type Outcome = "unchanged" | "changed" | "partial" | "failed";
+
+/**
+ * A failure is recorded against the source's own URL (the page it was sent to is never recorded),
+ * so the database takes it and the source leaves the front of the queue.
+ */
+function failure(source: DueSource, result: "failed" | "blocked", code: string, status: number | null) {
+  return {
+    result,
+    source_id: source.source_id,
+    retrieved_at: new Date().toISOString(),
+    http_status: status,
+    final_url: source.url.split("#")[0],
+    error_code: code,
+  };
+}
+
+async function recheckOne(query: Query, source: DueSource): Promise<Outcome> {
+  const fetched = await fetchOfficialPage(source.url, query.fetch);
+  if (!fetched.ok) {
+    await query.record(failure(source, fetched.result, fetched.code, fetched.status));
+    return "failed";
+  }
+  // The database records a page only on its own host; a move to another host is recorded as blocked.
+  if (movedOffHost(source.url, fetched.finalUrl)) {
+    await query.record(failure(source, "blocked", "moved_off_host", fetched.status));
+    return "failed";
+  }
+  const retrievedAt = new Date().toISOString();
+  const hashed = hashPage(fetched.bytes, fetched.contentType);
+  const body = recheckBody(source, {
+    sha256: hashed.sha256,
+    html: hashed.html,
+    retrievedAt,
+    httpStatus: fetched.status,
+    finalUrl: fetched.finalUrl,
+    dates: hashed.html ? readPageDates(hashed.html) : { modifiedOn: null, lastAmendedOn: null, currentTo: null },
+  });
+  const recorded = await query.record(body);
+  const result = recorded && typeof recorded === "object" && "result" in recorded ? String((recorded as { result: unknown }).result) : body.result;
+  if (result === "changed" || result === "partial" || result === "unchanged") return result;
+  return "failed";
+}
+
+/**
+ * One pass of the scheduled re-check. A failed fetch is recorded and does not change a claim. One
+ * source that fails (or that the database refuses) does not stop the others.
+ */
 export async function runSourceRechecks(query: Query, limit = 5): Promise<{ checked: number; unchanged: number; changed: number; partial: number; failed: number }> {
   const due = sourcesOf(await query.due(limit));
   const summary = { checked: 0, unchanged: 0, changed: 0, partial: 0, failed: 0 };
   for (const source of due) {
     summary.checked += 1;
-    const fetched = await fetchOfficialPage(source.url, query.fetch);
-    const retrievedAt = new Date().toISOString();
-    if (!fetched.ok) {
-      await query.record({
-        result: fetched.result,
-        source_id: source.source_id,
-        retrieved_at: retrievedAt,
-        http_status: fetched.status,
-        final_url: fetched.finalUrl,
-        error_code: fetched.code,
-      });
+    try {
+      summary[await recheckOne(query, source)] += 1;
+    } catch {
       summary.failed += 1;
-      continue;
+      try {
+        await query.record(failure(source, "failed", "record_refused", null));
+      } catch {
+        // Recorded on the next pass.
+      }
     }
-    const hashed = hashPage(fetched.bytes, fetched.contentType);
-    const body = recheckBody(source, {
-      sha256: hashed.sha256,
-      html: hashed.html,
-      retrievedAt,
-      httpStatus: fetched.status,
-      finalUrl: fetched.finalUrl,
-      dates: hashed.html ? readPageDates(hashed.html) : { modifiedOn: null, lastAmendedOn: null, currentTo: null },
-    });
-    const recorded = await query.record(body);
-    const result = recorded && typeof recorded === "object" && "result" in recorded ? String((recorded as { result: unknown }).result) : body.result;
-    if (result === "changed") summary.changed += 1;
-    else if (result === "partial") summary.partial += 1;
-    else if (result === "unchanged") summary.unchanged += 1;
-    else summary.failed += 1;
   }
   return summary;
 }

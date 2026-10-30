@@ -101,6 +101,15 @@ export async function handleInboundEmail(message: InboundEmailMessage, env: Inbo
     },
     body,
   });
+  // Refusals that did not deliver the message are rejected so the sender is told, never acknowledged.
+  if (response.status === 429) {
+    message.setReject("Mailbox is receiving too much mail right now. Please try again later.");
+    return;
+  }
+  if (response.status === 413) {
+    message.setReject("Attachments could not be accepted right now (size limit reached). Please send them again later.");
+    return;
+  }
   if (!response.ok) {
     throw new Error(`inbound webhook failed: ${response.status}`);
   }

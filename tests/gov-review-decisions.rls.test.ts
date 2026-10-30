@@ -120,17 +120,23 @@ async function proposeRequirement(ctx: Firm, captured: boolean, label = `Synthet
 }
 
 async function proposeIssuer(ctx: Firm, read: boolean, name = `Synthetic Office ${randomUUID().slice(0, 6)}`) {
-  const row = await db.query<{ id: string }>(
-    `select public.propose_government_issuer($1, $2, $3, $4::date, $5::timestamptz, $6, null, $7) as id`,
-    read ? [ctx.orgId, name, PAGE, firmDay(), new Date().toISOString(), HASH, true] : [ctx.orgId, name, PAGE, firmDay(), null, null, null],
-  );
+  // A read page is a server capture (20261031010000); a hash sent by the caller is not one.
+  const snapshot = read ? JSON.stringify(await serverCapture(db, { orgId: ctx.orgId, url: PAGE, snapshot: { sha256: HASH } })) : null;
+  const row = await db.query<{ id: string }>(`select public.propose_government_issuer($1, $2, $3, $4::date, $5::jsonb) as id`, [
+    ctx.orgId,
+    name,
+    PAGE,
+    firmDay(),
+    snapshot,
+  ]);
   return row.rows[0].id;
 }
 
 async function enterEstimate(ctx: Firm, captured: boolean) {
+  const snapshot = captured ? JSON.stringify(await serverCapture(db, { orgId: ctx.orgId, url: TIMES, snapshot: { sha256: HASH } })) : null;
   const row = await db.query<{ id: string }>(
-    `select public.record_processing_estimate($1, $2, 'Synthetic application type', 'Synthetic estimate', $3::date, $4::timestamptz, $5) as id`,
-    captured ? [ctx.matterId, TIMES, firmDay(), new Date().toISOString(), HASH] : [ctx.matterId, TIMES, firmDay(), null, null],
+    `select public.record_processing_estimate($1, $2, 'Synthetic application type', 'Synthetic estimate', $3::date, $4::jsonb) as id`,
+    [ctx.matterId, TIMES, firmDay(), snapshot],
   );
   return row.rows[0].id;
 }

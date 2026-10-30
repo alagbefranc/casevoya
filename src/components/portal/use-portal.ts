@@ -2,6 +2,7 @@
 
 import { useEffect, type RefObject } from "react";
 import { toast2 } from "@/components/port/kit";
+import { escapeHtml } from "@/lib/html";
 import { nextPrototypePayState } from "@/modules/portal/pay";
 import { noteStepUpTrigger, resumeStepUp, type ResumeNode } from "@/lib/auth/step-up-resume";
 
@@ -266,7 +267,7 @@ function armSwipe(root: HTMLElement) {
     const title = row.querySelector("h4")?.textContent || "this thread";
     actions.innerHTML = row.matches(".fcard")
       ? accepted
-        ? `<button type="button" data-toast="Opened ${title}">Open</button>`
+        ? `<button type="button" data-toast="Opened ${escapeHtml(title)}">Open</button>`
         : `<a href="/portal/upload" class="up">Upload</a>`
       : `<button type="button" class="mr">Mark read</button>`;
     const more = document.createElement("button");

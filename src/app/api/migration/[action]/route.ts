@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
-import { commitMigrationDocuments, isMigrationAction, runMigrationAction, uploadMigrationFile, type MigrationResult } from "@/modules/migration/actions";
+import { readLimitedBody } from "@/lib/http/limited-body";
+import {
+  commitMigrationDocuments,
+  isMigrationAction,
+  migrationRequestGate,
+  runMigrationAction,
+  uploadMigrationFile,
+  type MigrationResult,
+} from "@/modules/migration/actions";
+import { MIGRATION_MAX_BYTES } from "@/modules/migration/csv";
 import { migrationReportResponse } from "@/modules/migration/report-download";
+import { MIGRATION_ZIP_MAX_BYTES } from "@/modules/migration/zip";
 
 /**
  * Migration import (T044): `/api/migration/upload` takes the CSV as multipart form data and parses
@@ -15,6 +25,12 @@ function reply(result: MigrationResult) {
   return NextResponse.json(result);
 }
 
+const MB = 1024 * 1024;
+/** Request body limits, checked before (Content-Length) and while the body is read. */
+const UPLOAD_MAX_BYTES = MIGRATION_ZIP_MAX_BYTES + MIGRATION_MAX_BYTES + 2 * MB; // ZIP + CSV + form overhead
+const DOCUMENTS_MAX_BYTES = MIGRATION_ZIP_MAX_BYTES + MB;
+const JSON_MAX_BYTES = MIGRATION_MAX_BYTES;
+
 /** MIG-02: `/api/migration/report?batch=<id>&format=csv|pdf`, a finished import's run report (firm owner). */
 export async function GET(request: Request, { params }: { params: Promise<{ action: string }> }) {
   const { action } = await params;
@@ -23,27 +39,43 @@ export async function GET(request: Request, { params }: { params: Promise<{ acti
   return migrationReportResponse(url.searchParams.get("batch") ?? "", url.searchParams.get("format") === "pdf" ? "pdf" : "csv");
 }
 
+/** The body as form data, read within `maxBytes`; or the response that refuses it. */
+async function readForm(request: Request, maxBytes: number, tooLarge: string, unreadable: string): Promise<FormData | NextResponse> {
+  const body = await readLimitedBody(request, maxBytes);
+  if (!body.ok) {
+    return body.reason === "too_large"
+      ? NextResponse.json({ error: tooLarge }, { status: 413 })
+      : NextResponse.json({ error: unreadable }, { status: 400 });
+  }
+  try {
+    return await new Response(body.bytes, { headers: { "content-type": request.headers.get("content-type") ?? "" } }).formData();
+  } catch {
+    return NextResponse.json({ error: unreadable }, { status: 400 });
+  }
+}
+
 export async function POST(request: Request, { params }: { params: Promise<{ action: string }> }) {
   const origin = request.headers.get("origin");
   if (!origin || origin !== new URL(request.url).origin) {
     return NextResponse.json({ error: "This request must come from Casevoya." }, { status: 403 });
   }
   const { action } = await params;
+  if (action !== "upload" && action !== "commit-documents" && !isMigrationAction(action)) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+  // Who may import is settled before any of the body is read.
+  const gate = await migrationRequestGate();
+  if ("error" in gate) return NextResponse.json({ error: gate.error }, { status: gate.status });
+
   if (action === "upload") {
     // MIG-01: a documents import sends its ZIP (up to 25 MB) with the manifest CSV.
-    const length = Number(request.headers.get("content-length") ?? 0);
-    if (length > 32 * 1024 * 1024) return NextResponse.json({ error: "The files are too large. Split them and import each part." }, { status: 413 });
-    let form: FormData;
-    try {
-      form = await request.formData();
-    } catch {
-      return NextResponse.json({ error: "Choose a CSV file." }, { status: 400 });
-    }
+    const form = await readForm(request, UPLOAD_MAX_BYTES, "The files are too large. Split them and import each part.", "Choose a CSV file.");
+    if (form instanceof NextResponse) return form;
     const org = form.get("organizationId");
     const file = form.get("file");
     const kind = form.get("kind");
     const zip = form.get("zip");
-    if (!(zip instanceof File) && file instanceof File && file.size > 5 * 1024 * 1024) {
+    if (!(zip instanceof File) && file instanceof File && file.size > MIGRATION_MAX_BYTES) {
       return NextResponse.json({ error: "The file is larger than 5 MB. Split it and import each part." }, { status: 413 });
     }
     return reply(
@@ -56,14 +88,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
     );
   }
   if (action === "commit-documents") {
-    const length = Number(request.headers.get("content-length") ?? 0);
-    if (length > 26 * 1024 * 1024) return NextResponse.json({ error: "The ZIP is larger than 25 MB." }, { status: 413 });
-    let form: FormData;
-    try {
-      form = await request.formData();
-    } catch {
-      return NextResponse.json({ error: "Choose the same ZIP you uploaded." }, { status: 400 });
-    }
+    const form = await readForm(request, DOCUMENTS_MAX_BYTES, "The ZIP is larger than 25 MB.", "Choose the same ZIP you uploaded.");
+    if (form instanceof NextResponse) return form;
     const org = form.get("org");
     const batch = form.get("batch");
     const zip = form.get("zip");
@@ -80,9 +106,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
     );
   }
   if (!isMigrationAction(action)) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  const read = await readLimitedBody(request, JSON_MAX_BYTES);
+  if (!read.ok) {
+    return read.reason === "too_large"
+      ? NextResponse.json({ error: "The request is too large." }, { status: 413 })
+      : NextResponse.json({ error: "Send JSON." }, { status: 400 });
+  }
   let body: unknown;
   try {
-    body = await request.json();
+    body = JSON.parse(new TextDecoder().decode(read.bytes));
   } catch {
     return NextResponse.json({ error: "Send JSON." }, { status: 400 });
   }

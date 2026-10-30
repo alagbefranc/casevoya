@@ -89,5 +89,8 @@ export function safeAccessError(message: string): string {
   if (/email is invalid/i.test(message)) {
     return "Enter a valid email address.";
   }
+  if (/invitation limit reached/i.test(message)) {
+    return "Too many invitations were sent recently. Please wait and try again later.";
+  }
   return "That action could not be completed.";
 }

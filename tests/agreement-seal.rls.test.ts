@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, queryInternal, type TestDb } from "./helpers/postgres";
 import { renderAgreementPdf, renderCertificatePdf, SEAL_RENDERER } from "@/modules/agreements/pdf-render";
 import { agreementTerms, parseSealSource } from "@/modules/agreements/seal-source";
 
@@ -128,7 +128,8 @@ async function envelope() {
   const sign = async (userId: string) => {
     await asUser(db, { userId, aal: "aal1", orgId });
     return (
-      await db.query<{ result: { status: string; seal_pending?: boolean } }>(
+      await queryInternal<{ result: { status: string; seal_pending?: boolean } }>(
+        db,
         `select app.sign_agreement($1, true, $2, $3::inet, $4) as result`,
         [envelopeId, `sign-${randomUUID()}`, IP, AGENT],
       )

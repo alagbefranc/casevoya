@@ -63,10 +63,11 @@ async function publicFirm(slug: string) {
  */
 async function submit(slug: string, viewer: string | null = null, key = randomUUID()) {
   await asServiceRole(db);
+  // A named viewer is at aal2 here (the server passes the session assurance, 20261031017000).
   const row = await db.query<{ r: { ok?: boolean; error?: string } }>(
     `select public.submit_enquiry($1, 'Wei Zhang', 'wei@example.test', 'email', 'Study', 'China', 'Mandarin', true,
-       'Synthetic Firm may use these details to reply to my enquiry', false, null, 'enquiry-v2', 'web_form', $2, $3, '{}'::jsonb, $4::uuid) as r`,
-    [slug, key, createHash("sha256").update(randomUUID()).digest("hex"), viewer],
+       'Synthetic Firm may use these details to reply to my enquiry', false, null, 'enquiry-v2', 'web_form', $2, $3, '{}'::jsonb, $4::uuid, $5::text) as r`,
+    [slug, key, createHash("sha256").update(randomUUID()).digest("hex"), viewer, viewer ? "aal2" : null],
   );
   return row.rows[0].r;
 }

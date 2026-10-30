@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, queryInternal, type TestDb } from "./helpers/postgres";
 import { pdfText } from "./helpers/pdf-text";
 import { renderAgreementPdf } from "@/modules/agreements/pdf-render";
 import { agreementTerms, parseSealSource } from "@/modules/agreements/seal-source";
@@ -194,17 +194,19 @@ describe("the Sheet's agreement flow", () => {
     // The applicant signs first in the portal, then the sponsor; the envelope completes.
     await asUser(db, { userId: ctx.sponsor, aal: "aal1", orgId: ctx.orgId });
     await expectDbError(
-      () => db.query(`select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `early-${randomUUID()}`, IP, AGENT]),
+      () => queryInternal(db, `select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `early-${randomUUID()}`, IP, AGENT]),
       /identity/i,
     );
     await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
-    const first = await db.query<{ result: { status: string } }>(
+    const first = await queryInternal<{ result: { status: string } }>(
+      db,
       `select app.sign_agreement($1, true, $2, $3::inet, $4) as result`,
       [envelopeId, `sign-${randomUUID()}`, IP, AGENT],
     );
     expect(first.rows[0].result.status).toBe("partially_signed");
     await asUser(db, { userId: ctx.sponsor, aal: "aal1", orgId: ctx.orgId });
-    const second = await db.query<{ result: { status: string } }>(
+    const second = await queryInternal<{ result: { status: string } }>(
+      db,
       `select app.sign_agreement($1, true, $2, $3::inet, $4) as result`,
       [envelopeId, `sign-${randomUUID()}`, IP, AGENT],
     );
@@ -283,7 +285,7 @@ describe("the Sheet's agreement flow", () => {
     const envelopeId = sent.rows[0].result.envelope_id;
     for (const userId of [ctx.client, ctx.sponsor]) {
       await asUser(db, { userId, aal: "aal1", orgId: ctx.orgId });
-      await db.query(`select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `sign-${randomUUID()}`, IP, AGENT]);
+      await queryInternal(db, `select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `sign-${randomUUID()}`, IP, AGENT]);
     }
 
     // The sealed-PDF renderer's input carries every term, and the PDF prints them.

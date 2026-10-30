@@ -2,6 +2,7 @@ import { safeAccessError } from "@/lib/auth/step-up";
 
 /** Maps database refusals to short portal copy. Never returns the raw message. */
 export function documentError(message: string): string {
+  if (/upload rate limit/i.test(message)) return "Too many uploads in the last hour. Try again later.";
   if (/version conflict/i.test(message)) return "Someone else updated this document. Refresh and try again.";
   if (/not on that matter/i.test(message)) return "That person isn’t on the matter you chose.";
   if (/passed its check/i.test(message)) return "Only a file that passed its check can be used on another matter.";

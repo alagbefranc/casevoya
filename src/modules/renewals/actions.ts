@@ -3,7 +3,7 @@
 import { safeAccessError } from "@/lib/auth/step-up";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
-import { storeServerCapture } from "@/modules/content-governance/server-capture";
+import { mayStoreServerCapture, NOT_FETCHED, storeServerCapture } from "@/modules/content-governance/server-capture";
 import { renewalError } from "@/modules/renewals/present";
 import { federalOfficialUrl, snapshotOfficialPage } from "@/modules/submissions/official-page";
 
@@ -118,7 +118,8 @@ export async function proposeRenewalTiming(
   if (days && !/^\d{1,4}$/.test(days)) return { error: renewalError("days before expiry must be") };
   const s = await session(input.organizationId);
   if ("error" in s) return { error: s.error };
-  const fetched = await snapshotOfficialPage(url, fetch);
+  // The firm membership is checked before any outbound fetch.
+  const fetched = (await mayStoreServerCapture(s.supabase, input.organizationId, s.userId)) ? await snapshotOfficialPage(url, fetch) : NOT_FETCHED;
   // The fetched page is stored by the server (service role); the entry names that capture.
   const stored = fetched.snapshot
     ? await storeServerCapture({

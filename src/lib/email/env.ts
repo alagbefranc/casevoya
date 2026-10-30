@@ -33,6 +33,8 @@ export function emailRuntimeConfig() {
     routingToken: process.env.CLOUDFLARE_ROUTING_API_TOKEN ?? "",
     routingReconcileSecret: process.env.EMAIL_ROUTING_RECONCILE_SECRET ?? "",
     dispatchSecret: process.env.EMAIL_DISPATCH_SECRET ?? "",
+    /** Optional scheduler bearer; when set it replaces EMAIL_DISPATCH_SECRET for route auth (cron-auth.ts). */
+    cronSecret: process.env.CRON_SECRET ?? "",
     inboundSecret: process.env.EMAIL_INBOUND_WEBHOOK_SECRET ?? "",
     serviceKey: process.env.SUPABASE_SECRET_KEY ?? "",
   };

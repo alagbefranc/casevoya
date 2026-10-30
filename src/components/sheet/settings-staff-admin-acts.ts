@@ -18,6 +18,7 @@ import {
   type OffboardFacts,
 } from "@/modules/sheet/settings-staff-admin-present";
 import { stepUpHref } from "@/lib/auth/mfa-step";
+import { escapeHtml } from "@/lib/html";
 
 /**
  * Settings > Team and seats: the Designer's Offboard dialog (#dlgOff, press and hold), and the live
@@ -56,10 +57,6 @@ function select(root: ParentNode, id: string): HTMLSelectElement | null {
 /** "Grace Lin" from the Person option "Grace Lin · Licensed consultant" (the separator is a span). */
 function optionName(option: HTMLOptionElement | undefined): string {
   return (option?.textContent ?? "").split(/\s{2,}/)[0]?.trim() ?? "";
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
 }
 
 // ---------------------------------------------------------------------------

@@ -104,6 +104,18 @@ describe("scanner client (src/modules/documents/virus-scan.ts)", () => {
     expect(avScannerTransport({})).toBeNull();
     if (saved !== undefined) process.env.AV_SCANNER_URL = saved;
   });
+
+  it("refuses the dev URL in production and plain http to another host", () => {
+    expect(avScannerTransport({ AV_SCANNER_URL: "https://scanner.example", NODE_ENV: "production" })).toBeNull();
+    expect(avScannerTransport({ AV_SCANNER_URL: "http://localhost:8080", NODE_ENV: "production" })).toBeNull();
+    expect(avScannerTransport({ AV_SCANNER_URL: "http://scanner.example" })).toBeNull();
+    expect(avScannerTransport({ AV_SCANNER_URL: "ftp://scanner.example" })).toBeNull();
+    expect(avScannerTransport({ AV_SCANNER_URL: "https://scanner.example" })).not.toBeNull();
+    expect(avScannerTransport({ AV_SCANNER_URL: "http://127.0.0.1:8080" })).not.toBeNull();
+    // The binding is still used in production.
+    const fetcher = { fetch: vi.fn(async () => json(200, { result: "clean" })) };
+    expect(avScannerTransport({ AV_SCANNER: fetcher, NODE_ENV: "production" })).not.toBeNull();
+  });
 });
 
 function deps(over: Partial<ScanRunnerDeps> & { claims?: unknown } = {}) {

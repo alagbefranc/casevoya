@@ -1,3 +1,4 @@
+import { isAcceptableEmail } from "@/lib/auth/invitations";
 import { isIsoCountry } from "@/lib/iso-country";
 
 /**
@@ -27,7 +28,8 @@ const MAX: Record<(typeof FIRM_DETAIL_KEYS)[number], number> = {
 };
 
 const REQUIRED = new Set(["legal_name", "display_name", "billing_contact_name", "billing_contact_email", "privacy_contact_name", "privacy_contact_email"]);
-const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+/** Same rule as app.normalize_email: one address, no markup or quoting characters. */
+const EMAIL = { test: (value: string) => isAcceptableEmail(value.toLowerCase()) };
 
 export function firmDetailChanges(fields: Record<string, unknown>): { changes: Record<string, string> } | { error: string } {
   const changes: Record<string, string> = {};

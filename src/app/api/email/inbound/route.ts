@@ -3,6 +3,7 @@ import { verifyPayload } from "@/modules/email/sign";
 import type { InboundAttachment, InboundPayload } from "@/modules/email/inbound";
 import { emailRuntimeConfig } from "@/lib/email/env";
 import { runInboundEmail } from "@/modules/email/run-inbound";
+import { inboundResultStatus, readBodyWithLimit } from "@/modules/email/inbound-body";
 
 function asPayload(value: unknown): InboundPayload | null {
   if (!value || typeof value !== "object") return null;
@@ -42,7 +43,11 @@ export async function POST(request: Request) {
   if (!config.inboundSecret || !config.serviceKey) {
     return NextResponse.json({ error: "Inbound email is not configured." }, { status: 503 });
   }
-  const body = await request.text();
+  const read = await readBodyWithLimit(request);
+  if (!read.ok) {
+    return NextResponse.json({ error: read.status === 413 ? "Message is too large." : "Bad request." }, { status: read.status });
+  }
+  const body = read.text;
   const timestamp = request.headers.get("x-casevoya-timestamp") ?? "";
   const signature = request.headers.get("x-casevoya-signature") ?? "";
   const valid = await verifyPayload(config.inboundSecret, timestamp, body, signature);
@@ -60,8 +65,9 @@ export async function POST(request: Request) {
   }
   try {
     const result = await runInboundEmail(payload);
-    const status = result.status === "unknown_firm" || result.status === "reserved" || result.status === "bad_address" ? 422 : 200;
-    return NextResponse.json(result, { status });
+    const status = inboundResultStatus(result.status);
+    const headers: Record<string, string> = status === 429 ? { "retry-after": "3600" } : {};
+    return NextResponse.json(result, { status, headers });
   } catch {
     return NextResponse.json({ error: "Inbound email failed." }, { status: 500 });
   }

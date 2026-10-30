@@ -35,7 +35,7 @@ export async function runInboundEmail(payload: InboundPayload) {
   return processInboundEmail(payload, {
     domain: config.inboundDomain,
     async begin(input) {
-      const { data, error } = await supabase.rpc("begin_verified_inbound_message", {
+      const { data, error } = await supabase.rpc("begin_inbound_message_with_digest", {
         p_to: input.to,
         p_from: input.from,
         p_message_id: input.messageId,
@@ -44,6 +44,7 @@ export async function runInboundEmail(payload: InboundPayload) {
         p_html: input.html ?? "",
         p_domain: input.domain,
         p_sender_verified: input.senderVerified === true,
+        p_content_digest: input.contentDigest,
       });
       if (error) throw new Error(error.message);
       return asBegin(data);
@@ -59,11 +60,12 @@ export async function runInboundEmail(payload: InboundPayload) {
       return asIntent(data);
     },
     async completeUpload(input) {
-      const { error } = await supabase.rpc("complete_email_upload", {
+      const { error } = await supabase.rpc("complete_verified_email_upload", {
         p_inbound_id: input.inboundId,
         p_ordinal: input.ordinal,
         p_sha256: input.sha256,
-        p_header_hex: input.headerHex,
+        p_byte_size: input.byteSize,
+        p_detected_media_type: input.mediaType,
       });
       if (error) throw new Error(error.message);
     },
@@ -95,6 +97,10 @@ export async function runInboundEmail(payload: InboundPayload) {
     },
     async finishMessage(inboundId) {
       const { error } = await supabase.rpc("finish_inbound_attachments", { p_inbound_id: inboundId });
+      if (error) throw new Error(error.message);
+    },
+    async abandonMessage(inboundId, reason) {
+      const { error } = await supabase.rpc("abandon_inbound_attachments", { p_inbound_id: inboundId, p_reason: reason });
       if (error) throw new Error(error.message);
     },
   });

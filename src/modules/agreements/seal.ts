@@ -1,4 +1,5 @@
 import "server-only";
+import { redactedMessage } from "@/lib/log/redact";
 import { createServiceClient } from "@/lib/supabase/service";
 import { renderAgreementPdf, renderCertificatePdf, SEAL_RENDERER, type FirmLogo } from "@/modules/agreements/pdf-render";
 import { parseSealSource, sha256Hex, type SealSource } from "@/modules/agreements/seal-source";
@@ -72,7 +73,7 @@ export async function sealEnvelope(envelopeId: string, client?: ServiceClient): 
     if (!stored) return { ok: false, reason: "failed" };
     return { ok: true, attached: result.attached === true, sealedSha256: stored };
   } catch (cause) {
-    console.error("agreement seal failed", { envelopeId, message: cause instanceof Error ? cause.message : "unknown" });
+    console.error("agreement seal failed", { envelopeId, message: redactedMessage(cause) });
     return { ok: false, reason: "failed" };
   }
 }

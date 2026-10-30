@@ -75,20 +75,22 @@ async function localStart(days: number, time = "10:00"): Promise<string> {
 
 const HOLD_10 = `select public.booking_public_hold($1, 'initial', $2::timestamptz, 'Sam Example', 'sam@example.test', null, 'UTC', $3, $4, $5::uuid) as r`;
 const HOLD_9 = `select public.booking_public_hold($1, 'initial', $2::timestamptz, 'Sam Example', 'sam@example.test', null, 'UTC', $3, $4) as r`;
+const HOLD_11 = `select public.booking_public_hold($1, 'initial', $2::timestamptz, 'Sam Example', 'sam@example.test', null, 'UTC', $3, $4, $5::uuid, $6) as r`;
 
-/** As the service role (the app server). */
-async function hold(ctx: Firm, start: string, hash: string | null, viewer: string | null = null) {
+/** As the service role (the app server), naming the viewer and their session assurance. */
+async function hold(ctx: Firm, start: string, hash: string | null, viewer: string | null = null, aal: string | null = viewer ? "aal2" : null) {
   await asServiceRole(db);
-  return (await db.query<{ r: { status?: string; error?: string; practice?: boolean; public_ref?: string } }>(HOLD_10, [ctx.slug, start, randomUUID(), hash, viewer])).rows[0].r;
+  return (await db.query<{ r: { status?: string; error?: string; practice?: boolean; public_ref?: string } }>(HOLD_11, [ctx.slug, start, randomUUID(), hash, viewer, aal])).rows[0].r;
 }
 
 const ENQUIRY_ARGS = `$1, 'Wei Zhang', 'wei@example.test', 'email', 'Study', 'China', 'Mandarin', true,
   'Synthetic Firm may use these details to reply to my enquiry', false, null, 'enquiry-v2', 'web_form', $2, $3`;
 
-async function enquire(ctx: Firm, hash: string | null, viewer: string | null = null) {
+async function enquire(ctx: Firm, hash: string | null, viewer: string | null = null, aal: string | null = viewer ? "aal2" : null) {
   await asServiceRole(db);
-  return (await db.query<{ r: { ok?: boolean; error?: string } }>(`select public.submit_enquiry(${ENQUIRY_ARGS}, '{}'::jsonb, $4::uuid) as r`, [ctx.slug, randomUUID(), hash, viewer]))
-    .rows[0].r;
+  return (
+    await db.query<{ r: { ok?: boolean; error?: string } }>(`select public.submit_enquiry(${ENQUIRY_ARGS}, '{}'::jsonb, $4::uuid, $5::text) as r`, [ctx.slug, randomUUID(), hash, viewer, aal])
+  ).rows[0].r;
 }
 
 describe("public hold and enquiry: service role only", () => {
@@ -106,6 +108,7 @@ describe("public hold and enquiry: service role only", () => {
       await expectDbError(() => db.query(`select public.submit_enquiry(${ENQUIRY_ARGS})`, [ctx.slug, randomUUID(), hashOf()]), /permission denied/);
       await expectDbError(() => db.query(`select public.submit_enquiry(${ENQUIRY_ARGS}, '{}'::jsonb)`, [ctx.slug, randomUUID(), hashOf()]), /permission denied/);
       await expectDbError(() => db.query(`select public.submit_enquiry(${ENQUIRY_ARGS}, '{}'::jsonb, null::uuid)`, [ctx.slug, randomUUID(), hashOf()]), /permission denied/);
+      await expectDbError(() => db.query(`select public.submit_enquiry(${ENQUIRY_ARGS}, '{}'::jsonb, null::uuid, 'aal2')`, [ctx.slug, randomUUID(), hashOf()]), /permission denied/);
       await asMaintenance(db);
       expect((await db.query(`select 1 from public.booking_hold_attempts where organization_id = $1`, [ctx.orgId])).rows, who).toHaveLength(0);
     }
@@ -189,9 +192,39 @@ describe("the viewer named by the server", () => {
       await asServiceRole(db);
       await expectDbError(() => db.query(HOLD_10, [ctx.slug, start, randomUUID(), hashOf(), viewer]), /booking type not found/);
     }
+    // 20261031017000 (R2-06): staff without staff MFA on their session are not shown the page.
+    for (const aal of [null, "aal1", "AAL2", "passkey"]) {
+      await asServiceRole(db);
+      await expectDbError(() => db.query(HOLD_11, [ctx.slug, start, randomUUID(), hashOf(), ctx.host, aal]), /booking type not found/);
+      await expectDbError(() => db.query(HOLD_10, [ctx.slug, start, randomUUID(), hashOf(), ctx.host]), /booking type not found/);
+    }
     expect(await hold(ctx, start, hashOf(), ctx.host)).toMatchObject({ status: "confirmed", practice: true });
+    expect(await hold(ctx, await localStart(4), hashOf(), ctx.host, "mfa")).toMatchObject({ status: "confirmed", practice: true });
     await asMaintenance(db);
-    expect((await db.query<{ is_sample: boolean }>(`select is_sample from public.bookings where organization_id = $1`, [ctx.orgId])).rows).toEqual([{ is_sample: true }]);
+    expect((await db.query<{ is_sample: boolean }>(`select is_sample from public.bookings where organization_id = $1`, [ctx.orgId])).rows).toEqual([{ is_sample: true }, { is_sample: true }]);
+  });
+
+  it("links a client with a second step only at the assurance app.session_assurance_ok accepts", async () => {
+    const ctx = await firm();
+    const client = await createUser("client");
+    await asMaintenance(db);
+    await db.query(`insert into public.memberships (organization_id, user_id, role, status, accepted_at) values ($1, $2, 'client', 'active', now())`, [ctx.orgId, client]);
+    await db.query(`insert into auth.mfa_factors (id, user_id, factor_type, status) values ($1, $2, 'totp', 'verified')`, [randomUUID(), client]);
+    const person = (
+      await db.query<{ id: string }>(`insert into public.persons (organization_id, user_id, display_name, email) values ($1, $2, 'Synthetic Client', 'c2@example.test') returning id`, [
+        ctx.orgId,
+        client,
+      ])
+    ).rows[0].id;
+    const unassured = await hold(ctx, await localStart(9), hashOf(), client, "aal1");
+    const passkey = await hold(ctx, await localStart(10), hashOf(), client, "mfa");
+    const totp = await hold(ctx, await localStart(11), hashOf(), client, "aal2");
+    await asMaintenance(db);
+    const rows = await db.query<{ public_ref: string; person_id: string | null }>(`select public_ref, person_id from public.bookings where organization_id = $1`, [ctx.orgId]);
+    const byRef = Object.fromEntries(rows.rows.map((row) => [row.public_ref, row.person_id]));
+    expect(byRef[unassured.public_ref!]).toBeNull();
+    expect(byRef[passkey.public_ref!]).toBe(person);
+    expect(byRef[totp.public_ref!]).toBe(person);
   });
 
   it("links a signed-in portal client's booking to their own person only", async () => {
@@ -219,6 +252,13 @@ describe("the viewer named by the server", () => {
     const other = await firm();
     expect(await enquire(ctx, hashOf())).toEqual({ error: "form_unavailable" });
     expect(await enquire(ctx, hashOf(), other.owner)).toEqual({ error: "form_unavailable" });
+    // 20261031017000 (R2-06): staff MFA on the visitor's session is required.
+    expect(await enquire(ctx, hashOf(), ctx.host, "aal1")).toEqual({ error: "form_unavailable" });
+    expect(await enquire(ctx, hashOf(), ctx.host, null)).toEqual({ error: "form_unavailable" });
+    await asServiceRole(db);
+    expect((await db.query<{ r: unknown }>(`select public.submit_enquiry(${ENQUIRY_ARGS}, '{}'::jsonb, $4::uuid) as r`, [ctx.slug, randomUUID(), hashOf(), ctx.host])).rows[0].r).toEqual({
+      error: "form_unavailable",
+    });
     expect(await enquire(ctx, hashOf(), ctx.host)).toEqual({ ok: true });
     await asMaintenance(db);
     const audit = await db.query<{ actor_user_id: string; sample: boolean }>(

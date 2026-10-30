@@ -289,7 +289,7 @@ export const MATTER_EVENT: Record<string, { title: string; source: string; dot: 
   "deadline.confirmed": { title: "Deadline confirmed", source: "Deadlines", dot: "#2e9d5b", badge: { tone: "ok", label: "Confirmed" } },
 };
 
-const ACTOR: Record<string, string> = { user: "Signed-in user", system: "Casevoya", service: "Casevoya" };
+const ACTOR: Record<string, string> = { user: "Signed-in user", system: "Casevoya", service: "Casevoya", public: "Public visitor" };
 
 export function actorLabel(actorType: string): string {
   return ACTOR[actorType] ?? "Casevoya";

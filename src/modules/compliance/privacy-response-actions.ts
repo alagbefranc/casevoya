@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
-import { storeServerCapture } from "@/modules/content-governance/server-capture";
+import { mayStoreServerCapture, NOT_FETCHED, storeServerCapture } from "@/modules/content-governance/server-capture";
 import { federalOfficialUrl, snapshotOfficialPage } from "@/modules/submissions/official-page";
 import { readDate } from "./format";
 import { privacyResponseError } from "./privacy-response-format";
@@ -49,7 +49,8 @@ export async function proposePrivacyTimeLimit(input: {
   if (text(input.currentTo) && !currentTo) return { error: "Enter the current-to date as DD/MM/YYYY, or leave it empty." };
   const auth = await session(input.organizationId);
   if (!auth.supabase) return { error: auth.error ?? "Sign in first." };
-  const fetched = await snapshotOfficialPage(url, fetch);
+  // The firm membership is checked before any outbound fetch.
+  const fetched = (await mayStoreServerCapture(auth.supabase, input.organizationId, auth.userId)) ? await snapshotOfficialPage(url, fetch) : NOT_FETCHED;
   // The fetched page is stored by the server (service role); the entry names that capture.
   const stored = fetched.snapshot
     ? await storeServerCapture({

@@ -121,7 +121,7 @@ type StaffSupabase = Awaited<ReturnType<typeof createClient>>;
 async function refundCardPayment(
   supabase: StaffSupabase,
   organizationId: string,
-  input: { paymentId: string; amountCents: number; reason: string | null; idempotencyKey: string },
+  input: { paymentId: string; amountCents: number; reason: string | null; idempotencyKey: string; creditId?: string },
 ): Promise<{ id: string } | { error: string }> {
   const context = await supabase.rpc("invoice_refund_context", { p_payment_id: input.paymentId });
   if (context.error) return { error: refundError(context.error.message) };
@@ -131,14 +131,21 @@ async function refundCardPayment(
   const stripe = stripeServer();
   if (!stripe) return { error: NOT_CONFIGURED };
   // Hold the amount in the database (payment locked, other holds counted) before Stripe is called.
-  const reserved = await supabase.rpc("reserve_invoice_refund", {
+  // A client credit's refund is held against the credit too (credit locked, its holds counted).
+  const hold = {
     p_payment_id: input.paymentId,
     p_amount_cents: input.amountCents,
     p_currency: payment.currency,
     p_livemode: stripeLive(),
     p_idempotency_key: input.idempotencyKey,
-  });
-  if (reserved.error) return { error: refundError(reserved.error.message) };
+  };
+  const reserved = input.creditId
+    ? await supabase.rpc("reserve_client_credit_refund", { ...hold, p_credit_id: input.creditId })
+    : await supabase.rpc("reserve_invoice_refund", hold);
+  if (reserved.error) {
+    const message = reserved.error.message;
+    return { error: /credit/i.test(message) ? creditError(message) : refundError(message) };
+  }
   if (typeof reserved.data !== "string") return { error: "The refund wasn’t recorded. Try again." };
   const reservationId = reserved.data;
   let refundId: string;
@@ -230,6 +237,7 @@ export async function moveClientCredit(
     amountCents: credit.amountCents,
     reason: "requested_by_customer",
     idempotencyKey: input.idempotencyKey,
+    creditId: credit.creditId,
   });
   if ("error" in refunded) return refunded;
   const linked = await supabase.rpc("link_client_credit_refund", { p_credit_id: credit.creditId, p_refund_id: refunded.id });

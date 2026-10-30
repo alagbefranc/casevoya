@@ -183,6 +183,7 @@ describe("inbound orchestration", () => {
         puts.push(input.key);
       },
       finishMessage: async () => undefined,
+      abandonMessage: async () => undefined,
     });
     const known = await processInboundEmail(
       {
@@ -222,9 +223,94 @@ describe("inbound orchestration", () => {
           puts.push(input.key);
         },
         finishMessage: async () => undefined,
+        abandonMessage: async () => undefined,
       },
     );
     expect(result.status).toBe("duplicate");
     expect(puts).toEqual([]);
+  });
+});
+
+describe("inbound resume binding and attachment close-out", () => {
+  const pdf = Buffer.from("%PDF-1.4\n%synthetic\n");
+  const zip = Buffer.from([0x50, 0x4b, 0x03, 0x04, ...new Array(40).fill(0)]);
+
+  function linkedDeps(over: Partial<InboundDeps> = {}) {
+    const calls = {
+      digests: [] as string[],
+      completed: [] as { mediaType: string | null; byteSize: number; sha256: string }[],
+      abandoned: [] as string[],
+      finished: 0,
+    };
+    const deps: InboundDeps = {
+      domain: "docs.casevoya.ca",
+      begin: async (input) => {
+        calls.digests.push(input.contentDigest);
+        return { status: "accepted", inbound_email_id: "mail-1", matter_id: "matter-1", person_id: "person-1" };
+      },
+      createIntent: async () => ({ storage_key: "org/quarantine/version/key", declared_media_type: "application/pdf" }),
+      completeUpload: async (input) => {
+        calls.completed.push({ mediaType: input.mediaType, byteSize: input.byteSize, sha256: input.sha256 });
+      },
+      openUnsorted: async () => ({ storage_key: "org/inbox/item/key" }),
+      finishUnsorted: async () => undefined,
+      putObject: async () => undefined,
+      finishMessage: async () => {
+        calls.finished += 1;
+      },
+      abandonMessage: async (_id, reason) => {
+        calls.abandoned.push(reason);
+      },
+      ...over,
+    };
+    return { deps, calls };
+  }
+
+  const message = (subject: string, files: Buffer[]) => ({
+    from: "client@example.test",
+    to: "northline@docs.casevoya.ca",
+    messageId: "<m@example.test>",
+    subject,
+    text: "Please file these.",
+    attachments: files.map((bytes, index) => ({ filename: `file${index}.pdf`, mimeType: "application/pdf", contentBase64: bytes.toString("base64") })),
+  });
+
+  it("passes a digest of subject, text and attachment hashes that changes with the content", async () => {
+    const { deps, calls } = linkedDeps();
+    await processInboundEmail(message("Passport", [pdf]), deps);
+    await processInboundEmail(message("Passport", [pdf]), deps);
+    await processInboundEmail(message("Passport", [zip]), deps);
+    await processInboundEmail(message("Other", [pdf]), deps);
+    expect(calls.digests[0]).toMatch(/^[0-9a-f]{64}$/);
+    expect(calls.digests[1]).toBe(calls.digests[0]);
+    expect(calls.digests[2]).not.toBe(calls.digests[0]);
+    expect(calls.digests[3]).not.toBe(calls.digests[0]);
+  });
+
+  it("completes with server-measured values; a plain ZIP has no media type", async () => {
+    const { deps, calls } = linkedDeps();
+    await processInboundEmail(message("Files", [pdf, zip]), deps);
+    expect(calls.completed.map((row) => row.mediaType)).toEqual(["application/pdf", null]);
+    expect(calls.completed[0].byteSize).toBe(pdf.byteLength);
+    expect(calls.finished).toBe(1);
+  });
+
+  it("closes the message when an attachment step fails", async () => {
+    const failing = linkedDeps({
+      createIntent: async () => {
+        throw new Error("file is above the upload limit");
+      },
+    });
+    await expect(processInboundEmail(message("Files", [pdf]), failing.deps)).rejects.toThrow(/upload limit/);
+    expect(failing.calls.abandoned).toEqual(["attachment_error"]);
+    expect(failing.calls.finished).toBe(0);
+
+    const capped = linkedDeps({
+      createIntent: async () => {
+        throw new Error("inbound attachment limit reached for this hour");
+      },
+    });
+    expect(await processInboundEmail(message("Files", [pdf]), capped.deps)).toEqual({ status: "attachments_refused" });
+    expect(capped.calls.abandoned).toEqual(["attachment_limit"]);
   });
 });

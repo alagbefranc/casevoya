@@ -4,7 +4,8 @@
  * The capture script uses the same hash (claim-capture.ts).
  */
 import { createHash } from "node:crypto";
-import { federalHost, hashableBytes, lawSectionText, textOf, type PageDates } from "./claim-capture";
+import { hashableBytes, lawSectionText, textOf, type PageDates } from "./claim-capture";
+import { fetchOfficialPage as fetchPage, type FetchLike, type OfficialFetch } from "./official-fetch";
 
 export type DueClaim = {
   definition_id: string;
@@ -130,38 +131,21 @@ export function hashPage(bytes: Uint8Array, contentType: string | null): { sha25
   return { sha256, html };
 }
 
-type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+/**
+ * Follow redirects only while every hop stays on an official federal host on the allowlist, with
+ * a streamed size cap (official-fetch.ts).
+ */
+export function fetchOfficialPage(url: string, fetchImpl: FetchLike = fetch): Promise<OfficialFetch> {
+  return fetchPage(url, fetchImpl, { maxBytes: MAX_BYTES, maxHops: MAX_HOPS, timeoutMs: 25_000, userAgent: "Casevoya source re-check" });
+}
 
-/** Follow redirects only while every hop stays on an official federal host. */
-export async function fetchOfficialPage(url: string, fetchImpl: FetchLike = fetch): Promise<
-  | { ok: true; status: number; finalUrl: string; contentType: string | null; bytes: Uint8Array }
-  | { ok: false; result: "failed" | "blocked"; code: string; status: number | null; finalUrl: string }
-> {
-  let current = url;
-  for (let hop = 0; hop <= MAX_HOPS; hop += 1) {
-    if (!federalHost(current)) return { ok: false, result: "blocked", code: "off_allowlist", status: null, finalUrl: current };
-    let response: Response;
-    try {
-      response = await fetchImpl(current, {
-        redirect: "manual",
-        signal: AbortSignal.timeout(25_000),
-        headers: { accept: "text/html,application/pdf", "user-agent": "Casevoya source re-check" },
-      });
-    } catch {
-      return { ok: false, result: "failed", code: "fetch_failed", status: null, finalUrl: current };
-    }
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get("location");
-      if (!location) return { ok: false, result: "failed", code: "redirect_without_location", status: response.status, finalUrl: current };
-      current = new URL(location, current).toString();
-      continue;
-    }
-    if (response.status !== 200) return { ok: false, result: "failed", code: `http_${response.status}`, status: response.status, finalUrl: current };
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > MAX_BYTES) return { ok: false, result: "failed", code: "too_large", status: response.status, finalUrl: current };
-    return { ok: true, status: response.status, finalUrl: current, contentType: response.headers.get("content-type"), bytes };
+/** True when the page that answered is on another host than the source's own (the database records only the same host). */
+export function movedOffHost(sourceUrl: string, finalUrl: string): boolean {
+  try {
+    return new URL(sourceUrl).hostname.replace(/\.$/, "") !== new URL(finalUrl).hostname.replace(/\.$/, "");
+  } catch {
+    return true;
   }
-  return { ok: false, result: "failed", code: "too_many_redirects", status: null, finalUrl: current };
 }
 
 export function isDueSource(value: unknown): value is DueSource {

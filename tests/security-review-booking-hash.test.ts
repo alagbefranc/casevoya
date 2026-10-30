@@ -45,15 +45,25 @@ describe("publicDeps", () => {
     expect(serviceRpc).not.toHaveBeenCalled();
   });
 
-  it("holds through the service role, naming the signed-in visitor", async () => {
+  it("holds through the service role, naming the signed-in visitor and their session assurance", async () => {
     serviceRpc.mockResolvedValue({ data: { public_ref: "x" }, error: null });
+    sessionRpc.mockResolvedValue({ data: false, error: null });
     sub = VIEWER;
     const { publicDeps } = await import("@/modules/scheduling/public-deps");
     await (await publicDeps()).hold(ARGS);
-    expect(sessionRpc).not.toHaveBeenCalled();
+    // Below aal2, the staff MFA rule is asked on the visitor's own session.
+    expect(sessionRpc).toHaveBeenCalledWith("session_mfa_satisfied");
     expect(serviceRpc).toHaveBeenCalledWith("booking_public_hold", { ...ARGS, p_viewer: VIEWER, p_viewer_aal: "aal1" });
+    sessionRpc.mockResolvedValue({ data: true, error: null });
+    await (await publicDeps()).hold(ARGS);
+    expect(serviceRpc).toHaveBeenLastCalledWith("booking_public_hold", { ...ARGS, p_viewer: VIEWER, p_viewer_aal: "mfa" });
+    sessionRpc.mockResolvedValue({ data: true, error: { message: "failed" } });
+    await (await publicDeps()).hold(ARGS);
+    expect(serviceRpc).toHaveBeenLastCalledWith("booking_public_hold", { ...ARGS, p_viewer: VIEWER, p_viewer_aal: "aal1" });
+    sessionRpc.mockClear();
     aal = "aal2";
     await (await publicDeps()).hold(ARGS);
+    expect(sessionRpc).not.toHaveBeenCalled();
     expect(serviceRpc).toHaveBeenLastCalledWith("booking_public_hold", { ...ARGS, p_viewer: VIEWER, p_viewer_aal: "aal2" });
   });
 

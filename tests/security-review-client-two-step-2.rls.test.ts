@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, queryInternal, type TestDb } from "./helpers/postgres";
 import { publishTestPrivacyNotice } from "./helpers/privacy-notice";
 
 /**
@@ -150,7 +150,7 @@ async function agreementView(agreementId: string, envelopeId: string) {
 }
 
 const sign = (envelopeId: string) =>
-  db.query<{ result: { status: string } }>(`select app.sign_agreement($1, true, $2, $3::inet, $4) as result`, [
+  queryInternal<{ result: { status: string } }>(db, `select app.sign_agreement($1, true, $2, $3::inet, $4) as result`, [
     envelopeId,
     `sign-${randomUUID()}`,
     IP,
@@ -168,7 +168,7 @@ describe("e-sign: the client signer needs their second step", () => {
     expect(gate.rows[0].ok).toBe(false);
     await expectDbError(() => sign(envelopeId), /two-step/);
     await expectDbError(
-      () => db.query(`select app.decline_agreement($1, $2, $3::inet, $4)`, [envelopeId, `decline-${randomUUID()}`, IP, AGENT]),
+      () => queryInternal(db, `select app.decline_agreement($1, $2, $3::inet, $4)`, [envelopeId, `decline-${randomUUID()}`, IP, AGENT]),
       /two-step/,
     );
     await asMaintenance(db);

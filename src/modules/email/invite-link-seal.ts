@@ -4,7 +4,9 @@
  * the mail worker opens it with the same server secret. AES-256-GCM through Web Crypto (it runs
  * in the Cloudflare Worker), with the key derived by HKDF-SHA-256 from EMAIL_DISPATCH_SECRET.
  * The invitation id is the additional authenticated data, so a sealed link only opens for the
- * invitation it was made for.
+ * invitation it was made for. The HKDF salt/info below are specific to sealing; the scheduler
+ * bearer uses its own (cron-auth.ts), so a bearer is never a sealing key. Changing SALT/INFO would
+ * stop already-sealed links and codes from opening, so they stay as they are.
  *
  * Output: base64(iv[12] || ciphertext+tag).
  */

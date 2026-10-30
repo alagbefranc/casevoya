@@ -3161,6 +3161,7 @@ export type Database = {
           hits: number
           hour_bucket: string
           organization_id: string
+          rejected: number
           updated_at: string
           version: number
         }
@@ -3170,6 +3171,7 @@ export type Database = {
           hits?: number
           hour_bucket: string
           organization_id: string
+          rejected?: number
           updated_at?: string
           version?: number
         }
@@ -3179,12 +3181,60 @@ export type Database = {
           hits?: number
           hour_bucket?: string
           organization_id?: string
+          rejected?: number
           updated_at?: string
           version?: number
         }
         Relationships: [
           {
             foreignKeyName: "email_inbound_windows_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_inbound_sender_windows: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          hits: number
+          organization_id: string
+          rejected: number
+          scope: string
+          sender_key: string
+          updated_at: string
+          version: number
+          window_start: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          hits?: number
+          organization_id: string
+          rejected?: number
+          scope: string
+          sender_key: string
+          updated_at?: string
+          version?: number
+          window_start: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          hits?: number
+          organization_id?: string
+          rejected?: number
+          scope?: string
+          sender_key?: string
+          updated_at?: string
+          version?: number
+          window_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_inbound_sender_windows_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -13914,6 +13964,10 @@ export type Database = {
         Args: { p_org?: string | null }
         Returns: Json
       }
+      abandon_inbound_attachments: {
+        Args: { p_inbound_id: string; p_reason: string }
+        Returns: undefined
+      }
       accept_invitation: { Args: { token: string }; Returns: string }
       accept_portal_invitation: {
         Args: { p_payload: Json; p_token: string }
@@ -14188,6 +14242,20 @@ export type Database = {
         }
         Returns: Json
       }
+      begin_inbound_message_with_digest: {
+        Args: {
+          p_content_digest: string
+          p_domain: string
+          p_from: string
+          p_html: string
+          p_message_id: string
+          p_sender_verified: boolean
+          p_subject: string
+          p_text: string
+          p_to: string
+        }
+        Returns: Json
+      }
       begin_migration_commit: {
         Args: { p_batch: string; p_org: string; p_plan_hash: string }
         Returns: Json
@@ -14287,6 +14355,10 @@ export type Database = {
       }
       pin_matter_shared_template: {
         Args: { p_matter_id: string; p_template_id: string }
+        Returns: Json
+      }
+      platform_step_up_check: {
+        Args: never
         Returns: Json
       }
       save_firm_template_override: {
@@ -14596,6 +14668,11 @@ export type Database = {
       service_store_page_capture: {
         Args: { p_actor: string; p_org: string; p_snapshot: Json; p_source_url: string; p_title: string }
         Returns: string
+      }
+      // 20261031010000_server_captures_issuers_estimates.sql. Service role only.
+      service_record_issuer_name_on_page: {
+        Args: { p_actor: string; p_issuer_id: string; p_name_on_page: boolean; p_org: string }
+        Returns: boolean
       }
       record_source_conflict: {
         Args: { p_definition_id: string; p_left_evidence: string; p_reason: string; p_right_evidence: string }
@@ -14995,6 +15072,16 @@ export type Database = {
       complete_unsorted_assignment: {
         Args: { p_item_id: string }
         Returns: undefined
+      }
+      complete_verified_email_upload: {
+        Args: {
+          p_byte_size: number
+          p_detected_media_type: string | null
+          p_inbound_id: string
+          p_ordinal: number
+          p_sha256: string
+        }
+        Returns: Json
       }
       confirm_deadline: {
         Args: { p_deadline_id: string; p_expected_version: number }
@@ -16401,19 +16488,31 @@ export type Database = {
         Args: { p_request_id: string }
         Returns: Json
       }
-      propose_government_issuer: {
-        Args: {
-          p_checked_on: string
-          p_modified_on: string | null
-          p_name: string
-          p_name_on_page: boolean | null
-          p_org: string
-          p_retrieved_at: string | null
-          p_sha256: string | null
-          p_source_url: string
-        }
-        Returns: string
-      }
+      propose_government_issuer:
+        | {
+            Args: {
+              p_checked_on: string
+              p_modified_on: string | null
+              p_name: string
+              p_name_on_page: boolean | null
+              p_org: string
+              p_retrieved_at: string | null
+              p_sha256: string | null
+              p_source_url: string
+            }
+            Returns: string
+          }
+        | {
+            // 20261031010000_server_captures_issuers_estimates.sql: p_snapshot is {snapshot_id} of a server capture.
+            Args: {
+              p_checked_on: string
+              p_name: string
+              p_org: string
+              p_snapshot: Json | null
+              p_source_url: string
+            }
+            Returns: string
+          }
       public_privacy_notice: { Args: { p_firm_slug: string }; Returns: Json }
       publish_intake_draft: {
         Args: { p_expected_version: number; p_template_id: string }
@@ -16624,18 +16723,31 @@ export type Database = {
         }
         Returns: string
       }
-      record_processing_estimate: {
-        Args: {
-          p_application_type: string
-          p_checked_on: string
-          p_estimate: string
-          p_matter_id: string
-          p_retrieved_at: string | null
-          p_sha256: string | null
-          p_source_url: string
-        }
-        Returns: string
-      }
+      record_processing_estimate:
+        | {
+            Args: {
+              p_application_type: string
+              p_checked_on: string
+              p_estimate: string
+              p_matter_id: string
+              p_retrieved_at: string | null
+              p_sha256: string | null
+              p_source_url: string
+            }
+            Returns: string
+          }
+        | {
+            // 20261031010000_server_captures_issuers_estimates.sql: p_snapshot is {snapshot_id} of a server capture.
+            Args: {
+              p_application_type: string
+              p_checked_on: string
+              p_estimate: string
+              p_matter_id: string
+              p_snapshot: Json | null
+              p_source_url: string
+            }
+            Returns: string
+          }
       record_government_check: {
         Args: {
           p_matter_id: string
@@ -16894,6 +17006,17 @@ export type Database = {
       release_legal_hold: {
         Args: { p_hold_id: string; p_reason: string }
         Returns: undefined
+      }
+      reserve_client_credit_refund: {
+        Args: {
+          p_amount_cents: number
+          p_credit_id: string
+          p_currency: string
+          p_idempotency_key: string
+          p_livemode: boolean
+          p_payment_id: string
+        }
+        Returns: string
       }
       reserve_invoice_refund: {
         Args: {
@@ -17801,6 +17924,29 @@ export type Database = {
               p_service_interest: string | null
               p_source: Database["public"]["Enums"]["lead_source"]
               p_viewer: string | null
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_attribution: Json
+              p_client_hash: string | null
+              p_consent_version: string | null
+              p_contact: string
+              p_country_now: string | null
+              p_firm_slug: string
+              p_idempotency_key: string
+              p_language: string | null
+              p_marketing_consent: boolean
+              p_marketing_statement: string | null
+              p_name: string
+              p_preferred_contact: string | null
+              p_reply_consent: boolean
+              p_reply_statement: string
+              p_service_interest: string | null
+              p_source: Database["public"]["Enums"]["lead_source"]
+              p_viewer: string | null
+              p_viewer_aal: string | null
             }
             Returns: Json
           }
