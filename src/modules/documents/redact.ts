@@ -29,6 +29,7 @@ import {
   multiply,
   type Matrix,
   type NormRect,
+  type PageBox,
   type UserRect,
 } from "@/modules/documents/redact-geometry";
 
@@ -60,8 +61,14 @@ export class RedactionError extends Error {
 }
 
 const MAX_PIXELS = 40_000_000;
+const UNSAFE = "This PDF can’t be redacted safely, so no copy was made.";
 
 type Widths = (code: number) => number;
+
+/** `modelled` is false for Type3 fonts and vertical writing, whose glyph positions are not computed here. */
+type FontInfo = { widths: Widths; modelled: boolean };
+
+const DEFAULT_FONT: FontInfo = { widths: () => 1000, modelled: true };
 
 type Graphics = {
   ctm: Matrix;
@@ -71,6 +78,7 @@ type Graphics = {
   wordSpacing: number;
   horizontalScale: number;
   leading: number;
+  rise: number;
 };
 
 type Token =
@@ -152,13 +160,34 @@ async function redactPdf(bytes: Uint8Array, regions: readonly RedactionRegion[])
     if (onPage.length === 0) continue;
     const page = pages[index];
     if (!page) continue;
-    const media = page.getMediaBox();
-    const user = onPage.map((region) => displayedRectToUser(region, media, page.getRotation().angle));
+    const view = visibleBox(page);
+    const user = onPage.map((region) => displayedRectToUser(region, view, page.getRotation().angle));
     rewritePage(pdf, page, user, standard);
     blankAnnotations(pdf, page, user);
   }
   scrubDocument(pdf);
   return pdf.save({ useObjectStreams: false, updateFieldAppearances: false });
+}
+
+/**
+ * The area a viewer shows, which is where the marks were drawn: the CropBox clipped to the
+ * MediaBox, or the MediaBox when there is no CropBox or the two don't overlap (as pdf.js does).
+ */
+function visibleBox(page: PDFPage): PageBox {
+  const media = normalBox(page.getMediaBox());
+  const crop = normalBox(page.getCropBox());
+  const left = Math.max(media.x, crop.x);
+  const bottom = Math.max(media.y, crop.y);
+  const right = Math.min(media.x + media.width, crop.x + crop.width);
+  const top = Math.min(media.y + media.height, crop.y + crop.height);
+  if (right - left > 0 && top - bottom > 0) return { x: left, y: bottom, width: right - left, height: top - bottom };
+  return media;
+}
+
+function normalBox(box: PageBox): PageBox {
+  const x = Math.min(box.x, box.x + box.width);
+  const y = Math.min(box.y, box.y + box.height);
+  return { x, y, width: Math.abs(box.width), height: Math.abs(box.height) };
 }
 
 const CATALOG_DROP = ["AcroForm", "StructTreeRoot", "MarkInfo", "Metadata", "OpenAction", "AA", "Perms", "AF", "Collection", "PieceInfo"];
@@ -277,14 +306,16 @@ function asciiWidths(font: PDFFont): Map<number, number> {
 function rewritePage(pdf: PDFDocument, page: PDFPage, rects: readonly UserRect[], standard: Map<string, Map<number, number>>): void {
   const refs = contentRefs(page.node);
   if (refs.length === 0) return;
-  const fonts = fontMap(page.node.lookupMaybe(PDFName.of("Resources"), PDFDict), standard);
+  // Resources may be inherited from the Pages tree.
+  const resources = page.node.Resources();
+  const fonts = fontMap(resources, standard);
   const parts: Uint8Array[] = [];
   for (const ref of refs) parts.push(decodeContent(rawStream(pdf, ref)));
   const joined = concatBytes(parts);
-  if (joined.length > 20_000_000) throw new RedactionError("This PDF can’t be redacted safely, so no copy was made.");
+  if (joined.length > 20_000_000) throw new RedactionError(UNSAFE);
   const graphics = freshGraphics();
   const rewritten = rewriteStream(joined, graphics, rects, (name, ctm) => {
-    paintImage(pdf, page.node.lookupMaybe(PDFName.of("Resources"), PDFDict), name, ctm, rects);
+    paintImage(pdf, resources, name, ctm, rects, standard);
   }, fonts);
   const black = blackPath(rects, graphics.ctm);
   const first = refs[0];
@@ -329,15 +360,42 @@ function decodeContent(stream: PDFRawStream): Uint8Array {
   }
 }
 
-function fontMap(resources: PDFDict | undefined, standard: Map<string, Map<number, number>>): Map<string, Widths> {
-  const map = new Map<string, Widths>();
+function fontMap(resources: PDFDict | undefined, standard: Map<string, Map<number, number>>): Map<string, FontInfo> {
+  const map = new Map<string, FontInfo>();
   const fonts = resources?.lookupMaybe(PDFName.of("Font"), PDFDict);
   if (!fonts) return map;
   for (const [name] of fonts.entries()) {
     const font = fonts.lookupMaybe(name, PDFDict);
-    if (font) map.set(name.decodeText(), widthsFor(font, standard));
+    if (font) map.set(name.decodeText(), { widths: widthsFor(font, standard), modelled: fontIsModelled(font) });
   }
   return map;
+}
+
+/** Type3 glyphs are arbitrary drawings and vertical writing advances down the page; neither is modelled. */
+function fontIsModelled(font: PDFDict): boolean {
+  const subtype = font.lookup(PDFName.of("Subtype"));
+  if (subtype === PDFName.of("Type3")) return false;
+  if (subtype !== PDFName.of("Type0")) return true;
+  return !verticalEncoding(font.lookup(PDFName.of("Encoding")), 0);
+}
+
+function verticalEncoding(encoding: PDFObject | undefined, depth: number): boolean {
+  if (encoding instanceof PDFName) return verticalCMapName(encoding.decodeText());
+  if (!(encoding instanceof PDFRawStream) || depth > 4) return true;
+  const mode = encoding.dict.lookup(PDFName.of("WMode"));
+  if (mode instanceof PDFNumber) return mode.asNumber() !== 0;
+  const parent = encoding.dict.lookup(PDFName.of("UseCMap"));
+  if (parent !== undefined && verticalEncoding(parent, depth + 1)) return true;
+  try {
+    const text = Buffer.from(decodePDFRawStream(encoding).decode()).toString("latin1");
+    return /\/WMode\s+[^0\s]/.test(text);
+  } catch {
+    return true;
+  }
+}
+
+function verticalCMapName(name: string): boolean {
+  return name === "V" || name.endsWith("-V");
 }
 
 function widthsFor(font: PDFDict, standard: Map<string, Map<number, number>>): Widths {
@@ -361,10 +419,10 @@ function widthsFor(font: PDFDict, standard: Map<string, Map<number, number>>): W
 }
 
 function freshGraphics(): Graphics {
-  return { ctm: IDENTITY, font: "", fontSize: 12, charSpacing: 0, wordSpacing: 0, horizontalScale: 100, leading: 0 };
+  return { ctm: IDENTITY, font: "", fontSize: 12, charSpacing: 0, wordSpacing: 0, horizontalScale: 100, leading: 0, rise: 0 };
 }
 
-function rewriteStream(bytes: Uint8Array, graphics: Graphics, rects: readonly UserRect[], onImage: (name: string, ctm: Matrix) => void, fonts: Map<string, Widths>): Uint8Array {
+function rewriteStream(bytes: Uint8Array, graphics: Graphics, rects: readonly UserRect[], onImage: (name: string, ctm: Matrix) => void, fonts: Map<string, FontInfo>): Uint8Array {
   const tokens = tokenize(bytes);
   const kept: Uint8Array[] = [];
   const operands: Token[] = [];
@@ -372,13 +430,17 @@ function rewriteStream(bytes: Uint8Array, graphics: Graphics, rects: readonly Us
   const text = { tm: IDENTITY, tlm: IDENTITY };
   let inText = false;
   const stack: Graphics[] = [];
-  const widths = () => fonts.get(graphics.font) ?? (() => 1000);
+  const currentFont = () => fonts.get(graphics.font) ?? DEFAULT_FONT;
 
   const flush = (token: Token) => {
     const from = start < 0 ? token.start : start;
     const operator = token.kind === "op" ? token.value : "";
-    if (operator === "BI") throw new RedactionError("This PDF can’t be redacted safely, so no copy was made.");
-    const glyphWidths = widths();
+    if (operator === "BI") throw new RedactionError(UNSAFE);
+    // ' and " move to the next line (and " sets word and character spacing) before showing.
+    if (operator === "'" || operator === '"') startLine(operator, operands, graphics, text);
+    const font = currentFont();
+    if (inText && showsText(operator) && !font.modelled && textChunks(operands, operator).length > 0) throw new RedactionError(UNSAFE);
+    const glyphWidths = font.widths;
     const drop = inText && showsText(operator) && textHits(operands, operator, text.tm, graphics, glyphWidths, rects);
     const marked = markedContentWithoutProperties(bytes, operands, operator);
     if (marked) kept.push(marked);
@@ -435,8 +497,9 @@ function textHits(operands: readonly Token[], operator: string, tm: Matrix, grap
 }
 
 function glyphBox(tm: Matrix, advance: number, graphics: Graphics): UserRect {
-  const rise = 0.85 * graphics.fontSize;
-  const sink = -0.25 * graphics.fontSize;
+  // Text rise (Ts) shifts glyphs up or down from the baseline in text space.
+  const rise = 0.85 * graphics.fontSize + graphics.rise;
+  const sink = -0.25 * graphics.fontSize + graphics.rise;
   const point = (x: number, y: number): [number, number] => {
     const [textX, textY] = apply(tm, x, y);
     return apply(graphics.ctm, textX, textY);
@@ -501,6 +564,17 @@ function cursorMove(operands: readonly Token[], operator: string, graphics: Grap
     parts.push(`[${trim(adjust)}] TJ`);
   }
   return latin1(`\n${parts.join("\n")}\n`);
+}
+
+function startLine(operator: string, operands: readonly Token[], graphics: Graphics, text: { tm: Matrix; tlm: Matrix }): void {
+  if (operator === '"') {
+    const word = operands[0];
+    const character = operands[1];
+    if (word?.kind === "num") graphics.wordSpacing = word.value;
+    if (character?.kind === "num") graphics.charSpacing = character.value;
+  }
+  text.tlm = multiply(text.tlm, [1, 0, 0, 1, 0, -graphics.leading]);
+  text.tm = text.tlm;
 }
 
 function trim(value: number): string {
@@ -573,14 +647,14 @@ function applyOperator(
     case "TL":
       graphics.leading = numbers[0] ?? 0;
       return;
+    case "Ts":
+      graphics.rise = numbers[0] ?? 0;
+      return;
     case "Tj":
     case "TJ":
     case "'":
     case '"': {
-      if (operator === "'" || operator === '"') {
-        text.tlm = multiply(text.tlm, [1, 0, 0, 1, 0, -graphics.leading]);
-        text.tm = text.tlm;
-      }
+      // The line move for ' and " was applied before the hit test (startLine).
       const chunks = textChunks(operands, operator);
       for (const chunk of chunks) {
         const advance = chunk.kind === "gap" ? gapAdvance(chunk.value, graphics) : stringAdvance(chunk.bytes, graphics, widths);
@@ -598,14 +672,23 @@ function applyOperator(
   }
 }
 
-function paintImage(pdf: PDFDocument, resources: PDFDict | undefined, name: string, ctm: Matrix, rects: readonly UserRect[]): void {
-  const xobjects = resources?.lookupMaybe(PDFName.of("XObject"), PDFDict);
+function paintImage(
+  pdf: PDFDocument,
+  resources: PDFDict | undefined,
+  name: string,
+  ctm: Matrix,
+  rects: readonly UserRect[],
+  standard: Map<string, Map<number, number>>,
+): void {
+  const entry = resources?.lookup(PDFName.of("XObject"));
+  const xobjects = entry instanceof PDFDict ? entry : undefined;
   const object = xobjects?.lookup(PDFName.of(name));
   const raw = xobjects?.get(PDFName.of(name));
-  if (!(object instanceof PDFRawStream) || !(raw instanceof PDFRef)) return;
+  // Where an unresolved XObject would paint is unknown, so it can't be shown to be outside the marks.
+  if (!(object instanceof PDFRawStream) || !(raw instanceof PDFRef)) throw new RedactionError(UNSAFE);
   const subtype = object.dict.lookupMaybe(PDFName.of("Subtype"), PDFName);
   if (subtype === PDFName.of("Form")) {
-    rewriteForm(pdf, object, raw, ctm, rects);
+    rewriteForm(pdf, object, raw, ctm, rects, resources, standard);
     return;
   }
   if (subtype !== PDFName.of("Image")) return;
@@ -620,24 +703,57 @@ function paintImage(pdf: PDFDocument, resources: PDFDict | undefined, name: stri
   putSamples(pdf, raw, object, edited.samples, width, height, edited.colors);
 }
 
-function rewriteForm(pdf: PDFDocument, stream: PDFRawStream, ref: PDFRef, ctm: Matrix, rects: readonly UserRect[]): void {
+function rewriteForm(
+  pdf: PDFDocument,
+  stream: PDFRawStream,
+  ref: PDFRef,
+  ctm: Matrix,
+  rects: readonly UserRect[],
+  parentResources: PDFDict | undefined,
+  standard: Map<string, Map<number, number>>,
+): void {
   const matrix = stream.dict.lookupMaybe(PDFName.of("Matrix"), PDFArray);
   const formMatrix = matrix ? readMatrix(matrix) : IDENTITY;
   const graphics = freshGraphics();
   graphics.ctm = multiply(ctm, formMatrix);
-  const resources = stream.dict.lookupMaybe(PDFName.of("Resources"), PDFDict);
-  const standard = new Map<string, Map<number, number>>();
+  // A form is clipped to its BBox; one placed wholly outside the marks shows nothing in them.
+  const bbox = formBBox(stream.dict);
+  if (bbox) {
+    const placed = boundsOf([
+      apply(graphics.ctm, bbox[0], bbox[1]),
+      apply(graphics.ctm, bbox[2], bbox[1]),
+      apply(graphics.ctm, bbox[0], bbox[3]),
+      apply(graphics.ctm, bbox[2], bbox[3]),
+    ]);
+    if (!rects.some((rect) => intersects(rect, placed))) return;
+  }
+  // A form without its own Resources uses those of the content that paints it.
+  const own = stream.dict.lookup(PDFName.of("Resources"));
+  const resources = own instanceof PDFDict ? own : parentResources;
   const fonts = fontMap(resources, standard);
   let decoded: Uint8Array;
   try {
     decoded = decodeContent(stream);
   } catch {
-    throw new RedactionError("This PDF can’t be redacted safely, so no copy was made.");
+    throw new RedactionError(UNSAFE);
   }
-  const rewritten = rewriteStream(decoded, graphics, rects, (name, at) => paintImage(pdf, resources, name, at, rects), fonts);
+  const rewritten = rewriteStream(decoded, graphics, rects, (name, at) => paintImage(pdf, resources, name, at, rects, standard), fonts);
   stream.dict.delete(PDFName.of("Filter"));
   stream.dict.delete(PDFName.of("DecodeParms"));
   pdf.context.assign(ref, PDFRawStream.of(stream.dict, concatBytes([rewritten, blackPath(rects, graphics.ctm)])));
+}
+
+function formBBox(dict: PDFDict): [number, number, number, number] | null {
+  const array = dict.lookup(PDFName.of("BBox"));
+  if (!(array instanceof PDFArray) || array.size() !== 4) return null;
+  const numbers: number[] = [];
+  for (let index = 0; index < 4; index += 1) {
+    const item = array.lookup(index);
+    if (!(item instanceof PDFNumber) || !Number.isFinite(item.asNumber())) return null;
+    numbers.push(item.asNumber());
+  }
+  const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = numbers;
+  return [x1, y1, x2, y2];
 }
 
 function readMatrix(array: PDFArray): Matrix {

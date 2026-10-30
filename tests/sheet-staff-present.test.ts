@@ -141,6 +141,13 @@ describe("invite staff dialog", () => {
     expect(staffStepUpLocation("/sheet/invitations", "?dlg=invite", false)).toBe(`/mfa?step=6&next=${encodeURIComponent("/sheet/invitations")}&for=staff_invite`);
   });
 
+  it("says to wait when the invitation limit is reached", () => {
+    const limited = "Too many invitations were sent recently. Please wait and try again later.";
+    expect(staffInviteError("invitation limit reached: this address was sent 5 invitations in the last 24 hours; try again tomorrow")).toBe(limited);
+    expect(safeAccessError("invitation limit reached: this firm sent 50 invitations in the last hour; try again later")).toBe(limited);
+    expect(needsStepUp(staffInviteError("invitation limit reached: you sent 30 invitations in the last hour; try again later"))).toBe(false);
+  });
+
   it("never passes a database message through", () => {
     expect(staffInviteError("only a firm owner can invite staff")).toBe("Only a firm owner can invite or remove staff.");
     expect(staffInviteError("email is invalid")).toBe("Enter a valid email address.");

@@ -5,6 +5,7 @@
  * text when the person or receiver changes, in the browser. Nothing here invents a value.
  */
 import type { ContinuityDialogData, MemberDialogData, OffboardDialogData, OffboardItem } from "@/components/sheet/designer/settings-staff-admin";
+import { escapeHtml } from "@/lib/html";
 import { dayMonth } from "@/modules/sheet/home-present";
 import { roleLabel } from "@/modules/sheet/present";
 import type { ContinuityFacts } from "@/modules/sheet/settings-present";
@@ -116,9 +117,7 @@ export function parseOffboardResult(raw: unknown): OffboardResult {
   };
 }
 
-function esc(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
-}
+const esc = escapeHtml;
 
 /** "Wed 29 Oct, 10:00" in the consultation's own time zone. */
 export function consultationWhen(iso: string, timeZone: string | null): string {

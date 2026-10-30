@@ -63,6 +63,24 @@ async function owner(organizationId: string): Promise<{ error: string } | { supa
 }
 
 /**
+ * Checked before a request body is read: a signed-in firm owner whose session has two-step
+ * (aal2, or public.session_mfa_satisfied). owner() still checks the firm named in the body and the
+ * database functions still decide each write.
+ */
+export async function migrationRequestGate(): Promise<{ ok: true } | { error: string; status: 401 | 403 }> {
+  const access = await loadSheetAccess();
+  if (access.kind !== "live" && access.kind !== "sample") return { error: "Sign in first.", status: 401 };
+  if (access.staff.role !== "firm_owner") return { error: "Only the firm owner can import records.", status: 403 };
+  const supabase = await createClient({ organizationId: access.staff.organizationId });
+  const { data: level } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (level?.currentLevel !== "aal2") {
+    const { data: satisfied } = await supabase.rpc("session_mfa_satisfied");
+    if (satisfied !== true) return { error: "Confirm two-step sign-in first.", status: 403 };
+  }
+  return { ok: true };
+}
+
+/**
  * Upload: parse on the server with limits, stage the batch, append rows in chunks, and verify.
  * MIG-01: the kind of records the file holds; a documents import also reads its ZIP here (each
  * entry's size, SHA-256 and real type are staged, the bytes are not kept).

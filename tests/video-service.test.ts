@@ -88,10 +88,39 @@ describe("token route", () => {
   it("a call whose room was created before still asks for the room (it may have closed on its own), without recording it again", async () => {
     rpc.mockResolvedValue({ data: open({ role: "host", identity: "staff:00000000-0000-4000-8000-0000000000aa", admitted: true, room_created: true }), error: null });
     const body = (await (await postToken()).json()) as { token: string };
-    expect((await new TokenVerifier(KEY, SECRET).verify(body.token)).video).toMatchObject({ roomAdmin: true });
+    const claims = await new TokenVerifier(KEY, SECRET).verify(body.token);
+    expect(claims.sub).toBe("staff:00000000-0000-4000-8000-0000000000aa");
+    expect(claims.video).toMatchObject({ room: ROOM, roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: true });
+    expect(claims.video?.roomAdmin).toBeFalsy();
+    expect(claims.video?.roomCreate).toBeFalsy();
+    expect(claims.video?.roomList).toBeFalsy();
+    expect(claims.video?.roomRecord).toBeFalsy();
     expect(fetchCalls.map((c) => c.url)).toEqual(["https://synthetic.livekit.test/twirp/livekit.RoomService/CreateRoom"]);
     expect(fetchCalls[0].body).toMatchObject({ name: ROOM, emptyTimeout: 600, departureTimeout: 60, maxParticipants: 8 });
     expect(rpc).not.toHaveBeenCalledWith("video_room_created", expect.anything());
+  });
+
+  it("the join token lives at most 10 minutes even when the window is longer", async () => {
+    rpc.mockImplementation(async (name: string) => (name === "video_join" ? { data: open({ ttl_seconds: 7200 }), error: null } : { data: null, error: null }));
+    const body = (await (await postToken()).json()) as { token: string };
+    const claims = await new TokenVerifier(KEY, SECRET).verify(body.token);
+    expect(Number(claims.exp) - Number(claims.nbf)).toBeLessThanOrEqual(600);
+  });
+
+  it("no token when the identity the database answers isn't the signed-in person's own", async () => {
+    for (const data of [
+      open({ identity: "client:00000000-0000-4000-8000-0000000000bb" }),
+      open({ role: "host", identity: "client:00000000-0000-4000-8000-0000000000aa", admitted: true }),
+      open({ role: "client", identity: "staff:00000000-0000-4000-8000-0000000000aa" }),
+    ]) {
+      rpc.mockReset();
+      rpc.mockResolvedValue({ data, error: null });
+      fetchCalls = [];
+      const response = await postToken();
+      expect(response.status).toBe(403);
+      expect(((await response.json()) as { token?: string }).token).toBeUndefined();
+      expect(fetchCalls).toHaveLength(0);
+    }
   });
 
   it("no token when the room can't be created", async () => {
@@ -128,6 +157,43 @@ describe("token route", () => {
     expect(bad.status).toBe(400);
     getClaims.mockResolvedValueOnce({ data: { claims: null } } as never);
     expect((await postToken()).status).toBe(401);
+  });
+});
+
+describe("guest token route", () => {
+  const BOOKING = "22222222-2222-4222-8222-222222222222";
+  const GUEST_ROOM = `cv-${BOOKING.replaceAll("-", "")}`;
+  async function postGuest() {
+    const { POST } = await import("@/app/api/video/[ref]/token/route");
+    return POST(new Request("https://app.test/x", { method: "POST", body: JSON.stringify({ guestToken: "g".repeat(43), name: "Sam" }) }), { params: Promise.resolve({ ref: REF }) });
+  }
+
+  it("a guest gets a short lobby token bound to their booking's identity and room", async () => {
+    rpc.mockImplementation(async (name: string) =>
+      name === "video_join_guest" ? { data: open({ room_name: GUEST_ROOM, identity: `client:${BOOKING}`, ttl_seconds: 5400 }), error: null } : { data: null, error: null },
+    );
+    const response = await postGuest();
+    expect(response.status).toBe(200);
+    const claims = await new TokenVerifier(KEY, SECRET).verify(((await response.json()) as { token: string }).token);
+    expect(claims.sub).toBe(`client:${BOOKING}`);
+    expect(claims.video).toMatchObject({ room: GUEST_ROOM, roomJoin: true, canPublish: false, canSubscribe: false, canPublishData: false });
+    expect(claims.video?.roomAdmin).toBeFalsy();
+    expect(Number(claims.exp) - Number(claims.nbf)).toBeLessThanOrEqual(600);
+  });
+
+  it("no guest token for a host role, or an identity that doesn't name the room", async () => {
+    for (const data of [
+      open({ role: "host", room_name: GUEST_ROOM, identity: `client:${BOOKING}` }),
+      open({ room_name: ROOM, identity: `client:${BOOKING}` }),
+      open({ room_name: GUEST_ROOM, identity: `staff:${BOOKING}` }),
+    ]) {
+      rpc.mockReset();
+      rpc.mockResolvedValue({ data, error: null });
+      fetchCalls = [];
+      const response = await postGuest();
+      expect(response.status).toBe(403);
+      expect(fetchCalls).toHaveLength(0);
+    }
   });
 });
 

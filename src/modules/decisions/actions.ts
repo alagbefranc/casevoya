@@ -3,7 +3,7 @@
 import { safeAccessError } from "@/lib/auth/step-up";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
-import { storeServerCapture } from "@/modules/content-governance/server-capture";
+import { mayStoreServerCapture, NOT_FETCHED, storeServerCapture } from "@/modules/content-governance/server-capture";
 import { DELIVERY_METHODS, followUpError } from "@/modules/decisions/present";
 import { federalOfficialUrl, snapshotOfficialPage } from "@/modules/submissions/official-page";
 
@@ -63,7 +63,8 @@ export async function proposeFollowUpStep(
   if (!/^[a-z0-9_]{1,80}$/.test(input.programKey ?? "")) return { error: followUpError("choose the program") };
   const s = await session(input.organizationId);
   if ("error" in s) return { error: s.error };
-  const fetched = await snapshotOfficialPage(url, fetch);
+  // The firm membership is checked before any outbound fetch.
+  const fetched = (await mayStoreServerCapture(s.supabase, input.organizationId, s.userId)) ? await snapshotOfficialPage(url, fetch) : NOT_FETCHED;
   // The fetched page is stored by the server (service role); the entry names that capture.
   const stored = fetched.snapshot
     ? await storeServerCapture({

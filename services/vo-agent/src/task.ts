@@ -141,7 +141,7 @@ export async function runVoTask(request: VoTaskRequest, deps: RunDeps): Promise<
     if (!success && !resultText) return failed("failed", metrics);
     // SRC-09: only sentences that cite the run's allowed set survive; markers the run never handed
     // out are dropped. Nothing supported (or the model's own consultant marker): Vo abstains.
-    const grounded = guardGroundedAnswer(resultText, ctx.markers ?? new Map());
+    const grounded = guardGroundedAnswer(resultText, ctx.markers ?? new Map(), ctx.markerContent ?? new Map());
     if (grounded.kind === "empty") return failed("empty", metrics);
     if (grounded.kind === "abstain") {
       await finish({ p_result: "abstained", p_model: VO_MODEL, ...metrics });

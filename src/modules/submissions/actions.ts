@@ -4,7 +4,7 @@ import { safeAccessError } from "@/lib/auth/step-up";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { SUBMISSION_CHANNELS, type SubmissionChannel } from "@/modules/government/present";
-import { storeServerCapture } from "@/modules/content-governance/server-capture";
+import { mayStoreServerCapture, NOT_FETCHED, storeServerCapture } from "@/modules/content-governance/server-capture";
 import { federalOfficialUrl, snapshotOfficialPage } from "@/modules/submissions/official-page";
 import { checklistError, OVERRIDABLE, type GateKey } from "@/modules/submissions/present";
 
@@ -97,7 +97,8 @@ export async function proposeSubmissionRequirement(
   if (programKey && !/^[a-z0-9_]{1,80}$/.test(programKey)) return { error: "Choose the program." };
   const s = await session(input.organizationId);
   if ("error" in s) return { error: s.error };
-  const fetched = await snapshotOfficialPage(url, fetch);
+  // The firm membership is checked before any outbound fetch.
+  const fetched = (await mayStoreServerCapture(s.supabase, input.organizationId, s.userId)) ? await snapshotOfficialPage(url, fetch) : NOT_FETCHED;
   // The fetched page is stored by the server (service role); the entry names that capture.
   const stored = fetched.snapshot
     ? await storeServerCapture({ organizationId: input.organizationId, actorUserId: s.userId, sourceUrl: url, title: text(input.sourceSection), page: fetched.snapshot })

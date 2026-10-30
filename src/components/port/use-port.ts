@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import { messageParts, rateLimitText, secondsLeft } from "@/lib/auth/signup-errors";
+import { escapeHtml } from "@/lib/html";
 import { busyBtn, clearBtn, icon, k2Count, k2Slider, k2Spark, morphText, settleBtn, toast2, voPose } from "./kit";
 
 export type PortResult =
@@ -164,7 +165,7 @@ export function usePort(
           summary.tabIndex = -1;
           scope.prepend(summary);
         }
-        summary.innerHTML = `<h4>${icon("alert", "s")}${bad.length === 1 ? "One thing to fix" : `${bad.length} things to fix`}</h4><ul>${bad.map(([id, message]) => `<li><a href="#${id}">${message}</a></li>`).join("")}</ul>`;
+        summary.innerHTML = `<h4>${icon("alert", "s")}${bad.length === 1 ? "One thing to fix" : `${bad.length} things to fix`}</h4><ul>${bad.map(([id, message]) => `<li><a href="#${escapeHtml(id)}">${escapeHtml(message)}</a></li>`).join("")}</ul>`;
         summary.focus();
         pose("worried");
       } else summary?.remove();

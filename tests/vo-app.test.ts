@@ -72,6 +72,7 @@ describe("output guard", () => {
   it("removes injected links, contact details, markup and invented fees or deadlines", () => {
     const result = guardVoOutput(
       "**Hi Priya**, <script>alert(1)</script> pay at https://evil.example/x or [here](https://phish.example) — write to boss@evil.example or call +1 (416) 555-0199. The fee is $1,085 CAD and it takes 12 months. Book: https://app.casevoya.ca/book/firm/consult",
+      { firmSlug: "firm" },
     );
     expect(result.kind).toBe("draft");
     if (result.kind !== "draft") return;
@@ -79,6 +80,31 @@ describe("output guard", () => {
     expect(result.text).toContain("[link removed]");
     expect(result.text).toContain("https://app.casevoya.ca/book/firm/consult");
     expect(result.needsRule).toBe(true);
+  });
+
+  it("keeps only the portal and this firm's own booking pages among app links (VO-6)", () => {
+    const result = guardVoOutput(
+      "Upload in https://app.casevoya.ca/portal/documents. Book https://app.casevoya.ca/book/firm/consult. Not https://app.casevoya.ca/book/other-firm/consult, https://app.casevoya.ca/embed/enquiry/other-firm, https://app.casevoya.ca/book/firmx/a, https://app.casevoya.ca/portal/../book/other-firm/a or https://app.casevoya.ca@evil.example/portal.",
+      { firmSlug: "firm" },
+    );
+    expect(result.kind).toBe("draft");
+    if (result.kind !== "draft") return;
+    expect(result.text).toContain("https://app.casevoya.ca/portal/documents");
+    expect(result.text).toContain("https://app.casevoya.ca/book/firm/consult");
+    expect(result.text).not.toMatch(/other-firm|embed|firmx|evil/);
+    expect(result.text.match(/\[link removed\]/g)).toHaveLength(5);
+    // Without the run's firm, no booking page survives.
+    const noFirm = guardVoOutput("Book https://app.casevoya.ca/book/firm/consult");
+    expect(noFirm.kind === "draft" && noFirm.text).toBe("Book [link removed]");
+  });
+
+  it("matches the database re-check: '@' in a portal path stays, dot segments and '@' before the path go", () => {
+    const result = guardVoOutput(
+      "Open https://app.casevoya.ca/portal/@me or https://app.casevoya.ca/portal/a/../b or https://app.casevoya.ca/portal/%2e or https://@app.casevoya.ca/portal now.",
+    );
+    expect(result.kind).toBe("draft");
+    if (result.kind !== "draft") return;
+    expect(result.text).toBe("Open https://app.casevoya.ca/portal/@me or [link removed] or [link removed] or [link removed] now.");
   });
 
   it("treats the consultant marker as an abstention and empty output as nothing", () => {

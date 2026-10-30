@@ -19,7 +19,7 @@ export const VO_MODEL = "claude-opus-5-5";
 
 export const VO_PROMPT_VERSION: Record<VoTask, string> = {
   message_reply: "reply-1",
-  document_request: "docreq-1",
+  document_request: "docreq-2",
   ask: "ask-3",
   document_review: "docread-1",
   letter_draft: "letter-2",
@@ -57,6 +57,11 @@ export function dataBlock(nonce: string, text: string, max = 1500): string {
   return `<<<DATA ${nonce}>>>\n${neutralize(text, max).trim()}\n<<<END ${nonce}>>>`;
 }
 
+/** A name or title written by a client or staff member, on one line inside the run's delimiters (untrusted data). */
+export function dataInline(nonce: string, text: string, max = 160): string {
+  return `<<<DATA ${nonce}>>> ${oneLine(text, max)} <<<END ${nonce}>>>`;
+}
+
 /** A fresh delimiter for one run: letters and digits only. */
 export function newNonce(): string {
   const random = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}${Math.random()}`;
@@ -81,8 +86,8 @@ const TASK: Record<VoTask, string> = {
     "Otherwise call save_draft once with a brief, warm reply (at most 120 words) in the language of the client's latest message, addressing the client by first name, without a signature. Then answer DONE.",
   ].join("\n"),
   document_request: [
-    "Task: draft a short message from the firm explaining the open document requests on this matter in plain words: what each document is for (from its explanation), the accepted file formats and the due date when one is given, and ask the client to upload them in their portal.",
-    "Read them with read_matter_summary; read_messages_thread shows who the conversation is with. Call save_draft once (at most 150 words, no signature). Then answer DONE.",
+    "Task: draft a short message from the firm explaining the open document requests for the people in this conversation in plain words: what each document is for (from its explanation), the accepted file formats and the due date when one is given, and ask the client to upload them in their portal.",
+    "Read them with read_matter_summary (it lists only what this conversation's readers may see; never mention anything else); read_messages_thread shows who the conversation is with. Call save_draft once (at most 150 words, no signature). Then answer DONE.",
   ].join("\n"),
   // SRC-09: every sentence cites what supports it, by the marker the tool handed out.
   ask: [

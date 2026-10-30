@@ -5,8 +5,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 /**
  * #263-B: the app Worker's side of the virus scanner (services/av-scanner: ClamAV in a Cloudflare
  * Container, Francis's own Cloudflare account). Reached through the service binding AV_SCANNER
- * when the Worker has one, otherwise AV_SCANNER_URL (a private URL, for local development of the
- * service only). The file's bytes go in the request body; nothing else about the file or its
+ * when the Worker has one, otherwise AV_SCANNER_URL (for local development of the service only;
+ * ignored in production, https or localhost http only). The file's bytes go in the request body; nothing else about the file or its
  * owner is sent. The answer is one of clean, infected (with the signature name) or error.
  *
  * Without a transport every scan is an error: uploads stay held ("scanning") and the retry job
@@ -34,11 +34,31 @@ function env(): Record<string, unknown> {
   }
 }
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * The AV_SCANNER_URL fallback is for local development only: refused in production builds, and
+ * otherwise only https, or http to this machine.
+ */
+export function scannerUrlAllowed(raw: string, production: boolean): boolean {
+  if (production) return false;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.username || url.password) return false;
+  if (url.protocol === "https:") return true;
+  return url.protocol === "http:" && LOCAL_HOSTS.has(url.hostname);
+}
+
 export function avScannerTransport(values: Record<string, unknown> = env()): ScanTransport {
   const binding = values.AV_SCANNER as Fetcher | undefined;
   if (binding && typeof binding.fetch === "function") return { send: (path, init) => binding.fetch(new Request(`https://av-scanner${path}`, init)) };
   const url = values.AV_SCANNER_URL ?? process.env.AV_SCANNER_URL;
-  if (typeof url === "string" && /^https?:\/\//.test(url)) return { send: (path, init) => fetch(`${url.replace(/\/$/, "")}${path}`, init) };
+  const production = (values.NODE_ENV ?? process.env.NODE_ENV) === "production";
+  if (typeof url === "string" && scannerUrlAllowed(url, production)) return { send: (path, init) => fetch(`${url.replace(/\/$/, "")}${path}`, init) };
   return null;
 }
 

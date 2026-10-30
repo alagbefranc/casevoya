@@ -248,8 +248,8 @@ describe("a Vo run", () => {
     expect(seen.toolResults[1]).not.toContain("Passport");
     expect(seen.toolResults[1]).toContain("1 document(s) hidden");
     // SRC-09: each record carries its marker; the answer cites the matter and the document version.
-    expect(seen.toolResults[0]).toContain("[R1] Matter: Synthetic matter");
-    expect(seen.toolResults[1]).toContain("[R2] Wedding photos");
+    expect(seen.toolResults[0]).toMatch(/\[R1\] Matter: <<<DATA (\w+)>>> Synthetic matter <<<END \1>>>/);
+    expect(seen.toolResults[1]).toMatch(/\[R2\] <<<DATA (\w+)>>> Wedding photos <<<END \1>>>/);
     if (out.result !== "answered") return;
     expect(out.sources.map((source) => [source.marker, source.kind, source.id])).toEqual([
       ["R1", "matter", MATTER],

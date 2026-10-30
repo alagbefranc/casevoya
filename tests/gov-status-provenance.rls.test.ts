@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { firmDay } from "./helpers/firm-day";
+import { serverCapture } from "./helpers/server-capture";
 
 /**
  * GOV-05 against the real migrations: Mark checked per status, sharing a status with the client,
@@ -113,11 +114,13 @@ async function letter(ctx: Firm, kind = "status_update") {
   return row.rows[0].id;
 }
 
-async function estimate(ctx: Firm, url = TIMES, capture: { at: string | null; hash: string | null } = { at: null, hash: null }) {
+async function estimate(ctx: Firm, url = TIMES, capture: { hash: string | null } = { hash: null }) {
   await stale(ctx.manager, ctx.orgId);
+  // A captured page is a server capture (20261031010000_server_captures_issuers_estimates.sql).
+  const snapshot = capture.hash ? JSON.stringify(await serverCapture(db, { orgId: ctx.orgId, url, snapshot: { sha256: capture.hash } })) : null;
   const row = await db.query<{ id: string }>(
-    `select public.record_processing_estimate($1, $2, 'Synthetic application type', 'Synthetic estimate', $3::date, $4::timestamptz, $5) as id`,
-    [ctx.matterId, url, firmDay(), capture.at, capture.hash],
+    `select public.record_processing_estimate($1, $2, 'Synthetic application type', 'Synthetic estimate', $3::date, $4::jsonb) as id`,
+    [ctx.matterId, url, firmDay(), snapshot],
   );
   return row.rows[0].id;
 }
@@ -221,15 +224,16 @@ describe("GOV-05 IRCC processing-time estimates", () => {
     );
     await expectDbError(
       () =>
-        db.query(`select public.record_processing_estimate($1, $2, 'Synthetic type', 'Synthetic estimate', $3::date, statement_timestamp(), null)`, [
+        db.query(`select public.record_processing_estimate($1, $2, 'Synthetic type', 'Synthetic estimate', $3::date, $4::jsonb)`, [
           ctx.matterId,
           TIMES,
           firmDay(),
+          JSON.stringify({ snapshot_id: randomUUID() }),
         ]),
-      /both its time and its hash/,
+      /not stored by Casevoya/,
     );
 
-    const first = await estimate(ctx, TIMES, { at: new Date().toISOString(), hash: "b".repeat(64) });
+    const first = await estimate(ctx, TIMES, { hash: "b".repeat(64) });
     await asMaintenance(db);
     const pending = await db.query<{ status: string; snapshot_sha256: string; entered: string }>(
       `select status, snapshot_sha256, entered_by_membership_id::text as entered from public.government_processing_estimates where id = $1`,

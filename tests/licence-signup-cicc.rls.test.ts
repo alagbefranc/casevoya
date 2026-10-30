@@ -299,7 +299,9 @@ describe("the CICC register list", () => {
     const admin = await platformAdmin();
     const revokedNumber = licenceNumber();
     const f = await signUp("Ana Silva", revokedNumber);
-    await as(f.owner, f.orgId);
+    // The manual check comes from a platform admin: the owner's own licence already has a CICC
+    // list check, so the owner cannot record one on it (20261031025000).
+    await asUser(db, { userId: admin, aal: "aal2", totpAgeSeconds: 0 });
     await db.query(
       `select public.record_licence_check($1, $2, statement_timestamp(), 'active', true, false, true, false, null, $3, null)`,
       [f.credentialId, REGISTER, PROOF],

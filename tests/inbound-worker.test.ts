@@ -76,6 +76,23 @@ describe("inbound email worker", () => {
     expect(body.text).toContain("Please file this.");
   });
 
+  it("rejects with a temporary reason when the app refuses the message for rate or size limits", async () => {
+    const env = { INBOUND_WEBHOOK_URL: "https://app.example/api/email/inbound", INBOUND_WEBHOOK_SECRET: "hook-secret", INBOUND_EMAIL_DOMAIN: "docs.casevoya.ca" };
+    const limited = fakeMessage();
+    await handleInboundEmail(limited.message, env, vi.fn<typeof fetch>(async () => new Response("{}", { status: 429 })));
+    expect(limited.setReject).toHaveBeenCalledWith(expect.stringMatching(/try again later/i));
+
+    const tooBig = fakeMessage();
+    await handleInboundEmail(tooBig.message, env, vi.fn<typeof fetch>(async () => new Response("{}", { status: 413 })));
+    expect(tooBig.setReject).toHaveBeenCalledWith(expect.stringMatching(/again later/i));
+
+    const failed = fakeMessage();
+    await expect(
+      handleInboundEmail(failed.message, env, vi.fn<typeof fetch>(async () => new Response("{}", { status: 500 }))),
+    ).rejects.toThrow(/500/);
+    expect(failed.setReject).not.toHaveBeenCalled();
+  });
+
   it("rejects another domain and an oversized message before reading", async () => {
     const wrong = fakeMessage({ to: "northline@in.casevoya.ca" });
     await handleInboundEmail(wrong.message, {

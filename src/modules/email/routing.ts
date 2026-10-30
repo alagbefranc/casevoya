@@ -1,4 +1,5 @@
 import { RESERVED_FIRM_SLUGS } from "@/lib/auth/slug";
+import { redactText } from "@/lib/log/redact";
 import { firmAddress, inboundDomain } from "@/modules/email/addresses";
 
 /** Zone casevoya.ca. Email Routing rules are addressed by zone, not account. */
@@ -202,7 +203,7 @@ export async function provisionFirmSlug(
     const result = await applyFirmSlugRoute(change, client);
     if (!result.ok) {
       for (const failure of result.failures) {
-        console.error("email routing failed", failure.op, failure.slug ?? failure.ruleId ?? label, failure.error);
+        console.error("email routing failed", failure.op, failure.slug ?? failure.ruleId ?? label, redactText(failure.error));
       }
     }
   } catch (error) {
@@ -345,5 +346,5 @@ function normalizeSlug(value: string | null | undefined): string {
 }
 
 function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : "network";
+  return error instanceof Error ? redactText(error.message) : "network";
 }

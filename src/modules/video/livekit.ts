@@ -11,6 +11,8 @@
  * stored or logged.
  */
 
+import { isRoomName } from "./present";
+
 export type VideoGrant = {
   room?: string;
   roomJoin?: boolean;
@@ -202,12 +204,24 @@ export const ROOM_OPTIONS = { emptyTimeout: 600, departureTimeout: 60, maxPartic
 export const FULL_SOURCES: NonNullable<VideoGrant["canPublishSources"]> = ["camera", "microphone", "screen_share", "screen_share_audio"];
 
 /**
- * The join grant. A host is a room admin; an admitted client publishes and subscribes; a client in
- * the lobby can neither publish nor subscribe (sees and sends nothing) until a host admits them.
+ * Join tokens live at most this long (seconds). A token is only needed to connect; LiveKit refreshes
+ * the token of a connected participant itself, and Join again asks the server for a new one.
+ */
+export const JOIN_TOKEN_MAX_TTL_SECONDS = 600;
+
+/** A participant identity as the database issues it: `staff:<user id>` or `client:<user or booking id>`. */
+const JOIN_IDENTITY = /^(staff|client):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * The join grant, for exactly one room (roomJoin only; never roomAdmin, roomCreate, roomList or
+ * roomRecord: admitting, removing and ending go through the server's RoomService calls). A host
+ * and an admitted client publish, subscribe and send chat (data); a client in the lobby can
+ * neither publish nor subscribe (sees and sends nothing) until a host admits them.
  */
 export function joinGrant(room: string, role: "host" | "client", admitted: boolean): VideoGrant {
+  if (!isRoomName(room)) throw new Error("invalid room name");
   if (role === "host") {
-    return { room, roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: true, canPublishSources: FULL_SOURCES, roomAdmin: true, canUpdateOwnMetadata: false };
+    return { room, roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: true, canPublishSources: FULL_SOURCES, canUpdateOwnMetadata: false };
   }
   if (admitted) {
     return { room, roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: true, canPublishSources: FULL_SOURCES, canUpdateOwnMetadata: false };
@@ -224,12 +238,26 @@ export const ADMITTED_PERMISSION = {
   canUpdateMetadata: false,
 } as const;
 
-/** A participant's join token, valid `ttlSeconds`. */
+/**
+ * A participant's join token, valid `ttlSeconds` capped at JOIN_TOKEN_MAX_TTL_SECONDS. The identity
+ * must match the role (`staff:` for a host, `client:` for a client) and the room must be a call room.
+ */
 export function participantToken(
   config: LiveKitConfig,
   input: { identity: string; name: string; role: "host" | "client"; admitted: boolean; room: string; ttlSeconds: number },
   now?: number,
 ): Promise<string> {
+  const match = JOIN_IDENTITY.exec(input.identity);
+  if (!match || match[1] !== (input.role === "host" ? "staff" : "client")) {
+    return Promise.reject(new Error("invalid participant identity"));
+  }
+  const ttl = Number.isFinite(input.ttlSeconds) && input.ttlSeconds > 0 ? Math.min(Math.floor(input.ttlSeconds), JOIN_TOKEN_MAX_TTL_SECONDS) : JOIN_TOKEN_MAX_TTL_SECONDS;
+  let video: VideoGrant;
+  try {
+    video = joinGrant(input.room, input.role, input.admitted);
+  } catch (error) {
+    return Promise.reject(error);
+  }
   return signLiveKitJwt(
     config,
     {
@@ -237,9 +265,9 @@ export function participantToken(
       name: input.name,
       metadata: JSON.stringify({ role: input.role }),
       attributes: { role: input.role, admitted: input.role === "host" || input.admitted ? "1" : "0" },
-      video: joinGrant(input.room, input.role, input.admitted),
+      video,
     },
-    input.ttlSeconds,
+    ttl,
     now,
   );
 }

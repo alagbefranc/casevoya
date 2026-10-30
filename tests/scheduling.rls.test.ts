@@ -117,10 +117,12 @@ async function hold(
 ) {
   // The hold is service role only (20261030231500): the app server passes the address hash it
   // computed and the signed-in visitor, after the visitor's own session was served the page.
+  // It also names the visitor's session assurance (20261031017000); a named viewer is at aal2 here.
   const viewer = options.session?.userId ?? options.as ?? null;
+  const viewerAal = viewer ? (options.session?.aal ?? "aal2") : null;
   await asServiceRole(db);
   const row = await db.query<{ result: Summary & { error?: string } }>(
-    `select public.booking_public_hold($1, $2, $3::timestamptz, 'Sam Example', $4, null, 'America/Vancouver', $5, $6, $7::uuid) as result`,
+    `select public.booking_public_hold($1, $2, $3::timestamptz, 'Sam Example', $4, null, 'America/Vancouver', $5, $6, $7::uuid, $8) as result`,
     [
       ctx.firmSlug,
       options.event ?? "initial",
@@ -129,6 +131,7 @@ async function hold(
       options.key ?? randomUUID(),
       options.hash === undefined ? createHash("sha256").update(randomUUID()).digest("hex") : options.hash,
       viewer,
+      viewerAal,
     ],
   );
   const result = row.rows[0].result;

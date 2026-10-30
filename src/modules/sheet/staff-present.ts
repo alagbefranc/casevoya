@@ -5,6 +5,7 @@
  */
 import type { StaffRow } from "@/components/sheet/designer/invitations";
 import { safeAccessError } from "@/lib/auth/step-up";
+import { isAcceptableEmail } from "@/lib/auth/invitations";
 import { staffPerson } from "@/modules/sheet/avatar";
 import { dayMonth } from "@/modules/sheet/home-present";
 import { isoDateInTimeZone, roleLabel } from "@/modules/sheet/present";
@@ -222,8 +223,6 @@ export function inviteExpiry(now: Date, timeZone: string): string {
   return dayMonth(isoDateInTimeZone(new Date(now.getTime() + 7 * 86_400_000), timeZone));
 }
 
-const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-
 export function inviteRoleFor(label: string | null | undefined): StaffInviteRole | null {
   const match = STAFF_INVITE_ROLES.find(([name, role]) => name === label || role === label);
   return match ? match[1] : null;
@@ -233,7 +232,7 @@ export function inviteRoleFor(label: string | null | undefined): StaffInviteRole
 export function readStaffInvite(fields: { email?: string | null; role?: string | null }): { input: { email: string; role: StaffInviteRole } } | { error: string } {
   const email = (fields.email ?? "").trim().toLowerCase();
   if (!email) return { error: "Add their work email." };
-  if (email.length > 320 || !EMAIL.test(email)) return { error: "Enter a valid email address." };
+  if (!isAcceptableEmail(email)) return { error: "Enter a valid email address." };
   const role = inviteRoleFor((fields.role ?? "").trim());
   if (!role) return { error: "Choose a staff role." };
   return { input: { email, role } };

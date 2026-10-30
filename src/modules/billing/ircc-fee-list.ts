@@ -6,6 +6,8 @@
  * changed shape and nothing is recorded.
  */
 
+import { fetchOfficialPage, officialFetchAllowed } from "@/modules/content-governance/official-fetch";
+
 export const IRCC_FEE_LIST_URL = "https://ircc.canada.ca/english/information/fees/fees.asp";
 
 export type FeeListRow = { section: string | null; group: string | null; name: string; amount_cents: number; anchor: string | null };
@@ -96,30 +98,31 @@ function officialHost(url: string): boolean {
   }
 }
 
-async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(bytes));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 /**
  * Fetches the fee list (server side) and reads it: the rows, the retrieval time and the SHA-256 of
- * the bytes received. Any failure says so and returns no rows; nothing is guessed.
+ * the bytes received. Every redirect hop must stay on canada.ca (official-fetch.ts). Any failure
+ * says so and returns no rows; nothing is guessed.
  */
 export async function readFeeListPage(
   fetcher: typeof fetch,
   now: () => Date = () => new Date(),
 ): Promise<{ rows: FeeListRow[]; sha256: string; retrievedAt: string } | { error: string }> {
-  let response: Response;
-  try {
-    response = await fetcher(IRCC_FEE_LIST_URL, { redirect: "follow", signal: AbortSignal.timeout(15_000), headers: { accept: "text/html" } });
-  } catch {
+  const fetched = await fetchOfficialPage(IRCC_FEE_LIST_URL, fetcher, {
+    maxBytes: 2_000_000,
+    timeoutMs: 15_000,
+    accept: "text/html",
+    allow: (hop) => officialHost(hop) && officialFetchAllowed(hop),
+  });
+  if (!fetched.ok && fetched.code === "fetch_failed") {
     return { error: "IRCC’s fee list couldn’t be reached. Nothing was recorded; enter government fees by hand with their source." };
   }
-  if (!response.ok || (response.url && !officialHost(response.url))) {
-    return { error: "IRCC’s fee list didn’t answer as expected. Nothing was recorded." };
-  }
-  const bytes = await response.arrayBuffer();
-  if (bytes.byteLength === 0 || bytes.byteLength > 2_000_000) return { error: "IRCC’s fee list didn’t answer as expected. Nothing was recorded." };
+  if (!fetched.ok || fetched.bytes.byteLength === 0) return { error: "IRCC’s fee list didn’t answer as expected. Nothing was recorded." };
+  const bytes = fetched.bytes;
   const retrievedAt = now().toISOString();
   const sha256 = await sha256Hex(bytes);
   const rows = parseIrccFeeList(new TextDecoder("utf-8").decode(bytes));

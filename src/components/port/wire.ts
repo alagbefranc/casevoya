@@ -33,6 +33,7 @@ import {
   verifyTotpCode,
 } from "@/app/auth/port-actions";
 import { toast2 } from "./kit";
+import { writeInviteBadge } from "./invite-badge";
 import { showSignupEmail } from "./signup-email";
 import type { PortEvent, PortResult } from "./use-port";
 
@@ -442,7 +443,7 @@ export function usePortActions(page: string, token?: string) {
             const email = event.root.querySelector<HTMLInputElement>("#sem");
             if (email) email.value = preview.email;
             const badge = event.root.querySelector(".inv .meta .bd.ok");
-            if (badge) badge.innerHTML = `<i></i>For ${preview.email}`;
+            if (badge) writeInviteBadge(badge, preview.email);
           }
           if (preview?.organization_name) {
             const heading = event.root.querySelector("h1");

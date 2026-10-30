@@ -61,6 +61,11 @@ describe("sendMagicLink", () => {
     expect(state.otp[0].options.emailRedirectTo).not.toContain("attacker.example");
   });
 
+  it("never creates an account", async () => {
+    await send(form("person@example.test"));
+    expect(state.otp[0].options.shouldCreateUser).toBe(false);
+  });
+
   it("keeps http://localhost working for development", async () => {
     process.env.APP_URL = "http://localhost:3000";
     await send(form("person@example.test"));

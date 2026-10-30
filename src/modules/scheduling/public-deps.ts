@@ -15,8 +15,9 @@ type SessionClient = Awaited<ReturnType<typeof createClient>>;
  *
  * The hold is service role only: the database takes the client-address hash only from this
  * server. postPublicHold reads the page with the visitor's session first, so a practice page is
- * held only after that check passed; the hold then names the visitor (p_viewer) so the database
- * can re-check staff membership and link a signed-in portal client to their own person.
+ * held only after that check passed; the hold then names the visitor (p_viewer) and their session
+ * assurance (p_viewer_aal) so the database can re-check staff membership with staff MFA and link
+ * a signed-in portal client to their own person.
  */
 export async function publicDeps(): Promise<PublicDeps> {
   const supabase = await createClient();
@@ -57,15 +58,26 @@ export async function sessionViewer(supabase: SessionClient): Promise<string | n
   return isUuid(sub) ? sub : null;
 }
 
+/** The visitor's session assurance: aal2, "mfa" (passkey or recovery code on this session), or aal1. */
+export type ViewerAssurance = "aal1" | "aal2" | "mfa";
+
 /**
- * The signed-in visitor and their session's assurance level, both from the verified session token, or null when
- * signed out. The database links a booking to a client who has a second step only at aal2.
+ * The signed-in visitor and their session's assurance, read from their own verified session, or
+ * null when signed out. "mfa" means public.session_mfa_satisfied() holds on that session (the
+ * staff MFA rule). The database opens a practice page only to staff at aal2 or "mfa", and links a
+ * booking to a client who has a second step only at the same levels.
  */
-export async function sessionViewerWithAssurance(supabase: SessionClient): Promise<{ id: string; aal: "aal1" | "aal2" } | null> {
+export async function sessionViewerWithAssurance(supabase: SessionClient): Promise<{ id: string; aal: ViewerAssurance } | null> {
   const { data } = await supabase.auth.getClaims();
   const sub = data?.claims?.sub;
   if (!isUuid(sub)) return null;
-  return { id: sub, aal: data?.claims?.aal === "aal2" ? "aal2" : "aal1" };
+  if (data?.claims?.aal === "aal2") return { id: sub, aal: "aal2" };
+  try {
+    const satisfied = await supabase.rpc("session_mfa_satisfied");
+    return { id: sub, aal: !satisfied?.error && satisfied?.data === true ? "mfa" : "aal1" };
+  } catch {
+    return { id: sub, aal: "aal1" };
+  }
 }
 
 /** The visitor's address as Cloudflare (or a local proxy) reports it. */

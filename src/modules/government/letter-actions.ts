@@ -4,6 +4,7 @@ import { refresh } from "next/cache";
 import { safeAccessError } from "@/lib/auth/step-up";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
+import { mayStoreServerCapture, storeIssuerNameCheck, storeServerCapture } from "@/modules/content-governance/server-capture";
 import { readIssuerPage } from "@/modules/government/issuer-page";
 import { letterError, officialIssuerUrl, type LetterTask } from "@/modules/government/letters";
 import {
@@ -28,7 +29,7 @@ async function session(organizationId: string) {
   const supabase = await createClient({ organizationId });
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) return { error: "Sign in first." as const };
-  return { supabase };
+  return { supabase, userId: claims.claims.sub as string };
 }
 
 function refusal(message: string): string {
@@ -85,8 +86,10 @@ export async function recordGovernmentLetter(input: {
 
 /**
  * Adds an issuer from its official page. The server reads the page itself (Government of Canada
- * hosts only) to record its SHA-256, retrieval time, "Date modified" and whether the name is on
- * it; when it can't, the issuer is recorded with the URL and date checked, marked "page not read".
+ * hosts on the allowlist only) and stores it as a server capture (service role): its SHA-256,
+ * retrieval time and "Date modified" come from that capture, and whether the name is on it is
+ * recorded by the server afterwards. When it can't, the issuer is recorded with the URL and date
+ * checked, marked "page not read".
  */
 export async function proposeGovernmentIssuer(input: { organizationId: string; name: string; sourceUrl: string; checkedOn: string }) {
   const name = (input.name ?? "").trim();
@@ -96,20 +99,32 @@ export async function proposeGovernmentIssuer(input: { organizationId: string; n
   if (!DATE.test(input.checkedOn ?? "")) return { error: "Add the date you checked the page." };
   const s = await session(input.organizationId);
   if ("error" in s) return { error: s.error };
-  const read = await readIssuerPage(fetch, url, name);
+  // The firm membership is checked before any outbound fetch.
+  const read = (await mayStoreServerCapture(s.supabase, input.organizationId, s.userId)) ? await readIssuerPage(fetch, url, name) : null;
+  const stored = read
+    ? await storeServerCapture({
+        organizationId: input.organizationId,
+        actorUserId: s.userId,
+        sourceUrl: url,
+        title: null,
+        page: { sha256: read.sha256, retrieved_at: read.retrievedAt, final_url: read.finalUrl, http_status: read.httpStatus },
+        dates: { modifiedOn: read.modifiedOn },
+      })
+    : null;
   const { data, error } = await s.supabase.rpc("propose_government_issuer", {
     p_org: input.organizationId,
     p_name: name,
     p_source_url: url,
     p_checked_on: input.checkedOn,
-    p_retrieved_at: read?.retrievedAt ?? null,
-    p_sha256: read?.sha256 ?? null,
-    p_modified_on: read?.modifiedOn ?? null,
-    p_name_on_page: read?.nameOnPage ?? null,
+    p_snapshot: stored,
   });
   if (error) return { error: refusal(error.message) };
+  const nameOnPage =
+    stored && read && typeof data === "string"
+      ? await storeIssuerNameCheck({ organizationId: input.organizationId, actorUserId: s.userId, issuerId: data, nameOnPage: read.nameOnPage })
+      : null;
   refresh();
-  return { id: data, read: Boolean(read), nameOnPage: read?.nameOnPage ?? null };
+  return { id: data, read: Boolean(stored), nameOnPage };
 }
 
 /** pageOpenedOn: the reviewer's attestation when the issuer's page wasn't read (decided 2026-10-24). */

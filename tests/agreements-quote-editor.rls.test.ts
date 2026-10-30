@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { firmDay } from "./helpers/firm-day";
-import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asMaintenance, asUser, createTestDb, expectDbError, queryInternal, type TestDb } from "./helpers/postgres";
 
 /**
  * Quote builder, Agreement editor and Compare versions (20261020140000–20261020140100): quotes
@@ -388,7 +388,7 @@ describe("agreement clauses", () => {
     ]);
     const envelopeId = (await db.query<{ id: string }>(`select id from public.signature_envelopes where agreement_id = $1`, [agreementId])).rows[0].id;
     await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
-    await db.query(`select app.sign_agreement($1, true, $2, '203.0.113.10'::inet, 'SyntheticAgent/1.0')`, [envelopeId, `sign-${randomUUID()}`]);
+    await queryInternal(db, `select app.sign_agreement($1, true, $2, '203.0.113.10'::inet, 'SyntheticAgent/1.0')`, [envelopeId, `sign-${randomUUID()}`]);
     await ctx.consultantSession();
     const current = (await db.query<{ id: string }>(`select id from public.agreement_clauses where agreement_version_id = (select current_version_id from public.agreements where id = $1) and title = 'Communication'`, [agreementId])).rows[0].id;
     await expectDbError(() => db.query(`select public.edit_agreement_clause($1, $2, 'Changed after signing')`, [agreementId, current]), /executed agreement cannot be edited/i);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "@/modules/email/sign";
 import { emailRuntimeConfig } from "@/lib/email/env";
+import { redactedMessage } from "@/lib/log/redact";
 import { runRoutingReconcile } from "@/modules/email/sync-routing";
 
 /** Repairs per-firm Email Routing rules. The caller holds EMAIL_ROUTING_RECONCILE_SECRET. */
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     const status = result.failures.length > 0 ? 502 : 200;
     return NextResponse.json(result, { status });
   } catch (error) {
-    console.error("email routing reconcile failed", error instanceof Error ? error.message : "unknown");
+    console.error("email routing reconcile failed", redactedMessage(error));
     return NextResponse.json({ error: "Email routing reconcile failed." }, { status: 500 });
   }
 }

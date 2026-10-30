@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isAcceptableEmail } from "@/lib/auth/invitations";
 
 /**
  * Designer firm-setup screen, reviewed 2026-10-17. Order and labels match that
@@ -52,7 +53,7 @@ export const SAMPLE_PROOF_LABELS: Record<(typeof SAMPLE_PROOF_STEPS)[number], st
 export type FirmSetupStep = (typeof FIRM_SETUP_STEPS)[number];
 export type SampleProofStep = (typeof SAMPLE_PROOF_STEPS)[number];
 
-const email = z.string().trim().toLowerCase().max(320).regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/);
+const email = z.string().trim().toLowerCase().max(320).refine(isAcceptableEmail);
 
 export const firmSetupPayloadSchema = z.discriminatedUnion("step", [
   z.strictObject({

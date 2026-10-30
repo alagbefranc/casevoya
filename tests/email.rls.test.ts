@@ -302,11 +302,15 @@ describe("outbound and inbound email", () => {
     );
     expect(first.rows[0].result.status).toBe("accepted");
     expect(first.rows[0].result.person_id).toBe(ctx.personId);
-    const duplicate = await db.query<{ result: { status: string } }>(
+    // An unverified message reusing the Message-ID is not attached to the stored person or matter.
+    const duplicate = await db.query<{ result: { status: string; person_id: string | null; matter_id: string | null; inbound_email_id?: string } }>(
       `select public.begin_inbound_message($1, 'client@example.test', '<same-message@example.test>', 'Hello', 'Body text', null, null) as result`,
       [`${ctx.orgSlug}@docs.casevoya.ca`],
     );
-    expect(duplicate.rows[0].result.status).toBe("resume");
+    expect(duplicate.rows[0].result.status).toBe("duplicate");
+    expect(duplicate.rows[0].result.person_id).toBeNull();
+    expect(duplicate.rows[0].result.matter_id).toBeNull();
+    expect(duplicate.rows[0].result.inbound_email_id).toBeUndefined();
     await db.query(`select public.finish_inbound_attachments($1)`, [first.rows[0].result.inbound_email_id]);
     const dropped = await db.query<{ result: { status: string } }>(
       `select public.begin_inbound_message($1, 'client@example.test', '<same-message@example.test>', 'Hello', 'Body', null, null) as result`,
@@ -382,9 +386,13 @@ describe("outbound and inbound email", () => {
     );
     await storeObject(intent.rows[0].result.storage_key, 16);
     await asServiceRole(db);
+    await expectDbError(
+      () => db.query(`select public.complete_email_upload($1, 0, $2, $3)`, [known.rows[0].result.inbound_email_id, SHA, PDF]),
+      /permission denied|42501/,
+    );
     const completed = await db.query<{ result: { upload_state: string; scan_result: string } }>(
-      `select public.complete_email_upload($1, 0, $2, $3) as result`,
-      [known.rows[0].result.inbound_email_id, SHA, PDF],
+      `select public.complete_verified_email_upload($1, 0, $2, 16, 'application/pdf') as result`,
+      [known.rows[0].result.inbound_email_id, SHA],
     );
     expect(completed.rows[0].result.upload_state).toBe("clean");
     expect(completed.rows[0].result.scan_result).toBe("structural_only");

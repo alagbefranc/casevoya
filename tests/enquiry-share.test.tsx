@@ -93,18 +93,21 @@ describe("framing", () => {
 
     const embedMissing = await proxy(new NextRequest("https://app.casevoya.ca/embed/enquiry/no-such-firm"));
     expect(embedMissing.status).toBe(404);
-    expect(embedMissing.headers.get("Content-Security-Policy")).toBe("frame-ancestors *");
+    expect(embedMissing.headers.get("Content-Security-Policy")).toBe("frame-ancestors *; object-src 'none'; base-uri 'self'");
 
     rpc.mockResolvedValue({ data: { firm_name: "Maple", firm_slug: "maple", practice: false, staff: false }, error: null });
     const found = await proxy(new NextRequest("https://app.casevoya.ca/embed/enquiry/maple"));
     expect(found.status).toBe(200);
-    expect(found.headers.get("Content-Security-Policy")).toBe("frame-ancestors *");
+    expect(found.headers.get("Content-Security-Policy")).toBe("frame-ancestors *; object-src 'none'; base-uri 'self'");
+    expect(found.headers.get("Content-Security-Policy-Report-Only")).toContain("frame-ancestors *");
     expect(found.headers.get("X-Frame-Options")).toBeNull();
     expect(found.headers.get("Cache-Control")).toBe("private, no-store");
     const hosted = await proxy(new NextRequest("https://app.casevoya.ca/enquiry/maple"));
     expect(hosted.status).toBe(200);
     expect(hosted.headers.get("X-Frame-Options")).toBe("SAMEORIGIN");
-    expect(hosted.headers.get("Content-Security-Policy")).toBeNull();
+    // Only the baseline is enforced; the hosted page is not framable by other sites.
+    expect(hosted.headers.get("Content-Security-Policy")).toBe("object-src 'none'; base-uri 'self'");
+    expect(hosted.headers.get("Content-Security-Policy-Report-Only")).toContain("frame-ancestors 'self'");
 
     rpc.mockClear();
     const malformed = await proxy(new NextRequest("https://app.casevoya.ca/enquiry/Bad_Slug"));
@@ -147,8 +150,9 @@ describe("POST /api/enquiry/<firm>", () => {
     const response = await post("maple", form);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true, practice: true });
-    // The page is read with the visitor's session; the enquiry goes through the service role.
-    expect(rpc.mock.calls.map(([name]) => name)).toEqual(["enquiry_public_firm"]);
+    // The page (and the visitor's staff MFA) is read with the visitor's session; the enquiry goes
+    // through the service role.
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual(["enquiry_public_firm", "session_mfa_satisfied"]);
     const [name, args] = serviceRpc.mock.calls[0] ?? [];
     expect(name).toBe("submit_enquiry");
     expect(args).toMatchObject({
@@ -158,7 +162,24 @@ describe("POST /api/enquiry/<firm>", () => {
       p_consent_version: "enquiry-v2",
       p_source: "web_form",
       p_viewer: VIEWER,
+      // The session mock refuses session_mfa_satisfied: the visitor is named without staff MFA.
+      p_viewer_aal: "aal1",
     });
+  });
+
+  it("names the visitor's staff MFA when their session satisfies it", async () => {
+    rpc.mockImplementation(async (name: string) =>
+      name === "enquiry_public_firm"
+        ? { data: { firm_name: "Maple Immigration", firm_slug: "maple", practice: true, staff: true }, error: null }
+        : name === "session_mfa_satisfied"
+          ? { data: true, error: null }
+          : { data: null, error: { message: "permission denied" } },
+    );
+    serviceRpc.mockResolvedValue({ data: { ok: true }, error: null });
+    viewerSub = VIEWER;
+    expect((await post("maple", form)).status).toBe(200);
+    const [, args] = serviceRpc.mock.calls[0] ?? [];
+    expect(args).toMatchObject({ p_viewer: VIEWER, p_viewer_aal: "mfa" });
   });
 
   it("computes the address hash on the server and names no viewer when signed out", async () => {
@@ -176,6 +197,7 @@ describe("POST /api/enquiry/<firm>", () => {
     expect(response.status).toBe(200);
     const [, args] = serviceRpc.mock.calls[0] ?? [];
     expect(args.p_viewer).toBeNull();
+    expect(args.p_viewer_aal).toBeNull();
     expect(args.p_client_hash).toMatch(/^[0-9a-f]{64}$/);
     expect(args.p_client_hash).not.toBe("f".repeat(64));
   });

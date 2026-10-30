@@ -2,10 +2,12 @@
 
 /** Ports of the designer's kit helpers used by the auth screens. Timings match kit2.js / rb.js. */
 
+import { escapeHtml } from "@/lib/html";
+
 const ASSET = "/assets/icons-coreui/sprite.svg";
 
 export function icon(name: string, cls = ""): string {
-  return `<svg class="ic ${cls}" aria-hidden="true"><use href="${ASSET}#i-${name}"/></svg>`;
+  return `<svg class="ic ${escapeHtml(cls)}" aria-hidden="true"><use href="${ASSET}#i-${escapeHtml(name)}"/></svg>`;
 }
 
 export function reducedMotion(): boolean {
@@ -246,9 +248,9 @@ export function k2Count(el: HTMLElement, value: string) {
         .map((ch) =>
           /\d/.test(ch)
             ? `<span class="k2-dg"><span class="k2-st">${[...Array(10).keys()].map((n) => `<span>${n}</span>`).join("")}</span></span>`
-            : `<span>${ch}</span>`,
+            : `<span>${escapeHtml(ch)}</span>`,
         )
-        .join("") + `<span class="k2-sr">${text}</span>`;
+        .join("") + `<span class="k2-sr">${escapeHtml(text)}</span>`;
     el.dataset.len = String(text.length);
     el.classList.add("k2-count");
   }
@@ -277,7 +279,8 @@ export function k2Slider(
   } = {},
 ) {
   el.classList.add("k2-sl");
-  el.innerHTML = `<div class="k2-sl-top"><span>${label}</span><b class="num"><span class="v"></span> ${unit}</b></div><div class="k2-sl-body"><span class="k2-sl-cap">${min}</span><div class="k2-sl-tr" role="slider" tabindex="0" aria-label="${label}" aria-valuemin="${min}" aria-valuemax="${max}"><i class="k2-sl-fill"></i><i class="k2-sl-th"></i></div><span class="k2-sl-cap">${max}</span></div>`;
+  const safeLabel = escapeHtml(label);
+  el.innerHTML = `<div class="k2-sl-top"><span>${safeLabel}</span><b class="num"><span class="v"></span> ${escapeHtml(unit)}</b></div><div class="k2-sl-body"><span class="k2-sl-cap">${Number(min)}</span><div class="k2-sl-tr" role="slider" tabindex="0" aria-label="${safeLabel}" aria-valuemin="${Number(min)}" aria-valuemax="${Number(max)}"><i class="k2-sl-fill"></i><i class="k2-sl-th"></i></div><span class="k2-sl-cap">${Number(max)}</span></div>`;
   const track = el.querySelector<HTMLElement>(".k2-sl-tr");
   const fill = el.querySelector<HTMLElement>(".k2-sl-fill");
   const thumb = el.querySelector<HTMLElement>(".k2-sl-th");
@@ -499,9 +502,7 @@ export function voPose(pose = "wave", size = 96): string {
     search: "searching",
     lock: "holding a lock, private",
   };
-  return `<svg class="mascot vo-pose p-${pose}" width="${size}" height="${size}" viewBox="0 0 100 100" role="img" aria-label="Vo ${labels[pose] || pose}" style="overflow:visible"><g class="m-body" style="transform-origin:50px 90px" transform="${tilt[pose] || ""}"><path d="M38 20 C 42 28, 46 32, 50 31 C 55 26, 60 18, 68 14" fill="none" stroke="${blue}" stroke-width="7" stroke-linecap="round"/><ellipse cx="50" cy="60" rx="32" ry="30" fill="${blue}"/><ellipse cx="50" cy="64" rx="21" ry="17" fill="#fff"/>${eye}${mouth}<ellipse cx="34" cy="70" rx="3.4" ry="2" fill="${light}" opacity=".7"/><ellipse cx="66" cy="70" rx="3.4" ry="2" fill="${light}" opacity=".7"/></g>${extra[pose] || ""}</svg>`;
+  const px = Number(size) || 96;
+  return `<svg class="mascot vo-pose p-${escapeHtml(pose)}" width="${px}" height="${px}" viewBox="0 0 100 100" role="img" aria-label="Vo ${escapeHtml(labels[pose] || pose)}" style="overflow:visible"><g class="m-body" style="transform-origin:50px 90px" transform="${tilt[pose] || ""}"><path d="M38 20 C 42 28, 46 32, 50 31 C 55 26, 60 18, 68 14" fill="none" stroke="${blue}" stroke-width="7" stroke-linecap="round"/><ellipse cx="50" cy="60" rx="32" ry="30" fill="${blue}"/><ellipse cx="50" cy="64" rx="21" ry="17" fill="#fff"/>${eye}${mouth}<ellipse cx="34" cy="70" rx="3.4" ry="2" fill="${light}" opacity=".7"/><ellipse cx="66" cy="70" rx="3.4" ry="2" fill="${light}" opacity=".7"/></g>${extra[pose] || ""}</svg>`;
 }
 
-function escapeHtml(value: string) {
-  return value.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch] ?? ch);
-}

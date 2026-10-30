@@ -18,7 +18,7 @@
  * - isCitableOfficialUrl and adviceLike mirror the database's app.vo_citable_official_url and
  *   app.vo_advice_like, so the page and the service can decide early; the database decides.
  */
-import { clean, MONEY, REMOVED } from "./letter-guard";
+import { claimsSupported, clean, MONEY, REMOVED } from "./letter-guard";
 import { NEEDS_CONSULTANT, NEEDS_RULE } from "./prompt";
 import type { VoAbstainReason, VoSourceRef } from "./sign";
 
@@ -195,9 +195,12 @@ function sentencesOf(line: string): string[] {
 
 /**
  * Guards an Ask Vo answer against the run's allowed set (`allowed`: marker to the record it was
- * handed out for). Pure; whatever the model returned is untrusted.
+ * handed out for). Pure; whatever the model returned is untrusted. `contents` (marker to the text
+ * handed out with it, for [S#] and [F#]): a sentence citing [S#] keeps a money amount only if the
+ * cited official content states it, and a duration or date only if the cited official content or
+ * fact states it (a date may also come from a cited matter record).
  */
-export function guardGroundedAnswer(raw: unknown, allowed: ReadonlyMap<string, VoSourceRef>): GroundedAnswer {
+export function guardGroundedAnswer(raw: unknown, allowed: ReadonlyMap<string, VoSourceRef>, contents?: ReadonlyMap<string, string>): GroundedAnswer {
   if (typeof raw !== "string") return { kind: "empty" };
   const text = clean(raw);
   if (!text) return { kind: "empty" };
@@ -226,6 +229,13 @@ export function guardGroundedAnswer(raw: unknown, allowed: ReadonlyMap<string, V
         if (!cites.length || kept.includes(REMOVED) || placeholder || (regulated && !official)) {
           leftOut += 1;
           return "";
+        }
+        if (contents && official) {
+          const text = (prefix: string) => cites.filter((ref) => ref.startsWith(prefix)).map((ref) => contents.get(ref) ?? "");
+          if (!claimsSupported(kept, { money: text("S"), other: [...text("S"), ...text("F")], dates: !cites.some((ref) => ref.startsWith("R")) })) {
+            leftOut += 1;
+            return "";
+          }
         }
         for (const ref of cites) if (!used.includes(ref)) used.push(ref);
         return kept

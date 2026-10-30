@@ -325,6 +325,63 @@ describe("scope search and redaction", () => {
     await db.query(`select public.record_privacy_step($1, 'redaction', 'Third-party details removed')`, [id]);
     await expectDbError(() => db.query(`select public.decide_privacy_item($1, 'withhold', null, 'X', 'Too late')`, [matter.id]), /worklist is closed/);
   });
+
+  // 20261031020000 (DOC-3): other people's and staff-only documents start withheld, awaiting a decision.
+  it("withholds other people's non-shared documents and staff-only documents until a reviewer decides", async () => {
+    const f = await firm();
+    await asMaintenance(db);
+    const doc = async (personId: string, purpose: string, audience: string, sensitivity: string) => {
+      const row = await db.query<{ id: string }>(
+        `insert into public.documents (organization_id, person_id, purpose, audience, sensitivity)
+         values ($1, $2, $3, $4::public.document_audience, $5::public.document_sensitivity) returning id`,
+        [f.orgId, personId, purpose, audience, sensitivity],
+      );
+      await db.query(`insert into public.document_matter_refs (organization_id, document_id, matter_id) values ($1, $2, $3)`, [f.orgId, row.rows[0].id, f.matterId]);
+      return row.rows[0].id;
+    };
+    const ownMedical = await doc(f.personId, "Own medical exam", "subject", "medical");
+    const ownStaff = await doc(f.personId, "Staff file note", "staff", "ordinary");
+    const otherPrivate = await doc(f.offlinePersonId, "Sponsor tax return", "subject", "ordinary");
+    const otherShared = await doc(f.offlinePersonId, "Sponsor letter", "matter", "ordinary");
+    const otherSensitive = await doc(f.offlinePersonId, "Sponsor police certificate", "matter", "criminal");
+
+    const id = await recordRequest(f);
+    await searched(f, id);
+    await asMaintenance(db);
+    const rows = (
+      await db.query<{ source_id: string; decision: string; third_party: string | null; decided_at: string | null }>(
+        `select source_id, decision, third_party, decided_at from public.privacy_request_items where request_id = $1 and source = 'document'`,
+        [id],
+      )
+    ).rows;
+    const decision = (docId: string) => rows.find((row) => row.source_id === docId)?.decision;
+    expect(decision(ownMedical)).toBe("include");
+    expect(decision(otherShared)).toBe("include");
+    expect(decision(ownStaff)).toBe("withhold");
+    expect(decision(otherPrivate)).toBe("withhold");
+    expect(decision(otherSensitive)).toBe("withhold");
+    expect(rows.find((row) => row.source_id === otherPrivate)?.third_party).toBe("Synthetic offline person");
+    expect(rows.every((row) => row.decided_at === null)).toBe(true);
+
+    // Each default-withheld document is an open worklist line: the redaction step waits for a decision.
+    const lines = await db.query<{ n: number }>(`select count(*)::int as n from public.privacy_request_redactions where request_id = $1 and state = 'to_do'`, [id]);
+    expect(lines.rows[0].n).toBe(3);
+    await stale(f.consultant, f.orgId);
+    await expectDbError(() => db.query(`select public.record_privacy_step($1, 'redaction', 'Done')`, [id]), /finish every line/);
+    // Re-running the search adds no duplicate lines.
+    await db.query(`select public.privacy_scope_search($1)`, [id]);
+    await asMaintenance(db);
+    expect((await db.query<{ n: number }>(`select count(*)::int as n from public.privacy_request_redactions where request_id = $1`, [id])).rows[0].n).toBe(3);
+
+    // A reviewer includes the staff note on purpose and confirms the other two stay withheld.
+    await stale(f.consultant, f.orgId);
+    const itemId = async (docId: string) =>
+      (await db.query<{ id: string }>(`select id from public.privacy_request_items where request_id = $1 and source_id = $2`, [id, docId])).rows[0].id;
+    await db.query(`select public.decide_privacy_item($1, 'include', null, null, null)`, [await itemId(ownStaff)]);
+    await db.query(`select public.decide_privacy_item($1, 'withhold', null, 'Synthetic sponsor', 'About the sponsor only')`, [await itemId(otherPrivate)]);
+    await db.query(`select public.decide_privacy_item($1, 'withhold', null, 'Synthetic sponsor', 'About the sponsor only')`, [await itemId(otherSensitive)]);
+    await db.query(`select public.record_privacy_step($1, 'redaction', 'Third-party documents withheld')`, [id]);
+  });
 });
 
 describe("response package and delivery", () => {

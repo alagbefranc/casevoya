@@ -8,10 +8,10 @@
  * every record a result shows is recorded as a source the draft cites.
  */
 import { z } from "zod";
-import { dataBlock, oneLine } from "../../../src/modules/vo/prompt";
+import { dataBlock, dataInline, oneLine } from "../../../src/modules/vo/prompt";
 import { guardVoOutput, type GuardResult } from "../../../src/modules/vo/guard";
 import type { VoSourceRef, VoTask, VoTaskRequest } from "../../../src/modules/vo/sign";
-import type { VoData, VoSettingsRow } from "./data";
+import { deadlineInAudience, personInAudience, requestInAudience, taskInAudience, type VoData, type VoSettingsRow } from "./data";
 import { LETTER_TOOL_SPECS, type LetterContext, type LetterToolName } from "./letter-tools";
 import { GROUNDED_TOOL_SPECS, type GroundedToolName } from "./grounded-tools";
 import { cite } from "./cite";
@@ -51,6 +51,10 @@ export type RunContext = {
   sources: Map<string, VoSourceRef>;
   /** SRC-09 (Ask Vo): the run's allowed set, by the marker each record was handed out with ("R1", "F2", "S1"). */
   markers?: Map<string, VoSourceRef>;
+  /** VO-3 (Ask Vo): the text each [S#] / [F#] marker was handed out with. */
+  markerContent?: Map<string, string>;
+  /** VO-1: the conversation's audience (person ids), read once per run. */
+  audience?: string[];
   /** Tool names in call order (the run log). */
   calls: string[];
   draft: Extract<GuardResult, { kind: "draft" }> | null;
@@ -115,50 +119,92 @@ export function documentKind(purpose: string, sensitivity: string): keyof typeof
   return sensitivity === "sensitive" ? "medical" : "identity";
 }
 
+const SENSITIVE_SWITCH: Record<string, keyof VoSettingsRow> = { medical: "read_medical", criminal: "read_criminal", narrative: "read_narratives" };
+
+/** Medical or criminal-history wording in a title, purpose or label. */
+function sensitiveWording(value: string): "medical" | "criminal" | null {
+  if (/\b(?:medical|health|diagnos\w*|hospital\w*|psychiatr\w*|psycholog\w*)\b/i.test(value)) return "medical";
+  if (/\b(?:police|criminal|court|convictions?|charges?|offen[cs]es?)\b/i.test(value)) return "criminal";
+  return null;
+}
+
+/**
+ * VO-2: whether the firm's per-category switches hide this text from Vo: its stated sensitivity
+ * (medical, criminal, narrative) or medical / criminal wording, with that switch not on.
+ */
+export function hiddenBySettings(settings: VoSettingsRow | null, sensitivity: string | null | undefined, value: string): boolean {
+  const kinds = [sensitivity && SENSITIVE_SWITCH[sensitivity] ? sensitivity : null, sensitiveWording(value)].filter((kind): kind is string => Boolean(kind));
+  return kinds.some((kind) => settings?.[SENSITIVE_SWITCH[kind]] !== true);
+}
+
+/**
+ * VO-1: the person ids a reply or document-request run's conversation is addressed to, or null
+ * for runs without a conversation (Ask Vo and letters are staff-only and read the whole matter).
+ */
+async function audienceOf(ctx: RunContext): Promise<string[] | null> {
+  if (ctx.request.task !== "message_reply" && ctx.request.task !== "document_request") return null;
+  if (ctx.audience) return ctx.audience;
+  const threadId = ctx.request.threadId;
+  ctx.audience = threadId && ctx.data.threadAudience ? await ctx.data.threadAudience(threadId) : [];
+  return ctx.audience;
+}
+
 export const TOOL_SPECS: Record<VoToolName, ToolSpec> = {
   read_matter_summary: {
     name: "read_matter_summary",
-    description: "The matter this run is about: title, reference, stage, open tasks, deadlines (with whether a person verified them) and open document requests.",
+    description:
+      "The matter this run is about: title, reference, stage, open tasks, deadlines (with whether a person verified them) and open document requests. In a conversation, only what its readers may see.",
     shape: {},
     readOnly: true,
     async run(ctx) {
       const matterId = ctx.request.matterId;
-      const [matter, tasks, deadlines, requests] = await Promise.all([
+      const [matter, allTasks, allDeadlines, allRequests, audience] = await Promise.all([
         ctx.data.matter(matterId),
         ctx.data.tasks(matterId),
         ctx.data.deadlines(matterId),
         ctx.data.requests(matterId),
+        audienceOf(ctx),
       ]);
       if (!matter) return refused("This matter can't be read.");
+      // VO-1: a conversation sees only its own people's records; VO-2: the firm's category switches apply.
+      const tasks = (audience ? allTasks.filter((task) => taskInAudience(task, audience)) : allTasks).filter((task) => !hiddenBySettings(ctx.settings, null, task.title));
+      const deadlines = (audience ? allDeadlines.filter(deadlineInAudience) : allDeadlines).filter((deadline) => !hiddenBySettings(ctx.settings, null, deadline.label));
+      const scoped = audience ? allRequests.filter((request) => requestInAudience(request, audience)) : allRequests;
+      const requests = scoped.filter((request) => !hiddenBySettings(ctx.settings, request.sensitivity, request.purpose));
+      const hidden = allTasks.length - tasks.length + (allDeadlines.length - deadlines.length) + (allRequests.length - requests.length);
       const matterMark = cite(ctx, { kind: "matter", id: matter.id, label: matter.reference || matter.title });
-      const lines = [`${matterMark}Matter: ${oneLine(matter.title)}${matter.reference ? ` (${oneLine(matter.reference, 40)})` : ""}; stage: ${oneLine(stageWords(matter.stage), 40)}`];
+      const lines = [
+        `${matterMark}Matter: ${dataInline(ctx.nonce, matter.title)}${matter.reference ? ` (reference ${dataInline(ctx.nonce, matter.reference, 40)})` : ""}; stage: ${oneLine(stageWords(matter.stage), 40)}`,
+      ];
       lines.push(`Open tasks: ${tasks.length ? "" : "none"}`);
       for (const task of tasks) {
         const mark = cite(ctx, { kind: "task", id: task.id, label: `Task: ${task.title}` });
-        lines.push(`- ${mark}${oneLine(redactIdentity(task.title), 200)}; due ${day(task.dueOn)}; ${task.status}`);
+        lines.push(`- ${mark}${dataInline(ctx.nonce, redactIdentity(task.title), 200)}; due ${day(task.dueOn)}; ${oneLine(task.status, 20)}`);
       }
       lines.push(`Deadlines: ${deadlines.length ? "" : "none"}`);
       for (const deadline of deadlines) {
         const mark = cite(ctx, { kind: "deadline", id: deadline.id, label: `Deadline: ${deadline.label}` });
-        lines.push(`- ${mark}${oneLine(redactIdentity(deadline.label), 200)}; due ${day(deadline.dueOn)}; ${deadline.verification === "verified" ? "verified by a person" : "NOT verified (tentative)"}`);
+        lines.push(`- ${mark}${dataInline(ctx.nonce, redactIdentity(deadline.label), 200)}; due ${day(deadline.dueOn)}; ${deadline.verification === "verified" ? "verified by a person" : "NOT verified (tentative)"}`);
       }
       lines.push(`Open document requests: ${requests.length ? "" : "none"}`);
       for (const request of requests) {
-        const mark = cite(ctx, { kind: "document_request", id: request.id, label: `Request: ${request.purpose}` });
-        lines.push(`- ${mark}${oneLine(request.purpose, 200)}; formats ${request.formats.map((f) => oneLine(f, 10)).join(", ")}; due ${day(request.dueOn)}; explanation:`);
+        const mark = cite(ctx, { kind: "document_request", id: request.id, label: `Request: ${redactIdentity(request.purpose)}` });
+        lines.push(`- ${mark}${dataInline(ctx.nonce, redactIdentity(request.purpose), 200)}; formats ${request.formats.map((f) => oneLine(f, 10)).join(", ")}; due ${day(request.dueOn)}; explanation:`);
         lines.push(dataBlock(ctx.nonce, redactIdentity(request.explanation)));
       }
+      if (hidden) lines.push(`${hidden} record(s) not shown: outside this conversation's readers or hidden by the firm's Vo settings. Don't mention or guess them.`);
       return text(lines.join("\n"));
     },
   },
   read_person: {
     name: "read_person",
-    description: "The people on this matter: display name and role only (no contact details, dates of birth or identity numbers).",
+    description: "The people on this matter (in a conversation, only its readers): display name and role only (no contact details, dates of birth or identity numbers).",
     shape: {},
     readOnly: true,
     async run(ctx) {
-      const people = await ctx.data.people(ctx.request.matterId);
-      return text(people.length ? people.map((p) => `- ${oneLine(p.name, 80)} (${oneLine(p.role, 30)})`).join("\n") : "No people recorded on this matter.");
+      const [all, audience] = await Promise.all([ctx.data.people(ctx.request.matterId), audienceOf(ctx)]);
+      const people = audience ? all.filter((person) => personInAudience(person, audience)) : all;
+      return text(people.length ? people.map((p) => `- ${dataInline(ctx.nonce, p.name, 80)} (${oneLine(p.role, 30)})`).join("\n") : "No people recorded on this matter.");
     },
   },
   read_documents_index: {
@@ -173,7 +219,7 @@ export const TOOL_SPECS: Record<VoToolName, ToolSpec> = {
       // SRC-09: each listed document is cited by its current version (Ask Vo cites it as [R#]).
       const lines = allowed.map((doc) => {
         const mark = doc.versionId ? cite(ctx, { kind: "document_version", id: doc.versionId, label: `Document: ${redactIdentity(doc.purpose)}` }) : "";
-        return `- ${mark}${oneLine(redactIdentity(doc.purpose), 200)}`;
+        return `- ${mark}${dataInline(ctx.nonce, redactIdentity(doc.purpose), 200)}`;
       });
       if (hidden) lines.push(`${hidden} document(s) hidden by the firm's Vo settings.`);
       return text(lines.length ? lines.join("\n") : "No documents Vo may list.");
@@ -188,10 +234,10 @@ export const TOOL_SPECS: Record<VoToolName, ToolSpec> = {
       if (!ctx.request.threadId) return refused("This task has no conversation.");
       if (ctx.settings && ctx.settings.read_client_messages !== true) return refused("The firm doesn't let Vo read client messages.");
       const [people, messages] = await Promise.all([ctx.data.threadPeople(ctx.request.threadId), ctx.data.messages(ctx.request.threadId, 12)]);
-      const lines = [`Client(s) who read this conversation: ${people.map((p) => oneLine(p, 80)).join(", ") || "unknown"}`];
+      const lines = [`Client(s) who read this conversation: ${people.map((p) => dataInline(ctx.nonce, p, 80)).join(", ") || "unknown"}`];
       for (const message of messages) {
         const mark = cite(ctx, { kind: "message", id: message.id, label: `${message.authorKind === "client" ? "Client message" : "Firm message"} ${day(message.createdAt)}` });
-        lines.push(`${mark}${message.authorKind === "client" ? "Client" : "Firm"} ${oneLine(message.authorName, 80)} on ${day(message.createdAt)}:`);
+        lines.push(`${mark}${message.authorKind === "client" ? "Client" : "Firm"} ${dataInline(ctx.nonce, message.authorName, 80)} on ${day(message.createdAt)}:`);
         lines.push(dataBlock(ctx.nonce, redactIdentity(message.body)));
       }
       if (!messages.length) lines.push("No messages yet.");
@@ -233,7 +279,9 @@ export const TOOL_SPECS: Record<VoToolName, ToolSpec> = {
     readOnly: false,
     async run(ctx, args) {
       if (ctx.draft) return refused("A draft was already saved for this run.");
-      const guarded = guardVoOutput(String(args.text ?? ""));
+      // VO-6: links survive only to the portal and this firm's own booking pages.
+      const firm = await ctx.data.firm();
+      const guarded = guardVoOutput(String(args.text ?? ""), { firmSlug: firm?.slug ?? null });
       if (guarded.kind === "abstain") {
         ctx.abstainedByDraft = true;
         return text("Noted: this needs a consultant. No draft was saved.");

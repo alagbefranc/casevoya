@@ -29,6 +29,8 @@ import {
 
 export const BILLING_EVENTS = new Set([
   "checkout.session.completed",
+  "checkout.session.async_payment_succeeded",
+  "checkout.session.async_payment_failed",
   "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.deleted",
@@ -39,6 +41,7 @@ export const BILLING_EVENTS = new Set([
 export const ORGANIZATION_METADATA = "casevoya_organization_id";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SUBSCRIPTION_ID = /^sub_[A-Za-z0-9]{6,250}$/;
 
 export type SubscriptionSummary = {
   id: string | null;
@@ -49,14 +52,20 @@ export type SubscriptionSummary = {
   current_period_end: string | null;
   cancel_at: string | null;
   canceled_at: string | null;
+  /** Checkout events only: the session's payment_status (paid, unpaid, no_payment_required). */
+  payment_status?: string | null;
 };
 
 export type InvoiceSummary = {
   id: string;
+  /** The Stripe subscription the invoice belongs to, when it has one. */
+  subscription: string | null;
+  billing_reason: string | null;
   number: string | null;
   status: string | null;
   amount_due: number;
   amount_paid: number;
+  amount_remaining: number;
   currency: string;
   period_start: string | null;
   period_end: string | null;
@@ -139,7 +148,7 @@ export function billingEventSummary(event: Stripe.Event): BillingEventSummary | 
   if (!BILLING_EVENTS.has(event.type) || typeof event.account === "string") return null;
   const base = { id: event.id, type: event.type, created: event.created, livemode: event.livemode === true };
   const object = event.data.object as { object?: string };
-  if (event.type === "checkout.session.completed") {
+  if (event.type.startsWith("checkout.session.")) {
     const session = event.data.object as Stripe.Checkout.Session;
     if (session.object !== "checkout.session" || session.mode !== "subscription") return null;
     const meta = session.metadata ?? {};
@@ -158,6 +167,7 @@ export function billingEventSummary(event: Stripe.Event): BillingEventSummary | 
         current_period_end: null,
         cancel_at: null,
         canceled_at: null,
+        payment_status: text(session.payment_status, 40),
       },
     };
   }
@@ -176,6 +186,7 @@ export function billingEventSummary(event: Stripe.Event): BillingEventSummary | 
   const invoice = event.data.object as Stripe.Invoice;
   if (typeof invoice.id !== "string") return null;
   const subscriptionMetadata = invoice.parent?.subscription_details?.metadata ?? null;
+  const invoiceSubscription = idOf(invoice.parent?.subscription_details?.subscription);
   return {
     ...base,
     livemode: base.livemode || invoice.livemode === true,
@@ -183,10 +194,13 @@ export function billingEventSummary(event: Stripe.Event): BillingEventSummary | 
     customer: idOf(invoice.customer),
     invoice: {
       id: invoice.id,
+      subscription: invoiceSubscription && SUBSCRIPTION_ID.test(invoiceSubscription) ? invoiceSubscription : null,
+      billing_reason: text(invoice.billing_reason, 60),
       number: text(invoice.number, 60),
       status: text(invoice.status, 40),
       amount_due: Math.max(0, invoice.amount_due ?? 0),
       amount_paid: Math.max(0, invoice.amount_paid ?? 0),
+      amount_remaining: Math.max(0, invoice.amount_remaining ?? 0),
       currency: text(invoice.currency, 3) ?? "cad",
       period_start: iso(invoice.period_start),
       period_end: iso(invoice.period_end),

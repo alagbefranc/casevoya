@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database.types";
 import { hasPublicSupabaseEnv, getPublicSupabaseEnv } from "@/lib/env";
+import { authCookieOptions, authCookieSecure, capAuthCookie } from "@/lib/supabase/cookie-options";
 import { isGatedPath, signInLocation } from "@/lib/auth/redirect";
 import { isStaffArea, staffMfaRedirectPath } from "@/lib/auth/staff-session";
 import { REQUEST_ID_HEADER, resolveRequestId } from "@/lib/tenant/context";
@@ -48,6 +49,7 @@ export async function updateSession(request: NextRequest) {
 
   const supabase = createServerClient<Database>(url, publishableKey, {
     auth: { experimental: { passkey: true } },
+    cookieOptions: authCookieOptions(authCookieSecure(request.nextUrl.protocol, request.nextUrl.hostname)),
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -56,7 +58,7 @@ export async function updateSession(request: NextRequest) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
         response = NextResponse.next({ request });
         response.headers.set(REQUEST_ID_HEADER, requestId);
-        cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+        cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, capAuthCookie(options)));
         Object.entries(headers ?? {}).forEach(([key, value]) => response.headers.set(key, value));
       },
     },

@@ -1,22 +1,20 @@
 import { NextResponse } from "next/server";
 import { emailRuntimeConfig } from "@/lib/email/env";
 import { createServiceClient } from "@/lib/supabase/service";
-import { timingSafeEqual } from "@/modules/email/sign";
+import { bearerToken, cronBearerAuthorized } from "@/modules/email/cron-auth";
 import { runScheduledReports } from "@/modules/sheet/scheduled-reports-runner";
 
 /**
  * REP-03: sends the scheduled reports that are due. The caller is the scheduler
- * (app.kick_scheduled_reports, every 5 minutes while one is due) with the mail dispatch bearer
- * (EMAIL_DISPATCH_SECRET), like the retention runner. Recipients get an in-app link only.
+ * (app.kick_scheduled_reports, every 5 minutes while one is due) with the cron bearer
+ * (cron-auth.ts), like the retention runner. Recipients get an in-app link only.
  */
 export async function POST(request: Request) {
   const config = emailRuntimeConfig();
   if (!config.dispatchSecret || !config.serviceKey) {
     return NextResponse.json({ error: "The scheduled reports runner is not configured." }, { status: 503 });
   }
-  const header = request.headers.get("authorization") ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
-  if (!timingSafeEqual(token, config.dispatchSecret)) {
+  if (!(await cronBearerAuthorized(bearerToken(request), config))) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
   try {

@@ -2,6 +2,7 @@ import { AccessToken, TokenVerifier, WebhookReceiver } from "livekit-server-sdk"
 import { describe, expect, it, vi } from "vitest";
 import {
   ADMITTED_PERMISSION,
+  JOIN_TOKEN_MAX_TTL_SECONDS,
   joinGrant,
   liveKitHttpUrl,
   participantToken,
@@ -15,27 +16,60 @@ import {
 // our join tokens verify with its TokenVerifier, its webhook tokens verify with ours.
 
 const config = { url: "wss://synthetic.livekit.test", apiKey: "APIsynthetic", apiSecret: "synthetic-secret-that-is-long-enough-for-hs256" };
+const ROOM = `cv-${"0123456789abcdef".repeat(2)}`;
 
 describe("join tokens", () => {
-  it("a host token verifies with the official SDK and carries the room-admin grant", async () => {
-    const token = await participantToken(config, { identity: "staff:00000000-0000-4000-8000-000000000001", name: "Synthetic Host", role: "host", admitted: true, room: "cv-0123", ttlSeconds: 900 });
+  it("a host token verifies with the official SDK, joins one room only and has no admin grants", async () => {
+    const token = await participantToken(config, { identity: "staff:00000000-0000-4000-8000-000000000001", name: "Synthetic Host", role: "host", admitted: true, room: ROOM, ttlSeconds: 900 });
     const claims = await new TokenVerifier(config.apiKey, config.apiSecret).verify(token);
     expect(claims).toMatchObject({
       iss: config.apiKey,
       sub: "staff:00000000-0000-4000-8000-000000000001",
       name: "Synthetic Host",
       attributes: { role: "host", admitted: "1" },
-      video: { room: "cv-0123", roomJoin: true, roomAdmin: true, canPublish: true, canSubscribe: true, canPublishSources: ["camera", "microphone", "screen_share", "screen_share_audio"] },
+      video: { room: ROOM, roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: true, canPublishSources: ["camera", "microphone", "screen_share", "screen_share_audio"] },
     });
+    for (const grant of ["roomAdmin", "roomCreate", "roomList", "roomRecord", "ingressAdmin", "hidden", "recorder"]) {
+      expect((claims.video as unknown as Record<string, unknown>)[grant]).toBeFalsy();
+    }
     expect(JSON.parse(String(claims.metadata))).toEqual({ role: "host" });
-    expect(Number(claims.exp) - Number(claims.nbf)).toBe(900);
+    // The database's TTL (up to the end of the window) is capped at 10 minutes.
+    expect(Number(claims.exp) - Number(claims.nbf)).toBe(JOIN_TOKEN_MAX_TTL_SECONDS);
+    expect(JOIN_TOKEN_MAX_TTL_SECONDS).toBeLessThanOrEqual(600);
+  });
+
+  it("the TTL is never longer than 10 minutes and a shorter one is kept", async () => {
+    const verify = async (ttlSeconds: number) => {
+      const claims = await verifyLiveKitJwt(config, await participantToken(config, { identity: "client:00000000-0000-4000-8000-000000000002", name: "C", role: "client", admitted: false, room: ROOM, ttlSeconds }));
+      return Number(claims?.exp) - Number(claims?.nbf);
+    };
+    expect(await verify(7200)).toBe(600);
+    expect(await verify(120)).toBe(120);
+    expect(await verify(Number.NaN)).toBe(600);
+    expect(await verify(-5)).toBe(600);
+  });
+
+  it("the identity must match the role, and the room must be a single call room", async () => {
+    const base = { name: "X", admitted: true, room: ROOM, ttlSeconds: 300 };
+    await expect(participantToken(config, { ...base, identity: "client:00000000-0000-4000-8000-000000000002", role: "host" })).rejects.toThrow(/identity/);
+    await expect(participantToken(config, { ...base, identity: "staff:00000000-0000-4000-8000-000000000001", role: "client" })).rejects.toThrow(/identity/);
+    await expect(participantToken(config, { ...base, identity: "", role: "client" })).rejects.toThrow(/identity/);
+    await expect(participantToken(config, { ...base, identity: "client:*", role: "client" })).rejects.toThrow(/identity/);
+    await expect(participantToken(config, { ...base, identity: "client:00000000-0000-4000-8000-000000000002", role: "client", room: "" })).rejects.toThrow(/room/);
+    await expect(participantToken(config, { ...base, identity: "client:00000000-0000-4000-8000-000000000002", role: "client", room: "*" })).rejects.toThrow(/room/);
+    expect(() => joinGrant("cv-1", "client", true)).toThrow(/room/);
   });
 
   it("a client in the lobby can neither publish nor subscribe; admitted, they can", () => {
-    expect(joinGrant("cv-1", "client", false)).toMatchObject({ roomJoin: true, canPublish: false, canSubscribe: false, canPublishData: false });
-    expect(joinGrant("cv-1", "client", false).roomAdmin).toBeUndefined();
-    expect(joinGrant("cv-1", "client", true)).toMatchObject({ canPublish: true, canSubscribe: true, canPublishData: true });
-    expect(joinGrant("cv-1", "client", true).roomAdmin).toBeUndefined();
+    expect(joinGrant(ROOM, "client", false)).toMatchObject({ room: ROOM, roomJoin: true, canPublish: false, canSubscribe: false, canPublishData: false });
+    expect(joinGrant(ROOM, "client", false).roomAdmin).toBeUndefined();
+    expect(joinGrant(ROOM, "client", true)).toMatchObject({ room: ROOM, roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: true });
+    expect(joinGrant(ROOM, "client", true).roomAdmin).toBeUndefined();
+    for (const grant of [joinGrant(ROOM, "host", true), joinGrant(ROOM, "client", true), joinGrant(ROOM, "client", false)]) {
+      expect(grant).not.toHaveProperty("roomAdmin");
+      expect(grant).not.toHaveProperty("roomCreate");
+      expect(grant).not.toHaveProperty("roomList");
+    }
   });
 
   it("our verifier refuses another secret, another issuer, expiry and tampering", async () => {

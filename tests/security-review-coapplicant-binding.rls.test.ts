@@ -165,6 +165,67 @@ describe("co-applicant uploads are bound to the request", () => {
     expect(other.document_id).not.toBe(first.document_id);
   });
 
+  // 20261031017000 (R2-01): the attach step checks the target request itself.
+  it("refuses attaching a co-applicant file to another request of the same person", async () => {
+    const ctx = await firm();
+    const requestA = await request(ctx, ctx.elias);
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const others: string[] = [];
+    for (const [audience, sensitivity, purpose] of [
+      ["subject", "ordinary", PURPOSE],
+      ["staff", "ordinary", PURPOSE],
+      ["matter", "medical", PURPOSE],
+      ["matter", "ordinary", "Birth certificate"],
+    ]) {
+      const row = await db.query<{ id: string }>(
+        `select public.create_document_request(
+           $1, $2, $3, 'Synthetic explanation.', null, array['pdf']::text[], 'Readable.', null,
+           $4::public.document_audience, $5::public.document_sensitivity, null, null
+         ) as id`,
+        [ctx.matterId, ctx.elias, purpose, audience, sensitivity],
+      );
+      others.push(row.rows[0].id);
+    }
+
+    await asSponsor(ctx);
+    const file = (await intent(ctx, ctx.elias, PURPOSE)).rows[0].result;
+    for (const other of others) {
+      await expectDbError(() => db.query(`select public.attach_upload_to_request($1, $2)`, [file.version_id, other]), /document upload denied/);
+    }
+    await asMaintenance(db);
+    const untouched = await db.query<{ n: string }>(`select count(*) as n from public.document_requests where id = any($1::uuid[]) and document_id is not null`, [others]);
+    expect(Number(untouched.rows[0].n)).toBe(0);
+
+    // The request the file was made for still takes it.
+    await asSponsor(ctx);
+    await db.query(`select public.attach_upload_to_request($1, $2)`, [file.version_id, requestA]);
+    await asMaintenance(db);
+    const doc = await db.query<{ purpose: string; audience: string; sensitivity: string }>(
+      `select purpose, audience::text, sensitivity::text from public.documents where id = $1`,
+      [file.document_id],
+    );
+    expect(doc.rows[0]).toEqual({ purpose: PURPOSE, audience: "matter", sensitivity: "ordinary" });
+  });
+
+  it("leaves staff attaching to any request of the matter unchanged", async () => {
+    const ctx = await firm();
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const staffOnly = (
+      await db.query<{ id: string }>(
+        `select public.create_document_request(
+           $1, $2, 'Police certificate', 'Synthetic explanation.', null, array['pdf']::text[], 'Readable.', null,
+           'staff'::public.document_audience, 'criminal'::public.document_sensitivity, null, null
+         ) as id`,
+        [ctx.matterId, ctx.freya],
+      )
+    ).rows[0].id;
+    const file = (await intent(ctx, ctx.freya, "Police certificate", null, "staff")).rows[0].result;
+    await db.query(`select public.attach_upload_to_request($1, $2)`, [file.version_id, staffOnly]);
+    await asMaintenance(db);
+    const row = await db.query<{ document_id: string }>(`select document_id from public.document_requests where id = $1`, [staffOnly]);
+    expect(row.rows[0].document_id).toBe(file.document_id);
+  });
+
   it("leaves the person's own uploads and staff uploads unchanged", async () => {
     const ctx = await firm();
     await request(ctx, ctx.elias);

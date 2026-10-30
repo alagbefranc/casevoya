@@ -270,12 +270,19 @@ describe("disputes (FIN-13)", () => {
     await asStepUp(f, f.finance);
     const context = (await db.query<{ c: { dispute_id: string; account_id: string } }>(`select public.dispute_evidence_context($1) as c`, [id])).rows[0].c;
     expect(context).toMatchObject({ dispute_id: dispute, account_id: f.account });
+    // 20261031013000: the server records the evidence Stripe accepted, for the user who passed the context check.
     await expectDbError(
-      () => db.query(`select public.record_dispute_evidence($1, $2, 'letter.pdf', 'application/pdf', 1200, 'Signed retainer', true, true)`, [id, fileId()]),
+      () => db.query(`select public.record_dispute_evidence($1, $2, 'letter.pdf', 'application/pdf', 1200, 'Signed retainer', true, false)`, [id, fileId()]),
+      /permission denied/,
+    );
+    await asServiceRole(db);
+    await expectDbError(
+      () => db.query(`select public.service_record_dispute_evidence($1, $2, $3, 'letter.pdf', 'application/pdf', 1200, 'Signed retainer', true, true)`, [f.finance, id, fileId()]),
       /other Stripe mode/,
     );
-    await expectDbError(() => db.query(`select public.record_dispute_evidence($1, $2, 'letter.exe', 'application/x-msdownload', 1200, null, true, false)`, [id, fileId()]), /./);
-    await db.query(`select public.record_dispute_evidence($1, $2, 'letter.pdf', 'application/pdf', 1200, 'Signed retainer and delivered work', true, false)`, [id, fileId()]);
+    await expectDbError(() => db.query(`select public.service_record_dispute_evidence($1, $2, $3, 'letter.exe', 'application/x-msdownload', 1200, null, true, false)`, [f.finance, id, fileId()]), /./);
+    await expectDbError(() => db.query(`select public.service_record_dispute_evidence($1, $2, $3, 'letter.pdf', 'application/pdf', 1200, null, true, false)`, [f.otherFinance, id, fileId()]), /billing access denied/);
+    await db.query(`select public.service_record_dispute_evidence($1, $2, $3, 'letter.pdf', 'application/pdf', 1200, 'Signed retainer and delivered work', true, false)`, [f.finance, id, fileId()]);
     await asMaintenance(db);
     const row = (await db.query<{ evidence_submitted_at: Date | null; evidence_submitted_by: string }>(`select * from public.invoice_disputes where id = $1`, [id])).rows[0];
     expect(row.evidence_submitted_at).not.toBeNull();

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { claimUrlProblem } from "@/modules/content-governance/claim-capture";
 import { captureClaimPage } from "@/modules/content-governance/claim-page";
-import { storeServerCapture } from "@/modules/content-governance/server-capture";
+import { mayStoreServerCapture, NOT_FETCHED, storeServerCapture } from "@/modules/content-governance/server-capture";
 import { officialClaimError } from "@/modules/sheet/official-claims-present";
 import { claimError } from "@/modules/sheet/source-claims-present";
 
@@ -78,7 +78,8 @@ export async function addRuleClaim(input: AddClaimInput) {
   const s = await session(input.organizationId);
   if ("error" in s) return { error: s.error };
 
-  const fetched = await captureClaimPage(url, fetch);
+  // The firm membership is checked before any outbound fetch.
+  const fetched = (await mayStoreServerCapture(s.supabase, input.organizationId, s.userId)) ? await captureClaimPage(url, fetch) : NOT_FETCHED;
   // The fetched page is stored by the server (service role); the claim names that capture. The
   // database doesn't treat a hash sent with the claim as a capture.
   const stored = fetched.snapshot

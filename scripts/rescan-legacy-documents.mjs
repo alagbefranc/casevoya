@@ -16,6 +16,7 @@
 // Usage:
 //   APP_URL=https://app.casevoya.ca EMAIL_DISPATCH_SECRET=... node scripts/rescan-legacy-documents.mjs [--batch 5] [--max 1000]
 // The secret comes from the environment only (the Worker's EMAIL_DISPATCH_SECRET); never put it in a file.
+// When the Worker has CRON_SECRET set, pass that instead as CRON_SECRET (it wins here too).
 
 function option(name, fallback) {
   const at = process.argv.indexOf(`--${name}`);
@@ -24,9 +25,9 @@ function option(name, fallback) {
 }
 
 const base = (process.env.APP_URL ?? "").replace(/\/$/, "");
-const secret = process.env.EMAIL_DISPATCH_SECRET ?? "";
+const secret = process.env.CRON_SECRET || process.env.EMAIL_DISPATCH_SECRET || "";
 if (!/^https?:\/\//.test(base) || !secret) {
-  console.error("Set APP_URL and EMAIL_DISPATCH_SECRET in the environment.");
+  console.error("Set APP_URL and CRON_SECRET (or EMAIL_DISPATCH_SECRET) in the environment.");
   process.exit(1);
 }
 const batch = Math.min(option("batch", 5), 10);
