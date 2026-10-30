@@ -99,7 +99,7 @@ describe("auth cookie options", () => {
   it("caps the lifetime at 30 days and leaves removals alone", () => {
     expect(capAuthCookie({ maxAge: 400 * 24 * 60 * 60, httpOnly: false })).toEqual({ maxAge: AUTH_COOKIE_MAX_AGE, httpOnly: false });
     expect(capAuthCookie({ maxAge: 0 })).toEqual({ maxAge: 0 });
-    expect(capAuthCookie({ path: "/" })).toEqual({ path: "/" });
+    expect(capAuthCookie<{ maxAge?: number; path?: string }>({ path: "/" })).toEqual({ path: "/" });
     expect(AUTH_COOKIE_MAX_AGE).toBe(30 * 24 * 60 * 60);
   });
 

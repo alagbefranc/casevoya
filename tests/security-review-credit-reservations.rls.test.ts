@@ -122,9 +122,10 @@ function reserveCredit(creditId: string, paymentId: string, amount: number, k: s
   return db.query<{ id: string }>(`select public.reserve_client_credit_refund($1, $2, $3, 'cad', false, $4) as id`, [creditId, paymentId, amount, k]);
 }
 
+// The server links and releases a reservation for the staff member who made it (20261031018000).
 async function link(f: Firm, reservationId: string, refund: string, userId: string = f.owner) {
-  await asStepUp(f, userId);
-  await db.query(`select public.link_invoice_refund_reservation($1, $2)`, [reservationId, refund]);
+  await asServiceRole(db);
+  await db.query(`select public.service_link_invoice_refund_reservation($1, $2, $3)`, [reservationId, userId, refund]);
 }
 
 async function record(f: Firm, paymentId: string, refund: string, amount: number, k: string | null) {
@@ -164,8 +165,8 @@ describe("client-credit paths count active refund reservations", () => {
     await db.query(`select public.apply_client_credit($1, $2, 2000, $3)`, [creditId, target, `cc-${randomUUID()}`]);
 
     // Once the hold is freed (Stripe refused), the bank refund path is open again.
-    await asStepUp(f);
-    await db.query(`select public.release_invoice_refund_reservation($1)`, [held]);
+    await asServiceRole(db);
+    await db.query(`select public.service_release_invoice_refund_reservation($1, $2)`, [held, f.owner]);
     expect(await available(creditId)).toBe(3_000);
     await asStepUp(f);
     await bankRefund(creditId, 3_000);
@@ -266,8 +267,8 @@ describe("linked reservations", () => {
     await expectDbError(() => link(f, second, refund), /another payment/);
     await expectDbError(() => link(f, second, "re_bad id"), /refund id is invalid/);
 
-    await asStepUp(f);
-    await db.query(`select public.release_invoice_refund_reservation($1)`, [second]);
+    await asServiceRole(db);
+    await db.query(`select public.service_release_invoice_refund_reservation($1, $2)`, [second, f.owner]);
     await expectDbError(() => link(f, second, refundId()), /released/);
   });
 });
