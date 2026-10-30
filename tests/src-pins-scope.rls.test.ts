@@ -112,9 +112,13 @@ const staff = (ctx: Firm, who: "owner" | "consultant" | "manager", totpAgeSecond
   totpAgeSeconds,
 });
 
-/** A firm snapshot of a fictional official page, with the "date modified" the page would state. */
+/**
+ * A firm snapshot of a fictional official page, with the "date modified" the page would state.
+ * Firm governance rows are written only by definer functions (20261030235000); fixtures seed them
+ * from a maintenance session.
+ */
 async function snapshot(ctx: Firm, modifiedOn: string | null) {
-  await asUser(db, staff(ctx, "owner"));
+  await asMaintenance(db);
   const url = `https://www.canada.ca/en/fictional-src-${token()}.html`;
   const source = await db.query<{ id: string }>(
     `insert into public.official_sources (organization_id, publisher, canonical_url, jurisdiction, content_kind)
@@ -130,7 +134,7 @@ async function snapshot(ctx: Firm, modifiedOn: string | null) {
 }
 
 async function definition(ctx: Firm, suffix: string) {
-  await asUser(db, staff(ctx, "owner"));
+  await asMaintenance(db);
   const row = await db.query<{ id: string }>(
     `insert into public.rule_definitions (organization_id, stable_key, category, jurisdiction)
      values ($1, $2, 'immigration_requirement', 'CA') returning id`,
@@ -141,7 +145,7 @@ async function definition(ctx: Firm, suffix: string) {
 
 /** A published firm rule version citing the snapshot. kind goes in output_value. */
 async function publishedRule(ctx: Firm, definitionId: string, versionNumber: number, kind: string, snapshotId: string) {
-  await asUser(db, staff(ctx, "owner"));
+  await asMaintenance(db);
   const version = await db.query<{ id: string }>(
     `insert into public.rule_versions (definition_id, version_number, claim, output_value, effective_from, next_review_at, test_case_ids)
      values ($1, $2, 'FICTIONAL fixture. Not an immigration requirement.', jsonb_build_object('kind', $3::text),
@@ -163,7 +167,7 @@ async function publishedRule(ctx: Firm, definitionId: string, versionNumber: num
 }
 
 async function publishedPack(ctx: Firm, programKey: string, packVersion: number, ruleVersions: string[], forms: unknown[]) {
-  await asUser(db, staff(ctx, "owner"));
+  await asMaintenance(db);
   const pack = await db.query<{ id: string }>(
     `insert into public.rule_pack_versions (organization_id, jurisdiction, program_key, pack_version, next_review_at, form_mappings)
      values ($1, 'CA', $2, $3, '2027-11-01T00:00:00Z', $4::jsonb) returning id`,
@@ -256,7 +260,13 @@ describe("SRC-05: pinned rule pack and form versions", () => {
     expect(state.binding?.forms[0].content_hash).toMatch(/^[0-9a-f]{64}$/);
     expect(state.binding?.forms[1].source_url).toBeNull();
 
+    // Staff cannot update a pin at all (20261030235000); the trigger also keeps the form versions.
     await asUser(db, staff(w.ctx, "owner"));
+    await expectDbError(
+      () => db.query(`update public.matter_rule_bindings set form_versions = '[]'::jsonb where matter_id = $1`, [created.id]),
+      /permission denied/,
+    );
+    await asMaintenance(db);
     await expectDbError(
       () => db.query(`update public.matter_rule_bindings set form_versions = '[]'::jsonb where matter_id = $1`, [created.id]),
       /pinned form versions are kept/,
@@ -504,7 +514,7 @@ describe("SRC-12: support catalogue and unsupported programs", () => {
     await asUser(db, staff(w.ctx, "owner"));
     await expectDbError(
       () => db.query(`insert into public.matter_rule_bindings (organization_id, matter_id, rule_pack_version_id) values ($1, $2, $3)`, [w.ctx.orgId, created.id, w.packV1]),
-      /cannot inherit another program/,
+      /cannot inherit another program|row-level security/,
     );
     // Nor a rule-derived checklist item from another pack.
     await asMaintenance(db);

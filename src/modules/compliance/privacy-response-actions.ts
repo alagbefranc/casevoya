@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
+import { storeServerCapture } from "@/modules/content-governance/server-capture";
 import { federalOfficialUrl, snapshotOfficialPage } from "@/modules/submissions/official-page";
 import { readDate } from "./format";
 import { privacyResponseError } from "./privacy-response-format";
@@ -19,7 +20,7 @@ async function session(organizationId: string) {
   const supabase = await createClient({ organizationId });
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) return { error: "Sign in first." as const };
-  return { supabase };
+  return { supabase, userId: claims.claims.sub as string };
 }
 
 const text = (value: string | null | undefined) => (value && value.trim() ? value.trim() : null);
@@ -49,6 +50,17 @@ export async function proposePrivacyTimeLimit(input: {
   const auth = await session(input.organizationId);
   if (!auth.supabase) return { error: auth.error ?? "Sign in first." };
   const fetched = await snapshotOfficialPage(url, fetch);
+  // The fetched page is stored by the server (service role); the entry names that capture.
+  const stored = fetched.snapshot
+    ? await storeServerCapture({
+        organizationId: input.organizationId,
+        actorUserId: auth.userId,
+        sourceUrl: url,
+        title: input.lawName.trim() || null,
+        page: fetched.snapshot,
+        dates: { currentTo },
+      })
+    : null;
   const result = await auth.supabase.rpc("propose_privacy_time_limit", {
     p_org: input.organizationId,
     p_kind: input.kind,
@@ -59,10 +71,10 @@ export async function proposePrivacyTimeLimit(input: {
     p_source_section: input.section.trim(),
     p_checked_on: checked,
     p_current_to: currentTo,
-    p_snapshot: fetched.snapshot as unknown as never,
+    p_snapshot: stored as unknown as never,
   });
   if (result.error) return { error: privacyResponseError(result.error.message) };
-  return { ok: true, captured: Boolean(fetched.snapshot), reason: fetched.snapshot ? null : fetched.reason };
+  return { ok: true, captured: Boolean(stored), reason: fetched.snapshot ? (stored ? null : "The page capture couldn’t be stored.") : fetched.reason };
 }
 
 export async function reviewPrivacyTimeLimit(input: {

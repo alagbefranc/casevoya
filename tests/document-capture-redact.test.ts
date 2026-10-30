@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { encode as encodeJpeg } from "jpeg-js";
-import { PDFDocument, PDFName, PDFNumber, PDFRawStream, StandardFonts, decodePDFRawStream, rgb } from "pdf-lib";
+import { PDFDict, PDFDocument, PDFName, PDFNumber, PDFRawStream, PDFString, StandardFonts, decodePDFRawStream, rgb } from "pdf-lib";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 import { PageList, type CapturePage } from "@/components/documents/page-capture";
@@ -65,6 +65,32 @@ async function imageSamples(bytes: Uint8Array): Promise<{ width: number; height:
     }
   }
   return found;
+}
+
+/** The file's bytes plus every stream decoded, for searching. */
+async function everyByte(bytes: Uint8Array): Promise<string> {
+  const parts = [Buffer.from(bytes).toString("latin1")];
+  const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+  for (const [, object] of doc.context.enumerateIndirectObjects()) {
+    if (!(object instanceof PDFRawStream)) {
+      // Objects that were inside a compressed object stream.
+      parts.push(object.toString());
+      continue;
+    }
+    try {
+      parts.push(Buffer.from(decodePDFRawStream(object).decode()).toString("latin1"));
+    } catch {
+      parts.push(Buffer.from(object.contents).toString("latin1"));
+    }
+  }
+  return parts.join("\n");
+}
+
+/** As text, as hex, or as UTF-16BE hex (how pdf-lib stores field values). */
+function appears(haystack: string, secret: string): boolean {
+  const upper = haystack.toUpperCase();
+  const utf16 = Buffer.from(secret, "utf16le").swap16().toString("hex").toUpperCase();
+  return upper.includes(secret.toUpperCase()) || upper.includes(Buffer.from(secret).toString("hex").toUpperCase()) || upper.includes(utf16);
 }
 
 describe("capture and redaction controls", () => {
@@ -143,6 +169,84 @@ describe("true redaction", () => {
     expect(image.data[2]).toBe(0);
     const corner = (19 * 20 + 19) * 4;
     expect(image.data[corner + 1]).toBe(180);
+  });
+
+  it("removes form data, XFA, alternate text, structure, metadata, attachments and scripts from the copy", async () => {
+    const secrets = {
+      field: "FIELD-SECRET-552",
+      fieldDefault: "FIELD-DEFAULT-553",
+      outsideValue: "OUTSIDE-VALUE-554",
+      xfa: "XFA-SECRET-773",
+      actual: "ACTUAL-SECRET-334",
+      alt: "ALT-SECRET-335",
+      expansion: "EXPANSION-SECRET-336",
+      property: "PROPS-SECRET-337",
+      xmp: "XMP-SECRET-338",
+      pageXmp: "PAGE-XMP-SECRET-345",
+      piece: "PIECE-SECRET-346",
+      info: "INFO-SECRET-339",
+      embedded: "EMBED-SECRET-340",
+      struct: "STRUCT-SECRET-341",
+      script: "JS-SECRET-342",
+    };
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([200, 200]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    page.drawText(KEPT, { x: 20, y: 160, size: 12, font, color: rgb(0, 0, 0) });
+    const form = pdf.getForm();
+    const inside = form.createTextField("applicant.name");
+    inside.setText(secrets.field);
+    inside.addToPage(page, { x: 20, y: 10, width: 150, height: 20, font });
+    inside.acroField.dict.set(PDFName.of("DV"), PDFString.of(secrets.fieldDefault));
+    const outside = form.createTextField("office");
+    outside.setText(secrets.outsideValue);
+    outside.addToPage(page, { x: 20, y: 120, width: 150, height: 20, font });
+    page.node.Resources()?.set(PDFName.of("Properties"), pdf.context.obj({ MC0: pdf.context.obj({ ActualText: PDFString.of(secrets.property) }) }));
+    const marked = [
+      `/Span <</ActualText (${secrets.actual}) /Alt (${secrets.alt})>> BDC 20 20 m 30 30 l S EMC`,
+      `/Span <</E <${Buffer.from(secrets.expansion).toString("hex")}>>> BDC 20 20 m EMC`,
+      "/Span /MC0 BDC 20 20 m EMC",
+    ].join("\n");
+    page.node.addContentStream(pdf.context.register(pdf.context.stream(marked)));
+    pdf.catalog.set(PDFName.of("Metadata"), pdf.context.register(pdf.context.stream(`<x:xmpmeta>${secrets.xmp}</x:xmpmeta>`, { Type: "Metadata", Subtype: "XML" })));
+    page.node.set(PDFName.of("Metadata"), pdf.context.register(pdf.context.flateStream(`<x:xmpmeta>${secrets.pageXmp}</x:xmpmeta>`, { Type: "Metadata", Subtype: "XML" })));
+    page.node.set(PDFName.of("PieceInfo"), pdf.context.obj({ App: pdf.context.obj({ Private: PDFString.of(secrets.piece) }) }));
+    pdf.catalog.set(
+      PDFName.of("StructTreeRoot"),
+      pdf.context.register(pdf.context.obj({ Type: "StructTreeRoot", K: pdf.context.obj({ S: "Figure", Alt: PDFString.of(secrets.struct) }) })),
+    );
+    pdf.catalog.set(PDFName.of("MarkInfo"), pdf.context.obj({ Marked: true }));
+    pdf.catalog.set(PDFName.of("OpenAction"), pdf.context.obj({ S: "JavaScript", JS: PDFString.of(secrets.script) }));
+    pdf.setTitle(secrets.info);
+    await pdf.attach(Buffer.from(secrets.embedded), "notes.txt", { mimeType: "text/plain" });
+    // pdf-lib's form API drops XFA, so it is added to the saved file without it.
+    const withXfa = await PDFDocument.load(await pdf.save(), { updateMetadata: false });
+    const acroForm = withXfa.catalog.lookup(PDFName.of("AcroForm"), PDFDict);
+    acroForm.set(PDFName.of("XFA"), withXfa.context.register(withXfa.context.flateStream(`<xdp:xdp><data>${secrets.xfa}</data></xdp:xdp>`)));
+    const bytes = await withXfa.save();
+
+    const before = await everyByte(bytes);
+    for (const secret of Object.values(secrets)) expect(appears(before, secret), `fixture has ${secret}`).toBe(true);
+
+    const out = await redactDocument(bytes, "application/pdf", [{ page: 0, x: 0, y: 0.75, width: 1, height: 0.25 }]);
+    const after = await everyByte(out);
+    for (const [label, secret] of Object.entries(secrets)) {
+      if (label === "outsideValue") continue;
+      expect(appears(after, secret), secret).toBe(false);
+    }
+
+    const doc = await PDFDocument.load(out, { updateMetadata: false });
+    for (const key of ["AcroForm", "StructTreeRoot", "MarkInfo", "Metadata", "OpenAction"]) expect(doc.catalog.has(PDFName.of(key)), key).toBe(false);
+    expect(doc.context.trailerInfo.Info).toBeUndefined();
+    for (const [, object] of doc.context.enumerateIndirectObjects()) {
+      if (object instanceof PDFDict) for (const key of ["V", "DV", "XFA", "ActualText", "Alt", "EmbeddedFiles"]) expect(object.has(PDFName.of(key)), key).toBe(false);
+    }
+    // The unmarked area still shows: the kept text and the outside field's appearance.
+    expect(appears(after, KEPT)).toBe(true);
+    expect(appears(after, secrets.outsideValue)).toBe(true);
+    const annots = doc.getPage(0).node.Annots();
+    expect(annots?.size()).toBe(2);
+    expect(after).toContain("/Span BMC");
   });
 
   it("refuses a type it cannot redact", async () => {

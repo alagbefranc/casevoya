@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { firmDay } from "./helpers/firm-day";
+import { serverCapture } from "./helpers/server-capture";
 
 /**
  * DEC-02 renewal follow-up against the real migrations: official renewal timings held for
@@ -189,7 +190,7 @@ describe("DEC-02 official renewal timing", () => {
       `select public.propose_renewal_timing($1, null, 'Synthetic permit', 'Synthetic timing words', 30, $2, null, null, null, $3::date, null, null) as id`,
       [ctx.orgId, PAGE, firmDay()],
     );
-    const snapshot = { sha256: sha("synthetic page"), retrieved_at: new Date().toISOString(), final_url: PAGE.split("#")[0], http_status: 200 };
+    const snapshot = await serverCapture(db, { orgId: ctx.orgId, url: PAGE, snapshot: { sha256: sha("synthetic page") } });
     const captured = await db.query<{ id: string }>(
       `select public.propose_renewal_timing($1, null, 'Synthetic permit', 'Synthetic timing words', 30, $2, null, 'IMM 0000', $3::date, $3::date, null, $4::jsonb) as id`,
       [ctx.orgId, PAGE, firmDay(), JSON.stringify(snapshot)],
@@ -316,8 +317,8 @@ describe("DEC-02 expiry reminders", () => {
     const ctx = await firm();
     const decisionId = await decision(ctx);
     await confirm(ctx, decisionId);
-    const snapshot = { sha256: sha("synthetic timing page"), retrieved_at: new Date().toISOString(), final_url: PAGE.split("#")[0], http_status: 200 };
     await stale(ctx.manager, ctx.orgId);
+    const snapshot = await serverCapture(db, { orgId: ctx.orgId, url: PAGE, snapshot: { sha256: sha("synthetic timing page") } });
     const timed = await db.query<{ id: string }>(
       `select public.propose_renewal_timing($1, null, 'Synthetic permit', 'Synthetic timing words', 45, $2, null, null, null, $3::date, null, $4::jsonb) as id`,
       [ctx.orgId, PAGE, firmDay(), JSON.stringify(snapshot)],
@@ -481,7 +482,7 @@ describe("DEC-02 renewal reminder and successor lead", () => {
 describe("DEC-02 renewal timings follow the GOV review rules (2026-10-24)", () => {
   async function proposeTiming(ctx: Firm, as: string, captured: boolean) {
     await stale(as, ctx.orgId);
-    const snapshot = captured ? JSON.stringify({ sha256: sha(`page ${randomUUID()}`), retrieved_at: new Date().toISOString(), final_url: PAGE.split("#")[0], http_status: 200 }) : null;
+    const snapshot = captured ? JSON.stringify(await serverCapture(db, { orgId: ctx.orgId, url: PAGE, snapshot: { sha256: sha(`page ${randomUUID()}`) } })) : null;
     const row = await db.query<{ id: string }>(
       `select public.propose_renewal_timing($1, null, 'Synthetic permit', 'Synthetic timing words', 30, $2, null, null, null, $3::date, null, $4::jsonb) as id`,
       [ctx.orgId, PAGE, firmDay(), snapshot],
@@ -552,7 +553,7 @@ describe("DES-04 the client's renewal reminder carries its official timing's fre
   it("returns the timing's status and its official page's review and check state, and shows a retired timing as retired", async () => {
     const ctx = await firm();
     await stale(ctx.manager, ctx.orgId);
-    const snapshot = JSON.stringify({ sha256: sha(`page ${randomUUID()}`), retrieved_at: new Date().toISOString(), final_url: PAGE.split("#")[0], http_status: 200 });
+    const snapshot = JSON.stringify(await serverCapture(db, { orgId: ctx.orgId, url: PAGE, snapshot: { sha256: sha(`page ${randomUUID()}`) } }));
     const proposed = await db.query<{ id: string }>(
       `select public.propose_renewal_timing($1, null, 'Synthetic permit', 'Synthetic timing words', 30, $2, null, null, null, $3::date, null, $4::jsonb) as id`,
       [ctx.orgId, PAGE, firmDay(), snapshot],

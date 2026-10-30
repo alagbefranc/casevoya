@@ -184,9 +184,10 @@ describe("platform admin roles in the database", () => {
       /role does not allow/,
     );
     await rpc(`public.set_shared_template_version_sources($1, $2::jsonb, $3)`, [versionId, officialSources, author]);
+    const submitted = await rpc<{ review_hash: string }>(`public.submit_shared_template_version($1, $2)`, [versionId, author]);
 
     await fresh(reviewer, firm.orgId);
-    await expectDbError(() => rpc(`public.approve_shared_template_version($1)`, [versionId]), /role does not allow/);
+    await expectDbError(() => rpc(`public.approve_shared_template_version($1, $2)`, [versionId, submitted.review_hash]), /role does not allow/);
     await expectDbError(() => rpc(`public.reject_shared_template_version($1, 'Viewer reason')`, [versionId]), /role does not allow/);
     await asMaintenance(db);
     expect((await db.query<{ status: string }>(`select status from public.shared_template_versions where id = $1`, [versionId])).rows[0].status).toBe(
@@ -195,7 +196,7 @@ describe("platform admin roles in the database", () => {
 
     await db.query(`update public.platform_admins set role = 'operator' where user_id = $1`, [reviewer]);
     await fresh(reviewer, firm.orgId);
-    expect(await rpc(`public.approve_shared_template_version($1)`, [versionId])).toMatchObject({ status: "published" });
+    expect(await rpc(`public.approve_shared_template_version($1, $2)`, [versionId, submitted.review_hash])).toMatchObject({ status: "published" });
   });
 
   it("a viewer cannot change product settings, record support responses or import the CICC list; an operator can", async () => {

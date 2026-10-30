@@ -261,6 +261,7 @@ export function readRefund(fields: RefundFields, currency: string, maxCents: num
 /** User-facing copy for a refused refund. Never passes a database or Stripe message through. */
 export function refundError(message: string): string {
   if (/billing access denied/i.test(message)) return "Only the firm owner or the matter’s finance user can refund this payment.";
+  if (/refund is already in progress/i.test(message)) return "This refund is already being sent to Stripe. Check the Refunds and disputes tab in a moment.";
   if (/exceeds the amount received/i.test(message)) return "That’s more than is left to refund on this payment.";
   if (/only a received card payment/i.test(message)) return "Only a card payment Stripe has received can be refunded.";
   if (/does not match the firm/i.test(message)) return "This payment went to a different Stripe account, so it can’t be refunded here.";

@@ -115,12 +115,21 @@ async function hold(
   start: string,
   options: { email?: string; key?: string; hash?: string | null; event?: string; as?: string; session?: Parameters<typeof asUser>[1] } = {},
 ) {
-  if (options.session) await asUser(db, options.session);
-  else if (options.as) await asUser(db, { userId: options.as, aal: "aal1" });
-  else await asAnon(db);
+  // The hold is service role only (20261030231500): the app server passes the address hash it
+  // computed and the signed-in visitor, after the visitor's own session was served the page.
+  const viewer = options.session?.userId ?? options.as ?? null;
+  await asServiceRole(db);
   const row = await db.query<{ result: Summary & { error?: string } }>(
-    `select public.booking_public_hold($1, $2, $3::timestamptz, 'Sam Example', $4, null, 'America/Vancouver', $5, $6) as result`,
-    [ctx.firmSlug, options.event ?? "initial", start, options.email ?? "sam@example.test", options.key ?? randomUUID(), options.hash === undefined ? null : options.hash],
+    `select public.booking_public_hold($1, $2, $3::timestamptz, 'Sam Example', $4, null, 'America/Vancouver', $5, $6, $7::uuid) as result`,
+    [
+      ctx.firmSlug,
+      options.event ?? "initial",
+      start,
+      options.email ?? "sam@example.test",
+      options.key ?? randomUUID(),
+      options.hash === undefined ? createHash("sha256").update(randomUUID()).digest("hex") : options.hash,
+      viewer,
+    ],
   );
   const result = row.rows[0].result;
   // Refusals come back as {error}; tests treat them like thrown errors.
@@ -198,14 +207,15 @@ describe("scheduling: public booking page", () => {
     const ctx = await firm();
     await eventType(ctx);
     const start = await localStart(6);
-    await asAnon(db);
+    await asServiceRole(db);
     const attempts = await Promise.all(
       Array.from({ length: 5 }, (_, i) =>
-        db.query<{ r: { status?: string; error?: string } }>(`select public.booking_public_hold($1, 'initial', $2::timestamptz, 'Person', $3, null, 'UTC', $4, null) as r`, [
+        db.query<{ r: { status?: string; error?: string } }>(`select public.booking_public_hold($1, 'initial', $2::timestamptz, 'Person', $3, null, 'UTC', $4, $5) as r`, [
           ctx.firmSlug,
           start,
           `p${i}@example.test`,
           randomUUID(),
+          createHash("sha256").update(randomUUID()).digest("hex"),
         ]),
       ),
     );
@@ -413,27 +423,32 @@ describe("scheduling: practice booking pages (sample mode)", () => {
       client.id,
       client.email,
     ]);
-    const viewers: [string, () => Promise<void>][] = [
-      ["anonymous", () => asAnon(db)],
-      ["another firm's owner", () => asUser(db, { userId: other.owner.id, aal: "aal2", totpAgeSeconds: 0 })],
-      ["another firm's owner pointing at this firm", () => asUser(db, { userId: other.owner.id, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 })],
-      ["the firm's portal client", () => asUser(db, { userId: client.id, aal: "aal1", orgId: ctx.orgId })],
-      ["the firm's owner without MFA", () => asUser(db, { userId: ctx.owner.id, aal: "aal1" })],
+    // The viewer the server would name for the hold (null: signed out). The owner without MFA
+    // never reaches the hold: the session read below hides the page, so the route answers 404.
+    const viewers: [string, () => Promise<void>, string | null | undefined][] = [
+      ["anonymous", () => asAnon(db), null],
+      ["another firm's owner", () => asUser(db, { userId: other.owner.id, aal: "aal2", totpAgeSeconds: 0 }), other.owner.id],
+      ["another firm's owner pointing at this firm", () => asUser(db, { userId: other.owner.id, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 }), other.owner.id],
+      ["the firm's portal client", () => asUser(db, { userId: client.id, aal: "aal1", orgId: ctx.orgId }), client.id],
+      ["the firm's owner without MFA", () => asUser(db, { userId: ctx.owner.id, aal: "aal1" }), undefined],
     ];
-    for (const [who, as] of viewers) {
+    for (const [who, as, viewer] of viewers) {
       await as();
       const view = await publicView(ctx.firmSlug, typeId);
       expect(view.event, who).toBeNull();
       expect(view.types, who).toEqual([]);
       expect(view.busy, who).toMatch(/booking type not found/);
+      // The hold itself is service role only.
       await expectDbError(
         () =>
           db.query(`select public.booking_public_hold($1, 'initial', now() + interval '3 days', 'Sam Example', 'sam@example.test', null, 'UTC', $2, null)`, [
             ctx.firmSlug,
             randomUUID(),
           ]),
-        /booking type not found/,
+        /permission denied/,
       );
+      if (viewer === undefined) continue;
+      await expectDbError(() => hold(ctx, "2030-01-01T15:00:00Z", { as: viewer ?? undefined }), /booking type not found/);
     }
     await asMaintenance(db);
     expect((await db.query(`select 1 from public.bookings where organization_id = $1`, [ctx.orgId])).rows).toHaveLength(0);

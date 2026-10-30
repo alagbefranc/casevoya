@@ -152,6 +152,29 @@ describe("client two-step enforced in the database", () => {
     expect(reply.rows[0].result.message_id).toBeTruthy();
   });
 
+  it("requires the second step before a client with a verified factor saves their contact preferences", async () => {
+    const f = await firm();
+    const save = () => db.query(`select public.save_my_contact_preferences(true, false, true, 'en-CA')`);
+    const saved = async (personId: string) => {
+      await asMaintenance(db);
+      const rows = await db.query<{ email_notices: boolean }>(`select email_notices from public.person_contact_preferences where person_id = $1`, [personId]);
+      return rows.rows.length;
+    };
+
+    await asClient(f, f.guarded.userId, "aal1");
+    await expectDbError(save, /two-step/);
+    expect(await saved(f.guarded.personId)).toBe(0);
+
+    await asClient(f, f.guarded.userId, "aal2");
+    await save();
+    expect(await saved(f.guarded.personId)).toBe(1);
+
+    // A client without a verified factor still saves at aal1.
+    await asClient(f, f.open.userId, "aal1");
+    await save();
+    expect(await saved(f.open.personId)).toBe(1);
+  });
+
   it("leaves staff access unchanged", async () => {
     const f = await firm();
     await sendToClient(f, f.guarded.personId, "Synthetic: staff view");

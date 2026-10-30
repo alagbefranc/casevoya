@@ -317,14 +317,19 @@ describe("source governance access and versions", () => {
     );
     expect(unchanged.rows[0].title).toBe("Fictional catalog page");
 
+    // Firm rows are written only by definer functions (20261030235000), not by a direct insert.
     await asUser(db, { userId: ownerA, aal: "aal2", orgId: orgA, totpAgeSeconds: 0 });
-    const firm = await db.query<{ id: string; allowed_host: string }>(
-      `insert into public.official_sources (
-         organization_id, publisher, canonical_url, jurisdiction, content_kind
-       ) values ($1, 'Immigration, Refugees and Citizenship Canada', $2, 'CA', 'program_guidance')
-       returning id, allowed_host`,
-      [orgA, `https://www.cic.gc.ca/fictional-firm-${suffix}`],
-    );
+    const insertFirmSource = () =>
+      db.query<{ id: string; allowed_host: string }>(
+        `insert into public.official_sources (
+           organization_id, publisher, canonical_url, jurisdiction, content_kind
+         ) values ($1, 'Immigration, Refugees and Citizenship Canada', $2, 'CA', 'program_guidance')
+         returning id, allowed_host`,
+        [orgA, `https://www.cic.gc.ca/fictional-firm-${suffix}`],
+      );
+    await expectDbError(insertFirmSource, /row-level security/);
+    await asMaintenance(db);
+    const firm = await insertFirmSource();
     expect(firm.rows[0].allowed_host).toBe("www.cic.gc.ca");
 
     await asUser(db, { userId: ownerB, aal: "aal2", orgId: orgB, totpAgeSeconds: 0 });
@@ -376,7 +381,9 @@ describe("source governance access and versions", () => {
     );
     const ownerMembership = ownerRow.rows[0].id;
     const staff = { userId: owner, aal: "aal2" as const, orgId, totpAgeSeconds: 0 };
-    await asUser(db, staff);
+    // Firm governance rows are written only by definer functions (20261030235000); this fixture
+    // seeds them from a maintenance session and checks staff are refused the direct writes.
+    await asMaintenance(db);
     const source = await db.query<{ id: string }>(
       `insert into public.official_sources (
          organization_id, publisher, canonical_url, jurisdiction, content_kind
@@ -456,7 +463,8 @@ describe("source governance access and versions", () => {
          ) values ($1, $2, $3, 'approved', '2026-10-16T15:00:00Z', 1)`,
         [orgId, versionId, ownerMembership],
       );
-    await expectDbError(ownerReview, /only in Source review/);
+    await asUser(db, staff);
+    await expectDbError(ownerReview, /permission denied/);
     await asMaintenance(db);
     await ownerReview();
     await db.query(
@@ -468,10 +476,8 @@ describe("source governance access and versions", () => {
       [orgId, versionId, consultantMembership],
     );
     await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
-    await expectDbError(
-      () => db.query(`update public.rule_versions set status = 'published' where id = $1`, [versionId]),
-      /publication blocked: approval_required/,
-    );
+    const direct = await db.query(`update public.rule_versions set status = 'published' where id = $1`, [versionId]);
+    expect(direct.affectedRows ?? 0).toBe(0);
     await asMaintenance(db);
     const published = await db.query<{ status: string; content_frozen: boolean }>(
       `update public.rule_versions set status = 'published' where id = $1
@@ -479,7 +485,6 @@ describe("source governance access and versions", () => {
       [versionId],
     );
     expect(published.rows[0]).toEqual({ status: "published", content_frozen: true });
-    await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
 
     const pack = await db.query<{ id: string }>(
       `insert into public.rule_pack_versions (
@@ -504,12 +509,17 @@ describe("source governance access and versions", () => {
       `insert into public.matters (id, organization_id, title, is_sample) values ($1, $2, 'Fictional matter', true)`,
       [matterId, orgId],
     );
-    const binding = await db.query<{ id: string; recheck_required: boolean }>(
-      `insert into public.matter_rule_bindings (organization_id, matter_id, rule_pack_version_id)
-       values ($1, $2, $3)
-       returning id, recheck_required`,
-      [orgId, matterId, packId],
-    );
+    const pinMatter = () =>
+      db.query<{ id: string; recheck_required: boolean }>(
+        `insert into public.matter_rule_bindings (organization_id, matter_id, rule_pack_version_id)
+         values ($1, $2, $3)
+         returning id, recheck_required`,
+        [orgId, matterId, packId],
+      );
+    // Not the matter's validated pack, nor in the creating transaction: refused to staff.
+    await expectDbError(pinMatter, /row-level security/);
+    await asMaintenance(db);
+    const binding = await pinMatter();
     expect(binding.rows[0].recheck_required).toBe(false);
 
     const second = await db.query<{ id: string }>(
@@ -578,6 +588,7 @@ describe("source governance access and versions", () => {
       still_checked: true,
     });
 
+    await asMaintenance(db);
     await db.query(
       `insert into public.source_snapshots (
          source_id, final_url, publisher, retrieved_at, content_hash, retrieval_result
@@ -596,7 +607,7 @@ describe("source governance access and versions", () => {
       checked_forward: true,
     });
 
-    await asUser(db, { userId: consultant, aal: "aal2", orgId, totpAgeSeconds: 0 });
+    await asMaintenance(db);
     const packTwo = await db.query<{ id: string }>(
       `insert into public.rule_pack_versions (
          organization_id, jurisdiction, program_key, pack_version, next_review_at
@@ -619,6 +630,22 @@ describe("source governance access and versions", () => {
     );
     expect(pin.rows[0].rule_pack_version_id).toBe(packId);
 
+    // Staff have no direct write on these rows (20261030235000) ...
+    const claimRewrite = await db.query(`update public.rule_versions set claim = 'rewritten fictional claim' where id = $1`, [versionId]);
+    expect(claimRewrite.affectedRows ?? 0).toBe(0);
+    await expectDbError(
+      () => db.query(`update public.source_snapshots set content_hash = $2 where id = $1`, [snapshotId, HASH_C]),
+      /permission denied/,
+    );
+    await expectDbError(
+      () => db.query(`update public.matter_rule_bindings set recheck_required = false where id = $1`, [binding.rows[0].id]),
+      /permission denied/,
+    );
+    const freshness = await db.query(`update public.official_sources set change_state = 'unchanged' where id = $1`, [sourceId]);
+    expect(freshness.affectedRows ?? 0).toBe(0);
+
+    // ... and the triggers still hold for any other writer.
+    await asMaintenance(db);
     await expectDbError(
       () =>
         db.query(`update public.rule_versions set claim = 'rewritten fictional claim' where id = $1`, [
@@ -694,6 +721,8 @@ describe("platform admins", () => {
       `insert into public.matters (id, organization_id, title, is_sample) values ($1, $2, 'Firm matter', true)`,
       [matterId, orgId],
     );
+    // A firm row (seeded from maintenance: firm rows are written by definer functions only).
+    await asMaintenance(db);
     await db.query(
       `insert into public.official_sources (
          organization_id, publisher, canonical_url, jurisdiction, content_kind

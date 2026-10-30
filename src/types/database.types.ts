@@ -14388,20 +14388,37 @@ export type Database = {
         Args: { p_firm_slug: string }
         Returns: Json
       }
-      booking_public_hold: {
-        Args: {
-          p_client_hash: string | null
-          p_email: string
-          p_event_slug: string
-          p_firm_slug: string
-          p_idempotency_key: string
-          p_name: string
-          p_phone: string | null
-          p_start: string
-          p_time_zone: string
-        }
-        Returns: Json
-      }
+      booking_public_hold:
+        | {
+            Args: {
+              p_client_hash: string | null
+              p_email: string
+              p_event_slug: string
+              p_firm_slug: string
+              p_idempotency_key: string
+              p_name: string
+              p_phone: string | null
+              p_start: string
+              p_time_zone: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_client_hash: string | null
+              p_email: string
+              p_event_slug: string
+              p_firm_slug: string
+              p_idempotency_key: string
+              p_name: string
+              p_phone: string | null
+              p_start: string
+              p_time_zone: string
+              p_viewer: string | null
+              p_viewer_aal?: string | null
+            }
+            Returns: Json
+          }
       cache_subscription_stripe_prices: {
         Args: { p_mode: string; p_prices: Json }
         Returns: undefined
@@ -15376,15 +15393,24 @@ export type Database = {
         }
         Returns: string
       }
-      decline_agreement: {
-        Args: {
-          p_envelope_id: string
-          p_idempotency_key: string
-          p_ip: string
-          p_user_agent: string
-        }
-        Returns: Json
-      }
+      decline_agreement:
+        | {
+            Args: {
+              p_envelope_id: string
+              p_idempotency_key: string
+              p_ip: string
+              p_user_agent: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_envelope_id: string
+              p_evidence_id: string
+              p_idempotency_key: string
+            }
+            Returns: Json
+          }
       decline_booking_agreement: { Args: { p_reason: string; p_ref: string }; Returns: Json }
       decline_client_transfer: {
         Args: {
@@ -15891,6 +15917,10 @@ export type Database = {
         Returns: Json
       }
       issue_booking_agreement_code: { Args: { p_code_id: string; p_code_sha256: string; p_ref: string; p_sealed: string }; Returns: Json }
+      issue_signing_evidence: {
+        Args: { p_actor: string; p_envelope_id: string; p_ip: string; p_user_agent: string }
+        Returns: string
+      }
       issue_credit_note: {
         Args: { p_credit_note_id: string }
         Returns: Json
@@ -15940,6 +15970,13 @@ export type Database = {
           p_refund_id: string
         }
         Returns: string
+      }
+      link_invoice_refund_reservation: {
+        Args: {
+          p_refund_id: string
+          p_reservation_id: string
+        }
+        Returns: undefined
       }
       link_correspondence_work: {
         Args: {
@@ -16850,9 +16887,23 @@ export type Database = {
         Returns: string
       }
       reject_vo_doc_proposal: { Args: { p_proposal_id: string }; Returns: Json }
+      release_invoice_refund_reservation: {
+        Args: { p_reservation_id: string }
+        Returns: undefined
+      }
       release_legal_hold: {
         Args: { p_hold_id: string; p_reason: string }
         Returns: undefined
+      }
+      reserve_invoice_refund: {
+        Args: {
+          p_amount_cents: number
+          p_currency: string
+          p_idempotency_key: string
+          p_livemode: boolean
+          p_payment_id: string
+        }
+        Returns: string
       }
       remind_booking_agreement: { Args: { p_booking_id: string }; Returns: number }
       remove_firm_office: {
@@ -17505,16 +17556,26 @@ export type Database = {
         }
         Returns: undefined
       }
-      sign_agreement: {
-        Args: {
-          p_consent: boolean
-          p_envelope_id: string
-          p_idempotency_key: string
-          p_ip: string
-          p_user_agent: string
-        }
-        Returns: Json
-      }
+      sign_agreement:
+        | {
+            Args: {
+              p_consent: boolean
+              p_envelope_id: string
+              p_idempotency_key: string
+              p_ip: string
+              p_user_agent: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_consent: boolean
+              p_envelope_id: string
+              p_evidence_id: string
+              p_idempotency_key: string
+            }
+            Returns: Json
+          }
       sign_booking_agreement:
         | {
             Args: { p_consent: boolean; p_ip: unknown; p_name: string; p_ref: string; p_sha256: string; p_user_agent: string }
@@ -17699,27 +17760,50 @@ export type Database = {
         }
         Returns: number
       }
-      submit_enquiry: {
-        Args: {
-          p_client_hash: string | null
-          p_consent_version: string | null
-          p_contact: string
-          p_country_now: string | null
-          p_firm_slug: string
-          p_idempotency_key: string
-          p_language: string | null
-          p_marketing_consent: boolean
-          p_marketing_statement: string | null
-          p_name: string
-          p_preferred_contact: string | null
-          p_reply_consent: boolean
-          p_reply_statement: string
-          p_service_interest: string | null
-          p_source: Database["public"]["Enums"]["lead_source"]
-          p_attribution?: Json
-        }
-        Returns: Json
-      }
+      submit_enquiry:
+        | {
+            Args: {
+              p_client_hash: string | null
+              p_consent_version: string | null
+              p_contact: string
+              p_country_now: string | null
+              p_firm_slug: string
+              p_idempotency_key: string
+              p_language: string | null
+              p_marketing_consent: boolean
+              p_marketing_statement: string | null
+              p_name: string
+              p_preferred_contact: string | null
+              p_reply_consent: boolean
+              p_reply_statement: string
+              p_service_interest: string | null
+              p_source: Database["public"]["Enums"]["lead_source"]
+              p_attribution?: Json
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_attribution: Json
+              p_client_hash: string | null
+              p_consent_version: string | null
+              p_contact: string
+              p_country_now: string | null
+              p_firm_slug: string
+              p_idempotency_key: string
+              p_language: string | null
+              p_marketing_consent: boolean
+              p_marketing_statement: string | null
+              p_name: string
+              p_preferred_contact: string | null
+              p_reply_consent: boolean
+              p_reply_statement: string
+              p_service_interest: string | null
+              p_source: Database["public"]["Enums"]["lead_source"]
+              p_viewer: string | null
+            }
+            Returns: Json
+          }
       submit_intake_response: {
         Args: { p_expected_version: number; p_response_id: string }
         Returns: number

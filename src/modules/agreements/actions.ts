@@ -1,7 +1,7 @@
 "use server";
 
 import { agreementError } from "@/modules/agreements/errors";
-import { clientEvidence } from "@/modules/agreements/evidence";
+import { issueSigningEvidence } from "@/modules/agreements/evidence";
 import { sealEnvelope } from "@/modules/agreements/seal";
 import { verifyTotpCode } from "@/lib/auth/verify-totp";
 import { createClient } from "@/lib/supabase/server";
@@ -11,12 +11,13 @@ async function sessionFor(organizationId: string, code: string | null) {
   if (!isUuid(organizationId)) return { error: "Choose a firm." as const };
   const supabase = await createClient({ organizationId });
   const { data: claims } = await supabase.auth.getClaims();
-  if (!claims?.claims?.sub) return { error: "Sign in first." as const };
+  const userId = claims?.claims?.sub;
+  if (!userId) return { error: "Sign in first." as const };
   if (code != null && code !== "") {
     const verified = await verifyTotpCode(supabase, code);
     if (!verified.ok) return { error: verified.error };
   }
-  return { supabase };
+  return { supabase, userId };
 }
 
 export async function signAgreement(input: {
@@ -29,13 +30,13 @@ export async function signAgreement(input: {
   if (!input.consent) return { error: "Confirm that you agree to sign electronically." };
   const session = await sessionFor(input.organizationId, input.code ?? null);
   if ("error" in session) return { error: session.error };
-  const evidence = await clientEvidence();
+  const evidence = await issueSigningEvidence(input.envelopeId, session.userId);
+  if ("error" in evidence) return { error: evidence.error };
   const { data, error } = await session.supabase.rpc("sign_agreement", {
     p_envelope_id: input.envelopeId,
     p_consent: true,
     p_idempotency_key: `portal-sign-${input.envelopeId}-${crypto.randomUUID()}`,
-    p_ip: evidence.ip,
-    p_user_agent: evidence.userAgent,
+    p_evidence_id: evidence.id,
   });
   if (error) return { error: agreementError(error.message) };
   const status = data && typeof data === "object" && !Array.isArray(data) ? data.status : null;
@@ -51,12 +52,12 @@ export async function declineAgreement(input: { organizationId: string; envelope
   if (!isUuid(input.envelopeId)) return { error: "Choose the agreement to decline." };
   const session = await sessionFor(input.organizationId, input.code ?? null);
   if ("error" in session) return { error: session.error };
-  const evidence = await clientEvidence();
+  const evidence = await issueSigningEvidence(input.envelopeId, session.userId);
+  if ("error" in evidence) return { error: evidence.error };
   const { error } = await session.supabase.rpc("decline_agreement", {
     p_envelope_id: input.envelopeId,
     p_idempotency_key: `portal-decline-${input.envelopeId}-${crypto.randomUUID()}`,
-    p_ip: evidence.ip,
-    p_user_agent: evidence.userAgent,
+    p_evidence_id: evidence.id,
   });
   if (error) return { error: agreementError(error.message) };
   return { status: "declined" };

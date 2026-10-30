@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { asAnon, asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asAnon, asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 
 // The firm's public enquiry page (20261020190000_enquiry_public_page): enquiry_public_firm (what the
 // hosted page and the embed may show, and to whom) and submit_enquiry's practice enquiries in sample
@@ -57,11 +57,16 @@ async function publicFirm(slug: string) {
   return row.rows[0].r;
 }
 
-async function submit(slug: string, key = randomUUID()) {
+/**
+ * submit_enquiry is service role only (20261030231500): the app server passes the address hash and
+ * the signed-in visitor (`viewer`), after enquiry_public_firm served the page to that visitor.
+ */
+async function submit(slug: string, viewer: string | null = null, key = randomUUID()) {
+  await asServiceRole(db);
   const row = await db.query<{ r: { ok?: boolean; error?: string } }>(
     `select public.submit_enquiry($1, 'Wei Zhang', 'wei@example.test', 'email', 'Study', 'China', 'Mandarin', true,
-       'Synthetic Firm may use these details to reply to my enquiry', false, null, 'enquiry-v2', 'web_form', $2, null) as r`,
-    [slug, key],
+       'Synthetic Firm may use these details to reply to my enquiry', false, null, 'enquiry-v2', 'web_form', $2, $3, '{}'::jsonb, $4::uuid) as r`,
+    [slug, key, createHash("sha256").update(randomUUID()).digest("hex"), viewer],
   );
   return row.rows[0].r;
 }
@@ -128,16 +133,13 @@ describe("submit_enquiry in sample mode", () => {
   it("takes a practice enquiry from the firm's own staff only, as a sample lead", async () => {
     const sample = await firm({ sample: true });
     const other = await firm();
-    await asAnon(db);
     expect(await submit(sample.slug)).toEqual({ error: "form_unavailable" });
-    await staff(other, other.owner);
-    expect(await submit(sample.slug)).toEqual({ error: "form_unavailable" });
-    await staff(sample, sample.manager, "aal1");
-    expect(await submit(sample.slug)).toEqual({ error: "form_unavailable" });
+    expect(await submit(sample.slug, other.owner)).toEqual({ error: "form_unavailable" });
+    // Staff without two-step never reach submit: enquiry_public_firm hides the page from them
+    // (tested above), so the route answers 404 first.
     expect(await leadsOf(sample.orgId)).toEqual([]);
 
-    await staff(sample, sample.manager);
-    expect(await submit(sample.slug)).toEqual({ ok: true });
+    expect(await submit(sample.slug, sample.manager)).toEqual({ ok: true });
     expect(await leadsOf(sample.orgId)).toEqual([{ is_sample: true, source: "web_form" }]);
     const audit = await db.query<{ context: Record<string, unknown> }>(
       `select context from public.audit_log where organization_id = $1 and action = 'lead.enquiry_received'`,
@@ -149,21 +151,17 @@ describe("submit_enquiry in sample mode", () => {
   it("keeps a live firm's enquiries real and its other refusals unchanged", async () => {
     const live = await firm();
     const noNotice = await firm({ privacy: false });
-    await asAnon(db);
     expect(await submit(live.slug)).toEqual({ ok: true });
     expect(await leadsOf(live.orgId)).toEqual([{ is_sample: false, source: "web_form" }]);
-    await asAnon(db);
     expect(await submit(noNotice.slug)).toEqual({ error: "form_unavailable" });
     // A staff member of a live firm sending from the page makes a real lead too (it's a real enquiry).
-    await staff(live, live.manager);
-    expect(await submit(live.slug)).toEqual({ ok: true });
+    expect(await submit(live.slug, live.manager)).toEqual({ ok: true });
     expect((await leadsOf(live.orgId)).every((row) => row.is_sample === false)).toBe(true);
   });
 
   it("cannot be steered into another firm: the slug decides the firm, and leads stay unreadable to visitors", async () => {
     const a = await firm();
     const b = await firm();
-    await asAnon(db);
     expect(await submit(a.slug)).toEqual({ ok: true });
     expect(await leadsOf(b.orgId)).toEqual([]);
     await asAnon(db);
@@ -185,6 +183,8 @@ describe("enquiry page controls (CRM-01, 20261024140000)", () => {
     await db.query(`select public.set_enquiry_page_enabled($1, false)`, [ctx.orgId]);
     await asAnon(db);
     expect(await publicFirm(ctx.slug)).toMatchObject({ firm_name: "Synthetic Firm", open: false });
+    // A visitor cannot call submit_enquiry directly; the server path is refused while closed.
+    await expectDbError(() => db.query(`select public.submit_enquiry($1, 'Wei', 'wei@example.test', 'email', null, null, null, true, 'x', false, null, 'v', 'web_form', $2, null)`, [ctx.slug, randomUUID()]), /permission denied/);
     expect(await submit(ctx.slug)).toEqual({ error: "form_closed" });
     expect(await leadsOf(ctx.orgId)).toEqual([]);
     await asMaintenance(db);
@@ -192,13 +192,12 @@ describe("enquiry page controls (CRM-01, 20261024140000)", () => {
     expect(audit.rows.map((row) => row.context)).toEqual([{ enabled: false }]);
     await asUser(db, { userId: ctx.owner, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
     await db.query(`select public.set_enquiry_page_enabled($1, true)`, [ctx.orgId]);
-    await asAnon(db);
     expect(await submit(ctx.slug)).toEqual({ ok: true });
   });
 
   it("keeps only the known attribution keys, cleaned, and puts utm_source in source_detail", async () => {
     const ctx = await firm();
-    await asAnon(db);
+    await asServiceRole(db);
     const attribution = {
       utm_source: "test",
       utm_campaign: "fall\tintake",
@@ -209,8 +208,8 @@ describe("enquiry page controls (CRM-01, 20261024140000)", () => {
     };
     const row = await db.query<{ r: { ok?: boolean } }>(
       `select public.submit_enquiry($1, 'Wei Zhang', 'wei@example.test', 'email', 'Study', 'China', 'Mandarin', true,
-         'Synthetic Firm may use these details to reply to my enquiry', false, null, 'enquiry-v2', 'web_form', $2, null, $3::jsonb) as r`,
-      [ctx.slug, randomUUID(), JSON.stringify(attribution)],
+         'Synthetic Firm may use these details to reply to my enquiry', false, null, 'enquiry-v2', 'web_form', $2, $4, $3::jsonb) as r`,
+      [ctx.slug, randomUUID(), JSON.stringify(attribution), createHash("sha256").update(randomUUID()).digest("hex")],
     );
     expect(row.rows[0].r).toEqual({ ok: true });
     await asMaintenance(db);

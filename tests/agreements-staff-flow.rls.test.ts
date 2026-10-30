@@ -194,18 +194,18 @@ describe("the Sheet's agreement flow", () => {
     // The applicant signs first in the portal, then the sponsor; the envelope completes.
     await asUser(db, { userId: ctx.sponsor, aal: "aal1", orgId: ctx.orgId });
     await expectDbError(
-      () => db.query(`select public.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `early-${randomUUID()}`, IP, AGENT]),
+      () => db.query(`select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `early-${randomUUID()}`, IP, AGENT]),
       /identity/i,
     );
     await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
     const first = await db.query<{ result: { status: string } }>(
-      `select public.sign_agreement($1, true, $2, $3::inet, $4) as result`,
+      `select app.sign_agreement($1, true, $2, $3::inet, $4) as result`,
       [envelopeId, `sign-${randomUUID()}`, IP, AGENT],
     );
     expect(first.rows[0].result.status).toBe("partially_signed");
     await asUser(db, { userId: ctx.sponsor, aal: "aal1", orgId: ctx.orgId });
     const second = await db.query<{ result: { status: string } }>(
-      `select public.sign_agreement($1, true, $2, $3::inet, $4) as result`,
+      `select app.sign_agreement($1, true, $2, $3::inet, $4) as result`,
       [envelopeId, `sign-${randomUUID()}`, IP, AGENT],
     );
     expect(second.rows[0].result.status).toBe("completed");
@@ -283,7 +283,7 @@ describe("the Sheet's agreement flow", () => {
     const envelopeId = sent.rows[0].result.envelope_id;
     for (const userId of [ctx.client, ctx.sponsor]) {
       await asUser(db, { userId, aal: "aal1", orgId: ctx.orgId });
-      await db.query(`select public.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `sign-${randomUUID()}`, IP, AGENT]);
+      await db.query(`select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `sign-${randomUUID()}`, IP, AGENT]);
     }
 
     // The sealed-PDF renderer's input carries every term, and the PDF prints them.

@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { asAnon, asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { publishTestPrivacyNotice } from "./helpers/privacy-notice";
 
 /**
@@ -64,11 +64,13 @@ async function firmWithBooking() {
       [FIRM_TZ],
     )
   ).rows[0].at;
-  await asAnon(db);
-  await db.query(`select public.booking_public_hold($1, 'initial', $2::timestamptz, 'Sam Example', 'sam@example.test', null, 'America/Vancouver', $3, null)`, [
+  // The hold is service role only: the app server passes the address hash (20261030231500).
+  await asServiceRole(db);
+  await db.query(`select public.booking_public_hold($1, 'initial', $2::timestamptz, 'Sam Example', 'sam@example.test', null, 'America/Vancouver', $3, $4)`, [
     slug,
     start,
     randomUUID(),
+    createHash("sha256").update(randomUUID()).digest("hex"),
   ]);
   await asMaintenance(db);
   const date = (await db.query<{ d: string }>(`select to_char(($1::timestamptz at time zone $2)::date, 'YYYY-MM-DD') as d`, [start, FIRM_TZ])).rows[0].d;

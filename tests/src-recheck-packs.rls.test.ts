@@ -220,17 +220,19 @@ describe("scheduled re-check, conflicts and a named program pack", () => {
     expect(packRow[0].reviewer_name).toBe("Synthetic Consultant");
     expect(packRow[0].source_owner_licence).toMatch(/^R/);
 
+    // Staff write firm packs only through publish_reviewed_program_pack (20261030235000).
+    const draftSql = `insert into public.rule_pack_versions (organization_id, jurisdiction, program_key, pack_version, next_review_at)
+       values ($1, 'CA', 'synthetic_program', 9, '2027-06-01T00:00:00Z') returning id`;
     await asUser(db, { userId: f.owner, aal: "aal2", orgId: f.orgId, totpAgeSeconds: 0 });
-    const draft = await rows<{ id: string }>(
-      `insert into public.rule_pack_versions (organization_id, jurisdiction, program_key, pack_version, next_review_at)
-       values ($1, 'CA', 'synthetic_program', 9, '2027-06-01T00:00:00Z') returning id`,
-      [f.orgId],
-    );
+    await expectDbError(() => db.query(draftSql, [f.orgId]), /row-level security/);
+    await asMaintenance(db);
+    const draft = await rows<{ id: string }>(draftSql, [f.orgId]);
     await db.query(`insert into public.rule_pack_items (pack_id, rule_version_id) values ($1, $2)`, [draft[0].id, live[0].id]);
-    await expectDbError(
-      () => db.query(`update public.rule_pack_versions set status = 'published' where id = $1`, [draft[0].id]),
-      /licensed reviewer/,
-    );
+    await asUser(db, { userId: f.owner, aal: "aal2", orgId: f.orgId, totpAgeSeconds: 0 });
+    const direct = await db.query(`update public.rule_pack_versions set status = 'published' where id = $1`, [draft[0].id]);
+    expect(direct.affectedRows ?? 0).toBe(0);
+    await asMaintenance(db);
+    expect((await rows<{ status: string }>(`select status::text from public.rule_pack_versions where id = $1`, [draft[0].id]))[0].status).toBe("draft");
   });
 
   it("blocks a claim when two stored official pages disagree", async () => {
@@ -262,12 +264,12 @@ describe("scheduled re-check, conflicts and a named program pack", () => {
     );
     expect(conflict[0].id).toBeTruthy();
     await asMaintenance(db);
-    const blocked = await rows<{ open: boolean }>(`select app.claim_conflict_open($1) as open`, [loaded.definition_id]);
+    const blocked = await rows<{ open: boolean }>(`select app.claim_conflict_open_for($1, $2) as open`, [loaded.definition_id, f.orgId]);
     expect(blocked[0].open).toBe(true);
     await asUser(db, { userId: f.consultant, aal: "aal2", orgId: f.orgId, totpAgeSeconds: 2 });
     await db.query(`select public.resolve_source_conflict($1, 'The second page does not apply to this fixture.')`, [conflict[0].id]);
     await asMaintenance(db);
-    const closed = await rows<{ open: boolean }>(`select app.claim_conflict_open($1) as open`, [loaded.definition_id]);
+    const closed = await rows<{ open: boolean }>(`select app.claim_conflict_open_for($1, $2) as open`, [loaded.definition_id, f.orgId]);
     expect(closed[0].open).toBe(false);
   });
 });

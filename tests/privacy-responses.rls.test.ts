@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { firmDay } from "./helpers/firm-day";
+import { serverCapture } from "./helpers/server-capture";
 
 /**
  * SEC-06 against the real migrations: legal time limits held for licensed review, the due-date
@@ -135,7 +136,7 @@ async function request(id: string) {
 
 async function proposeLimit(f: Firm, kind: string, days: number | null, withSnapshot = true) {
   await stale(f.manager, f.orgId);
-  const snapshot = withSnapshot ? JSON.stringify({ sha256: sha(`page-${kind}`), retrieved_at: new Date().toISOString(), final_url: LAW.split("#")[0], http_status: 200 }) : null;
+  const snapshot = withSnapshot ? JSON.stringify(await serverCapture(db, { orgId: f.orgId, url: LAW, snapshot: { sha256: sha(`page-${kind}`) } })) : null;
   const row = await db.query<{ id: string }>(
     `select public.propose_privacy_time_limit($1, $2, 'Synthetic Privacy Act', 'Synthetic provision text, word for word.', $3, $4, 's. 1(1)', $5::date, $6::date, $7::jsonb) as id`,
     [f.orgId, kind, days, LAW, firmDay(), firmDay(-20), snapshot],

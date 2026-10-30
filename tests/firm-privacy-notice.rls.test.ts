@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { asAnon, asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asAnon, asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 
 // #263-A (20261028120000_firm_privacy_notice): a firm's public booking and enquiry pages need its
 // published privacy notice; the owner can unpublish it (step-up, audited) only while those pages
@@ -117,10 +117,11 @@ async function localStart(days: number): Promise<string> {
 }
 
 async function hold(ctx: Firm, start: string) {
-  await asAnon(db);
+  // The hold is service role only: the app server passes the address hash (20261030231500).
+  await asServiceRole(db);
   const row = await db.query<{ r: { status?: string; error?: string } }>(
-    `select public.booking_public_hold($1, 'initial', $2::timestamptz, 'Sam Example', 'sam@example.test', null, 'America/Vancouver', $3, null) as r`,
-    [ctx.slug, start, randomUUID()],
+    `select public.booking_public_hold($1, 'initial', $2::timestamptz, 'Sam Example', 'sam@example.test', null, 'America/Vancouver', $3, $4) as r`,
+    [ctx.slug, start, randomUUID(), createHash("sha256").update(randomUUID()).digest("hex")],
   );
   return row.rows[0].r;
 }

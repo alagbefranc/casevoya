@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { asAnon, asMaintenance, asServiceRole, asUser, createTestDb, type TestDb } from "./helpers/postgres";
+import { asMaintenance, asServiceRole, asUser, createTestDb, type TestDb } from "./helpers/postgres";
 
 // CRM-01 (20261024150100_enquiry_staff_email.sql): a web enquiry emails the firm's owners EX18,
 // with no enquiry details; practice enquiries don't. Everything here is synthetic.
@@ -38,11 +38,12 @@ async function setup() {
 describe("new enquiry staff email", () => {
   it("queues one lead.enquiry_received, and the worker sends EX18 to the owner with no details", async () => {
     const ctx = await setup();
-    await asAnon(db);
+    // submit_enquiry is service role only: the app server passes the address hash (20261030231500).
+    await asServiceRole(db);
     const sent = await db.query<{ r: { ok?: boolean } }>(
       `select public.submit_enquiry($1, 'Wei Zhang', 'wei@example.test', 'email', 'Study', 'China', 'Mandarin', true,
-         'Synthetic Firm may use these details to reply to my enquiry', false, null, 'enquiry-v2', 'hosted_page', $2, null) as r`,
-      [ctx.slug, randomUUID()],
+         'Synthetic Firm may use these details to reply to my enquiry', false, null, 'enquiry-v2', 'hosted_page', $2, $3) as r`,
+      [ctx.slug, randomUUID(), createHash("sha256").update(randomUUID()).digest("hex")],
     );
     expect(sent.rows[0].r).toEqual({ ok: true });
     await asServiceRole(db);

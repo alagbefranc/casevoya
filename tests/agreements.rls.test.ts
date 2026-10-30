@@ -238,7 +238,7 @@ describe("in-house agreements and signatures", () => {
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
     await expectDbError(
       () =>
-        db.query(`select public.sign_agreement($1, true, $2, $3::inet, $4)`, [
+        db.query(`select app.sign_agreement($1, true, $2, $3::inet, $4)`, [
           envelopeId,
           `early-${randomUUID()}`,
           IP,
@@ -249,16 +249,16 @@ describe("in-house agreements and signatures", () => {
 
     await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
     await expectDbError(
-      () => db.query(`select public.sign_agreement($1, false, $2, $3::inet, $4)`, [envelopeId, `noconsent-${randomUUID()}`, IP, AGENT]),
+      () => db.query(`select app.sign_agreement($1, false, $2, $3::inet, $4)`, [envelopeId, `noconsent-${randomUUID()}`, IP, AGENT]),
       /consent/i,
     );
     const signKey = `sign-${randomUUID()}`;
     const first = await db.query<{ result: { status: string; replayed: boolean } }>(
-      `select public.sign_agreement($1, true, $2, $3::inet, $4) as result`,
+      `select app.sign_agreement($1, true, $2, $3::inet, $4) as result`,
       [envelopeId, signKey, IP, AGENT],
     );
     const replay = await db.query<{ result: { status: string; replayed: boolean } }>(
-      `select public.sign_agreement($1, true, $2, $3::inet, $4) as result`,
+      `select app.sign_agreement($1, true, $2, $3::inet, $4) as result`,
       [envelopeId, signKey, IP, AGENT],
     );
     expect(first.rows[0].result.status).toBe("partially_signed");
@@ -282,6 +282,104 @@ describe("in-house agreements and signatures", () => {
     expect(engagement.rows[0].engagement_status).toBe("pending");
   });
 
+  it("records the IP and browser the server issued, never ones the caller supplies", async () => {
+    const privileges = await db.query<{ fn: string; anon: boolean; authed: boolean; service: boolean }>(
+      `select fn,
+              has_function_privilege('anon', fn, 'execute') as anon,
+              has_function_privilege('authenticated', fn, 'execute') as authed,
+              has_function_privilege('service_role', fn, 'execute') as service
+       from unnest(array[
+         'public.sign_agreement(uuid, boolean, text, inet, text)',
+         'public.decline_agreement(uuid, text, inet, text)',
+         'public.issue_signing_evidence(uuid, uuid, inet, text)',
+         'public.sign_booking_agreement(text, text, boolean, text, inet, text)',
+         'public.sign_booking_agreement(text, text, boolean, text, inet, text, text, text, text)'
+       ]) as fn`,
+    );
+    for (const row of privileges.rows) expect(row, row.fn).toMatchObject({ anon: false, authed: false });
+    expect(privileges.rows.find((row) => row.fn.startsWith("public.issue_signing_evidence"))?.service).toBe(true);
+    const signerSide = await db.query<{ sign: boolean; decline: boolean }>(
+      `select has_function_privilege('authenticated', 'public.sign_agreement(uuid, boolean, text, uuid)', 'execute') as sign,
+              has_function_privilege('authenticated', 'public.decline_agreement(uuid, text, uuid)', 'execute') as decline`,
+    );
+    expect(signerSide.rows[0]).toEqual({ sign: true, decline: true });
+
+    const ctx = await firm();
+    const agreementId = await draftService(ctx);
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const sent = await db.query<{ result: { envelope_id: string } }>(
+      `select public.send_agreement($1, $2::jsonb, $3, null) as result`,
+      [agreementId, signers(ctx), `send-${randomUUID()}`],
+    );
+    const envelopeId = sent.rows[0].result.envelope_id;
+    const issue = async (userId: string, ip: string) => {
+      await asServiceRole(db);
+      const issued = await db.query<{ id: string }>(`select public.issue_signing_evidence($1, $2, $3::inet, $4) as id`, [envelopeId, userId, ip, AGENT]);
+      return issued.rows[0].id;
+    };
+
+    // A session can't record its own evidence or pass an address.
+    await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
+    await expectDbError(
+      () => db.query(`select public.issue_signing_evidence($1, $2, '192.0.2.1'::inet, 'x')`, [envelopeId, ctx.client]),
+      /permission denied/,
+    );
+    await expectDbError(
+      () => db.query(`select public.sign_agreement($1, true, $2, '192.0.2.1'::inet, 'x')`, [envelopeId, `direct-${randomUUID()}`]),
+      /permission denied/,
+    );
+
+    // Evidence issued for someone else, or expired, is refused.
+    const forConsultant = await issue(ctx.consultant, "198.51.100.40");
+    await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
+    await expectDbError(
+      () => db.query(`select public.sign_agreement($1, true, $2, $3)`, [envelopeId, `other-${randomUUID()}`, forConsultant]),
+      /signing evidence not found/,
+    );
+    const stale = await issue(ctx.client, "198.51.100.41");
+    await asMaintenance(db);
+    await db.query(`update app.signing_evidence set created_at = created_at - interval '11 minutes' where id = $1`, [stale]);
+    await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
+    await expectDbError(
+      () => db.query(`select public.sign_agreement($1, true, $2, $3)`, [envelopeId, `stale-${randomUUID()}`, stale]),
+      /signing evidence not found/,
+    );
+
+    // The signer's own fresh evidence signs once, with the server's address and browser.
+    const mine = await issue(ctx.client, "198.51.100.23");
+    await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
+    const signed = await db.query<{ result: { status: string } }>(`select public.sign_agreement($1, true, $2, $3) as result`, [
+      envelopeId,
+      `sign-${randomUUID()}`,
+      mine,
+    ]);
+    expect(signed.rows[0].result.status).toBe("partially_signed");
+    await expectDbError(
+      () => db.query(`select public.sign_agreement($1, true, $2, $3)`, [envelopeId, `again-${randomUUID()}`, mine]),
+      /signing evidence not found/,
+    );
+
+    // The consultant declines with evidence the server issued for them.
+    const declineEvidence = await issue(ctx.consultant, "198.51.100.24");
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const declined = await db.query<{ result: { status: string } }>(`select public.decline_agreement($1, $2, $3) as result`, [
+      envelopeId,
+      `decline-${randomUUID()}`,
+      declineEvidence,
+    ]);
+    expect(declined.rows[0].result.status).toBe("declined");
+
+    await asMaintenance(db);
+    const rows = await db.query<{ status: string; ip: string; user_agent: string }>(
+      `select status::text, host(ip) as ip, user_agent from public.envelope_signers where envelope_id = $1 order by signing_order`,
+      [envelopeId],
+    );
+    expect(rows.rows).toEqual([
+      { status: "signed", ip: "198.51.100.23", user_agent: AGENT },
+      { status: "declined", ip: "198.51.100.24", user_agent: AGENT },
+    ]);
+  });
+
   it("supersedes a partial signature when the fee changes and seals the new version into the documents bucket", async () => {
     const ctx = await firm();
     const agreementId = await draftService(ctx, 10000);
@@ -293,7 +391,7 @@ describe("in-house agreements and signatures", () => {
     const oldHash = sent.rows[0].result.content_sha256;
     const oldEnvelope = sent.rows[0].result.envelope_id;
     await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
-    await db.query(`select public.sign_agreement($1, true, $2, $3::inet, $4)`, [oldEnvelope, `sign-${randomUUID()}`, IP, AGENT]);
+    await db.query(`select app.sign_agreement($1, true, $2, $3::inet, $4)`, [oldEnvelope, `sign-${randomUUID()}`, IP, AGENT]);
 
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
     await db.query(
@@ -322,10 +420,10 @@ describe("in-house agreements and signatures", () => {
     expect(resent.rows[0].result.content_sha256).not.toBe(oldHash);
     const envelopeId = resent.rows[0].result.envelope_id;
     await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
-    await db.query(`select public.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `sign2-${randomUUID()}`, IP, AGENT]);
+    await db.query(`select app.sign_agreement($1, true, $2, $3::inet, $4)`, [envelopeId, `sign2-${randomUUID()}`, IP, AGENT]);
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
     const done = await db.query<{ result: { status: string; sealed_sha256: string | null; seal_pending: boolean } }>(
-      `select public.sign_agreement($1, true, $2, $3::inet, $4) as result`,
+      `select app.sign_agreement($1, true, $2, $3::inet, $4) as result`,
       [envelopeId, `final-${randomUUID()}`, IP, AGENT],
     );
     expect(done.rows[0].result.status).toBe("completed");

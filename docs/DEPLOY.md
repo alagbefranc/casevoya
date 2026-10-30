@@ -8,7 +8,8 @@ Do not commit secrets. Copy the names below into the host environment. Account i
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL. Public. |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser key. Public. |
-| `SUPABASE_SECRET_KEY` | Service role for mail dispatch, inbound intake, routing reconcile, and document upload completion (the server reads the stored file and calls `finish_verified_document_upload`). Without it, portal uploads cannot be completed. |
+| `SUPABASE_SECRET_KEY` | Service role for mail dispatch, inbound intake, routing reconcile, and document upload completion (the server reads the stored file and calls `finish_verified_document_upload`). Without it, portal uploads cannot be completed. Also required by the public booking hold (`POST /api/book/<firm>/<event>/hold`) and the public enquiry form (`POST /api/enquiry/<firm>`): `booking_public_hold` and `submit_enquiry` are service role only so the client-address hash comes from the server; without the key both answer 502. |
+| `BOOKING_CLIENT_SALT` | Optional but recommended. Salt for the SHA-256 client-address hash behind the per-address limits of the booking hold and the enquiry form (8 holds / 5 enquiries per address per 10 minutes). The address comes from `cf-connecting-ip` (else `x-real-ip`, `x-forwarded-for`); requests without one share a single bucket with the same limit. Secret. |
 | `CLOUDFLARE_EMAIL_API_TOKEN` | Email Sending API. Not used for routing rules. |
 | `CLOUDFLARE_ACCOUNT_ID` | Account that owns the zone. Default `c8010438fc56280e3ea5747a123e818a`. Sending uses it in the URL. Routing rules are zone-scoped, so reconcile does not send this id. |
 | `CLOUDFLARE_EMAIL_FROM` | Outbound From address. Default `notices@casevoya.ca`. |

@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { publishTestPrivacyNotice } from "./helpers/privacy-notice";
 
 // Consultation outcome summaries (20261023150000, CRM-04): staff write the summary after an
@@ -103,10 +103,11 @@ async function localStart(days: number, time = "10:00"): Promise<string> {
 /** The client books on the firm's public page, signed in, so the booking is their own. */
 async function book(ctx: Ctx, start: string, options: { as?: { id: string; email: string } } = {}) {
   const who = options.as ?? ctx.client;
-  await asUser(db, client(who.id, null));
+  // The hold is service role only; the server names the signed-in visitor (20261030231500).
+  await asServiceRole(db);
   const row = await db.query<{ r: { public_ref: string; error?: string } }>(
-    `select public.booking_public_hold($1, 'review', $2::timestamptz, 'Synthetic Client', $3, null, 'America/Vancouver', $4, null) as r`,
-    [ctx.firmSlug, start, who.email, randomUUID()],
+    `select public.booking_public_hold($1, 'review', $2::timestamptz, 'Synthetic Client', $3, null, 'America/Vancouver', $4, $5, $6::uuid) as r`,
+    [ctx.firmSlug, start, who.email, randomUUID(), createHash("sha256").update(randomUUID()).digest("hex"), who.id],
   );
   if (row.rows[0].r.error) throw new Error(row.rows[0].r.error);
   await asMaintenance(db);

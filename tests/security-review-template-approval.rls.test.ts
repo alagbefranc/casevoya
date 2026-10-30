@@ -5,7 +5,8 @@ import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type
 /**
  * ADM-03: a shared template approval publishes exactly what was reviewed. A draft submitted for
  * review cannot be edited (content or sources) until it is withdrawn; the hash-bound approve
- * overload refuses content that changed; opening a draft does not change the live title.
+ * overload refuses content that changed and a draft that was not submitted; the id-only overload
+ * is refused; opening a draft does not change the live title.
  */
 
 let db: TestDb;
@@ -109,6 +110,14 @@ async function draft(key: string, title: string, lines: string[]) {
   return id;
 }
 
+async function submitAndApprove(versionId: string) {
+  await asServiceRole(db);
+  await rpc(`public.submit_shared_template_version($1, $2)`, [versionId, author]);
+  await asReviewer();
+  const hash = await rpc<string>(`public.shared_template_review_hash($1)`, [versionId]);
+  return rpc<{ status: string; review_hash: string }>(`public.approve_shared_template_version($1, $2)`, [versionId, hash]);
+}
+
 async function body(versionId: string) {
   await asMaintenance(db);
   return (await db.query<{ body: { title: string; items: string[] } }>(`select body from public.shared_template_versions where id = $1`, [versionId])).rows[0]
@@ -159,7 +168,10 @@ describe("shared template approval is bound to the reviewed content", () => {
     }
 
     await asReviewer();
-    const published = await rpc<{ status: string; review_hash: string }>(`public.approve_shared_template_version($1)`, [versionId]);
+    const published = await rpc<{ status: string; review_hash: string }>(`public.approve_shared_template_version($1, $2)`, [
+      versionId,
+      submitted.review_hash,
+    ]);
     expect(published.status).toBe("published");
     expect(published.review_hash).toBe(submitted.review_hash);
     expect((await body(versionId)).items).toEqual(["Original item"]);
@@ -177,6 +189,14 @@ describe("shared template approval is bound to the reviewed content", () => {
     await rpc(`public.withdraw_shared_template_version($1, $2)`, [versionId, author]);
     await rpc(REVISE, [versionId, "Review hash template", "Changed.", items(["Swapped item"]), "Synthetic test evidence changed.", "2026-11-01", "Changed."]);
 
+    // The edited draft was withdrawn, so it is not approved until it is submitted again.
+    await asReviewer();
+    const current = await rpc<string>(`public.shared_template_review_hash($1)`, [versionId]);
+    expect(current).not.toBe(seen);
+    await expectDbError(() => rpc(`public.approve_shared_template_version($1, $2)`, [versionId, current]), /not been submitted for review/);
+
+    await asServiceRole(db);
+    await rpc(`public.submit_shared_template_version($1, $2)`, [versionId, author]);
     await asReviewer();
     await expectDbError(() => rpc(`public.approve_shared_template_version($1, $2)`, [versionId, seen]), /changed since it was reviewed/);
     await expectDbError(() => rpc(`public.approve_shared_template_version($1, $2)`, [versionId, "not-a-hash"]), /review hash is required/);
@@ -184,21 +204,35 @@ describe("shared template approval is bound to the reviewed content", () => {
     expect((await db.query<{ status: string }>(`select status from public.shared_template_versions where id = $1`, [versionId])).rows[0].status).toBe("draft");
 
     await asReviewer();
-    const current = await rpc<string>(`public.shared_template_review_hash($1)`, [versionId]);
-    const published = await rpc<{ status: string }>(`public.approve_shared_template_version($1, $2)`, [versionId, current]);
+    const published = await rpc<{ status: string; review_hash: string }>(`public.approve_shared_template_version($1, $2)`, [versionId, current]);
     expect(published.status).toBe("published");
+    expect(published.review_hash).toBe(current);
     expect((await body(versionId)).items).toEqual(["Swapped item"]);
   });
 
-  it("keeps the admin portal flow: a draft not in review is revised and approved with only the id", async () => {
+  it("refuses the id-only approval and a draft that was never submitted; the submit-and-approve flow publishes", async () => {
     const versionId = await draft("portal_flow_template", "Portal flow template", ["Original item"]);
     await asServiceRole(db);
     await rpc(REVISE, [versionId, "Portal flow template", "Revised.", items(["Revised item"]), "Synthetic test evidence revised.", "2026-11-01", "Revised."]);
     await rpc(`public.set_shared_template_version_sources($1, $2::jsonb, $3)`, [versionId, otherSources, author]);
 
     await asReviewer();
-    const published = await rpc<{ status: string }>(`public.approve_shared_template_version($1)`, [versionId]);
+    await expectDbError(() => rpc(`public.approve_shared_template_version($1)`, [versionId]), /submit the draft for review, then approve it with its review hash/);
+    const hash = await rpc<string>(`public.shared_template_review_hash($1)`, [versionId]);
+    await expectDbError(() => rpc(`public.approve_shared_template_version($1, $2)`, [versionId, hash]), /not been submitted for review/);
+    await asMaintenance(db);
+    expect((await db.query<{ status: string }>(`select status from public.shared_template_versions where id = $1`, [versionId])).rows[0].status).toBe("draft");
+
+    const published = await submitAndApprove(versionId);
     expect(published.status).toBe("published");
+    expect((await body(versionId)).items).toEqual(["Revised item"]);
+
+    // The id-only form stays refused for a submitted draft too.
+    const next = await draft("portal_flow_template", "Portal flow template", ["Next item"]);
+    await asServiceRole(db);
+    await rpc(`public.submit_shared_template_version($1, $2)`, [next, author]);
+    await asReviewer();
+    await expectDbError(() => rpc(`public.approve_shared_template_version($1)`, [next]), /submit the draft for review/);
 
     // Published content stays frozen.
     await asServiceRole(db);
@@ -211,8 +245,7 @@ describe("shared template approval is bound to the reviewed content", () => {
 
   it("does not change the live template title when a new draft is opened", async () => {
     const first = await draft("title_template", "Live title", ["Item"]);
-    await asReviewer();
-    await rpc(`public.approve_shared_template_version($1)`, [first]);
+    await submitAndApprove(first);
     expect(await liveTitle("title_template")).toBe("Live title");
 
     const second = await draft("title_template", "Draft title", ["Item", "Second item"]);
@@ -222,8 +255,7 @@ describe("shared template approval is bound to the reviewed content", () => {
     const catalogue = await rpc<{ versions: { stable_key: string; template_title: string }[] }>(`public.firm_shared_templates()`);
     expect(catalogue.versions.filter((v) => v.stable_key === "title_template").every((v) => v.template_title === "Live title")).toBe(true);
 
-    await asReviewer();
-    await rpc(`public.approve_shared_template_version($1)`, [second]);
+    await submitAndApprove(second);
     expect(await liveTitle("title_template")).toBe("Draft title");
 
     await asReviewer();

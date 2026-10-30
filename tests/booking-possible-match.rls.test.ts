@@ -110,11 +110,11 @@ async function localStart(days: number, time = "10:00"): Promise<string> {
 /** Someone books on the public page, not signed in (or signed in as `as`), with `email`. */
 async function book(ctx: Ctx, email: string, options: { days?: number; as?: string } = {}) {
   const start = await localStart(options.days ?? 5);
-  if (options.as) await asUser(db, client(options.as, null));
-  else await asAnon(db);
+  // The hold is service role only; the server names the signed-in visitor (20261030231500).
+  await asServiceRole(db);
   const row = await db.query<{ r: { public_ref: string; error?: string } }>(
-    `select public.booking_public_hold($1, 'initial', $2::timestamptz, 'Somebody Typing', $3, null, 'America/Vancouver', $4, null) as r`,
-    [ctx.firmSlug, start, email, randomUUID()],
+    `select public.booking_public_hold($1, 'initial', $2::timestamptz, 'Somebody Typing', $3, null, 'America/Vancouver', $4, $5, $6::uuid) as r`,
+    [ctx.firmSlug, start, email, randomUUID(), createHash("sha256").update(randomUUID()).digest("hex"), options.as ?? null],
   );
   if (row.rows[0].r.error) throw new Error(row.rows[0].r.error);
   await asMaintenance(db);
