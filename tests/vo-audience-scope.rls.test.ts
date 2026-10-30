@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { VO_VENDOR_TERMS } from "@/modules/vo/vendor-terms";
+import { guardVoOutput } from "@/modules/vo/guard";
 
 /**
  * 20261031015000_vo_audience_scope_and_draft_guard.sql against the real migrations: a reply or
@@ -200,5 +201,26 @@ describe("VO-5 / VO-6: a stored draft passes the output guard again", () => {
     await asMaintenance(db);
     const row = (await db.query<{ needs_rule: boolean }>(`select needs_rule from public.vo_drafts where id = $1`, [draftId])).rows[0];
     expect(row.needs_rule).toBe(true);
+  });
+
+  it("accepts what guard.ts keeps: '@' in a portal path, an address-like text without word boundaries", async () => {
+    const f = await firm();
+    const sources = [{ kind: "message", id: f.sponsor.messageId, label: "Client message" }];
+    for (const raw of ["Open https://app.casevoya.ca/portal/@me today.", "Reference ref@case.ca_2 is on file.", "See xhttps://elsewhere.example later."]) {
+      const guarded = guardVoOutput(raw, { firmSlug: f.slug });
+      expect(guarded).toMatchObject({ kind: "draft", text: raw });
+      const run = await begin(f, "message_reply", f.sponsor.threadId);
+      expect(await drafted(run, raw, sources)).toBeTruthy();
+    }
+    await asMaintenance(db);
+    for (const [body, problem] of [
+      ["https://@app.casevoya.ca/portal", "link"],
+      ["https://user@app.casevoya.ca/portal", "link"],
+      ["https://app.casevoya.ca/portal/../admin", "link"],
+      ["Write to a.b@example.com.", "email"],
+      ["(someone@example.org)", "email"],
+    ] as const) {
+      expect((await db.query<{ p: string | null }>(`select app.vo_draft_body_problem($1, null) as p`, [body])).rows[0].p, body).toBe(problem);
+    }
   });
 });

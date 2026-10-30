@@ -267,4 +267,37 @@ describe("the viewer named by the server", () => {
     );
     expect(audit.rows).toEqual([{ actor_user_id: ctx.host, sample: true }]);
   });
+
+  it("deploy window: before 20261031090000 the 17-argument form still takes a practice enquiry from staff", async () => {
+    const ctx = await firm({ sample: true });
+    const other = await firm();
+    const legacy = (viewer: string | null) =>
+      db.query<{ r: unknown }>(`select public.submit_enquiry(${ENQUIRY_ARGS}, '{}'::jsonb, $4::uuid) as r`, [ctx.slug, randomUUID(), hashOf(), viewer]);
+    // The 2-argument check as 20261031017000 leaves it (membership only), before 090000 replaces it.
+    const windowBody = `create or replace function app.public_viewer_is_staff(p_org uuid, p_viewer uuid)
+      returns boolean language sql stable security definer set search_path = '' as $$
+        select p_org is not null and p_viewer is not null and exists (
+          select 1 from public.memberships m
+          where m.organization_id = p_org and m.user_id = p_viewer and m.status = 'active' and m.role = any (app.staff_roles()))
+      $$`;
+    const finalBody = `create or replace function app.public_viewer_is_staff(p_org uuid, p_viewer uuid)
+      returns boolean language sql stable security definer set search_path = '' as $$
+        select app.public_viewer_is_staff(p_org, p_viewer, null::text)
+      $$`;
+    await asMaintenance(db);
+    await db.query(windowBody);
+    try {
+      await asServiceRole(db);
+      expect((await legacy(ctx.host)).rows[0].r).toEqual({ ok: true });
+      expect((await legacy(other.owner)).rows[0].r).toEqual({ error: "form_unavailable" });
+      expect((await legacy(null)).rows[0].r).toEqual({ error: "form_unavailable" });
+      // The new form still needs staff MFA when it names an assurance.
+      expect(await enquire(ctx, hashOf(), ctx.host, "aal1")).toEqual({ error: "form_unavailable" });
+    } finally {
+      await asMaintenance(db);
+      await db.query(finalBody);
+    }
+    await asServiceRole(db);
+    expect((await legacy(ctx.host)).rows[0].r).toEqual({ error: "form_unavailable" });
+  });
 });

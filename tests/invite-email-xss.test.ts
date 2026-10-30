@@ -59,10 +59,11 @@ describe("escapeHtml", () => {
 
 describe("invitation email validation", () => {
   it("accepts ordinary addresses", () => {
-    for (const value of ["a@example.test", "first.last+tag@sub.example.co", "x_y-z@example.test"]) {
+    for (const value of ["a@example.test", "first.last+tag@sub.example.co", "x_y-z@example.test", "o'brien@example.test"]) {
       expect(isAcceptableEmail(value)).toBe(true);
     }
     expect(normalizeEmail("  New.Hire@Example.TEST ")).toBe("new.hire@example.test");
+    expect(normalizeEmail("O'Brien@Example.test")).toBe("o'brien@example.test");
   });
 
   it("refuses markup, quoting characters and control characters", () => {
@@ -71,7 +72,6 @@ describe("invitation email validation", () => {
       "a<b@example.test",
       "a>b@example.test",
       'a"b@example.test',
-      "a'b@example.test",
       "a`b@example.test",
       "a(b)@example.test",
       "a;b@example.test",
@@ -88,7 +88,9 @@ describe("invitation email validation", () => {
   it("refuses those addresses in the staff invite dialog and the firm contact form", () => {
     expect(readStaffInvite({ email: MARKUP, role: "Case manager" })).toEqual({ error: "Enter a valid email address." });
     expect("input" in readStaffInvite({ email: "new.hire@example.test", role: "Case manager" })).toBe(true);
-    expect(firmDetailChanges({ billing_contact_email: "billing'@example.test" })).toEqual({ error: "Enter a full email address." });
+    expect(firmDetailChanges({ billing_contact_email: "billing`@example.test" })).toEqual({ error: "Enter a full email address." });
+    expect(firmDetailChanges({ billing_contact_email: "o'brien@example.test" })).toEqual({ changes: { billing_contact_email: "o'brien@example.test" } });
+    expect("input" in readStaffInvite({ email: "o'brien@example.test", role: "Case manager" })).toBe(true);
     expect(firmDetailChanges({ billing_contact_email: "billing@example.test" })).toEqual({ changes: { billing_contact_email: "billing@example.test" } });
   });
 });

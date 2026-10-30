@@ -160,6 +160,40 @@ describe("inbound Message-ID resume binding", () => {
     for (const row of audit.rows) expect(row.context).toEqual({ reason: "message_id_conflict" });
   });
 
+  it("a row stored without a digest (previous app) resumes for the same sender and verification, and takes the digest", async () => {
+    const ctx = await firm();
+    const messageId = `<legacy-${randomUUID()}@example.test>`;
+    await asServiceRole(db);
+    const legacy = await db.query<{ result: Begin }>(
+      `select public.begin_verified_inbound_message($1, 'client@example.test', $2, 'Subject', 'Body', null, null, true) as result`,
+      [ctx.to, messageId],
+    );
+    const first = legacy.rows[0].result;
+    expect(first.status).toBe("accepted");
+
+    // The previous app retrying without a digest still resumes.
+    await asServiceRole(db);
+    const legacyRetry = await db.query<{ result: Begin }>(
+      `select public.begin_verified_inbound_message($1, 'client@example.test', $2, 'Subject', 'Body', null, null, true) as result`,
+      [ctx.to, messageId],
+    );
+    expect(legacyRetry.rows[0].result).toMatchObject({ status: "resume", inbound_email_id: first.inbound_email_id });
+
+    // Another sender or verification result is still refused.
+    expect(await begin(ctx.to, "stranger@elsewhere.example", messageId, true, DIGEST)).toMatchObject({ status: "duplicate", person_id: null });
+    expect(await begin(ctx.to, "client@example.test", messageId, false, DIGEST)).toMatchObject({ status: "duplicate", person_id: null });
+
+    const resumed = await begin(ctx.to, "client@example.test", messageId, true, DIGEST);
+    expect(resumed).toMatchObject({ status: "resume", inbound_email_id: first.inbound_email_id, person_id: ctx.personId });
+    await asMaintenance(db);
+    const stored = await db.query<{ content_digest: string | null }>(`select content_digest from public.inbound_emails where id = $1`, [
+      first.inbound_email_id,
+    ]);
+    expect(stored.rows[0].content_digest).toBe(DIGEST);
+    // Once bound, other content no longer resumes.
+    expect(await begin(ctx.to, "client@example.test", messageId, true, OTHER_DIGEST)).toMatchObject({ status: "duplicate", person_id: null });
+  });
+
   it("refuses a malformed digest and keeps the wrapper away from signed-in users", async () => {
     const ctx = await firm();
     await asServiceRole(db);

@@ -8,9 +8,9 @@ export function isInvitationToken(value: string): boolean {
 const EMAIL_SHAPE_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /**
  * Characters an address may not contain (the database refuses the same set: app.email_chars_ok):
- * < > " ' ` ( ) ; , \ and control characters.
+ * < > " ` ( ) ; , \ and control characters. The apostrophe is allowed (o'brien@…); screens escape it.
  */
-const EMAIL_FORBIDDEN_RE = /[<>"'`();,\\]/;
+const EMAIL_FORBIDDEN_RE = /[<>"`();,\\]/;
 
 function hasControlChar(value: string): boolean {
   for (let i = 0; i < value.length; i += 1) {

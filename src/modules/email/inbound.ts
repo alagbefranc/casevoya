@@ -104,7 +104,10 @@ export function safeAttachmentName(filename: string | null | undefined, mimeType
 }
 
 const STOP = new Set(["duplicate", "unknown_firm", "reserved", "bad_address", "rate_limited"]);
+/** The firm's hourly attachment byte cap (reserve_inbound_attachment_bytes). */
 const ATTACHMENT_LIMIT = /inbound attachment limit/i;
+/** Refusals that repeat on every retry (per-file size limit, file type). */
+const PERMANENT_ATTACHMENT_ERROR = /file is above the upload limit|use a PDF, JPEG, PNG, HEIC, or DOCX file/i;
 
 export async function processInboundEmail(payload: InboundPayload, deps: InboundDeps): Promise<{ status: string }> {
   const decoded = (payload.attachments ?? []).map((attachment) => {
@@ -158,9 +161,14 @@ export async function processInboundEmail(payload: InboundPayload, deps: Inbound
       ordinal += 1;
     }
   } catch (error) {
-    const limited = error instanceof Error && ATTACHMENT_LIMIT.test(error.message);
-    await deps.abandonMessage(inboundId, limited ? "attachment_limit" : "attachment_error");
-    if (limited) return { status: "attachments_refused" };
+    // Only the byte limit and permanent refusals close the message; any other error is rethrown
+    // with the message left open so the retry resumes from the stored attachments.
+    const message = error instanceof Error ? error.message : "";
+    if (ATTACHMENT_LIMIT.test(message)) {
+      await deps.abandonMessage(inboundId, "attachment_limit");
+      return { status: "attachments_refused" };
+    }
+    if (PERMANENT_ATTACHMENT_ERROR.test(message)) await deps.abandonMessage(inboundId, "attachment_error");
     throw error;
   }
   await deps.finishMessage(inboundId);

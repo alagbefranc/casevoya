@@ -9,10 +9,12 @@
 --      public.platform_admin_resolve_attempt(p_attempt, p_succeeded)  sets the outcome of a
 --        pending attempt; an attempt already resolved is unchanged.
 -- 2. app.record_licence_check (latest 20261031016000): in the firm-owner branch, an owner may record
---    a check on a credential they hold only as its first check (status declared, no check of any
---    kind recorded yet). Later checks on the owner's own licence come from the CICC list or a
---    platform admin. Everything else is unchanged; the change is marked "Own licence". The
---    credential row is locked so two first checks cannot race.
+--    a check on a credential they hold only as its first manual check (no manual register check,
+--    by the owner or a platform admin, recorded yet; automatic CICC list checks do not count), and
+--    never one that lifts an adverse status (a CICC list result) to a less severe one
+--    (app.licence_status_severity, new). Later checks on the owner's own licence come from the
+--    CICC list or a platform admin. Everything else is unchanged; the change is marked "Own
+--    licence". The credential row is locked so two first checks cannot race.
 -- 3. Client two-step (app.session_assurance_ok(), 20261030200000) on the remaining client branches:
 --    app.gov_client_on_matter (only definition 20261019202100), public.request_intake_correction
 --    (latest 20261020200000), public.my_consents (only definition 20261025270100). Staff branches
@@ -22,7 +24,7 @@
 --    record_person_identity, resolve_person_flag, link_document_matter, set_document_translation,
 --    set_document_classification, reuse_approved_facts, confirm_reused_fact.
 --
--- Additive: one new table, two new functions, function bodies replaced, grants revoked.
+-- Additive: one new table, three new functions, function bodies replaced, grants revoked.
 
 
 -- ---------------------------------------------------------------------------
@@ -132,8 +134,27 @@ grant execute on function public.platform_admin_resolve_attempt(uuid, boolean) t
 
 -- ---------------------------------------------------------------------------
 -- 2. Manual licence check (from 20261031016000; the firm-owner branch limits the owner's own
---    licence to its first check)
+--    licence to its first manual check)
 -- ---------------------------------------------------------------------------
+
+-- How severe a credential status is: verified and declared 0, then not entitled, inactive,
+-- suspended, revoked (the precedence of record_licence_check).
+create or replace function app.licence_status_severity(p_status public.credential_status)
+returns integer
+language sql
+immutable
+set search_path = ''
+as $$
+  select case p_status
+    when 'revoked' then 4
+    when 'suspended' then 3
+    when 'inactive' then 2
+    when 'not_entitled' then 1
+    else 0
+  end;
+$$;
+revoke all on function app.licence_status_severity(public.credential_status) from public;
+
 create or replace function app.record_licence_check(
   p_credential_id uuid,
   p_source_url text,
@@ -162,6 +183,8 @@ declare
   review_at timestamptz;
   interval_known interval;
   restriction_detail text;
+  -- Own licence:
+  own_licence boolean := false;
 begin
   if actor is null or app.staff_mfa_satisfied() is distinct from true
      or app.mfa_step_up_satisfied() is distinct from true then
@@ -174,11 +197,14 @@ begin
   end if;
   if (app.in_active_org(credential.organization_id)
       and app.has_org_role(credential.organization_id, array['firm_owner']::public.org_role[])) is true then
-    -- Firm-owner branch. Own licence: only its first check (declared, nothing recorded yet).
-    if app.credential_held_by(credential.id, actor)
-       and (
-         credential.status is distinct from 'declared'
-         or exists (select 1 from public.credential_checks chk where chk.credential_id = credential.id)
+    -- Firm-owner branch. Own licence: only its first manual check (automatic CICC list checks
+    -- do not count); an adverse status is never lifted by it (checked below).
+    own_licence := app.credential_held_by(credential.id, actor) is true;
+    if own_licence
+       and exists (
+         select 1 from public.credential_checks chk
+         where chk.credential_id = credential.id
+           and chk.method is distinct from 'cicc_list'
        ) then
       raise exception 'you cannot record a check on your own licence' using errcode = '42501';
     end if;
@@ -233,6 +259,13 @@ begin
   else
     result := 'verified';
     new_status := 'verified';
+  end if;
+
+  -- Own licence: an adverse status (from the CICC list) may only be kept or made more severe.
+  if own_licence
+     and app.licence_status_blocks(credential.status)
+     and app.licence_status_severity(new_status) < app.licence_status_severity(credential.status) then
+    raise exception 'you cannot record a check on your own licence' using errcode = '42501';
   end if;
 
   interval_known := app.product_setting_interval('licence.recheck_interval');

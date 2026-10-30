@@ -168,9 +168,11 @@ grant execute on function app.decline_agreement(uuid, text, inet, text) to servi
 -- C) Actor for public booking holds
 -- ---------------------------------------------------------------------------
 
+-- Added NOT VALID (no scan while adding), then validated in its own statement.
 alter table public.audit_log drop constraint if exists audit_log_actor_type_check;
 alter table public.audit_log
-  add constraint audit_log_actor_type_check check (actor_type in ('user', 'system', 'service', 'public'));
+  add constraint audit_log_actor_type_check check (actor_type in ('user', 'system', 'service', 'public')) not valid;
+alter table public.audit_log validate constraint audit_log_actor_type_check;
 
 -- Rows written by the service role with no user, while app.public_actor is set for this
 -- transaction, name the server-supplied viewer, or the public actor type.

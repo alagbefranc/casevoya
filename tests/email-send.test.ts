@@ -313,4 +313,29 @@ describe("inbound resume binding and attachment close-out", () => {
     expect(await processInboundEmail(message("Files", [pdf]), capped.deps)).toEqual({ status: "attachments_refused" });
     expect(capped.calls.abandoned).toEqual(["attachment_limit"]);
   });
+
+  it("leaves the message open on a temporary error so the retry resumes", async () => {
+    let attempts = 0;
+    const flaky = linkedDeps({
+      putObject: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("fetch failed: ECONNRESET");
+      },
+    });
+    await expect(processInboundEmail(message("Files", [pdf]), flaky.deps)).rejects.toThrow(/ECONNRESET/);
+    expect(flaky.calls.abandoned).toEqual([]);
+    expect(flaky.calls.finished).toBe(0);
+    // The retry is not closed, so it stores the attachment and finishes.
+    expect(await processInboundEmail(message("Files", [pdf]), flaky.deps)).toEqual({ status: "accepted" });
+    expect(flaky.calls.completed).toHaveLength(1);
+    expect(flaky.calls.finished).toBe(1);
+
+    const storage = linkedDeps({
+      completeUpload: async () => {
+        throw new Error("stored object was not found");
+      },
+    });
+    await expect(processInboundEmail(message("Files", [pdf]), storage.deps)).rejects.toThrow(/not found/);
+    expect(storage.calls.abandoned).toEqual([]);
+  });
 });

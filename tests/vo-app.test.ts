@@ -98,6 +98,15 @@ describe("output guard", () => {
     expect(noFirm.kind === "draft" && noFirm.text).toBe("Book [link removed]");
   });
 
+  it("matches the database re-check: '@' in a portal path stays, dot segments and '@' before the path go", () => {
+    const result = guardVoOutput(
+      "Open https://app.casevoya.ca/portal/@me or https://app.casevoya.ca/portal/a/../b or https://app.casevoya.ca/portal/%2e or https://@app.casevoya.ca/portal now.",
+    );
+    expect(result.kind).toBe("draft");
+    if (result.kind !== "draft") return;
+    expect(result.text).toBe("Open https://app.casevoya.ca/portal/@me or [link removed] or [link removed] or [link removed] now.");
+  });
+
   it("treats the consultant marker as an abstention and empty output as nothing", () => {
     expect(guardVoOutput("[needs a consultant]").kind).toBe("abstain");
     expect(guardVoOutput("“[needs a consultant].”").kind).toBe("abstain");

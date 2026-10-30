@@ -1,6 +1,7 @@
 -- Invitation emails: refuse markup and quoting characters.
 -- An email address stored on an invitation is shown on public screens (the anonymous invitation
--- preview), so it may not contain any of < > " ' ` ( ) ; , \ or a control character.
+-- preview), so it may not contain any of < > " ` ( ) ; , \ or a control character. The apostrophe
+-- is allowed (o'brien@example.ie is a real address); screens escape it when rendering.
 --
 --   * app.email_chars_ok(text): the rule, as one immutable helper.
 --   * app.normalize_email: latest definition from 20261017140700_firm_onboarding.sql; now also
@@ -20,12 +21,12 @@ immutable
 set search_path = ''
 as $$
   select p_email is not null
-     and p_email !~ '[<>"''`();,\\]'
+     and p_email !~ '[<>"`();,\\]'
      and p_email !~ '[[:cntrl:]]';
 $$;
 revoke all on function app.email_chars_ok(text) from public;
 comment on function app.email_chars_ok(text) is
-  'False when the address contains any of < > " '' ` ( ) ; , \ or a control character.';
+  'False when the address contains any of < > " ` ( ) ; , \ or a control character.';
 
 create or replace function app.normalize_email(p_email text)
 returns text
@@ -159,7 +160,7 @@ begin
   ) then
     alter table public.invitations
       add constraint invitations_email_safe_chars
-      check (email !~ '[<>"''`();,\\]' and email !~ '[[:cntrl:]]') not valid;
+      check (email !~ '[<>"`();,\\]' and email !~ '[[:cntrl:]]') not valid;
   end if;
   if not exists (
     select 1 from pg_constraint
@@ -167,7 +168,7 @@ begin
   ) then
     alter table public.portal_invitations
       add constraint portal_invitations_email_safe_chars
-      check (email !~ '[<>"''`();,\\]' and email !~ '[[:cntrl:]]') not valid;
+      check (email !~ '[<>"`();,\\]' and email !~ '[[:cntrl:]]') not valid;
   end if;
 end;
 $$;

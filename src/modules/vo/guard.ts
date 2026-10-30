@@ -38,7 +38,11 @@ function underPath(pathname: string, base: string): boolean {
 export function allowedVoLink(url: string, firmSlug?: string | null): boolean {
   try {
     // Trailing sentence punctuation isn't part of the link.
-    const parsed = new globalThis.URL((url.startsWith("www.") ? `https://${url}` : url).replace(/[.,;:!?]+$/, ""));
+    const raw = (url.startsWith("www.") ? `https://${url}` : url).replace(/[.,;:!?]+$/, "");
+    // As the database re-check (app.vo_draft_body_problem): no dot segments, encoded dots or
+    // backslashes anywhere, and no "@" before the path.
+    if (/\.\.|%2e|\\/i.test(raw) || /^[a-z]+:\/\/[^/?#]*@/i.test(raw)) return false;
+    const parsed = new globalThis.URL(raw);
     if (parsed.protocol !== "https:" || !(ALLOWED_LINK_ORIGINS as readonly string[]).includes(parsed.origin) || parsed.username || parsed.password) return false;
     if (underPath(parsed.pathname, "/portal")) return true;
     return typeof firmSlug === "string" && SLUG.test(firmSlug) && underPath(parsed.pathname, `/book/${firmSlug}`);

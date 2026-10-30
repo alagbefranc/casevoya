@@ -217,21 +217,44 @@ describe("client-credit paths count active refund reservations", () => {
     await db.query(`select public.link_client_credit_refund($1, $2)`, [creditId, row]);
     expect(await available(creditId)).toBe(2_000);
 
-    // A payment refund (reserved without the credit) does not become a credit refund.
+    // A refund reserved without naming a credit (the previous app reserved credit refunds through
+    // reserve_invoice_refund) links when the overpayment covers it, and the reservation takes the credit.
     const pk = key();
     const plain = await reserve(f, paymentId, 1_000, pk);
     const plainRefund = refundId();
     await link(f, plain, plainRefund);
     const plainRow = await record(f, paymentId, plainRefund, 1_000, pk);
     await asStepUp(f);
-    await expectDbError(() => db.query(`select public.link_client_credit_refund($1, $2)`, [creditId, plainRow]), /not taken from this credit/);
+    await db.query(`select public.link_client_credit_refund($1, $2)`, [creditId, plainRow]);
+    expect((await reservation(plain)).client_credit_id).toBe(creditId);
+    expect(await available(creditId)).toBe(1_000);
+
+    // One the overpayment cannot cover is refused and stays untied.
+    const ok = key();
+    const over = await reserve(f, paymentId, 2_000, ok);
+    const overRefund = refundId();
+    await link(f, over, overRefund);
+    const overRow = await record(f, paymentId, overRefund, 2_000, ok);
+    await asStepUp(f);
+    await expectDbError(() => db.query(`select public.link_client_credit_refund($1, $2)`, [creditId, overRow]), /more than the credit available/);
+    expect((await reservation(over)).client_credit_id).toBeNull();
+
+    // A refund reserved from another credit is refused.
+    const second = await withCredit(f, 10_000, 500);
+    await asMaintenance(db);
+    await db.query(`update public.invoice_refund_reservations set client_credit_id = $2 where id = $1`, [over, second.creditId]);
+    await asStepUp(f);
+    await expectDbError(() => db.query(`select public.link_client_credit_refund($1, $2)`, [creditId, overRow]), /not taken from this credit/);
 
     // A refund recorded without a reservation that the overpayment cannot cover is refused.
     const big = await record(f, paymentId, refundId(), 50_000, null);
     await asStepUp(f);
     await expectDbError(() => db.query(`select public.link_client_credit_refund($1, $2)`, [creditId, big]), /more than the credit available/);
     await asMaintenance(db);
-    expect((await db.query(`select kind from public.client_credit_allocations where credit_id = $1`, [creditId])).rows).toEqual([{ kind: "card_refund" }]);
+    expect((await db.query(`select kind from public.client_credit_allocations where credit_id = $1`, [creditId])).rows).toEqual([
+      { kind: "card_refund" },
+      { kind: "card_refund" },
+    ]);
   });
 });
 

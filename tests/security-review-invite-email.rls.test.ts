@@ -27,7 +27,6 @@ function slug() {
 const UNSAFE = [
   `<img/src=x/onerror=alert(1)>@example.test`,
   `a"b@example.test`,
-  `a'b@example.test`,
   "a`b@example.test",
   "a(b)@example.test",
   "a;b@example.test",
@@ -122,6 +121,31 @@ describe("invitation emails refuse markup and quoting characters", () => {
     await asAnon(db);
     const preview = await db.query<{ status: string; email: string }>(`select status, email from public.preview_invitation($1)`, [token]);
     expect(preview.rows[0]).toEqual({ status: "valid", email: address });
+  });
+
+  it("accepts an apostrophe in staff and portal invitations and the firm contact email", async () => {
+    const ctx = await firm();
+    const address = `o'brien-${randomUUID().slice(0, 8)}@example.test`;
+    await asUser(db, { userId: ctx.owner, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const created = await db.query<{ token: string }>(
+      `select public.create_staff_invitation($1, $2, 'case_manager'::public.org_role) as token`,
+      [ctx.orgId, address],
+    );
+    expect(created.rows[0].token).toMatch(/^[0-9a-f]{64}$/);
+    await asAnon(db);
+    const preview = await db.query<{ email: string }>(`select email from public.preview_invitation($1)`, [created.rows[0].token]);
+    expect(preview.rows[0].email).toBe(address);
+
+    const { matterId, personId } = await samplePerson(ctx);
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const issued = await db.query<{ result: { ok: boolean } }>(
+      `select public.create_portal_invitation($1, $2, 'client'::public.org_role, $3, '{}'::uuid[]) as result`,
+      [personId, matterId, `o'brien@example.test`],
+    );
+    expect(issued.rows[0].result.ok).toBe(true);
+    await asMaintenance(db);
+    const normalized = await db.query<{ email: string | null }>(`select app.normalize_email($1) as email`, [" O'Brien@Example.test "]);
+    expect(normalized.rows[0].email).toBe("o'brien@example.test");
   });
 
   it("answers invalid_email for a portal invitation to an unsafe address and still issues an ordinary one", async () => {

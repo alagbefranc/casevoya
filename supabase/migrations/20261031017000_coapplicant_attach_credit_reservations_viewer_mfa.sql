@@ -18,8 +18,10 @@
 --     credit available (less every active reservation of the invoice), then reserves through
 --     app.reserve_invoice_refund and ties the reservation to the credit.
 --   * app.link_client_credit_refund (20261025130000): the refund must be live; a refund with a
---     reservation must have been reserved from this credit; one without must fit the invoice's
---     overpayment together with the other in-flight refunds.
+--     reservation naming a credit must have been reserved from this credit; one without a
+--     reservation, or with a reservation naming no credit (reserved by the previous app), must fit
+--     the invoice's overpayment together with the other in-flight refunds, and such a
+--     reservation is then tied to this credit.
 --
 -- R2-05 A linked reservation is active for 7 days (expires_at is moved forward when it is linked),
 --   then stops counting. app.payment_reservable_cents and app.link_invoice_refund_reservation
@@ -32,7 +34,9 @@
 --   verified session ('aal2', or 'mfa' when public.session_mfa_satisfied() holds on that session:
 --   passkey or recovery code). app.public_viewer_is_staff takes it. The booking link to a portal
 --   client's person accepts the same assurance as app.session_assurance_ok. submit_enquiry gains
---   an 18-argument form with p_viewer_aal; the 17-argument form calls it with no assurance.
+--   an 18-argument form with p_viewer_aal; the 17-argument form calls it with no assurance, which
+--   uses the 2-argument app.public_viewer_is_staff (membership only, kept for the previous app
+--   during the deploy window; 20261031090000 makes it always false).
 
 -- ---------------------------------------------------------------------------
 -- R2-01 Co-applicant attach bound to the target request
@@ -412,12 +416,21 @@ begin
   where invoice_refund_id = refund.id or refund_id = refund.refund_id
   order by (invoice_refund_id = refund.id) desc nulls last
   limit 1;
-  if held.id is not null then
+  -- Credit: a reservation naming no credit (made through app.reserve_invoice_refund by the
+  -- previous app) is checked like a refund without one, then tied to this credit.
+  if held.id is not null and held.client_credit_id is not null then
     if held.client_credit_id is distinct from credit.id then
       raise exception 'that refund was not taken from this credit' using errcode = '22023';
     end if;
-  elsif app.invoice_overpaid_cents(credit.source_invoice_id) - app.invoice_pending_card_refunds_cents(credit.source_invoice_id) < 0 then
-    raise exception 'amount is more than the credit available' using errcode = '22023';
+  else
+    if app.invoice_overpaid_cents(credit.source_invoice_id) - app.invoice_pending_card_refunds_cents(credit.source_invoice_id) < 0 then
+      raise exception 'amount is more than the credit available' using errcode = '22023';
+    end if;
+    if held.id is not null then
+      update public.invoice_refund_reservations
+      set client_credit_id = credit.id, updated_at = now()
+      where id = held.id and client_credit_id is null;
+    end if;
   end if;
   insert into public.client_credit_allocations (organization_id, credit_id, kind, refund_id, amount_cents, currency)
   values (credit.organization_id, credit.id, 'card_refund', refund.id, refund.amount_cents, refund.currency)
@@ -468,7 +481,9 @@ as $$
 $$;
 revoke all on function app.public_viewer_is_staff(uuid, uuid, text) from public, anon, authenticated;
 
--- From 20261030231500. Without an assurance level the viewer is not treated as staff.
+-- From 20261030231500, unchanged here: the previous app's 17-argument submit_enquiry passes no
+-- assurance and still uses this membership-only form until 20261031090000_post_deploy_revokes.sql
+-- makes it always false (applied after the app that passes p_viewer_aal is deployed).
 create or replace function app.public_viewer_is_staff(p_org uuid, p_viewer uuid)
 returns boolean
 language sql
@@ -476,7 +491,13 @@ stable
 security definer
 set search_path = ''
 as $$
-  select app.public_viewer_is_staff(p_org, p_viewer, null::text);
+  select p_org is not null and p_viewer is not null and exists (
+    select 1 from public.memberships m
+    where m.organization_id = p_org
+      and m.user_id = p_viewer
+      and m.status = 'active'
+      and m.role = any (app.staff_roles())
+  );
 $$;
 revoke all on function app.public_viewer_is_staff(uuid, uuid) from public, anon, authenticated;
 
@@ -663,8 +684,15 @@ begin
   perform app.require_service_role();
   select * into org from public.organizations o where o.slug = lower(btrim(coalesce(p_firm_slug, '')));
   if org.id is null
-     -- Assurance: a practice enquiry is for the firm's staff with staff MFA.
-     or (org.sample_mode is true and not app.public_viewer_is_staff(org.id, v_viewer, p_viewer_aal))
+     -- Assurance: a practice enquiry is for the firm's staff with staff MFA. With no assurance
+     -- level (the 17-argument form) the 2-argument check applies; it is always false once
+     -- 20261031090000 is applied. The app names an assurance whenever it names a viewer.
+     or (org.sample_mode is true and not (
+       case
+         when p_viewer_aal is null then app.public_viewer_is_staff(org.id, v_viewer)
+         else app.public_viewer_is_staff(org.id, v_viewer, p_viewer_aal)
+       end
+     ))
      or not exists (
        select 1 from public.portal_policy_documents doc where doc.organization_id = org.id and doc.kind = 'privacy_notice'
      ) then

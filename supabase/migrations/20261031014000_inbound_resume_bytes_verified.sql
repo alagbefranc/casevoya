@@ -10,8 +10,9 @@
 --     treated as the same message (resume / duplicate with the stored ids) when the normalised
 --     from_email, the sender_verified value and the content digest all match the stored row.
 --     Otherwise it is a 'duplicate' with no inbound id, person or matter; when the stored row was
---     still open an audit row (reason only, no content) is written. A row without a digest is
---     never resumed.
+--     still open an audit row (reason only, no content) is written. A row stored without a digest
+--     (written before this migration or by the previous app) resumes when from_email and
+--     sender_verified match; the digest of the resuming call is then stored on that row.
 --   * public.abandon_inbound_attachments (service_role only): closes a row whose attachment step
 --     failed (attachments_done = true) and audits the reason, so it cannot be resumed later.
 --   * Per-firm hourly byte cap for stored inbound attachments (product setting
@@ -178,11 +179,12 @@ begin
     and email.message_id = left(btrim(p_message_id), 500);
   if existing.id is not null then
     -- Resume binding: the same Message-ID is the same message only for the same sender,
-    -- verification result and content.
+    -- verification result and content. A row stored without a digest is bound by sender and
+    -- verification result only; the first digest seen is then stored on it.
     if existing.from_email is distinct from normalized_from
        or existing.sender_verified is distinct from verified_now
-       or existing.content_digest is null
-       or existing.content_digest is distinct from digest_now then
+       or (existing.content_digest is not null
+           and existing.content_digest is distinct from digest_now) then
       if not existing.attachments_done then
         perform app.record_audit_event(
           org, 'email.rejected', 'public.inbound_emails', existing.id, 'denied',
@@ -197,6 +199,26 @@ begin
         'attachments_done', true,
         'reason', 'message_id_conflict'
       );
+    end if;
+    if existing.content_digest is null and digest_now is not null then
+      update public.inbound_emails
+         set content_digest = digest_now
+       where id = existing.id
+         and content_digest is null;
+      -- A concurrent call stored a different digest first: not the same message.
+      if not found and exists (
+        select 1 from public.inbound_emails email
+        where email.id = existing.id and email.content_digest is distinct from digest_now
+      ) then
+        return jsonb_build_object(
+          'status', 'duplicate',
+          'organization_id', org,
+          'matter_id', null,
+          'person_id', null,
+          'attachments_done', true,
+          'reason', 'message_id_conflict'
+        );
+      end if;
     end if;
     return jsonb_build_object(
       'status', case when existing.attachments_done then 'duplicate' else 'resume' end,
@@ -775,5 +797,5 @@ $$;
 revoke all on function public.complete_verified_email_upload(uuid, integer, text, bigint, text) from public, anon, authenticated;
 grant execute on function public.complete_verified_email_upload(uuid, integer, text, bigint, text) to service_role;
 
--- The header-only completion stops being an entry point in 20261031019000 (applied after the app
+-- The header-only completion stops being an entry point in 20261031090000 (applied after the app
 -- that calls complete_verified_email_upload is deployed, so mail in flight keeps working).

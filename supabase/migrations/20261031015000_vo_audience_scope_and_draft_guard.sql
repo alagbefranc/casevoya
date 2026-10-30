@@ -79,15 +79,25 @@ begin
   if p_body is null then
     return null;
   end if;
-  for link in select (regexp_matches(p_body, '(?:https?://|www\.)[^\s<>"'')\]]+', 'gi'))[1]
+  -- Same matching as guard.ts: a link starts at a word boundary (ASCII word characters, as in
+  -- JavaScript) and ends at JavaScript whitespace or < > " ' ) ].
+  for link in select (regexp_matches(
+    p_body,
+    '(?<![a-z0-9_])(?:https?://|www\.)[^\s\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff<>"'')\]]+',
+    'gi'
+  ))[1]
   loop
     link := regexp_replace(link, '[.,;:!?]+$', '');
     parts := regexp_match(link, '^([A-Za-z]+://[^/?#]*)(.*)$');
     if parts is null then
       return 'link';
     end if;
+    -- No credentials in the authority ('@' is allowed in the path, as guard.ts allows it).
+    if parts[1] ~ '@' then
+      return 'link';
+    end if;
     link := regexp_replace(lower(parts[1]), ':443$', '') || parts[2];
-    if link ~ '(\.\.|%2[eE]|\\|@)' then
+    if link ~ '(\.\.|%2[eE]|\\)' then
       return 'link';
     end if;
     base := 'https://app.casevoya.ca/portal';
@@ -102,7 +112,8 @@ begin
     end if;
     return 'link';
   end loop;
-  if p_body ~* '[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}' then
+  -- Word boundaries before and after, as guard.ts's \b...\b (ASCII word characters).
+  if p_body ~* '(?:(?<![a-z0-9_])(?=[a-z0-9_])|(?<=[a-z0-9_])(?![a-z0-9_]))[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}(?![a-z0-9_])' then
     return 'email';
   end if;
   if p_body ~* '(\$|CAD|USD|EUR|€|£)\s?[0-9]' then

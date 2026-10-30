@@ -32,10 +32,11 @@ function open(query: string) {
   return GET(new NextRequest(`${ORIGIN}/auth/confirm?${query}`));
 }
 
-function post(fields: Record<string, string>, origin: string | null = ORIGIN) {
+function post(fields: Record<string, string>, origin: string | null = ORIGIN, fetchSite?: string) {
   const body = new URLSearchParams(fields);
   const headers: Record<string, string> = { "content-type": "application/x-www-form-urlencoded" };
   if (origin) headers.origin = origin;
+  if (fetchSite) headers["sec-fetch-site"] = fetchSite;
   return POST(new NextRequest(`${ORIGIN}/auth/confirm`, { method: "POST", body, headers }));
 }
 
@@ -70,9 +71,11 @@ describe("/auth/confirm", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("location")).toBeNull();
     expect(response.headers.get("set-cookie")).toBeNull();
-    expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
+    expect(response.headers.get("Referrer-Policy")).toBe("same-origin");
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     const html = await response.text();
+    expect(html).toContain('<meta name="referrer" content="same-origin">');
+    expect(html).not.toContain("no-referrer");
     expect(html).toContain('<form method="post" action="/auth/confirm">');
     expect(html).toContain('name="token_hash" value="pkce_abc123"');
     expect(html).toContain('name="type" value="magiclink"');
@@ -105,6 +108,24 @@ describe("/auth/confirm", () => {
     state.verify = null;
     expect((await post({ token_hash: "abc", type: "email" }, "https://attacker.example")).status).toBe(403);
     expect((await post({ token_hash: "abc", type: "email" }, null)).status).toBe(403);
+    expect((await post({ token_hash: "abc", type: "email" }, "null")).status).toBe(403);
+    expect(state.verifyCalls).toHaveLength(0);
+  });
+
+  it("accepts Origin null or absent only when Sec-Fetch-Site is same-origin", async () => {
+    state.verify = null;
+    const nullOrigin = await post({ token_hash: "abc", type: "email", next: "/app" }, "null", "same-origin");
+    expect(nullOrigin.status).toBe(303);
+    expect(nullOrigin.headers.get("location")).toBe(`${ORIGIN}/app`);
+    const noOrigin = await post({ token_hash: "abc", type: "email", next: "/app" }, null, "same-origin");
+    expect(noOrigin.status).toBe(303);
+    expect(state.verifyCalls).toHaveLength(2);
+    state.verifyCalls = [];
+    expect((await post({ token_hash: "abc", type: "email" }, "null", "cross-site")).status).toBe(403);
+    expect((await post({ token_hash: "abc", type: "email" }, "null", "same-site")).status).toBe(403);
+    expect((await post({ token_hash: "abc", type: "email" }, null, "none")).status).toBe(403);
+    // A foreign Origin is refused even if Sec-Fetch-Site claims same-origin.
+    expect((await post({ token_hash: "abc", type: "email" }, "https://attacker.example", "same-origin")).status).toBe(403);
     expect(state.verifyCalls).toHaveLength(0);
   });
 

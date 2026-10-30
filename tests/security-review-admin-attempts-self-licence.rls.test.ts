@@ -215,7 +215,7 @@ describe("firm owner checks on their own licence", () => {
   });
 
   // Last: a completed CICC list import changes declare_consultant_credential for the rest of this file.
-  it("refuses a first self check once a CICC list check exists", async () => {
+  it("allows the first self check when only CICC list checks exist, but never lifts an adverse list status", async () => {
     const importer = await createUser("importer");
     await asMaintenance(db);
     await db.query(`insert into public.platform_admins (user_id, note, role) values ($1, 'Synthetic importer', 'operator')`, [importer]);
@@ -230,10 +230,32 @@ describe("firm owner checks on their own licence", () => {
     expect(listChecks.rows.length).toBeGreaterThan(0);
     expect(await credentialStatus(f.ownerCredential)).toBe("declared");
 
+    // The automatic list check does not use up the owner's first check.
+    await fresh(f.owner, f.orgId);
+    expect(await recordCheck(f.ownerCredential)).toBeTruthy();
+    expect(await credentialStatus(f.ownerCredential)).toBe("verified");
+    // A second manual self check is still refused.
     await fresh(f.owner, f.orgId);
     await expectDbError(() => recordCheck(f.ownerCredential), /cannot record a check on your own licence/);
     await fresh(f.owner, f.orgId);
     expect(await recordCheck(f.consultantCredential)).toBeTruthy();
+
+    // An adverse status set by the CICC list cannot be lifted by the owner's own check.
+    const g = await firm();
+    await asMaintenance(db);
+    await db.query(
+      `update public.consultant_credentials
+          set status = 'suspended', verification_method = 'cicc_list', discipline_suspended = true
+        where id = $1`,
+      [g.ownerCredential],
+    );
+    await fresh(g.owner, g.orgId);
+    await expectDbError(() => recordCheck(g.ownerCredential), /cannot record a check on your own licence/);
+    expect(await credentialStatus(g.ownerCredential)).toBe("suspended");
+    // Confirming it (not better) is allowed.
+    await fresh(g.owner, g.orgId);
+    expect(await recordCheck(g.ownerCredential, { suspended: true })).toBeTruthy();
+    expect(await credentialStatus(g.ownerCredential)).toBe("suspended");
   });
 });
 
