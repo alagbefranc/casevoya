@@ -14117,6 +14117,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      assert_firm_owner_step_up: {
+        Args: { p_organization_id: string }
+        Returns: boolean
+      }
       assign_responsible_consultant: {
         Args: { p_expected_version: number; p_matter_id: string; p_membership_id: string }
         Returns: number
@@ -14989,10 +14993,15 @@ export type Database = {
         Returns: number
       }
       confirm_reused_fact: { Args: { p_reuse_id: string }; Returns: undefined }
-      connect_firm_whatsapp: {
-        Args: { p_account_id: string; p_display_phone?: string; p_organization_id: string; p_sandbox?: boolean }
-        Returns: undefined
-      }
+      connect_firm_whatsapp:
+        | {
+            Args: { p_account_id: string; p_display_phone?: string; p_organization_id: string; p_sandbox?: boolean }
+            Returns: undefined
+          }
+        | {
+            Args: { p_account_id: string; p_actor: string; p_display_phone: string; p_organization_id: string; p_sandbox: boolean }
+            Returns: undefined
+          }
       consultant_change_audience: { Args: { p_matter_id: string }; Returns: Json }
       consume_recovery_code: {
         Args: { p_code: string }
@@ -17118,10 +17127,15 @@ export type Database = {
         }
         Returns: undefined
       }
-      save_firm_zernio_profile: {
-        Args: { p_organization_id: string; p_profile_id: string }
-        Returns: undefined
-      }
+      save_firm_zernio_profile:
+        | {
+            Args: { p_organization_id: string; p_profile_id: string }
+            Returns: undefined
+          }
+        | {
+            Args: { p_actor: string; p_organization_id: string; p_profile_id: string }
+            Returns: undefined
+          }
       save_intake_answer: {
         Args: {
           p_expected_version: number

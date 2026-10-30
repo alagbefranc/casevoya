@@ -85,9 +85,12 @@ const asClient = (f: Firm, userId: string) => asUser(db, { userId, aal: "aal1", 
 let accountSeq = 0;
 async function connect(f: Firm) {
   const account = `acct${++accountSeq}${tag()}`;
+  // As the server action does: the owner's session passes step-up, then the service role writes.
   await staff(f, f.owner);
-  await db.query(`select public.save_firm_zernio_profile($1, $2)`, [f.orgId, `prof${tag()}`]);
-  await db.query(`select public.connect_firm_whatsapp($1, $2, '+1 431 555 0000')`, [f.orgId, account]);
+  await db.query(`select public.assert_firm_owner_step_up($1)`, [f.orgId]);
+  await asServiceRole(db);
+  await db.query(`select public.save_firm_zernio_profile($1, $2, $3)`, [f.orgId, `prof${tag()}`, f.owner]);
+  await db.query(`select public.connect_firm_whatsapp($1, $2, '+1 431 555 0000', false, $3)`, [f.orgId, account, f.owner]);
   return account;
 }
 
@@ -130,18 +133,25 @@ async function drain(f: Firm) {
 describe("firm connection", () => {
   it("lets only the firm owner, with a recent step-up, connect and disconnect", async () => {
     const f = await firm();
+    const profile = `prof${tag()}`;
+    const acct = `acct${tag()}`;
     await staff(f, f.consultant);
-    await expectDbError(() => db.query(`select public.save_firm_zernio_profile($1, 'prof1')`, [f.orgId]), /step-up is required/);
-    await expectDbError(() => db.query(`select public.connect_firm_whatsapp($1, 'acct1')`, [f.orgId]), /step-up is required/);
+    await expectDbError(() => db.query(`select public.assert_firm_owner_step_up($1)`, [f.orgId]), /step-up is required/);
+    await expectDbError(() => db.query(`select public.save_firm_zernio_profile($1, 'prof1')`, [f.orgId]), /permission denied/);
+    await expectDbError(() => db.query(`select public.connect_firm_whatsapp($1, 'acct1')`, [f.orgId]), /permission denied/);
     // The owner without a recent second factor is refused too.
     await staff(f, f.owner, 3600);
-    await expectDbError(() => db.query(`select public.save_firm_zernio_profile($1, 'prof1')`, [f.orgId]), /step-up is required/);
+    await expectDbError(() => db.query(`select public.assert_firm_owner_step_up($1)`, [f.orgId]), /step-up is required/);
     await staff(f, f.owner);
-    await expectDbError(() => db.query(`select public.connect_firm_whatsapp($1, 'acct1')`, [f.orgId]), /start the WhatsApp connection/);
-    await db.query(`select public.save_firm_zernio_profile($1, 'prof1')`, [f.orgId]);
+    expect((await db.query<{ ok: boolean }>(`select public.assert_firm_owner_step_up($1) as ok`, [f.orgId])).rows[0].ok).toBe(true);
+    // The server writes with the service role, naming the owner.
+    await asServiceRole(db);
+    await expectDbError(() => db.query(`select public.save_firm_zernio_profile($1, $2, $3)`, [f.orgId, profile, f.consultant]), /step-up is required/);
+    await expectDbError(() => db.query(`select public.connect_firm_whatsapp($1, $2, null, false, $3)`, [f.orgId, acct, f.owner]), /start the WhatsApp connection/);
+    await db.query(`select public.save_firm_zernio_profile($1, $2, $3)`, [f.orgId, profile, f.owner]);
     // The shared sandbox number is linked by the operator, never from the app.
-    await expectDbError(() => db.query(`select public.connect_firm_whatsapp($1, 'acct1', null, true)`, [f.orgId]), /operator only/);
-    await db.query(`select public.connect_firm_whatsapp($1, 'acct1', '+1 431 555 0000')`, [f.orgId]);
+    await expectDbError(() => db.query(`select public.connect_firm_whatsapp($1, $2, null, true, $3)`, [f.orgId, acct, f.owner]), /operator only/);
+    await db.query(`select public.connect_firm_whatsapp($1, $2, '+1 431 555 0000', false, $3)`, [f.orgId, acct, f.owner]);
     await staff(f, f.consultant);
     const seen = await db.query<{ status: string }>(`select status from public.firm_whatsapp_accounts`);
     expect(seen.rows).toEqual([{ status: "connected" }]);
@@ -149,7 +159,7 @@ describe("firm connection", () => {
     await expectDbError(() => db.query(`update public.firm_whatsapp_accounts set status = 'disconnected'`), /permission denied/);
     await staff(f, f.owner);
     const off = await db.query<{ r: { account_id: string; sandbox: boolean } }>(`select public.disconnect_firm_whatsapp($1) as r`, [f.orgId]);
-    expect(off.rows[0].r).toEqual({ account_id: "acct1", sandbox: false });
+    expect(off.rows[0].r).toEqual({ account_id: acct, sandbox: false });
     await asMaintenance(db);
     const audit = await db.query<{ action: string }>(
       `select action from public.audit_log where organization_id = $1 and action like 'whatsapp.%' order by occurred_at`,
@@ -166,9 +176,10 @@ describe("firm connection", () => {
     await db.query(`select public.set_my_whatsapp_notices($1, 'both')`, [a.orgId]);
     await queueEmail(a, a.applicant.email, "document_request");
     // The same number cannot be connected to a second firm.
+    await asServiceRole(db);
+    await db.query(`select public.save_firm_zernio_profile($1, $2, $3)`, [b.orgId, `profB${tag()}`, b.owner]);
+    await expectDbError(() => db.query(`select public.connect_firm_whatsapp($1, $2, null, false, $3)`, [b.orgId, account, b.owner]), /another firm/);
     await staff(b, b.owner);
-    await db.query(`select public.save_firm_zernio_profile($1, 'profB')`, [b.orgId]);
-    await expectDbError(() => db.query(`select public.connect_firm_whatsapp($1, $2)`, [b.orgId, account]), /another firm/);
     for (const table of ["firm_whatsapp_accounts", "person_whatsapp_contacts", "whatsapp_consent_events", "whatsapp_deliveries", "whatsapp_inbound_messages"]) {
       const rows = await db.query(`select 1 from public.${table} where organization_id = $1`, [a.orgId]);
       expect(rows.rows, table).toHaveLength(0);
