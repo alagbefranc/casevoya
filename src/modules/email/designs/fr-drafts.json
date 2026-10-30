@@ -921,28 +921,64 @@
       "reviewedOn": null,
       "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
       "promptVersion": "fr-ca-2026-10-18.3",
-      "draftedOn": "2026-10-18",
-      "sourceHash": "sha256:9c55851a36415ffe36f71d743b823b92a381f9ea847aa3aeca4059898692e7d3",
+      "draftedOn": "2026-10-30",
+      "sourceHash": "sha256:18c5d7c73a9fe8b8d53322632070d012659f66beaa66ff95c368d8092d475228",
       "strings": {
         "subject": {
           "en": "Your Casevoya subscription is past due",
-          "fr": "Votre abonnement Casevoya est en retard",
-          "origin": "machine"
+          "fr": "Votre abonnement Casevoya est en retard de paiement",
+          "origin": "hand"
         },
         "preheader": {
-          "en": "Nothing is deleted. Update billing to keep working.",
-          "fr": "Rien n’est supprimé. Mettez à jour la facturation pour continuer à travailler.",
-          "origin": "machine"
+          "en": "Nothing is deleted. Update your card within {days} days to keep working.",
+          "fr": "Rien n’est supprimé. Mettez à jour votre carte d’ici {days} jours pour continuer à travailler.",
+          "origin": "hand"
         },
         "body": {
-          "en": "We couldn’t collect {firm_name}’s subscription payment. Nothing is deleted; new work pauses after notice if it stays unpaid.",
-          "fr": "Nous n’avons pas pu collecter le paiement de l’abonnement de {firm_name}. Rien n’est supprimé ; les nouveaux travaux sont mis en pause après un avis si celui-ci reste impayé.",
-          "origin": "machine"
+          "en": "We couldn’t collect {firm_name}’s subscription payment. Nothing is deleted. Update your card within {days} days; after that, new matters and invitations pause until the payment goes through.",
+          "fr": "Nous n’avons pas pu percevoir le paiement de l’abonnement de {firm_name}. Rien n’est supprimé. Mettez à jour votre carte d’ici {days} jours; ensuite, les nouveaux dossiers et les invitations sont suspendus jusqu’à ce que le paiement soit effectué.",
+          "origin": "hand"
         },
         "cta": {
           "en": "Update billing",
           "fr": "Mettre à jour la facturation",
-          "origin": "machine"
+          "origin": "hand"
+        }
+      }
+    },
+    "EM18c": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-30",
+      "sourceHash": "sha256:399ec3bbc2d14050089cbe6680d2225352bbe29ed6ed13d7867e9464112d3ca3",
+      "strings": {
+        "subject": {
+          "en": "Your Casevoya trial ends soon",
+          "fr": "Votre essai Casevoya se termine bientôt",
+          "origin": "hand"
+        },
+        "preheader": {
+          "en": "Nothing to do to keep going. Cancel anytime before then.",
+          "fr": "Rien à faire pour continuer. Annulez en tout temps d’ici là.",
+          "origin": "hand"
+        },
+        "body_date": {
+          "en": "{firm_name}’s free trial ends on {date}. Unless you cancel before then, the card on file is charged {amount} plus applicable taxes for the {plan} plan.",
+          "fr": "L’essai gratuit de {firm_name} se termine le {date}. À moins que vous n’annuliez d’ici là, la carte enregistrée sera débitée de {amount}, plus les taxes applicables, pour le forfait {plan}.",
+          "origin": "hand"
+        },
+        "body": {
+          "en": "{firm_name}’s free trial ends in a few days. Unless you cancel before then, the card on file is charged for your plan, plus applicable taxes.",
+          "fr": "L’essai gratuit de {firm_name} se termine dans quelques jours. À moins que vous n’annuliez d’ici là, la carte enregistrée sera débitée pour votre forfait, plus les taxes applicables.",
+          "origin": "hand"
+        },
+        "cta": {
+          "en": "Manage billing",
+          "fr": "Gérer la facturation",
+          "origin": "hand"
         }
       }
     },

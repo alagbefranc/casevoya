@@ -93,7 +93,8 @@ const VARIANTS: { [K in Catalogued]: EmailContexts[K][] } = {
     { firmName: FIRM, approverName: "Sam Example", minutes: 60, endsAt: "2026-10-22T15:40:00Z", timeZone: "America/Toronto" },
     { firmName: FIRM },
   ],
-  EM18a: [{ firmName: FIRM }],
+  EM18a: [{ firmName: FIRM, graceDays: 7 }, { firmName: FIRM }],
+  EM18c: [{ firmName: FIRM, endsOn: "2026-11-14", plan: "Practice", amount: "CAD 249.00" }, { firmName: FIRM }],
   EM18b: [{ firmName: FIRM, daysPastDue: 21 }, { firmName: FIRM }],
   EM19a: [{ hours: 24 }, {}],
   EM19b: [

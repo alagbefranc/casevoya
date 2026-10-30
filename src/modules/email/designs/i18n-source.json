@@ -174,9 +174,16 @@
   },
   "EM18a": {
     "subject": "Your Casevoya subscription is past due",
-    "preheader": "Nothing is deleted. Update billing to keep working.",
-    "body": "We couldn’t collect {firm_name}’s subscription payment. Nothing is deleted; new work pauses after notice if it stays unpaid.",
+    "preheader": "Nothing is deleted. Update your card within {days} days to keep working.",
+    "body": "We couldn’t collect {firm_name}’s subscription payment. Nothing is deleted. Update your card within {days} days; after that, new matters and invitations pause until the payment goes through.",
     "cta": "Update billing"
+  },
+  "EM18c": {
+    "subject": "Your Casevoya trial ends soon",
+    "preheader": "Nothing to do to keep going. Cancel anytime before then.",
+    "body_date": "{firm_name}’s free trial ends on {date}. Unless you cancel before then, the card on file is charged {amount} plus applicable taxes for the {plan} plan.",
+    "body": "{firm_name}’s free trial ends in a few days. Unless you cancel before then, the card on file is charged for your plan, plus applicable taxes.",
+    "cta": "Manage billing"
   },
   "EM18b": {
     "subject": "{firm_name}’s workspace is restricted",

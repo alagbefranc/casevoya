@@ -186,6 +186,8 @@ export function realClientInviteBlockers(input: {
   /** The firm owner's licence: none on file, one that is blocked, or one in good standing or awaiting the list check. */
   ownerLicence: "missing" | "blocked" | "ok";
   subscriptionStatus?: string | null;
+  /** Card trial: no card on file yet (organization_subscriptions.card_required). */
+  cardRequired?: boolean;
 }): string[] {
   if (input.verificationStatus == null) return ["firm_not_found"];
   const blockers: string[] = [];
@@ -193,6 +195,7 @@ export function realClientInviteBlockers(input: {
   if (input.ownerLicence === "missing") blockers.push("owner_licence_missing");
   else if (input.ownerLicence === "blocked") blockers.push("owner_licence_blocked");
   if (input.subscriptionStatus === "trial_ended") blockers.push("trial_ended");
+  if (input.subscriptionStatus === "trial" && input.cardRequired === true) blockers.push("card_required");
   if (input.subscriptionStatus === "restricted" || input.subscriptionStatus === "cancelled" || input.subscriptionStatus === "archived") blockers.push("subscription_restricted");
   return blockers;
 }

@@ -22,7 +22,7 @@ export async function loadSheetSetup(supabase: Client, staff: SheetStaff): Promi
       .from("consultant_credentials")
       .select("status, verification_method, register_status, entitlement_to_practise, discipline_suspended, discipline_revoked, membership_id")
       .eq("organization_id", org),
-    supabase.from("organization_subscriptions").select("status").eq("organization_id", org).maybeSingle(),
+    supabase.from("organization_subscriptions").select("status, card_required").eq("organization_id", org).maybeSingle(),
     cookies(),
   ]);
   const holderIds = [...new Set((credentials.data ?? []).map((row) => row.membership_id))];
@@ -42,6 +42,7 @@ export async function loadSheetSetup(supabase: Client, staff: SheetStaff): Promi
       holderStatus: holder.get(row.membership_id)?.status ?? null,
     })),
     subscriptionStatus: subscription.data?.status ?? null,
+    cardRequired: subscription.data?.card_required === true,
   });
   return {
     state,

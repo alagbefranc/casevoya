@@ -42,7 +42,7 @@ describe("approved email designs", () => {
   it("covers every Designer email except the Supabase Auth ones, with status and trigger", () => {
     const designerIds = [
       "EM01", "EM02", "EM05", "EM06", "EM07", "EM08", "EM09", "EM10", "EM11", "EM12", "EM14a", "EM14b", "EM14c", "EM15",
-      "EM16a", "EM16b", "EM16c", "EM17", "EM18a", "EM18b", "EM19a", "EM19b", "EX02", "EX03", "EX04", "EX05", "EX06",
+      "EM16a", "EM16b", "EM16c", "EM17", "EM18a", "EM18b", "EM18c", "EM19a", "EM19b", "EX02", "EX03", "EX04", "EX05", "EX06",
       "EX07", "EX08", "EX09", "EX10", "EX11", "EX12", "EX13", "EX14",
     ];
     for (const id of designerIds) expect(IDS, id).toContain(id);

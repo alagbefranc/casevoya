@@ -36,6 +36,9 @@ export const BILLING_EVENTS = new Set([
   "customer.subscription.deleted",
   "invoice.paid",
   "invoice.payment_failed",
+  // Card trial: Stripe's notice three days before a trial ends, and a payment the bank wants confirmed.
+  "customer.subscription.trial_will_end",
+  "invoice.payment_action_required",
 ]);
 
 export const ORGANIZATION_METADATA = "casevoya_organization_id";
@@ -54,6 +57,17 @@ export type SubscriptionSummary = {
   canceled_at: string | null;
   /** Checkout events only: the session's payment_status (paid, unpaid, no_payment_required). */
   payment_status?: string | null;
+  /** Card trial: Stripe's trial dates and whether the subscription ends at the period end. */
+  trial_start?: string | null;
+  trial_end?: string | null;
+  cancel_at_period_end?: boolean;
+  /** Checkout events only: the session started a free trial (session metadata casevoya_trial). */
+  trial?: boolean;
+  /**
+   * Trialing subscriptions only: SHA-256 (hex) of the card's Stripe fingerprint, added by the
+   * webhook route so the database can refuse a second trial on the same card. Never the card.
+   */
+  card_hash?: string | null;
 };
 
 export type InvoiceSummary = {
@@ -137,6 +151,9 @@ export function subscriptionSummary(subscription: Stripe.Subscription): Subscrip
     current_period_end: periodEnd,
     cancel_at: iso(subscription.cancel_at),
     canceled_at: iso(subscription.canceled_at),
+    trial_start: iso(subscription.trial_start),
+    trial_end: iso(subscription.trial_end),
+    cancel_at_period_end: subscription.cancel_at_period_end === true,
   };
 }
 
@@ -168,6 +185,7 @@ export function billingEventSummary(event: Stripe.Event): BillingEventSummary | 
         cancel_at: null,
         canceled_at: null,
         payment_status: text(session.payment_status, 40),
+        trial: meta.casevoya_trial === "1",
       },
     };
   }
@@ -220,6 +238,13 @@ export type BillingWebhookDeps = {
   livemode?: boolean;
   apply: ((summary: BillingEventSummary) => Promise<ApplyResult>) | null;
   cryptoProvider?: Stripe.CryptoProvider;
+  /**
+   * Card trial: the hashed fingerprint of a trialing subscription's card (see SubscriptionSummary
+   * card_hash). Best effort: null or a failure applies the event without it.
+   */
+  cardHash?: (subscription: Stripe.Subscription) => Promise<string | null>;
+  /** Card trial: ends a repeat trial now (the database answered end_trial with the subscription id). */
+  endTrial?: (subscriptionId: string) => Promise<void>;
 };
 
 export type WebhookResponse = { status: number; body: Record<string, unknown> };
@@ -238,12 +263,35 @@ export async function handleBillingWebhook(body: string, signature: string | nul
   if ((event.livemode === true) !== (deps.livemode === true)) return { status: 200, body: { received: true, outcome: "ignored", reason: "livemode" } };
   const summary = billingEventSummary(event);
   if (!summary) return { status: 200, body: { received: true, outcome: "ignored" } };
+  if (summary.subscription && deps.cardHash && event.type.startsWith("customer.subscription.") && summary.subscription.status === "trialing") {
+    try {
+      const hash = await deps.cardHash(event.data.object as Stripe.Subscription);
+      if (hash && /^[0-9a-f]{64}$/.test(hash)) summary.subscription.card_hash = hash;
+    } catch {
+      // Applied without it: the licence check still runs and a later event carries the card.
+    }
+  }
+  let result: ApplyResult;
   try {
-    const result = await deps.apply(summary);
-    return { status: 200, body: { received: true, outcome: result.outcome } };
+    result = await deps.apply(summary);
   } catch {
     return { status: 500, body: { error: "The event was not recorded." } };
   }
+  const endTrial = typeof result.end_trial === "string" && SUBSCRIPTION_ID.test(result.end_trial) ? result.end_trial : null;
+  if (endTrial && deps.endTrial) {
+    try {
+      await deps.endTrial(endTrial);
+    } catch {
+      // Recorded either way; a repeat trial left running is visible in the audit (repeat_trial).
+    }
+  }
+  return { status: 200, body: { received: true, outcome: result.outcome } };
+}
+
+/** SHA-256 (hex) of "card:" + a Stripe card fingerprint, the value subscription_trial_claims holds. */
+export async function cardFingerprintHash(fingerprint: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`card:${fingerprint}`));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 /** The summary as the database RPC takes it. */
@@ -320,7 +368,64 @@ export type CheckoutInput = {
   idempotencyKey: string;
   appOrigin: string;
   mode: "test" | "live";
+  /**
+   * Card trial: the free days Checkout grants (subscription_checkout_allowed decides), or the end
+   * of a trial the firm already started. None: billing starts today.
+   */
+  trial?: { days?: number | null; endAt?: string | null } | null;
+  /** The founding-firm coupon (25% for 12 months), when the offer is open, and its terms. */
+  foundingCoupon?: string | null;
+  founding?: { percent: number; months: number } | null;
+  /** The firm's time zone, for the date in the disclosure. */
+  timeZone?: string | null;
 };
+
+/** The trial's last day and the trial_end Stripe takes, or null when billing starts today. */
+export function checkoutTrial(trial: CheckoutInput["trial"], now = new Date()): { end: Date; days: number | null; endSeconds: number | null } | null {
+  if (!trial) return null;
+  if (typeof trial.days === "number" && Number.isInteger(trial.days) && trial.days >= 1 && trial.days <= 730) {
+    return { end: new Date(now.getTime() + trial.days * 86_400_000), days: trial.days, endSeconds: null };
+  }
+  const at = trial.endAt ? new Date(trial.endAt) : null;
+  // Stripe wants trial_end at least 48 hours out; a shorter remainder bills today.
+  if (at && Number.isFinite(at.getTime()) && at.getTime() - now.getTime() > 49 * 3_600_000) {
+    return { end: at, days: null, endSeconds: Math.floor(at.getTime() / 1000) };
+  }
+  return null;
+}
+
+function money(cents: number, currency: string): string {
+  const amount = (cents / 100).toFixed(cents % 100 === 0 ? 0 : 2);
+  return `${currency.toUpperCase()} ${amount}`;
+}
+
+/**
+ * The words above Checkout's button: what is charged today, what is charged when, and how to stop
+ * it. Stripe shows its own trial line too; this one names the date, the amount and the taxes.
+ */
+export function checkoutDisclosure(input: { cents: number; currency: string; interval: Interval; trialEnd: Date | null; founding: { percent: number; months: number } | null; timeZone?: string | null }): string {
+  const discounted = input.founding ? Math.round((input.cents * (100 - input.founding.percent)) / 100) : input.cents;
+  const per = input.interval === "year" ? "year" : "month";
+  const price = input.founding
+    ? `${money(discounted, input.currency)}/${per} (founding-firm price, ${input.founding.percent}% off for the first ${input.founding.months} months), then ${money(input.cents, input.currency)}/${per}`
+    : `${money(input.cents, input.currency)}/${per}`;
+  const taxes = "plus applicable taxes";
+  if (!input.trialEnd) return `You are billed ${price}, ${taxes}, starting today. Cancel anytime in Settings > Subscription.`;
+  let date: string;
+  try {
+    date = new Intl.DateTimeFormat("en-CA", { dateStyle: "long", timeZone: input.timeZone || "America/Toronto" }).format(input.trialEnd);
+  } catch {
+    date = new Intl.DateTimeFormat("en-CA", { dateStyle: "long", timeZone: "America/Toronto" }).format(input.trialEnd);
+  }
+  return `$0 today. Your free trial ends on ${date}; then this card is billed ${price}, ${taxes}, unless you cancel before then. Cancel anytime in Settings > Subscription. One free trial per firm, card and licence.`;
+}
+
+/** True for Stripe's refusal of a coupon (spent, expired or missing), so Checkout opens without it. */
+export function couponRefused(cause: unknown): boolean {
+  const error = cause as { code?: unknown; param?: unknown } | null;
+  const param = typeof error?.param === "string" ? error.param : "";
+  return error?.code === "coupon_expired" || param.startsWith("discounts") || (error?.code === "resource_missing" && param.includes("coupon"));
+}
 
 /** Where Checkout and the portal come back to: the Subscription tab. */
 export function billingReturnUrl(appOrigin: string, outcome?: "success" | "cancelled"): string {
@@ -358,19 +463,58 @@ export async function createSubscriptionCheckout(stripe: BillingStripe, cache: P
     casevoya_interval: input.interval,
     casevoya_extra_seats: String(input.extraSeats),
   };
-  const session = await stripe.checkout.sessions.create(
-    {
-      mode: "subscription",
-      customer: input.customerId,
-      line_items: lineItems,
-      success_url: billingReturnUrl(input.appOrigin, "success"),
-      cancel_url: billingReturnUrl(input.appOrigin, "cancelled"),
-      metadata,
-      subscription_data: { metadata },
-      client_reference_id: input.organizationId,
+  const trial = checkoutTrial(input.trial);
+  const sessionMetadata: Stripe.MetadataParam = { ...metadata, casevoya_trial: trial ? "1" : "0" };
+  const seatTotal = input.extraSeats > 0 ? (extraSeatsCents(input.catalog, input.interval, input.extraSeats) ?? 0) : 0;
+  const cents = planCents + seatTotal;
+  const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
+    metadata,
+    ...(trial
+      ? {
+          ...(trial.days ? { trial_period_days: trial.days } : { trial_end: trial.endSeconds ?? undefined }),
+          // No card at the trial's end (removed in the portal): the subscription cancels, never bills.
+          trial_settings: { end_behavior: { missing_payment_method: "cancel" } },
+        }
+      : {}),
+  };
+  const params = (coupon: string | null): Stripe.Checkout.SessionCreateParams => ({
+    mode: "subscription",
+    customer: input.customerId,
+    line_items: lineItems,
+    success_url: billingReturnUrl(input.appOrigin, "success"),
+    cancel_url: billingReturnUrl(input.appOrigin, "cancelled"),
+    metadata: sessionMetadata,
+    subscription_data: subscriptionData,
+    client_reference_id: input.organizationId,
+    // Card trial: a card even when today's total is $0; the address Stripe Tax needs.
+    payment_method_collection: "always",
+    billing_address_collection: "required",
+    customer_update: { address: "auto", name: "auto" },
+    automatic_tax: { enabled: true },
+    tax_id_collection: { enabled: true },
+    ...(coupon ? { discounts: [{ coupon }] } : {}),
+    custom_text: {
+      submit: {
+        message: checkoutDisclosure({
+          cents,
+          currency,
+          interval: input.interval,
+          trialEnd: trial?.end ?? null,
+          founding: coupon ? (input.founding ?? null) : null,
+          timeZone: input.timeZone,
+        }),
+      },
     },
-    { idempotencyKey: `casevoya-checkout-${input.idempotencyKey}` },
-  );
+  });
+  const coupon = input.foundingCoupon && /^[A-Za-z0-9_-]{1,64}$/.test(input.foundingCoupon) ? input.foundingCoupon : null;
+  let session: { id: string; url: string | null };
+  try {
+    session = await stripe.checkout.sessions.create(params(coupon), { idempotencyKey: `casevoya-checkout-${input.idempotencyKey}` });
+  } catch (cause) {
+    if (!coupon || !couponRefused(cause)) throw cause;
+    // The founding offer is spent (50 firms) or withdrawn: the firm checks out at the list price.
+    session = await stripe.checkout.sessions.create(params(null), { idempotencyKey: `casevoya-checkout-${input.idempotencyKey}-list` });
+  }
   if (!session.url) throw new Error("Stripe returned no Checkout URL.");
   return { url: session.url, id: session.id };
 }
