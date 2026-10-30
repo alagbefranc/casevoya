@@ -484,7 +484,8 @@ describe("licensed publishing and approvals", () => {
       expect(approved.rows[0]).toEqual({ status: "approved", approved_by: ctx.ownerMembership });
 
       // An approved professional review needs a licensed reviewer membership; an owner is one.
-      await as(ctx.owner, ctx.orgId);
+      // Firm rule rows are written by definer functions only (20261030235000): seeded from maintenance.
+      await asMaintenance(db);
       const definition = await db.query<{ id: string }>(
         `insert into public.rule_definitions (organization_id, stable_key, category, jurisdiction)
          values ($1, $2, 'immigration_requirement', 'CA') returning id`,
@@ -505,7 +506,7 @@ describe("licensed publishing and approvals", () => {
       // SRC-03: approvals are recorded only through Source review; a direct insert is refused. The
       // licence rule on the reviewer membership still applies (checked from a maintenance session).
       await as(ctx.owner, ctx.orgId);
-      await expectDbError(() => review(ctx.ownerMembership), /only in Source review/);
+      await expectDbError(() => review(ctx.ownerMembership), /only in Source review|permission denied/);
       await asMaintenance(db);
       await review(ctx.ownerMembership);
       await review(ctx.consultantMembership);

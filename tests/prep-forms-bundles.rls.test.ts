@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { firmDay } from "./helpers/firm-day";
+import { serverCapture } from "./helpers/server-capture";
 
 /**
  * PREP-01, PREP-03 and PREP-04. Synthetic records only: the official URL is a test string on an
@@ -109,12 +110,13 @@ type Firm = Awaited<ReturnType<typeof firm>>;
 
 async function propose(ctx: Firm, formVersion: string, format = "field_review", fields = FIELDS) {
   await stale(ctx.manager, ctx.orgId);
+  const snapshot = await serverCapture(db, { orgId: ctx.orgId, url: PAGE, snapshot: { sha256: HASH } });
   const row = await db.query<{ id: string }>(
     `select public.propose_form_template(
        $1::uuid, 'CA', null::text, 'SYN-1', $2::text, 'Synthetic section', $3::text, null::integer, null::date, $4::text, $5::jsonb, $6::date,
-       jsonb_build_object('sha256', $7::text, 'retrieved_at', statement_timestamp(), 'final_url', $2::text, 'http_status', 200)
+       $7::jsonb
      ) as id`,
-    [ctx.orgId, PAGE, formVersion, format, fields, firmDay(), HASH],
+    [ctx.orgId, PAGE, formVersion, format, fields, firmDay(), JSON.stringify(snapshot)],
   );
   return row.rows[0].id;
 }

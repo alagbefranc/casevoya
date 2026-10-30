@@ -311,7 +311,7 @@ describe("Vo letter drafts: approved official content only", () => {
     const ownerMembership = (await db.query<{ id: string }>(`select id from public.memberships where organization_id = $1 and user_id = $2 and role = 'firm_owner'`, [f.orgId, f.owner])).rows[0].id;
     await db.query(`update public.profiles set display_name = 'Amara Osei' where id = $1`, [f.owner]);
     const page = `https://www.canada.ca/en/immigration-refugees-citizenship/services/synthetic-letter-${tag()}.html#s1`;
-    await staff(f.owner, f.orgId, true);
+    // Firm rule rows are written by definer functions only (20261030235000): seeded from maintenance.
     const definition = (
       await db.query<{ id: string }>(`insert into public.rule_definitions (organization_id, stable_key, category, jurisdiction) values ($1, $2, 'immigration_requirement', 'CA') returning id`, [
         f.orgId,

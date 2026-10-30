@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { firmDay } from "./helpers/firm-day";
+import { serverCapture } from "./helpers/server-capture";
 
 /**
  * DEC-02 approval follow-up against the real migrations: the follow-up checklist (closure tasks
@@ -203,7 +204,7 @@ async function followUpTask(decisionId: string, kind: string) {
 
 async function propose(ctx: Firm, as: string, options: { url?: string; program?: string; snapshot?: boolean; timing?: string | null } = {}) {
   await stale(as, ctx.orgId);
-  const snapshot = options.snapshot === false ? null : JSON.stringify({ sha256: HASH, retrieved_at: new Date().toISOString(), final_url: PAGE.split("#")[0], http_status: 200 });
+  const snapshot = options.snapshot === false ? null : JSON.stringify(await serverCapture(db, { orgId: ctx.orgId, url: options.url ?? PAGE, snapshot: { sha256: HASH } }));
   const row = await db.query<{ id: string }>(
     `select public.propose_approval_follow_up_step($1, $2, 'Synthetic step after approval', $3, $4, null, null, null, $5::date, null, $6::jsonb) as id`,
     [ctx.orgId, options.program ?? ctx.programKey, options.timing ?? null, options.url ?? PAGE, firmDay(), snapshot],

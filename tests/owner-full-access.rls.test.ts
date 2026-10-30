@@ -383,8 +383,9 @@ describe("regulated actions: the owner acts as a licensed consultant", () => {
       await asUser(db, { userId: ctx.owner, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 3600 });
       await expectDbError(() => db.query(`select public.confirm_deadline($1, 1)`, [deadline.rows[0].id]), /step-up/);
 
-      // Professional review of a rule version.
-      await as(ctx.owner, ctx.orgId);
+      // Professional review of a rule version. Firm rule rows are written by definer functions
+      // only (20261030235000): the draft is seeded from maintenance.
+      await asMaintenance(db);
       const definition = await db.query<{ id: string }>(
         `insert into public.rule_definitions (organization_id, stable_key, category, jurisdiction)
          values ($1, $2, 'immigration_requirement', 'CA') returning id`,
@@ -406,7 +407,7 @@ describe("regulated actions: the owner acts as a licensed consultant", () => {
            ) values ($1, $2, $3, 'approved', '2026-10-16T15:00:00Z', 'FICTIONAL review.', 1)`,
           [ctx.orgId, ruleVersion.rows[0].id, ctx.ownerMembership],
         );
-      await expectDbError(insertReview, /only in Source review/);
+      await expectDbError(insertReview, /only in Source review|permission denied/);
       await asMaintenance(db);
       await insertReview();
 

@@ -248,7 +248,8 @@ describe("Ask Vo's grounded reads", () => {
   it("cites a rule version only while it is live (app.rule_version_is_live, the SRC-03 definition)", async () => {
     const f = await firm();
     // A firm snapshot of a synthetic deep IRCC page, cited as evidence by each rule version.
-    await staff(f.owner, f.orgId, true);
+    // Firm governance rows are written by definer functions only (20261030235000): seeded from maintenance.
+    await asMaintenance(db);
     const page = `https://www.canada.ca/en/immigration-refugees-citizenship/services/synthetic-${tag()}.html`;
     const source = (
       await db.query<{ id: string }>(
@@ -271,7 +272,7 @@ describe("Ask Vo's grounded reads", () => {
 
     /** A rule version of its own claim, approved and published from a maintenance session (the SRC-03 gate). */
     async function rule(label: string, effectiveFrom: string) {
-      await staff(f.owner, f.orgId, true);
+      await asMaintenance(db);
       const definition = (
         await db.query<{ id: string }>(
           `insert into public.rule_definitions (organization_id, stable_key, category, jurisdiction) values ($1, $2, 'immigration_requirement', 'CA') returning id`,
@@ -339,7 +340,7 @@ describe("attested claims (no page capture)", () => {
     ).rows[0].id;
     await db.query(`update public.profiles set display_name = 'Amara Osei' where id = $1`, [f.owner]);
     const page = `https://www.canada.ca/en/immigration-refugees-citizenship/services/synthetic-attested-${tag()}.html#s2`;
-    await staff(f.owner, f.orgId, true);
+    // Seeded from maintenance: firm rule rows are written by definer functions only (20261030235000).
     const definition = (
       await db.query<{ id: string }>(
         `insert into public.rule_definitions (organization_id, stable_key, category, jurisdiction) values ($1, $2, 'immigration_requirement', 'CA') returning id`,

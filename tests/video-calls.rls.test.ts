@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { publishTestPrivacyNotice } from "./helpers/privacy-notice";
@@ -108,11 +108,13 @@ async function futureSlot(days: number): Promise<string> {
  * booking is moved to start `startsInMin` minutes from now (the window is relative to now).
  */
 async function book(ctx: Ctx, options: { event?: "video" | "link"; startsInMin?: number } = {}) {
-  await asUser(db, client(ctx.client.id, null));
+  const start = await futureSlot(3);
+  // The hold is service role only; the server names the signed-in visitor (20261030231500).
+  await asServiceRole(db);
   const hold = (
     await db.query<{ r: { public_ref: string; error?: string } }>(
-      `select public.booking_public_hold($1, $2, $3::timestamptz, 'Synthetic Client', $4, null, $5, $6, null) as r`,
-      [ctx.firmSlug, options.event ?? "video", await futureSlot(3), ctx.client.email, TZ, randomUUID()],
+      `select public.booking_public_hold($1, $2, $3::timestamptz, 'Synthetic Client', $4, null, $5, $6, $7, $8::uuid) as r`,
+      [ctx.firmSlug, options.event ?? "video", start, ctx.client.email, TZ, randomUUID(), createHash("sha256").update(randomUUID()).digest("hex"), ctx.client.id],
     )
   ).rows[0].r;
   if (hold.error) throw new Error(hold.error);

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { asAnon, asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asAnon, asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 
 // Leads (20261019201000_lead_enums, 20261019201100_leads_core, 20261019201200_lead_functions):
 // RLS and tenant isolation, role checks, stage moves with versions, lost reason, conflict screen,
@@ -430,10 +430,11 @@ describe("leads: bookings, CSV import and the public enquiry", () => {
       `select to_char(app.local_instant((now() at time zone $1)::date + 3, '10:00'::time, $1) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as at`,
       [TZ],
     );
-    await asAnon(db);
+    // The hold is service role only: the app server passes the address hash (20261030231500).
+    await asServiceRole(db);
     const held = await db.query<{ r: { error?: string } }>(
-      `select public.booking_public_hold($1, 'initial', $2::timestamptz, 'Ana Ferreira', 'ana.f@example.test', '+1 416 555 0100', 'America/Toronto', $3, null) as r`,
-      [ctx.slug, start.rows[0].at, randomUUID()],
+      `select public.booking_public_hold($1, 'initial', $2::timestamptz, 'Ana Ferreira', 'ana.f@example.test', '+1 416 555 0100', 'America/Toronto', $3, $4) as r`,
+      [ctx.slug, start.rows[0].at, randomUUID(), createHash("sha256").update(randomUUID()).digest("hex")],
     );
     expect(held.rows[0].r.error).toBeUndefined();
     await asMaintenance(db);
@@ -494,12 +495,20 @@ describe("leads: bookings, CSV import and the public enquiry", () => {
     const noNotice = await firm();
     const sample = await firm({ sample: true, privacy: true });
     const submit = async (slug: string, overrides: Partial<{ contact: string; reply: boolean; marketing: boolean; key: string; hash: string | null }> = {}) => {
-      await asAnon(db);
+      // submit_enquiry is service role only: the app server passes the address hash (20261030231500).
+      await asServiceRole(db);
       const row = await db.query<{ r: { ok?: boolean; error?: string } }>(
         `select public.submit_enquiry($1, 'Wei Zhang', $2, 'email', 'Study', 'China', 'Mandarin', $3,
            'Synthetic Firm may use these details to reply to my enquiry', $4, 'Send me Synthetic Firm news', 'enquiry-v1',
            'hosted_page', $5, $6) as r`,
-        [slug, overrides.contact ?? "Wei@Example.test", overrides.reply ?? true, overrides.marketing ?? false, overrides.key ?? randomUUID(), overrides.hash ?? null],
+        [
+          slug,
+          overrides.contact ?? "Wei@Example.test",
+          overrides.reply ?? true,
+          overrides.marketing ?? false,
+          overrides.key ?? randomUUID(),
+          overrides.hash === undefined ? createHash("sha256").update(randomUUID()).digest("hex") : overrides.hash,
+        ],
       );
       return row.rows[0].r;
     };

@@ -15,7 +15,13 @@ import { ENQUIRY_HEIGHT_MESSAGE, bookingLinks, enquiryEmbedScript, enquiryLinks,
 // framing headers, the embed script's origin check, and the snippets the dialog hands out.
 
 const rpc = vi.fn();
-vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ rpc }) }));
+const serviceRpc = vi.fn();
+const VIEWER = "11111111-1111-4111-8111-111111111111";
+let viewerSub: string | null = null;
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({ rpc, auth: { getClaims: async () => ({ data: viewerSub ? { claims: { sub: viewerSub } } : null }) } }),
+}));
+vi.mock("@/lib/supabase/service", () => ({ createServiceClient: () => ({ rpc: serviceRpc }) }));
 vi.mock("@supabase/ssr", () => ({
   createServerClient: () => ({ auth: { getClaims: async () => ({ data: null }) }, rpc }),
 }));
@@ -24,6 +30,8 @@ const ORIGIN = "https://app.casevoya.ca";
 
 beforeEach(() => {
   rpc.mockReset();
+  serviceRpc.mockReset();
+  viewerSub = null;
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.test");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test");
 });
@@ -127,23 +135,49 @@ describe("POST /api/enquiry/<firm>", () => {
     expect((await post("maple", { ...form, elapsedMs: 100 })).status).toBe(429);
     expect((await post("maple", { ...form, website: "spam" })).status).toBe(400);
     expect(rpc).not.toHaveBeenCalled();
+    expect(serviceRpc).not.toHaveBeenCalled();
   });
 
   it("stores the wording the page showed, naming the firm, with the version and the embed's source", async () => {
     rpc.mockImplementation(async (name: string) =>
-      name === "enquiry_public_firm" ? { data: { firm_name: "Maple Immigration", firm_slug: "maple", practice: true, staff: true }, error: null } : { data: { ok: true }, error: null },
+      name === "enquiry_public_firm" ? { data: { firm_name: "Maple Immigration", firm_slug: "maple", practice: true, staff: true }, error: null } : { data: null, error: { message: "permission denied" } },
     );
+    serviceRpc.mockResolvedValue({ data: { ok: true }, error: null });
+    viewerSub = VIEWER;
     const response = await post("maple", form);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true, practice: true });
-    const [, args] = rpc.mock.calls.find(([name]) => name === "submit_enquiry") ?? [];
+    // The page is read with the visitor's session; the enquiry goes through the service role.
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual(["enquiry_public_firm"]);
+    const [name, args] = serviceRpc.mock.calls[0] ?? [];
+    expect(name).toBe("submit_enquiry");
     expect(args).toMatchObject({
       p_firm_slug: "maple",
       p_reply_statement: "Maple Immigration may use these details to reply to my enquiry",
       p_marketing_statement: "Send me Maple Immigration news. Separate from replies about your enquiry. You can stop any time.",
       p_consent_version: "enquiry-v2",
       p_source: "web_form",
+      p_viewer: VIEWER,
     });
+  });
+
+  it("computes the address hash on the server and names no viewer when signed out", async () => {
+    rpc.mockResolvedValue({ data: { firm_name: "Maple", firm_slug: "maple", practice: false, staff: false }, error: null });
+    serviceRpc.mockResolvedValue({ data: { ok: true }, error: null });
+    const { POST } = await import("@/app/api/enquiry/[firm]/route");
+    const response = await POST(
+      new Request("https://app.casevoya.ca/api/enquiry/maple", {
+        method: "POST",
+        headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.9" },
+        body: JSON.stringify({ ...form, clientHash: "f".repeat(64), p_client_hash: "f".repeat(64) }),
+      }),
+      { params: Promise.resolve({ firm: "maple" }) },
+    );
+    expect(response.status).toBe(200);
+    const [, args] = serviceRpc.mock.calls[0] ?? [];
+    expect(args.p_viewer).toBeNull();
+    expect(args.p_client_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(args.p_client_hash).not.toBe("f".repeat(64));
   });
 });
 

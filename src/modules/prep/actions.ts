@@ -3,6 +3,7 @@
 import { safeAccessError } from "@/lib/auth/step-up";
 import { isUuid } from "@/lib/tenant/context";
 import { createClient } from "@/lib/supabase/server";
+import { storeServerCapture } from "@/modules/content-governance/server-capture";
 import { SUBMISSION_CHANNELS, type SubmissionChannel } from "@/modules/government/present";
 import { snapshotOfficialPage, federalOfficialUrl } from "@/modules/submissions/official-page";
 import { channelPatternOk, MAX_BUNDLE_MAX_BYTES, MIN_BUNDLE_MAX_BYTES } from "@/modules/prep/channel-name";
@@ -36,7 +37,7 @@ async function session(organizationId: string) {
   const supabase = await createClient({ organizationId });
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) return { error: "Sign in first." as const };
-  return { supabase };
+  return { supabase, userId: claims.claims.sub as string };
 }
 
 const text = (value: string | null | undefined) => {
@@ -71,6 +72,16 @@ export async function proposeFormTemplate(
   const s = await session(input.organizationId);
   if ("error" in s) return { error: s.error };
   const fetched = await snapshotOfficialPage(url, fetch);
+  // The fetched page is stored by the server (service role); the entry names that capture.
+  const stored = fetched.snapshot
+    ? await storeServerCapture({
+        organizationId: input.organizationId,
+        actorUserId: s.userId,
+        sourceUrl: url,
+        title: `${input.officialFormId.trim()} ${input.formVersion.trim()}`.trim() || null,
+        page: fetched.snapshot,
+      })
+    : null;
   const { data, error } = await s.supabase.rpc("propose_form_template", {
     p_org: input.organizationId,
     p_jurisdiction: input.jurisdiction.trim(),
@@ -84,10 +95,10 @@ export async function proposeFormTemplate(
     p_output_format: input.outputFormat,
     p_fields: input.fields as unknown as Json,
     p_checked_on: input.checkedOn,
-    p_snapshot: (fetched.snapshot ?? null) as unknown as Json,
+    p_snapshot: (stored ?? null) as unknown as Json,
   });
   if (error) return { error: refusal(error.message) };
-  return { id: data, snapshot: Boolean(fetched.snapshot), reason: fetched.snapshot ? null : fetched.reason };
+  return { id: data, snapshot: Boolean(stored), reason: fetched.snapshot ? (stored ? null : "The page capture couldn’t be stored.") : fetched.reason };
 }
 
 export async function reviewFormTemplate(

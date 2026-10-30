@@ -239,7 +239,7 @@ select pg_temp.assert((select count(*) from public.shared_template_version_sourc
 select pg_temp.expect_error($$update public.shared_template_version_sources set title = 'x'$$, '');
 -- Approve refuses a platform admin without the reviewer flag.
 select pg_temp.as_user('00000000-0000-4000-8000-00000000000b');
-select pg_temp.expect_error($$select public.approve_shared_template_version((select id from public.shared_template_versions where status = 'draft' limit 1))$$, 'not a template reviewer');
+select pg_temp.expect_error($$select public.approve_shared_template_version((select id from public.shared_template_versions where status = 'draft' limit 1), repeat('0', 64))$$, 'not a template reviewer');
 select pg_temp.as_service();
 select pg_temp.assert((public.platform_template_version((select id from public.shared_template_versions where status = 'draft' limit 1)) -> 'sources' -> 0 ->> 'official')::boolean, 'template version shows sources');
 select pg_temp.assert((public.platform_template_queue() -> 'templates' -> 0 -> 'draft' ->> 'official_sources')::int = 1, 'queue counts official sources');

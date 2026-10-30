@@ -9,10 +9,12 @@ import {
   PDFNumber,
   PDFRawStream,
   PDFRef,
+  PDFStream,
   PDFString,
   StandardFonts,
   decodePDFRawStream,
   type PDFFont,
+  type PDFObject,
   type PDFPage,
 } from "pdf-lib";
 import { PNG } from "pngjs";
@@ -43,7 +45,9 @@ import {
  * Text-showing operators whose glyphs meet a box are replaced with a cursor move and no string.
  * An image that meets a box is decoded and the samples under the box are set to black, then
  * stored again as a new compressed stream; the previous stream bytes are not kept. A black
- * rectangle is also painted so the area reads as redacted. The caller's buffer is not modified.
+ * rectangle is also painted so the area reads as redacted. Form data, alternate text, the
+ * structure tree, metadata, attachments and scripts are not carried into the copy (scrubDocument).
+ * The caller's buffer is not modified.
  */
 
 export type RedactionRegion = NormRect & { page: number };
@@ -153,7 +157,91 @@ async function redactPdf(bytes: Uint8Array, regions: readonly RedactionRegion[])
     rewritePage(pdf, page, user, standard);
     blankAnnotations(pdf, page, user);
   }
+  scrubDocument(pdf);
   return pdf.save({ useObjectStreams: false, updateFieldAppearances: false });
+}
+
+const CATALOG_DROP = ["AcroForm", "StructTreeRoot", "MarkInfo", "Metadata", "OpenAction", "AA", "Perms", "AF", "Collection", "PieceInfo"];
+const PAGE_DROP = ["Metadata", "PieceInfo", "Thumb", "AA", "AF"];
+const WIDGET_DROP = ["V", "DV", "RV", "Parent", "T", "TU", "TM", "Opt", "I", "Lock", "SV", "Ff", "FT", "MaxLen", "DA", "DS", "Q", "AA"];
+const PROPERTY_DROP = ["ActualText", "Alt", "E"];
+
+/**
+ * A redacted copy carries the page content only: form data (AcroForm, XFA, field values), the
+ * structure tree, document and object metadata, page thumbnails, embedded files and scripts are
+ * removed, alternate text is stripped from marked-content properties, and objects no longer
+ * reachable from the catalog are not written.
+ */
+function scrubDocument(pdf: PDFDocument): void {
+  const catalog = pdf.catalog;
+  for (const key of CATALOG_DROP) catalog.delete(PDFName.of(key));
+  const names = dictAt(catalog, "Names");
+  names?.delete(PDFName.of("EmbeddedFiles"));
+  names?.delete(PDFName.of("JavaScript"));
+  pdf.context.trailerInfo.Info = undefined;
+  for (const page of pdf.getPages()) {
+    for (const key of PAGE_DROP) page.node.delete(PDFName.of(key));
+    scrubAnnotations(page.node);
+  }
+  for (const [, object] of pdf.context.enumerateIndirectObjects()) {
+    const dict = object instanceof PDFDict ? object : object instanceof PDFStream ? object.dict : undefined;
+    if (!dict) continue;
+    dict.delete(PDFName.of("Metadata"));
+    dict.delete(PDFName.of("PieceInfo"));
+    const properties = dictAt(dictAt(dict, "Resources"), "Properties");
+    if (!properties) continue;
+    for (const [key] of properties.entries()) {
+      const entry = properties.lookup(key);
+      if (entry instanceof PDFDict) for (const drop of PROPERTY_DROP) entry.delete(PDFName.of(drop));
+    }
+  }
+  collectGarbage(pdf);
+}
+
+function scrubAnnotations(node: PDFDict): void {
+  const annots = node.lookup(PDFName.of("Annots"));
+  if (!(annots instanceof PDFArray)) return;
+  for (let index = 0; index < annots.size(); index += 1) {
+    const annot = annots.lookup(index);
+    if (!(annot instanceof PDFDict)) continue;
+    annot.delete(PDFName.of("AA"));
+    const action = dictAt(annot, "A");
+    if (action && action.lookup(PDFName.of("S")) === PDFName.of("JavaScript")) annot.delete(PDFName.of("A"));
+    const subtype = annot.lookup(PDFName.of("Subtype"));
+    // Without the AcroForm a widget is drawn from its appearance only; its value and field go.
+    if (subtype === PDFName.of("Widget")) for (const key of WIDGET_DROP) annot.delete(PDFName.of(key));
+    if (subtype === PDFName.of("FileAttachment")) annot.delete(PDFName.of("FS"));
+  }
+}
+
+function dictAt(dict: PDFDict | undefined, key: string): PDFDict | undefined {
+  const value = dict?.lookup(PDFName.of(key));
+  return value instanceof PDFDict ? value : undefined;
+}
+
+/** Deletes every indirect object not reachable from the catalog (old revisions, removed parts). */
+function collectGarbage(pdf: PDFDocument): void {
+  const context = pdf.context;
+  const seen = new Set<string>();
+  const stack: PDFObject[] = [];
+  if (context.trailerInfo.Root) stack.push(context.trailerInfo.Root);
+  while (stack.length > 0) {
+    const object = stack.pop();
+    if (object instanceof PDFRef) {
+      if (seen.has(object.tag)) continue;
+      seen.add(object.tag);
+      const target = context.lookup(object);
+      if (target) stack.push(target);
+    } else if (object instanceof PDFDict) {
+      for (const [, value] of object.entries()) stack.push(value);
+    } else if (object instanceof PDFArray) {
+      for (let index = 0; index < object.size(); index += 1) stack.push(object.get(index));
+    } else if (object instanceof PDFStream) {
+      stack.push(object.dict);
+    }
+  }
+  const unreachable = context.enumerateIndirectObjects().filter(([ref]) => !seen.has(ref.tag)).map(([ref]) => ref);
+  for (const ref of unreachable) context.delete(ref);
 }
 
 async function standardWidths(): Promise<Map<string, Map<number, number>>> {
@@ -292,7 +380,9 @@ function rewriteStream(bytes: Uint8Array, graphics: Graphics, rects: readonly Us
     if (operator === "BI") throw new RedactionError("This PDF can’t be redacted safely, so no copy was made.");
     const glyphWidths = widths();
     const drop = inText && showsText(operator) && textHits(operands, operator, text.tm, graphics, glyphWidths, rects);
-    if (!drop) kept.push(bytes.subarray(from, token.end));
+    const marked = markedContentWithoutProperties(bytes, operands, operator);
+    if (marked) kept.push(marked);
+    else if (!drop) kept.push(bytes.subarray(from, token.end));
     else kept.push(cursorMove(operands, operator, graphics, glyphWidths));
     applyOperator(operator, operands, graphics, text, stack, onImage, glyphWidths);
     if (operator === "BT") inText = true;
@@ -309,6 +399,18 @@ function rewriteStream(bytes: Uint8Array, graphics: Graphics, rects: readonly Us
     }
   }
   return concatBytes(kept);
+}
+
+/**
+ * `/Tag <<...>> BDC` becomes `/Tag BMC` (and DP becomes MP): an inline property list can carry
+ * ActualText, Alt or E for the text it wraps. A named list (`/Tag /P0 BDC`, used for optional
+ * content) is kept; its resource entry is cleaned in scrubDocument.
+ */
+function markedContentWithoutProperties(bytes: Uint8Array, operands: readonly Token[], operator: string): Uint8Array | null {
+  if (operator !== "BDC" && operator !== "DP") return null;
+  const [tag, properties] = operands;
+  if (operands.length !== 2 || tag?.kind !== "name" || properties?.kind !== "dict") return null;
+  return concatBytes([latin1("\n"), bytes.subarray(tag.start, tag.end), latin1(operator === "BDC" ? " BMC\n" : " MP\n")]);
 }
 
 function showsText(operator: string): boolean {
@@ -750,14 +852,15 @@ function blankAnnotations(pdf: PDFDocument, page: PDFPage, rects: readonly UserR
     if (!rects.some((region) => intersects(region, box))) continue;
     annot.set(PDFName.of("Contents"), PDFString.of(""));
     annot.delete(PDFName.of("RC"));
-    const appearance = annot.lookupMaybe(PDFName.of("AP"), PDFDict);
-    const normal = appearance?.get(PDFName.of("N"));
-    if (!(normal instanceof PDFRef)) continue;
-    const stream = pdf.context.lookup(normal);
-    if (!(stream instanceof PDFRawStream)) continue;
-    stream.dict.delete(PDFName.of("Filter"));
-    stream.dict.delete(PDFName.of("DecodeParms"));
-    pdf.context.assign(normal, PDFRawStream.of(stream.dict, latin1("0 0 0 rg 0 0 1 1 re f")));
+    // Every appearance state (normal, rollover, down, on/off) is replaced by one black box; the
+    // old streams are no longer referenced and are not written.
+    const width = Math.max(Math.abs(box.width), 1);
+    const height = Math.max(Math.abs(box.height), 1);
+    const blank = pdf.context.register(
+      pdf.context.stream(`0 0 0 rg 0 0 ${trim(width)} ${trim(height)} re f`, { Type: "XObject", Subtype: "Form", BBox: [0, 0, width, height] }),
+    );
+    annot.set(PDFName.of("AP"), pdf.context.obj({ N: blank }));
+    annot.delete(PDFName.of("AS"));
   }
 }
 
@@ -924,6 +1027,15 @@ function readDict(bytes: Uint8Array, start: number): { token: Token; next: numbe
   let at = start + 2;
   let depth = 1;
   while (at < bytes.length && depth > 0) {
+    // Strings inside the dictionary may contain << or >>.
+    if (bytes[at] === 0x28) {
+      at = readLiteral(bytes, at).next;
+      continue;
+    }
+    if (bytes[at] === 0x3c && bytes[at + 1] !== 0x3c) {
+      at = readHex(bytes, at).next;
+      continue;
+    }
     if (bytes[at] === 0x3c && bytes[at + 1] === 0x3c) {
       depth += 1;
       at += 2;

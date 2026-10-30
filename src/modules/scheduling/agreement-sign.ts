@@ -124,9 +124,10 @@ export async function signBookingAgreement(form: FormData): Promise<{ ok: true; 
   const jar = await cookies();
   const token = jar.get(sessionCookie(ref).name)?.value ?? "";
   if (!/^[0-9a-f]{64}$/.test(token)) return { error: signError("emailed code") };
-  const supabase = await createClient();
+  // Service role: the IP and user agent are this server's; the function checks the link and the
+  // code session itself.
   const evidence = await clientEvidence();
-  const { data, error } = await supabase.rpc("sign_booking_agreement", {
+  const { data, error } = await createServiceClient().rpc("sign_booking_agreement", {
     p_ref: ref,
     p_name: name.slice(0, 200),
     p_consent: true,

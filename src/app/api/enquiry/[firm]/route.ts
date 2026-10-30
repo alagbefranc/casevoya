@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { ENQUIRY_CONSENT, ENQUIRY_MESSAGES, enquiryStatements, isFirmSlug, parsePublicFirm, readEnquiry } from "@/modules/leads/enquiry";
 import { clientHash } from "@/modules/scheduling/public-api";
-import { clientAddress } from "@/modules/scheduling/public-deps";
+import { clientAddress, sessionViewer } from "@/modules/scheduling/public-deps";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -48,7 +49,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ fir
     }
     const statements = enquiryStatements(page.firmName);
     const hash = await clientHash(clientAddress(request.headers), process.env.BOOKING_CLIENT_SALT ?? "");
-    const { data, error } = await supabase.rpc("submit_enquiry", {
+    // submit_enquiry is service role only (the hash comes from this server). The page check
+    // above ran on the visitor's session; the visitor is named so the database re-checks staff
+    // for a practice enquiry and records who sent it.
+    const viewer = await sessionViewer(supabase);
+    const { data, error } = await createServiceClient().rpc("submit_enquiry", {
       p_firm_slug: firm,
       p_name: input.name,
       p_contact: input.contact,
@@ -65,6 +70,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ fir
       p_idempotency_key: input.key,
       p_client_hash: hash,
       p_attribution: input.attribution,
+      p_viewer: viewer,
     });
     if (error) throw new Error("submit_enquiry failed");
     const result = (data && typeof data === "object" ? data : {}) as { ok?: boolean; error?: keyof typeof ENQUIRY_MESSAGES };

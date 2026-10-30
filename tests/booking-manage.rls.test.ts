@@ -115,12 +115,21 @@ async function hold(
   start: string,
   options: { email?: string; key?: string; hash?: string | null; event?: string; as?: string; session?: Parameters<typeof asUser>[1] } = {},
 ) {
-  if (options.session) await asUser(db, options.session);
-  else if (options.as) await asUser(db, { userId: options.as, aal: "aal1" });
-  else await asAnon(db);
+  // The hold is service role only; the server passes the address hash and the signed-in visitor
+  // (20261030231500).
+  const viewer = options.session?.userId ?? options.as ?? null;
+  await asServiceRole(db);
   const row = await db.query<{ result: Summary & { error?: string } }>(
-    `select public.booking_public_hold($1, $2, $3::timestamptz, 'Sam Example', $4, null, 'America/Vancouver', $5, $6) as result`,
-    [ctx.firmSlug, options.event ?? "initial", start, options.email ?? "sam@example.test", options.key ?? randomUUID(), options.hash === undefined ? null : options.hash],
+    `select public.booking_public_hold($1, $2, $3::timestamptz, 'Sam Example', $4, null, 'America/Vancouver', $5, $6, $7::uuid) as result`,
+    [
+      ctx.firmSlug,
+      options.event ?? "initial",
+      start,
+      options.email ?? "sam@example.test",
+      options.key ?? randomUUID(),
+      options.hash === undefined ? createHash("sha256").update(randomUUID()).digest("hex") : options.hash,
+      viewer,
+    ],
   );
   const result = row.rows[0].result;
   // Refusals come back as {error}; tests treat them like thrown errors.

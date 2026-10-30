@@ -103,10 +103,11 @@ async function localStart(days: number, time = "10:00"): Promise<string> {
 /** The client books on the firm's public page, signed in, so the booking is their own. */
 async function book(ctx: Ctx, start: string, options: { as?: { id: string; email: string } } = {}) {
   const who = options.as ?? ctx.client;
-  await asUser(db, client(who.id, null));
+  // The hold is service role only; the server names the signed-in visitor (20261030231500).
+  await asServiceRole(db);
   const row = await db.query<{ r: { public_ref: string; error?: string } }>(
-    `select public.booking_public_hold($1, 'review', $2::timestamptz, 'Synthetic Client', $3, null, 'America/Vancouver', $4, null) as r`,
-    [ctx.firmSlug, start, who.email, randomUUID()],
+    `select public.booking_public_hold($1, 'review', $2::timestamptz, 'Synthetic Client', $3, null, 'America/Vancouver', $4, $5, $6::uuid) as r`,
+    [ctx.firmSlug, start, who.email, randomUUID(), createHash("sha256").update(randomUUID()).digest("hex"), who.id],
   );
   if (row.rows[0].r.error) throw new Error(row.rows[0].r.error);
   await asMaintenance(db);
@@ -155,10 +156,16 @@ const sessions = new Map<string, string>();
 /** Signs as the booker: the code check once per link, then the typed signature. */
 async function sign(ref: string, name: string, consent: boolean, sha: string, kind = "typed", image: string | null = null) {
   if (!sessions.has(ref)) sessions.set(ref, await codeCheck(ref));
-  return db.query<{ r: Record<string, unknown> }>(
-    `select public.sign_booking_agreement($1, $2, $3, $4, '203.0.113.7'::inet, 'Synthetic browser', $5, $6, $7) as r`,
-    [ref, name, consent, sha, sessions.get(ref), kind, image],
-  );
+  // The server signs with the service role (it supplies the IP and browser); back to anon after.
+  await asServiceRole(db);
+  try {
+    return await db.query<{ r: Record<string, unknown> }>(
+      `select public.sign_booking_agreement($1, $2, $3, $4, '203.0.113.7'::inet, 'Synthetic browser', $5, $6, $7) as r`,
+      [ref, name, consent, sha, sessions.get(ref), kind, image],
+    );
+  } finally {
+    await asAnon(db);
+  }
 }
 
 type Mail = { action: string; messages: { to: string; template: string; context: Record<string, unknown> }[] };
@@ -234,6 +241,7 @@ describe("consultation agreements on bookings", () => {
     // The old link says it was withdrawn (the firm's name only, nothing else).
     expect(await forSigning(ref)).toMatchObject({ state: "withdrawn", firm: "Synthetic Firm" });
     expect(Object.keys(await forSigning(ref)).sort()).toEqual(["firm", "firm_slug", "state"]);
+    await asServiceRole(db);
     await expectDbError(
       () => db.query(`select public.sign_booking_agreement($1, 'Synthetic Client', true, $2, null, null, $3, 'typed', null)`, [ref, "a".repeat(64), "b".repeat(64)]),
       /not available/,
@@ -376,11 +384,13 @@ describe("consultation agreements on bookings", () => {
     const shown = await forSigning(ref);
     expect(shown.email_mask).toMatch(/^.{1,4}•••@example\.test$/);
     // The old six-argument sign no longer signs; nor does the new one without a code session.
+    await asServiceRole(db);
     await expectDbError(() => db.query(`select public.sign_booking_agreement($1, 'Synthetic Client', true, $2, null, null)`, [ref, shown.sha256]), /emailed code/);
     await expectDbError(
       () => db.query(`select public.sign_booking_agreement($1, 'Synthetic Client', true, $2, null, null, $3, 'typed', null)`, [ref, shown.sha256, hex("nope")]),
       /emailed code/,
     );
+    await asAnon(db);
 
     const issue = async (code: string) => {
       await asServiceRole(db);
@@ -419,13 +429,14 @@ describe("consultation agreements on bookings", () => {
     await expectDbError(() => db.query(`select * from public.booking_agreement_codes`), /permission denied/);
 
     // A drawn signature: PNG only, stored on the row, shown back on the signed link.
-    await asAnon(db);
+    await asServiceRole(db);
     const signAs = (kind: string, image: string | null) =>
       db.query(`select public.sign_booking_agreement($1, 'Synthetic Client', true, $2, null, null, $3, $4, $5) as r`, [ref, shown.sha256, hex("good-session"), kind, image]);
     await expectDbError(() => signAs("drawn", null), /PNG or JPEG/);
     await expectDbError(() => signAs("drawn", Buffer.from("GIF89a-not-allowed").toString("base64")), /PNG or JPEG/);
     await expectDbError(() => signAs("scribbled", null), /choose how to sign/);
     await signAs("drawn", "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+    await asAnon(db);
     const signed = await forSigning(ref);
     expect(signed).toMatchObject({ state: "signed", signature_kind: "drawn" });
     expect(String(signed.signature_image)).toMatch(/^iVBORw0KGgo/);

@@ -129,7 +129,7 @@ async function envelope() {
     await asUser(db, { userId, aal: "aal1", orgId });
     return (
       await db.query<{ result: { status: string; seal_pending?: boolean } }>(
-        `select public.sign_agreement($1, true, $2, $3::inet, $4) as result`,
+        `select app.sign_agreement($1, true, $2, $3::inet, $4) as result`,
         [envelopeId, `sign-${randomUUID()}`, IP, AGENT],
       )
     ).rows[0].result;

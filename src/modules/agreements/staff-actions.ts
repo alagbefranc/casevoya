@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { isLicensedMembership, LICENCE_FACT_COLUMNS } from "@/lib/tenant/roles";
-import { clientEvidence } from "@/modules/agreements/evidence";
+import { issueSigningEvidence } from "@/modules/agreements/evidence";
 import { sealEnvelope } from "@/modules/agreements/seal";
 import {
   agreementStaffError,
@@ -32,8 +32,9 @@ async function staffClient(organizationId: string) {
   if (!isUuid(organizationId)) return { error: "Choose a firm." as const };
   const supabase = await createClient({ organizationId });
   const { data: claims } = await supabase.auth.getClaims();
-  if (!claims?.claims?.sub) return { error: "Sign in first." as const };
-  return { supabase };
+  const userId = claims?.claims?.sub;
+  if (!userId) return { error: "Sign in first." as const };
+  return { supabase, userId };
 }
 
 type StaffSupabase = Awaited<ReturnType<typeof createClient>>;
@@ -288,13 +289,13 @@ export async function countersignAgreement(input: {
   if ("error" in read) return { error: read.error };
   const session = await staffClient(input.organizationId);
   if ("error" in session) return { error: session.error ?? "Sign in first." };
-  const evidence = await clientEvidence();
+  const evidence = await issueSigningEvidence(read.input.envelopeId, session.userId);
+  if ("error" in evidence) return { error: evidence.error };
   const { data, error } = await session.supabase.rpc("sign_agreement", {
     p_envelope_id: read.input.envelopeId,
     p_consent: true,
     p_idempotency_key: `sheet-countersign-${read.input.envelopeId}-${crypto.randomUUID()}`,
-    p_ip: evidence.ip,
-    p_user_agent: evidence.userAgent,
+    p_evidence_id: evidence.id,
   });
   if (error) return { error: agreementStaffError(error.message) };
   const status = data && typeof data === "object" && !Array.isArray(data) && typeof data.status === "string" ? data.status : "signed";

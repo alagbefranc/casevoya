@@ -81,6 +81,11 @@ const officialSources = JSON.stringify([
   { url: "https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/study-permit.html", title: "Study permit", retrieved_on: "2026-10-29" },
 ]);
 
+const APPROVE = `public.approve_shared_template_version($1, $2)`;
+const SUBMIT = `public.submit_shared_template_version($1, $2)`;
+// Well-formed but never matching; used where the call is refused before the hash is compared.
+const PLACEHOLDER_HASH = "0".repeat(64);
+
 describe("ADM-03 shared template publication", () => {
   it("publishes only after a licensed reviewer steps up, then a firm adopts without moving a pin", async () => {
     await asMaintenance(db);
@@ -111,24 +116,26 @@ describe("ADM-03 shared template publication", () => {
 
     await asServiceRole(db);
     const versionId = await rpc<string>(`public.draft_shared_template_version($1, $2, $3, $4::jsonb, $5, $6, $7, $8::date, $9)`, draftArgs);
-    await expectDbError(() => rpc(`public.approve_shared_template_version($1)`, [versionId]), /permission denied|service role cannot publish/);
+    await expectDbError(() => rpc(APPROVE, [versionId, PLACEHOLDER_HASH]), /permission denied|service role cannot publish/);
 
     await asUser(db, { userId: author, aal: "aal2", totpAgeSeconds: 0 });
-    await expectDbError(() => rpc(`public.approve_shared_template_version($1)`, [versionId]), /licensed reviewer is required/);
+    await expectDbError(() => rpc(APPROVE, [versionId, PLACEHOLDER_HASH]), /licensed reviewer is required/);
 
     // A licensed platform admin without the reviewer flag cannot publish.
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
-    await expectDbError(() => rpc(`public.approve_shared_template_version($1)`, [versionId]), /not a template reviewer/);
+    await expectDbError(() => rpc(APPROVE, [versionId, PLACEHOLDER_HASH]), /not a template reviewer/);
     await asMaintenance(db);
     await db.query(`update public.platform_admins set template_reviewer = true where user_id = $1`, [ctx.consultant]);
 
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 3600 });
-    await expectDbError(() => rpc(`public.approve_shared_template_version($1)`, [versionId]), /step-up is required/);
+    await expectDbError(() => rpc(APPROVE, [versionId, PLACEHOLDER_HASH]), /step-up is required/);
 
-    // Publishing needs at least one official source on the draft.
+    // The id-only form is refused; a draft must be submitted (which needs an official source) first.
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
-    await expectDbError(() => rpc(`public.approve_shared_template_version($1)`, [versionId]), /official source/);
+    await expectDbError(() => rpc(`public.approve_shared_template_version($1)`, [versionId]), /submit the draft for review/);
+    await expectDbError(() => rpc(APPROVE, [versionId, PLACEHOLDER_HASH]), /not been submitted for review/);
     await asServiceRole(db);
+    await expectDbError(() => rpc(SUBMIT, [versionId, author]), /official source/);
     await expectDbError(
       () => rpc(`public.set_shared_template_version_sources($1, $2::jsonb, $3)`, [versionId, JSON.stringify([{ url: "http://example.com", title: "x", retrieved_on: "2026-10-29" }]), author]),
       /https link/,
@@ -147,11 +154,14 @@ describe("ADM-03 shared template publication", () => {
       "2026-11-01",
       "The reviewer wrote this one.",
     ]);
+    await rpc(`public.set_shared_template_version_sources($1, $2::jsonb, $3)`, [own, officialSources, author]);
+    const ownSubmitted = await rpc<{ review_hash: string }>(SUBMIT, [own, author]);
+    const submitted = await rpc<{ review_hash: string }>(SUBMIT, [versionId, author]);
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
-    await expectDbError(() => rpc(`public.approve_shared_template_version($1)`, [own]), /author cannot approve/);
+    await expectDbError(() => rpc(APPROVE, [own, ownSubmitted.review_hash]), /author cannot approve/);
 
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
-    const published = await rpc<{ status: string; version_number: number }>(`public.approve_shared_template_version($1)`, [versionId]);
+    const published = await rpc<{ status: string; version_number: number }>(APPROVE, [versionId, submitted.review_hash]);
     expect(published).toMatchObject({ status: "published", version_number: 1 });
 
     await asMaintenance(db);
@@ -208,8 +218,9 @@ describe("ADM-03 shared template publication", () => {
 
     await asServiceRole(db);
     await rpc(`public.set_shared_template_version_sources($1, $2::jsonb, $3)`, [second, officialSources, author]);
+    const secondSubmitted = await rpc<{ review_hash: string }>(SUBMIT, [second, author]);
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
-    await rpc(`public.approve_shared_template_version($1)`, [second]);
+    await rpc(APPROVE, [second, secondSubmitted.review_hash]);
     await asMaintenance(db);
     const pin = await db.query<{ version_id: string }>(`select version_id from public.matter_shared_template_pins where matter_id = $1`, [matterId]);
     expect(pin.rows[0].version_id).toBe(versionId);

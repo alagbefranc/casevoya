@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { asAnon, asMaintenance, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asAnon, asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { publishTestPrivacyNotice } from "./helpers/privacy-notice";
 
 // 20261019235000_leads_calendar_fixes: Edit lead's Source (set_lead_source), archiving a booking
@@ -105,10 +105,11 @@ async function publicBooking(ctx: Ctx, days: number, email: string) {
     `select to_char(app.local_instant((now() at time zone $1)::date + $2::integer, '10:00'::time, $1) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as at`,
     [TZ, days],
   );
-  await asAnon(db);
+  // The hold is service role only: the app server passes the address hash (20261030231500).
+  await asServiceRole(db);
   const held = await db.query<{ r: { error?: string; booking?: { id?: string } } }>(
-    `select public.booking_public_hold($1, 'initial', $2::timestamptz, 'Ana Ferreira', $3, null, 'America/Toronto', $4, null) as r`,
-    [ctx.slug, start.rows[0].at, email, randomUUID()],
+    `select public.booking_public_hold($1, 'initial', $2::timestamptz, 'Ana Ferreira', $3, null, 'America/Toronto', $4, $5) as r`,
+    [ctx.slug, start.rows[0].at, email, randomUUID(), createHash("sha256").update(randomUUID()).digest("hex")],
   );
   expect(held.rows[0].r.error).toBeUndefined();
   await asMaintenance(db);

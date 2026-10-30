@@ -83,10 +83,23 @@ function stripeRefundError(error: unknown): string {
 }
 
 /**
+ * True when Stripe answered with a refusal (a 4xx), so no refund was made and the reservation can
+ * be released. A conflict on the idempotency key, a network error or a 5xx leaves it to expire.
+ */
+function stripeRefusedRefund(error: unknown): boolean {
+  const failure = (typeof error === "object" && error ? error : {}) as { statusCode?: unknown; type?: unknown; rawType?: unknown };
+  const status = typeof failure.statusCode === "number" ? failure.statusCode : 0;
+  if (status < 400 || status >= 500 || status === 409) return false;
+  return failure.type !== "StripeIdempotencyError" && failure.rawType !== "idempotency_error";
+}
+
+/**
  * Refunds a card payment, in full or in part (FIN-13), through the firm's connected account
  * (direct charge, so `stripeAccount`). The database first checks billing access, a recent step-up
  * and the refundable remainder; Stripe is called only after that, with an idempotency key from
- * the dialog, so a double click or a retry makes one refund. The refund is recorded as pending;
+ * the dialog, so a double click or a retry makes one refund. Before Stripe is called the amount is
+ * reserved in the database under that key (app.reserve_invoice_refund), so two refunds at once
+ * cannot both pass the refundable cap. The refund is recorded as pending;
  * only Stripe's signed refund events move it to succeeded or failed, and the invoice with it.
  */
 export async function refundPayment(
@@ -117,6 +130,17 @@ async function refundCardPayment(
   if (input.amountCents > payment.refundable) return { error: refundError("refund exceeds the amount received") };
   const stripe = stripeServer();
   if (!stripe) return { error: NOT_CONFIGURED };
+  // Hold the amount in the database (payment locked, other holds counted) before Stripe is called.
+  const reserved = await supabase.rpc("reserve_invoice_refund", {
+    p_payment_id: input.paymentId,
+    p_amount_cents: input.amountCents,
+    p_currency: payment.currency,
+    p_livemode: stripeLive(),
+    p_idempotency_key: input.idempotencyKey,
+  });
+  if (reserved.error) return { error: refundError(reserved.error.message) };
+  if (typeof reserved.data !== "string") return { error: "The refund wasn’t recorded. Try again." };
+  const reservationId = reserved.data;
   let refundId: string;
   try {
     const refund = await stripe.refunds.create(
@@ -128,14 +152,18 @@ async function refundCardPayment(
           casevoya_organization_id: organizationId,
           casevoya_invoice_id: payment.invoice_id,
           casevoya_payment_id: input.paymentId,
+          casevoya_refund_reservation_id: reservationId,
         },
       },
       { stripeAccount: payment.account_id, idempotencyKey: `casevoya-refund-${input.idempotencyKey}` },
     );
     refundId = refund.id;
   } catch (error) {
+    if (stripeRefusedRefund(error)) await supabase.rpc("release_invoice_refund_reservation", { p_reservation_id: reservationId });
     return { error: stripeRefundError(error) };
   }
+  // Best effort: if this fails, recording the refund (here or from Stripe's event) still consumes the hold.
+  await supabase.rpc("link_invoice_refund_reservation", { p_reservation_id: reservationId, p_refund_id: refundId });
   const recorded = await supabase.rpc("record_invoice_refund", {
     p_payment_id: input.paymentId,
     p_refund_id: refundId,

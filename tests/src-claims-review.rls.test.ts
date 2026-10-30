@@ -187,7 +187,7 @@ describe("SRC-01 Add claim", () => {
     // A direct evidence row with a homepage URL is refused too.
     await expectDbError(
       () => db.query(`insert into public.rule_evidence (rule_version_id, source_url, source_section) select id, 'https://www.canada.ca/en.html', 'x' from public.rule_versions limit 1`),
-      /homepage|row-level security/,
+      /homepage|row-level security|permission denied/,
     );
   });
 
@@ -287,10 +287,15 @@ describe("SRC-03 Review workbench and publication gate", () => {
     expect(live.rows[0]).toEqual({ live: true, reviewer: ctx.consultantMembership, decided: true });
     expect(await audit(ctx.orgId, "rule.version_approved%")).toEqual(["rule.version_approved"]);
 
-    // Immutable: the claim, its value and its evidence can't change now.
+    // Immutable: the claim, its value and its evidence can't change now. Staff have no direct
+    // write on firm rule rows (20261030235000); the triggers refuse any other writer.
     await fresh(ctx.consultant as string, ctx.orgId);
+    expect((await db.query(`update public.rule_versions set claim = 'Rewritten' where id = $1`, [id])).affectedRows ?? 0).toBe(0);
+    await expectDbError(() => db.query(`update public.rule_evidence set evidence_excerpt = 'Rewritten' where rule_version_id = $1`, [id]), /permission denied/);
+    await asMaintenance(db);
     await expectDbError(() => db.query(`update public.rule_versions set claim = 'Rewritten' where id = $1`, [id]), /immutable/);
     await expectDbError(() => db.query(`update public.rule_evidence set evidence_excerpt = 'Rewritten' where rule_version_id = $1`, [id]), /published rule version/);
+    await fresh(ctx.consultant as string, ctx.orgId);
 
     // Suspend with a reason: no longer live.
     await expectDbError(() => db.query(`select public.suspend_rule_version($1, (select version from public.rule_versions where id = $1), '')`, [id]), /say why/);
@@ -300,6 +305,9 @@ describe("SRC-03 Review workbench and publication gate", () => {
     expect((await db.query<{ live: boolean }>(`select app.rule_version_is_live($1) as live`, [id])).rows[0].live).toBe(false);
     // A suspended version can't be made live again by SQL.
     await fresh(ctx.consultant as string, ctx.orgId);
+    expect((await db.query(`update public.rule_versions set status = 'published' where id = $1`, [id])).affectedRows ?? 0).toBe(0);
+    expect(await version(id)).toMatchObject({ status: "suspended" });
+    await asServiceRole(db);
     await expectDbError(() => db.query(`update public.rule_versions set status = 'published' where id = $1`, [id]), /approval_required/);
   });
 
@@ -320,15 +328,16 @@ describe("SRC-03 Review workbench and publication gate", () => {
            values ($1, $2, $3, 'approved', now(), 1)`,
           [ctx.orgId, id, ctx.consultantMembership],
         ),
-      /only in Source review/,
+      /permission denied/,
     );
-    await expectDbError(() => db.query(`update public.rule_versions set status = 'published' where id = $1`, [id]), /publication blocked/);
-    await expectDbError(() => db.query(`update public.rule_versions set status = 'approved' where id = $1`, [id]), /publication blocked/);
-    await expectDbError(() => db.query(`insert into public.rule_versions (definition_id, version_number, claim, status) select definition_id, 50, 'x', 'published' from public.rule_versions where id = $1`, [id]), /status_requires_prior_review/);
+    // Firm rule rows have no direct staff write (20261030235000): the updates match no row.
+    expect((await db.query(`update public.rule_versions set status = 'published' where id = $1`, [id])).affectedRows ?? 0).toBe(0);
+    expect((await db.query(`update public.rule_versions set status = 'approved' where id = $1`, [id])).affectedRows ?? 0).toBe(0);
+    await expectDbError(() => db.query(`insert into public.rule_versions (definition_id, version_number, claim, status) select definition_id, 50, 'x', 'published' from public.rule_versions where id = $1`, [id]), /status_requires_prior_review|row-level security/);
     // An attestation can't be forged either.
     await expectDbError(
       () => db.query(`update public.rule_evidence set page_attested_on = current_date, page_attested_at = now(), page_attested_by_membership_id = $2 where rule_version_id = $1`, [id, ctx.consultantMembership]),
-      /attestation is recorded only/,
+      /permission denied/,
     );
 
     // A rejected review on file plus a direct publish: still refused.
@@ -338,7 +347,7 @@ describe("SRC-03 Review workbench and publication gate", () => {
           `update public.professional_reviews set decision = 'approved' where rule_version_id = $1`,
           [id],
         ).then(() => db.query(`update public.rule_versions set status = 'published' where id = $1`, [id])),
-      /publication blocked|only in Source review/,
+      /permission denied/,
     );
 
     // Jobs and imports run as the service role: refused too.

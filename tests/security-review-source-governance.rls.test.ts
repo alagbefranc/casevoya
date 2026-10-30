@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadOfficialClaims } from "../scripts/ops/load-official-claims.mjs";
-import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
+import { asMaintenance, asServiceRole, asUser, asUserInternal, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 import { serverCapture } from "./helpers/server-capture";
 
 /**
@@ -95,9 +95,10 @@ async function disagreeingClaims() {
   return { left: await evidenceFor(key), right: await evidenceFor(otherKey) };
 }
 
-async function conflictOpen(definitionId: string) {
+/** Whether the claim is blocked for orgId (null: platform-wide conflicts only). */
+async function conflictOpen(definitionId: string, orgId: string | null = null) {
   await asMaintenance(db);
-  return (await rows<{ open: boolean }>(`select app.claim_conflict_open($1) as open`, [definitionId]))[0].open;
+  return (await rows<{ open: boolean }>(`select app.claim_conflict_open_for($1, $2) as open`, [definitionId, orgId]))[0].open;
 }
 
 async function platformAdmin(role: "owner" | "operator" | "viewer") {
@@ -120,7 +121,7 @@ describe("source conflicts on official claims", () => {
     ))[0].id;
     await asMaintenance(db);
     expect((await rows<{ org: string }>(`select opened_organization_id as org from public.source_conflicts where id = $1`, [conflict]))[0].org).toBe(a.orgId);
-    expect(await conflictOpen(claims.left.definition_id)).toBe(true);
+    expect(await conflictOpen(claims.left.definition_id, a.orgId)).toBe(true);
 
     // Firm B: licensed, fresh step-up, but it did not open this review.
     await as(b.consultant, b.orgId, 0);
@@ -133,14 +134,14 @@ describe("source conflicts on official claims", () => {
       () => db.query(`select public.resolve_source_conflict($1, 'Synthetic: closing another firm''s review.')`, [conflict]),
       /only the firm that opened this review/,
     );
-    expect(await conflictOpen(claims.left.definition_id)).toBe(true);
+    expect(await conflictOpen(claims.left.definition_id, a.orgId)).toBe(true);
 
     // Firm A, the opener: still needs a fresh step-up, then resolves it.
     await as(a.consultant, a.orgId);
     await expectDbError(() => db.query(`select public.resolve_source_conflict($1, 'Synthetic: resolved.')`, [conflict]), /step-up/);
     await as(a.consultant, a.orgId, 2);
     await db.query(`select public.resolve_source_conflict($1, 'Synthetic: the second page does not apply.')`, [conflict]);
-    expect(await conflictOpen(claims.left.definition_id)).toBe(false);
+    expect(await conflictOpen(claims.left.definition_id, a.orgId)).toBe(false);
   });
 
   it("a conflict the re-check opened is resolved only by a platform owner/operator at a fresh step-up", async () => {
@@ -223,13 +224,15 @@ describe("page captures on claims and official requirements", () => {
     const f = await firm();
     const other = await firm();
 
-    // A row the user writes directly is never marked as a server capture, and the mark can't be set later.
+    // A signed-in user writes no source or snapshot directly (20261030235000).
+    const sourceSql = `insert into public.official_sources (organization_id, publisher, canonical_url, allowed_host, jurisdiction, content_kind)
+       values ($1, 'Synthetic publisher', $2, 'www.canada.ca', 'CA', 'program_guidance') returning id`;
     await as(f.owner, f.orgId);
-    const source = (await rows<{ id: string }>(
-      `insert into public.official_sources (organization_id, publisher, canonical_url, allowed_host, jurisdiction, content_kind)
-       values ($1, 'Synthetic publisher', $2, 'www.canada.ca', 'CA', 'program_guidance') returning id`,
-      [f.orgId, PAGE.split("#")[0]],
-    ))[0].id;
+    await expectDbError(() => rows(sourceSql, [f.orgId, PAGE.split("#")[0]]), /row-level security/);
+    // A row stored with a user's request claims (not the capture service) is never marked as a
+    // server capture, and the mark can't be set later.
+    await asUserInternal(db, { userId: f.owner, aal: "aal2", orgId: f.orgId, totpAgeSeconds: 3600 });
+    const source = (await rows<{ id: string }>(sourceSql, [f.orgId, PAGE.split("#")[0]]))[0].id;
     const written = (await rows<{ id: string; server_captured: boolean }>(
       `insert into public.source_snapshots (organization_id, source_id, snapshot_number, final_url, publisher, retrieved_at, content_hash, retrieval_result, server_captured)
        values ($1, $2, 1, $3, 'Synthetic publisher', now(), $4, 'success', true) returning id, server_captured`,
@@ -237,6 +240,8 @@ describe("page captures on claims and official requirements", () => {
     ))[0];
     expect(written.server_captured).toBe(false);
     await db.query(`update public.source_snapshots set server_captured = true where id = $1`, [written.id]);
+    await as(f.owner, f.orgId);
+    await expectDbError(() => db.query(`update public.source_snapshots set server_captured = true where id = $1`, [written.id]), /permission denied/);
     await asMaintenance(db);
     expect((await rows<{ s: boolean }>(`select server_captured as s from public.source_snapshots where id = $1`, [written.id]))[0].s).toBe(false);
 
