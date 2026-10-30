@@ -152,6 +152,9 @@ function invoiceEvent(orgId: string, type: "invoice.paid" | "invoice.payment_fai
     customer: ids.customer,
     invoice: {
       id: ids.invoice,
+      subscription: ids.subscription,
+      billing_reason: "subscription_cycle",
+      amount_remaining: type === "invoice.paid" ? 0 : 32400,
       number: "CV-0001",
       status: type === "invoice.paid" ? "paid" : "open",
       amount_due: 32400,
@@ -356,7 +359,7 @@ describe("Stripe billing events", () => {
         livemode: false,
         organization_id: ctx.orgId,
         customer: stripeIds(ctx.orgId).customer,
-        subscription: { id: stripeIds(ctx.orgId).subscription, plan: "firm", interval: "year", extra_seats: 0 },
+        subscription: { id: stripeIds(ctx.orgId).subscription, plan: "firm", interval: "year", extra_seats: 0, payment_status: "paid" },
       }),
     ).toEqual({ outcome: "applied", status: "active" });
     await as(ctx.owner, ctx.orgId);

@@ -201,10 +201,13 @@ describe("Stripe billing webhook", () => {
       customer: "cus_1SyntheticFirm01",
       invoice: {
         id: "in_1SyntheticInvoice01",
+        subscription: "sub_1SyntheticSub01",
+        billing_reason: null,
         number: "CV-0007",
         status: "open",
         amount_due: 34900,
         amount_paid: 0,
+        amount_remaining: 0,
         currency: "cad",
         period_start: iso(1_792_000_000),
         period_end: iso(1_794_600_000),
@@ -221,6 +224,54 @@ describe("Stripe billing webhook", () => {
     // An invoice with an http (not https) link keeps none.
     const plain = billingEventSummary(event("invoice.paid", invoiceObject({ hosted_invoice_url: "http://example.test/x", invoice_pdf: null })) as unknown as Stripe.Event);
     expect(plain?.invoice).toMatchObject({ hosted_invoice_url: null, pdf_url: null });
+  });
+
+  it("carries the invoice's subscription, billing reason and amounts (security review B-1)", () => {
+    const proration = billingEventSummary(
+      event("invoice.paid", invoiceObject({ billing_reason: "subscription_update", amount_due: 0, amount_paid: 0, amount_remaining: 0 })) as unknown as Stripe.Event,
+    );
+    expect(proration?.invoice).toMatchObject({ subscription: "sub_1SyntheticSub01", billing_reason: "subscription_update", amount_paid: 0, amount_remaining: 0 });
+    const expanded = billingEventSummary(
+      event(
+        "invoice.payment_failed",
+        invoiceObject({
+          status: "open",
+          amount_paid: 0,
+          amount_remaining: 34900,
+          billing_reason: "subscription_cycle",
+          parent: { type: "subscription_details", subscription_details: { subscription: { id: "sub_1SyntheticSub02", object: "subscription" }, metadata: { casevoya_organization_id: ORG } } },
+        }),
+      ) as unknown as Stripe.Event,
+    );
+    expect(expanded?.invoice).toMatchObject({ subscription: "sub_1SyntheticSub02", billing_reason: "subscription_cycle", amount_remaining: 34900 });
+    // A one-off invoice names no subscription; a malformed id is dropped.
+    const oneOff = billingEventSummary(event("invoice.paid", invoiceObject({ parent: null })) as unknown as Stripe.Event);
+    expect(oneOff?.invoice?.subscription).toBeNull();
+    const bogus = billingEventSummary(
+      event("invoice.paid", invoiceObject({ parent: { type: "subscription_details", subscription_details: { subscription: "sub_'; --", metadata: {} } } })) as unknown as Stripe.Event,
+    );
+    expect(bogus?.invoice?.subscription).toBeNull();
+  });
+
+  it("summarises Checkout payment status and the async payment events (security review B-2)", () => {
+    const session = (payment: string) => ({
+      id: "cs_1Synthetic",
+      object: "checkout.session",
+      mode: "subscription",
+      status: "complete",
+      payment_status: payment,
+      customer: "cus_1SyntheticFirm01",
+      subscription: "sub_1SyntheticSub01",
+      metadata: { casevoya_organization_id: ORG, casevoya_plan: "solo", casevoya_interval: "month", casevoya_extra_seats: "0" },
+    });
+    expect(billingEventSummary(event("checkout.session.completed", session("unpaid")) as unknown as Stripe.Event)?.subscription).toMatchObject({ id: "sub_1SyntheticSub01", payment_status: "unpaid" });
+    for (const type of ["checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed"]) {
+      const summary = billingEventSummary(event(type, session(type.endsWith("succeeded") ? "paid" : "unpaid")) as unknown as Stripe.Event);
+      expect(summary).toMatchObject({ type, organization_id: ORG, customer: "cus_1SyntheticFirm01", subscription: { id: "sub_1SyntheticSub01", plan: "solo" } });
+      expect(summary?.subscription?.payment_status).toBe(type.endsWith("succeeded") ? "paid" : "unpaid");
+    }
+    // An expired session is not a billing event we apply.
+    expect(billingEventSummary(event("checkout.session.expired", session("unpaid")) as unknown as Stripe.Event)).toBeNull();
   });
 });
 

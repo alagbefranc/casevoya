@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { stripeLive, stripeServer, stripeServerForMode } from "@/lib/stripe/server";
 import { isUuid } from "@/lib/tenant/context";
 import { accountCreateParams, ACCOUNT_SESSION_COMPONENTS, retrieveAccountStatus, syncStatusArgs } from "@/modules/finance/stripe-account";
@@ -32,7 +33,28 @@ async function staffClient(organizationId: string) {
   const supabase = await createClient({ organizationId });
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) return { error: "Sign in first." as const };
-  return { supabase, email: typeof claims.claims.email === "string" ? claims.claims.email : null };
+  return { supabase, userId: String(claims.claims.sub), email: typeof claims.claims.email === "string" ? claims.claims.email : null };
+}
+
+/**
+ * Releasing or linking a refund reservation runs on the service client, bound to the user who made
+ * the reservation (the database refuses these from a signed-in session). Best effort: an unreleased
+ * hold expires after 15 minutes, and recording the refund consumes an unlinked one.
+ */
+async function releaseReservation(reservationId: string, actor: string): Promise<void> {
+  try {
+    await createServiceClient().rpc("service_release_invoice_refund_reservation", { p_reservation_id: reservationId, p_actor: actor });
+  } catch {
+    // The hold expires on its own.
+  }
+}
+
+async function linkReservation(reservationId: string, actor: string, refundId: string): Promise<void> {
+  try {
+    await createServiceClient().rpc("service_link_invoice_refund_reservation", { p_reservation_id: reservationId, p_actor: actor, p_refund_id: refundId });
+  } catch {
+    // Recording the refund consumes the hold.
+  }
 }
 
 export async function createInvoice(
@@ -112,7 +134,7 @@ export async function refundPayment(
   }
   const session = await staffClient(input.organizationId);
   if ("error" in session) return { error: session.error ?? "Sign in first." };
-  return refundCardPayment(session.supabase, input.organizationId, { ...read.input, idempotencyKey: input.idempotencyKey });
+  return refundCardPayment(session.supabase, session.userId, input.organizationId, { ...read.input, idempotencyKey: input.idempotencyKey });
 }
 
 type StaffSupabase = Awaited<ReturnType<typeof createClient>>;
@@ -120,6 +142,7 @@ type StaffSupabase = Awaited<ReturnType<typeof createClient>>;
 /** The one card-refund path (Refund on the Payments tab, and a client credit's Refund to the card). */
 async function refundCardPayment(
   supabase: StaffSupabase,
+  actor: string,
   organizationId: string,
   input: { paymentId: string; amountCents: number; reason: string | null; idempotencyKey: string; creditId?: string },
 ): Promise<{ id: string } | { error: string }> {
@@ -166,11 +189,11 @@ async function refundCardPayment(
     );
     refundId = refund.id;
   } catch (error) {
-    if (stripeRefusedRefund(error)) await supabase.rpc("release_invoice_refund_reservation", { p_reservation_id: reservationId });
+    if (stripeRefusedRefund(error)) await releaseReservation(reservationId, actor);
     return { error: stripeRefundError(error) };
   }
   // Best effort: if this fails, recording the refund (here or from Stripe's event) still consumes the hold.
-  await supabase.rpc("link_invoice_refund_reservation", { p_reservation_id: reservationId, p_refund_id: refundId });
+  await linkReservation(reservationId, actor, refundId);
   const recorded = await supabase.rpc("record_invoice_refund", {
     p_payment_id: input.paymentId,
     p_refund_id: refundId,
@@ -204,7 +227,7 @@ export async function moveClientCredit(
   }
   const session = await staffClient(input.organizationId);
   if ("error" in session) return { error: session.error ?? "Sign in first." };
-  const { supabase } = session;
+  const { supabase, userId } = session;
   const credit = read.input;
   if (credit.mode === "apply") {
     const { error } = await supabase.rpc("apply_client_credit", {
@@ -232,7 +255,7 @@ export async function moveClientCredit(
   if (typeof row.payment_id !== "string") return { error: "No card payment on this invoice can take a refund. Record a bank refund instead." };
   if (credit.amountCents > Number(row.available ?? 0)) return { error: creditError("amount is more than the credit available") };
   if (credit.amountCents > Number(row.refundable ?? 0)) return { error: refundError("refund exceeds the amount received") };
-  const refunded = await refundCardPayment(supabase, input.organizationId, {
+  const refunded = await refundCardPayment(supabase, userId, input.organizationId, {
     paymentId: row.payment_id,
     amountCents: credit.amountCents,
     reason: "requested_by_customer",

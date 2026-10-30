@@ -5875,6 +5875,7 @@ export type Database = {
           currency: string
           id: string
           invoice_id: string
+          last_event_created: number | null
           last_event_id: string | null
           livemode: boolean
           organization_id: string
@@ -5898,6 +5899,7 @@ export type Database = {
           currency: string
           id?: string
           invoice_id: string
+          last_event_created?: number | null
           last_event_id?: string | null
           livemode?: boolean
           organization_id: string
@@ -5921,6 +5923,7 @@ export type Database = {
           currency?: string
           id?: string
           invoice_id?: string
+          last_event_created?: number | null
           last_event_id?: string | null
           livemode?: boolean
           organization_id?: string
@@ -8813,6 +8816,7 @@ export type Database = {
           end_arrangement_chosen_by: string | null
           end_transfer_id: string | null
           extra_seats: number
+          last_stripe_event_created: number | null
           last_webhook_event_id: string | null
           latest_invoice_status: string | null
           latest_invoice_url: string | null
@@ -8844,6 +8848,7 @@ export type Database = {
           end_arrangement_chosen_by?: string | null
           end_transfer_id?: string | null
           extra_seats?: number
+          last_stripe_event_created?: number | null
           last_webhook_event_id?: string | null
           latest_invoice_status?: string | null
           latest_invoice_url?: string | null
@@ -8875,6 +8880,7 @@ export type Database = {
           end_arrangement_chosen_by?: string | null
           end_transfer_id?: string | null
           extra_seats?: number
+          last_stripe_event_created?: number | null
           last_webhook_event_id?: string | null
           latest_invoice_status?: string | null
           latest_invoice_url?: string | null
@@ -12697,6 +12703,7 @@ export type Database = {
           status: string
           stripe_created_at: string | null
           stripe_invoice_id: string
+          stripe_subscription_id: string | null
           updated_at: string
           version: number
         }
@@ -12716,6 +12723,7 @@ export type Database = {
           status: string
           stripe_created_at?: string | null
           stripe_invoice_id: string
+          stripe_subscription_id?: string | null
           updated_at?: string
           version?: number
         }
@@ -12735,6 +12743,7 @@ export type Database = {
           status?: string
           stripe_created_at?: string | null
           stripe_invoice_id?: string
+          stripe_subscription_id?: string | null
           updated_at?: string
           version?: number
         }
@@ -15922,6 +15931,28 @@ export type Database = {
           p_period_end: string | null
         }
         Returns: undefined
+      }
+      service_release_invoice_refund_reservation: {
+        Args: { p_actor: string; p_reservation_id: string }
+        Returns: boolean
+      }
+      service_link_invoice_refund_reservation: {
+        Args: { p_actor: string; p_refund_id: string; p_reservation_id: string }
+        Returns: undefined
+      }
+      service_record_dispute_evidence: {
+        Args: {
+          p_actor: string
+          p_content_type: string
+          p_dispute_id: string
+          p_explanation: string
+          p_file_name: string
+          p_livemode: boolean
+          p_size_bytes: number
+          p_stripe_file_id: string
+          p_submitted: boolean
+        }
+        Returns: string
       }
       choose_subscription_end_arrangement: {
         Args: {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { stripeLive, stripeServer } from "@/lib/stripe/server";
 import { isUuid } from "@/lib/tenant/context";
 import { EVIDENCE_MAX_BYTES } from "@/modules/finance/credits-present";
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
   const supabase = await createClient({ organizationId: org });
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) return refuse("Sign in first.", 401);
+  const actor = String(claims.claims.sub);
   const stripe = stripeServer();
   if (!stripe) return refuse("Stripe isn’t configured for this environment. Nothing was sent to Stripe.", 503);
 
@@ -68,9 +70,15 @@ export async function POST(request: Request) {
         );
         return { livemode: updated.livemode };
       },
+      // Recorded by the server only (the database refuses it from a signed-in session), for the
+      // user who passed dispute_evidence_context above.
       record: async (args) => {
-        const { error } = await supabase.rpc("record_dispute_evidence", args);
-        return { error: error?.message ?? null };
+        try {
+          const { error } = await createServiceClient().rpc("service_record_dispute_evidence", { ...args, p_actor: actor });
+          return { error: error?.message ?? null };
+        } catch {
+          return { error: "evidence was not recorded" };
+        }
       },
     },
   );

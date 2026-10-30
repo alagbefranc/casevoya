@@ -94,14 +94,15 @@ async function reserve(f: Firm, paymentId: string, amount: number, idempotencyKe
   return (await db.query<{ id: string }>(`select public.reserve_invoice_refund($1, $2, 'cad', false, $3) as id`, [paymentId, amount, idempotencyKey])).rows[0].id;
 }
 
+/** The server releases or links a reservation for the user who made it (20261031013000). */
 async function release(f: Firm, reservationId: string) {
-  await asStepUp(f);
-  await db.query(`select public.release_invoice_refund_reservation($1)`, [reservationId]);
+  await asServiceRole(db);
+  await db.query(`select public.service_release_invoice_refund_reservation($1, $2)`, [reservationId, f.owner]);
 }
 
 async function link(f: Firm, reservationId: string, refund: string) {
-  await asStepUp(f);
-  await db.query(`select public.link_invoice_refund_reservation($1, $2)`, [reservationId, refund]);
+  await asServiceRole(db);
+  await db.query(`select public.service_link_invoice_refund_reservation($1, $2, $3)`, [reservationId, f.owner, refund]);
 }
 
 async function record(f: Firm, paymentId: string, refund: string, amount: number, idempotencyKey: string | null) {
@@ -264,7 +265,7 @@ describe("card refund reservations", () => {
 
     await asUser(db, { userId: f.owner, aal: "aal2", orgId: f.orgId, totpAgeSeconds: 3_600 });
     await expectDbError(() => db.query(`select public.reserve_invoice_refund($1, 1000, 'cad', false, $2)`, [paymentId, key()]), /step-up is required/);
-    await expectDbError(() => db.query(`select public.release_invoice_refund_reservation($1)`, [held]), /step-up is required/);
+    await expectDbError(() => db.query(`select public.release_invoice_refund_reservation($1)`, [held]), /permission denied/);
 
     await asUser(db, { userId: f.client, aal: "aal1", orgId: f.orgId });
     await expectDbError(() => db.query(`select public.reserve_invoice_refund($1, 1000, 'cad', false, $2)`, [paymentId, key()]), /billing access denied|permission denied/);
@@ -272,5 +273,35 @@ describe("card refund reservations", () => {
     await expectDbError(() => db.query(`select public.link_invoice_refund_reservation($1, $2)`, [held, refundId()]), /billing access denied|permission denied/);
     await expectDbError(() => db.query(`select id from public.invoice_refund_reservations`), /permission denied/);
     expect((await reservation(held)).status).toBe("pending");
+  });
+
+  it("is released or linked only by the server, for the user who made it (security review R-1)", async () => {
+    const f = await firm();
+    const { paymentId } = await paidByCard(f, 40_000);
+    const held = await reserve(f, paymentId, 40_000, key());
+
+    // A signed-in billing user with a fresh step-up cannot free or link the hold while Stripe is called.
+    await asStepUp(f);
+    await expectDbError(() => db.query(`select public.release_invoice_refund_reservation($1)`, [held]), /permission denied/);
+    await expectDbError(() => db.query(`select app.release_invoice_refund_reservation($1)`, [held]), /permission denied/);
+    await expectDbError(() => db.query(`select public.link_invoice_refund_reservation($1, $2)`, [held, refundId()]), /permission denied/);
+    await expectDbError(() => db.query(`select public.service_release_invoice_refund_reservation($1, $2)`, [held, f.owner]), /permission denied/);
+    await expectDbError(() => db.query(`select public.service_link_invoice_refund_reservation($1, $2, $3)`, [held, f.owner, refundId()]), /permission denied/);
+    await expectDbError(() => db.query(`select public.reserve_invoice_refund($1, 1, 'cad', false, $2)`, [paymentId, key()]), /exceeds the amount received/);
+    expect((await reservation(held)).status).toBe("pending");
+
+    // The server, for another user: refused.
+    await asServiceRole(db);
+    await expectDbError(() => db.query(`select public.service_release_invoice_refund_reservation($1, $2)`, [held, f.client]), /billing access denied/);
+    await expectDbError(() => db.query(`select public.service_link_invoice_refund_reservation($1, $2, $3)`, [held, f.client, refundId()]), /billing access denied/);
+    await expectDbError(() => db.query(`select public.service_link_invoice_refund_reservation($1, $2, 'not-a-refund')`, [held, f.owner]), /refund id is invalid/);
+    expect((await reservation(held)).status).toBe("pending");
+
+    // The server, for the user who reserved: released after a refusal.
+    await asServiceRole(db);
+    const released = await db.query<{ ok: boolean }>(`select public.service_release_invoice_refund_reservation($1, $2) as ok`, [held, f.owner]);
+    expect(released.rows[0].ok).toBe(true);
+    expect((await reservation(held)).status).toBe("released");
+    expect(await reservable(paymentId)).toBe(40_000);
   });
 });

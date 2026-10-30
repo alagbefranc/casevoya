@@ -44,6 +44,17 @@ vi.mock("@/lib/supabase/server", () => ({
     },
   }),
 }));
+// Release and link run on the service client, bound to the signed-in user (security review R-1).
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => ({
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      state.calls.push({ name: `service:${name}`, args });
+      if (name === "service_link_invoice_refund_reservation") return { data: null, error: null };
+      if (name === "service_release_invoice_refund_reservation") return { data: true, error: null };
+      return { data: null, error: { message: `unexpected ${name}` } };
+    },
+  }),
+}));
 vi.mock("@/lib/stripe/server", () => ({
   stripeServer: () => state.stripe,
   stripeServerForMode: () => state.stripe,
@@ -77,12 +88,12 @@ beforeEach(() => {
 describe("refundPayment reserves before Stripe", () => {
   it("reserves, calls Stripe with the same key, links and records", async () => {
     expect(await refund()).toEqual({ id: RECORDED });
-    expect(names()).toEqual(["invoice_refund_context", "reserve_invoice_refund", "link_invoice_refund_reservation", "record_invoice_refund"]);
+    expect(names()).toEqual(["invoice_refund_context", "reserve_invoice_refund", "service:service_link_invoice_refund_reservation", "record_invoice_refund"]);
     expect(state.calls[1].args).toEqual({ p_payment_id: PAYMENT, p_amount_cents: 10_000, p_currency: "CAD", p_livemode: false, p_idempotency_key: KEY });
     expect(state.stripeCalls).toHaveLength(1);
     expect(state.stripeCalls[0].options).toEqual({ stripeAccount: "acct_1SynAccount01", idempotencyKey: `casevoya-refund-${KEY}` });
     expect(state.stripeCalls[0].params).toMatchObject({ amount: 10_000, metadata: { casevoya_refund_reservation_id: RESERVATION } });
-    expect(state.calls[2].args).toEqual({ p_reservation_id: RESERVATION, p_refund_id: "re_3SynRefund01" });
+    expect(state.calls[2].args).toEqual({ p_reservation_id: RESERVATION, p_actor: "owner-1", p_refund_id: "re_3SynRefund01" });
     expect(state.calls[3].args).toMatchObject({ p_refund_id: "re_3SynRefund01", p_amount_cents: 10_000, p_idempotency_key: KEY });
   });
 
@@ -98,8 +109,8 @@ describe("refundPayment reserves before Stripe", () => {
   it("releases the reservation when Stripe refused, and keeps it when the answer is unknown", async () => {
     state.stripe = fakeStripe(Object.assign(new Error("declined"), { statusCode: 400, type: "StripeInvalidRequestError", code: "amount_too_large" }));
     expect(await refund()).toEqual({ error: "That’s more than Stripe can refund on this payment." });
-    expect(names()).toEqual(["invoice_refund_context", "reserve_invoice_refund", "release_invoice_refund_reservation"]);
-    expect(state.calls[2].args).toEqual({ p_reservation_id: RESERVATION });
+    expect(names()).toEqual(["invoice_refund_context", "reserve_invoice_refund", "service:service_release_invoice_refund_reservation"]);
+    expect(state.calls[2].args).toEqual({ p_reservation_id: RESERVATION, p_actor: "owner-1" });
 
     for (const failure of [
       Object.assign(new Error("network"), { type: "StripeConnectionError" }),
@@ -123,7 +134,7 @@ describe("refundPayment reserves before Stripe", () => {
       "client_credit_refund_context",
       "invoice_refund_context",
       "reserve_client_credit_refund",
-      "link_invoice_refund_reservation",
+      "service:service_link_invoice_refund_reservation",
       "record_invoice_refund",
       "link_client_credit_refund",
     ]);
