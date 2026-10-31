@@ -73,6 +73,8 @@ Subjects and preheaders must not reveal a program, document name, amount or deci
 | EX09 | Refund started | machine_draft | — | — | No (not_approved) |
 | EX10 | Refund complete | machine_draft | — | — | No (not_approved) |
 | EX20 | Refund didn’t go through | machine_draft | — | — | No (not_approved) |
+| EX21 | Two-step reset requested | machine_draft | — | — | No (not_approved) |
+| EX22 | Two-step reset decided | machine_draft | — | — | No (not_approved) |
 | EX19 | New notice (announcement) | machine_draft | — | — | No (not_approved) |
 | EX18 | New enquiry (staff) | machine_draft | — | — | No (not_approved) |
 | EX17 | Consultant changed | machine_draft | — | — | No (not_approved) |
@@ -652,6 +654,38 @@ Status `machine_draft` · drafted 2026-10-25 · English hash `sha256:34b3867edc5
 | `body` | The refund from {firm_name} didn’t go through, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way. | Le remboursement de {firm_name} n’a pas abouti; l’argent ne vous est donc pas parvenu. Veuillez ne pas tenir compte de notre courriel précédent au sujet de ce remboursement. {firm_name} communiquera avec vous pour le faire autrement. | Hand draft. EX20 hand draft (bug #215 refund correction). Not reviewed. Keep {firm_name} |
 | `body_card` | The refund from {firm_name} didn’t go through because the card it was sent to is no longer active, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way. | Le remboursement de {firm_name} n’a pas abouti parce que la carte visée n’est plus active; l’argent ne vous est donc pas parvenu. Veuillez ne pas tenir compte de notre courriel précédent au sujet de ce remboursement. {firm_name} communiquera avec vous pour le faire autrement. | Hand draft. EX20 hand draft (bug #215 refund correction). Not reviewed. Keep {firm_name} |
 | `cta` | View payments | Afficher les paiements | Hand draft. EX20 hand draft (bug #215 refund correction). Not reviewed. |
+
+## EX21: Two-step reset requested
+
+A staff member who lost their two-step device asks for a reset from /recovery (public.request_mfa_reset; outbox mfa_reset.requested, template mfa_reset_requested), to the firm's other active owners, never the person who asked. Not sent when the person is the firm's only owner (Casevoya's admin queue decides). Name only; never what they wrote. Audience: firm owner. [French preview](../email/previews/fr/EX21.html)
+
+Status `machine_draft` · drafted 2026-10-30 · English hash `sha256:3c9045ff46fb…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject` | {requester} asked to reset two-step sign-in | {requester} a demandé de réinitialiser la connexion en deux étapes | Hand draft. Keep {requester} |
+| `subject_anon` | Someone at your firm asked to reset two-step sign-in | Une personne de votre cabinet a demandé de réinitialiser la connexion en deux étapes | Hand draft |
+| `preheader` | Confirm it’s them before you approve. The request expires in 24 hours. | Confirmez que c’est bien cette personne avant d’approuver. La demande expire dans 24 heures. | Hand draft |
+| `heading` | A two-step reset needs your decision | Une réinitialisation en deux étapes attend votre décision | Hand draft |
+| `body` | {requester} at {firm_name} lost their two-step device and asked to reset it. Confirm it’s really them, on a video call or in person, then approve or deny it in Casevoya. If you approve, they sign in with their password and set up two-step again. The request expires 24 hours after it was sent. | {requester}, chez {firm_name}, a perdu son appareil de vérification en deux étapes et a demandé de la réinitialiser. Confirmez que c’est vraiment cette personne, par appel vidéo ou en personne, puis approuvez ou refusez la demande dans Casevoya. Si vous approuvez, elle se connecte avec son mot de passe et configure de nouveau la vérification en deux étapes. La demande expire 24 heures après son envoi. | Hand draft. Keep {firm_name}, {requester} |
+| `body_anon` | Someone at {firm_name} lost their two-step device and asked to reset it. Confirm it’s really them, on a video call or in person, then approve or deny it in Casevoya. If you approve, they sign in with their password and set up two-step again. The request expires 24 hours after it was sent. | Une personne de {firm_name} a perdu son appareil de vérification en deux étapes et a demandé de la réinitialiser. Confirmez que c’est vraiment cette personne, par appel vidéo ou en personne, puis approuvez ou refusez la demande dans Casevoya. Si vous approuvez, elle se connecte avec son mot de passe et configure de nouveau la vérification en deux étapes. La demande expire 24 heures après son envoi. | Hand draft. Keep {firm_name} |
+| `cta` | Review the request | Examiner la demande | Hand draft |
+
+## EX22: Two-step reset decided
+
+A firm owner or Casevoya support approves or denies a two-step reset request (public.decide_mfa_reset / platform_decide_mfa_reset; outbox mfa_reset.decided, template mfa_reset_decided), to the person who asked. Expired requests send nothing. Audience: staff. [French preview](../email/previews/fr/EX22.html)
+
+Status `machine_draft` · drafted 2026-10-30 · English hash `sha256:c11e1386184b…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject_approved` | Your two-step reset was approved | Votre réinitialisation en deux étapes a été approuvée | Hand draft |
+| `preheader_approved` | Sign in with your password, then set up two-step again. | Connectez-vous avec votre mot de passe, puis configurez de nouveau la vérification en deux étapes. | Hand draft |
+| `body_approved` | Your two-step sign-in at {firm_name} was reset and your old sessions were signed out. Sign in with your password, then set up two-step again with a new device. | Votre connexion en deux étapes chez {firm_name} a été réinitialisée et vos anciennes sessions ont été fermées. Connectez-vous avec votre mot de passe, puis configurez de nouveau la vérification en deux étapes avec un nouvel appareil. | Hand draft. Keep {firm_name} |
+| `subject_denied` | Your two-step reset was declined | Votre réinitialisation en deux étapes a été refusée | Hand draft |
+| `preheader_denied` | Nothing changed. Talk to your firm owner. | Rien n’a changé. Parlez au propriétaire de votre cabinet. | Hand draft |
+| `body_denied` | Your request to reset two-step sign-in at {firm_name} was declined, so nothing changed. If you still can’t sign in, talk to your firm owner, or send a new request from the sign-in page. | Votre demande de réinitialisation de la connexion en deux étapes chez {firm_name} a été refusée; rien n’a donc changé. Si vous ne pouvez toujours pas vous connecter, parlez au propriétaire de votre cabinet ou envoyez une nouvelle demande depuis la page de connexion. | Hand draft. Keep {firm_name} |
+| `cta` | Sign in | Se connecter | Hand draft |
 
 ## EX19: New notice (announcement)
 

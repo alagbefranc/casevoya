@@ -1894,6 +1894,98 @@
           "note": "EX20 hand draft (bug #215 refund correction). Not reviewed."
         }
       }
+    },
+    "EX21": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-30",
+      "sourceHash": "sha256:3c9045ff46fba1626ed91ccc70afbd42e4d705c6491c15aaf70d791ad7a25219",
+      "strings": {
+        "subject": {
+          "en": "{requester} asked to reset two-step sign-in",
+          "fr": "{requester} a demandé de réinitialiser la connexion en deux étapes",
+          "origin": "hand"
+        },
+        "subject_anon": {
+          "en": "Someone at your firm asked to reset two-step sign-in",
+          "fr": "Une personne de votre cabinet a demandé de réinitialiser la connexion en deux étapes",
+          "origin": "hand"
+        },
+        "preheader": {
+          "en": "Confirm it’s them before you approve. The request expires in 24 hours.",
+          "fr": "Confirmez que c’est bien cette personne avant d’approuver. La demande expire dans 24 heures.",
+          "origin": "hand"
+        },
+        "heading": {
+          "en": "A two-step reset needs your decision",
+          "fr": "Une réinitialisation en deux étapes attend votre décision",
+          "origin": "hand"
+        },
+        "body": {
+          "en": "{requester} at {firm_name} lost their two-step device and asked to reset it. Confirm it’s really them, on a video call or in person, then approve or deny it in Casevoya. If you approve, they sign in with their password and set up two-step again. The request expires 24 hours after it was sent.",
+          "fr": "{requester}, chez {firm_name}, a perdu son appareil de vérification en deux étapes et a demandé de la réinitialiser. Confirmez que c’est vraiment cette personne, par appel vidéo ou en personne, puis approuvez ou refusez la demande dans Casevoya. Si vous approuvez, elle se connecte avec son mot de passe et configure de nouveau la vérification en deux étapes. La demande expire 24 heures après son envoi.",
+          "origin": "hand"
+        },
+        "body_anon": {
+          "en": "Someone at {firm_name} lost their two-step device and asked to reset it. Confirm it’s really them, on a video call or in person, then approve or deny it in Casevoya. If you approve, they sign in with their password and set up two-step again. The request expires 24 hours after it was sent.",
+          "fr": "Une personne de {firm_name} a perdu son appareil de vérification en deux étapes et a demandé de la réinitialiser. Confirmez que c’est vraiment cette personne, par appel vidéo ou en personne, puis approuvez ou refusez la demande dans Casevoya. Si vous approuvez, elle se connecte avec son mot de passe et configure de nouveau la vérification en deux étapes. La demande expire 24 heures après son envoi.",
+          "origin": "hand"
+        },
+        "cta": {
+          "en": "Review the request",
+          "fr": "Examiner la demande",
+          "origin": "hand"
+        }
+      }
+    },
+    "EX22": {
+      "status": "machine_draft",
+      "reviewer": null,
+      "reviewedOn": null,
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "promptVersion": "fr-ca-2026-10-18.3",
+      "draftedOn": "2026-10-30",
+      "sourceHash": "sha256:c11e1386184b29afd11636f682795fe806b304f7614717e3add924d6247f0bb8",
+      "strings": {
+        "subject_approved": {
+          "en": "Your two-step reset was approved",
+          "fr": "Votre réinitialisation en deux étapes a été approuvée",
+          "origin": "hand"
+        },
+        "preheader_approved": {
+          "en": "Sign in with your password, then set up two-step again.",
+          "fr": "Connectez-vous avec votre mot de passe, puis configurez de nouveau la vérification en deux étapes.",
+          "origin": "hand"
+        },
+        "body_approved": {
+          "en": "Your two-step sign-in at {firm_name} was reset and your old sessions were signed out. Sign in with your password, then set up two-step again with a new device.",
+          "fr": "Votre connexion en deux étapes chez {firm_name} a été réinitialisée et vos anciennes sessions ont été fermées. Connectez-vous avec votre mot de passe, puis configurez de nouveau la vérification en deux étapes avec un nouvel appareil.",
+          "origin": "hand"
+        },
+        "subject_denied": {
+          "en": "Your two-step reset was declined",
+          "fr": "Votre réinitialisation en deux étapes a été refusée",
+          "origin": "hand"
+        },
+        "preheader_denied": {
+          "en": "Nothing changed. Talk to your firm owner.",
+          "fr": "Rien n’a changé. Parlez au propriétaire de votre cabinet.",
+          "origin": "hand"
+        },
+        "body_denied": {
+          "en": "Your request to reset two-step sign-in at {firm_name} was declined, so nothing changed. If you still can’t sign in, talk to your firm owner, or send a new request from the sign-in page.",
+          "fr": "Votre demande de réinitialisation de la connexion en deux étapes chez {firm_name} a été refusée; rien n’a donc changé. Si vous ne pouvez toujours pas vous connecter, parlez au propriétaire de votre cabinet ou envoyez une nouvelle demande depuis la page de connexion.",
+          "origin": "hand"
+        },
+        "cta": {
+          "en": "Sign in",
+          "fr": "Se connecter",
+          "origin": "hand"
+        }
+      }
     }
   }
 }

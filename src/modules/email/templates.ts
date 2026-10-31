@@ -86,7 +86,9 @@ type Wired =
   | "EX11"
   | "EM17"
   | "EM18a"
-  | "EM18c";
+  | "EM18c"
+  | "EX21"
+  | "EX22";
 
 /** Which approved design a queued delivery uses, from its database template and context. */
 export function designFor(context: Context): Wired | "generic" {
@@ -156,6 +158,11 @@ export function designFor(context: Context): Wired | "generic" {
       return "EM18c";
     case "billing_payment_failed":
       return "EM18a";
+    // Lost two-step device (20261102100100): Casevoya's own mail.
+    case "mfa_reset_requested":
+      return "EX21";
+    case "mfa_reset_decided":
+      return "EX22";
     default:
       return "generic";
   }
@@ -236,6 +243,10 @@ function contextFor(design: Wired, context: Context, firm: string): EmailContext
       };
     case "EM18a":
       return { firmName: firm, graceDays: minutesOf(context.grace_days) };
+    case "EX21":
+      return { firmName: firm, requesterName: textOf(context.requester) || null };
+    case "EX22":
+      return { firmName: firm, approved: context.status === "approved" };
     case "EM18c":
       return {
         firmName: firm,

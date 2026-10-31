@@ -35,4 +35,6 @@ export const TAGLINES: Partial<Record<TemplateId | "generic", string>> = {
   EX18: "New enquiries",
   EX19: "Notices",
   EX20: "Refunds",
+  EX21: "Sign-in security",
+  EX22: "Sign-in security",
 };

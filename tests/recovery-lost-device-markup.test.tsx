@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { RecoveryMarkup } from "@/components/port/markup/recovery";
+import { mfaResetSentCopy } from "@/modules/auth/mfa-reset-copy";
 
 function lostDeviceStep() {
   const html = renderToStaticMarkup(createElement(RecoveryMarkup));
@@ -25,5 +26,26 @@ describe("recovery: lost two-step device", () => {
     expect(step).toContain('data-go="5"');
     expect(step).toContain('data-novalidate=""');
     expect(step).not.toContain("required");
+  });
+
+  // Lost two-step device (20261102100100): the copy says what really happens.
+  it("says who confirms the request, the 24-hour expiry and the re-enrolment, for both routes", () => {
+    const step = lostDeviceStep();
+    expect(step).toContain("If you’re the firm’s only owner, Casevoya support confirms it instead");
+    expect(step).toContain("Your firm’s owners get an email and a notice in Casevoya");
+    expect(step).toContain("within 24 hours");
+    const html = renderToStaticMarkup(createElement(RecoveryMarkup));
+    const sent = html.slice(html.indexOf('<section data-step="5"'));
+    expect(sent).toContain('id="mr-lead"');
+    expect(sent).toContain("We emailed your firm’s other owners");
+    expect(sent).not.toContain("will get in touch");
+    const firm = mfaResetSentCopy("firm", false);
+    expect(firm.heading).toBe("Request sent");
+    expect(firm.lead).toMatch(/emailed your firm’s other owners.*24 hours.*set up two-step again/);
+    const platform = mfaResetSentCopy("platform", false);
+    expect(platform.lead).toMatch(/only owner, so Casevoya support reviews this request/);
+    expect(platform.lead).not.toContain("other owners");
+    expect(mfaResetSentCopy("firm", true)).toMatchObject({ heading: "Your request is waiting" });
+    expect(mfaResetSentCopy("firm", true).lead).toContain("already emailed");
   });
 });

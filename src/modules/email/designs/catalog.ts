@@ -52,6 +52,9 @@ export const PATHS = {
   sheetExports: "/sheet/exports",
   sheetLicence: "/sheet/licence",
   sheetPipeline: "/sheet/pipeline",
+  /** Lost two-step device: a firm owner approves or denies a staff member's reset request. */
+  twoStepResets: "/app/two-step-resets",
+  signIn: "/sign-in",
 } as const;
 
 type FirmContext = { firmName: string };
@@ -130,6 +133,10 @@ export type EmailContexts = {
   EX19: FirmContext;
   /** refundReason: Stripe's refund failure_reason code; only known codes become plain words. */
   EX20: FirmContext & { refundReason?: string | null };
+  /** Lost two-step device: requesterName is the staff member who asked (never what they wrote). */
+  EX21: FirmContext & { requesterName?: string | null };
+  /** approved: the reset was approved (else denied). */
+  EX22: FirmContext & { approved?: boolean };
 };
 
 export type TemplateId = keyof EmailContexts;
@@ -1368,6 +1375,64 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         cta: cta("View payments", appLink(origin, PATHS.portalPayments)),
         spot: "receipt",
         brand: firmBrand(context),
+      });
+    },
+  },
+  EX21: {
+    id: "EX21",
+    name: "Two-step reset requested",
+    audience: "firm owner",
+    brand: "platform",
+    trigger:
+      "A staff member who lost their two-step device asks for a reset from /recovery (public.request_mfa_reset; outbox mfa_reset.requested, template mfa_reset_requested), to the firm's other active owners, never the person who asked. Not sent when the person is the firm's only owner (Casevoya's admin queue decides). Name only; never what they wrote",
+    status: "wired",
+    ctaTarget: PATHS.twoStepResets,
+    mergeFields: ["firm_name", "requester"],
+    sample: { firmName: SYNTHETIC_FIRM, requesterName: "Sam Example" },
+    build(context, origin) {
+      const who = name(context.requesterName);
+      return copy({
+        subject: who ? `${who} asked to reset two-step sign-in` : "Someone at your firm asked to reset two-step sign-in",
+        preheader: "Confirm it’s them before you approve. The request expires in 24 hours.",
+        heading: "A two-step reset needs your decision",
+        body: `${who ? `${who} at ${firm(context)}` : `Someone at ${firm(context)}`} lost their two-step device and asked to reset it. Confirm it’s really them, on a video call or in person, then approve or deny it in Casevoya. If you approve, they sign in with their password and set up two-step again. The request expires 24 hours after it was sent.`,
+        cta: cta("Review the request", appLink(origin, PATHS.twoStepResets)),
+        spot: "reminder",
+        brand: PLATFORM,
+      });
+    },
+  },
+  EX22: {
+    id: "EX22",
+    name: "Two-step reset decided",
+    audience: "staff",
+    brand: "platform",
+    trigger:
+      "A firm owner or Casevoya support approves or denies a two-step reset request (public.decide_mfa_reset / platform_decide_mfa_reset; outbox mfa_reset.decided, template mfa_reset_decided), to the person who asked. Expired requests send nothing",
+    status: "wired",
+    ctaTarget: PATHS.signIn,
+    mergeFields: ["firm_name", "status"],
+    sample: { firmName: SYNTHETIC_FIRM, approved: true },
+    build(context, origin) {
+      if (context.approved) {
+        return copy({
+          subject: "Your two-step reset was approved",
+          preheader: "Sign in with your password, then set up two-step again.",
+          heading: "Your two-step reset was approved",
+          body: `Your two-step sign-in at ${firm(context)} was reset and your old sessions were signed out. Sign in with your password, then set up two-step again with a new device.`,
+          cta: cta("Sign in", appLink(origin, PATHS.signIn)),
+          spot: "reminder",
+          brand: PLATFORM,
+        });
+      }
+      return copy({
+        subject: "Your two-step reset was declined",
+        preheader: "Nothing changed. Talk to your firm owner.",
+        heading: "Your two-step reset was declined",
+        body: `Your request to reset two-step sign-in at ${firm(context)} was declined, so nothing changed. If you still can’t sign in, talk to your firm owner, or send a new request from the sign-in page.`,
+        cta: cta("Sign in", appLink(origin, PATHS.signIn)),
+        spot: "reminder",
+        brand: PLATFORM,
       });
     },
   },

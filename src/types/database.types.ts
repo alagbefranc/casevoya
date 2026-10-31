@@ -17250,6 +17250,41 @@ export type Database = {
         Args: { p_reason: string }
         Returns: string
       }
+      // Lost two-step device (20261102100100).
+      my_mfa_reset: { Args: never; Returns: Json }
+      firm_mfa_resets: {
+        Args: { p_org: string }
+        Returns: {
+          id: string
+          requester_user_id: string
+          requester_name: string | null
+          requester_email: string | null
+          requester_role: string
+          reason: string | null
+          status: string
+          created_at: string
+          expires_at: string
+          decided_at: string | null
+          decided_by_name: string | null
+          factors_cleared_at: string | null
+        }[]
+      }
+      decide_mfa_reset: {
+        Args: { p_id: string; p_approve: boolean; p_note?: string | null }
+        Returns: Json
+      }
+      complete_mfa_reset: {
+        Args: { p_id: string; p_factors_removed: number }
+        Returns: undefined
+      }
+      platform_mfa_resets: {
+        Args: { p_state?: string | null; p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
+      platform_decide_mfa_reset: {
+        Args: { p_id: string; p_approve: boolean; p_note: string | null; p_admin_user_id: string }
+        Returns: Json
+      }
       resend_portal_invitation: {
         Args: { p_invitation_id: string }
         Returns: Json

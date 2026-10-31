@@ -158,6 +158,8 @@ describe("approved email designs", () => {
       [{ template: "refund_started" }, "EX09"],
       [{ template: "refund_complete" }, "EX10"],
       [{ template: "refund_failed", refund_reason: "lost_or_stolen_card" }, "EX20"],
+      [{ template: "mfa_reset_requested", requester: "Sam Example" }, "EX21"],
+      [{ template: "mfa_reset_decided", status: "denied" }, "EX22"],
       [{ template: "payment_receipt" }, "EM11"],
       [{ template: "support_requested", minutes: 60 }, "EX11"],
       [{ template: "support_granted", approver: "Sam Example", minutes: 60, ends_at: "2026-10-22T15:40:00Z", time_zone: "America/Toronto" }, "EM17"],

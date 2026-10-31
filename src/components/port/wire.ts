@@ -32,6 +32,7 @@ import {
   verifyEmailCode,
   verifyTotpCode,
 } from "@/app/auth/port-actions";
+import { mfaResetSentCopy } from "@/modules/auth/mfa-reset-copy";
 import { toast2 } from "./kit";
 import { writeInviteBadge } from "./invite-badge";
 import { showSignupEmail } from "./signup-email";
@@ -597,7 +598,15 @@ export function usePortActions(page: string, token?: string) {
         return updatePassword(val(event.root, "np"), checked(event.root, "outall"));
       }
       if (page === "recovery" && el.dataset.go === "5") {
-        return requestMfaReset(val(event.root, "why"));
+        const result = await requestMfaReset(val(event.root, "why"));
+        if (result?.ok && result.route) {
+          const copy = mfaResetSentCopy(result.route, Boolean(result.existing));
+          const heading = event.root.querySelector<HTMLElement>("#mr-h");
+          const lead = event.root.querySelector<HTMLElement>("#mr-lead");
+          if (heading) heading.textContent = copy.heading;
+          if (lead) lead.textContent = copy.lead;
+        }
+        return result;
       }
       if (page === "setup" && el.hasAttribute("data-next") && event.step <= 7) {
         const panel = event.root.querySelector<HTMLElement>(`[data-step="${event.step}"]`);
