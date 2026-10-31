@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { decideMfaReset } from "./actions";
+import { firmTime as when } from "@/modules/auth/mfa-reset-time";
 
 const ERRORS: Record<string, string> = {
   input: "That request could not be read. Try again.",
@@ -14,10 +15,6 @@ const ERRORS: Record<string, string> = {
 
 const STATUS: Record<string, string> = { pending: "Waiting for you", approved: "Approved", denied: "Denied", expired: "Expired" };
 
-function when(value: string | null) {
-  if (!value) return "";
-  return new Intl.DateTimeFormat("en-CA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-}
 
 async function Resets({ searchParams }: { searchParams: PageProps<"/app/two-step-resets">["searchParams"] }) {
   const params = await searchParams;
@@ -30,11 +27,11 @@ async function Resets({ searchParams }: { searchParams: PageProps<"/app/two-step
   if (!claims?.claims?.sub) redirect("/sign-in?next=/app/two-step-resets");
   const { data: memberships } = await supabase
     .from("memberships")
-    .select("organization_id, organizations(display_name)")
+    .select("organization_id, organizations(display_name, timezone)")
     .eq("user_id", claims.claims.sub)
     .eq("role", "firm_owner")
     .eq("status", "active");
-  const firms = (memberships ?? []).map((m) => ({ id: m.organization_id, name: m.organizations?.display_name ?? "Firm" }));
+  const firms = (memberships ?? []).map((m) => ({ id: m.organization_id, name: m.organizations?.display_name ?? "Firm", timeZone: m.organizations?.timezone ?? "America/Toronto" }));
 
   const lists = await Promise.all(
     firms.map(async (f) => {
@@ -84,8 +81,8 @@ async function Resets({ searchParams }: { searchParams: PageProps<"/app/two-step
                   </span>
                 </p>
                 <p className="text-ink-secondary">
-                  {STATUS[r.status] ?? r.status} · asked {when(r.created_at)}
-                  {r.status === "pending" ? ` · expires ${when(r.expires_at)}` : r.decided_at ? ` · decided ${when(r.decided_at)}${r.decided_by_name ? ` by ${r.decided_by_name}` : ""}` : ""}
+                  {STATUS[r.status] ?? r.status} · asked {when(r.created_at, firm.timeZone)}
+                  {r.status === "pending" ? ` · expires ${when(r.expires_at, firm.timeZone)}` : r.decided_at ? ` · decided ${when(r.decided_at, firm.timeZone)}${r.decided_by_name ? ` by ${r.decided_by_name}` : ""}` : ""}
                 </p>
                 {r.reason ? <blockquote className="mt-2 border-l-2 border-line pl-3 whitespace-pre-wrap">{r.reason}</blockquote> : null}
                 {r.status === "pending" && r.requester_user_id !== claims.claims.sub ? (
