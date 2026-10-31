@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { safeNext } from "@/lib/auth/redirect";
+import { recordAuthAttempt, totpGate } from "@/lib/security/auth-attempts";
 import { createClient } from "@/lib/supabase/server";
 
 export type EnrollState =
@@ -47,6 +48,8 @@ export async function verifyTotp(formData: FormData) {
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) redirect(`/sign-in?next=${encodeURIComponent(mfaPath(next))}`);
+  const userId = claims.claims.sub;
+  if (!(await totpGate(userId)).allowed) redirect(mfaPath(next, "rate_limited"));
 
   const challenge = await supabase.auth.mfa.challenge({ factorId });
   if (challenge.error || !challenge.data) redirect(mfaPath(next, "verify_failed"));
@@ -55,7 +58,10 @@ export async function verifyTotp(formData: FormData) {
     challengeId: challenge.data.id,
     code,
   });
-  if (verified.error) redirect(mfaPath(next, "verify_failed"));
+  if (verified.error) {
+    await recordAuthAttempt("totp", userId, true);
+    redirect(mfaPath(next, "verify_failed"));
+  }
   redirect(next);
 }
 

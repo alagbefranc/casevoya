@@ -149,7 +149,10 @@ describe("public booking API", () => {
   it("maps the database's refusals and never reports an unconfirmed booking as confirmed", async () => {
     const refused = (error: string) => deps({ hold: async () => ({ error }) });
     expect((await postPublicHold(refused("slot_unavailable"), "synthetic", "initial", goodBody(), null)).status).toBe(409);
-    expect((await postPublicHold(refused("booking_rate_limited"), "synthetic", "initial", goodBody(), null)).status).toBe(429);
+    const limited = await postPublicHold(refused("booking_rate_limited"), "synthetic", "initial", goodBody(), null);
+    expect(limited.status).toBe(429);
+    // The database limit counts 10 minutes.
+    expect(limited.headers?.["Retry-After"]).toBe("600");
     const held = deps({ hold: async (args) => ({ public_ref: "abcdefghijklmnopqrstuvwxyz", status: "held", starts_at: args.p_start, ends_at: args.p_start }) });
     const result = await postPublicHold(held, "synthetic", "initial", goodBody(), null);
     expect(result.status).toBe(202);

@@ -1270,3 +1270,10 @@ Tested in `tests/security-review-upload-intent.rls.test.ts`.
 * Rate limits: a missing or malformed hash goes to one shared bucket (`app.public_client_bucket`, 64 zeros) with the per-address limit (8 holds / 5 enquiries per 10 minutes). The firm caps (60 / 100) stay as a backstop, but each address counts toward them with at most its own allowance, so one address retrying cannot fill a firm's cap.
 
 Tested in `tests/security-review-booking-hash.rls.test.ts` and `tests/security-review-booking-hash.test.ts`.
+
+## Auth attempt limits (`20261031100000`, not applied on the live project)
+
+* `20261031100000_auth_attempt_limits.sql`: new table `app.auth_attempts` (kind `password` / `otp` / `totp` / `email_send`, a SHA-256 `key_hash` the app server computes from the kind and the normalized email or user id, `failed`), RLS enabled and forced, no grants. Two service-role functions (`search_path = ''`, refused for any other role): `public.auth_attempt_check(p_kind, p_key_hash)` returns `{allowed, retry_after_seconds}` (password: 10 failures in 15 minutes lock for 15 minutes after the latest failure; otp and totp: 5 failures, the same; email_send: 3 per hour), `public.auth_attempt_record(p_kind, p_key_hash, p_failed)` stores a failure or an email send (successes are not stored) and prunes up to 500 rows older than a day.
+* The app (`src/lib/security/auth-attempts.ts`) checks before Supabase Auth is called and fails open when the service key is missing or the call errors; the Workers Rate Limiting bindings (`src/lib/security/rate-limit.ts`, `wrangler.jsonc`) are the per-address and per-user first layer.
+
+Tested in `tests/security-review-auth-attempts.rls.test.ts`.

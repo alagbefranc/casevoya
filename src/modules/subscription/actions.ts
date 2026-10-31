@@ -7,6 +7,7 @@ import { stripeMode } from "@/modules/finance/keys";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isUuid } from "@/lib/tenant/context";
+import { RATE_LIMIT_MESSAGE, rateLimit } from "@/lib/security/rate-limit";
 import { isInterval, isPaidPlan, readCatalog } from "@/modules/subscription/catalog";
 import {
   billingCustomerExists,
@@ -39,6 +40,8 @@ async function ownerClient(organizationId: string) {
   const supabase = await createClient({ organizationId });
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) return { error: "Sign in first." as const };
+  // Checkout and portal sessions call Stripe: 10 a minute per person (RL_PAYMENT).
+  if (!(await rateLimit("RL_PAYMENT", `user:${claims.claims.sub}`))) return { error: RATE_LIMIT_MESSAGE };
   return { supabase };
 }
 

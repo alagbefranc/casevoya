@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { rateLimit, requestIp, tooManyRequests } from "@/lib/security/rate-limit";
 import { ENQUIRY_CONSENT, ENQUIRY_MESSAGES, enquiryStatements, isFirmSlug, parsePublicFirm, readEnquiry } from "@/modules/leads/enquiry";
 import { clientHash } from "@/modules/scheduling/public-api";
 import { clientAddress, sessionViewerWithAssurance } from "@/modules/scheduling/public-deps";
@@ -17,6 +18,8 @@ const NO_STORE = { "Cache-Control": "no-store" };
  * those leads are sample rows.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ firm: string }> }) {
+  // Per-address request limit before any database work (RL_PUBLIC).
+  if (!(await rateLimit("RL_PUBLIC", requestIp(request.headers)))) return tooManyRequests();
   const firm = (await params).firm.toLowerCase();
   if (!(request.headers.get("content-type") ?? "").includes("application/json")) {
     return NextResponse.json({ error: "invalid", message: ENQUIRY_MESSAGES.invalid }, { status: 415, headers: NO_STORE });
@@ -78,7 +81,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ fir
     if (result.ok) return NextResponse.json({ ok: true, practice: page.practice }, { headers: NO_STORE });
     const code = result.error && result.error in ENQUIRY_MESSAGES ? result.error : "unavailable";
     const status = code === "form_unavailable" ? 404 : code === "form_closed" ? 403 : code === "enquiry_rate_limited" ? 429 : 400;
-    return NextResponse.json({ error: code, message: ENQUIRY_MESSAGES[code] }, { status, headers: NO_STORE });
+    // The database limit is per address and per firm over 10 minutes.
+    const headers = status === 429 ? { ...NO_STORE, "Retry-After": "600" } : NO_STORE;
+    return NextResponse.json({ error: code, message: ENQUIRY_MESSAGES[code] }, { status, headers });
   } catch {
     return NextResponse.json({ error: "unavailable", message: ENQUIRY_MESSAGES.unavailable }, { status: 502, headers: NO_STORE });
   }

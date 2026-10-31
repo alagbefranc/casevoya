@@ -38,6 +38,15 @@ import { todayIso } from "@/modules/sheet/birth-date";
 import { acceptPath } from "@/modules/sheet/portal-invite";
 import { appOrigin } from "@/lib/email/env";
 import { isPortalInviteRole, type PortalInviteRole } from "@/modules/portal-invitations/types";
+import { RATE_LIMIT_RETRY_SECONDS, clientIp, rateLimit } from "@/lib/security/rate-limit";
+import {
+  attemptWaitMessage,
+  authEmailGate,
+  checkAuthAttempt,
+  invalidCredentials,
+  recordAuthAttempt,
+  totpGate,
+} from "@/lib/security/auth-attempts";
 
 export type PortResult =
   | { ok: true; href?: string; codes?: string[] }
@@ -64,6 +73,39 @@ function fail(message: string, state?: "error" | "locked"): PortResult {
 
 function lockedMessage(message: string) {
   return /rate|too many|locked|429/i.test(message);
+}
+
+/** An app rate limit (rate-limit.ts, auth-attempts.ts): the same words whether or not an account exists. */
+function limited(retryAfter = RATE_LIMIT_RETRY_SECONDS): PortResult {
+  return { ok: false, message: attemptWaitMessage(retryAfter), inline: true, retryAfter };
+}
+
+/** Per-address Workers limit for a password sign-in or sign-up. */
+async function authAllowed(): Promise<boolean> {
+  return rateLimit("RL_AUTH", await clientIp());
+}
+
+/** Per-address Workers limit for checking an emailed code. */
+async function verifyAllowed(): Promise<boolean> {
+  return rateLimit("RL_VERIFY", `ip:${await clientIp()}`);
+}
+
+type AuthErrorLike = { message: string; code?: string };
+
+/**
+ * signInWithPassword behind the per-email failure limit: refused without asking Supabase while
+ * locked, and a wrong email or password counts as a failure.
+ */
+async function guardedPasswordSignIn(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  email: string,
+  password: string,
+): Promise<{ limited: number } | { limited?: undefined; error: AuthErrorLike | null }> {
+  const gate = await checkAuthAttempt("password", email);
+  if (!gate.allowed) return { limited: gate.retryAfterSeconds };
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error && invalidCredentials(error)) await recordAuthAttempt("password", email, true);
+  return { error: error ?? null };
 }
 
 function fromRpc(error: { message: string }): PortResult {
@@ -163,8 +205,11 @@ export async function signInWithPassword(email: string, password: string, next: 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean) || !password) {
     return fail("Email or password didn’t match", "error");
   }
+  if (!(await authAllowed())) return limited();
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email: clean, password });
+  const signedIn = await guardedPasswordSignIn(supabase, clean, password);
+  if (signedIn.limited !== undefined) return limited(signedIn.limited);
+  const { error } = signedIn;
   if (error) {
     return lockedMessage(error.message) ? fail(error.message, "locked") : fail("Email or password didn’t match", "error");
   }
@@ -188,6 +233,8 @@ export async function sendRecoveryEmail(email: string): Promise<PortResult | nul
   if (!hasPublicSupabaseEnv()) return nullResult();
   const clean = email.trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return fail("Enter the email you use for Casevoya");
+  const emailGate = await authEmailGate(clean);
+  if (!emailGate.allowed) return limited(emailGate.retryAfterSeconds);
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithOtp({
     email: clean,
@@ -200,13 +247,19 @@ export async function sendRecoveryEmail(email: string): Promise<PortResult | nul
 export async function verifyEmailCode(email: string, code: string, purpose: "recovery" | "signup"): Promise<PortResult | null> {
   if (!hasPublicSupabaseEnv()) return nullResult();
   if (!/^\d{6}$/.test(code)) return fail("That code didn’t match.");
+  if (!(await verifyAllowed())) return limited();
+  const gate = await checkAuthAttempt("otp", email);
+  if (!gate.allowed) return limited(gate.retryAfterSeconds);
   const supabase = await createClient();
   const { error } = await supabase.auth.verifyOtp({
     email: email.trim(),
     token: code,
     type: purpose === "signup" ? "signup" : "email",
   });
-  if (error) return fail("That code didn’t match.");
+  if (error) {
+    await recordAuthAttempt("otp", email, true);
+    return fail("That code didn’t match.");
+  }
   return { ok: true };
 }
 
@@ -243,6 +296,9 @@ export async function signUpForTrial(input: {
   if (!name || !isAcceptableEmail(email) || !passwordOk(input.password)) {
     return fail("Check your name, email and password.");
   }
+  if (!(await authAllowed())) return limited();
+  const emailGate = await authEmailGate(email);
+  if (!emailGate.allowed) return limited(emailGate.retryAfterSeconds);
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -489,6 +545,10 @@ export async function verifyTotpCode(factorId: string, code: string): Promise<Po
   if (!hasPublicSupabaseEnv()) return nullResult();
   if (!/^[0-9a-f-]{36}$/i.test(factorId) || !/^\d{6}$/.test(code)) return fail("That code didn’t match.");
   const supabase = await createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  const userId = typeof claims?.claims?.sub === "string" ? claims.claims.sub : null;
+  const gate = await totpGate(userId);
+  if (!gate.allowed) return { ok: false, message: attemptWaitMessage(gate.retryAfterSeconds) };
   const challenge = await supabase.auth.mfa.challenge({ factorId });
   if (challenge.error || !challenge.data) return fail("That code didn’t match.");
   const verified = await supabase.auth.mfa.verify({
@@ -496,7 +556,10 @@ export async function verifyTotpCode(factorId: string, code: string): Promise<Po
     challengeId: challenge.data.id,
     code,
   });
-  if (verified.error) return fail("That code didn’t match.");
+  if (verified.error) {
+    if (userId) await recordAuthAttempt("totp", userId, true);
+    return fail("That code didn’t match.");
+  }
   await clearPendingTotp();
   return { ok: true };
 }
@@ -555,6 +618,7 @@ export async function joinStaffInvite(input: {
   if (!hasPublicSupabaseEnv()) return nullResult();
   if (!isInvitationToken(input.token)) return fail("That invitation link is not valid.");
   if (!passwordOk(input.password)) return fail("Choose a password that meets all three rules");
+  if (!(await authAllowed())) return limited();
   const supabase = await createClient();
   const { data: preview, error: previewError } = await supabase.rpc("preview_invitation", { p_token: input.token });
   const row = preview?.[0];
@@ -579,6 +643,8 @@ export async function joinStaffInvite(input: {
     // someone with no firm yet is offered a new firm of their own).
     // The emailed link uses the configured app origin, never a request header.
     const origin = appOrigin();
+    const emailGate = await authEmailGate(row.email ?? input.email.trim());
+    if (!emailGate.allowed) return limited(emailGate.retryAfterSeconds);
     const signedUp = await supabase.auth.signUp({
       email: row.email ?? input.email.trim(),
       password: input.password,
@@ -591,10 +657,8 @@ export async function joinStaffInvite(input: {
     if (signedUp.error && !/already/i.test(signedUp.error.message)) return fail("Your sign-in could not be created. Try again.");
     if (!signedUp.data.session) {
       // An account that already has this email signs in with its own password (#252: sign in first).
-      const signedIn = await supabase.auth.signInWithPassword({
-        email: row.email ?? input.email.trim(),
-        password: input.password,
-      });
+      const signedIn = await guardedPasswordSignIn(supabase, row.email ?? input.email.trim(), input.password);
+      if (signedIn.limited !== undefined) return limited(signedIn.limited);
       if (signedIn.error) {
         if (lockedMessage(signedIn.error.message)) return fail("Too many attempts. Wait and try again.");
         // A confirmed account with another password: say so, instead of asking to confirm an email that is.
@@ -684,7 +748,9 @@ async function signedInAfterConfirm(
     return current === invitee.email ? "signed-in" : "elsewhere";
   }
   if (!password || password.length > 200) return "no-password";
-  const { error } = await supabase.auth.signInWithPassword({ email: invitee.email, password });
+  const signedIn = await guardedPasswordSignIn(supabase, invitee.email, password);
+  if (signedIn.limited !== undefined) return "locked";
+  const { error } = signedIn;
   if (!error) return "signed-in";
   if (error.code === "email_not_confirmed" || /not confirmed/i.test(error.message)) return "unconfirmed";
   if (lockedMessage(error.message)) return "locked";
@@ -761,6 +827,7 @@ export async function joinPortalInvite(input: {
   const password = typeof input.password === "string" ? input.password : "";
   if (input.mode === "create" && !passwordOk(password)) return joinFail("Choose a password that meets all three rules");
   if (input.mode === "existing" && (!password || password.length > 200)) return joinFail("Enter your Casevoya password");
+  if (!(await authAllowed())) return joinFail(attemptWaitMessage(RATE_LIMIT_RETRY_SECONDS));
 
   const supabase = await createClient();
   const invitee = await openPortalInvitee(supabase, input.token);
@@ -780,7 +847,9 @@ export async function joinPortalInvite(input: {
    * 2026-10-25). The code step's "Send a new code" is the explicit way to get another.
    */
   const signIn = async (): Promise<PortalJoinResult | "signed-in" | "wrong-password"> => {
-    const { error } = await supabase.auth.signInWithPassword({ email: invitee.email, password });
+    const signedIn = await guardedPasswordSignIn(supabase, invitee.email, password);
+    if (signedIn.limited !== undefined) return joinFail(attemptWaitMessage(signedIn.limited));
+    const { error } = signedIn;
     if (!error) return "signed-in";
     if (error.code === "email_not_confirmed" || /not confirmed/i.test(error.message)) {
       return { ok: true, confirm: true, reused: true };
@@ -796,6 +865,8 @@ export async function joinPortalInvite(input: {
   // No account with this email and password yet: create one (Supabase emails the first code).
   const alreadyMade = "This email already has a Casevoya sign-in. Choose “Already have a Casevoya sign-in?” and use that password.";
 
+  const emailGate = await authEmailGate(invitee.email);
+  if (!emailGate.allowed) return joinFail(attemptWaitMessage(emailGate.retryAfterSeconds));
   const signedUp = await supabase.auth.signUp({
     email: invitee.email,
     password,
@@ -834,11 +905,15 @@ export async function confirmPortalInvite(input: {
   if (!isInvitationToken(input.token)) return joinFail("That invitation link is not valid.");
   if (typeof input.code !== "string" || !/^\d{6}$/.test(input.code)) return joinFail("That code didn’t match.");
   if (!acceptPayloadOk(input.payload)) return joinFail("The current terms and privacy notice have to be accepted.");
+  if (!(await verifyAllowed())) return joinFail(attemptWaitMessage(RATE_LIMIT_RETRY_SECONDS));
   const supabase = await createClient();
   const invitee = await openPortalInvitee(supabase, input.token);
   if ("error" in invitee) return joinFail(invitee.error);
+  const gate = await checkAuthAttempt("otp", invitee.email);
+  if (!gate.allowed) return joinFail(attemptWaitMessage(gate.retryAfterSeconds));
   const { error } = await supabase.auth.verifyOtp({ email: invitee.email, token: input.code, type: "signup" });
   if (error) {
+    await recordAuthAttempt("otp", invitee.email, true);
     if (lockedMessage(error.message)) return joinFail("Too many attempts. Wait and try again.");
     // A used code: the email may have been confirmed through the link already.
     const checked = await signedInAfterConfirm(supabase, invitee, passwordInput(input.password));
@@ -862,6 +937,7 @@ export async function continuePortalInvite(input: {
   if (!hasPublicSupabaseEnv()) return nullResult();
   if (!isInvitationToken(input.token)) return joinFail("That invitation link is not valid.");
   if (!acceptPayloadOk(input.payload)) return joinFail("The current terms and privacy notice have to be accepted.");
+  if (!(await authAllowed())) return joinFail(attemptWaitMessage(RATE_LIMIT_RETRY_SECONDS));
   const supabase = await createClient();
   const invitee = await openPortalInvitee(supabase, input.token);
   if ("error" in invitee) return joinFail(invitee.error);
@@ -886,6 +962,8 @@ export async function resendPortalInviteCode(token: string, extra?: { password?:
     if (checked === "signed-in") return acceptJoined(supabase, token, extra.payload);
     if (checked === "locked") return joinFail("Too many attempts. Wait and try again.");
   }
+  const emailGate = await authEmailGate(invitee.email);
+  if (!emailGate.allowed) return joinFail(attemptWaitMessage(emailGate.retryAfterSeconds));
   const { error } = await supabase.auth.resend({
     type: "signup",
     email: invitee.email,

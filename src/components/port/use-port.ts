@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
-import { messageParts, rateLimitText, secondsLeft } from "@/lib/auth/signup-errors";
+import { countdownText, messageParts, secondsLeft } from "@/lib/auth/signup-errors";
 import { escapeHtml } from "@/lib/html";
 import { busyBtn, clearBtn, icon, k2Count, k2Slider, k2Spark, morphText, settleBtn, toast2, voPose } from "./kit";
 
@@ -205,6 +205,7 @@ export function usePort(
       if (retryAfter && retryAfter > 0) {
         // Off the clock, not by counting ticks: a throttled background tab must not re-enable early (#261).
         const until = Date.now() + Math.min(Math.ceil(retryAfter), 3600) * 1000;
+        const countdownWords = countdownText(message);
         button.setAttribute("aria-disabled", "true");
         const tick = () => {
           if (stopped || !summary.isConnected) {
@@ -212,7 +213,7 @@ export function usePort(
             return;
           }
           const left = secondsLeft(until, Date.now());
-          write(rateLimitText(left));
+          write(countdownWords(left));
           if (left <= 0) {
             button.removeAttribute("aria-disabled");
             return;

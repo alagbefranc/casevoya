@@ -58,6 +58,18 @@ export function rateLimitText(seconds: number | null | undefined): string {
   return `We just sent you an email. You can try again in ${seconds} ${seconds === 1 ? "second" : "seconds"}.`;
 }
 
+/** The countdown words for an app rate limit that sent nothing (sign-in, codes). */
+export function waitText(seconds: number | null | undefined): string {
+  if (seconds == null) return "Too many attempts. Please wait a minute and try again.";
+  if (seconds <= 0) return "You can try again now.";
+  return `Too many attempts. You can try again in ${seconds} ${seconds === 1 ? "second" : "seconds"}.`;
+}
+
+/** Which countdown words fit a rate-limit message: rateLimitText after an email, waitText otherwise. */
+export function countdownText(message: string): (seconds: number | null | undefined) => string {
+  return /^We just sent you an email/.test(message) ? rateLimitText : waitText;
+}
+
 export type MessagePart = { text: string } | { text: string; href: string };
 
 /** Splits `[label](/path)` links out of a message. Only same-site paths become links. */

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { safeNext } from "@/lib/auth/redirect";
 import { appOrigin } from "@/lib/email/env";
+import { authEmailGate } from "@/lib/security/auth-attempts";
 import { createClient } from "@/lib/supabase/server";
 
 export async function sendMagicLink(formData: FormData) {
@@ -10,6 +11,10 @@ export async function sendMagicLink(formData: FormData) {
   const next = safeNext(formData.get("next"));
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     redirect(`/sign-in?error=invalid_email&next=${encodeURIComponent(next)}`);
+  }
+
+  if (!(await authEmailGate(email)).allowed) {
+    redirect(`/sign-in?error=rate_limited&next=${encodeURIComponent(next)}`);
   }
 
   // The emailed link uses the configured app origin, never a request header.
