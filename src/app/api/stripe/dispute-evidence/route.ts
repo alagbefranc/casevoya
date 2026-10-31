@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
+import { declaredContentLength, readLimitedBody } from "@/lib/http/limited-body";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { stripeLive, stripeServer } from "@/lib/stripe/server";
 import { isUuid } from "@/lib/tenant/context";
 import { EVIDENCE_MAX_BYTES } from "@/modules/finance/credits-present";
 import { submitDisputeEvidence, type EvidenceContext } from "@/modules/finance/dispute-evidence";
+
+/** The file plus the form's other fields and multipart overhead. */
+const EVIDENCE_REQUEST_MAX_BYTES = EVIDENCE_MAX_BYTES + 64 * 1024;
 
 function refuse(error: string, status: number) {
   return NextResponse.json({ error }, { status });
@@ -20,12 +24,22 @@ export async function POST(request: Request) {
   // Cookie-authenticated, so only this site's own pages may post here.
   const origin = request.headers.get("origin");
   if (!origin || origin !== new URL(request.url).origin) return refuse("This must come from Casevoya.", 403);
-  const declared = Number(request.headers.get("content-length") ?? "0");
-  if (declared > EVIDENCE_MAX_BYTES + 64 * 1024) return refuse("Use a file under 4.5 MB.", 413);
+  // A declared length is required and capped; the body is also counted while it is read.
+  const declared = declaredContentLength(request.headers);
+  if (declared === null) return refuse("Choose a file.", 411);
+  if (declared === "invalid") return refuse("Choose a file.", 400);
+  if (declared > EVIDENCE_REQUEST_MAX_BYTES) return refuse("Use a file under 4.5 MB.", 413);
 
+  // Signed in before any of the body is read.
+  const { data: claims } = await (await createClient()).auth.getClaims();
+  if (!claims?.claims?.sub) return refuse("Sign in first.", 401);
+  const actor = String(claims.claims.sub);
+
+  const body = await readLimitedBody(request, EVIDENCE_REQUEST_MAX_BYTES);
+  if (!body.ok) return body.reason === "too_large" ? refuse("Use a file under 4.5 MB.", 413) : refuse("Choose a file.", 400);
   let form: FormData;
   try {
-    form = await request.formData();
+    form = await new Response(body.bytes, { headers: { "content-type": request.headers.get("content-type") ?? "" } }).formData();
   } catch {
     return refuse("Choose a file.", 400);
   }
@@ -38,9 +52,6 @@ export async function POST(request: Request) {
   if (file.size > EVIDENCE_MAX_BYTES) return refuse("Use a file under 4.5 MB.", 413);
 
   const supabase = await createClient({ organizationId: org });
-  const { data: claims } = await supabase.auth.getClaims();
-  if (!claims?.claims?.sub) return refuse("Sign in first.", 401);
-  const actor = String(claims.claims.sub);
   const stripe = stripeServer();
   if (!stripe) return refuse("Stripe isn’t configured for this environment. Nothing was sent to Stripe.", 503);
 
