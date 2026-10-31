@@ -1,15 +1,19 @@
 import "server-only";
 import type { AutomationsTab } from "@/components/sheet/designer/automations";
 import { createClient } from "@/lib/supabase/server";
-import { automationsData, quietHours, reminderDays, type ReminderRun } from "@/modules/sheet/automations-present";
+import { automationsData, quietHours, readFirmAutomation, reminderDays, type ReminderRun } from "@/modules/sheet/automations-present";
+import { isUuid } from "@/lib/tenant/context";
 import { loadSheetChrome, matterNames } from "@/modules/sheet/chrome-load";
 import type { SheetStaff } from "@/modules/sheet/load";
 
-/** The Designer's Automations page for a firm, read as the signed-in staff member (RLS). Read only. */
-export async function loadSheetAutomations(staff: SheetStaff, tab: AutomationsTab, now: Date = new Date()) {
+/**
+ * The Designer's Automations page for a firm, read as the signed-in staff member (RLS): the built-in
+ * deadline-reminder rule and the firm's own automations (`rule`: the one shown).
+ */
+export async function loadSheetAutomations(staff: SheetStaff, tab: AutomationsTab, now: Date = new Date(), rule?: string | null) {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
-  const [chrome, offsets, proposed, firm, schedules] = await Promise.all([
+  const [chrome, offsets, proposed, firm, schedules, automations] = await Promise.all([
     loadSheetChrome(staff, "/sheet/automations"),
     supabase.from("firm_reminder_offsets").select("offset_days").eq("organization_id", org),
     supabase.from("product_settings").select("value").eq("key", "reminders.proposed_offsets").maybeSingle(),
@@ -20,6 +24,11 @@ export async function loadSheetAutomations(staff: SheetStaff, tab: AutomationsTa
       .eq("organization_id", org)
       .order("created_at", { ascending: false })
       .limit(30),
+    supabase
+      .from("firm_automations")
+      .select("id, name, status, deadline_kinds, offset_days, version, copied_from")
+      .eq("organization_id", org)
+      .order("created_at", { ascending: true }),
   ]);
   const rows = schedules.data ?? [];
   const deadlineIds = [...new Set(rows.map((row) => row.deadline_id).filter((id): id is string => Boolean(id)))];
@@ -57,6 +66,9 @@ export async function loadSheetAutomations(staff: SheetStaff, tab: AutomationsTa
     now,
     timeZone: staff.timezone,
     editable: staff.role === "firm_owner",
+    automations: (automations.data ?? []).map(readFirmAutomation),
+    selectedId: rule && isUuid(rule) ? rule : null,
+    manage: staff.role === "firm_owner" || staff.role === "licensed_consultant" ? { organizationId: org } : null,
   });
   const dialog =
     staff.role === "firm_owner"

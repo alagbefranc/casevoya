@@ -18,7 +18,7 @@ describe("Automations page", () => {
     expect(data.steps.map((step) => step.title)).toEqual(["When", "If", "Then", "Stop when"]);
     expect(data.steps[2].text).toBe("Email client reminders 14, 7, 3 and 1 days before (proposed days)");
     expect(data.actions).toBeNull();
-    expect(data.pills).toEqual(["Active", "Not run yet"]);
+    expect(data.pills).toEqual(["Active", "Built in", "Not run yet"]);
     const quiet = automationsData({ tab: "builder", days: [7], firmSet: true, quiet: "21:00–08:00", runs: [], now: NOW, timeZone: ZONE });
     expect(quiet.steps.map((step) => step.title)).toContain("And");
   });

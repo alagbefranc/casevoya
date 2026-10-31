@@ -1277,3 +1277,11 @@ Tested in `tests/security-review-booking-hash.rls.test.ts` and `tests/security-r
 * The app (`src/lib/security/auth-attempts.ts`) reserves before Supabase Auth is called and resolves afterwards, and fails open when the service key is missing or the call errors; the Workers Rate Limiting bindings (`src/lib/security/rate-limit.ts`, `wrangler.jsonc`) are the per-address and per-user first layer.
 
 Tested in `tests/security-review-auth-attempts.rls.test.ts`.
+
+## Firm automations (`20261101120000`)
+
+Francis, 2026-10-30 ("how do firms create their workflow? The page looks read only", meaning Automations). Additive only.
+
+* `20261101120000_firm_automations.sql`: new table `public.firm_automations` (name, active or paused, trigger `deadline_saved`, the deadline kinds it covers, action `client_reminder_email`, reminder days 1 to 365 (at most 12), optional `copied_from = 'builtin_deadline_reminders'`, row version); forced RLS, select for the firm's staff with MFA, no API writes, row-change audit, delete and truncate refused. New `public.save_firm_automation` (create, optionally as a copy of the built-in rule, or change at the expected row version) and `public.set_firm_automation_paused` (pause or resume). Both: firm owner or licensed consultant with a recent step-up (`app.firm_automation_editor`), audited `automation.created`, `automation.saved`, `automation.paused`, `automation.resumed`. New `app.deadline_reminder_days(org, kind)`: the built-in days (`app.reminder_offset_days`) plus the days of every active automation covering the kind. `app.schedule_deadline_reminders` is redefined (latest from `20261020130000`) to use it; nothing else changes, and a day in both rules is one reminder (same idempotency key).
+
+Tested in `tests/firm-automations.rls.test.ts` and `tests/firm-automations-present.test.ts`.

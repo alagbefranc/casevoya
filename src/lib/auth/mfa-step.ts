@@ -59,6 +59,7 @@ const ACTIONS = {
   messaging_channel: { phrase: "change the WhatsApp number", icon: "message", title: "Change the WhatsApp number", detail: "The firm’s number for client notices" },
   notification_settings: { phrase: "change notification settings", icon: "bell", title: "Change notification settings", detail: "Quiet hours and who is told what" },
   reminder_settings: { phrase: "change reminder settings", icon: "lightning", title: "Change reminder settings", detail: "Automatic reminder days and quiet hours" },
+  automations: { phrase: "change automations", icon: "lightning", title: "Change automations", detail: "Your firm’s deadline-reminder automations" },
   booking_settings: { phrase: "change booking settings", icon: "calendar", title: "Change booking settings", detail: "Booking types, times and your public page" },
   enquiry_page: { phrase: "turn the enquiry page on or off", icon: "globe", title: "Change the enquiry page", detail: "The public form new clients use to reach you" },
   intake_publish: { phrase: "publish an intake form", icon: "file", title: "Publish an intake form", detail: "The questions clients are asked" },
