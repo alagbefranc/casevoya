@@ -122,6 +122,8 @@ const VARIANTS: { [K in Catalogued]: EmailContexts[K][] } = {
   EX17: [{ firmName: FIRM }],
   EX20: [{ firmName: FIRM, refundReason: "expired_or_canceled_card" }, { firmName: FIRM, refundReason: "lost_or_stolen_card" }, { firmName: FIRM, refundReason: "unknown" }, { firmName: FIRM }],
   EX18: [{ firmName: FIRM }],
+  EX21: [{ firmName: FIRM, requesterName: "Sam Example" }, { firmName: FIRM }],
+  EX22: [{ firmName: FIRM, approved: true }, { firmName: FIRM, approved: false }],
   EX19: [{ firmName: FIRM }],
   EX14: [
     { firmName: FIRM, respondBy: "2026-10-23", handlerName: "Sam Example" },

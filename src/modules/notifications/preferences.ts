@@ -52,6 +52,7 @@ export const IN_APP_ROWS: readonly { kind: string; label: string; small: string 
   { kind: "booking_change", label: "A client moves or cancels a consultation", small: "From their portal, for the call’s host and the firm owner" },
   { kind: "deadline", label: "A deadline reminder comes due", small: "On matters you can open" },
   { kind: "support", label: "Casevoya support asks for access", small: "Firm owners only. Nothing opens until you approve" },
+  { kind: "mfa_reset", label: "A staff member asks to reset two-step", small: "Firm owners only. Nothing changes until an owner approves" },
   { kind: "intake", label: "A client sends a form or asks for a correction", small: "On matters you can open" },
 ];
 

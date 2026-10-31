@@ -1,5 +1,6 @@
 "use server";
 
+import type { MfaResetRoute } from "@/modules/auth/mfa-reset-copy";
 import type { Json } from "@/types/database.types";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { passwordOk } from "@/lib/auth/password";
@@ -283,14 +284,31 @@ export async function updatePassword(password: string, signOutElsewhere: boolean
   return { ok: true, href: "/sign-in" };
 }
 
-export async function requestMfaReset(reason: string): Promise<PortResult | null> {
+/**
+ * Lost two-step device: records a reset request (public.request_mfa_reset, aal1 is enough).
+ * The route says who confirms it (the firm's other owners, or Casevoya support for an only
+ * owner); existing is true when an open request was already waiting (no second email).
+ */
+export async function requestMfaReset(
+  reason: string,
+): Promise<(PortResult & { route?: MfaResetRoute; existing?: boolean }) | null> {
   if (!hasPublicSupabaseEnv()) return nullResult();
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
-  if (!data?.claims?.sub) return fail("Sign in before sending this request. It is not stored otherwise.");
-  const { error } = await supabase.rpc("request_mfa_reset", { p_reason: reason.slice(0, 2000) });
-  if (error) return fail("The request could not be recorded.");
-  return { ok: true };
+  if (!data?.claims?.sub) return fail("Sign in with your password first, then send this request.");
+  const before = await supabase.rpc("my_mfa_reset");
+  const { data: id, error } = await supabase.rpc("request_mfa_reset", { p_reason: reason.slice(0, 2000) });
+  if (error) {
+    if (/too many reset requests/i.test(error.message)) return limited(3600);
+    if (/for firm staff/i.test(error.message)) return fail("Two-step resets here are for firm staff. If you’re a client, ask your firm to reset it for you.");
+    return fail("The request could not be recorded.");
+  }
+  const now = await supabase.rpc("my_mfa_reset");
+  const mine = (now.data ?? null) as { id?: string; route?: string; status?: string } | null;
+  const previous = (before.data ?? null) as { id?: string; status?: string } | null;
+  const route: MfaResetRoute = mine?.route === "platform" ? "platform" : "firm";
+  const existing = Boolean(previous?.id && previous.id === id && previous.status === "pending");
+  return { ok: true, route, existing };
 }
 
 export async function signUpForTrial(input: {

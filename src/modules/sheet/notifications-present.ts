@@ -7,7 +7,7 @@ import { dayLabel, clockLabel } from "@/modules/messages/present";
 
 export type NotificationItem = {
   id: string;
-  kind: "message" | "document" | "payment" | "booking" | "booking_cancelled" | "booking_rescheduled" | "deadline" | "support" | "intake_submitted" | "intake_correction" | "task" | "report" | "document_blocked";
+  kind: "message" | "document" | "payment" | "booking" | "booking_cancelled" | "booking_rescheduled" | "deadline" | "support" | "intake_submitted" | "intake_correction" | "task" | "report" | "document_blocked" | "mfa_reset";
   occurred_at: string;
   matter_id: string | null;
   actor_name: string | null;
@@ -17,12 +17,12 @@ export type NotificationItem = {
   read: boolean;
 };
 
-const KINDS = new Set(["message", "document", "payment", "booking", "booking_cancelled", "booking_rescheduled", "deadline", "support", "intake_submitted", "intake_correction", "task", "report", "document_blocked"]);
+const KINDS = new Set(["message", "document", "payment", "booking", "booking_cancelled", "booking_rescheduled", "deadline", "support", "intake_submitted", "intake_correction", "task", "report", "document_blocked", "mfa_reset"]);
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /** What the System tab lists: the rows Casevoya itself raises (card payments, deadline reminders, support requests). */
-export const SYSTEM_KINDS = new Set<NotificationItem["kind"]>(["payment", "deadline", "support", "report", "document_blocked"]);
+export const SYSTEM_KINDS = new Set<NotificationItem["kind"]>(["payment", "deadline", "support", "report", "document_blocked", "mfa_reset"]);
 
 /** How many notifications the page and the sidebar read: the most public.staff_notifications returns. */
 export const NOTIFICATION_READ_LIMIT = 200;
@@ -53,7 +53,7 @@ export function readItems(raw: unknown): NotificationItem[] {
       KINDS.has((row as NotificationItem).kind) &&
       typeof (row as NotificationItem).occurred_at === "string" &&
       typeof (row as NotificationItem).href === "string" &&
-      (row as NotificationItem).href.startsWith("/sheet/"),
+      ((row as NotificationItem).href.startsWith("/sheet/") || (row as NotificationItem).href === "/app/two-step-resets"),
   );
 }
 
@@ -101,6 +101,14 @@ export function notificationParts(item: NotificationItem, matterName: (id: strin
     case "support": {
       const minutes = /^\d+$/.test(item.detail ?? "") ? `${item.detail} minutes of access` : "access";
       return ["Casevoya support asked for ", { b: minutes }, ` to ${item.subject ?? "your firm"}. Nothing opens until you approve`];
+    }
+    // Lost two-step device (20261102100100): a staff member asked to reset two-step; firm owners decide.
+    case "mfa_reset": {
+      const who = item.actor_name?.trim() || "A staff member";
+      if (item.detail === "approved") return [`${who}’s two-step reset was `, { b: "approved" }];
+      if (item.detail === "denied") return [`${who}’s two-step reset was `, { b: "denied" }];
+      if (item.detail === "expired") return [`${who}’s two-step reset request `, { b: "expired" }];
+      return [`${who} lost their two-step device and asked for a `, { b: "reset" }, ". Confirm it’s them, then approve or deny"];
     }
     // Intake delivery (20261020180100): a client sent a form, or asked for a correction after sending.
     case "intake_submitted":

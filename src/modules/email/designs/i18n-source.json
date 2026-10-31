@@ -355,5 +355,23 @@
     "body": "The refund from {firm_name} didn’t go through, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way.",
     "body_card": "The refund from {firm_name} didn’t go through because the card it was sent to is no longer active, so the money hasn’t reached you. Please disregard our earlier email about this refund. {firm_name} will contact you to arrange it another way.",
     "cta": "View payments"
+  },
+  "EX21": {
+    "subject": "{requester} asked to reset two-step sign-in",
+    "subject_anon": "Someone at your firm asked to reset two-step sign-in",
+    "preheader": "Confirm it’s them before you approve. The request expires in 24 hours.",
+    "heading": "A two-step reset needs your decision",
+    "body": "{requester} at {firm_name} lost their two-step device and asked to reset it. Confirm it’s really them, on a video call or in person, then approve or deny it in Casevoya. If you approve, they sign in with their password and set up two-step again. The request expires 24 hours after it was sent.",
+    "body_anon": "Someone at {firm_name} lost their two-step device and asked to reset it. Confirm it’s really them, on a video call or in person, then approve or deny it in Casevoya. If you approve, they sign in with their password and set up two-step again. The request expires 24 hours after it was sent.",
+    "cta": "Review the request"
+  },
+  "EX22": {
+    "subject_approved": "Your two-step reset was approved",
+    "preheader_approved": "Sign in with your password, then set up two-step again.",
+    "body_approved": "Your two-step sign-in at {firm_name} was reset and your old sessions were signed out. Sign in with your password, then set up two-step again with a new device.",
+    "subject_denied": "Your two-step reset was declined",
+    "preheader_denied": "Nothing changed. Talk to your firm owner.",
+    "body_denied": "Your request to reset two-step sign-in at {firm_name} was declined, so nothing changed. If you still can’t sign in, talk to your firm owner, or send a new request from the sign-in page.",
+    "cta": "Sign in"
   }
 }

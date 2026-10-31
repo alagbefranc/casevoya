@@ -62,6 +62,9 @@ const WIRED: Record<string, Record<string, unknown>> = {
   EM17: { template: "support_granted", firm: FIRM, approver: "Sam Example", minutes: 60, ends_at: "2026-10-22T15:40:00Z", time_zone: "America/Toronto" },
   // Card trial (20261101100100): Casevoya's own billing, to the firm's owners.
   EM18a: { template: "billing_payment_failed", firm: FIRM, audience: "staff", grace_days: 7 },
+  // Lost two-step device (20261102100100): Casevoya's own mail.
+  EX21: { template: "mfa_reset_requested", firm: FIRM, audience: "staff", requester: "Sam Example", status: "pending" },
+  EX22: { template: "mfa_reset_decided", firm: FIRM, audience: "staff", status: "approved" },
   EM18c: { template: "trial_ending", firm: FIRM, audience: "staff", trial_end: "2026-11-14T15:00:00Z", plan: "practice", interval: "month", amount_cents: 24900, currency: "cad", time_zone: "America/Toronto" },
 };
 

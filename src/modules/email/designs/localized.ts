@@ -663,6 +663,34 @@ const BUILDERS: Builders = {
       brand: firmBrand(kit, context),
     });
   },
+  EX21(kit, context) {
+    const { t, origin } = kit;
+    const who = name(context.requesterName);
+    const firmName = firm(kit, context);
+    return copy(kit, {
+      subject: who ? t("subject", { requester: who }) : t("subject_anon"),
+      preheader: t("preheader"),
+      heading: t("heading"),
+      body: who ? t("body", { requester: who, firm_name: firmName }) : t("body_anon", { firm_name: firmName }),
+      cta: cta(t("cta"), appLink(origin, PATHS.twoStepResets)),
+      spot: "reminder",
+      brand: PLATFORM,
+    });
+  },
+  EX22(kit, context) {
+    const { t, origin } = kit;
+    const firmName = firm(kit, context);
+    const k = context.approved ? "approved" : "denied";
+    return copy(kit, {
+      subject: t(`subject_${k}`),
+      preheader: t(`preheader_${k}`),
+      heading: t(`subject_${k}`),
+      body: t(`body_${k}`, { firm_name: firmName }),
+      cta: cta(t("cta"), appLink(origin, PATHS.signIn)),
+      spot: "reminder",
+      brand: PLATFORM,
+    });
+  },
   EX19(kit, context) {
     const { t, origin } = kit;
     const firmName = firm(kit, context);
