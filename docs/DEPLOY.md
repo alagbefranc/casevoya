@@ -72,6 +72,16 @@ pnpm run deploy:app
 
 `pnpm run deploy:inbound` deploys the inbound mail Worker below.
 
+## Supabase Auth hardening
+
+The app's per-account limits (`src/lib/security/auth-attempts.ts`) bind only calls made through the app's server actions. Supabase Auth is also reachable directly with the public publishable key, so set these in the Supabase dashboard as well (not done by migrations):
+
+1. **MFA verification attempt hook.** After migration `20261102110000` is applied: Authentication > Hooks > "MFA verification attempt" > Postgres function `public.hook_mfa_verification_attempt`. It rejects second-factor verifications for a user with 5 failures in 15 minutes (`app.auth_attempts`, kind `mfa_verify`). Before enabling in production, check on staging that a wrong code is refused, that a sixth try (correct or not) gets "Too many attempts", and that it clears after 15 minutes. If `supabase_auth_admin` was created after the migration ran, run `grant execute on function public.hook_mfa_verification_attempt(jsonb) to supabase_auth_admin;`.
+2. **CAPTCHA.** Authentication > Attack Protection > enable CAPTCHA (Cloudflare Turnstile) for sign-in, sign-up and OTP. The app's forms do not send a CAPTCHA token yet, so enabling it needs the matching front-end change first, or sign-in from the app will fail.
+3. **Rate limits.** Authentication > Rate Limits: lower the per-IP limits for token verification and sign-in to the smallest values that fit normal use.
+
+A password verification attempt hook is not provided: it only sees the user id, so a per-account refusal there would let anyone lock a known user out of sign-in (the app's own limit refuses per email and address instead).
+
 ## Inbound Worker
 
 `workers/inbound-email/wrangler.toml` sets `workers_dev = false`, so deploy does not publish a `workers.dev` hostname.

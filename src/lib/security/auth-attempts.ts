@@ -7,10 +7,14 @@ import { RATE_LIMIT_MESSAGE, RATE_LIMIT_RETRY_SECONDS, clientIp, rateLimit } fro
  * The database layer of the auth limits (app.auth_attempts, migration 20261031100000), through
  * the service-role functions public.auth_attempt_reserve / auth_attempt_resolve:
  *
- *   password    10 failed sign-ins per (email, address) and 50 per email in 15 minutes
- *   otp          5 failed email codes per (email, address) and 20 per email in 15 minutes
- *   totp         5 failed authenticator codes per user in 15 minutes
+ *   password    10 failed sign-ins per (email, address) in 15 minutes; past 50 per email, 3 per
+ *               (email, address) (the per-email count alone never refuses: migration 20261102110000)
+ *   otp          5 failed email codes per (email, address) in 15 minutes; past 20 per email, 2
+ *   totp         5 failed authenticator or recovery codes per user in 15 minutes
  *   email_send   3 auth emails per (recipient, address) and 10 per recipient in an hour
+ *
+ * app.consume_recovery_code also limits recovery codes itself (5 per user in 15 minutes), so a
+ * direct RPC call is bound too.
  *
  * An attempt is reserved before Supabase is asked (the reservation counts while in flight) and
  * resolved afterwards: kept as counted for a failure or an email sent, deleted otherwise. The key
@@ -110,8 +114,8 @@ export async function authEmailGate(email: string): Promise<AttemptGate> {
 }
 
 /**
- * Before an authenticator code is checked: the Workers limits per address and per user, then the
- * user's failures. Resolve with resolveAuthAttempt(gate, codeRejected).
+ * Before an authenticator code or an app recovery code is checked: the Workers limits per address
+ * and per user, then the user's failures. Resolve with resolveAuthAttempt(gate, codeRejected).
  */
 export async function totpGate(userId: string | null): Promise<AttemptGate> {
   const ipAllowed = await rateLimit("RL_VERIFY", `ip:${await clientIp()}`);

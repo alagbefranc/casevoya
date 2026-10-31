@@ -1278,6 +1278,15 @@ Tested in `tests/security-review-booking-hash.rls.test.ts` and `tests/security-r
 
 Tested in `tests/security-review-auth-attempts.rls.test.ts`.
 
+## Auth attempt limits, round 2 (`20261102110000`)
+
+* `20261102110000_auth_attempts_recovery_soft_subject_mfa_hook.sql`: `app.auth_attempts.kind` also allows `recovery` and `mfa_verify`.
+* `app.consume_recovery_code` (latest from `20261017140500`) takes a per-user transaction lock and refuses (returns false) while the user has 5 rejected codes in 15 minutes in `app.auth_attempts` (`recovery`, key `sha256('recovery:' || user id)`); each rejected code adds a counted row. The `public.mfa_recovery_attempts` lockout is unchanged. Both server actions (`redeemRecovery`, `redeemRecoveryCode`) also go through `totpGate`, so authenticator and recovery codes share the app's per-user budget.
+* `public.auth_attempt_reserve`: for `password` and `otp` the per-email limit (50 / 20 in 15 minutes) no longer refuses by itself; past it each (email, address) allows 3 / 2 attempts instead of 10 / 5. `totp` and `email_send` are unchanged.
+* `public.hook_mfa_verification_attempt(event jsonb)`: Supabase Auth MFA verification attempt hook. Counts failed verifications per user (`mfa_verify`) and answers `reject` while the user has 5 in 15 minutes, also for a correct code. Executable only by `supabase_auth_admin` (granted when that role exists). Inactive until enabled (docs/DEPLOY.md, "Supabase Auth hardening").
+
+Tested in `tests/security-review-auth-recovery-hook.rls.test.ts`, `tests/security-review-auth-attempts.rls.test.ts` and `tests/recovery-code-limit.test.ts`.
+
 ## Firm automations (`20261101120000`)
 
 Francis, 2026-10-30 ("how do firms create their workflow? The page looks read only", meaning Automations). Additive only.

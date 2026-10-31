@@ -16076,6 +16076,10 @@ export type Database = {
         Args: never
         Returns: string[]
       }
+      hook_mfa_verification_attempt: {
+        Args: { event: Json }
+        Returns: Json
+      }
       import_cicc_register: {
         Args: { p_import_id: string; p_rows: Json }
         Returns: number
