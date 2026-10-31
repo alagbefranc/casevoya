@@ -92,7 +92,7 @@ async function officialClaim() {
   const page = `https://www.canada.ca/en/immigration-refugees-citizenship/services/synthetic-${tag()}/page.html`;
   await asMaintenance(db);
   await loadOfficialClaims({
-    query: async (sql: string) => (await db.query(sql)).rows,
+    query: async (sql: string) => (await db.query<Record<string, unknown>>(sql)).rows,
     dryRun: false,
     files: [{
       name: "captured-claims.json",
