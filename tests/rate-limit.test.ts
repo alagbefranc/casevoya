@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The Workers rate-limit helper: fails open without a binding, keys by binding name and visitor
 // address (IPv6 as its /64), and the 429 answer carries Retry-After.
@@ -6,6 +9,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   env: null as Record<string, unknown> | null,
   headers: new Headers() as Headers | null,
+  rpcCalls: [] as { name: string; args: Record<string, unknown> }[],
+  rpc: { data: { allowed: true, retry_after_seconds: 30 } as unknown, error: null as { message: string } | null },
+  rpcThrows: false,
+}));
+
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => ({
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      state.rpcCalls.push({ name, args });
+      if (state.rpcThrows) throw new Error("network down");
+      return state.rpc;
+    },
+  }),
 }));
 
 vi.mock("@opennextjs/cloudflare", () => ({
@@ -21,13 +37,24 @@ vi.mock("next/headers", () => ({
   },
 }));
 
-const { RATE_LIMIT_MESSAGE, clientIp, rateLimit, requestIp, tooManyRequests } = await import("@/lib/security/rate-limit");
+const { RATE_LIMIT_MESSAGE, RATE_LIMITS, clientIp, rateLimit, rateLimitOutcome, requestIp, tooManyRequests } = await import("@/lib/security/rate-limit");
 const { ipKey } = await import("@/lib/security/client-address");
 const { clientHash } = await import("@/modules/scheduling/public-api");
+
+const sha = (text: string) => createHash("sha256").update(text).digest("hex");
 
 beforeEach(() => {
   state.env = null;
   state.headers = new Headers();
+  state.rpcCalls = [];
+  state.rpc = { data: { allowed: true, retry_after_seconds: 30 }, error: null };
+  state.rpcThrows = false;
+  vi.stubEnv("SUPABASE_SECRET_KEY", "synthetic-service-key");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 
 describe("rateLimit", () => {
@@ -55,6 +82,96 @@ describe("rateLimit", () => {
     state.env = { RL_PUBLIC: { limit: async () => ({ success: true }) }, RL_PAYMENT: { limit: async () => Promise.reject(new Error("down")) } };
     expect(await rateLimit("RL_PUBLIC", "x")).toBe(true);
     expect(await rateLimit("RL_PAYMENT", "x")).toBe(true);
+  });
+});
+
+describe("rateLimit database window", () => {
+  const allowAll = { limit: async () => ({ success: true }) };
+
+  it("without a Cloudflare context the database is never asked", async () => {
+    expect(await rateLimit("RL_AUTH", "203.0.113.9")).toBe(true);
+    expect(state.rpcCalls).toEqual([]);
+  });
+
+  it("after the binding allows, counts sha256(name:key) with the binding's limit and period", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    state.env = { RL_AUTH_EMAIL: allowAll };
+    expect(await rateLimit("RL_AUTH_EMAIL", "203.0.113.9")).toBe(true);
+    expect(state.rpcCalls).toEqual([
+      {
+        name: "request_window_hit",
+        args: { p_bucket: "RL_AUTH_EMAIL", p_key_hash: sha("RL_AUTH_EMAIL:203.0.113.9"), p_limit: 5, p_window_seconds: 60 },
+      },
+    ]);
+  });
+
+  it("binding allows but the database refuses: false, with the database's wait", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    state.env = { RL_VERIFY: allowAll };
+    state.rpc = { data: { allowed: false, retry_after_seconds: 17 }, error: null };
+    expect(await rateLimit("RL_VERIFY", "user:abc")).toBe(false);
+    expect(await rateLimitOutcome("RL_VERIFY", "user:abc")).toEqual({ allowed: false, retryAfterSeconds: 17 });
+  });
+
+  it("a binding refusal never asks the database", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    state.env = { RL_PUBLIC: { limit: async () => ({ success: false }) } };
+    expect(await rateLimit("RL_PUBLIC", "203.0.113.9")).toBe(false);
+    expect(state.rpcCalls).toEqual([]);
+  });
+
+  it("with the context but no binding, the database still counts", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    state.env = {};
+    state.rpc = { data: { allowed: false, retry_after_seconds: 5 }, error: null };
+    expect(await rateLimit("RL_PAYMENT", "user:abc")).toBe(false);
+    expect(state.rpcCalls.map((call) => call.args.p_bucket)).toEqual(["RL_PAYMENT"]);
+  });
+
+  it("fails open when the database errors, throws, or there is no service key", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    state.env = { RL_AUTH: allowAll };
+    state.rpc = { data: null, error: { message: "connection reset" } };
+    expect(await rateLimit("RL_AUTH", "203.0.113.9")).toBe(true);
+    state.rpcThrows = true;
+    expect(await rateLimit("RL_AUTH", "203.0.113.9")).toBe(true);
+    // Logged without the key.
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("203.0.113.9");
+    state.rpcCalls = [];
+    vi.stubEnv("SUPABASE_SECRET_KEY", "");
+    expect(await rateLimit("RL_AUTH", "203.0.113.9")).toBe(true);
+    expect(state.rpcCalls).toEqual([]);
+  });
+
+  it("an unknown address skips the database but still goes through the binding", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const keys: string[] = [];
+    state.env = {
+      RL_VERIFY: {
+        limit: async ({ key }: { key: string }) => {
+          keys.push(key);
+          return { success: true };
+        },
+      },
+    };
+    state.rpc = { data: { allowed: false, retry_after_seconds: 5 }, error: null };
+    expect(await rateLimit("RL_VERIFY", "unknown")).toBe(true);
+    expect(await rateLimit("RL_VERIFY", "ip:unknown")).toBe(true);
+    expect(keys).toEqual(["RL_VERIFY:unknown", "RL_VERIFY:ip:unknown"]);
+    expect(state.rpcCalls).toEqual([]);
+  });
+
+  it("the limits match the ratelimits in wrangler.jsonc", () => {
+    const wrangler = readFileSync(path.join(process.cwd(), "wrangler.jsonc"), "utf8");
+    const found = Object.fromEntries(
+      [...wrangler.matchAll(/"name":\s*"(RL_[A-Z_]+)"[^}]*"simple":\s*\{\s*"limit":\s*(\d+),\s*"period":\s*(\d+)\s*\}/g)].map((m) => [
+        m[1],
+        { limit: Number(m[2]), period: Number(m[3]) },
+      ]),
+    );
+    expect(found).toEqual(RATE_LIMITS);
   });
 });
 
