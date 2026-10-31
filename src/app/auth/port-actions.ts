@@ -42,9 +42,9 @@ import { RATE_LIMIT_RETRY_SECONDS, clientIp, rateLimit } from "@/lib/security/ra
 import {
   attemptWaitMessage,
   authEmailGate,
-  checkAuthAttempt,
   invalidCredentials,
-  recordAuthAttempt,
+  reserveAuthAttempt,
+  resolveAuthAttempt,
   totpGate,
 } from "@/lib/security/auth-attempts";
 
@@ -93,19 +93,27 @@ async function verifyAllowed(): Promise<boolean> {
 type AuthErrorLike = { message: string; code?: string };
 
 /**
- * signInWithPassword behind the per-email failure limit: refused without asking Supabase while
- * locked, and a wrong email or password counts as a failure.
+ * signInWithPassword behind the password failure limits (per email and address, and per email):
+ * refused without asking Supabase while locked, and a wrong email or password counts as a failure.
  */
 async function guardedPasswordSignIn(
   supabase: Awaited<ReturnType<typeof createClient>>,
   email: string,
   password: string,
 ): Promise<{ limited: number } | { limited?: undefined; error: AuthErrorLike | null }> {
-  const gate = await checkAuthAttempt("password", email);
+  const gate = await reserveAuthAttempt("password", email);
   if (!gate.allowed) return { limited: gate.retryAfterSeconds };
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error && invalidCredentials(error)) await recordAuthAttempt("password", email, true);
+  await resolveAuthAttempt(gate, invalidCredentials(error));
   return { error: error ?? null };
+}
+
+/**
+ * Whether a signUp call made Supabase email a confirmation: not on an error, not when it started a
+ * session, and not for an address that is already confirmed (a user with no identities).
+ */
+function signUpEmailed(result: { data: { user?: { identities?: unknown[] | null } | null; session?: unknown } | null; error: unknown }): boolean {
+  return !result.error && !result.data?.session && !signUpEmailTaken(result.data);
 }
 
 function fromRpc(error: { message: string }): PortResult {
@@ -241,6 +249,7 @@ export async function sendRecoveryEmail(email: string): Promise<PortResult | nul
     email: clean,
     options: { shouldCreateUser: false },
   });
+  await resolveAuthAttempt(emailGate, !error);
   if (error) return fail("We couldn’t send a code to that email.");
   return { ok: true };
 }
@@ -249,7 +258,7 @@ export async function verifyEmailCode(email: string, code: string, purpose: "rec
   if (!hasPublicSupabaseEnv()) return nullResult();
   if (!/^\d{6}$/.test(code)) return fail("That code didn’t match.");
   if (!(await verifyAllowed())) return limited();
-  const gate = await checkAuthAttempt("otp", email);
+  const gate = await reserveAuthAttempt("otp", email);
   if (!gate.allowed) return limited(gate.retryAfterSeconds);
   const supabase = await createClient();
   const { error } = await supabase.auth.verifyOtp({
@@ -257,10 +266,8 @@ export async function verifyEmailCode(email: string, code: string, purpose: "rec
     token: code,
     type: purpose === "signup" ? "signup" : "email",
   });
-  if (error) {
-    await recordAuthAttempt("otp", email, true);
-    return fail("That code didn’t match.");
-  }
+  await resolveAuthAttempt(gate, Boolean(error));
+  if (error) return fail("That code didn’t match.");
   return { ok: true };
 }
 
@@ -311,6 +318,7 @@ export async function signUpForTrial(input: {
       emailRedirectTo: `${appOrigin()}/auth/confirm?next=${encodeURIComponent("/start-trial")}`,
     },
   });
+  await resolveAuthAttempt(emailGate, signUpEmailed({ data, error }));
   if (error) {
     if (error.code === "user_already_exists" || /already registered|already exists/i.test(error.message)) {
       return { ok: false, message: EMAIL_TAKEN, inline: true };
@@ -556,16 +564,17 @@ export async function verifyTotpCode(factorId: string, code: string): Promise<Po
   const gate = await totpGate(userId);
   if (!gate.allowed) return { ok: false, message: attemptWaitMessage(gate.retryAfterSeconds) };
   const challenge = await supabase.auth.mfa.challenge({ factorId });
-  if (challenge.error || !challenge.data) return fail("That code didn’t match.");
+  if (challenge.error || !challenge.data) {
+    await resolveAuthAttempt(gate, false);
+    return fail("That code didn’t match.");
+  }
   const verified = await supabase.auth.mfa.verify({
     factorId,
     challengeId: challenge.data.id,
     code,
   });
-  if (verified.error) {
-    if (userId) await recordAuthAttempt("totp", userId, true);
-    return fail("That code didn’t match.");
-  }
+  await resolveAuthAttempt(gate, Boolean(verified.error));
+  if (verified.error) return fail("That code didn’t match.");
   await clearPendingTotp();
   return { ok: true };
 }
@@ -650,23 +659,28 @@ export async function joinStaffInvite(input: {
     // The emailed link uses the configured app origin, never a request header.
     const origin = appOrigin();
     const emailGate = await authEmailGate(row.email ?? input.email.trim());
-    if (!emailGate.allowed) return limited(emailGate.retryAfterSeconds);
-    const signedUp = await supabase.auth.signUp({
-      email: row.email ?? input.email.trim(),
-      password: input.password,
-      options: {
-        data: { display_name: input.name.trim().slice(0, 200) },
-        emailRedirectTo: `${origin}/auth/confirm?next=${encodeURIComponent(`/invite/${input.token}`)}`,
-      },
-    });
-    if (signedUp.error && isRateLimited(signedUp.error)) return fail(rateLimitText(rateLimitSeconds(signedUp.error)));
-    if (signedUp.error && !/already/i.test(signedUp.error.message)) return fail("Your sign-in could not be created. Try again.");
-    if (!signedUp.data.session) {
+    // At the email limit nothing is sent, but an existing account can still sign in below.
+    let signedUp: Awaited<ReturnType<typeof supabase.auth.signUp>> | null = null;
+    if (emailGate.allowed) {
+      signedUp = await supabase.auth.signUp({
+        email: row.email ?? input.email.trim(),
+        password: input.password,
+        options: {
+          data: { display_name: input.name.trim().slice(0, 200) },
+          emailRedirectTo: `${origin}/auth/confirm?next=${encodeURIComponent(`/invite/${input.token}`)}`,
+        },
+      });
+      await resolveAuthAttempt(emailGate, signUpEmailed(signedUp));
+      if (signedUp.error && isRateLimited(signedUp.error)) return fail(rateLimitText(rateLimitSeconds(signedUp.error)));
+      if (signedUp.error && !/already/i.test(signedUp.error.message)) return fail("Your sign-in could not be created. Try again.");
+    }
+    if (!signedUp?.data.session) {
       // An account that already has this email signs in with its own password (#252: sign in first).
       const signedIn = await guardedPasswordSignIn(supabase, row.email ?? input.email.trim(), input.password);
       if (signedIn.limited !== undefined) return limited(signedIn.limited);
       if (signedIn.error) {
         if (lockedMessage(signedIn.error.message)) return fail("Too many attempts. Wait and try again.");
+        if (!signedUp) return limited(emailGate.allowed ? RATE_LIMIT_RETRY_SECONDS : emailGate.retryAfterSeconds);
         // A confirmed account with another password: say so, instead of asking to confirm an email that is.
         const taken = signUpEmailTaken(signedUp.data) || Boolean(signedUp.error);
         if (taken && signedIn.error.code !== "email_not_confirmed") return { ok: false, message: STAFF_EMAIL_TAKEN, inline: true };
@@ -881,6 +895,7 @@ export async function joinPortalInvite(input: {
       emailRedirectTo: portalInviteRedirect(input.token, invitee.role),
     },
   });
+  await resolveAuthAttempt(emailGate, signUpEmailed(signedUp));
   if (signedUp.error) {
     // The typed password didn't sign in above, so this sign-in has a different password.
     if (/already/i.test(signedUp.error.message) || signedUp.error.code === "user_already_exists") return joinFail(alreadyMade);
@@ -915,11 +930,11 @@ export async function confirmPortalInvite(input: {
   const supabase = await createClient();
   const invitee = await openPortalInvitee(supabase, input.token);
   if ("error" in invitee) return joinFail(invitee.error);
-  const gate = await checkAuthAttempt("otp", invitee.email);
+  const gate = await reserveAuthAttempt("otp", invitee.email);
   if (!gate.allowed) return joinFail(attemptWaitMessage(gate.retryAfterSeconds));
   const { error } = await supabase.auth.verifyOtp({ email: invitee.email, token: input.code, type: "signup" });
+  await resolveAuthAttempt(gate, Boolean(error));
   if (error) {
-    await recordAuthAttempt("otp", invitee.email, true);
     if (lockedMessage(error.message)) return joinFail("Too many attempts. Wait and try again.");
     // A used code: the email may have been confirmed through the link already.
     const checked = await signedInAfterConfirm(supabase, invitee, passwordInput(input.password));
@@ -960,6 +975,7 @@ export async function continuePortalInvite(input: {
 export async function resendPortalInviteCode(token: string, extra?: { password?: string; payload?: PortalAcceptPayload }): Promise<PortalJoinResult | null> {
   if (!hasPublicSupabaseEnv()) return nullResult();
   if (!isInvitationToken(token)) return joinFail("That invitation link is not valid.");
+  if (!(await authAllowed())) return joinFail(attemptWaitMessage(RATE_LIMIT_RETRY_SECONDS));
   const supabase = await createClient();
   const invitee = await openPortalInvitee(supabase, token);
   if ("error" in invitee) return joinFail(invitee.error);
@@ -975,6 +991,8 @@ export async function resendPortalInviteCode(token: string, extra?: { password?:
     email: invitee.email,
     options: { emailRedirectTo: portalInviteRedirect(token, invitee.role) },
   });
+  // Supabase cannot tell us whether a resend for a confirmed email was sent, so a success counts.
+  await resolveAuthAttempt(emailGate, !error);
   if (error) {
     return lockedMessage(error.message)
       ? joinFail("A code was sent a moment ago. Wait a minute, then ask for another.")

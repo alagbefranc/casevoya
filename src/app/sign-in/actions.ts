@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { safeRedirect } from "@/lib/auth/redirect";
 import { appOrigin } from "@/lib/email/env";
-import { authEmailGate } from "@/lib/security/auth-attempts";
+import { authEmailGate, resolveAuthAttempt } from "@/lib/security/auth-attempts";
 import { createClient } from "@/lib/supabase/server";
 
 export async function sendMagicLink(formData: FormData) {
@@ -13,7 +13,8 @@ export async function sendMagicLink(formData: FormData) {
     redirect(`/sign-in?error=invalid_email&next=${encodeURIComponent(next)}`);
   }
 
-  if (!(await authEmailGate(email)).allowed) {
+  const emailGate = await authEmailGate(email);
+  if (!emailGate.allowed) {
     redirect(`/sign-in?error=rate_limited&next=${encodeURIComponent(next)}`);
   }
 
@@ -28,6 +29,8 @@ export async function sendMagicLink(formData: FormData) {
       shouldCreateUser: false,
     },
   });
+  // Only a link that was sent counts toward the recipient's hourly limit.
+  await resolveAuthAttempt(emailGate, !error);
   if (error) {
     redirect(`/sign-in?error=send_failed&next=${encodeURIComponent(next)}`);
   }

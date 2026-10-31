@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { safeRedirect } from "@/lib/auth/redirect";
-import { recordAuthAttempt, totpGate } from "@/lib/security/auth-attempts";
+import { resolveAuthAttempt, totpGate } from "@/lib/security/auth-attempts";
 import { createClient } from "@/lib/supabase/server";
 
 export type EnrollState =
@@ -49,19 +49,21 @@ export async function verifyTotp(formData: FormData) {
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) redirect(`/sign-in?next=${encodeURIComponent(mfaPath(next))}`);
   const userId = claims.claims.sub;
-  if (!(await totpGate(userId)).allowed) redirect(mfaPath(next, "rate_limited"));
+  const gate = await totpGate(userId);
+  if (!gate.allowed) redirect(mfaPath(next, "rate_limited"));
 
   const challenge = await supabase.auth.mfa.challenge({ factorId });
-  if (challenge.error || !challenge.data) redirect(mfaPath(next, "verify_failed"));
+  if (challenge.error || !challenge.data) {
+    await resolveAuthAttempt(gate, false);
+    redirect(mfaPath(next, "verify_failed"));
+  }
   const verified = await supabase.auth.mfa.verify({
     factorId,
     challengeId: challenge.data.id,
     code,
   });
-  if (verified.error) {
-    await recordAuthAttempt("totp", userId, true);
-    redirect(mfaPath(next, "verify_failed"));
-  }
+  await resolveAuthAttempt(gate, Boolean(verified.error));
+  if (verified.error) redirect(mfaPath(next, "verify_failed"));
   redirect(safeRedirect(next));
 }
 

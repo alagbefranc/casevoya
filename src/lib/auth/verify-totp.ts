@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { attemptWaitMessage, recordAuthAttempt, totpGate } from "@/lib/security/auth-attempts";
+import { attemptWaitMessage, resolveAuthAttempt, totpGate } from "@/lib/security/auth-attempts";
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -30,14 +30,16 @@ export async function verifyTotpCode(
   if (!gate.allowed) return { ok: false, error: attemptWaitMessage(gate.retryAfterSeconds) };
   const { data: factors, error: listError } = await supabase.auth.mfa.listFactors();
   if (listError || !factors) {
+    await resolveAuthAttempt(gate, false);
     return { ok: false, error: "The authenticator could not be checked. Try again." };
   }
   const factor = factors.totp.find((item) => item.status === "verified");
-  if (!factor) return { ok: false, error: "Set up an authenticator app first." };
-  const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code: normalized });
-  if (error) {
-    if (userId) await recordAuthAttempt("totp", userId, true);
-    return { ok: false, error: "That code was not accepted." };
+  if (!factor) {
+    await resolveAuthAttempt(gate, false);
+    return { ok: false, error: "Set up an authenticator app first." };
   }
+  const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code: normalized });
+  await resolveAuthAttempt(gate, Boolean(error));
+  if (error) return { ok: false, error: "That code was not accepted." };
   return { ok: true };
 }

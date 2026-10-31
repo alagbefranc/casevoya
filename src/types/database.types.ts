@@ -14399,12 +14399,12 @@ export type Database = {
         Args: { p_attempt: string; p_succeeded: boolean }
         Returns: undefined
       }
-      auth_attempt_check: {
-        Args: { p_key_hash: string; p_kind: string }
+      auth_attempt_reserve: {
+        Args: { p_key_hash: string; p_kind: string; p_scope_hash?: string | null }
         Returns: Json
       }
-      auth_attempt_record: {
-        Args: { p_failed: boolean; p_key_hash: string; p_kind: string }
+      auth_attempt_resolve: {
+        Args: { p_failed: boolean; p_id: string }
         Returns: undefined
       }
       save_firm_template_override: {
