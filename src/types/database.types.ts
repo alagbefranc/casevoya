@@ -3541,6 +3541,60 @@ export type Database = {
         }
         Relationships: []
       }
+      firm_automations: {
+        Row: {
+          action_kind: string
+          copied_from: string | null
+          created_at: string
+          created_by: string | null
+          deadline_kinds: Database["public"]["Enums"]["deadline_kind"][]
+          id: string
+          name: string
+          offset_days: number[]
+          organization_id: string
+          paused_at: string | null
+          status: string
+          trigger_kind: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          action_kind?: string
+          copied_from?: string | null
+          created_at?: string
+          created_by?: string | null
+          deadline_kinds?: Database["public"]["Enums"]["deadline_kind"][]
+          id?: string
+          name?: string
+          offset_days?: number[]
+          organization_id?: string
+          paused_at?: string | null
+          status?: string
+          trigger_kind?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          action_kind?: string
+          copied_from?: string | null
+          created_at?: string
+          created_by?: string | null
+          deadline_kinds?: Database["public"]["Enums"]["deadline_kind"][]
+          id?: string
+          name?: string
+          offset_days?: number[]
+          organization_id?: string
+          paused_at?: string | null
+          status?: string
+          trigger_kind?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
       firm_reminder_offsets: {
         Row: {
           created_at: string
@@ -13973,6 +14027,17 @@ export type Database = {
         Args: { p_matter_id: string }
         Returns: Json
       }
+      save_firm_automation: {
+        Args: {
+          p_automation_id: string
+          p_copied_from: string
+          p_deadline_kinds: string[]
+          p_expected_version: number
+          p_name: string
+          p_offset_days: number[]
+        }
+        Returns: Json
+      }
       save_support_catalogue_entry: {
         Args: {
           p_active?: boolean
@@ -17658,6 +17723,14 @@ export type Database = {
           p_succession_note: string
         }
         Returns: undefined
+      }
+      set_firm_automation_paused: {
+        Args: {
+          p_automation_id: string
+          p_expected_version: number
+          p_paused: boolean
+        }
+        Returns: Json
       }
       set_firm_reminder_offsets: {
         Args: { p_days: number[] }

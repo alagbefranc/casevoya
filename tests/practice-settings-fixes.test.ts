@@ -298,7 +298,7 @@ describe("Automations", () => {
     const owner = automationsData({ tab: "builder", days: [14, 7], firmSet: true, quiet: "21:00–08:00", runs: [], now: NOW, timeZone: ZONE, editable: true });
     expect(owner.settings[0]).toMatchObject({ label: "Reminder days", attrs: { "data-dlg": "dlgAuto" } });
     expect(owner.settings[2]).toEqual({ label: "Delay", value: "None (fixed)" });
-    expect(owner.intro).toContain("steps are built in");
+    expect(owner.intro).toContain("built in and locked");
     const staff = automationsData({ tab: "builder", days: [14, 7], firmSet: false, quiet: null, runs: [], now: NOW, timeZone: ZONE });
     expect(staff.settings[0].attrs).toBeUndefined();
     expect(staff.settings[0].value).toBe("14 and 7 (proposed)");

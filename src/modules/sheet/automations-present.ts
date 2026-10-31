@@ -6,6 +6,9 @@
 import { AUTOMATION_DIALOG, type AutomationRun, type AutomationSetting, type AutomationStep, type AutomationsData, type AutomationsTab } from "@/components/sheet/designer/automations";
 import { dayMonth } from "@/modules/sheet/home-present";
 import { isoDateInTimeZone } from "@/modules/sheet/present";
+import { DEADLINE_KINDS, type DeadlineKindKey, type FirmAutomationView } from "@/modules/sheet/automation-rules";
+
+export { automationError, automationProblem, DEADLINE_KINDS, readReminderDays, type DeadlineKindKey, type FirmAutomationView } from "@/modules/sheet/automation-rules";
 
 export type ReminderRun = {
   status: string;
@@ -21,20 +24,6 @@ export type ReminderRun = {
   matterId?: string | null;
 };
 
-/** "14, 7, 3, 1" (or "14 7 3 1") → [14, 7, 3, 1]; an error for anything else. Matches app.set_firm_reminder_offsets. */
-export function readReminderDays(raw: string): { days: number[] } | { error: string } {
-  const parts = raw.split(/[\s,;]+/).map((part) => part.trim()).filter(Boolean);
-  if (!parts.length) return { error: "Enter at least one reminder day, like 14, 7, 3, 1." };
-  const days: number[] = [];
-  for (const part of parts) {
-    if (!/^\d{1,3}$/.test(part)) return { error: "Reminder days are whole numbers of days, like 14, 7, 3, 1." };
-    const day = Number(part);
-    if (day < 1 || day > 365) return { error: "Each reminder day is between 1 and 365 days before." };
-    if (!days.includes(day)) days.push(day);
-  }
-  if (days.length > 12) return { error: "Choose at most 12 reminder days." };
-  return { days: days.sort((a, b) => b - a) };
-}
 
 /** "21:00" and "08:00" → both; both empty → none (off); one alone → an error. */
 export function readQuietHours(start: string, end: string): { start: string | null; end: string | null } | { error: string } {
@@ -105,7 +94,48 @@ export function automationsData(input: {
   timeZone: string;
   /** The firm owner may change the reminder days and quiet hours (#dlgAuto). */
   editable?: boolean;
+  /** The firm's own automations (public.firm_automations). */
+  automations?: readonly FirmAutomationView[];
+  /** The automation shown: one of `automations` by id; otherwise the built-in rule. */
+  selectedId?: string | null;
+  /** A firm owner or licensed consultant: New automation, Edit, Pause or Resume, Duplicate, Make a copy. */
+  manage?: { organizationId: string } | null;
 }): AutomationsData {
+  const automations = input.automations ?? [];
+  const selected = automations.find((rule) => rule.id === input.selectedId) ?? null;
+  const others: AutomationsData["others"] = [
+    { label: "Deadline reminders (built in)", on: true, href: "/sheet/automations", current: !selected },
+    ...automations.map((rule) => ({ label: rule.name, on: rule.status === "active", href: `/sheet/automations?rule=${rule.id}`, current: rule.id === selected?.id })),
+  ];
+  const manage = input.manage
+    ? { organizationId: input.manage.organizationId, selected, builtInDays: [...input.days], builtInName: "Deadline reminders" }
+    : null;
+  const runs = orderedRuns(input.runs).map((run) => ({ ...runRow(run, input.now, input.timeZone), ...(run.matterId ? { href: `/sheet/matters/${run.matterId}?tab=tasks` } : {}) }));
+  if (selected) {
+    return {
+      tab: input.tab,
+      name: selected.name,
+      pills: [selected.status === "active" ? "Active" : "Paused", selected.copiedFromBuiltIn ? "Copy of the built-in rule" : "Your firm’s automation"],
+      actions: null,
+      intro: `Your firm’s automation. ${
+        selected.status === "active" ? "Deadlines of these kinds saved from now on get these reminders, as well as the built-in rule’s." : "Paused: deadlines saved while it is paused get no reminders from it."
+      } A day both rules use is one reminder, not two. ${input.manage ? "Edit it, pause it or duplicate it above." : "A firm owner or licensed consultant can change it."}`,
+      steps: firmAutomationSteps(selected, input.quiet),
+      addStep: false,
+      runs,
+      settings: [
+        { label: "Reminder days", value: dayList(selected.days) },
+        { label: "Deadlines", value: kindList(selected.kinds) },
+        { label: "Sends", value: "Approved reminder email (fixed)" },
+        { label: "To", value: "Clients on the matter who chose reminders (fixed)" },
+        { label: "Quiet hours", value: input.quiet ?? "None set", icon: "moon" },
+        { label: "Critical exceptions", value: "Due within a day (fixed)" },
+      ],
+      others,
+      manage,
+      vo: null,
+    };
+  }
   const lastSent = input.runs.filter((run) => run.sentAt).sort((a, b) => (b.sentAt ?? "").localeCompare(a.sentAt ?? ""))[0];
   const steps: AutomationStep[] = [
     { icon: "bell", title: "When", text: "A deadline with a due date is saved on a matter", badge: { label: "Event" } },
@@ -131,17 +161,73 @@ export function automationsData(input: {
   return {
     tab: input.tab,
     name: "Deadline reminders",
-    pills: ["Active", lastSent?.sentAt ? `Last run ${when(lastSent.sentAt, input.now, input.timeZone)}` : "Not run yet"],
+    pills: ["Active", "Built in", lastSent?.sentAt ? `Last run ${when(lastSent.sentAt, input.now, input.timeZone)}` : "Not run yet"],
     actions: null,
     intro:
-      `Automations create tasks, assign staff, request documents and send approved admin templates. Legal advice, refunds, bank details, outcomes and submissions always need a person. Reminder days are an office routine, not a legal deadline. This rule’s steps are built in and can’t be edited; ${
+      `Automations create tasks, assign staff, request documents and send approved admin templates. Legal advice, refunds, bank details, outcomes and submissions always need a person. Reminder days are an office routine, not a legal deadline. This rule is built in and locked${input.manage ? ": use Make a copy to build your own version, or New automation" : ""}; ${
         input.editable ? "change its reminder days and quiet hours under Settings." : "the firm owner changes its reminder days and quiet hours under Settings."
       }`,
     steps,
     addStep: false,
-    runs: orderedRuns(input.runs).map((run) => ({ ...runRow(run, input.now, input.timeZone), ...(run.matterId ? { href: `/sheet/matters/${run.matterId}?tab=tasks` } : {}) })),
+    runs,
     settings,
-    others: [],
+    others,
+    manage,
     vo: null,
   };
+}
+
+
+
+export function readFirmAutomation(row: {
+  id: string;
+  name: string;
+  status: string;
+  deadline_kinds: string[] | null;
+  offset_days: number[] | null;
+  version: number;
+  copied_from: string | null;
+}): FirmAutomationView {
+  const known = new Set<string>(DEADLINE_KINDS.map((kind) => kind.key));
+  return {
+    id: row.id,
+    name: row.name,
+    status: row.status === "paused" ? "paused" : "active",
+    kinds: (row.deadline_kinds ?? []).filter((kind): kind is DeadlineKindKey => known.has(kind)),
+    days: [...(row.offset_days ?? [])].sort((a, b) => b - a),
+    version: row.version,
+    copiedFromBuiltIn: row.copied_from === "builtin_deadline_reminders",
+  };
+}
+
+/** "legal deadlines and IRCC and other letters": the covered kinds, for a sentence. */
+export function kindList(kinds: readonly string[]): string {
+  const labels = DEADLINE_KINDS.filter((kind) => kinds.includes(kind.key)).map((kind) => (/^[A-Z][a-z]/.test(kind.label) ? kind.label.charAt(0).toLowerCase() + kind.label.slice(1) : kind.label));
+  if (labels.length === DEADLINE_KINDS.length) return "any kind of deadline";
+  if (labels.length <= 1) return labels.join("");
+  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+}
+
+
+
+/** The When / If / Then / Stop steps of one of the firm's automations. */
+export function firmAutomationSteps(rule: FirmAutomationView, quiet: string | null): AutomationStep[] {
+  const steps: AutomationStep[] = [
+    { icon: "bell", title: "When", text: "A deadline with a due date is saved on a matter", badge: { label: "Event" } },
+    {
+      icon: "filter",
+      title: "If",
+      text: { left: `It is one of: ${kindList(rule.kinds)}`, right: "and the reminder day is still ahead" },
+      badge: { label: "Conditions" },
+    },
+    {
+      icon: "clock",
+      title: "Then",
+      text: { left: `Email client reminders ${dayList(rule.days)} days before`, right: "the approved reminder email; staff see it in Notifications" },
+      badge: { label: "Action" },
+    },
+  ];
+  if (quiet) steps.push({ icon: "moon", title: "And", text: `Routine reminders move out of quiet hours (${quiet})`, badge: { label: "Action" } });
+  steps.push({ icon: "x-circle", title: "Stop when", text: "The deadline changes or is removed, or the automation is paused before the deadline is saved", badge: { label: "Stop rule" } });
+  return steps;
 }

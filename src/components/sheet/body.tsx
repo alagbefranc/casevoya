@@ -618,10 +618,10 @@ export async function SheetBody({
       </SheetScreen>
     );
   }
-  // Automations: the deadline-reminder rule as it runs, and its reminder history (read only).
+  // Automations: the built-in deadline-reminder rule (locked), the firm's own automations, and the reminder history.
   if (page === "automations" && (access.kind === "live" || access.kind === "sample")) {
     const tab = query.tab === "runs" ? "runs" : "builder";
-    const loaded = await loadSheetAutomations(access.staff, tab);
+    const loaded = await loadSheetAutomations(access.staff, tab, undefined, query.rule);
     return (
       <SheetScreen page={page}>
         <SheetFrame
@@ -1082,6 +1082,7 @@ export function queryFrom(search: Record<string, string | string[] | undefined>)
     program: one("program"),
     claim: one("claim"),
     cq: one("cq"),
+    rule: one("rule"),
     offset: one("offset"),
   };
 }

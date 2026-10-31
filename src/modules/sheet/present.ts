@@ -180,6 +180,8 @@ export type SheetQuery = {
   /** Templates › Source review: the Live official claims search and page offset. */
   cq?: string;
   offset?: string;
+  /** Automations: the automation shown (a firm automation id; absent for the built-in rule). */
+  rule?: string;
 };
 
 export function sheetVariant(page: string, query: SheetQuery): string {

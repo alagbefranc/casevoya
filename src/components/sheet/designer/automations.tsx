@@ -3,8 +3,10 @@
  * history (`tab-runs`), with the Settings column. Same DOM, classes and order; the steps, runs and
  * settings come from the firm's deadline-reminder configuration and its reminder schedules.
  * Automations are fixed rules here (OPS-07: no free-form scripting): a step list states what the
- * reminder job does, it is not an editor.
+ * reminder job does. The built-in rule is locked; firm owners and licensed consultants build their
+ * own deadline-reminder automations (2026-10-30) with the live controls in automations-live.tsx.
  */
+import { AutomationsManageActions, type AutomationsManage } from "./automations-live";
 import { Avatar, type SidebarPerson } from "./sidebar";
 import { Empty, Icon, Pair, VoCard } from "./frame";
 import { Badge, type MatterBadge } from "./matters";
@@ -35,7 +37,10 @@ export type AutomationsData = {
   addStep: boolean;
   runs: AutomationRun[];
   settings: AutomationSetting[];
-  others: { label: string; on: boolean }[];
+  /** The automations list in the Settings column: the built-in rule, then the firm's own (live links). */
+  others: { label: string; on: boolean; href?: string; current?: boolean }[];
+  /** Live only: what a firm owner or licensed consultant may do here. */
+  manage?: AutomationsManage | null;
   vo: { draft: string; sources: string } | null;
 };
 
@@ -92,6 +97,7 @@ export function AutomationsHeader({ data }: { data: AutomationsData }) {
               <button className={"btn p sm"}>{data.actions.save}</button>
             </>
           ) : null}
+          {data.manage ? <AutomationsManageActions manage={data.manage} /> : null}
         </span>
       </header>
       <div className={"tabs"} role={"tablist"}>
@@ -253,14 +259,28 @@ export function AutomationsSettings({ data }: { data: AutomationsData }) {
       </div>
       {data.others.length ? (
         <>
-          <h4 style={{ marginTop: "18px" }}>{"Other automations"}</h4>
+          <h4 style={{ marginTop: "18px" }}>{data.others.some((other) => other.href) ? "Automations" : "Other automations"}</h4>
           <div className={"rank"} style={{ fontSize: "13.5px" }}>
-            {data.others.map((other) => (
-              <div key={other.label}>
-                {other.label}
-                <span className={other.on ? "tog on" : "tog"} style={{ marginLeft: "auto" }}></span>
-              </div>
-            ))}
+            {data.others.map((other, index) =>
+              other.href ? (
+                <a
+                  key={other.href}
+                  href={other.href}
+                  aria-current={other.current ? "page" : undefined}
+                  style={{ color: "inherit", textDecoration: "none", fontWeight: other.current ? 600 : undefined }}
+                >
+                  {other.label}
+                  <span className={"r"} style={{ color: "var(--t2)" }}>
+                    {other.on ? "Active" : "Paused"}
+                  </span>
+                </a>
+              ) : (
+                <div key={`${other.label}-${index}`}>
+                  {other.label}
+                  <span className={other.on ? "tog on" : "tog"} style={{ marginLeft: "auto" }}></span>
+                </div>
+              ),
+            )}
           </div>
         </>
       ) : null}
