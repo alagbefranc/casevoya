@@ -30,8 +30,10 @@ import { RuleTestsPanel, type RuleTestRow } from "./rule-tests-panel";
 import { SourceConflictPanel, type ConflictEvidence, type OpenConflict } from "./source-conflict-panel";
 import type { SharedTemplatesView } from "@/modules/sheet/shared-template-present";
 import { SharedTemplatesPanel } from "@/components/sheet/shared-templates";
+import type { WorkflowsLiveData } from "@/modules/sheet/workflows-present";
+import { WorkflowsLive } from "./workflows-live";
 
-export type TemplatesTab = "program" | "messages" | "checklists" | "sources" | "rule" | "shared";
+export type TemplatesTab = "program" | "workflows" | "messages" | "checklists" | "sources" | "rule" | "shared";
 
 type Text = string | { left: string; right: string };
 
@@ -85,10 +87,18 @@ export type TemplatesData = {
   /** Live only (ADM-03): the Shared templates tab. Absent on the Designer's capture. */
   showSharedTab?: boolean;
   shared?: (SharedTemplatesView & { organizationId: string; failed?: boolean }) | null;
+  /** Live only (2026-10-30): the Workflows tab, the firm's own editable workflows. */
+  showWorkflowsTab?: boolean;
+  workflows?: WorkflowsLiveData | null;
+  /** Live: no header button (a role that can't make what the tab holds). */
+  hideNewTemplate?: boolean;
+  /** Live: the Shared templates tab offers Make a copy to edit (firm owner or licensed consultant). */
+  canCopyShared?: boolean;
 };
 
 const UL: Record<TemplatesTab, React.CSSProperties> = {
   program: { left: "0px", width: "109px" },
+  workflows: { left: "135px", width: "70px" },
   messages: { left: "135px", width: "110px" },
   checklists: { left: "271px", width: "60px" },
   sources: { left: "358px", width: "104px" },
@@ -126,6 +136,7 @@ export function TemplatesHeader({ data }: { data: TemplatesData }) {
           </span>
         ))}
         <span className={"acts"}>
+          {data.hideNewTemplate ? null : (
           <button
             className={"btn p sm"}
             data-toast={data.newTemplateDialog ? undefined : "New template"}
@@ -137,12 +148,18 @@ export function TemplatesHeader({ data }: { data: TemplatesData }) {
             <Icon name={"plus"} cls={"ic s"} />
             {data.newTemplateLabel ?? "New template"}
           </button>
+          )}
         </span>
       </header>
       <div className={"tabs"} role={"tablist"}>
         <button role={"tab"} data-t={"program"} className={data.tab === "program" ? "on" : undefined}>
           {"Program templates"}
         </button>
+        {data.showWorkflowsTab ? (
+          <button role={"tab"} data-t={"workflows"} className={data.tab === "workflows" ? "on" : undefined}>
+            {"Workflows"}
+          </button>
+        ) : null}
         <button role={"tab"} data-t={"messages"} className={data.tab === "messages" ? "on" : undefined}>
           {"Message templates"}
         </button>
@@ -192,6 +209,14 @@ function Program({ data }: { data: TemplatesData }) {
           <p>{"Each matter pins the template version it started with. A new release never changes an existing file or package."}</p>
         </div>
       </div>
+      {data.showWorkflowsTab ? (
+        <p className={"lock rv"} style={{ fontSize: "13.5px", margin: "0 0 12px" }}>
+          <Icon name={"lock"} cls={"ic s"} />
+          {"Program templates are reviewed centrally and read only here. To build or edit your firm’s own workflow, open "}
+          <a href={"/sheet/templates?tab=workflows"}>{"Workflows"}</a>
+          {"."}
+        </p>
+      ) : null}
       {data.program.rows.length === 0 ? (
         <div className={"panel rv"} style={i(1)}>
           <Empty art={"templates-empty"} title={"No program templates yet"} copy={"A program template appears here once its official sources are reviewed and it is published."} />
@@ -590,7 +615,28 @@ function Rule({ rule }: { rule: RuleDetail | null }) {
   );
 }
 
+function Workflows({ data }: { data: TemplatesData }) {
+  return (
+    <>
+      <div className={"ph rv"} style={i(0)}>
+        <div>
+          <h1 className={"display"}>{"Workflows"}</h1>
+          <p>{"Your firm’s own workflows: the stages of a file, the steps in each and the documents to request. Start from scratch, or copy a Casevoya shared template and edit your copy."}</p>
+        </div>
+      </div>
+      {data.workflows ? (
+        <WorkflowsLive data={data.workflows} />
+      ) : (
+        <div className={"panel rv"} style={i(1)}>
+          <Empty art={"templates-empty"} title={"Workflows couldn’t load"} copy={"Reload the page. Nothing was changed. If it keeps happening, sign in again."} />
+        </div>
+      )}
+    </>
+  );
+}
+
 export function SheetTemplates({ data }: { data: TemplatesData }) {
+  if (data.tab === "workflows") return <Workflows data={data} />;
   if (data.tab === "messages") return <Messages data={data} />;
   if (data.tab === "checklists") return <Checklists data={data} />;
   if (data.tab === "sources") return <Sources data={data} />;
@@ -611,7 +657,7 @@ export function SheetTemplates({ data }: { data: TemplatesData }) {
         <Empty art={"templates-empty"} title={"Shared templates couldn’t load"} copy={"Reload the page. Nothing was changed. If it keeps happening, sign in again."} />
       </div>
     ) : (
-      <SharedTemplatesPanel organizationId={data.shared.organizationId} view={data.shared} />
+      <SharedTemplatesPanel organizationId={data.shared.organizationId} view={data.shared} canCopy={data.canCopyShared} />
     );
   }
   return <Program data={data} />;

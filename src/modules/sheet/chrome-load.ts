@@ -130,6 +130,7 @@ async function baseChrome(staff: SheetStaff, active: string): Promise<SheetChrom
         toastSub: "Use Team queue, Due this week and Awaiting my review. Their filters work on each page.",
         disabled: "Saved boards aren’t available yet",
       },
+      showWorkflows: true,
     },
     // No workspace switcher exists (a staff session is in one firm), so the firm name opens Settings > Firm.
     top: { firmName: staff.organizationName, pills: [`Your matters: ${matterCount.count ?? 0}`], firmHref: FIRM_SETTINGS },

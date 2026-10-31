@@ -1277,3 +1277,11 @@ Tested in `tests/security-review-booking-hash.rls.test.ts` and `tests/security-r
 * The app (`src/lib/security/auth-attempts.ts`) reserves before Supabase Auth is called and resolves afterwards, and fails open when the service key is missing or the call errors; the Workers Rate Limiting bindings (`src/lib/security/rate-limit.ts`, `wrangler.jsonc`) are the per-address and per-user first layer.
 
 Tested in `tests/security-review-auth-attempts.rls.test.ts`.
+
+## Firm workflows (`20261101110000`)
+
+Francis, 2026-10-30 ("how do firms create their workflow? The page looks read only"). Branch `feat/firm-workflows`. Additive only.
+
+* `20261101110000_firm_workflows.sql`: new tables `public.firm_workflows` (name, optional program key, description, active or archived, the shared template and version it was copied from, row version), `public.firm_workflow_stages` (ordered stages) and `public.firm_workflow_items` (ordered steps and document requests per stage: title, optional note, done or provided by the firm or the client, optional days); all forced RLS, select for the firm's staff with MFA, no API writes; `firm_workflows` has the row-change audit and refuses delete and truncate. New `public.save_firm_workflow` (create, or replace the content of an active workflow at the expected row version), `public.copy_shared_template_to_workflow` (the firm's editable copy of a published or superseded shared template version; its items become the steps of one stage; the shared template is not changed) and `public.set_firm_workflow_archived` (archive or restore; nothing is deleted). All three: firm owner or licensed consultant (`app.firm_workflow_editor`), audited `workflow.created`, `workflow.saved`, `workflow.copied`, `workflow.archived`, `workflow.restored`.
+
+Tested in `tests/firm-workflows.rls.test.ts` and `tests/workflows-present.test.ts`.

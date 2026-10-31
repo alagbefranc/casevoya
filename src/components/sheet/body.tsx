@@ -683,7 +683,7 @@ export async function SheetBody({
   }
   // Practice > Templates: program and agreement templates, the approved email catalog, checklists, and the rule source register (read only).
   if (page === "templates" && (access.kind === "live" || access.kind === "sample")) {
-    const tab = query.tab === "messages" || query.tab === "checklists" || query.tab === "sources" || query.tab === "rule" || query.tab === "shared" ? query.tab : "program";
+    const tab = query.tab === "workflows" || query.tab === "messages" || query.tab === "checklists" || query.tab === "sources" || query.tab === "rule" || query.tab === "shared" ? query.tab : "program";
     // DES-04: where official content shows (program templates, Source review, a rule), say when its source is stale.
     const official = tab === "program" || tab === "sources" || tab === "rule";
     const [loaded, stale] = await Promise.all([
