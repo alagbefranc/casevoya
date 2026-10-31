@@ -159,6 +159,8 @@ import {
   runComposioSwitch,
   runIntConnect,
   runIntDisconnect,
+  runIntConfirm,
+  runIntDismiss,
   runIntSync,
   runNotifPref,
   runQuietHours,
@@ -1305,7 +1307,7 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
       // Settings > Integrations and Notifications: connected accounts, connections, busy times,
       // the person's own email switches and the firm's quiet hours.
       const setting = target.closest<HTMLElement>(
-        ".k2-sw[data-composio], [data-composio-enable], [data-int-connect], [data-int-disconnect], [data-int-sync], .k2-sw[data-notif-pref], .k2-sw[data-quiet], [data-wa-connect], [data-wa-disconnect]",
+        ".k2-sw[data-composio], [data-composio-enable], [data-int-connect], [data-int-disconnect], [data-int-sync], [data-int-confirm], [data-int-dismiss], .k2-sw[data-notif-pref], .k2-sw[data-quiet], [data-wa-connect], [data-wa-disconnect]",
       );
       if (setting && root.contains(setting)) {
         event.preventDefault();
@@ -1326,6 +1328,10 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
                   ? () => runIntDisconnect(setting, router)
                   : data.intSync !== undefined
                     ? () => runIntSync(setting, router)
+                    : data.intConfirm !== undefined
+                      ? () => runIntConfirm(setting, router)
+                      : data.intDismiss !== undefined
+                        ? () => runIntDismiss(setting, router)
                     : data.notifPref !== undefined
                       ? () => runNotifPref(setting, router)
                       : () => runQuietHours(setting, router);

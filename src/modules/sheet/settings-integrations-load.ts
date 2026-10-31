@@ -23,7 +23,7 @@ async function loadIntegrations(staff: SheetStaff) {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
   const canBill = BILLING_ROLES.has(staff.role);
-  const [firm, vo, connections, busy, account] = await Promise.all([
+  const [firm, vo, connections, busy, account, proposals] = await Promise.all([
     supabase.from("organizations").select("slug").eq("id", org).maybeSingle(),
     supabase.from("vo_settings").select("composio_enabled, composio_accepted_at").eq("organization_id", org).maybeSingle(),
     supabase.from("staff_connections").select("id, toolkit, status, updated_at").eq("organization_id", org).eq("membership_id", staff.membershipId),
@@ -37,6 +37,15 @@ async function loadIntegrations(staff: SheetStaff) {
       .limit(1)
       .maybeSingle(),
     canBill ? supabase.from("firm_payment_accounts").select("card_payments_status, requirements_due").eq("organization_id", org).maybeSingle() : null,
+    supabase
+      .from("connected_action_proposals")
+      .select("id, toolkit, summary, created_at")
+      .eq("organization_id", org)
+      .eq("membership_id", staff.membershipId)
+      .eq("status", "pending")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at")
+      .limit(20),
   ]);
   const whatsapp = await loadWhatsApp(supabase, org);
   const mail = emailRuntimeConfig();
@@ -61,6 +70,7 @@ async function loadIntegrations(staff: SheetStaff) {
     },
     whatsapp,
     timeZone: staff.timezone,
+    proposals: (proposals.data ?? []).map((row) => ({ id: row.id, toolkit: row.toolkit, summary: row.summary, createdAt: row.created_at })),
   };
   return { integrations: integrationsData(input), dialog: composioDialog(input), whatsappDialog: whatsappDialog(input) };
 }

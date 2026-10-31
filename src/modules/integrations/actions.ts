@@ -18,7 +18,7 @@ function readyLabel(data: unknown): string | null {
   const label = (data as Record<string, unknown>).mail_label;
   return typeof label === "string" && label.length > 0 ? label : null;
 }
-const TOOLKITS = ["gmail", "outlook", "googlecalendar", "outlook_calendar", "zoom", "googlemeet", "microsoft_teams", "dropbox", "calendly"] as const;
+const TOOLKITS = ["gmail", "outlook", "googlecalendar", "outlook_calendar", "zoom", "googlemeet", "microsoft_teams", "dropbox", "calendly", "quickbooks"] as const;
 type Toolkit = (typeof TOOLKITS)[number];
 
 /** Composio's toolkit slug for each of our connection kinds (Outlook mail and calendar share one). */
@@ -28,6 +28,7 @@ const COMPOSIO_TOOLKIT: Record<Toolkit, string> = { gmail: "gmail", outlook: "ou
   microsoft_teams: "microsoft_teams",
   dropbox: "dropbox",
   calendly: "calendly",
+  quickbooks: "quickbooks",
 };
 
 async function me(organizationId: string) {

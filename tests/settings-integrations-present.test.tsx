@@ -33,8 +33,8 @@ const row = (rows: IntegrationRow[], name: string) => {
   return found;
 };
 
-const PLANNED = ["QuickBooks", "Twilio"];
-const COMPOSIO = ["Gmail", "Google Calendar", "Microsoft Outlook", "Microsoft 365 calendar", "Zoom", "Dropbox", "Calendly", "Microsoft Teams", "Google Meet"];
+const PLANNED = ["Twilio"];
+const COMPOSIO = ["Gmail", "Google Calendar", "Microsoft Outlook", "Microsoft 365 calendar", "Zoom", "Dropbox", "Calendly", "Microsoft Teams", "Google Meet", "QuickBooks"];
 
 describe("Settings > Integrations", () => {
   it("shows Casevoya email and calendar as built in, with the firm's real addresses", () => {

@@ -24,7 +24,8 @@ export type ComposioToolkit =
   | "googlemeet"
   | "microsoft_teams"
   | "dropbox"
-  | "calendly";
+  | "calendly"
+  | "quickbooks";
 
 export type StaffConnection = { id: string; toolkit: string; status: string; updatedAt: string };
 
@@ -43,7 +44,11 @@ export type IntegrationsInput = {
   /** The firm's WhatsApp number through Zernio. Absent: shown as not available. */
   whatsapp?: WhatsAppInput;
   timeZone: string;
+  /** Writes Vo proposed in this person's connected apps, waiting for their confirmation. */
+  proposals?: ConnectedProposal[];
 };
+
+export type ConnectedProposal = { id: string; toolkit: string; summary: string; createdAt: string };
 
 /** The firm's WhatsApp connection (firm_whatsapp_accounts) and Meta's live view of the number. */
 export type WhatsAppInput = {
@@ -138,6 +143,19 @@ function composioRow(input: IntegrationsInput, toolkit: ComposioToolkit, name: s
     state: { tone: "ok", label: "Connected" },
     unlink,
     action: toolkit === "googlecalendar" ? { label: "Sync busy times", attrs: { "data-int-sync": "1", "data-org": org } } : connect("Reconnect"),
+  };
+}
+
+/** A write Vo proposed: the person reads it, then Confirm runs it once (or dismiss). */
+function proposalRow(input: IntegrationsInput, item: ConnectedProposal): IntegrationRow {
+  return {
+    logo: null,
+    name: "Vo is waiting for you to confirm",
+    tag: "connected app",
+    sub: { left: item.summary, right: `proposed ${when(item.createdAt, input.timeZone)}` },
+    state: { tone: "chg", label: "Waiting" },
+    unlink: { "aria-label": "Dismiss", "data-int-dismiss": item.id, "data-org": input.organizationId },
+    action: { label: "Confirm", attrs: { "data-int-confirm": item.id, "data-org": input.organizationId } },
   };
 }
 
@@ -260,7 +278,7 @@ export function integrationsData(input: IntegrationsInput): IntegrationsData {
   return {
     title: "Integrations",
     intro:
-      "Casevoya’s own email and calendar work for everyone without any connection. Connecting your own Gmail, Outlook, Google Calendar, Zoom, Google Meet, Teams, Dropbox or Calendly is optional and goes through Composio, after the firm owner turns on connected accounts. Rows marked “connection only for now” link your account; Casevoya doesn’t use them for anything yet. Integrations marked planned aren’t available yet.",
+      "Casevoya’s own email and calendar work for everyone without any connection. Connecting your own Gmail, Outlook, Google Calendar, Zoom, Google Meet, Teams, Dropbox, Calendly or QuickBooks is optional and goes through Composio, after the firm owner turns on connected accounts. Vo reads them only for you, and anything that creates something waits for you to confirm it. Nothing is sent, deleted or shared. Integrations marked planned aren’t available yet.",
     lead: [
       {
         logo: "/assets/brand/favicon.svg",
@@ -279,20 +297,21 @@ export function integrationsData(input: IntegrationsInput): IntegrationsData {
         action: { label: "Manage", attrs: { "data-nav": "/sheet/calendar" } },
       },
       composioSwitch(input),
+      ...(input.proposals ?? []).map((item) => proposalRow(input, item)),
     ],
-    microsoft: { left: "Outlook mail, calendar and Teams connect through Composio", right: "Teams: connection only for now" },
+    microsoft: { left: "Outlook mail, calendar and Teams connect through Composio", right: "Teams meeting links when you confirm" },
     rows: [
       stripeRow(input),
-      planned("QuickBooks", "quickbooks.svg", "Accounting, firm-wide (not per person)"),
+      composioRow(input, "quickbooks", "QuickBooks", "quickbooks.svg", "Customers and balances Vo can read when you ask"),
       composioRow(input, "googlecalendar", "Google Calendar", "googlecalendar.svg", "Calendar busy times"),
       composioRow(input, "gmail", "Gmail", "gmail.svg", "Email from your Casevoya label, drafts only"),
-      composioRow(input, "zoom", "Zoom", "zoom.svg", "Meetings: connection only for now"),
-      composioRow(input, "dropbox", "Dropbox", "dropbox.svg", "Files: connection only for now"),
-      composioRow(input, "calendly", "Calendly", "calendly.svg", "Booking: connection only for now"),
+      composioRow(input, "zoom", "Zoom", "zoom.svg", "Meeting links Vo can create when you confirm"),
+      composioRow(input, "dropbox", "Dropbox", "dropbox.svg", "Folders Vo can list, search and create when you confirm"),
+      composioRow(input, "calendly", "Calendly", "calendly.svg", "Event types, bookings and one-time links Vo can make when you confirm"),
       composioRow(input, "outlook", "Microsoft Outlook", "integrations/microsoftoutlook-color.svg", "Email drafts only"),
       composioRow(input, "outlook_calendar", "Microsoft 365 calendar", "integrations/microsoft365-color.svg", "Calendar"),
-      composioRow(input, "microsoft_teams", "Microsoft Teams", "integrations/microsoftteams-color.svg", "Meetings: connection only for now"),
-      composioRow(input, "googlemeet", "Google Meet", "googlemeet.svg", "Meetings: connection only for now"),
+      composioRow(input, "microsoft_teams", "Microsoft Teams", "integrations/microsoftteams-color.svg", "Meeting links Vo can create when you confirm"),
+      composioRow(input, "googlemeet", "Google Meet", "googlemeet.svg", "Meeting links Vo can create when you confirm"),
       planned("Twilio", "twilio.svg", { left: "SMS reminders", right: "optional" }),
       later("Xero", "xero.svg", "Accounting export", { tone: "gr", label: "Later" }),
       whatsappRow(input),
@@ -305,7 +324,7 @@ export function composioDialog(input: Pick<IntegrationsInput, "organizationId" |
   if (!input.isOwner || !input.composio.configured || input.composio.enabled) return null;
   return {
     organizationId: input.organizationId,
-    lead: "Casevoya’s own email and calendar keep working without this. Turning it on lets each person in the firm connect their own Gmail, Outlook or Google Calendar, and link Zoom, Google Meet, Teams, Dropbox or Calendly (linked only for now, nothing is read from them).",
+    lead: "Casevoya’s own email and calendar keep working without this. Turning it on lets each person in the firm connect their own Gmail, Outlook or Google Calendar, and Zoom, Google Meet, Teams, Dropbox, Calendly or QuickBooks. Vo can read them for that person, and anything that creates something waits for their confirmation.",
     points: [
       {
         title: "Mail and busy times pass through Composio, in the United States",

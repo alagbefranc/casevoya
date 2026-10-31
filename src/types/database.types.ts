@@ -13627,6 +13627,26 @@ export type Database = {
         }
         Relationships: []
       }
+      connected_action_proposals: {
+        Row: {
+          action: string
+          arguments: Json
+          created_at: string
+          created_by: string
+          expires_at: string
+          id: string
+          membership_id: string
+          organization_id: string
+          result: string | null
+          settled_at: string | null
+          status: string
+          summary: string
+          toolkit: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       staff_connections: {
         Row: {
           connected_account_id: string | null
@@ -17768,6 +17788,18 @@ export type Database = {
       composio_connection_ready: {
         Args: { p_organization_id: string; p_toolkit?: string }
         Returns: Json
+      }
+      propose_connected_action: {
+        Args: { p_action: string; p_arguments: Json; p_organization_id: string; p_summary: string; p_toolkit: string }
+        Returns: string
+      }
+      claim_connected_action: {
+        Args: { p_proposal_id: string }
+        Returns: Json
+      }
+      settle_connected_action: {
+        Args: { p_proposal_id: string; p_result?: string; p_status: string }
+        Returns: undefined
       }
       set_composio_enabled: {
         Args: { p_accept_disclosure: boolean; p_enabled: boolean; p_organization_id: string }
