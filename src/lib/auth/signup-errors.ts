@@ -3,6 +3,8 @@
  * Pure, so the server actions and the screens share it and it is unit tested.
  */
 
+import { safeRedirect } from "@/lib/auth/redirect";
+
 /**
  * An address that already has a confirmed account. Supabase answers that sign-up with a fake
  * success (a user with no identities, no session) and sends nothing, so the screen must not move
@@ -80,8 +82,9 @@ export function messageParts(message: string): MessagePart[] {
   for (const match of message.matchAll(link)) {
     const start = match.index ?? 0;
     if (start > at) parts.push({ text: message.slice(at, start) });
-    if (match[2].startsWith("//")) parts.push({ text: match[1] });
-    else parts.push({ text: match[1], href: match[2] });
+    const href = safeRedirect(match[2], "");
+    if (!href) parts.push({ text: match[1] });
+    else parts.push({ text: match[1], href });
     at = start + match[0].length;
   }
   if (at < message.length) parts.push({ text: message.slice(at) });

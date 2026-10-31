@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { homeRoute } from "@/lib/auth/home-route";
-import { safeNext } from "@/lib/auth/redirect";
+import { safeRedirect } from "@/lib/auth/redirect";
 import type { Metadata } from "next";
 import { TwoStepMarkup, type TotpEnrollment } from "@/components/port/markup/two-step";
 import { PortScreen } from "@/components/port/screen";
@@ -35,8 +35,8 @@ async function MfaReady({ searchParams }: { searchParams: Promise<{ step?: strin
         activeStep = mfaActiveStep(true, asked);
       } else if (asked === null && (await homeRoute()) === "/portal") {
         // A client, sponsor or family member has no two-step to set up: send them to their portal.
-        const next = safeNext(params.next, "/portal");
-        redirect(next.startsWith("/portal") ? next : "/portal");
+        const next = safeRedirect(params.next, "/portal");
+        redirect(next === "/portal" || next.startsWith("/portal/") || next.startsWith("/portal?") || next.startsWith("/portal#") ? next : "/portal");
       } else {
         activeStep = mfaActiveStep(false, asked);
         // Never enrol while rendering: a reload would replace a QR the person already scanned.

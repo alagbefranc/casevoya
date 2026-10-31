@@ -1,14 +1,14 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { safeNext } from "@/lib/auth/redirect";
+import { safeRedirect } from "@/lib/auth/redirect";
 import { appOrigin } from "@/lib/email/env";
 import { authEmailGate } from "@/lib/security/auth-attempts";
 import { createClient } from "@/lib/supabase/server";
 
 export async function sendMagicLink(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
-  const next = safeNext(formData.get("next"));
+  const next = safeRedirect(formData.get("next"));
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     redirect(`/sign-in?error=invalid_email&next=${encodeURIComponent(next)}`);
   }

@@ -1,4 +1,5 @@
 import { isStepUpActionKey, type StepUpActionKey } from "@/lib/auth/mfa-step";
+import { safeRedirect } from "@/lib/auth/redirect";
 
 /**
  * One shared way back from a step-up (`/mfa?step=6`), for every Sheet act and portal action.
@@ -91,7 +92,7 @@ export function withResumeToken(href: string, nonce: string): string {
   } catch {
     return href;
   }
-  const next = url.searchParams.get("next");
+  const next = safeRedirect(url.searchParams.get("next"), "");
   if (url.origin !== PROBE || url.pathname !== "/mfa" || !next || !NONCE.test(nonce)) return href;
   const inner = new URL(next, PROBE);
   if (inner.origin !== PROBE) return href;
@@ -106,7 +107,7 @@ export function readStepUpHref(href: string): { action: StepUpActionKey; path: s
     const url = new URL(href, PROBE);
     if (url.origin !== PROBE || url.pathname !== "/mfa") return null;
     const action = url.searchParams.get("for");
-    const next = url.searchParams.get("next");
+    const next = safeRedirect(url.searchParams.get("next"), "");
     if (!isStepUpActionKey(action) || !next) return null;
     const inner = new URL(next, PROBE);
     if (inner.origin !== PROBE) return null;

@@ -1,3 +1,4 @@
+import { safeRedirect } from "@/lib/auth/redirect";
 import { STAFF_ROLES } from "@/lib/tenant/roles";
 
 /** Firm workspace routes. Portal-only sessions are not redirected here. */
@@ -31,6 +32,6 @@ export function staffMfaRedirectPath(input: {
   if (!isStaffArea(input.pathname)) return null;
   if (input.currentAal === "aal2" || input.mfaSatisfied) return null;
   if (!input.activeRoles.some((role) => isStaffRoleName(role))) return null;
-  const next = input.pathname.startsWith("/") && !input.pathname.startsWith("//") ? input.pathname : "/app";
+  const next = safeRedirect(input.pathname, "/app");
   return `${MFA_PATH}?next=${encodeURIComponent(next)}`;
 }

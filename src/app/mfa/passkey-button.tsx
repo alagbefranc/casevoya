@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { safeRedirect } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/client";
 
 /** Starts a passkey sign-in. Supabase issues an aal1 session whose amr method is `passkey`. */
@@ -18,7 +19,7 @@ export function PasskeyButton({ next }: { next: string }) {
       setPending(false);
       return;
     }
-    window.location.assign(next);
+    window.location.assign(safeRedirect(next));
   }
 
   return (

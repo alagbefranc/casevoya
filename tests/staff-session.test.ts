@@ -22,6 +22,17 @@ describe("staff MFA redirect", () => {
     ).toBe("/mfa?next=%2Fapp%2Finvitations");
   });
 
+  it("only ever puts a same-site path in next", () => {
+    expect(
+      staffMfaRedirectPath({
+        pathname: "/app/..//evil.example",
+        signedIn: true,
+        currentAal: "aal1",
+        activeRoles: ["firm_owner"],
+      }),
+    ).toBe("/mfa?next=%2Fapp");
+  });
+
   it("leaves clients, confirmed staff, and non-workspace routes alone", () => {
     expect(
       staffMfaRedirectPath({

@@ -54,8 +54,8 @@ export async function runComposioEnable(button: HTMLElement, router: Router) {
 export async function runIntConnect(button: HTMLElement) {
   const toolkit = button.dataset.intConnect;
   if (!isToolkit(toolkit)) return;
-  const callbackUrl = `${window.location.origin}${INTEGRATIONS_PATH}&connected=${toolkit}`;
-  const result = await connectAccount({ organizationId: button.dataset.org ?? "", toolkit, callbackUrl });
+  // The server sets where the Connect Link returns to (Settings > Integrations on the app origin).
+  const result = await connectAccount({ organizationId: button.dataset.org ?? "", toolkit });
   if ("error" in result) {
     toast2(result.error, { kind: "bad", sub: "Nothing was connected." });
     return;

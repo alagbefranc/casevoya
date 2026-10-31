@@ -113,6 +113,18 @@ describe("start a trial with an email that already has an account (fix 2)", () =
     }
   });
 
+  it("a trial sign-up's confirmation link uses the configured app origin and returns to /start-trial", async () => {
+    const before = process.env.APP_URL;
+    process.env.APP_URL = "https://app.example.test";
+    try {
+      expect(await signUpForTrial(TRIAL)).toEqual({ ok: true });
+      expect(state.redirects).toEqual([`https://app.example.test/auth/confirm?next=${encodeURIComponent("/start-trial")}`]);
+    } finally {
+      if (before === undefined) delete process.env.APP_URL;
+      else process.env.APP_URL = before;
+    }
+  });
+
   it("only a user with an empty identities list and no session counts as taken", () => {
     expect(signUpEmailTaken({ user: { identities: [] }, session: null })).toBe(true);
     expect(signUpEmailTaken({ user: { identities: [{}] }, session: null })).toBe(false);
@@ -179,5 +191,6 @@ describe("rate limit (fix 7)", () => {
       { text: "here" },
       { text: " or [there](https://evil.example)" },
     ]);
+    expect(messageParts("[a](/.//evil.example) [b](/a/..//evil.example)").filter((part) => "href" in part)).toEqual([]);
   });
 });

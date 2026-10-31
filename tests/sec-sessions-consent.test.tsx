@@ -176,6 +176,7 @@ describe("SEC-01 idle sign-out", () => {
     expect(isStaffPageLoad({ ...load, pathname: "/sheets" })).toBe(false);
     expect(idleSignInLocation("/sheet/matters?view=due")).toBe(`/sign-in?idle=1&next=${encodeURIComponent("/sheet/matters?view=due")}`);
     expect(idleSignInLocation("//evil.example")).toBe(`/sign-in?idle=1&next=${encodeURIComponent("/sheet")}`);
+    expect(idleSignInLocation("/a/..//evil.example")).toBe(`/sign-in?idle=1&next=${encodeURIComponent("/sheet")}`);
   });
 
   it("shows the value and On on the Security tab, with the owner's Change dialog built from the Designer's parts", () => {

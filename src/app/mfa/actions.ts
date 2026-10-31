@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { safeNext } from "@/lib/auth/redirect";
+import { safeRedirect } from "@/lib/auth/redirect";
 import { recordAuthAttempt, totpGate } from "@/lib/security/auth-attempts";
 import { createClient } from "@/lib/supabase/server";
 
@@ -38,7 +38,7 @@ export async function enrollTotp(): Promise<EnrollState> {
 }
 
 export async function verifyTotp(formData: FormData) {
-  const next = safeNext(formData.get("next"));
+  const next = safeRedirect(formData.get("next"));
   const factorId = String(formData.get("factorId") ?? "");
   const code = String(formData.get("code") ?? "").replace(/\s/g, "");
   if (!/^[0-9a-f-]{36}$/i.test(factorId) || !/^\d{6}$/.test(code)) {
@@ -62,12 +62,12 @@ export async function verifyTotp(formData: FormData) {
     await recordAuthAttempt("totp", userId, true);
     redirect(mfaPath(next, "verify_failed"));
   }
-  redirect(next);
+  redirect(safeRedirect(next));
 }
 
 /** Redeems one app recovery code for this session. The code is not written to logs. */
 export async function redeemRecoveryCode(formData: FormData) {
-  const next = safeNext(formData.get("next"));
+  const next = safeRedirect(formData.get("next"));
   const code = String(formData.get("code") ?? "").trim();
   if (!/^[A-Za-z0-9-]{8,32}$/.test(code)) redirect(mfaPath(next, "invalid_recovery"));
 
@@ -77,5 +77,5 @@ export async function redeemRecoveryCode(formData: FormData) {
 
   const { data, error } = await supabase.rpc("consume_recovery_code", { p_code: code });
   if (error || data !== true) redirect(mfaPath(next, "recovery_failed"));
-  redirect(next);
+  redirect(safeRedirect(next));
 }

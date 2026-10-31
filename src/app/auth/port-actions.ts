@@ -5,7 +5,7 @@ import { hasPublicSupabaseEnv } from "@/lib/env";
 import { passwordOk } from "@/lib/auth/password";
 import { safeAccessError } from "@/lib/auth/step-up";
 import { homeRoute } from "@/lib/auth/home-route";
-import { safeNext } from "@/lib/auth/redirect";
+import { safeRedirect } from "@/lib/auth/redirect";
 import { clearPendingTotp, readPendingTotp, withQr, writePendingTotp, type TotpSetup } from "@/lib/auth/mfa-pending";
 import { firmSlug } from "@/lib/auth/slug";
 import { syncClaimedFirmSlug } from "@/modules/email/sync-routing";
@@ -213,7 +213,7 @@ export async function signInWithPassword(email: string, password: string, next: 
   if (error) {
     return lockedMessage(error.message) ? fail(error.message, "locked") : fail("Email or password didn’t match", "error");
   }
-  const dest = safeNext(next, "/app");
+  const dest = safeRedirect(next, "/app");
   // Clients, sponsors and family sign in with a password, plus their code when they turned on
   // two-step on their Account page (SEC-01).
   if ((await homeRoute()) === "/portal") {
@@ -226,7 +226,8 @@ export async function signInWithPassword(email: string, password: string, next: 
 
 /** A portal-only account goes where it asked if that is a portal page, else to its portal. */
 function portalDestination(dest: string): string {
-  return dest === "/portal" || dest.startsWith("/portal/") || dest.startsWith("/portal?") ? dest : "/portal";
+  const safe = safeRedirect(dest, "/portal");
+  return safe === "/portal" || safe.startsWith("/portal/") || safe.startsWith("/portal?") ? safe : "/portal";
 }
 
 export async function sendRecoveryEmail(email: string): Promise<PortResult | null> {
@@ -303,7 +304,12 @@ export async function signUpForTrial(input: {
   const { data, error } = await supabase.auth.signUp({
     email,
     password: input.password,
-    options: { data: { display_name: name } },
+    options: {
+      data: { display_name: name },
+      // A confirmed sign-up with no firm yet lands on /start-trial, which asks only for the firm.
+      // The configured app origin, never a request header.
+      emailRedirectTo: `${appOrigin()}/auth/confirm?next=${encodeURIComponent("/start-trial")}`,
+    },
   });
   if (error) {
     if (error.code === "user_already_exists" || /already registered|already exists/i.test(error.message)) {

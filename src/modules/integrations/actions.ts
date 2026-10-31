@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { readGoogleBusy } from "./calendar";
+import { composioCallbackUrl } from "./callback";
 import { composioConfigured, connectLink, staffSession, toolkitSession } from "./composio";
 import { composioMailProvider } from "./mail/composio-mail";
 
@@ -38,7 +39,10 @@ export async function setComposioEnabled(input: { organizationId: string; enable
   return { ok: true };
 }
 
-/** A Connect Link for the signed-in staff member's own account (Composio-managed OAuth). */
+/**
+ * A Connect Link for the signed-in staff member's own account (Composio-managed OAuth). It returns
+ * to Settings > Integrations on the app origin; `callbackUrl` is accepted for compatibility and ignored.
+ */
 export async function connectAccount(input: { organizationId: string; toolkit: Toolkit; callbackUrl?: string }): Promise<Result<{ url: string }>> {
   if (!isUuid(input.organizationId) || !TOOLKITS.includes(input.toolkit)) return { error: "Choose an account to connect." };
   if (!composioConfigured()) return { error: NOT_CONFIGURED };
@@ -47,8 +51,7 @@ export async function connectAccount(input: { organizationId: string; toolkit: T
   const saved = await supabase.rpc("save_staff_connection", { p_organization_id: input.organizationId, p_toolkit: input.toolkit, p_status: "pending" });
   if (saved.error) return { error: /not turned on/.test(saved.error.message) ? "The firm owner hasn’t turned on connected accounts." : "Only firm staff can connect an account." };
   try {
-    const callback = input.callbackUrl && /^https:\/\/app\.casevoya\.ca\//.test(input.callbackUrl) ? input.callbackUrl : undefined;
-    return { ok: true, url: await connectLink(membershipId, COMPOSIO_TOOLKIT[input.toolkit], callback) };
+    return { ok: true, url: await connectLink(membershipId, COMPOSIO_TOOLKIT[input.toolkit], composioCallbackUrl(input.toolkit)) };
   } catch {
     return { error: "Composio didn’t return a link. Try again." };
   }

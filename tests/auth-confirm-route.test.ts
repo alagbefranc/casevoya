@@ -138,6 +138,17 @@ describe("/auth/confirm", () => {
     expect(unsafe.headers.get("location")).toBe(`${ORIGIN}/app`);
   });
 
+  it("dot segments in next never redirect off this site", async () => {
+    for (const next of ["/.//evil.example", "/%2e//evil.example", "/a/..//evil.example", "/a/%2e%2e//evil.example"]) {
+      state.exchange = null;
+      const viaCode = await open(`code=pkce-code&next=${encodeURIComponent(next)}`);
+      expect(viaCode.headers.get("location"), next).toBe(`${ORIGIN}/app`);
+      state.verify = null;
+      const viaPost = await post({ token_hash: "abc", type: "email", next });
+      expect(viaPost.headers.get("location"), next).toBe(`${ORIGIN}/app`);
+    }
+  });
+
   it("a failed verification sends an invitee back to the invitation, anyone else to sign-in", async () => {
     expect((await post({ token_hash: "abc", type: "signup", next: NEXT })).headers.get("location")).toBe(`${ORIGIN}${NEXT}`);
     expect((await post({ token_hash: "abc", type: "signup", next: "/app" })).headers.get("location")).toBe(`${ORIGIN}/sign-in?error=link_invalid`);
