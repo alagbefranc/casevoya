@@ -54,3 +54,11 @@ export async function connectLink(membershipId: string, toolkit: string, callbac
   if (!request.redirectUrl) throw new Error("Composio returned no Connect Link");
   return request.redirectUrl;
 }
+
+/**
+ * Runs one Composio action as this staff member (their own connected account). Callers check the
+ * action against vo-connected-tools.ts and composio_connection_ready first.
+ */
+export async function executeAs(membershipId: string, slug: string, args: Record<string, unknown>) {
+  return composio().tools.execute(slug, { userId: membershipId, arguments: args, dangerouslySkipVersionCheck: true });
+}

@@ -4,6 +4,7 @@ import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { COMPOSIO_DIALOG } from "@/components/sheet/designer/settings-integrations";
 import { connectAccount, disconnectAccount, refreshConnection, setComposioEnabled, syncCalendarBusy } from "@/modules/integrations/actions";
+import { confirmConnectedAction, dismissConnectedAction } from "@/modules/integrations/vo-connected-actions";
 import { saveNotificationPreference } from "@/modules/notifications/actions";
 import { DEFAULT_QUIET_HOURS } from "@/modules/notifications/preferences";
 import { needsStepUp } from "@/modules/sheet/matter-wire";
@@ -14,14 +15,21 @@ import { stepUpHref } from "@/lib/auth/mfa-step";
 
 type Router = { replace: (href: string) => void; refresh: () => void };
 
-const TOOLKITS = ["gmail", "outlook", "googlecalendar", "outlook_calendar"] as const;
+const TOOLKITS = ["gmail", "outlook", "googlecalendar", "outlook_calendar", "zoom", "googlemeet", "microsoft_teams", "dropbox", "calendly", "quickbooks"] as const;
 type Toolkit = (typeof TOOLKITS)[number];
 
 function isToolkit(value: string | null | undefined): value is Toolkit {
   return (TOOLKITS as readonly string[]).includes(value ?? "");
 }
 
-const NAME: Record<Toolkit, string> = { gmail: "Gmail", outlook: "Outlook", googlecalendar: "Google Calendar", outlook_calendar: "Microsoft 365 calendar" };
+const NAME: Record<Toolkit, string> = { gmail: "Gmail", outlook: "Outlook", googlecalendar: "Google Calendar", outlook_calendar: "Microsoft 365 calendar",
+  zoom: "Zoom",
+  googlemeet: "Google Meet",
+  microsoft_teams: "Microsoft Teams",
+  dropbox: "Dropbox",
+  calendly: "Calendly",
+  quickbooks: "QuickBooks",
+};
 
 /** The connected-accounts switch: turning on opens the disclosure; turning off saves at once. */
 export async function runComposioSwitch(button: HTMLElement, openDialog: (id: string) => void, router: Router) {
@@ -46,7 +54,7 @@ export async function runComposioEnable(button: HTMLElement, router: Router) {
     return;
   }
   button.closest("dialog")?.close();
-  toast2("Connected accounts turned on", { kind: "ok", sub: "Each person can now connect their own Gmail, Outlook or Google Calendar." });
+  toast2("Connected accounts turned on", { kind: "ok", sub: "Each person can now connect their own accounts below." });
   router.refresh();
 }
 
@@ -70,6 +78,28 @@ export async function runIntDisconnect(button: HTMLElement, router: Router) {
     return;
   }
   toast2("Disconnected", { kind: "ok", sub: "Casevoya no longer uses it. Busy times read from a calendar are removed." });
+  router.refresh();
+}
+
+/** "Confirm" on a write Vo proposed in a connected app: it runs once, in the person's own account. */
+export async function runIntConfirm(button: HTMLElement, router: Router) {
+  const result = await confirmConnectedAction({ organizationId: button.dataset.org ?? "", proposalId: button.dataset.intConfirm ?? "" });
+  if ("error" in result) {
+    toast2(result.error, { kind: "bad", sub: "Nothing was created." });
+    router.refresh();
+    return;
+  }
+  toast2("Done", { kind: "ok", sub: "Created in your connected app." });
+  router.refresh();
+}
+
+export async function runIntDismiss(button: HTMLElement, router: Router) {
+  const result = await dismissConnectedAction({ organizationId: button.dataset.org ?? "", proposalId: button.dataset.intDismiss ?? "" });
+  if ("error" in result) {
+    toast2(result.error, { kind: "bad", sub: "Nothing was changed." });
+    return;
+  }
+  toast2("Dismissed", { kind: "ok", sub: "Nothing was created." });
   router.refresh();
 }
 

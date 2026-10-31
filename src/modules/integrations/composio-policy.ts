@@ -16,9 +16,17 @@ export type ComposioClass = ComposioPurpose | "blocked";
 /** Verbs that change mail or calendars or reach other people. Checked first. */
 const BLOCK = /(SEND|REPLY|FORWARD|DELETE|TRASH|REMOVE|MOVE|IMPORT|INSERT|PATCH|UPDATE|MODIFY|CREATE_EVENT|QUICK_ADD|BATCH|CLEAR|ACL|WATCH|CHANNELS_STOP|SUBSCRIBE|SHARE|ARCHIVE|LABEL_(ADD|CREATE)|ADD_LABEL|CREATE_LABEL|CREATE_CALENDAR|DUPLICATE|SETTINGS|FILTER|VACATION|AUTO_?REPLY|RULE)/;
 
+/**
+ * Toolkits whose tools never go through this classifier: Vo runs only the explicit list in
+ * vo-connected-tools.ts for them (reads at once, writes after the person confirms).
+ */
+const CONNECT_ONLY = /^(ZOOM|GOOGLEMEET|MICROSOFT_TEAMS|DROPBOX|CALENDLY|QUICKBOOKS)_/;
+
 export function classifyComposioTool(slug: string): ComposioClass {
   const s = slug.toUpperCase();
   if (!/^[A-Z][A-Z0-9_]{2,100}$/.test(s)) return "blocked";
+  // Apps Vo uses only through its explicit list (vo-connected-tools.ts): blocked here.
+  if (CONNECT_ONLY.test(s)) return "blocked";
   if (/(FREE_?BUSY|GET_SCHEDULE|FIND_FREE_SLOTS)/.test(s)) return "freebusy";
   // A draft tool is allowed only when it creates a draft and does nothing else listed above.
   if (/CREATE(_EMAIL)?_DRAFT$/.test(s) && !/SEND/.test(s)) return "draft";

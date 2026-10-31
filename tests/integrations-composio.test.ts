@@ -168,3 +168,13 @@ describe("calendar busy times", () => {
     expect(busy).not.toContain(Date.parse("2030-03-04T15:00:00Z"));
   });
 });
+
+describe("connection-only toolkits", () => {
+  it("blocks every Zoom, Google Meet, Teams, Dropbox and Calendly tool, even list/read ones", async () => {
+    const { classifyComposioTool } = await import("@/modules/integrations/composio-policy");
+    for (const slug of ["ZOOM_LIST_MEETINGS", "GOOGLEMEET_GET_MEET", "MICROSOFT_TEAMS_LIST_MESSAGES", "MICROSOFT_TEAMS_CHATS_GET_ALL_MESSAGES", "DROPBOX_LIST_FOLDER", "CALENDLY_LIST_EVENTS", "ZOOM_CREATE_A_MEETING"]) {
+      expect(classifyComposioTool(slug), slug).toBe("blocked");
+    }
+  });
+});
+
