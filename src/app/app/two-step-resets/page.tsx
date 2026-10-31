@@ -37,7 +37,11 @@ async function Resets({ searchParams }: { searchParams: PageProps<"/app/two-step
   const firms = (memberships ?? []).map((m) => ({ id: m.organization_id, name: m.organizations?.display_name ?? "Firm" }));
 
   const lists = await Promise.all(
-    firms.map(async (f) => ({ firm: f, rows: (await supabase.rpc("firm_mfa_resets", { p_org: f.id })).data ?? [] })),
+    firms.map(async (f) => {
+      // The RPC checks the active org, which travels as the x-casevoya-org header.
+      const firmClient = await createClient({ organizationId: f.id });
+      return { firm: f, rows: (await firmClient.rpc("firm_mfa_resets", { p_org: f.id })).data ?? [] };
+    }),
   );
 
   return (
@@ -86,6 +90,7 @@ async function Resets({ searchParams }: { searchParams: PageProps<"/app/two-step
                 {r.reason ? <blockquote className="mt-2 border-l-2 border-line pl-3 whitespace-pre-wrap">{r.reason}</blockquote> : null}
                 {r.status === "pending" && r.requester_user_id !== claims.claims.sub ? (
                   <form action={decideMfaReset} className="mt-3 flex flex-wrap items-center gap-3">
+                    <input type="hidden" name="orgId" value={firm.id} />
                     <input type="hidden" name="requestId" value={r.id} />
                     <label className="flex items-center gap-2">
                       <input type="checkbox" name="confirmed" />
