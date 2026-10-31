@@ -14407,6 +14407,10 @@ export type Database = {
         Args: { p_failed: boolean; p_id: string }
         Returns: undefined
       }
+      request_window_hit: {
+        Args: { p_bucket: string; p_key_hash: string; p_limit: number; p_window_seconds: number }
+        Returns: Json
+      }
       save_firm_template_override: {
         Args: { p_items: Json; p_reason: string; p_summary: string; p_template_id: string; p_title: string }
         Returns: Json
