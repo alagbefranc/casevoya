@@ -15,7 +15,16 @@ import type {
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import { DEFAULT_QUIET_HOURS, IN_APP_ROWS, STAFF_EMAIL_ROWS } from "@/modules/notifications/preferences";
 
-export type ComposioToolkit = "gmail" | "googlecalendar" | "outlook" | "outlook_calendar";
+export type ComposioToolkit =
+  | "gmail"
+  | "googlecalendar"
+  | "outlook"
+  | "outlook_calendar"
+  | "zoom"
+  | "googlemeet"
+  | "microsoft_teams"
+  | "dropbox"
+  | "calendly";
 
 export type StaffConnection = { id: string; toolkit: string; status: string; updatedAt: string };
 
@@ -64,6 +73,9 @@ function day(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat("en-GB", { timeZone, day: "numeric", month: "short", year: "numeric" }).format(new Date(iso));
 }
 
+/** Same id as COMPOSIO_DIALOG in the designer component (the owner's disclosure). */
+export const COMPOSIO_DIALOG_ID = "dlgComposio";
+
 const NOT_CONNECTED: MatterBadge = { tone: "gr", label: "Not connected" };
 
 /** A row for something Casevoya hasn't built: the Designer's planned tag and a Connect that does nothing. */
@@ -96,11 +108,22 @@ function composioRow(input: IntegrationsInput, toolkit: ComposioToolkit, name: s
     };
   }
   if (!input.composio.enabled) {
+    // Off at the firm: the owner gets the switch's disclosure right here; everyone else is told who to ask.
+    if (input.isOwner) {
+      return {
+        ...base,
+        state: connection ? { tone: "gr", label: "Paused", detail: "connected accounts are off" } : NOT_CONNECTED,
+        unlink,
+        action: { label: "Turn on connected accounts", attrs: { "data-dlg": COMPOSIO_DIALOG_ID, "data-org": org } },
+      };
+    }
     return {
       ...base,
-      state: connection ? { tone: "gr", label: "Paused", detail: "connected accounts are off" } : NOT_CONNECTED,
+      state: connection
+        ? { tone: "gr", label: "Paused", detail: "ask your firm owner to turn on connected accounts" }
+        : { tone: "gr", label: "Not connected", detail: "ask your firm owner to turn on connected accounts" },
       unlink,
-      action: { label: "Connect", attrs: { disabled: true, title: "The firm owner turns on connected accounts first" } },
+      action: null,
     };
   }
   const connect = (label: string) => ({ label, attrs: { "data-int-connect": toolkit, "data-org": org } });
@@ -217,7 +240,7 @@ function composioSwitch(input: IntegrationsInput): IntegrationRow {
   }
   const sub = enabled
     ? { left: acceptedAt ? `On since ${day(acceptedAt, input.timeZone)}` : "On", right: "mail and busy times pass through Composio (United States)" }
-    : "Off. Turning it on lets each person connect their own Gmail, Outlook or Google Calendar through Composio (United States).";
+    : "Off. Turning it on lets each person connect their own Gmail, Outlook, Google Calendar and the other optional accounts below through Composio (United States).";
   if (!input.isOwner) {
     return {
       ...base,
@@ -237,7 +260,7 @@ export function integrationsData(input: IntegrationsInput): IntegrationsData {
   return {
     title: "Integrations",
     intro:
-      "Casevoya’s own email and calendar work for everyone without any connection. Connecting a personal Gmail, Outlook or Google Calendar is optional and goes through Composio. Integrations marked planned aren’t available yet.",
+      "Casevoya’s own email and calendar work for everyone without any connection. Connecting your own Gmail, Outlook, Google Calendar, Zoom, Google Meet, Teams, Dropbox or Calendly is optional and goes through Composio, after the firm owner turns on connected accounts. Rows marked “connection only for now” link your account; Casevoya doesn’t use them for anything yet. Integrations marked planned aren’t available yet.",
     lead: [
       {
         logo: "/assets/brand/favicon.svg",
@@ -257,19 +280,19 @@ export function integrationsData(input: IntegrationsInput): IntegrationsData {
       },
       composioSwitch(input),
     ],
-    microsoft: { left: "Outlook mail and calendar connect through Composio", right: "Teams planned" },
+    microsoft: { left: "Outlook mail, calendar and Teams connect through Composio", right: "Teams: connection only for now" },
     rows: [
       stripeRow(input),
-      planned("QuickBooks", "quickbooks.svg", "Accounting"),
+      planned("QuickBooks", "quickbooks.svg", "Accounting, firm-wide (not per person)"),
       composioRow(input, "googlecalendar", "Google Calendar", "googlecalendar.svg", "Calendar busy times"),
       composioRow(input, "gmail", "Gmail", "gmail.svg", "Email from your Casevoya label, drafts only"),
-      planned("Zoom", "zoom.svg", "Meetings"),
-      planned("Dropbox", "dropbox.svg", "File import"),
-      planned("Calendly", "calendly.svg", "Booking"),
+      composioRow(input, "zoom", "Zoom", "zoom.svg", "Meetings: connection only for now"),
+      composioRow(input, "dropbox", "Dropbox", "dropbox.svg", "Files: connection only for now"),
+      composioRow(input, "calendly", "Calendly", "calendly.svg", "Booking: connection only for now"),
       composioRow(input, "outlook", "Microsoft Outlook", "integrations/microsoftoutlook-color.svg", "Email drafts only"),
       composioRow(input, "outlook_calendar", "Microsoft 365 calendar", "integrations/microsoft365-color.svg", "Calendar"),
-      planned("Microsoft Teams", "integrations/microsoftteams-color.svg", "Meetings"),
-      planned("Google Meet", "googlemeet.svg", "Meetings"),
+      composioRow(input, "microsoft_teams", "Microsoft Teams", "integrations/microsoftteams-color.svg", "Meetings: connection only for now"),
+      composioRow(input, "googlemeet", "Google Meet", "googlemeet.svg", "Meetings: connection only for now"),
       planned("Twilio", "twilio.svg", { left: "SMS reminders", right: "optional" }),
       later("Xero", "xero.svg", "Accounting export", { tone: "gr", label: "Later" }),
       whatsappRow(input),
@@ -282,7 +305,7 @@ export function composioDialog(input: Pick<IntegrationsInput, "organizationId" |
   if (!input.isOwner || !input.composio.configured || input.composio.enabled) return null;
   return {
     organizationId: input.organizationId,
-    lead: "Casevoya’s own email and calendar keep working without this. Turning it on lets each person in the firm connect their own Gmail, Outlook or Google Calendar.",
+    lead: "Casevoya’s own email and calendar keep working without this. Turning it on lets each person in the firm connect their own Gmail, Outlook or Google Calendar, and link Zoom, Google Meet, Teams, Dropbox or Calendly (linked only for now, nothing is read from them).",
     points: [
       {
         title: "Mail and busy times pass through Composio, in the United States",

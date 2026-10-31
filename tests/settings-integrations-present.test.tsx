@@ -33,8 +33,8 @@ const row = (rows: IntegrationRow[], name: string) => {
   return found;
 };
 
-const PLANNED = ["QuickBooks", "Zoom", "Dropbox", "Calendly", "Microsoft Teams", "Google Meet", "Twilio"];
-const COMPOSIO = ["Gmail", "Google Calendar", "Microsoft Outlook", "Microsoft 365 calendar"];
+const PLANNED = ["QuickBooks", "Twilio"];
+const COMPOSIO = ["Gmail", "Google Calendar", "Microsoft Outlook", "Microsoft 365 calendar", "Zoom", "Dropbox", "Calendly", "Microsoft Teams", "Google Meet"];
 
 describe("Settings > Integrations", () => {
   it("shows Casevoya email and calendar as built in, with the firm's real addresses", () => {
@@ -84,7 +84,16 @@ describe("Settings > Integrations", () => {
       sr: "Connected accounts through Composio",
       attrs: { "data-composio": "on", "data-org": ORG },
     });
-    expect(row(off.rows, "Gmail").action?.attrs?.disabled).toBe(true);
+    // Off: the owner gets "Turn on connected accounts" opening the disclosure on every Composio row.
+    for (const name of COMPOSIO) {
+      expect(row(off.rows, name).action, name).toEqual({ label: "Turn on connected accounts", attrs: { "data-dlg": "dlgComposio", "data-org": ORG } });
+    }
+    // Non-owners are told who to ask, with no dead button.
+    const offStaff = integrationsData(input({ isOwner: false, composio: { configured: true, enabled: false, acceptedAt: null } }));
+    for (const name of COMPOSIO) {
+      expect(row(offStaff.rows, name).state, name).toEqual({ tone: "gr", label: "Not connected", detail: "ask your firm owner to turn on connected accounts" });
+      expect(row(offStaff.rows, name).action ?? null, name).toBeNull();
+    }
     expect(composioDialog(input({ composio: { configured: true, enabled: false, acceptedAt: null } }))?.points.length).toBe(4);
 
     const on = integrationsData(
@@ -95,6 +104,7 @@ describe("Settings > Integrations", () => {
           { id: "c-cal", toolkit: "googlecalendar", status: "active", updatedAt: "2026-10-18T14:00:00Z" },
           { id: "c-out", toolkit: "outlook", status: "pending", updatedAt: "2026-10-18T14:00:00Z" },
           { id: "c-old", toolkit: "outlook_calendar", status: "disconnected", updatedAt: "2026-10-18T14:00:00Z" },
+          { id: "c-zoom", toolkit: "zoom", status: "active", updatedAt: "2026-10-18T14:00:00Z" },
         ],
         busySyncedAt: "2026-10-18T13:40:00Z",
       }),
@@ -105,6 +115,11 @@ describe("Settings > Integrations", () => {
     expect(gmail.state).toEqual({ tone: "ok", label: "Connected" });
     expect(gmail.unlink).toEqual({ "aria-label": "Disconnect Gmail", "data-int-disconnect": "c-gmail", "data-org": ORG, "data-fpb": "1" });
     expect(gmail.action).toEqual({ label: "Reconnect", attrs: { "data-int-connect": "gmail", "data-org": ORG } });
+    const zoom = row(on.rows, "Zoom");
+    expect(zoom.state).toEqual({ tone: "ok", label: "Connected" });
+    expect(zoom.unlink?.["data-int-disconnect"]).toBe("c-zoom");
+    expect(zoom.action).toEqual({ label: "Reconnect", attrs: { "data-int-connect": "zoom", "data-org": ORG } });
+    expect(row(on.rows, "Dropbox").action).toEqual({ label: "Connect", attrs: { "data-int-connect": "dropbox", "data-org": ORG } });
     const calendar = row(on.rows, "Google Calendar");
     expect(calendar.action).toEqual({ label: "Sync busy times", attrs: { "data-int-sync": "1", "data-org": ORG } });
     expect(calendar.sub).toEqual({ left: "Calendar busy times", right: "busy times read 18 Oct, 09:40" });

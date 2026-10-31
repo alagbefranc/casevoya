@@ -14,14 +14,20 @@ import { stepUpHref } from "@/lib/auth/mfa-step";
 
 type Router = { replace: (href: string) => void; refresh: () => void };
 
-const TOOLKITS = ["gmail", "outlook", "googlecalendar", "outlook_calendar"] as const;
+const TOOLKITS = ["gmail", "outlook", "googlecalendar", "outlook_calendar", "zoom", "googlemeet", "microsoft_teams", "dropbox", "calendly"] as const;
 type Toolkit = (typeof TOOLKITS)[number];
 
 function isToolkit(value: string | null | undefined): value is Toolkit {
   return (TOOLKITS as readonly string[]).includes(value ?? "");
 }
 
-const NAME: Record<Toolkit, string> = { gmail: "Gmail", outlook: "Outlook", googlecalendar: "Google Calendar", outlook_calendar: "Microsoft 365 calendar" };
+const NAME: Record<Toolkit, string> = { gmail: "Gmail", outlook: "Outlook", googlecalendar: "Google Calendar", outlook_calendar: "Microsoft 365 calendar",
+  zoom: "Zoom",
+  googlemeet: "Google Meet",
+  microsoft_teams: "Microsoft Teams",
+  dropbox: "Dropbox",
+  calendly: "Calendly",
+};
 
 /** The connected-accounts switch: turning on opens the disclosure; turning off saves at once. */
 export async function runComposioSwitch(button: HTMLElement, openDialog: (id: string) => void, router: Router) {
@@ -46,7 +52,7 @@ export async function runComposioEnable(button: HTMLElement, router: Router) {
     return;
   }
   button.closest("dialog")?.close();
-  toast2("Connected accounts turned on", { kind: "ok", sub: "Each person can now connect their own Gmail, Outlook or Google Calendar." });
+  toast2("Connected accounts turned on", { kind: "ok", sub: "Each person can now connect their own accounts below." });
   router.refresh();
 }
 
