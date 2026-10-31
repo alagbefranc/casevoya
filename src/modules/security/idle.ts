@@ -5,6 +5,8 @@
  * warns two minutes before and signs out on time.
  */
 
+import { safeRedirect } from "@/lib/auth/redirect";
+
 /** The warning shows this long before sign-out. */
 export const IDLE_WARNING_SECONDS = 120;
 
@@ -102,6 +104,6 @@ export function isStaffPageLoad(input: { method: string; pathname: string; fetch
 
 /** Where an idle sign-out lands: sign in again, then back to the page. */
 export function idleSignInLocation(next: string): string {
-  const safe = next.startsWith("/") && !next.startsWith("//") ? next : "/sheet";
+  const safe = safeRedirect(next, "/sheet");
   return `/sign-in?idle=1&next=${encodeURIComponent(safe)}`;
 }

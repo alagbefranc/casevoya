@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef } from "react";
-import { safeNext } from "@/lib/auth/redirect";
+import { safeRedirect } from "@/lib/auth/redirect";
 import { recoveryCodesShown } from "@/lib/auth/mfa-step";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -87,7 +87,7 @@ async function createPendingTrialFirm(): Promise<PortResult> {
 }
 
 function mfaDestination() {
-  return safeNext(new URLSearchParams(location.search).get("next"));
+  return safeRedirect(new URLSearchParams(location.search).get("next"));
 }
 
 function portalLocale(root: ParentNode): "en-CA" | "fr-CA" {
@@ -532,7 +532,7 @@ export function usePortActions(page: string, token?: string) {
 
       const el = event.el;
       if (page === "sign-in" && el.dataset.href === "/mfa") {
-        const next = new URLSearchParams(location.search).get("next") || "/app";
+        const next = safeRedirect(new URLSearchParams(location.search).get("next"));
         return signInWithPassword(val(event.root, "em"), val(event.root, "pw"), next);
       }
       if (page === "sign-in" && el.dataset.go === "1" && session.configured) {

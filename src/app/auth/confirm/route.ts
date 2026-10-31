@@ -1,6 +1,6 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
-import { safeNext } from "@/lib/auth/redirect";
+import { redirectUrl, safeRedirect } from "@/lib/auth/redirect";
 import { escapeHtml } from "@/lib/html";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,8 +25,8 @@ function failed(next: string, request: NextRequest, status?: number) {
   // session there (no PKCE verifier). An invitee goes back to the invitation (staff: /invite/…,
   // portal: /accept/<role>?token=…), where signing in with the password they chose finishes
   // joining; anyone else signs in as usual.
-  if (isInvitationReturn(next)) return NextResponse.redirect(new URL(next, request.url), status);
-  return NextResponse.redirect(new URL("/sign-in?error=link_invalid", request.url), status);
+  if (isInvitationReturn(next)) return NextResponse.redirect(redirectUrl(next, request.url), status);
+  return NextResponse.redirect(redirectUrl("/sign-in?error=link_invalid", request.url), status);
 }
 
 /**
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const tokenHash = readTokenHash(searchParams.get("token_hash"));
   const type = readOtpType(searchParams.get("type"));
-  const next = safeNext(searchParams.get("next"));
+  const next = safeRedirect(searchParams.get("next"));
 
   if (tokenHash && type) return confirmPage(tokenHash, type, next);
 
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(new URL(next, request.url));
+    if (!error) return NextResponse.redirect(redirectUrl(next, request.url));
   }
   return failed(next, request);
 }
@@ -87,13 +87,13 @@ function isSameOriginPost(request: NextRequest): boolean {
 export async function POST(request: NextRequest) {
   if (!isSameOriginPost(request)) return NextResponse.json({ error: "This must come from Casevoya." }, { status: 403 });
   const form = await request.formData().catch(() => null);
-  const next = safeNext(form?.get("next") ?? null);
+  const next = safeRedirect(form?.get("next") ?? null);
   const tokenHash = readTokenHash(form?.get("token_hash") ?? null);
   const type = readOtpType(form?.get("type") ?? null);
   if (tokenHash && type) {
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
-    if (!error) return NextResponse.redirect(new URL(next, request.url), 303);
+    if (!error) return NextResponse.redirect(redirectUrl(next, request.url), 303);
   }
   return failed(next, request, 303);
 }

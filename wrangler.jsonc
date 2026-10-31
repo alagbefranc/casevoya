@@ -30,6 +30,20 @@
     // type-checked only until the product setting documents.accept_structural_inspection is false.
     { "binding": "AV_SCANNER", "service": "casevoya-av-scanner" },
   ],
+  // Workers Rate Limiting (src/lib/security/rate-limit.ts). Per Cloudflare location and approximate;
+  // the database counters (app.auth_attempts, booking and enquiry limits) are the hard layer.
+  "ratelimits": [
+    // Password sign-in, sign-up, invitation sign-in/sign-up; per visitor address.
+    { "name": "RL_AUTH", "namespace_id": "2001", "simple": { "limit": 20, "period": 60 } },
+    // Anything that makes Supabase send an email; per visitor address.
+    { "name": "RL_AUTH_EMAIL", "namespace_id": "2002", "simple": { "limit": 5, "period": 60 } },
+    // Email codes, invitation codes, TOTP; per visitor address and per signed-in user.
+    { "name": "RL_VERIFY", "namespace_id": "2003", "simple": { "limit": 15, "period": 60 } },
+    // Public booking hold and enquiry POSTs; per visitor address.
+    { "name": "RL_PUBLIC", "namespace_id": "2004", "simple": { "limit": 10, "period": 60 } },
+    // Invoice card payment, subscription checkout and billing portal; per user.
+    { "name": "RL_PAYMENT", "namespace_id": "2005", "simple": { "limit": 10, "period": 60 } }
+  ],
   "vars": {
     "NEXT_PUBLIC_SUPABASE_URL": "https://aqjtvqmojfamtspzyeqm.supabase.co",
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_WJL1a16TYhbj2HETogqpLQ_RcbYs1vH"

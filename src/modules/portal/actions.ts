@@ -4,6 +4,7 @@ import type Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
 import { stripeLive, stripeServer } from "@/lib/stripe/server";
 import { isUuid } from "@/lib/tenant/context";
+import { RATE_LIMIT_MESSAGE, rateLimit } from "@/lib/security/rate-limit";
 import { retrieveAccountStatus } from "@/modules/finance/stripe-account";
 
 export type InvoicePaymentResult =
@@ -40,6 +41,8 @@ export async function createInvoicePayment(input: { organizationId: string; invo
   const supabase = await createClient({ organizationId: input.organizationId });
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) return { error: "Sign in first." };
+  // Each try may call Stripe: 10 a minute per person (RL_PAYMENT).
+  if (!(await rateLimit("RL_PAYMENT", `user:${claims.claims.sub}`))) return { error: RATE_LIMIT_MESSAGE };
 
   // Earned fees only (FIN-02): an advance for the client (trust) account is refused before Stripe
   // is asked for anything. A trigger on invoice_payments refuses it again.

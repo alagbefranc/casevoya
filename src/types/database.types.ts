@@ -14399,6 +14399,14 @@ export type Database = {
         Args: { p_attempt: string; p_succeeded: boolean }
         Returns: undefined
       }
+      auth_attempt_reserve: {
+        Args: { p_key_hash: string; p_kind: string; p_scope_hash?: string | null }
+        Returns: Json
+      }
+      auth_attempt_resolve: {
+        Args: { p_failed: boolean; p_id: string }
+        Returns: undefined
+      }
       save_firm_template_override: {
         Args: { p_items: Json; p_reason: string; p_summary: string; p_template_id: string; p_title: string }
         Returns: Json

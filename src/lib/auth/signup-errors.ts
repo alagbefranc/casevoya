@@ -3,6 +3,8 @@
  * Pure, so the server actions and the screens share it and it is unit tested.
  */
 
+import { safeRedirect } from "@/lib/auth/redirect";
+
 /**
  * An address that already has a confirmed account. Supabase answers that sign-up with a fake
  * success (a user with no identities, no session) and sends nothing, so the screen must not move
@@ -58,6 +60,18 @@ export function rateLimitText(seconds: number | null | undefined): string {
   return `We just sent you an email. You can try again in ${seconds} ${seconds === 1 ? "second" : "seconds"}.`;
 }
 
+/** The countdown words for an app rate limit that sent nothing (sign-in, codes). */
+export function waitText(seconds: number | null | undefined): string {
+  if (seconds == null) return "Too many attempts. Please wait a minute and try again.";
+  if (seconds <= 0) return "You can try again now.";
+  return `Too many attempts. You can try again in ${seconds} ${seconds === 1 ? "second" : "seconds"}.`;
+}
+
+/** Which countdown words fit a rate-limit message: rateLimitText after an email, waitText otherwise. */
+export function countdownText(message: string): (seconds: number | null | undefined) => string {
+  return /^We just sent you an email/.test(message) ? rateLimitText : waitText;
+}
+
 export type MessagePart = { text: string } | { text: string; href: string };
 
 /** Splits `[label](/path)` links out of a message. Only same-site paths become links. */
@@ -68,8 +82,9 @@ export function messageParts(message: string): MessagePart[] {
   for (const match of message.matchAll(link)) {
     const start = match.index ?? 0;
     if (start > at) parts.push({ text: message.slice(at, start) });
-    if (match[2].startsWith("//")) parts.push({ text: match[1] });
-    else parts.push({ text: match[1], href: match[2] });
+    const href = safeRedirect(match[2], "");
+    if (!href) parts.push({ text: match[1] });
+    else parts.push({ text: match[1], href });
     at = start + match[0].length;
   }
   if (at < message.length) parts.push({ text: message.slice(at) });

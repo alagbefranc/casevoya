@@ -48,7 +48,7 @@ export type WhatsAppInput = {
   live: { status: string | null; quality: string | null } | "dead" | null;
 };
 
-/** Where the Connect Link comes back to (connectAccount accepts app.casevoya.ca only). */
+/** Where the Connect Link comes back to (connectAccount builds it on the app origin). */
 export const INTEGRATIONS_PATH = "/sheet/settings?tab=integrations";
 
 export const COMPOSIO_SOURCE = {

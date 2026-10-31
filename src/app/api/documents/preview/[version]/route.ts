@@ -1,4 +1,5 @@
 import { stepUpHref } from "@/lib/auth/mfa-step";
+import { redirectUrl, safeRedirect } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { PREVIEWABLE, previewStamp, watermarkedPreview } from "@/modules/documents/preview";
@@ -18,14 +19,15 @@ function page(text: string, status: number) {
 
 /** Where to come back to after a step-up: the page that opened the preview, on this site. */
 function backTo(request: Request): string {
+  const fallback = "/sheet/documents?tab=all";
   const referer = request.headers.get("referer");
   try {
     const from = referer ? new URL(referer) : null;
-    if (from && from.origin === new URL(request.url).origin && from.pathname.startsWith("/")) return `${from.pathname}${from.search}`;
+    if (from && from.origin === new URL(request.url).origin) return safeRedirect(`${from.pathname}${from.search}`, fallback);
   } catch {
     // An unreadable referrer just goes back to Documents.
   }
-  return "/sheet/documents?tab=all";
+  return fallback;
 }
 
 /**
@@ -52,7 +54,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ vers
   if (grant.error) {
     if (/step-up/i.test(grant.error.message)) {
       // SEC-01: the step-up names its action ("open a client document"), like every other caller.
-      return Response.redirect(new URL(stepUpHref(backTo(request), "document_open"), request.url), 303);
+      return Response.redirect(redirectUrl(stepUpHref(backTo(request), "document_open"), request.url), 303);
     }
     return page("You can’t open this file.", 403);
   }

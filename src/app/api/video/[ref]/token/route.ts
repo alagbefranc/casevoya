@@ -16,7 +16,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ ref
   const guest = typeof body?.guestToken === "string" ? body.guestToken : null;
   if (!guest && !validCall(organizationId, ref)) return NextResponse.json({ error: "Choose the call." }, { status: 400, headers: NO_STORE });
   const result = guest ? await joinGuestCall(ref, guest, typeof body?.name === "string" ? body.name : "") : await joinCall(organizationId as string, ref);
-  if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status, headers: NO_STORE });
+  if ("error" in result) {
+    const headers = result.status === 429 ? { ...NO_STORE, "Retry-After": "60" } : NO_STORE;
+    return NextResponse.json({ error: result.error }, { status: result.status, headers });
+  }
   if (!result.grant) {
     // Not open (early, closed, cancelled) or video isn't set up: what the call is, and no token.
     return NextResponse.json({ view: { ...result.view, grant: null }, configured: result.configured }, { headers: NO_STORE });

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readLimitedBody } from "@/lib/http/limited-body";
+import { STRIPE_WEBHOOK_MAX_BYTES } from "@/lib/stripe/webhook-limits";
 import { createServiceClient } from "@/lib/supabase/service";
 import { stripeCrypto, stripeLive, stripeServer, stripeWebhookSecrets } from "@/lib/stripe/server";
 import { cardFromPaymentIntent, handleStripeWebhook, type ApplyResult } from "@/modules/finance/webhook";
@@ -17,7 +19,11 @@ import { cardFromPaymentIntent, handleStripeWebhook, type ApplyResult } from "@/
  * the event is applied, so the receipt shows "Visa ••••4242". A failed lookup never blocks the payment.
  */
 export async function POST(request: Request) {
-  const body = await request.text();
+  // Stripe events are far below 1 MB; a larger body is refused before it is read in full. The
+  // signature is still checked on every body that is read.
+  const read = await readLimitedBody(request, STRIPE_WEBHOOK_MAX_BYTES);
+  if (!read.ok) return NextResponse.json({ error: read.reason }, { status: read.reason === "too_large" ? 413 : 400 });
+  const body = new TextDecoder().decode(read.bytes);
   const serviceKey = process.env.SUPABASE_SECRET_KEY;
   const stripe = stripeServer();
   const live = stripeLive();

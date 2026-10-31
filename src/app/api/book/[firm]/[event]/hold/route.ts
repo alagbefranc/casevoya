@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { rateLimit, requestIp, tooManyRequests } from "@/lib/security/rate-limit";
 import { clientHash, postPublicHold } from "@/modules/scheduling/public-api";
 import { clientAddress, publicDeps } from "@/modules/scheduling/public-deps";
 
@@ -6,10 +7,12 @@ import { clientAddress, publicDeps } from "@/modules/scheduling/public-deps";
  * Books a free consultation (BUILD-SPEC §3 "hold"; PRD API "reserve capacity atomically and confirm
  * timezone"). The start is re-checked here, then the database re-checks it and takes the slot under
  * the exclusion constraint, and the confirmation email is queued in the outbox in that transaction.
- * Abuse checks: honeypot field, minimum time on the form, and a per-address and per-firm limit in
- * the database (the address is stored only as a hash).
+ * Abuse checks: a per-address request limit before any database work (RL_PUBLIC), honeypot field,
+ * minimum time on the form, and a per-address and per-firm limit in the database (the address is
+ * stored only as a hash).
  */
 export async function POST(request: Request, { params }: { params: Promise<{ firm: string; event: string }> }) {
+  if (!(await rateLimit("RL_PUBLIC", requestIp(request.headers)))) return tooManyRequests();
   const { firm, event } = await params;
   const type = request.headers.get("content-type") ?? "";
   if (!type.includes("application/json")) {

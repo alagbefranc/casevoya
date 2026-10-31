@@ -158,6 +158,14 @@ describe("token route", () => {
     getClaims.mockResolvedValueOnce({ data: { claims: null } } as never);
     expect((await postToken()).status).toBe(401);
   });
+
+  it("too many join attempts answer 429 with Retry-After", async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: "too many join attempts" } });
+    const response = await postToken();
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("60");
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+  });
 });
 
 describe("guest token route", () => {

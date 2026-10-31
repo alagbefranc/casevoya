@@ -437,6 +437,12 @@ describe("The token in the step-up href", () => {
     expect(withResumeToken(href, "nope")).toBe(href);
     expect(readStepUpHref(stepUpHref("/sheet"))).toBeNull();
   });
+
+  it("leaves a step-up href whose next is not a same-site path untouched", () => {
+    const unsafe = stepUpHref("/a/..//evil.example", "rule_approve");
+    expect(withResumeToken(unsafe, NONCE)).toBe(unsafe);
+    expect(readStepUpHref(unsafe)).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------

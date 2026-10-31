@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
-import { messageParts, rateLimitText, secondsLeft } from "@/lib/auth/signup-errors";
+import { safeRedirect } from "@/lib/auth/redirect";
+import { countdownText, messageParts, secondsLeft } from "@/lib/auth/signup-errors";
 import { escapeHtml } from "@/lib/html";
 import { busyBtn, clearBtn, icon, k2Count, k2Slider, k2Spark, morphText, settleBtn, toast2, voPose } from "./kit";
 
@@ -22,6 +23,29 @@ export type PortEvent =
   | { type: "resend"; page: string; el: HTMLElement; root: HTMLElement };
 
 const CHECK = `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
+
+/**
+ * A navigation target on this site as a checked path (safeRedirect), or null. Absolute URLs on this
+ * origin keep working; any other origin is refused.
+ */
+export function portHref(value: string | null | undefined, here: { href: string; origin: string }): string | null {
+  if (!value) return null;
+  let url: URL;
+  try {
+    url = new URL(value, here.href);
+  } catch {
+    return null;
+  }
+  if (url.origin !== here.origin) return null;
+  const path = value.startsWith("/") ? value : `${url.pathname}${url.search}${url.hash}`;
+  return safeRedirect(path, "") || null;
+}
+
+/** Leaves the screen for a same-site target; anything else is ignored. */
+function navigate(value: string | null | undefined) {
+  const to = portHref(value, location);
+  if (to) location.href = to;
+}
 
 /** The class that plays a step panel's slide-back animation (auth.css `[data-step].on.st-back`). */
 export const STEP_BACK = "st-back";
@@ -205,6 +229,7 @@ export function usePort(
       if (retryAfter && retryAfter > 0) {
         // Off the clock, not by counting ticks: a throttled background tab must not re-enable early (#261).
         const until = Date.now() + Math.min(Math.ceil(retryAfter), 3600) * 1000;
+        const countdownWords = countdownText(message);
         button.setAttribute("aria-disabled", "true");
         const tick = () => {
           if (stopped || !summary.isConnected) {
@@ -212,7 +237,7 @@ export function usePort(
             return;
           }
           const left = secondsLeft(until, Date.now());
-          write(rateLimitText(left));
+          write(countdownWords(left));
           if (left <= 0) {
             button.removeAttribute("aria-disabled");
             return;
@@ -287,7 +312,7 @@ export function usePort(
       window.setTimeout(() => {
         if (!then || stopped) return;
         if (then.startsWith("#")) go(Number(then.slice(1)));
-        else location.href = then;
+        else navigate(then);
       }, 900);
     };
 
@@ -530,7 +555,7 @@ export function usePort(
       event.preventDefault();
       if (target.dataset.novalidate == null && !validate(scope)) return;
       const after = () => {
-        if (target.dataset.href) location.href = target.dataset.href;
+        if (target.dataset.href) navigate(target.dataset.href);
         else if (target.dataset.go != null) go(Number(target.dataset.go));
         else go(current + 1);
       };
@@ -596,7 +621,7 @@ export function usePort(
       const to = (event as CustomEvent<unknown>).detail;
       if (typeof to !== "string" || stopped) return;
       if (to.startsWith("#")) go(Number(to.slice(1)));
-      else if (to.startsWith("/") && !to.startsWith("//")) location.href = to;
+      else if (to.startsWith("/")) navigate(to);
     }, listen);
 
     root.dataset.ready = "1";

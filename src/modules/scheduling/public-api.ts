@@ -7,6 +7,7 @@
  *   POST /api/book/[firm]/[event]/hold     re-checks the start here and in the database, then books
  */
 import { z } from "zod";
+import { ipKey } from "@/lib/security/client-address";
 import { parseAvailability, slotsFromAvailability } from "./availability";
 import { locationLabel } from "./format";
 import { buildIcs } from "./ics";
@@ -176,7 +177,11 @@ export type HoldBody = z.infer<typeof holdSchema>;
 
 const HOLD_ERRORS: Record<string, ApiResult> = {
   slot_unavailable: { status: 409, body: { error: "slot_unavailable", message: "That time was just taken. Please choose another." } },
-  booking_rate_limited: { status: 429, body: { error: "rate_limited", message: "Too many booking attempts. Please wait a few minutes." } },
+  booking_rate_limited: {
+    status: 429,
+    body: { error: "rate_limited", message: "Too many booking attempts. Please wait a few minutes." },
+    headers: { "Retry-After": "600" },
+  },
   name_required: { status: 400, body: { error: "name_required", message: "Enter your name." } },
   email_invalid: { status: 400, body: { error: "email_invalid", message: "Enter a valid email address." } },
   phone_invalid: { status: 400, body: { error: "phone_invalid", message: "Enter a valid phone number." } },
@@ -308,10 +313,14 @@ async function bookingAgreement(deps: PublicDeps, publicRef: string): Promise<{ 
   }
 }
 
-/** sha256 hex of the client address with a prefix (and an optional deployment salt). */
+/**
+ * sha256 hex of the client address with a prefix (and an optional deployment salt). An IPv6
+ * address counts as its /64 network (ipKey), so one subscriber shares one per-address limit.
+ */
 export async function clientHash(address: string | null, salt = ""): Promise<string | null> {
-  const ip = (address ?? "").split(",")[0].trim();
-  if (!ip || ip.length > 64) return null;
+  const raw = (address ?? "").split(",")[0].trim();
+  if (!raw || raw.length > 64) return null;
+  const ip = ipKey(raw);
   const data = new TextEncoder().encode(`casevoya-booking:${salt}:${ip}`);
   const digest = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
