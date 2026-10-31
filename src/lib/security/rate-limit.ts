@@ -16,6 +16,7 @@ import { clientAddress, ipKey, isIpAddress } from "./client-address";
  *   RL_VERIFY      15/min per address and per user   email codes, invitation codes, TOTP
  *   RL_PUBLIC      10/min per address   public booking hold and enquiry POSTs
  *   RL_PAYMENT     10/min per user      invoice card payment, subscription checkout and portal
+ *   RL_DOCUMENT_WORK 10/min per user    server-side document rewrites (redacted copies)
  *
  * When the Worker context exists (production), a request the binding allows (or with the binding
  * missing or erroring) is also counted exactly in the database (public.request_window_hit,
@@ -26,7 +27,7 @@ import { clientAddress, ipKey, isIpAddress } from "./client-address";
  * binding or the database errors, the request is allowed. The database counters
  * (app.auth_attempts, the booking and enquiry limits) are the hard layer for their flows.
  */
-export type RateLimitName = "RL_AUTH" | "RL_AUTH_EMAIL" | "RL_VERIFY" | "RL_PUBLIC" | "RL_PAYMENT";
+export type RateLimitName = "RL_AUTH" | "RL_AUTH_EMAIL" | "RL_VERIFY" | "RL_PUBLIC" | "RL_PAYMENT" | "RL_DOCUMENT_WORK";
 
 /** Limit and period (seconds) of each binding; must match "ratelimits" in wrangler.jsonc. */
 export const RATE_LIMITS: Readonly<Record<RateLimitName, { readonly limit: number; readonly period: 10 | 60 | 600 | 3600 }>> = {
@@ -35,6 +36,7 @@ export const RATE_LIMITS: Readonly<Record<RateLimitName, { readonly limit: numbe
   RL_VERIFY: { limit: 15, period: 60 },
   RL_PUBLIC: { limit: 10, period: 60 },
   RL_PAYMENT: { limit: 10, period: 60 },
+  RL_DOCUMENT_WORK: { limit: 10, period: 60 },
 };
 
 export const RATE_LIMIT_MESSAGE = "Too many attempts. Please wait a minute and try again.";

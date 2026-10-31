@@ -249,6 +249,15 @@ describe("true redaction", () => {
     expect(after).toContain("/Span BMC");
   });
 
+  it("refuses a PNG above the pixel cap from its header, before decoding it", async () => {
+    const header = new Uint8Array(64);
+    header.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+    const view = new DataView(header.buffer);
+    view.setUint32(16, 8000);
+    view.setUint32(20, 6000);
+    await expect(redactDocument(header, "image/png", [{ page: 0, x: 0, y: 0, width: 0.2, height: 0.2 }])).rejects.toThrow(/too large/);
+  });
+
   it("refuses a type it cannot redact", async () => {
     await expect(redactDocument(new Uint8Array([1, 2, 3, 4]), "image/heic", [{ page: 0, x: 0, y: 0, width: 0.2, height: 0.2 }])).rejects.toThrow(/PDF, JPEG, or PNG/);
   });

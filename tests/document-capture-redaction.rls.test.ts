@@ -106,6 +106,26 @@ const regions = JSON.stringify([
   { page_index: 1, x: 0, y: 0, width: 0.5, height: 0.25 },
 ]);
 
+type Copy = { document_id: string; version_id: string; storage_key: string; source_version_id: string };
+
+async function beginTicket(userId: string, orgId: string, sourceVersionId: string, matterId: string) {
+  await asUser(db, { userId, aal: "aal2", orgId, totpAgeSeconds: 0 });
+  return (await db.query<{ result: { ticket_id: string; storage_key: string; media_type: string } }>(
+    `select public.begin_redacted_copy($1, $2) as result`,
+    [sourceVersionId, matterId],
+  )).rows[0].result;
+}
+
+/** The app's path: the consultant's session checks, then the server opens the copy for them. */
+async function openRedactedCopy(ctx: { consultant: string; orgId: string; matterId: string }, sourceVersionId: string): Promise<Copy> {
+  const ticket = await beginTicket(ctx.consultant, ctx.orgId, sourceVersionId, ctx.matterId);
+  await asServiceRole(db);
+  return (await db.query<{ result: Copy }>(
+    `select public.service_create_redacted_copy_intent($1, $2, 'redacted.pdf', 50, $3::jsonb) as result`,
+    [ticket.ticket_id, ctx.consultant, regions],
+  )).rows[0].result;
+}
+
 describe("camera assembly and redacted copies", () => {
   it("records page turns for the uploader and refuses everyone else", async () => {
     const ctx = await firm();
@@ -118,6 +138,10 @@ describe("camera assembly and redacted copies", () => {
       { rotation_degrees: 90, source: "camera" },
       { rotation_degrees: 0, source: "library" },
     ]);
+    await expectDbError(
+      () => db.query(`select public.record_camera_assembly($1, $2::jsonb)`, [intent.version_id, JSON.stringify([{ rotation_degrees: 45, source: "camera" }])]),
+      /turned/,
+    );
     await db.query(`select public.record_camera_assembly($1, $2::jsonb)`, [intent.version_id, pages]);
     const stored = await db.query<{ transformation: { kind: string; page_count: number } }>(
       `select transformation from public.document_versions where id = $1`,
@@ -127,11 +151,6 @@ describe("camera assembly and redacted copies", () => {
 
     await asUser(db, { userId: ctx.sponsor, aal: "aal1", orgId: ctx.orgId });
     await expectDbError(() => db.query(`select public.record_camera_assembly($1, $2::jsonb)`, [intent.version_id, pages]), /assembly denied/);
-    await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
-    await expectDbError(
-      () => db.query(`select public.record_camera_assembly($1, $2::jsonb)`, [intent.version_id, JSON.stringify([{ rotation_degrees: 45, source: "camera" }])]),
-      /turned/,
-    );
   });
 
   it("keeps the original, links a staff-only copy, audits every area, and holds it for the virus scan", async () => {
@@ -144,32 +163,17 @@ describe("camera assembly and redacted copies", () => {
     )).rows[0];
 
     await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
-    await expectDbError(
-      () => db.query(`select public.create_redacted_copy_intent($1, $2, 'redacted.pdf', 50, $3::jsonb)`, [source.version_id, ctx.matterId, regions]),
-      /redaction denied|aal2/,
-    );
+    await expectDbError(() => db.query(`select public.begin_redacted_copy($1, $2)`, [source.version_id, ctx.matterId]), /redaction denied|aal2/);
     await asUser(db, { userId: ctx.sponsor, aal: "aal1", orgId: ctx.orgId });
-    await expectDbError(
-      () => db.query(`select public.create_redacted_copy_intent($1, $2, 'redacted.pdf', 50, $3::jsonb)`, [source.version_id, ctx.matterId, regions]),
-      /redaction denied|aal2/,
-    );
+    await expectDbError(() => db.query(`select public.begin_redacted_copy($1, $2)`, [source.version_id, ctx.matterId]), /redaction denied|aal2/);
     await asUser(db, { userId: ctx.finance, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
-    await expectDbError(
-      () => db.query(`select public.create_redacted_copy_intent($1, $2, 'redacted.pdf', 50, $3::jsonb)`, [source.version_id, ctx.matterId, regions]),
-      /redaction denied/,
-    );
+    await expectDbError(() => db.query(`select public.begin_redacted_copy($1, $2)`, [source.version_id, ctx.matterId]), /redaction denied/);
     await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId });
-    await expectDbError(
-      () => db.query(`select public.create_redacted_copy_intent($1, $2, 'redacted.pdf', 50, $3::jsonb)`, [source.version_id, ctx.matterId, regions]),
-      /step-up/,
-    );
+    await expectDbError(() => db.query(`select public.begin_redacted_copy($1, $2)`, [source.version_id, ctx.matterId]), /step-up/);
 
-    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
-    const copy = (await db.query<{ result: { document_id: string; version_id: string; storage_key: string; source_version_id: string } }>(
-      `select public.create_redacted_copy_intent($1, $2, 'redacted.pdf', 50, $3::jsonb) as result`,
-      [source.version_id, ctx.matterId, regions],
-    )).rows[0].result;
+    const copy = await openRedactedCopy(ctx, source.version_id);
     expect(copy.source_version_id).toBe(source.version_id);
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
 
     const version = (await db.query<{ parent_version_id: string; transformation: { kind: string; engine: string }; upload_state: string }>(
       `select parent_version_id, transformation, upload_state from public.document_versions where id = $1`,
@@ -217,7 +221,7 @@ describe("camera assembly and redacted copies", () => {
     await store(copy.storage_key, 50);
     await asServiceRole(db);
     const finished = (await db.query<{ result: { upload_state: string; scan_result: string } }>(
-      `select public.finish_verified_document_upload($1, $2, $3, 50, $4) as result`,
+      `select public.service_finish_redacted_copy($1, $2, $3, 50, $4) as result`,
       [copy.version_id, ctx.consultant, SHA, PDF],
     )).rows[0].result;
     expect(finished).toMatchObject({ upload_state: "scanning", scan_result: "awaiting_scanner" });
@@ -242,5 +246,168 @@ describe("camera assembly and redacted copies", () => {
     );
     expect(audit.rows.filter((row) => row.action === "document.redacted")).toHaveLength(2);
     expect(audit.rows.some((row) => row.action === "document.redaction_started")).toBe(true);
+  });
+
+  it("opens a redacted copy only through the server path, with a single-use ticket bound to the staff member (#300, #301)", async () => {
+    const ctx = await firm();
+    const source = await cleanUpload(ctx.client, ctx.orgId, ctx.matterId, ctx.applicant);
+
+    await asMaintenance(db);
+    const grants = (await db.query<{ old_auth: boolean; svc_auth: boolean; svc_service: boolean; fin_auth: boolean; fin_service: boolean; begin_auth: boolean; begin_anon: boolean }>(
+      `select has_function_privilege('authenticated', 'public.create_redacted_copy_intent(uuid,uuid,text,bigint,jsonb)', 'execute') as old_auth,
+              has_function_privilege('authenticated', 'public.service_create_redacted_copy_intent(uuid,uuid,text,bigint,jsonb)', 'execute') as svc_auth,
+              has_function_privilege('service_role', 'public.service_create_redacted_copy_intent(uuid,uuid,text,bigint,jsonb)', 'execute') as svc_service,
+              has_function_privilege('authenticated', 'public.service_finish_redacted_copy(uuid,uuid,text,bigint,text)', 'execute') as fin_auth,
+              has_function_privilege('service_role', 'public.service_finish_redacted_copy(uuid,uuid,text,bigint,text)', 'execute') as fin_service,
+              has_function_privilege('authenticated', 'public.begin_redacted_copy(uuid,uuid)', 'execute') as begin_auth,
+              has_function_privilege('anon', 'public.begin_redacted_copy(uuid,uuid)', 'execute') as begin_anon`,
+    )).rows[0];
+    expect(grants).toEqual({ old_auth: false, svc_auth: false, svc_service: true, fin_auth: false, fin_service: true, begin_auth: true, begin_anon: false });
+
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    await expectDbError(
+      () => db.query(`select public.create_redacted_copy_intent($1, $2, 'redacted.pdf', 50, $3::jsonb)`, [source.version_id, ctx.matterId, regions]),
+      /permission denied/,
+    );
+
+    // The ticket is for the member who passed the checks, and is used once.
+    const ticket = await beginTicket(ctx.consultant, ctx.orgId, source.version_id, ctx.matterId);
+    expect(ticket.media_type).toBe(PDF);
+    await expectDbError(
+      () => db.query(`select public.service_create_redacted_copy_intent($1, $2, 'redacted.pdf', 50, $3::jsonb)`, [ticket.ticket_id, ctx.consultant, regions]),
+      /permission denied/,
+    );
+    await asServiceRole(db);
+    await expectDbError(
+      () => db.query(`select public.service_create_redacted_copy_intent($1, $2, 'redacted.pdf', 50, $3::jsonb)`, [ticket.ticket_id, ctx.assistant, regions]),
+      /redaction denied/,
+    );
+    const copy = (await db.query<{ result: Copy }>(
+      `select public.service_create_redacted_copy_intent($1, $2, 'redacted.pdf', 50, $3::jsonb) as result`,
+      [ticket.ticket_id, ctx.consultant, regions],
+    )).rows[0].result;
+    await expectDbError(
+      () => db.query(`select public.service_create_redacted_copy_intent($1, $2, 'redacted.pdf', 50, $3::jsonb)`, [ticket.ticket_id, ctx.consultant, regions]),
+      /redaction denied/,
+    );
+    await asMaintenance(db);
+    const created = (await db.query<{ created_by: string; kind: string }>(
+      `select created_by, transformation ->> 'kind' as kind from public.document_versions where id = $1`,
+      [copy.version_id],
+    )).rows[0];
+    expect(created).toEqual({ created_by: ctx.consultant, kind: "redaction" });
+
+    // An expired ticket is refused.
+    const stale = await beginTicket(ctx.consultant, ctx.orgId, source.version_id, ctx.matterId);
+    await asMaintenance(db);
+    await db.query(`update app.document_redaction_tickets set expires_at = now() - interval '1 second' where id = $1`, [stale.ticket_id]);
+    await asServiceRole(db);
+    await expectDbError(
+      () => db.query(`select public.service_create_redacted_copy_intent($1, $2, 'redacted.pdf', 50, $3::jsonb)`, [stale.ticket_id, ctx.consultant, regions]),
+      /redaction denied/,
+    );
+
+    // The uploader can't replace the redaction record with a page order.
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    await expectDbError(
+      () => db.query(`select public.record_camera_assembly($1, $2::jsonb)`, [copy.version_id, JSON.stringify([{ rotation_degrees: 0, source: "camera" }])]),
+      /assembly denied/,
+    );
+    const allowed = await db.query<{ ok: boolean }>(`select app.can_upload_storage_object($1) as ok`, [copy.storage_key]);
+    expect(allowed.rows[0].ok).toBe(false);
+
+    // Even a definer write can't change or clear a redaction record, or make one.
+    await asMaintenance(db);
+    await expectDbError(
+      () => db.exec(`
+        begin;
+        select app.open_document_write('${copy.version_id}');
+        update public.document_versions set transformation = null where id = '${copy.version_id}';
+        commit;
+      `),
+      /keeps its redaction record/,
+    );
+    await db.exec(`rollback`);
+    await expectDbError(
+      () => db.exec(`
+        begin;
+        select app.open_document_write('${source.version_id}');
+        update public.document_versions set transformation = '{"kind":"redaction"}'::jsonb where id = '${source.version_id}';
+        commit;
+      `),
+      /keeps its redaction record/,
+    );
+    await db.exec(`rollback`);
+
+    // The ordinary completion refuses a redaction version; the redaction completion refuses anything else.
+    await store(copy.storage_key, 50);
+    await asServiceRole(db);
+    await expectDbError(
+      () => db.query(`select public.finish_verified_document_upload($1, $2, $3, 50, $4)`, [copy.version_id, ctx.consultant, SHA, PDF]),
+      /upload denied/,
+    );
+    await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
+    const ordinary = (await db.query<{ result: { version_id: string; storage_key: string } }>(
+      `select public.create_upload_intent($1, $2, 'letter.pdf', 40, 'Letter', 'ordinary', 'subject', null, null, null) as result`,
+      [ctx.matterId, ctx.applicant],
+    )).rows[0].result;
+    await store(ordinary.storage_key, 40);
+    await asServiceRole(db);
+    await expectDbError(
+      () => db.query(`select public.service_finish_redacted_copy($1, $2, $3, 40, $4)`, [ordinary.version_id, ctx.client, SHA, PDF]),
+      /upload denied/,
+    );
+    const done = (await db.query<{ result: { upload_state: string } }>(
+      `select public.service_finish_redacted_copy($1, $2, $3, 50, $4) as result`,
+      [copy.version_id, ctx.consultant, SHA, PDF],
+    )).rows[0].result;
+    expect(done.upload_state).toBe("clean");
+    const plain = (await db.query<{ result: { upload_state: string } }>(
+      `select public.finish_verified_document_upload($1, $2, $3, 40, $4) as result`,
+      [ordinary.version_id, ctx.client, SHA, PDF],
+    )).rows[0].result;
+    expect(plain.upload_state).toBe("clean");
+  });
+
+  it("a redacted copy's document takes no ordinary new version; other documents still do (#300)", async () => {
+    const ctx = await firm();
+    const source = await cleanUpload(ctx.client, ctx.orgId, ctx.matterId, ctx.applicant);
+    const copy = await openRedactedCopy(ctx, source.version_id);
+
+    const newVersion = (documentId: string) =>
+      db.query<{ result: { version_id: string; document_id: string } }>(
+        `select public.create_upload_intent($1, $2, 'replacement.pdf', 40, 'Replacement', 'ordinary', 'staff', $3, null, null) as result`,
+        [ctx.matterId, ctx.applicant, documentId],
+      );
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    await expectDbError(() => newVersion(copy.document_id), /takes no new version/);
+    await asMaintenance(db);
+    const copyVersions = await db.query(`select id from public.document_versions where document_id = $1`, [copy.document_id]);
+    expect(copyVersions.rows).toHaveLength(1);
+    const current = (await db.query<{ current_version_id: string }>(`select current_version_id from public.documents where id = $1`, [copy.document_id])).rows[0];
+    expect(current.current_version_id).toBe(copy.version_id);
+
+    // An ordinary document still takes a new version.
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const next = (await newVersion(source.document_id)).rows[0].result;
+    expect(next.document_id).toBe(source.document_id);
+    await asMaintenance(db);
+    const numbers = await db.query<{ version_number: number }>(
+      `select version_number from public.document_versions where document_id = $1 order by version_number`,
+      [source.document_id],
+    );
+    expect(numbers.rows.map((row) => row.version_number)).toEqual([1, 2]);
+  });
+
+  it("takes one page order per upload", async () => {
+    const ctx = await firm();
+    await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
+    const intent = (await db.query<{ result: { version_id: string } }>(
+      `select public.create_upload_intent($1, $2, 'pages.pdf', 80, 'Passport bio page', 'ordinary', 'subject', null, null, null) as result`,
+      [ctx.matterId, ctx.applicant],
+    )).rows[0].result;
+    const pages = JSON.stringify([{ rotation_degrees: 90, source: "camera" }]);
+    await db.query(`select public.record_camera_assembly($1, $2::jsonb)`, [intent.version_id, pages]);
+    await expectDbError(() => db.query(`select public.record_camera_assembly($1, $2::jsonb)`, [intent.version_id, pages]), /assembly denied/);
   });
 });

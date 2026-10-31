@@ -12,4 +12,5 @@ interface CloudflareEnv {
   RL_VERIFY: RateLimit;
   RL_PUBLIC: RateLimit;
   RL_PAYMENT: RateLimit;
+  RL_DOCUMENT_WORK: RateLimit;
 }

@@ -11,6 +11,7 @@ import { INLINE_SCAN_BUDGET } from "@/modules/documents/virus-scan";
 import { verifyDocumentStream } from "@/modules/documents/verify";
 import { TRANSLATE_MODEL } from "@/modules/i18n/translate";
 import { verifyTotpCode } from "@/lib/auth/verify-totp";
+import { RATE_LIMIT_MESSAGE, rateLimit } from "@/lib/security/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isUuid } from "@/lib/tenant/context";
@@ -49,6 +50,9 @@ async function staleVersion(supabase: Awaited<ReturnType<typeof createClient>>, 
 }
 
 const STALE = documentError("document version conflict");
+
+/** Largest source a redacted copy is made from on the app server (Worker memory). */
+const REDACTION_SOURCE_MAX_BYTES = 25 * 1024 * 1024;
 
 function objectRecord(value: Json): Record<string, Json | undefined> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -518,21 +522,34 @@ export async function createRedactedCopy(input: {
   if (input.regions.length < 1 || input.regions.length > 40) return { error: "Mark between 1 and 40 areas." };
   const session = await clientFor(input.organizationId, input.code ?? null);
   if ("error" in session) return { error: session.error };
-  const { data: row, error: readError } = await session.supabase
-    .from("document_versions")
-    .select("storage_key, upload_state, declared_media_type, detected_media_type")
-    .eq("id", input.sourceVersionId)
-    .maybeSingle();
-  if (readError || !row || row.upload_state !== "clean") return { error: "Only a file that passed its check can be redacted." };
-  const sourceType = row.detected_media_type ?? row.declared_media_type;
+  // Each copy downloads and rewrites a file on this server: 10 a minute per person.
+  if (!(await rateLimit("RL_DOCUMENT_WORK", `user:${session.userId}`))) return { error: RATE_LIMIT_MESSAGE };
+  // Every staff, step-up and source check runs in the caller's session before any bytes are read.
+  const { data: ticketData, error: ticketError } = await session.supabase.rpc("begin_redacted_copy", {
+    p_source_version_id: input.sourceVersionId,
+    p_matter_id: input.matterId,
+  });
+  if (ticketError) return { error: documentError(ticketError.message) };
+  const ticket = objectRecord(ticketData);
+  const ticketId = ticket?.ticket_id;
+  const sourceKey = ticket?.storage_key;
+  const sourceType = ticket?.media_type;
+  const sourceSize = ticket?.byte_size;
+  if (typeof ticketId !== "string" || typeof sourceKey !== "string" || typeof sourceType !== "string") {
+    return { error: "The redacted copy could not be made." };
+  }
+  if (typeof sourceSize === "number" && sourceSize > REDACTION_SOURCE_MAX_BYTES) {
+    return { error: "This file is too large to redact here, so no copy was made." };
+  }
   let service: ReturnType<typeof createServiceClient>;
   try {
     service = createServiceClient();
   } catch {
     return { error: "The redacted copy could not be made right now." };
   }
-  const downloaded = await service.storage.from("documents").download(row.storage_key);
+  const downloaded = await service.storage.from("documents").download(sourceKey);
   if (downloaded.error || !downloaded.data) return { error: "That file could not be read." };
+  if (downloaded.data.size > REDACTION_SOURCE_MAX_BYTES) return { error: "This file is too large to redact here, so no copy was made." };
   const sourceBytes = new Uint8Array(await downloaded.data.arrayBuffer());
   let output: Uint8Array;
   try {
@@ -545,9 +562,9 @@ export async function createRedactedCopy(input: {
   const filename = detected ? redactedFilename(detected) : null;
   if (!detected || !filename) return { error: "The redacted copy could not be made." };
   const regions = input.regions.map(regionRecord);
-  const { data, error } = await session.supabase.rpc("create_redacted_copy_intent", {
-    p_source_version_id: input.sourceVersionId,
-    p_matter_id: input.matterId,
+  const { data, error } = await service.rpc("service_create_redacted_copy_intent", {
+    p_ticket_id: ticketId,
+    p_actor_user_id: session.userId,
     p_filename: filename,
     p_declared_byte_size: output.byteLength,
     p_regions: regions as unknown as Json,
@@ -563,7 +580,7 @@ export async function createRedactedCopy(input: {
   const uploaded = await service.storage.from("documents").upload(storageKey, output, { contentType: detected, upsert: false });
   if (uploaded.error) return { error: "The redacted copy could not be saved." };
   const sha256 = createHash("sha256").update(output).digest("hex");
-  const { data: finished, error: finishError } = await service.rpc("finish_verified_document_upload", {
+  const { data: finished, error: finishError } = await service.rpc("service_finish_redacted_copy", {
     p_version_id: versionId,
     p_actor_user_id: session.userId,
     p_sha256: sha256,

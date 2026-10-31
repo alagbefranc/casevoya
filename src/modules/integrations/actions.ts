@@ -10,6 +10,14 @@ import { composioMailProvider } from "./mail/composio-mail";
 type Result<T extends object = object> = ({ ok: true } & T) | { error: string };
 
 const NOT_CONFIGURED = "Not connected — Composio not configured on this server.";
+const SWITCHED_OFF = "The firm owner hasn’t turned on connected accounts.";
+
+/** The mail label public.composio_connection_ready returns for an active connection. */
+function readyLabel(data: unknown): string | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const label = (data as Record<string, unknown>).mail_label;
+  return typeof label === "string" && label.length > 0 ? label : null;
+}
 const TOOLKITS = ["gmail", "outlook", "googlecalendar", "outlook_calendar"] as const;
 type Toolkit = (typeof TOOLKITS)[number];
 
@@ -63,6 +71,8 @@ export async function refreshConnection(input: { organizationId: string; toolkit
   if (!composioConfigured()) return { error: NOT_CONFIGURED };
   const { supabase, membershipId } = await me(input.organizationId);
   if (!membershipId) return { error: "Sign in first." };
+  const ready = await supabase.rpc("composio_connection_ready", { p_organization_id: input.organizationId });
+  if (ready.error) return { error: SWITCHED_OFF };
   const session = await staffSession(membershipId);
   const { items } = await session.toolkits({ toolkits: [COMPOSIO_TOOLKIT[input.toolkit]] });
   const item = items.find((row) => row.slug === COMPOSIO_TOOLKIT[input.toolkit]);
@@ -88,6 +98,9 @@ export async function syncCalendarBusy(input: { organizationId: string }): Promi
   if (!composioConfigured()) return { error: NOT_CONFIGURED };
   const { supabase, membershipId } = await me(input.organizationId);
   if (!membershipId) return { error: "Sign in first." };
+  // The firm's switch and this person's calendar connection are checked before Composio is called.
+  const ready = await supabase.rpc("composio_connection_ready", { p_organization_id: input.organizationId, p_toolkit: "googlecalendar" });
+  if (ready.error) return { error: /turned on/.test(ready.error.message) ? SWITCHED_OFF : "Connect your Google Calendar first." };
   const from = new Date();
   const read = await readGoogleBusy(await toolkitSession(membershipId, "googlecalendar"), from, 28);
   if ("error" in read) return read;
@@ -119,14 +132,16 @@ export async function saveDraftToMailbox(input: {
   if (!composioConfigured()) return { error: NOT_CONFIGURED };
   const { supabase, membershipId } = await me(input.organizationId);
   if (!membershipId) return { error: "Sign in first." };
-  const [{ data: draft }, { data: connection }] = await Promise.all([
+  const [{ data: draft }, ready] = await Promise.all([
     supabase.from("vo_drafts").select("body, status").eq("organization_id", input.organizationId).eq("id", input.draftId).maybeSingle(),
-    supabase.from("staff_connections").select("status, mail_label").eq("organization_id", input.organizationId).eq("membership_id", membershipId).eq("toolkit", input.toolkit).maybeSingle(),
+    supabase.rpc("composio_connection_ready", { p_organization_id: input.organizationId, p_toolkit: input.toolkit }),
   ]);
   if (!draft) return { error: "That draft isn’t available." };
   if (/\[needs a sourced rule\]/i.test(draft.body)) return { error: "Replace “[needs a sourced rule]” before saving it to your mailbox." };
-  if (connection?.status !== "active") return { error: "Connect your mailbox first." };
-  const provider = composioMailProvider({ toolkit: input.toolkit, label: connection.mail_label, session: () => toolkitSession(membershipId, input.toolkit) });
+  // The firm's switch and this person's mailbox connection, checked before Composio is called.
+  const label = readyLabel(ready.data);
+  if (ready.error || !label) return { error: ready.error && /turned on/.test(ready.error.message) ? SWITCHED_OFF : "Connect your mailbox first." };
+  const provider = composioMailProvider({ toolkit: input.toolkit, label, session: () => toolkitSession(membershipId, input.toolkit) });
   const result = await provider.createDraft({ to: input.to, subject: input.subject.slice(0, 200), body: draft.body });
   if ("error" in result) return result;
   return { ok: true, draftId: result.draftId };

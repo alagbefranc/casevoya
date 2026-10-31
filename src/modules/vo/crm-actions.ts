@@ -181,7 +181,7 @@ export async function saveLeadFollowUpToMailbox(input: { organizationId: string;
   const { data: draft } = await who.supabase.from("vo_crm_drafts").select("lead_id, kind, status").eq("organization_id", input.organizationId).eq("id", input.draftId).maybeSingle();
   if (!draft || draft.kind !== "lead_follow_up" || !draft.lead_id) return { error: voError("denied") };
   if (draft.status !== "draft") return { error: voError("reviewed") };
-  const [{ data: lead }, { data: consent }, { data: connection }] = await Promise.all([
+  const [{ data: lead }, { data: consent }, ready] = await Promise.all([
     who.supabase.from("leads").select("email, service_interest").eq("organization_id", input.organizationId).eq("id", draft.lead_id).maybeSingle(),
     who.supabase
       .from("lead_consents")
@@ -192,13 +192,18 @@ export async function saveLeadFollowUpToMailbox(input: { organizationId: string;
       .order("recorded_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    who.supabase.from("staff_connections").select("status, mail_label").eq("organization_id", input.organizationId).eq("membership_id", who.membershipId).eq("toolkit", input.toolkit).maybeSingle(),
+    // The firm's connected-accounts switch and this person's mailbox connection.
+    who.supabase.rpc("composio_connection_ready", { p_organization_id: input.organizationId, p_toolkit: input.toolkit }),
   ]);
   if (consent?.granted !== true) return { error: voCrmError("no_consent_send") };
   if (!lead?.email) return { error: "This lead has no email address. Copy the text and send it another way." };
-  if (connection?.status !== "active") return { error: "Connect your mailbox first (Settings, Integrations)." };
+  const readyRow = ready.data && typeof ready.data === "object" && !Array.isArray(ready.data) ? (ready.data as Record<string, unknown>) : null;
+  const label = typeof readyRow?.mail_label === "string" ? readyRow.mail_label : null;
+  if (ready.error || !label) {
+    return { error: ready.error && /turned on/.test(ready.error.message) ? "The firm owner hasn’t turned on connected accounts." : "Connect your mailbox first (Settings, Integrations)." };
+  }
   const membershipId = who.membershipId;
-  const provider = composioMailProvider({ toolkit: input.toolkit, label: connection.mail_label, session: () => toolkitSession(membershipId, input.toolkit) });
+  const provider = composioMailProvider({ toolkit: input.toolkit, label, session: () => toolkitSession(membershipId, input.toolkit) });
   const subject = lead.service_interest ? `Your enquiry: ${lead.service_interest}` : "Your enquiry";
   const result = await provider.createDraft({ to: lead.email, subject: subject.slice(0, 200), body });
   if ("error" in result) return result;

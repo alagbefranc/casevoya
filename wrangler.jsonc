@@ -42,7 +42,9 @@
     // Public booking hold and enquiry POSTs; per visitor address.
     { "name": "RL_PUBLIC", "namespace_id": "2004", "simple": { "limit": 10, "period": 60 } },
     // Invoice card payment, subscription checkout and billing portal; per user.
-    { "name": "RL_PAYMENT", "namespace_id": "2005", "simple": { "limit": 10, "period": 60 } }
+    { "name": "RL_PAYMENT", "namespace_id": "2005", "simple": { "limit": 10, "period": 60 } },
+    // Server-side document rewrites (redacted copies); per user.
+    { "name": "RL_DOCUMENT_WORK", "namespace_id": "2006", "simple": { "limit": 10, "period": 60 } }
   ],
   "vars": {
     "NEXT_PUBLIC_SUPABASE_URL": "https://aqjtvqmojfamtspzyeqm.supabase.co",

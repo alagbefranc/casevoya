@@ -21,6 +21,7 @@ export function documentError(message: string): string {
     return "The file is not a PDF, JPEG, PNG, HEIC, or DOCX.";
   }
   if (/document redaction denied/i.test(message)) return "Only firm staff can make a redacted copy.";
+  if (/too many redaction requests/i.test(message)) return "Too many redacted copies in the last minute. Try again shortly.";
   if (/only a checked file can be redacted/i.test(message)) return "Only a file that passed its check can be redacted.";
   if (/not on this matter/i.test(message)) return "That document is not on this matter.";
   if (/mark between 1 and 40|mark an area/i.test(message)) return "Mark between 1 and 40 areas on the page.";

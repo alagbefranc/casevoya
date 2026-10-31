@@ -60,7 +60,9 @@ export class RedactionError extends Error {
   }
 }
 
-const MAX_PIXELS = 40_000_000;
+// Decode caps sized for the Worker's memory: a 12 MP phone photo fits, larger images are refused.
+const MAX_PIXELS = 13_000_000;
+const JPEG_LIMITS = { maxResolutionInMP: 13, maxMemoryUsageInMB: 128 } as const;
 const UNSAFE = "This PDF can’t be redacted safely, so no copy was made.";
 
 type Widths = (code: number) => number;
@@ -129,7 +131,7 @@ async function redactRaster(bytes: Uint8Array, mediaType: "image/jpeg" | "image/
 
 function decodeRasterJpeg(bytes: Uint8Array): { width: number; height: number; rgba: Uint8Array } {
   try {
-    const decoded = decodeJpeg(bytes, { useTArray: true, formatAsRGBA: true, maxResolutionInMP: 40, maxMemoryUsageInMB: 512 });
+    const decoded = decodeJpeg(bytes, { useTArray: true, formatAsRGBA: true, ...JPEG_LIMITS });
     return { width: decoded.width, height: decoded.height, rgba: decoded.data };
   } catch {
     throw new RedactionError("This image can’t be redacted.");
@@ -137,6 +139,11 @@ function decodeRasterJpeg(bytes: Uint8Array): { width: number; height: number; r
 }
 
 function decodeRasterPng(bytes: Uint8Array): { width: number; height: number; rgba: Uint8Array } {
+  // IHDR width and height (big-endian) at bytes 16..23, checked before the full decode.
+  if (bytes.length >= 24) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if (view.getUint32(16) * view.getUint32(20) > MAX_PIXELS) throw new RedactionError("This image is too large to redact, so no copy was made.");
+  }
   try {
     const png = PNG.sync.read(Buffer.from(bytes));
     return { width: png.width, height: png.height, rgba: png.data };
@@ -785,7 +792,7 @@ function tryDecodeImage(stream: PDFRawStream, width: number, height: number): { 
   const colors = colorCount(stream.dict);
   if (filter === PDFName.of("DCTDecode") && colors === 3) {
     try {
-      const jpeg = decodeJpeg(stream.contents, { useTArray: true, formatAsRGBA: true, maxResolutionInMP: 40, maxMemoryUsageInMB: 512 });
+      const jpeg = decodeJpeg(stream.contents, { useTArray: true, formatAsRGBA: true, ...JPEG_LIMITS });
       if (jpeg.width !== width || jpeg.height !== height) return null;
       return { samples: rgbaToRgb(jpeg.data), colors: 3 };
     } catch {
