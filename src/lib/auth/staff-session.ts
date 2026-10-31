@@ -1,8 +1,11 @@
 import { safeRedirect } from "@/lib/auth/redirect";
 import { STAFF_ROLES } from "@/lib/tenant/roles";
 
-/** Firm workspace routes. Portal-only sessions are not redirected here. */
-const STAFF_AREA_PREFIXES = ["/app"];
+/**
+ * Firm workspace routes: the Sheet and /app. One list for the proxy's staff MFA gate and the idle
+ * check (isStaffPageLoad). Portal-only sessions are not redirected here.
+ */
+export const STAFF_AREA_PREFIXES: readonly string[] = ["/app", "/sheet"];
 
 const MFA_PATH = "/mfa";
 

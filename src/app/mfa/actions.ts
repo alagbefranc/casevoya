@@ -76,8 +76,12 @@ export async function redeemRecoveryCode(formData: FormData) {
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) redirect(`/sign-in?next=${encodeURIComponent(mfaPath(next))}`);
+  // Same limits as an authenticator code (shared per-user budget); the database adds its own.
+  const gate = await totpGate(claims.claims.sub);
+  if (!gate.allowed) redirect(mfaPath(next, "rate_limited"));
 
   const { data, error } = await supabase.rpc("consume_recovery_code", { p_code: code });
+  await resolveAuthAttempt(gate, data !== true);
   if (error || data !== true) redirect(mfaPath(next, "recovery_failed"));
   redirect(safeRedirect(next));
 }

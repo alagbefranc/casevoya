@@ -619,7 +619,13 @@ export async function redeemRecovery(code: string): Promise<PortResult | null> {
   const clean = code.trim();
   if (!/^[A-Za-z0-9-]{8,32}$/.test(clean)) return fail("That recovery code was not accepted.");
   const supabase = await createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  const userId = typeof claims?.claims?.sub === "string" ? claims.claims.sub : null;
+  // Same limits as an authenticator code (shared per-user budget); the database adds its own.
+  const gate = await totpGate(userId);
+  if (!gate.allowed) return { ok: false, message: attemptWaitMessage(gate.retryAfterSeconds) };
   const { data, error } = await supabase.rpc("consume_recovery_code", { p_code: clean });
+  await resolveAuthAttempt(gate, data !== true);
   if (error || data !== true) return fail("That recovery code was not accepted.");
   return { ok: true };
 }

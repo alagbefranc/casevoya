@@ -73,7 +73,7 @@ describe("auth attempt reservations", () => {
     expect((await reserve("password", key, scope)).allowed).toBe(true);
   });
 
-  it("password: 10 failures lock one (email, address); another address still works until 50 for the email", async () => {
+  it("password: 10 failures lock one (email, address); past 50 for the email each address gets 3, never zero", async () => {
     const key = hash();
     const scopeA = hash();
     const scopeB = hash();
@@ -85,10 +85,17 @@ describe("auth attempt reservations", () => {
     const other = await reserve("password", key, scopeB);
     expect(other.allowed).toBe(true);
     await resolve(other.attempt_id, false);
-    // 50 counted failures for the email across addresses: every address is refused.
+    // 50 counted failures for the email across addresses: the email alone does not refuse.
     await seed("password", key, 40, "1 minute");
+    const fresh = hash();
+    const owner = await reserve("password", key, fresh);
+    expect(owner.allowed).toBe(true);
+    await resolve(owner.attempt_id, false);
+    // ...but an address is refused after 3 failures instead of 10.
+    await seed("password", key, 3, "1 minute", scopeB);
     expect((await reserve("password", key, scopeB)).allowed).toBe(false);
-    expect((await reserve("password", key, hash())).allowed).toBe(false);
+    expect((await reserve("password", key, scopeA)).allowed).toBe(false);
+    expect((await reserve("password", key, hash())).allowed).toBe(true);
     // Kinds and other emails are separate.
     expect((await reserve("otp", key, scopeB)).allowed).toBe(true);
     expect((await reserve("password", hash(), scopeB)).allowed).toBe(true);
@@ -96,24 +103,38 @@ describe("auth attempt reservations", () => {
 
   it("retry_after_seconds comes from the oldest counted row that must leave the window", async () => {
     const key = hash();
-    await seed("password", key, 2, "14 minutes");
-    await seed("password", key, 50, "1 minute");
-    const refused = await reserve("password", key, hash());
+    const scope = hash();
+    await seed("password", key, 2, "14 minutes", scope);
+    await seed("password", key, 8, "1 minute", scope);
+    const refused = await reserve("password", key, scope);
     expect(refused.allowed).toBe(false);
-    // 52 counted, limit 50: the 3rd oldest (1 minute old) must leave, about 14 minutes from now.
-    expect(refused.retry_after_seconds).toBeGreaterThan(800);
-    expect(refused.retry_after_seconds).toBeLessThanOrEqual(840);
+    // 10 counted from this address, limit 10: the oldest (14 minutes old) must leave, about 1 minute from now.
+    expect(refused.retry_after_seconds).toBeGreaterThan(0);
+    expect(refused.retry_after_seconds).toBeLessThanOrEqual(60);
+
+    // Past the per-email limit the tighter per-address limit sets the wait.
+    const busy = hash();
+    const busyScope = hash();
+    await seed("password", busy, 50, "1 minute");
+    await seed("password", busy, 1, "14 minutes", busyScope);
+    await seed("password", busy, 2, "1 minute", busyScope);
+    const tight = await reserve("password", busy, busyScope);
+    expect(tight.allowed).toBe(false);
+    expect(tight.retry_after_seconds).toBeLessThanOrEqual(60);
   });
 
-  it("otp: 5 per (email, address) and 20 per email; failures older than 15 minutes do not count", async () => {
+  it("otp: 5 per (email, address); past 20 per email each address gets 2; failures older than 15 minutes do not count", async () => {
     const key = hash();
     const scope = hash();
     await seed("otp", key, 5, "1 minute", scope);
     expect((await reserve("otp", key, scope)).allowed).toBe(false);
     expect((await reserve("otp", key, hash())).allowed).toBe(true);
     const busy = hash();
+    const busyScope = hash();
     await seed("otp", busy, 20, "1 minute");
-    expect((await reserve("otp", busy, hash())).allowed).toBe(false);
+    expect((await reserve("otp", busy, hash())).allowed).toBe(true);
+    await seed("otp", busy, 2, "1 minute", busyScope);
+    expect((await reserve("otp", busy, busyScope)).allowed).toBe(false);
     const old = hash();
     await seed("otp", old, 30, "16 minutes");
     expect((await reserve("otp", old, hash())).allowed).toBe(true);

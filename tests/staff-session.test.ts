@@ -62,6 +62,39 @@ describe("staff MFA redirect", () => {
     expect(isStaffArea("/mfa")).toBe(false);
   });
 
+  it("treats the Sheet as the staff area, so aal1 staff are sent to /mfa there too", () => {
+    expect(isStaffArea("/sheet")).toBe(true);
+    expect(isStaffArea("/sheet/automations")).toBe(true);
+    expect(isStaffArea("/sheet/reports/scheduled")).toBe(true);
+    expect(isStaffArea("/sheets")).toBe(false);
+    expect(isStaffArea("/portal")).toBe(false);
+    expect(
+      staffMfaRedirectPath({
+        pathname: "/sheet/finance",
+        signedIn: true,
+        currentAal: "aal1",
+        activeRoles: ["case_manager"],
+      }),
+    ).toBe("/mfa?next=%2Fsheet%2Ffinance");
+    expect(
+      staffMfaRedirectPath({
+        pathname: "/sheet",
+        signedIn: true,
+        currentAal: "aal1",
+        activeRoles: ["client"],
+      }),
+    ).toBeNull();
+    expect(
+      staffMfaRedirectPath({
+        pathname: "/sheet/matters",
+        signedIn: true,
+        currentAal: "aal1",
+        activeRoles: ["firm_owner"],
+        mfaSatisfied: true,
+      }),
+    ).toBeNull();
+  });
+
   it("lets a passkey or recovery-assured staff session into the workspace", () => {
     expect(
       staffMfaRedirectPath({

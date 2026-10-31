@@ -6,6 +6,7 @@
  */
 
 import { safeRedirect } from "@/lib/auth/redirect";
+import { isStaffArea } from "@/lib/auth/staff-session";
 
 /** The warning shows this long before sign-out. */
 export const IDLE_WARNING_SECONDS = 120;
@@ -98,8 +99,7 @@ export function idleDetail(minutes: number | null): string {
 export function isStaffPageLoad(input: { method: string; pathname: string; fetchDest: string | null; prefetch: boolean }): boolean {
   if (input.method !== "GET" || input.prefetch) return false;
   if (input.fetchDest !== "document") return false;
-  const path = input.pathname;
-  return path === "/sheet" || path.startsWith("/sheet/") || path === "/app" || path.startsWith("/app/");
+  return isStaffArea(input.pathname);
 }
 
 /** Where an idle sign-out lands: sign in again, then back to the page. */
