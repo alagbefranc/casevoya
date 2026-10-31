@@ -32,6 +32,12 @@ const reported = new Set<string>();
 
 /** Logs once per isolate why a limit could not be applied (no secrets or keys are logged). */
 function report(name: RateLimitName, reason: string): void {
+  if (reason.startsWith("active_")) {
+    if (reported.has(`${name}:${reason}`)) return;
+    reported.add(`${name}:${reason}`);
+    console.info("rate limit active", { binding: name, reason });
+    return;
+  }
   if (reported.has(`${name}:${reason}`)) return;
   reported.add(`${name}:${reason}`);
   console.warn("rate limit not applied; request allowed", { binding: name, reason });
@@ -56,7 +62,10 @@ export async function rateLimit(name: RateLimitName, key: string): Promise<boole
   if (!limiter) return true;
   try {
     const outcome = await limiter.limit({ key: `${name}:${key}` });
-    return outcome?.success !== false;
+    const allowed = outcome?.success !== false;
+    if (!allowed) console.warn("rate limited", { binding: name });
+    else report(name, `active_${key === "unknown" ? "unknown_key" : "keyed"}`);
+    return allowed;
   } catch (error) {
     report(name, `limit_${error instanceof Error ? error.name : "unknown"}`);
     return true;
