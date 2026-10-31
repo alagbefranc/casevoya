@@ -16,6 +16,12 @@ import {
   type BillingStripe,
 } from "@/modules/subscription/stripe";
 
+// custom_text.submit is "" | { message } in the SDK types.
+function submitText(params: { custom_text?: { submit?: unknown } | null }): string {
+  const submit = params.custom_text?.submit;
+  return submit && typeof submit === "object" && "message" in submit ? String((submit as { message: unknown }).message) : "";
+}
+
 /** Synthetic test-mode values only. */
 const SECRET = "whsec_syntheticCardTrialSecretForVitestOnly0";
 const ORG = "33333333-3333-4333-8333-333333333333";
@@ -102,7 +108,7 @@ describe("card-required trial checkout", () => {
       subscription_data: { trial_period_days: 14, trial_settings: { end_behavior: { missing_payment_method: "cancel" } } },
     });
     expect(params.subscription_data?.metadata).not.toHaveProperty("casevoya_trial");
-    const message = params.custom_text?.submit?.message ?? "";
+    const message = submitText(params);
     expect(message).toMatch(/^\$0 today\. Your free trial ends on /);
     expect(message).toContain("CAD 186.75/month (founding-firm price, 25% off for the first 12 months), then CAD 249/month");
     expect(message).toContain("plus applicable taxes");
@@ -116,7 +122,7 @@ describe("card-required trial checkout", () => {
     expect(calls).toHaveLength(2);
     expect(calls[1].params.discounts).toBeUndefined();
     expect(calls[1].options).toEqual({ idempotencyKey: `casevoya-checkout-${BASE.idempotencyKey}-list` });
-    expect(calls[1].params.custom_text?.submit?.message).not.toContain("founding");
+    expect(submitText(calls[1].params)).not.toContain("founding");
   });
 
   it("keeps a legacy trial's end date, and bills today without a trial", async () => {
@@ -133,7 +139,7 @@ describe("card-required trial checkout", () => {
     await createSubscriptionCheckout(none.stripe, null, BASE);
     expect(none.calls[0].params.subscription_data).not.toHaveProperty("trial_settings");
     expect(none.calls[0].params.metadata).toMatchObject({ casevoya_trial: "0" });
-    expect(none.calls[0].params.custom_text?.submit?.message).toMatch(/^You are billed CAD 249\/month, plus applicable taxes, starting today/);
+    expect(submitText(none.calls[0].params)).toMatch(/^You are billed CAD 249\/month, plus applicable taxes, starting today/);
   });
 
   it("reads the trial: days, a remainder over 49 hours, or nothing", () => {

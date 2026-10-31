@@ -10,6 +10,8 @@ import type { ContinuityBannerData } from "@/modules/sheet/sec-present";
 import { ContinuityBanner } from "./continuity-banner";
 import { BillingBanner } from "./billing-banner";
 import type { BillingBannerData } from "@/modules/sheet/billing-banner";
+import { GoLiveBanner } from "./go-live-panel";
+import type { GoLiveBannerData } from "@/modules/sheet/go-live-present";
 import type { ServiceNoticeBannerData } from "@/modules/sheet/service-notices-present";
 import { ServiceNoticeBanner } from "./service-notice-banner";
 import { SheetSidebar, type SidebarData } from "./sidebar";
@@ -270,6 +272,10 @@ export type StatusbarData = {
   continuity?: ContinuityBannerData | null;
   /** Live addition (card trial): days left in the firm's trial, a card still needed, or a failed payment; every staff page. */
   billing?: BillingBannerData | null;
+  /** Live addition (go live): the firm is in test mode until its owner switches it to live; every staff page. */
+  goLive?: GoLiveBannerData | null;
+  /** Live addition (go live): the status bar's Test mode badge, linking to Settings › Subscription for the owner and finance. */
+  testMode?: { label: string; href: string | null } | null;
   /** Live addition (ADM-04): Casevoya's current service notice (maintenance, incident); every staff page, dismissible per person. */
   notice?: ServiceNoticeBannerData | null;
 };
@@ -306,6 +312,17 @@ export function SheetStatusbar({ data }: { data: StatusbarData }) {
         <span className={"demo"}>
           <Pair left={data.sample.label} right={data.sample.detail} />
         </span>
+      ) : null}
+      {data.testMode ? (
+        data.testMode.href ? (
+          <a className={"demo"} href={data.testMode.href} data-test-mode={"1"} style={data.sample ? { marginLeft: 0 } : undefined}>
+            <Pair left={data.testMode.label} right={"Go live"} />
+          </a>
+        ) : (
+          <span className={"demo"} data-test-mode={"1"} style={data.sample ? { marginLeft: 0 } : undefined}>
+            {data.testMode.label}
+          </span>
+        )
       ) : null}
     </footer>
   );
@@ -372,6 +389,7 @@ export function SheetFrame({
               {statusbar.setup ? <SetupBanner data={statusbar.setup} /> : null}
               {statusbar.continuity ? <ContinuityBanner data={statusbar.continuity} /> : null}
               {statusbar.billing && !statusbar.continuity ? <BillingBanner data={statusbar.billing} /> : null}
+              {statusbar.goLive && !statusbar.continuity ? <GoLiveBanner data={statusbar.goLive} /> : null}
               {statusbar.notice ? <ServiceNoticeBanner data={statusbar.notice} /> : null}
               {children}
             </div>

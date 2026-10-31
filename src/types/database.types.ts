@@ -8944,6 +8944,8 @@ export type Database = {
           privacy_contact_name: string | null
           privacy_notice_due_at: string | null
           privacy_notice_withdrawn_at: string | null
+          live_at: string | null
+          live_by: string | null
           quiet_hours_end: string | null
           quiet_hours_start: string | null
           retention_policy: Json | null
@@ -8980,6 +8982,8 @@ export type Database = {
           privacy_contact_name?: string | null
           privacy_notice_due_at?: string | null
           privacy_notice_withdrawn_at?: string | null
+          live_at?: string | null
+          live_by?: string | null
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null
           retention_policy?: Json | null
@@ -9016,6 +9020,8 @@ export type Database = {
           privacy_contact_name?: string | null
           privacy_notice_due_at?: string | null
           privacy_notice_withdrawn_at?: string | null
+          live_at?: string | null
+          live_by?: string | null
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null
           retention_policy?: Json | null
@@ -16568,6 +16574,18 @@ export type Database = {
             Returns: string
           }
       public_privacy_notice: { Args: { p_firm_slug: string }; Returns: Json }
+      firm_go_live_status: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      switch_firm_to_live: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      switch_firm_to_test: {
+        Args: { p_confirm: string }
+        Returns: undefined
+      }
       public_pricing: {
         Args: Record<PropertyKey, never>
         Returns: Json
