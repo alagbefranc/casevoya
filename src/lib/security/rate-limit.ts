@@ -28,12 +28,24 @@ export const RATE_LIMIT_RETRY_SECONDS = 60;
 
 type Limiter = { limit(options: { key: string }): Promise<{ success: boolean }> };
 
+const reported = new Set<string>();
+
+/** Logs once per isolate why a limit could not be applied (no secrets or keys are logged). */
+function report(name: RateLimitName, reason: string): void {
+  if (reported.has(`${name}:${reason}`)) return;
+  reported.add(`${name}:${reason}`);
+  console.warn("rate limit not applied; request allowed", { binding: name, reason });
+}
+
 function binding(name: RateLimitName): Limiter | null {
   try {
     const env = getCloudflareContext().env as unknown as Record<string, unknown>;
-    const value = env[name] as Limiter | undefined;
-    return value && typeof value.limit === "function" ? value : null;
-  } catch {
+    const value = env?.[name] as Limiter | undefined;
+    if (value && typeof value.limit === "function") return value;
+    if (process.env.NODE_ENV === "production") report(name, value ? `binding_${typeof value.limit}` : "binding_missing");
+    return null;
+  } catch (error) {
+    if (process.env.NODE_ENV === "production") report(name, `context_${error instanceof Error ? error.name : "unknown"}`);
     return null;
   }
 }
@@ -45,7 +57,8 @@ export async function rateLimit(name: RateLimitName, key: string): Promise<boole
   try {
     const outcome = await limiter.limit({ key: `${name}:${key}` });
     return outcome?.success !== false;
-  } catch {
+  } catch (error) {
+    report(name, `limit_${error instanceof Error ? error.name : "unknown"}`);
     return true;
   }
 }
