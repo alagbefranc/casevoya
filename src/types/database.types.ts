@@ -15553,6 +15553,30 @@ export type Database = {
         }
         Returns: Json
       }
+      begin_redacted_copy: {
+        Args: { p_matter_id: string; p_source_version_id: string }
+        Returns: Json
+      }
+      service_create_redacted_copy_intent: {
+        Args: {
+          p_actor_user_id: string
+          p_declared_byte_size: number
+          p_filename: string
+          p_regions: Json
+          p_ticket_id: string
+        }
+        Returns: Json
+      }
+      service_finish_redacted_copy: {
+        Args: {
+          p_actor_user_id: string
+          p_byte_size: number
+          p_detected_media_type: string | null
+          p_sha256: string
+          p_version_id: string
+        }
+        Returns: Json
+      }
       create_upload_intent: {
         Args: {
           p_audience: Database["public"]["Enums"]["document_audience"]
@@ -17729,6 +17753,10 @@ export type Database = {
           p_privacy_response_days: number | null
         }
         Returns: undefined
+      }
+      composio_connection_ready: {
+        Args: { p_organization_id: string; p_toolkit?: string }
+        Returns: Json
       }
       set_composio_enabled: {
         Args: { p_accept_disclosure: boolean; p_enabled: boolean; p_organization_id: string }

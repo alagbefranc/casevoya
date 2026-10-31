@@ -133,3 +133,47 @@ describe("calendar busy times", () => {
     expect((await db.query(`select 1 from public.external_busy_blocks where organization_id = $1`, [f.orgId])).rows).toHaveLength(0);
   });
 });
+
+describe("turning connected accounts off (#299)", () => {
+  it("ends every connection of the firm, removes their busy times, and refuses further syncs", async () => {
+    const f = await firm();
+    const other = await firm();
+    for (const firmRow of [f, other]) {
+      await as(firmRow, firmRow.owner);
+      await db.query(`select public.set_composio_enabled($1, true, true)`, [firmRow.orgId]);
+      await as(firmRow, firmRow.consultant);
+      await db.query(`select public.save_staff_connection($1, 'googlecalendar', 'active', 'ca_cal123')`, [firmRow.orgId]);
+      await db.query(`select public.save_staff_connection($1, 'gmail', 'active', 'ca_mail123', 'Casevoya clients')`, [firmRow.orgId]);
+    }
+    const blocks = JSON.stringify([{ start: "2030-03-04T15:00:00Z", end: "2030-03-04T16:00:00Z" }]);
+    const args = [f.orgId, "2030-03-01T00:00:00Z", "2030-03-20T00:00:00Z", blocks];
+    await as(f, f.consultant);
+    await db.query(`select public.replace_external_busy_blocks($1, 'google', $2, $3, $4::jsonb)`, args);
+    const ready = await db.query<{ r: { mail_label: string } }>(`select public.composio_connection_ready($1, 'gmail') as r`, [f.orgId]);
+    expect(ready.rows[0].r.mail_label).toBe("Casevoya clients");
+    await expectDbError(() => db.query(`select public.composio_connection_ready($1, 'outlook')`, [f.orgId]), /connect that account first/);
+    await as(f, f.finance);
+    await expectDbError(() => db.query(`select public.composio_connection_ready($1, 'gmail')`, [f.orgId]), /staff access denied/);
+
+    await as(f, f.owner);
+    await db.query(`select public.set_composio_enabled($1, false, false)`, [f.orgId]);
+    await asMaintenance(db);
+    const statuses = await db.query<{ organization_id: string; status: string }>(
+      `select organization_id, status from public.staff_connections where organization_id = any ($1::uuid[])`,
+      [[f.orgId, other.orgId]],
+    );
+    expect(statuses.rows.filter((row) => row.organization_id === f.orgId).every((row) => row.status === "disconnected")).toBe(true);
+    expect(statuses.rows.filter((row) => row.organization_id === other.orgId).every((row) => row.status === "active")).toBe(true);
+    expect((await db.query(`select 1 from public.external_busy_blocks where organization_id = $1`, [f.orgId])).rows).toHaveLength(0);
+
+    await as(f, f.consultant);
+    await expectDbError(() => db.query(`select public.composio_connection_ready($1, 'gmail')`, [f.orgId]), /not turned on/);
+    await expectDbError(() => db.query(`select public.composio_connection_ready($1)`, [f.orgId]), /not turned on/);
+    await expectDbError(() => db.query(`select public.replace_external_busy_blocks($1, 'google', $2, $3, $4::jsonb)`, args), /not turned on/);
+
+    // The other firm is unaffected.
+    await as(other, other.consultant);
+    const otherReady = await db.query<{ r: { mail_label: string } }>(`select public.composio_connection_ready($1, 'gmail') as r`, [other.orgId]);
+    expect(otherReady.rows[0].r.mail_label).toBe("Casevoya clients");
+  });
+});
