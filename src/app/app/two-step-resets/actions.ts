@@ -14,13 +14,15 @@ const PAGE = "/app/two-step-resets";
  */
 export async function decideMfaReset(formData: FormData) {
   const id = String(formData.get("requestId") ?? "");
+  const orgId = String(formData.get("orgId") ?? "");
   const decision = String(formData.get("decision") ?? "");
   const confirmed = formData.get("confirmed") === "on";
-  if (!isUuid(id) || (decision !== "approve" && decision !== "deny")) redirect(`${PAGE}?error=input`);
+  if (!isUuid(id) || !isUuid(orgId) || (decision !== "approve" && decision !== "deny")) redirect(`${PAGE}?error=input`);
   const approve = decision === "approve";
   if (approve && !confirmed) redirect(`${PAGE}?error=confirm`);
 
-  const supabase = await createClient();
+  // decide_mfa_reset checks the active org, which travels as the x-casevoya-org header.
+  const supabase = await createClient({ organizationId: orgId });
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) redirect(`/sign-in?next=${PAGE}`);
 
