@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asMaintenance, asServiceRole, asUser, createTestDb, expectDbError, type TestDb } from "./helpers/postgres";
 
 /**
- * Billing hardening (20261102100000): a card trial that ends before it converts pauses new work;
+ * Billing hardening (20261102140000): a card trial that ends before it converts pauses new work;
  * a second paid subscription is not stored and is answered with a cancel instruction; the Stripe
  * customer is recorded by the server only; subscription events have their own ordering, and a
  * trial Checkout records the trial claims. Synthetic firms and test-mode Stripe ids only.
