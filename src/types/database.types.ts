@@ -2707,6 +2707,126 @@ export type Database = {
         }
         Relationships: []
       }
+      firm_workflows: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          organization_id: string
+          program_key: string | null
+          source_template_id: string | null
+          source_version_id: string | null
+          status: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          program_key?: string | null
+          source_template_id?: string | null
+          source_version_id?: string | null
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          program_key?: string | null
+          source_template_id?: string | null
+          source_version_id?: string | null
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
+      firm_workflow_stages: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+          position: number
+          workflow_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string
+          organization_id?: string
+          position?: number
+          workflow_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          organization_id?: string
+          position?: number
+          workflow_id?: string
+        }
+        Relationships: []
+      }
+      firm_workflow_items: {
+        Row: {
+          created_at: string
+          detail: string | null
+          due_offset_days: number | null
+          id: string
+          kind: string
+          organization_id: string
+          owner: string
+          position: number
+          stage_id: string
+          title: string
+          workflow_id: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: string | null
+          due_offset_days?: number | null
+          id?: string
+          kind?: string
+          organization_id?: string
+          owner?: string
+          position?: number
+          stage_id?: string
+          title?: string
+          workflow_id?: string
+        }
+        Update: {
+          created_at?: string
+          detail?: string | null
+          due_offset_days?: number | null
+          id?: string
+          kind?: string
+          organization_id?: string
+          owner?: string
+          position?: number
+          stage_id?: string
+          title?: string
+          workflow_id?: string
+        }
+        Relationships: []
+      }
       document_custody_events: {
         Row: {
           acknowledged_at: string | null
@@ -15666,6 +15786,18 @@ export type Database = {
       save_checklist_template: {
         Args: { p_items: Json; p_stable_key: string; p_template_id: string; p_title: string }
         Returns: string
+      }
+      save_firm_workflow: {
+        Args: { p_description: string; p_expected_version: number; p_name: string; p_program_key: string; p_stages: Json; p_workflow_id: string }
+        Returns: Json
+      }
+      copy_shared_template_to_workflow: {
+        Args: { p_version_id: string }
+        Returns: Json
+      }
+      set_firm_workflow_archived: {
+        Args: { p_archived: boolean; p_expected_version: number; p_workflow_id: string }
+        Returns: Json
       }
       document_request_progress: {
         Args: { p_matter_id: string }

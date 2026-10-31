@@ -26,6 +26,8 @@ export type SidebarData = {
   tiles: { documents: string; invoices: string };
   newMatter: Action;
   createBoard: Action;
+  /** Live only (2026-10-30): the Practice › Workflows link (Templates > Workflows). */
+  showWorkflows?: boolean;
 };
 
 /** disabled (live): the link is shown dimmed as unavailable, with this reason as its title. */
@@ -223,6 +225,7 @@ export function SheetSidebar({ data }: { data: SidebarData }) {
             label={counts.sourcesReview ? `${counts.sourcesReview} ${counts.sourcesReview === 1 ? "source needs" : "sources need"} review` : undefined}
           />
         </Item>
+        {data.showWorkflows ? <Item href={"/sheet/templates?tab=workflows"} icon={"workflow"} label={"Workflows"} active={active} /> : null}
         <Item href={"/sheet/ai"} icon={"sparkles"} label={"Vo and AI"} active={active} />
         <Item href={"/sheet/automations"} icon={"lightning"} label={"Automations"} active={active} />
         <Item href={"/sheet/intake-builder"} icon={"file"} label={"Intake forms"} active={active} />

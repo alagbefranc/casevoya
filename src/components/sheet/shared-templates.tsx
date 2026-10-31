@@ -10,6 +10,7 @@ import {
   pinMatterSharedTemplate,
   saveFirmTemplateOverride,
 } from "@/modules/templates/shared-actions";
+import { copySharedTemplateToWorkflow } from "@/modules/templates/workflow-actions";
 import {
   fieldLabel,
   isFirstVersion,
@@ -24,7 +25,7 @@ import { Empty } from "./designer/frame";
  * adopt, a firm override kept apart from the reviewed text, and a pin on a matter.
  * Drafting and approving happen in the admin portal, not here.
  */
-export function SharedTemplatesPanel({ organizationId, view }: { organizationId: string; view: SharedTemplatesView }) {
+export function SharedTemplatesPanel({ organizationId, view, canCopy = false }: { organizationId: string; view: SharedTemplatesView; canCopy?: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<SharedTemplateCard | null>(null);
@@ -96,6 +97,7 @@ export function SharedTemplatesPanel({ organizationId, view }: { organizationId:
       <div className={"ph rv"}>
         <div>
           <h1 className={"display"}>{"Shared templates"}</h1>
+          <p><Badge badge={{ tone: "gr", label: "Casevoya shared · read only" }} /></p>
           <p>
             {"These versions were reviewed centrally. Your firm can adopt one. A matter that already uses a version keeps it. Your own wording is labelled as the firm’s, separate from the reviewed text."}
           </p>
@@ -197,6 +199,21 @@ export function SharedTemplatesPanel({ organizationId, view }: { organizationId:
                 {view.canAdopt && card.adoption?.versionId !== card.published.id ? (
                   <button type={"button"} className={"btn p sm"} disabled={busy} onClick={() => void run(() => adoptSharedTemplate({ organizationId, versionId: card.published!.id }), `Adopted v${card.published!.versionNumber}`)}>
                     {`Adopt v${card.published.versionNumber}`}
+                  </button>
+                ) : null}
+                {canCopy ? (
+                  <button
+                    type={"button"}
+                    className={"btn sm"}
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        const copied = await copySharedTemplateToWorkflow({ organizationId, versionId: card.published!.id });
+                        return "error" in copied ? copied : { ok: true as const };
+                      }, `Copy made in Workflows. Edit it there; this template stays read only.`)
+                    }
+                  >
+                    {"Make a copy to edit"}
                   </button>
                 ) : null}
                 {view.canOverride ? (

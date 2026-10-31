@@ -17,6 +17,8 @@ import { partialAlert } from "@/modules/sheet/states-present";
 import { liveClaimsData, OFFICIAL_CLAIMS_PAGE, officialClaimView, type OfficialClaimJson } from "@/modules/sheet/official-claims-present";
 import { readConflict, readConflictEvidence, readPackEditor, readRuleTests } from "@/modules/sheet/source-governance-present";
 import { assembleSharedTemplates } from "@/modules/sheet/shared-template-present";
+import { programChoices } from "@/modules/sheet/new-matter";
+import { assembleWorkflows, WORKFLOW_EDIT_ROLES, type WorkflowsLiveData } from "@/modules/sheet/workflows-present";
 
 const READ = 200;
 
@@ -42,7 +44,7 @@ export async function loadSheetTemplates(
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
   const [chrome, packs, pinnedMatters, agreementTemplates, agreements, versions, definitions, reviews, evidence, items, names] = await Promise.all([
-    loadSheetChrome(staff, "/sheet/templates"),
+    loadSheetChrome(staff, tab === "workflows" ? "/sheet/templates?tab=workflows" : "/sheet/templates"),
     supabase.from("rule_pack_versions").select("id, program_key, jurisdiction, pack_version, status, organization_id, next_review_at, reviewer_name, reviewer_licence, source_owner_name, effective_from").order("updated_at", { ascending: false }).limit(READ),
     supabase.from("matters").select("program_pack_id").eq("organization_id", org).not("program_pack_id", "is", null).limit(1000),
     supabase.from("agreement_templates").select("id, name, kind, status, approved_at, approved_by, version").eq("organization_id", org).order("updated_at", { ascending: false }).limit(READ),
@@ -280,6 +282,14 @@ export async function loadSheetTemplates(
     { label: "Checklist templates", count: data.checklists.live?.templates.length ?? 0, cap: READ, failed: checklistsFailed },
   ]);
   data.showSharedTab = true;
+  data.showWorkflowsTab = true;
+  data.canCopyShared = WORKFLOW_EDIT_ROLES.includes(staff.role);
+  if (tab === "workflows") {
+    // A failed read shows "Workflows couldn't load" (DES-04), never as a firm without workflows.
+    data.workflows = await loadWorkflows(supabase, staff).catch(() => null);
+    // Only a firm owner or licensed consultant makes workflows; others don't get a button that can't work.
+    if (!data.workflows?.edit) data.hideNewTemplate = true;
+  }
   if (tab === "shared") {
     const shared = await supabase.rpc("firm_shared_templates");
     data.shared = shared.error
@@ -290,6 +300,44 @@ export async function loadSheetTemplates(
 }
 
 const DRAFT_ROLES = ["firm_owner", "licensed_consultant", "case_manager"];
+
+/**
+ * Firm workflows (2026-10-30): the firm's workflows with their stages and items (RLS: staff of the
+ * firm), the published Casevoya shared templates a firm can copy, and the program choices.
+ */
+async function loadWorkflows(supabase: Awaited<ReturnType<typeof createClient>>, staff: SheetStaff): Promise<WorkflowsLiveData> {
+  const org = staff.organizationId;
+  const [workflows, stages, items, shared, catalogue] = await Promise.all([
+    supabase
+      .from("firm_workflows")
+      .select("id, name, program_key, description, status, version, updated_at, source_template_id, source_version_id")
+      .eq("organization_id", org)
+      .order("updated_at", { ascending: false })
+      .limit(READ),
+    supabase.from("firm_workflow_stages").select("id, workflow_id, position, name").eq("organization_id", org).limit(2000),
+    supabase.from("firm_workflow_items").select("id, workflow_id, stage_id, position, kind, title, detail, owner, due_offset_days").eq("organization_id", org).limit(5000),
+    supabase.rpc("firm_shared_templates"),
+    supabase.rpc("support_catalogue", { p_org: org }),
+  ]);
+  if (workflows.error || stages.error || items.error) throw new Error("workflows couldn't load");
+  const view = shared.error ? null : assembleSharedTemplates(shared.data);
+  const titles = new Map(
+    (view?.templates ?? []).map((card) => [card.id, { title: card.title, versionNumbers: new Map(card.history.map((version) => [version.id, version.versionNumber])) }]),
+  );
+  const catalogueJson = !catalogue.error && catalogue.data && typeof catalogue.data === "object" && !Array.isArray(catalogue.data) ? (catalogue.data as { programs?: unknown }) : null;
+  return {
+    organizationId: org,
+    edit: WORKFLOW_EDIT_ROLES.includes(staff.role),
+    programs: catalogueJson ? programChoices(catalogueJson.programs).options : [],
+    workflows: assembleWorkflows(workflows.data ?? [], stages.data ?? [], items.data ?? [], titles),
+    sharedFailed: Boolean(shared.error),
+    shared: (view?.templates ?? []).flatMap((card) =>
+      card.published
+        ? [{ templateId: card.id, versionId: card.published.id, versionNumber: card.published.versionNumber, title: card.title, summary: card.published.body.summary, items: card.published.body.items.length }]
+        : [],
+    ),
+  };
+}
 
 /**
  * DOC-01: the firm's checklist templates (RLS: staff of the firm) with their items, and the intake
