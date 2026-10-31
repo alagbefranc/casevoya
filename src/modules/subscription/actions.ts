@@ -78,7 +78,8 @@ export async function startSubscriptionCheckout(input: { organizationId: string;
     p_extra_seats: extraSeats,
   });
   if (error) return refusal(error.message);
-  const allowed = (data ?? {}) as { ok?: boolean; idempotency_key?: string; stripe_customer_id?: string | null; firm_name?: string; billing_email?: string | null; catalog?: unknown };
+  const allowed = (data ?? {}) as { ok?: boolean; idempotency_key?: string; stripe_customer_id?: string | null; firm_name?: string; billing_email?: string | null; catalog?: unknown;
+    trial_days?: number | null; trial_end?: string | null; founding_coupon?: string | null; founding_percent?: number | null; founding_months?: number | null; time_zone?: string | null };
   const catalog = readCatalog(allowed.catalog);
   if (!allowed.ok || typeof allowed.idempotency_key !== "string" || !catalog) return { error: "The checkout could not be prepared." };
   const stripe = stripeServer();
@@ -110,6 +111,13 @@ export async function startSubscriptionCheckout(input: { organizationId: string;
       idempotencyKey: allowed.idempotency_key,
       appOrigin: appOrigin(),
       mode: stripeMode() ?? "test",
+      trial: allowed.trial_days || allowed.trial_end ? { days: allowed.trial_days ?? null, endAt: allowed.trial_end ?? null } : null,
+      foundingCoupon: allowed.founding_coupon ?? null,
+      founding:
+        typeof allowed.founding_percent === "number" && typeof allowed.founding_months === "number"
+          ? { percent: allowed.founding_percent, months: allowed.founding_months }
+          : null,
+      timeZone: allowed.time_zone ?? null,
     });
     return { url: checkout.url };
   } catch (cause) {

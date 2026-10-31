@@ -132,6 +132,9 @@ describe("Stripe billing webhook", () => {
         current_period_end: iso(1_794_600_000),
         cancel_at: null,
         canceled_at: null,
+        cancel_at_period_end: false,
+        trial_start: null,
+        trial_end: null,
       },
     });
     // No card, payment method or address reaches the database.

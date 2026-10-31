@@ -41,6 +41,11 @@ export type PlanDialogData = {
   selected: string;
   interval: "month" | "year";
   extraSeats: number;
+  /** Card trial: the free days Checkout starts (none when billing starts today) and the founding offer. */
+  trialDays?: number | null;
+  /** "Your trial carries on until 12 November 2026": a trial already running keeps its end date. */
+  trialNote?: string | null;
+  founding?: { percent: number; months: number } | null;
 };
 
 export type SubscriptionData = {
@@ -257,15 +262,29 @@ export function PlanDialog({ data }: { data: PlanDialogData }) {
           <Icon name={"shield"} cls={"ic s"} />
           {"Total "}
           <b id={"plT"}>{""}</b>
-          {". Continuing asks you to confirm it’s you, then opens Stripe’s secure checkout. Casevoya never sees your card."}
+          {", plus applicable taxes. Continuing asks you to confirm it’s you, then opens Stripe’s secure checkout. Casevoya never sees your card."}
         </p>
+        {data.trialDays || data.trialNote ? (
+          <p className={"why"}>
+            <Icon name={"clock"} cls={"ic s"} />
+            {data.trialDays
+              ? `$0 today. Your ${data.trialDays}-day free trial starts when you add a card; you are billed when it ends unless you cancel before then. Cancel anytime.`
+              : data.trialNote}
+          </p>
+        ) : null}
+        {data.founding ? (
+          <p className={"why"}>
+            <Icon name={"star"} cls={"ic s"} />
+            {`Founding-firm offer: ${data.founding.percent}% off for the first ${data.founding.months} months, applied at checkout while places last.`}
+          </p>
+        ) : null}
       </div>
       <div className={"df"}>
         <button className={"btn"} data-close={"dlgPlan"}>
           {"Cancel"}
         </button>
         <button className={"btn p"} data-subscription-act={"checkout"} data-org={data.organizationId}>
-          {"Continue to payment"}
+          {data.trialDays ? "Add a card" : "Continue to payment"}
         </button>
       </div>
     </dialog>

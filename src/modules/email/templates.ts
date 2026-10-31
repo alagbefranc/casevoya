@@ -84,7 +84,9 @@ type Wired =
   | "EX19"
   | "EX20"
   | "EX11"
-  | "EM17";
+  | "EM17"
+  | "EM18a"
+  | "EM18c";
 
 /** Which approved design a queued delivery uses, from its database template and context. */
 export function designFor(context: Context): Wired | "generic" {
@@ -149,6 +151,11 @@ export function designFor(context: Context): Wired | "generic" {
     // OPS-04 (20261025110100): an announcement to many clients. Firm name only.
     case "announcement":
       return "EX19";
+    // Card trial (20261101100100): Casevoya's own billing, to the firm's owners.
+    case "trial_ending":
+      return "EM18c";
+    case "billing_payment_failed":
+      return "EM18a";
     default:
       return "generic";
   }
@@ -227,6 +234,15 @@ function contextFor(design: Wired, context: Context, firm: string): EmailContext
         endsAt: textOf(context.ends_at) || null,
         timeZone: textOf(context.time_zone) || null,
       };
+    case "EM18a":
+      return { firmName: firm, graceDays: minutesOf(context.grace_days) };
+    case "EM18c":
+      return {
+        firmName: firm,
+        endsOn: localDay(context.trial_end, context.time_zone),
+        plan: planName(context.plan),
+        amount: amountText(context.amount_cents, context.currency),
+      };
     // The text and subject come with the message (never the delivery context); see dispatch.ts.
     case "EX15":
       return {
@@ -237,6 +253,31 @@ function contextFor(design: Wired, context: Context, firm: string): EmailContext
         portal: context.portal === true,
       };
   }
+}
+
+/** "2026-11-14": the day an ISO timestamp falls on in the firm's zone, or null. */
+function localDay(value: unknown, zone: unknown): string | null {
+  const instant = typeof value === "string" ? new Date(value) : null;
+  if (!instant || Number.isNaN(instant.getTime())) return null;
+  const timeZone = typeof zone === "string" && zone.trim() ? zone.trim() : "America/Toronto";
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(instant);
+  } catch {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit" }).format(instant);
+  }
+}
+
+const PLAN_NAMES: Record<string, string> = { solo: "Solo", practice: "Practice", firm: "Firm", enterprise: "Enterprise" };
+
+function planName(value: unknown): string | null {
+  return typeof value === "string" ? (PLAN_NAMES[value] ?? null) : null;
+}
+
+/** "CAD 249.00" from whole cents and a three-letter currency, or null. */
+function amountText(cents: unknown, currency: unknown): string | null {
+  if (typeof cents !== "number" || !Number.isInteger(cents) || cents <= 0 || cents > 100_000_000) return null;
+  const code = typeof currency === "string" && /^[a-z]{3}$/i.test(currency) ? currency.toUpperCase() : "CAD";
+  return `${code} ${(cents / 100).toFixed(2)}`;
 }
 
 /** The approved English generic notice, for a database template the renderer does not know. */

@@ -8808,7 +8808,9 @@ export type Database = {
           cancel_requested_at: string | null
           cancel_requested_by: string | null
           billing_interval: Database["public"]["Enums"]["billing_interval"] | null
+          card_required: boolean
           cancel_at: string | null
+          cancel_at_period_end: boolean
           cancelled_at: string | null
           created_at: string
           created_by: string | null
@@ -8832,6 +8834,8 @@ export type Database = {
           stripe_subscription_id: string | null
           trial_ends_at: string | null
           trial_started_at: string
+          trial_reminder_at: string | null
+          trial_used_at: string | null
           updated_at: string
           version: number
         }
@@ -8840,7 +8844,9 @@ export type Database = {
           cancel_requested_at?: string | null
           cancel_requested_by?: string | null
           billing_interval?: Database["public"]["Enums"]["billing_interval"] | null
+          card_required?: boolean
           cancel_at?: string | null
+          cancel_at_period_end?: boolean
           cancelled_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -8864,6 +8870,8 @@ export type Database = {
           stripe_subscription_id?: string | null
           trial_ends_at?: string | null
           trial_started_at?: string
+          trial_reminder_at?: string | null
+          trial_used_at?: string | null
           updated_at?: string
           version?: number
         }
@@ -8872,7 +8880,9 @@ export type Database = {
           cancel_requested_at?: string | null
           cancel_requested_by?: string | null
           billing_interval?: Database["public"]["Enums"]["billing_interval"] | null
+          card_required?: boolean
           cancel_at?: string | null
+          cancel_at_period_end?: boolean
           cancelled_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -8896,6 +8906,8 @@ export type Database = {
           stripe_subscription_id?: string | null
           trial_ends_at?: string | null
           trial_started_at?: string
+          trial_reminder_at?: string | null
+          trial_used_at?: string | null
           updated_at?: string
           version?: number
         }
@@ -8932,6 +8944,8 @@ export type Database = {
           privacy_contact_name: string | null
           privacy_notice_due_at: string | null
           privacy_notice_withdrawn_at: string | null
+          live_at: string | null
+          live_by: string | null
           quiet_hours_end: string | null
           quiet_hours_start: string | null
           retention_policy: Json | null
@@ -8968,6 +8982,8 @@ export type Database = {
           privacy_contact_name?: string | null
           privacy_notice_due_at?: string | null
           privacy_notice_withdrawn_at?: string | null
+          live_at?: string | null
+          live_by?: string | null
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null
           retention_policy?: Json | null
@@ -9004,6 +9020,8 @@ export type Database = {
           privacy_contact_name?: string | null
           privacy_notice_due_at?: string | null
           privacy_notice_withdrawn_at?: string | null
+          live_at?: string | null
+          live_by?: string | null
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null
           retention_policy?: Json | null
@@ -16556,6 +16574,22 @@ export type Database = {
             Returns: string
           }
       public_privacy_notice: { Args: { p_firm_slug: string }; Returns: Json }
+      firm_go_live_status: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      switch_firm_to_live: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      switch_firm_to_test: {
+        Args: { p_confirm: string }
+        Returns: undefined
+      }
+      public_pricing: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       publish_intake_draft: {
         Args: { p_expected_version: number; p_template_id: string }
         Returns: string
@@ -18354,6 +18388,8 @@ export type Database = {
         | "enquiry_received"
         | "announcement"
         | "refund_failed"
+        | "trial_ending"
+        | "billing_payment_failed"
       engagement_status: "pending" | "engaged" | "exception" | "ended"
       firm_setup_step:
         | "firm_details"
@@ -18833,6 +18869,8 @@ export const Constants = {
         "enquiry_received",
         "announcement",
         "refund_failed",
+        "trial_ending",
+        "billing_payment_failed",
       ],
       access_grant_kind: ["explicit", "guardian"],
       agreement_kind: ["quote", "consultation", "service", "amendment", "consent"],

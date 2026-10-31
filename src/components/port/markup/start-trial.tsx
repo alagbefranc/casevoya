@@ -7,11 +7,11 @@ export const START_TRIAL_LICENCE_FIELDS = ["lno", "cl"] as const;
 /** Copy changed from the Designer capture on 2026-10-19 (firms start live). Text only. */
 export const START_TRIAL_COPY = {
   /** Designer: "After we verify your firm and each consultant’s licence. Usually takes a few business days." */
-  pilot: "Invite real clients as soon as your firm is set up. Your licence number is checked against the CICC register list.",
+  pilot: "Invite real clients once your firm is set up and a card is on file ($0 today, 14-day free trial). Your licence number is checked against the CICC register list.",
   /** Designer: "Real client invitations stay locked until verification is done." */
   why: "Your firm starts live either way. The sample case stays available as an optional tour.",
   /** Designer: "Explore Casevoya with fictional clients. Real client invitations open once your firm and licence are verified." */
-  poster: "Explore Casevoya with a fictional case. Real client invitations open once your CICC licence is on file.",
+  poster: "Explore Casevoya with a fictional case. Real client invitations open once your CICC licence and a card are on file.",
 } as const;
 
 /**
@@ -27,7 +27,7 @@ export function StartTrialMarkup({ resume }: { resume?: { email: string } } = {}
       <a className="sr" href="#main">Skip to content</a><picture className="au-sky" aria-hidden="true"><source type="image/avif" srcSet="/assets/sky/sky-A-800.avif 800w, /assets/sky/sky-A-1440.avif 1440w, /assets/sky/sky-A-2048.avif 2048w" sizes="100vw" /><source type="image/webp" srcSet="/assets/sky/sky-A-800.webp 800w, /assets/sky/sky-A-1440.webp 1440w, /assets/sky/sky-A-2048.webp 2048w" sizes="100vw" /><img src="/assets/sky/sky-A-1440.webp" alt="" width="2048" height="1152" fetchPriority="high" decoding="async" /></picture>
 <div className="au-grid"><main className="au-sheet" id="main"><div className="au-top"><a href="/"><img src="/assets/casevoya-wordmark.png" alt="Casevoya home" width="188" height="30" /></a><span className="lnk">Have an account?<a href="/sign-in">Sign in</a></span></div>
 <div className="au-body">
-<section data-step="0" className="on" data-title="Create your account" data-vo="wave"><div className="au-vo" data-size="56" data-pose="wave"></div><div className="dots" aria-hidden="true"><i></i><i></i><i></i></div><h1>Start a trial</h1><p className="lead">{resume ? `Signed in as ${resume.email}. Name your firm to finish setting up.` : "You’ll set up your firm next. No card needed."}</p>
+<section data-step="0" className="on" data-title="Create your account" data-vo="wave"><div className="au-vo" data-size="56" data-pose="wave"></div><div className="dots" aria-hidden="true"><i></i><i></i><i></i></div><h1>Start a trial</h1><p className="lead">{resume ? `Signed in as ${resume.email}. Name your firm to finish setting up.` : "You’ll set up your firm next. Your 14-day free trial starts when you add a card; $0 today."}</p>
 <form noValidate onSubmit={(event) => event.preventDefault()}>{resume ? null : (<><div className="fld" data-req="Enter your name"><label htmlFor="nm">Your name</label><input className="inp" id="nm" type="text" autoComplete="name" defaultValue="" placeholder="Your name" aria-describedby="nm-h nm-e" /><span className="emsg" id="nm-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter your name</span></span></div>
 <div className="fld" data-req="Enter a work email, like name@firm.ca"><label htmlFor="wem">Work email</label><span className="hint" id="wem-h">We’ll send a code to confirm it.</span><input className="inp" id="wem" type="email" autoComplete="email" defaultValue="" placeholder="name@firm.ca" aria-describedby="wem-h wem-e" /><span className="emsg" id="wem-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter a work email, like name@firm.ca</span></span></div></>)}
 <div className="fld" data-req="Enter your firm’s name"><label htmlFor="firm">Firm name</label><input className="inp" id="firm" type="text" autoComplete="organization" defaultValue="" placeholder="Your firm" aria-describedby="firm-h firm-e" /><span className="emsg" id="firm-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter your firm’s name</span></span></div>

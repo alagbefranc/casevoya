@@ -120,6 +120,12 @@ export type TestDbOptions = {
    * migration's backfill: seed rows, then `applyMigrationsFrom`).
    */
   stopBefore?: string;
+  /**
+   * Card trial (20261101100100): new firms need a card in Stripe Checkout before real client
+   * invitations and real matters. Most suites test other things on a firm in its trial, so the
+   * harness turns the requirement off unless a suite asks for it.
+   */
+  cardRequired?: boolean;
 };
 
 function migrationFiles(): string[] {
@@ -158,6 +164,9 @@ export async function createTestDb(options: TestDbOptions = {}): Promise<TestDb>
     db,
     migrationFiles().filter((file) => !stop || file < stop),
   );
+  if (!options.cardRequired) {
+    await db.exec(`update public.product_settings set value = jsonb_set(value, '{card_required}', 'false'::jsonb) where key = 'subscription.trial'`);
+  }
   const original = db.query.bind(db);
   db.query = (async (query: string, params?: unknown[]) => {
     try {

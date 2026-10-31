@@ -37,6 +37,8 @@ export type SetupRows = {
   verificationStatus: string | null;
   credentials: SetupCredential[];
   subscriptionStatus: string | null;
+  /** Card trial: the firm has not put a card on file in Stripe Checkout yet. */
+  cardRequired?: boolean;
 };
 
 const BLOCKING = new Set(["revoked", "suspended", "inactive", "not_entitled"]);
@@ -73,6 +75,7 @@ export function inviteBlockers(rows: SetupRows): string[] {
   if (!owners.length) blockers.push("owner_licence_missing");
   else if (owners.some(credentialBlocks)) blockers.push("owner_licence_blocked");
   if (rows.subscriptionStatus === "trial_ended") blockers.push("trial_ended");
+  if (rows.subscriptionStatus === "trial" && rows.cardRequired === true) blockers.push("card_required");
   if (SUBSCRIPTION_RESTRICTED.has(rows.subscriptionStatus ?? "")) blockers.push("subscription_restricted");
   return blockers;
 }
@@ -84,6 +87,7 @@ export const LICENCE_ADDED = "Add your CICC licence";
 export const LICENCE_BLOCKED = "Your CICC licence needs attention";
 export const TRIAL_ENDED = "Your trial has ended: choose a plan";
 export const SUBSCRIPTION_PAUSED = "Your subscription is paused: choose a plan";
+export const CARD_REQUIRED = "Add a card to start your 14-day free trial";
 
 export type GoLiveStep = { key: string; label: string; href: string };
 
@@ -95,6 +99,7 @@ export function blockerStep(blocker: string): GoLiveStep {
   if (blocker === "owner_licence_missing") return { key: "licence_added", label: LICENCE_ADDED, href: "/sheet/licence" };
   if (blocker === "owner_licence_blocked" || blocker === "firm_restricted") return { key: "licence_blocked", label: LICENCE_BLOCKED, href: "/sheet/licence" };
   if (blocker === "trial_ended") return { key: "trial", label: TRIAL_ENDED, href: "/sheet/settings?tab=billing" };
+  if (blocker === "card_required") return { key: "card", label: CARD_REQUIRED, href: "/sheet/settings?tab=billing&dlg=plan" };
   if (blocker === "subscription_restricted") return { key: "subscription", label: SUBSCRIPTION_PAUSED, href: "/sheet/settings?tab=billing" };
   return { key: blocker, label: "Firm setup isn’t finished", href: "/sheet/sample-mode" };
 }
@@ -137,6 +142,7 @@ export function remainingSummary(state: SetupState): string {
   if (state.remaining.some((step) => step.key === "licence_added")) parts.push("add your CICC licence");
   if (state.remaining.some((step) => step.key === "licence_blocked")) parts.push("sort out your CICC licence (its check paused it)");
   if (state.trialEnded) parts.push("choose a plan (your trial has ended)");
+  if (state.remaining.some((step) => step.key === "card")) parts.push("add a card to start your 14-day free trial (nothing is charged today)");
   if (state.remaining.some((step) => step.key === "firm_not_found")) parts.push("finish firm setup");
   return parts.join(", ");
 }

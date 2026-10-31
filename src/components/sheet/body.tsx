@@ -1,3 +1,5 @@
+import { GoLivePanel, TestModeDialog } from "@/components/sheet/designer/go-live-panel";
+import { loadGoLivePanel } from "@/modules/sheet/go-live-load";
 import { notFound, redirect } from "next/navigation";
 import { DemoSheet } from "@/components/sheet/demo";
 import { CalendarHeader, CalendarRbarView, SheetCalendar } from "@/components/sheet/designer/calendar";
@@ -518,22 +520,25 @@ export async function SheetBody({
         </SheetScreen>
       );
     }
-    const loaded = await loadSheetSubscription(access.staff);
+    const [loaded, goLive] = await Promise.all([loadSheetSubscription(access.staff), loadGoLivePanel(access.staff)]);
     return (
       <SheetScreen key={"settings-billing"} page={page}>
         <SheetFrame
           sidebar={loaded.chrome.sidebar}
           header={<SettingsBillingHeader firmName={access.staff.organizationName} pill={loaded.pill} tab={"billing"} />}
-          statusbar={loaded.chrome.statusbar}
+          // The Go live panel below says what the Test mode banner would.
+          statusbar={goLive ? { ...loaded.chrome.statusbar, goLive: null } : loaded.chrome.statusbar}
           after={
             <>
               {loaded.page.dialog ? <PlanDialog data={loaded.page.dialog} /> : null}
               {loaded.accounts?.canAdd ? <BankAccountDialogs organizationId={loaded.accounts.organizationId} /> : null}
               {loaded.continuity.cancel ? <CancelSubscriptionDialog data={loaded.continuity.cancel} /> : null}
               {loaded.continuity.panel?.dialog ? <EndArrangementDialog data={loaded.continuity.panel.dialog} /> : null}
+              {goLive?.live && goLive.owner ? <TestModeDialog /> : null}
             </>
           }
         >
+          {goLive ? <GoLivePanel data={goLive} index={0} /> : null}
           <SheetSubscription data={loaded.page}>
             {loaded.continuity.panel ? <ContinuityPanel data={loaded.continuity.panel} index={2} /> : null}
             <StripeConnectCard data={loaded.connect.data} card={loaded.connect.card} index={3} />

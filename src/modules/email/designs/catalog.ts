@@ -93,7 +93,13 @@ export type EmailContexts = {
    */
   EM16c: FirmContext & { startsAt?: string | null; timeZone?: string | null; portal?: boolean; bookingPage?: string | null; cancelledBy?: "client" | "staff" | null };
   EM17: FirmContext & { approverName?: string | null; minutes?: number | null; endsAt?: string | null; timeZone?: string | null };
-  EM18a: FirmContext;
+  /** graceDays: the days before new work pauses (7). */
+  EM18a: FirmContext & { graceDays?: number | null };
+  /**
+   * Card trial: endsOn is the trial's last day in the firm's zone (YYYY-MM-DD); plan the plan's
+   * name; amount the first charge before taxes ("CAD 249.00").
+   */
+  EM18c: FirmContext & { endsOn?: string | null; plan?: string | null; amount?: string | null };
   EM18b: FirmContext & { daysPastDue?: number | null };
   EM19a: { hours?: number | null };
   EM19b: { startedOn?: string | null; hoursLeft?: number | null };
@@ -756,18 +762,49 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
     name: "Subscription past due",
     audience: "firm owner",
     brand: "platform",
-    trigger: "The Casevoya subscription payment fails. Subscription billing is not built yet",
-    status: "ready-not-wired",
+    trigger:
+      "A Casevoya subscription invoice fails or needs the bank's confirmation (invoice.payment_failed / invoice.payment_action_required; outbox subscription.payment_failed, template billing_payment_failed), once per invoice, to every active firm owner. The grace days only; never the card or the amount",
+    status: "wired",
     ctaTarget: PATHS.sheetSettings,
-    mergeFields: ["firm_name"],
-    sample: { firmName: SYNTHETIC_FIRM },
+    mergeFields: ["firm_name", "grace_days"],
+    sample: { firmName: SYNTHETIC_FIRM, graceDays: 7 },
     build(context, origin) {
+      const days = countOrNull(context.graceDays, 60) ?? 7;
       return copy({
         subject: "Your Casevoya subscription is past due",
-        preheader: "Nothing is deleted. Update billing to keep working.",
+        preheader: `Nothing is deleted. Update your card within ${days} days to keep working.`,
         heading: "Your Casevoya subscription is past due",
-        body: `We couldn’t collect ${firm(context)}’s subscription payment. Nothing is deleted; new work pauses after notice if it stays unpaid.`,
+        body: `We couldn’t collect ${firm(context)}’s subscription payment. Nothing is deleted. Update your card within ${days} days; after that, new matters and invitations pause until the payment goes through.`,
         cta: cta("Update billing", appLink(origin, PATHS.sheetSettings)),
+        spot: "invoice",
+        brand: PLATFORM,
+      });
+    },
+  },
+  EM18c: {
+    id: "EM18c",
+    name: "Trial ending",
+    audience: "firm owner",
+    brand: "platform",
+    trigger:
+      "Stripe's customer.subscription.trial_will_end (three days before a card trial ends; outbox subscription.trial_will_end, template trial_ending), once per trial, to every active firm owner. The end date in the firm's zone, the plan and the first charge before taxes; never the card",
+    status: "wired",
+    ctaTarget: PATHS.sheetSettings,
+    mergeFields: ["firm_name", "ends_on", "plan", "amount"],
+    sample: { firmName: SYNTHETIC_FIRM, endsOn: "2026-11-14", plan: "Practice", amount: "CAD 249.00" },
+    build(context, origin) {
+      const ends = longDate(context.endsOn);
+      const plan = name(context.plan);
+      const amount = cleanText(context.amount ?? "", 40);
+      return copy({
+        subject: "Your Casevoya trial ends soon",
+        preheader: "Nothing to do to keep going. Cancel anytime before then.",
+        heading: "Your Casevoya trial ends soon",
+        body:
+          ends && plan && amount
+            ? `${firm(context)}’s free trial ends on ${ends}. Unless you cancel before then, the card on file is charged ${amount} plus applicable taxes for the ${plan} plan.`
+            : `${firm(context)}’s free trial ends in a few days. Unless you cancel before then, the card on file is charged for your plan, plus applicable taxes.`,
+        cta: cta("Manage billing", appLink(origin, PATHS.sheetSettings)),
         spot: "invoice",
         brand: PLATFORM,
       });

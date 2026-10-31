@@ -27,6 +27,7 @@ export function entitlementError(message: string): string | null {
   if (seats) return `Your plan's seat allowance is used: ${seats[1]} of ${seats[2]} staff seats are in use. Add a seat in Settings > Subscription.`;
   const matters = /active-matter allowance reached: (\d+) of (\d+) active matters/i.exec(message);
   if (matters) return `Your plan's active-matter allowance is used: ${matters[1]} of ${matters[2]} active matters are open. Close a matter or change plan in Settings > Subscription.`;
+  if (/card required/i.test(message)) return "Add a card to start your 14-day free trial in Settings > Subscription. Nothing is charged today.";
   if (/subscription paused/i.test(message)) return "Your subscription is paused. Choose a plan in Settings > Subscription first.";
   return null;
 }

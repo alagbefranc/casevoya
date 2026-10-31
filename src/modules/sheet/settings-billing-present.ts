@@ -13,6 +13,7 @@ import type { PlanDialogData, RetentionData, RetentionRow, SettingsBillingAlert,
 import { dayMonth } from "@/modules/sheet/home-present";
 import { publishedOn } from "@/modules/portal-policies/present";
 import { readContinuity, type Continuity } from "@/modules/sheet/sec-present";
+import type { PublicPricing } from "@/modules/subscription/pricing";
 import { isInterval, isPlan, money, PLAN_NAMES, planLabel, readCatalog, totalCents, type Catalog, type Interval, type Plan } from "@/modules/subscription/catalog";
 
 export type SubscriptionStatus = "trial" | "trial_ended" | "active" | "past_due" | "restricted" | "cancelled" | "archived";
@@ -22,6 +23,11 @@ export type SubscriptionRow = {
   trial_started_at: string | null;
   trial_ends_at: string | null;
   plan?: string | null;
+  /** Card trial: no card on file yet, so the trial has not started (20261101100100). */
+  card_required?: boolean;
+  /** A Stripe subscription exists: a trial on it is Stripe's to end (it converts or cancels). */
+  stripe_trial?: boolean;
+  cancel_at_period_end?: boolean;
 };
 
 export type SubscriptionUsage = {
@@ -105,7 +111,7 @@ const STATE: Record<SubscriptionStatus, string> = {
 export function subscriptionState(row: SubscriptionRow | null, now: Date): SubscriptionStatus | null {
   if (!row || !(row.status in STATE)) return null;
   const status = row.status as SubscriptionStatus;
-  if (status === "trial" && row.trial_ends_at && new Date(row.trial_ends_at).getTime() <= now.getTime()) return "trial_ended";
+  if (status === "trial" && !row.stripe_trial && row.trial_ends_at && new Date(row.trial_ends_at).getTime() <= now.getTime()) return "trial_ended";
   return status;
 }
 
@@ -113,6 +119,7 @@ export function subscriptionState(row: SubscriptionRow | null, now: Date): Subsc
 export function subscriptionPill(row: SubscriptionRow | null, now: Date): string {
   const state = subscriptionState(row, now);
   if (state && isPlan(row?.plan) && (state === "active" || state === "past_due" || state === "restricted")) return `Plan: ${PLAN_NAMES[row!.plan as Plan]}`;
+  if (state === "trial" && row?.card_required) return "Subscription: Card needed";
   return state ? `Subscription: ${STATE[state]}` : "Subscription: not available";
 }
 
@@ -245,6 +252,13 @@ function addDays(iso: string, days: number): string {
 function stateText(row: SubscriptionRow | null, state: SubscriptionStatus | null, detail: SubscriptionDetail | null, grace: FirmSubscription["grace"], timeZone: string, exportsUntil: string | null = null): string {
   if (!row || !state) return "Not available";
   const on = (iso: string) => publishedOn(iso, timeZone);
+  if (state === "trial" && row.card_required) return "Not started: add a card to start your 14-day free trial. Nothing is charged today.";
+  if (state === "trial" && row.stripe_trial) {
+    if (!row.trial_ends_at) return "Free trial";
+    return row.cancel_at_period_end
+      ? `Free trial, ends ${on(row.trial_ends_at)}. You cancelled, so nothing will be charged.`
+      : `Free trial, ends ${on(row.trial_ends_at)}. Your card is charged on ${on(row.trial_ends_at)} unless you cancel before then.`;
+  }
   if (state === "trial") {
     const since = row.trial_started_at ? `Trial since ${on(row.trial_started_at)}` : "Trial";
     return row.trial_ends_at ? `${since}, ends ${on(row.trial_ends_at)}` : `${since}, no end date set`;
@@ -285,8 +299,19 @@ export function invoiceRows(invoices: readonly SubscriptionInvoice[], timeZone: 
 }
 
 /** The owner's buttons under the Plan rows: Checkout for a new plan, the portal for a live one. */
-export function subscriptionButtons(detail: SubscriptionDetail | null, state: SubscriptionStatus | null, organizationId: string): SubscriptionButton[] {
+export function subscriptionButtons(detail: SubscriptionDetail | null, state: SubscriptionStatus | null, organizationId: string, row: SubscriptionRow | null = null): SubscriptionButton[] {
   if (!state || !detail) return [];
+  // Card trial: a trial Stripe runs is changed, or cancelled before it bills, in the portal.
+  if (detail.has_stripe_subscription && state === "trial") {
+    return [
+      { label: "Manage billing", act: "portal", primary: true, organizationId },
+      { label: row?.cancel_at_period_end ? "Keep subscription" : "Cancel trial", act: "portal", primary: false, organizationId },
+    ];
+  }
+  if (state === "trial" && row?.card_required) {
+    const start: SubscriptionButton = { label: "Add a card and start the trial", act: "plan", primary: true, organizationId };
+    return detail.has_billing_account ? [start, { label: "Manage billing", act: "portal", primary: false, organizationId }] : [start];
+  }
   if (detail.has_stripe_subscription && (state === "active" || state === "past_due" || state === "restricted")) {
     const portal = (label: string): SubscriptionButton => ({ label, act: "portal", primary: false, organizationId });
     // SEC-10: Cancel subscription opens Casevoya's own dialog (period end, export window, no deletion); keeping it is in the portal.
@@ -295,6 +320,28 @@ export function subscriptionButtons(detail: SubscriptionDetail | null, state: Su
   }
   const choose: SubscriptionButton = { label: state === "trial" || state === "trial_ended" ? "Choose a plan" : "Choose a plan again", act: "plan", primary: true, organizationId };
   return detail.has_billing_account ? [choose, { label: "Manage billing", act: "portal", primary: false, organizationId }] : [choose];
+}
+
+/**
+ * Card trial: what the plan dialog says about today's charge. A firm with no card yet gets the
+ * full trial; a trial already running (before cards were required) keeps its end date when more
+ * than two days are left; anyone else is billed today. The server decides again at Checkout.
+ */
+export function dialogTrial(
+  row: SubscriptionRow | null,
+  state: SubscriptionStatus | null,
+  offer: PublicPricing | null,
+  now: Date,
+  on: (iso: string) => string,
+): Pick<PlanDialogData, "trialDays" | "trialNote" | "founding"> {
+  const founding = offer?.founding ? { percent: offer.founding.percent, months: offer.founding.months } : null;
+  if (state !== "trial" || !row) return { trialDays: null, trialNote: null, founding };
+  if (row.card_required) return { trialDays: offer?.trialDays || 14, trialNote: null, founding };
+  const left = row.trial_ends_at ? new Date(row.trial_ends_at).getTime() - now.getTime() : 0;
+  if (!row.stripe_trial && row.trial_ends_at && left > 49 * 3_600_000) {
+    return { trialDays: null, trialNote: `$0 today. Your trial carries on until ${on(row.trial_ends_at)}; you are billed then unless you cancel before. Cancel anytime.`, founding };
+  }
+  return { trialDays: null, trialNote: null, founding };
 }
 
 /** The Choose a plan dialog: every priced plan from the catalog, Enterprise as "Contact Casevoya". */
@@ -342,6 +389,8 @@ export function subscriptionPage(input: {
   /** A firm owner: the buttons and the plan dialog. */
   canManage?: boolean;
   organizationId?: string;
+  /** public.public_pricing: the trial and the founding offer, for the plan dialog. */
+  offer?: PublicPricing | null;
 }): SubscriptionData {
   const state = subscriptionState(input.subscription, input.now);
   const detail = input.detail ?? null;
@@ -397,15 +446,20 @@ export function subscriptionPage(input: {
   );
 
   let alert: SettingsBillingAlert | null = null;
-  if (state === "trial_ended") alert = { tone: "warn", icon: "alert", title: "Your trial has ended", body: "Your records are kept and you can still export them. New client portal invitations are paused until you choose a plan." };
-  else if (state === "past_due") alert = { tone: "warn", icon: "alert", title: "The last payment failed", body: `Update your card in Manage billing. New work pauses after ${grace.past_due_days} days past due; nothing is deleted.` };
+  if (state === "trial" && input.subscription?.card_required) alert = { tone: "info", icon: "alert", title: "Add a card to start your 14-day free trial", body: "$0 today. Real client invitations and real matters open once a card is on file. You are billed when the trial ends unless you cancel before then; cancel anytime." };
+  else if (state === "trial" && input.subscription?.stripe_trial && input.subscription.trial_ends_at && !input.subscription.cancel_at_period_end) alert = { tone: "info", icon: "alert", title: `Your free trial ends ${on(input.subscription.trial_ends_at)}`, body: "Your card is charged then, plus applicable taxes, unless you cancel before then in Manage billing." };
+  else if (state === "trial_ended") alert = { tone: "warn", icon: "alert", title: "Your trial has ended", body: "Your records are kept and you can still export them. New client portal invitations are paused until you choose a plan." };
+  else if (state === "past_due") alert = { tone: "warn", icon: "alert", title: "The last payment failed", body: `Update your card in Manage billing within ${grace.past_due_days} days. After that, new work pauses until the payment goes through; nothing is deleted.` };
   else if (state === "restricted") alert = { tone: "warn", icon: "alert", title: "Payment is overdue, so new work is paused", body: "New client invitations, staff invitations and real matters wait for the payment. Your records and exports stay open." };
   else if (state === "cancelled") alert = { tone: "warn", icon: "alert", title: "Your subscription is cancelled", body: `Your records are kept and you can still export them${sub?.cancelled_at ? ` until at least ${on(windowEnd(detail, sub.cancelled_at, grace.export_window_days)!)}` : ""}.` };
   else if (state === "archived") alert = { tone: "info", icon: "archive", title: "Your subscription is archived", body: "Nothing was deleted. Choose a plan to carry on where you left off." };
 
   const canManage = Boolean(input.canManage && input.organizationId && detail);
-  const buttons = canManage ? subscriptionButtons(sub, state, input.organizationId!) : [];
-  const dialog = canManage && buttons.some((button) => button.act === "plan") ? planDialog(catalog, input.organizationId!, { plan: sub?.plan ?? null, interval: sub?.billing_interval ?? null, extraSeats: sub?.extra_seats ?? 0 }) : null;
+  const buttons = canManage ? subscriptionButtons(sub, state, input.organizationId!, input.subscription) : [];
+  const dialog =
+    canManage && buttons.some((button) => button.act === "plan")
+      ? { ...planDialog(catalog, input.organizationId!, { plan: sub?.plan ?? null, interval: sub?.billing_interval ?? null, extraSeats: sub?.extra_seats ?? 0 }), ...dialogTrial(input.subscription, state, input.offer ?? null, input.now, on) }
+      : null;
 
   const note = [
     detail

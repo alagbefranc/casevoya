@@ -58,6 +58,7 @@ Subjects and preheaders must not reveal a program, document name, amount or deci
 | EM16c | Consultation cancelled | machine_draft | — | — | No (not_approved) |
 | EM17 | Support access granted | machine_draft | — | — | No (not_approved) |
 | EM18a | Subscription past due | machine_draft | — | — | No (not_approved) |
+| EM18c | Trial ending | machine_draft | — | — | No (not_approved) |
 | EM18b | Workspace restricted | machine_draft | — | — | No (not_approved) |
 | EM19a | Data export ready | machine_draft | — | — | No (not_approved) |
 | EM19b | Data export expiring | machine_draft | — | — | No (not_approved) |
@@ -423,16 +424,30 @@ Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:d1e82f0bd39
 
 ## EM18a: Subscription past due
 
-The Casevoya subscription payment fails. Subscription billing is not built yet. Audience: firm owner. [French preview](../email/previews/fr/EM18a.html)
+A Casevoya subscription invoice fails or needs the bank's confirmation (invoice.payment_failed / invoice.payment_action_required; outbox subscription.payment_failed, template billing_payment_failed), once per invoice, to every active firm owner. The grace days only; never the card or the amount. Audience: firm owner. [French preview](../email/previews/fr/EM18a.html)
 
-Status `machine_draft` · drafted 2026-10-18 · English hash `sha256:9c55851a3641…`
+Status `machine_draft` · drafted 2026-10-30 · English hash `sha256:18c5d7c73a9f…`
 
 | Key | English | French draft | Notes for the reviewer |
 |---|---|---|---|
-| `subject` | Your Casevoya subscription is past due | Votre abonnement Casevoya est en retard | Machine draft |
-| `preheader` | Nothing is deleted. Update billing to keep working. | Rien n’est supprimé. Mettez à jour la facturation pour continuer à travailler. | Machine draft |
-| `body` | We couldn’t collect {firm_name}’s subscription payment. Nothing is deleted; new work pauses after notice if it stays unpaid. | Nous n’avons pas pu collecter le paiement de l’abonnement de {firm_name}. Rien n’est supprimé&#8239;; les nouveaux travaux sont mis en pause après un avis si celui-ci reste impayé. | Machine draft. Keep {firm_name} |
-| `cta` | Update billing | Mettre à jour la facturation | Machine draft |
+| `subject` | Your Casevoya subscription is past due | Votre abonnement Casevoya est en retard de paiement | Hand draft |
+| `preheader` | Nothing is deleted. Update your card within {days} days to keep working. | Rien n’est supprimé. Mettez à jour votre carte d’ici {days} jours pour continuer à travailler. | Hand draft. Keep {days} |
+| `body` | We couldn’t collect {firm_name}’s subscription payment. Nothing is deleted. Update your card within {days} days; after that, new matters and invitations pause until the payment goes through. | Nous n’avons pas pu percevoir le paiement de l’abonnement de {firm_name}. Rien n’est supprimé. Mettez à jour votre carte d’ici {days} jours; ensuite, les nouveaux dossiers et les invitations sont suspendus jusqu’à ce que le paiement soit effectué. | Hand draft. Keep {days}, {firm_name} |
+| `cta` | Update billing | Mettre à jour la facturation | Hand draft |
+
+## EM18c: Trial ending
+
+Stripe's customer.subscription.trial_will_end (three days before a card trial ends; outbox subscription.trial_will_end, template trial_ending), once per trial, to every active firm owner. The end date in the firm's zone, the plan and the first charge before taxes; never the card. Audience: firm owner. [French preview](../email/previews/fr/EM18c.html)
+
+Status `machine_draft` · drafted 2026-10-30 · English hash `sha256:399ec3bbc2d1…`
+
+| Key | English | French draft | Notes for the reviewer |
+|---|---|---|---|
+| `subject` | Your Casevoya trial ends soon | Votre essai Casevoya se termine bientôt | Hand draft |
+| `preheader` | Nothing to do to keep going. Cancel anytime before then. | Rien à faire pour continuer. Annulez en tout temps d’ici là. | Hand draft |
+| `body_date` | {firm_name}’s free trial ends on {date}. Unless you cancel before then, the card on file is charged {amount} plus applicable taxes for the {plan} plan. | L’essai gratuit de {firm_name} se termine le {date}. À moins que vous n’annuliez d’ici là, la carte enregistrée sera débitée de {amount}, plus les taxes applicables, pour le forfait {plan}. | Hand draft. Keep {amount}, {date}, {firm_name}, {plan} |
+| `body` | {firm_name}’s free trial ends in a few days. Unless you cancel before then, the card on file is charged for your plan, plus applicable taxes. | L’essai gratuit de {firm_name} se termine dans quelques jours. À moins que vous n’annuliez d’ici là, la carte enregistrée sera débitée pour votre forfait, plus les taxes applicables. | Hand draft. Keep {firm_name} |
+| `cta` | Manage billing | Gérer la facturation | Hand draft |
 
 ## EM18b: Workspace restricted
 

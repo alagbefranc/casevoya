@@ -67,6 +67,7 @@ const ACTIONS = {
   privacy_unpublish: { phrase: "unpublish the privacy notice", icon: "privacy", title: "Unpublish the privacy notice", detail: "Your public notice page and portal acceptance" },
   portal_invite: { phrase: "invite a client to the portal", icon: "user-plus", title: "Invite a client to the portal", detail: "What this person can see once they join" },
   go_live: { phrase: "switch the firm to live", icon: "toggle", title: "Switch to live", detail: "Real clients and records from now on" },
+  test_mode: { phrase: "switch the firm back to test mode", icon: "toggle", title: "Switch back to test mode", detail: "Clients, records and payments stay as they are" },
   import_signoff: { phrase: "sign off an import", icon: "import", title: "Sign off an import", detail: "Records moving into Casevoya from another system" },
   compliance: { phrase: "record a privacy request or complaint", icon: "privacy", title: "Record a privacy step", detail: "Privacy requests and the complaints register" },
   new_matter: { phrase: "open a new matter", icon: "briefcase", title: "Open a new matter", detail: "A new client file and who works on it" },

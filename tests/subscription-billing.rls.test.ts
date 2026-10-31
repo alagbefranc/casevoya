@@ -203,16 +203,16 @@ describe("plan catalog and entitlements", () => {
       currency: "CAD",
       annual_months: 10,
       extra_seat_monthly_cents: 2500,
-      solo: { monthly_cents: 12900, seats: 2, matters: 100, storage_gb: 25 },
-      practice: { monthly_cents: 29900, seats: 6, matters: 500, storage_gb: 100 },
-      firm: { monthly_cents: 59900, seats: 15, matters: 1500, storage_gb: 250 },
+      solo: { monthly_cents: 9900, seats: 2, matters: 100, storage_gb: 25 },
+      practice: { monthly_cents: 24900, seats: 6, matters: 500, storage_gb: 100 },
+      firm: { monthly_cents: 54900, seats: 15, matters: 1500, storage_gb: 250 },
     });
     await asAnon(db);
     await expectDbError(() => db.query(`select public.subscription_plan_catalog()`), /permission denied|sign in is required/i);
 
     await as(ctx.assistant, ctx.orgId);
     const ent = await db.query<{ ent: Row }>(`select public.subscription_entitlements($1) as ent`, [ctx.orgId]);
-    expect(ent.rows[0].ent).toEqual({ status: "trial", plan: null, basis: "trial", seats: null, matters: null, storage_gb: null, extra_seats: 0, new_work_blocked: false });
+    expect(ent.rows[0].ent).toEqual({ status: "trial", plan: null, basis: "trial", seats: null, matters: null, storage_gb: null, extra_seats: 0, new_work_blocked: false, checkout_required: false });
     // Another firm's staff cannot read this firm's allowances.
     const other = await firm();
     await as(other.assistant, other.orgId);
@@ -253,8 +253,8 @@ describe("checkout and portal intents", () => {
     expect(result.stripe_customer_id).toBeNull();
     expect(result.firm_name).toBe("Synthetic Firm");
     expect(result.billing_email).toMatch(/^owner-.*@example\.test$/);
-    expect(result.catalog).toMatchObject({ practice: { monthly_cents: 29900 } });
-    expect(await audits(ctx.orgId, "subscription.checkout_requested")).toEqual([{ plan: "practice", interval: "year", extra_seats: 2, idempotency_key: result.idempotency_key }]);
+    expect(result.catalog).toMatchObject({ practice: { monthly_cents: 24900 } });
+    expect(await audits(ctx.orgId, "subscription.checkout_requested")).toEqual([{ plan: "practice", interval: "year", extra_seats: 2, idempotency_key: result.idempotency_key, trial: "remaining" }]);
     const events = await db.query<{ kind: string; payload: Row }>(`select kind, payload from public.subscription_events where organization_id = $1`, [ctx.orgId]);
     expect(events.rows).toEqual([{ kind: "checkout.requested", payload: { plan: "practice", interval: "year", extra_seats: 2, idempotency_key: result.idempotency_key } }]);
 

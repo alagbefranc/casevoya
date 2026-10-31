@@ -451,11 +451,27 @@ const BUILDERS: Builders = {
   },
   EM18a(kit, context) {
     const { t, origin } = kit;
+    const days = countOrNull(context.graceDays, 60) ?? 7;
+    return copy(kit, {
+      subject: t("subject"),
+      preheader: t("preheader", { days }),
+      heading: t("subject"),
+      body: t("body", { firm_name: firm(kit, context), days }),
+      cta: cta(t("cta"), appLink(origin, PATHS.sheetSettings)),
+      spot: "invoice",
+      brand: PLATFORM,
+    });
+  },
+  EM18c(kit, context) {
+    const { t, f, origin } = kit;
+    const ends = f.longDate(context.endsOn);
+    const plan = name(context.plan);
+    const amount = cleanText(context.amount ?? "", 40);
     return copy(kit, {
       subject: t("subject"),
       preheader: t("preheader"),
       heading: t("subject"),
-      body: t("body", { firm_name: firm(kit, context) }),
+      body: ends && plan && amount ? t("body_date", { firm_name: firm(kit, context), date: ends, amount, plan }) : t("body", { firm_name: firm(kit, context) }),
       cta: cta(t("cta"), appLink(origin, PATHS.sheetSettings)),
       spot: "invoice",
       brand: PLATFORM,
