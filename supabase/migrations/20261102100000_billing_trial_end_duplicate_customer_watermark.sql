@@ -320,12 +320,29 @@ begin
     paid := case when s ? 'payment_status'
                  then coalesce(s ->> 'payment_status', '') in ('paid', 'no_payment_required')
                  else true end;
-    if stale then
-      outcome := 'ignored';
-      detail := 'stale_event';
-    elsif app.stripe_subscription_ended(org, event_sub, event_id) then
+    -- Billing PR: order is ended -> duplicate (paid) -> stale -> not paid -> apply, so a duplicate
+    -- subscription is answered with a cancel instruction even when its Checkout arrives late.
+    if app.stripe_subscription_ended(org, event_sub, event_id) then
       outcome := 'ignored';
       detail := 'subscription_ended';
+    elsif paid
+          and sub.stripe_subscription_id is not null
+          and event_sub is not null
+          and event_sub is distinct from sub.stripe_subscription_id
+          and not stored_ended
+          and sub.status in ('active', 'past_due', 'restricted', 'trial') then
+      -- Billing PR: a second paid subscription while a live one is stored. The stored one is kept;
+      -- the server cancels the new one at Stripe.
+      outcome := 'ignored';
+      detail := 'duplicate_subscription';
+      cancel_sub := event_sub;
+      perform app.record_audit_event(
+        org, 'subscription.duplicate_subscription', 'public.organization_subscriptions', org, 'failure',
+        jsonb_build_object('event_id', event_id, 'cancel_subscription', event_sub, 'kept_subscription', sub.stripe_subscription_id)
+      );
+    elsif stale then
+      outcome := 'ignored';
+      detail := 'stale_event';
     elsif not paid then
       -- Billing: no access until Stripe reports the payment. The subscription id is kept when no
       -- other live subscription is stored, so its later events apply.
@@ -340,20 +357,6 @@ begin
         outcome := 'ignored';
         detail := 'other_subscription';
       end if;
-    elsif sub.stripe_subscription_id is not null
-          and event_sub is not null
-          and event_sub is distinct from sub.stripe_subscription_id
-          and not stored_ended
-          and sub.status in ('active', 'past_due', 'restricted', 'trial') then
-      -- Billing PR: a second paid subscription while a live one is stored. The stored one is kept;
-      -- the server cancels the new one at Stripe.
-      outcome := 'ignored';
-      detail := 'duplicate_subscription';
-      cancel_sub := event_sub;
-      perform app.record_audit_event(
-        org, 'subscription.duplicate_subscription', 'public.organization_subscriptions', org, 'failure',
-        jsonb_build_object('event_id', event_id, 'cancel_subscription', event_sub, 'kept_subscription', sub.stripe_subscription_id)
-      );
     else
       -- Billing PR: a trial Checkout records the trial claims (one trial per licence and card).
       is_trial := coalesce((s ->> 'trial')::boolean, false) and sub.status not in ('active', 'past_due', 'restricted');

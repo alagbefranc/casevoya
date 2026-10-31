@@ -190,6 +190,32 @@ describe("a second paid subscription (#306)", () => {
     expect(await row(f.orgId)).toMatchObject({ status: "active", stripe_subscription_id: f.sub, plan: "practice" });
   });
 
+  it("answers the cancel instruction when the extra Checkout arrives after a newer event on the kept subscription", async () => {
+    const f = await firm();
+    await apply(subscriptionEvent(f, "customer.subscription.created", T, { status: "active" }));
+    const invoice = {
+      id: eventId(),
+      type: "invoice.payment_failed",
+      created: T + 30,
+      livemode: false,
+      organization_id: f.orgId,
+      customer: f.customer,
+      invoice: { id: `in_Syn${token()}`, subscription: f.sub, status: "open", amount_due: 4900, amount_paid: 0, currency: "cad" },
+    };
+    expect(await apply(invoice)).toMatchObject({ outcome: "applied", status: "past_due" });
+
+    const extra = subId();
+    expect(await apply(checkoutEvent(f, T + 10, { id: extra, plan: "firm", payment_status: "paid", trial: false }))).toEqual({
+      outcome: "ignored",
+      status: "past_due",
+      reason: "duplicate_subscription",
+      cancel_subscription: extra,
+    });
+    expect(await row(f.orgId)).toMatchObject({ status: "past_due", stripe_subscription_id: f.sub, plan: "practice" });
+    // An older paid Checkout for the kept subscription is still stale.
+    expect(await apply(checkoutEvent(f, T + 20, { payment_status: "paid", trial: false }))).toEqual({ outcome: "ignored", status: "past_due", reason: "stale_event" });
+  });
+
   it("still applies a paid Checkout for the stored subscription, or for any subscription when none is stored", async () => {
     const f = await firm();
     expect(await apply(checkoutEvent(f, T, { payment_status: "paid", trial: false }))).toEqual({ outcome: "applied", status: "active" });

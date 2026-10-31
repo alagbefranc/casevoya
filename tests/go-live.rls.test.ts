@@ -144,6 +144,23 @@ describe("go live", () => {
     expect(done(await status(f.owner, f.orgId)).subscription).toBe(false);
   });
 
+  it("does not count a subscription still waiting for a card, or one whose cancellation date has passed", async () => {
+    const f = await firm();
+    await cardSubscription(f.orgId);
+    await asMaintenance(db);
+    await db.query(`update public.organization_subscriptions set card_required = true where organization_id = $1`, [f.orgId]);
+    expect(done(await status(f.owner, f.orgId)).subscription).toBe(false);
+
+    await asMaintenance(db);
+    await db.query(`update public.organization_subscriptions set card_required = false, status = 'active', cancel_at = now() - interval '1 minute' where organization_id = $1`, [f.orgId]);
+    expect(done(await status(f.owner, f.orgId)).subscription).toBe(false);
+
+    // A cancellation scheduled for later still counts until it takes effect.
+    await asMaintenance(db);
+    await db.query(`update public.organization_subscriptions set status = 'active', cancel_at = now() + interval '30 days' where organization_id = $1`, [f.orgId]);
+    expect(done(await status(f.owner, f.orgId)).subscription).toBe(true);
+  });
+
   it("switches a ready firm to live: owner with a fresh step-up only, sample mode off, audited", async () => {
     const f = await firm();
     await cardSubscription(f.orgId);
