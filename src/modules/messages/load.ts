@@ -323,7 +323,7 @@ async function whatsappWindows(supabase: Client, org: string, personIds: string[
 
 /**
  * Staff (OPS-04): each staff message's email notice state, from its outbox event (message.sent)
- * and that event's deliveries. Staff read both (outbox_events: firm staff; email_deliveries: staff
+ * and that event's deliveries. Staff read both (outbox_events: staff who can read the message; email_deliveries: staff
  * who can read the matter).
  */
 async function emailStates(supabase: Client, org: string, messageIds: string[], sample: boolean): Promise<Map<string, string | null>> {
