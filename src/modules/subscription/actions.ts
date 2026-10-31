@@ -11,6 +11,7 @@ import { RATE_LIMIT_MESSAGE, rateLimit } from "@/lib/security/rate-limit";
 import { isInterval, isPaidPlan, readCatalog } from "@/modules/subscription/catalog";
 import {
   billingCustomerExists,
+  billingCustomerOfFirm,
   createBillingCustomer,
   createPortalSession,
   createSubscriptionCheckout,
@@ -42,7 +43,7 @@ async function ownerClient(organizationId: string) {
   if (!claims?.claims?.sub) return { error: "Sign in first." as const };
   // Checkout and portal sessions call Stripe: 10 a minute per person (RL_PAYMENT).
   if (!(await rateLimit("RL_PAYMENT", `user:${claims.claims.sub}`))) return { error: RATE_LIMIT_MESSAGE };
-  return { supabase };
+  return { supabase, userId: String(claims.claims.sub) };
 }
 
 function refusal(message: string): BillingLink {
@@ -73,7 +74,7 @@ export async function startSubscriptionCheckout(input: { organizationId: string;
   if (!Number.isInteger(extraSeats) || extraSeats < 0 || extraSeats > 500) return { error: "Extra seats must be 0 to 500." };
   const session = await ownerClient(input.organizationId);
   if ("error" in session) return { error: session.error ?? "Sign in first." };
-  const { supabase } = session;
+  const { supabase, userId } = session;
   const { data, error } = await supabase.rpc("subscription_checkout_allowed", {
     p_organization_id: input.organizationId,
     p_plan: input.plan,
@@ -89,20 +90,29 @@ export async function startSubscriptionCheckout(input: { organizationId: string;
   if (!stripe) return { error: NOT_CONFIGURED };
   try {
     let customerId = allowed.stripe_customer_id ?? null;
-    if (customerId && !(await billingCustomerExists(stripe, customerId))) {
-      // Recorded in the other Stripe mode (or deleted at Stripe): a new customer in this mode.
+    const exists = customerId ? await billingCustomerExists(stripe, customerId) : false;
+    if (!customerId || !exists) {
+      // None yet, or recorded in the other Stripe mode (or deleted at Stripe): a new customer in this
+      // mode. The customer is recorded by the server only (service role), once Stripe confirms it
+      // names this firm; subscription_checkout_allowed above checked the owner's step-up.
+      if (!process.env.SUPABASE_SECRET_KEY) return { error: NOT_CONFIGURED };
       const previous = customerId;
       customerId = await createBillingCustomer(stripe, { organizationId: input.organizationId, name: allowed.firm_name ?? "Firm", email: allowed.billing_email ?? null });
-      const replaced = await supabase.rpc("replace_subscription_customer", {
-        p_organization_id: input.organizationId,
-        p_previous_customer_id: previous,
-        p_stripe_customer_id: customerId,
-      });
-      if (replaced.error) return refusal(replaced.error.message);
-    } else if (!customerId) {
-      customerId = await createBillingCustomer(stripe, { organizationId: input.organizationId, name: allowed.firm_name ?? "Firm", email: allowed.billing_email ?? null });
-      const recorded = await supabase.rpc("record_subscription_customer", { p_organization_id: input.organizationId, p_stripe_customer_id: customerId });
-      if (recorded.error) return refusal(recorded.error.message);
+      if (!(await billingCustomerOfFirm(stripe, customerId, input.organizationId))) return { error: "The billing account could not be confirmed with Stripe. Nothing was charged." };
+      const service = createServiceClient();
+      const saved = previous
+        ? await service.rpc("service_replace_subscription_customer", {
+            p_organization_id: input.organizationId,
+            p_previous_customer_id: previous,
+            p_stripe_customer_id: customerId,
+            p_actor_user_id: userId,
+          })
+        : await service.rpc("service_record_subscription_customer", {
+            p_organization_id: input.organizationId,
+            p_stripe_customer_id: customerId,
+            p_actor_user_id: userId,
+          });
+      if (saved.error) return refusal(saved.error.message);
     }
     const checkout = await createSubscriptionCheckout(stripe, await priceCache(supabase), {
       organizationId: input.organizationId,

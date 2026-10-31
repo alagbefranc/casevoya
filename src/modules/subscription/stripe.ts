@@ -243,8 +243,18 @@ export type BillingWebhookDeps = {
    * card_hash). Best effort: null or a failure applies the event without it.
    */
   cardHash?: (subscription: Stripe.Subscription) => Promise<string | null>;
+  /**
+   * Card trial: the same hash for the subscription a paid trial Checkout created, looked up by id
+   * (the session carries no card). Best effort, like cardHash.
+   */
+  checkoutCardHash?: (subscriptionId: string) => Promise<string | null>;
   /** Card trial: ends a repeat trial now (the database answered end_trial with the subscription id). */
   endTrial?: (subscriptionId: string) => Promise<void>;
+  /**
+   * Cancels a second subscription the firm paid for while another was live (the database answered
+   * cancel_subscription). A failure answers 5xx so Stripe retries the delivery.
+   */
+  cancelSubscription?: (subscriptionId: string) => Promise<void>;
 };
 
 export type WebhookResponse = { status: number; body: Record<string, unknown> };
@@ -271,6 +281,15 @@ export async function handleBillingWebhook(body: string, signature: string | nul
       // Applied without it: the licence check still runs and a later event carries the card.
     }
   }
+  const checkoutSubscription = summary.subscription?.id ?? null;
+  if (summary.subscription && deps.checkoutCardHash && event.type.startsWith("checkout.session.") && summary.subscription.trial === true && checkoutSubscription && SUBSCRIPTION_ID.test(checkoutSubscription)) {
+    try {
+      const hash = await deps.checkoutCardHash(checkoutSubscription);
+      if (hash && /^[0-9a-f]{64}$/.test(hash)) summary.subscription.card_hash = hash;
+    } catch {
+      // Applied without it: the licence claim is still recorded.
+    }
+  }
   let result: ApplyResult;
   try {
     result = await deps.apply(summary);
@@ -283,6 +302,16 @@ export async function handleBillingWebhook(body: string, signature: string | nul
       await deps.endTrial(endTrial);
     } catch {
       // Recorded either way; a repeat trial left running is visible in the audit (repeat_trial).
+    }
+  }
+  const cancel = typeof result.cancel_subscription === "string" && SUBSCRIPTION_ID.test(result.cancel_subscription) ? result.cancel_subscription : null;
+  if (cancel) {
+    if (!deps.cancelSubscription) return { status: 503, body: { error: "A duplicate subscription could not be cancelled." } };
+    try {
+      await deps.cancelSubscription(cancel);
+    } catch {
+      // Stripe retries the delivery; the database repeats the instruction until the subscription ends.
+      return { status: 500, body: { error: "A duplicate subscription could not be cancelled." } };
     }
   }
   return { status: 200, body: { received: true, outcome: result.outcome } };
@@ -307,7 +336,7 @@ export function summaryJson(summary: BillingEventSummary): Json {
 export type BillingStripe = {
   customers: {
     create(params: Stripe.CustomerCreateParams, options?: Stripe.RequestOptions): Promise<{ id: string }>;
-    retrieve?(id: string): Promise<{ id: string; deleted?: unknown }>;
+    retrieve?(id: string): Promise<{ id: string; deleted?: unknown; metadata?: Stripe.Metadata | null }>;
   };
   prices: { list(params: Stripe.PriceListParams): Promise<{ data: Pick<Stripe.Price, "id" | "unit_amount" | "currency" | "lookup_key" | "active" | "recurring">[] }> };
   checkout: { sessions: { create(params: Stripe.Checkout.SessionCreateParams, options?: Stripe.RequestOptions): Promise<{ id: string; url: string | null }> } };
@@ -543,6 +572,16 @@ export async function billingCustomerExists(stripe: BillingStripe, customerId: s
     if (code === "resource_missing") return false;
     throw cause;
   }
+}
+
+/**
+ * Whether the customer exists in this Stripe mode and names this firm in its metadata (the server
+ * creates every billing customer with it). Checked before the customer id is recorded for a firm.
+ */
+export async function billingCustomerOfFirm(stripe: BillingStripe, customerId: string, organizationId: string): Promise<boolean> {
+  if (!stripe.customers.retrieve) return false;
+  const customer = await stripe.customers.retrieve(customerId);
+  return customer.deleted !== true && customer.id === customerId && customer.metadata?.[ORGANIZATION_METADATA] === organizationId;
 }
 
 /** The portal configuration named by STRIPE_BILLING_PORTAL_CONFIGURATION (bpc_…), or Stripe's default. */

@@ -290,10 +290,15 @@ describe("checkout and portal intents", () => {
     const ctx = await firm();
     await as(ctx.owner, ctx.orgId);
     await expectDbError(() => db.query(`select public.subscription_portal_allowed($1)`, [ctx.orgId]), /no billing account yet/);
-    await db.query(`select public.record_subscription_customer($1, 'cus_SyntheticFirm02')`, [ctx.orgId]);
-    await db.query(`select public.record_subscription_customer($1, 'cus_SyntheticFirm02')`, [ctx.orgId]);
-    await expectDbError(() => db.query(`select public.record_subscription_customer($1, 'cus_SyntheticOther')`, [ctx.orgId]), /already has a billing account/);
-    await expectDbError(() => db.query(`select public.record_subscription_customer($1, 'not-a-customer')`, [ctx.orgId]), /invalid/);
+    // The customer is recorded by the server (service role) for the firm owner who passed step-up.
+    await expectDbError(() => db.query(`select public.record_subscription_customer($1, 'cus_SyntheticFirm02')`, [ctx.orgId]), /permission denied/);
+    await expectDbError(() => db.query(`select public.service_record_subscription_customer($1, 'cus_SyntheticFirm02', $2)`, [ctx.orgId, ctx.owner]), /permission denied/);
+    await asServiceRole(db);
+    await db.query(`select public.service_record_subscription_customer($1, 'cus_SyntheticFirm02', $2)`, [ctx.orgId, ctx.owner]);
+    await db.query(`select public.service_record_subscription_customer($1, 'cus_SyntheticFirm02', $2)`, [ctx.orgId, ctx.owner]);
+    await expectDbError(() => db.query(`select public.service_record_subscription_customer($1, 'cus_SyntheticOther', $2)`, [ctx.orgId, ctx.owner]), /already has a billing account/);
+    await expectDbError(() => db.query(`select public.service_record_subscription_customer($1, 'not-a-customer', $2)`, [ctx.orgId, ctx.owner]), /invalid/);
+    await as(ctx.owner, ctx.orgId);
     const portal = await db.query<{ result: Row }>(`select public.subscription_portal_allowed($1) as result`, [ctx.orgId]);
     expect(portal.rows[0].result).toEqual({ ok: true, stripe_customer_id: "cus_SyntheticFirm02" });
     expect(await audits(ctx.orgId, "subscription.portal_opened")).toHaveLength(1);
@@ -301,19 +306,23 @@ describe("checkout and portal intents", () => {
     await expectDbError(() => db.query(`select public.subscription_portal_allowed($1)`, [ctx.orgId]), /step-up is required/);
     expect((await subscription(ctx.orgId)).stripe_customer_id).toBe("cus_SyntheticFirm02");
 
-    // Stripe live: a customer made in test mode is replaced once, by the owner, before any subscription.
-    await as(ctx.finance, ctx.orgId);
-    await expectDbError(
-      () => db.query(`select public.replace_subscription_customer($1, 'cus_SyntheticFirm02', 'cus_SyntheticLive01')`, [ctx.orgId]),
-      /step-up is required/,
-    );
+    // Stripe live: a customer made in test mode is replaced once, by the server for the owner, before any subscription.
     await as(ctx.owner, ctx.orgId);
     await expectDbError(
-      () => db.query(`select public.replace_subscription_customer($1, 'cus_SyntheticWrong', 'cus_SyntheticLive01')`, [ctx.orgId]),
+      () => db.query(`select public.replace_subscription_customer($1, 'cus_SyntheticFirm02', 'cus_SyntheticLive01')`, [ctx.orgId]),
+      /permission denied/,
+    );
+    await asServiceRole(db);
+    await expectDbError(
+      () => db.query(`select public.service_replace_subscription_customer($1, 'cus_SyntheticFirm02', 'cus_SyntheticLive01', $2)`, [ctx.orgId, ctx.finance]),
+      /step-up is required/,
+    );
+    await expectDbError(
+      () => db.query(`select public.service_replace_subscription_customer($1, 'cus_SyntheticWrong', 'cus_SyntheticLive01', $2)`, [ctx.orgId, ctx.owner]),
       /already has a billing account/,
     );
-    await db.query(`select public.replace_subscription_customer($1, 'cus_SyntheticFirm02', 'cus_SyntheticLive01')`, [ctx.orgId]);
-    await db.query(`select public.replace_subscription_customer($1, 'cus_SyntheticFirm02', 'cus_SyntheticLive01')`, [ctx.orgId]);
+    await db.query(`select public.service_replace_subscription_customer($1, 'cus_SyntheticFirm02', 'cus_SyntheticLive01', $2)`, [ctx.orgId, ctx.owner]);
+    await db.query(`select public.service_replace_subscription_customer($1, 'cus_SyntheticFirm02', 'cus_SyntheticLive01', $2)`, [ctx.orgId, ctx.owner]);
     expect((await subscription(ctx.orgId)).stripe_customer_id).toBe("cus_SyntheticLive01");
     expect(await audits(ctx.orgId, "subscription.customer_replaced")).toHaveLength(1);
   });

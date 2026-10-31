@@ -39,9 +39,16 @@ export async function POST(request: Request) {
       : null,
     // Card trial: one trial per card. The card's fingerprint is hashed here; the card is never stored.
     cardHash: stripe ? (subscription) => trialCardHash(stripe, subscription) : undefined,
+    checkoutCardHash: stripe ? async (id) => trialCardHash(stripe, await stripe.subscriptions.retrieve(id)) : undefined,
     endTrial: stripe
       ? async (id) => {
           await stripe.subscriptions.update(id, { trial_end: "now", proration_behavior: "none" }, { idempotencyKey: `casevoya-end-trial-${id}` });
+        }
+      : undefined,
+    // A second subscription paid for while another is live: cancelled now (the stored one is kept).
+    cancelSubscription: stripe
+      ? async (id) => {
+          await stripe.subscriptions.cancel(id, {}, { idempotencyKey: `casevoya-cancel-duplicate-${id}` });
         }
       : undefined,
   });

@@ -8876,6 +8876,7 @@ export type Database = {
           end_transfer_id: string | null
           extra_seats: number
           last_stripe_event_created: number | null
+          last_stripe_subscription_event_created: number | null
           last_webhook_event_id: string | null
           latest_invoice_status: string | null
           latest_invoice_url: string | null
@@ -8912,6 +8913,7 @@ export type Database = {
           end_transfer_id?: string | null
           extra_seats?: number
           last_stripe_event_created?: number | null
+          last_stripe_subscription_event_created?: number | null
           last_webhook_event_id?: string | null
           latest_invoice_status?: string | null
           latest_invoice_url?: string | null
@@ -8948,6 +8950,7 @@ export type Database = {
           end_transfer_id?: string | null
           extra_seats?: number
           last_stripe_event_created?: number | null
+          last_stripe_subscription_event_created?: number | null
           last_webhook_event_id?: string | null
           latest_invoice_status?: string | null
           latest_invoice_url?: string | null
@@ -16060,6 +16063,14 @@ export type Database = {
           p_organization_id: string
           p_period_end: string | null
         }
+        Returns: undefined
+      }
+      service_record_subscription_customer: {
+        Args: { p_actor_user_id: string; p_organization_id: string; p_stripe_customer_id: string }
+        Returns: undefined
+      }
+      service_replace_subscription_customer: {
+        Args: { p_actor_user_id: string; p_organization_id: string; p_previous_customer_id: string; p_stripe_customer_id: string }
         Returns: undefined
       }
       service_release_invoice_refund_reservation: {
