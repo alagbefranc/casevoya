@@ -5,6 +5,8 @@
  * The service never holds a service-role key. Every query is narrowed to the run's matter and,
  * for drafts, its conversation.
  */
+import { isVoConnectedToolkit, type VoConnectedToolkit } from "../../../src/modules/integrations/vo-connected-tools";
+import type { ConnectedState } from "./connected-tools";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../../src/types/database.types";
 import { parseAvailability, slotsFromAvailability } from "../../../src/modules/scheduling/availability";
@@ -67,6 +69,12 @@ export interface VoData {
   /** SRC-09 Ask Vo: the run's approved facts and approved official content (public.vo_run_facts, vo_run_official_content). */
   runFacts?(runId: string): Promise<VoLetterFacts>;
   runOfficialContent?(runId: string): Promise<VoOfficialSource[]>;
+  /** Ask Vo: null when the firm's connected-accounts switch is off (or this isn't staff); else the person's active apps. */
+  connectedState?(): Promise<ConnectedState | null>;
+  /** composio_connection_ready for one app, as the staff member. */
+  connectedReady?(toolkit: VoConnectedToolkit): Promise<{ ok: true; mailLabel: string | null } | { ok: false; why: string }>;
+  /** propose_connected_action, as the staff member. */
+  proposeConnected?(input: { toolkit: VoConnectedToolkit; action: string; arguments: Record<string, unknown>; summary: string }): Promise<{ ok: true; id: string } | { ok: false; why: string }>;
   rpc(name: "finish_vo_run" | "save_vo_letter_draft", args: Record<string, unknown>): Promise<{ data: unknown; error: { message: string } | null }>;
 }
 
@@ -347,6 +355,30 @@ export function supabaseVoData(input: { url: string; publishableKey: string; acc
       const { data, error } = await db.rpc("vo_run_official_content", { p_run_id: runId });
       if (error) throw new Error("official");
       return parseOfficialSources(data);
+    },
+    async connectedState() {
+      const { data, error } = await db.rpc("composio_connection_ready", { p_organization_id: org });
+      const membershipId = !error && data && typeof data === "object" ? String((data as Record<string, unknown>).membership_id ?? "") : "";
+      if (!membershipId) return null;
+      const { data: rows } = await db.from("staff_connections").select("id, toolkit").eq("organization_id", org).eq("membership_id", membershipId).eq("status", "active");
+      return { membershipId, active: (rows ?? []).filter((row) => isVoConnectedToolkit(row.toolkit)).map((row) => ({ id: row.id, toolkit: row.toolkit as VoConnectedToolkit })) };
+    },
+    async connectedReady(toolkit) {
+      const { data, error } = await db.rpc("composio_connection_ready", { p_organization_id: org, p_toolkit: toolkit });
+      if (error) return { ok: false, why: error.message };
+      const label = data && typeof data === "object" ? (data as Record<string, unknown>).mail_label : null;
+      return { ok: true, mailLabel: typeof label === "string" ? label : null };
+    },
+    async proposeConnected(input) {
+      const { data, error } = await db.rpc("propose_connected_action", {
+        p_organization_id: org,
+        p_toolkit: input.toolkit,
+        p_action: input.action,
+        p_arguments: input.arguments as never,
+        p_summary: input.summary,
+      });
+      if (error || typeof data !== "string") return { ok: false, why: error?.message ?? "" };
+      return { ok: true, id: data };
     },
     async rpc(name, args) {
       const { data, error } = await db.rpc(name, args as never);

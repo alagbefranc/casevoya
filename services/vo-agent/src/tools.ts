@@ -15,6 +15,7 @@ import { deadlineInAudience, personInAudience, requestInAudience, taskInAudience
 import { LETTER_TOOL_SPECS, type LetterContext, type LetterToolName } from "./letter-tools";
 import { GROUNDED_TOOL_SPECS, type GroundedToolName } from "./grounded-tools";
 import { cite } from "./cite";
+import { CONNECTED_TOOL_SPECS, type ComposioExec, type ConnectedState, type ConnectedToolName } from "./connected-tools";
 
 export type VoToolName =
   | "read_matter_summary"
@@ -25,7 +26,8 @@ export type VoToolName =
   | "find_free_slots"
   | "save_draft"
   | LetterToolName
-  | GroundedToolName;
+  | GroundedToolName
+  | ConnectedToolName;
 
 /** The tools each task may use. Ask Vo has no write at all. */
 export const TASK_TOOLS: Record<VoTask, readonly VoToolName[]> = {
@@ -61,6 +63,12 @@ export type RunContext = {
   abstainedByDraft: boolean;
   /** letter_draft only: the facts and official content handed out, and the guarded letter. */
   letter?: LetterContext;
+  /** Ask Vo with connected accounts on: this person's membership and active apps, and Composio. */
+  connected?: ConnectedState | null;
+  composio?: ComposioExec | null;
+  /** What Casevoya tells the person next (connect an app, confirm a proposal), never model text. */
+  notices?: string[];
+  proposals?: number;
 };
 
 export type ToolSpec = {
@@ -293,4 +301,5 @@ export const TOOL_SPECS: Record<VoToolName, ToolSpec> = {
   },
   ...LETTER_TOOL_SPECS,
   ...GROUNDED_TOOL_SPECS,
+  ...CONNECTED_TOOL_SPECS,
 };

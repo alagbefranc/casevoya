@@ -117,6 +117,16 @@ export async function draftWithVo(input: {
   return { error: voError(out.failure === "nothing_to_draft" ? (input.kind === "document_request" ? "no_requests" : "no_message") : out.failure) };
 }
 
+/** The service's connected-app next steps: plain one-line text, at most four. */
+function connectedNotices(out: { result: string; notices?: unknown }): string[] {
+  const list = Array.isArray(out.notices) ? out.notices : [];
+  return list
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.replace(/[\u0000-\u001f<>]/g, " ").trim().slice(0, 400))
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
 /**
  * Ask Vo about one matter: an answer for the staff member only, from the firm's own records, with
  * the records it used. Questions that need a rule, a fee, a deadline or a legal judgement are
@@ -126,7 +136,7 @@ export async function askVo(input: {
   organizationId: string;
   matterId: string;
   question: string;
-}): Promise<Result<{ text: string; needsRule: boolean; sources: VoCitation[] }> | { ok: true; abstained: true; reason: VoAbstainReason }> {
+}): Promise<Result<{ text: string; needsRule: boolean; sources: VoCitation[]; notices?: string[] }> | { ok: true; abstained: true; reason: VoAbstainReason }> {
   if (!isUuid(input.organizationId) || !isUuid(input.matterId)) return { error: "Choose a matter." };
   const question = (input.question ?? "").trim();
   if (!question || question.length > 1000) return { error: "Ask a question of up to 1,000 characters." };
@@ -134,12 +144,15 @@ export async function askVo(input: {
   if ("error" in begun) return begun;
   const out = await callVoAgent(request(input.organizationId, "ask", begun.started, null, question));
   // SRC-09: an answer always cites; one that cites nothing on file or approved is an abstention.
+  // Connected apps: Casevoya's own next step (connect the app, confirm a proposal), shown as given.
+  const notices = connectedNotices(out);
   if (out.result === "answered") {
     const stored = await storedCitations(begun.supabase, begun.started.runId, out.sources);
     const sources = citationsFor(withStoredAttestation(out.sources, stored), { matterId: begun.started.matterId });
-    if (!sources.length) return { ok: true, abstained: true, reason: "unsupported" };
-    return { ok: true, text: out.text, needsRule: out.needsRule, sources };
+    if (!sources.length) return notices.length ? { ok: true, text: notices.join("\n"), needsRule: false, sources: [], notices } : { ok: true, abstained: true, reason: "unsupported" };
+    return { ok: true, text: [out.text, ...notices].join("\n"), needsRule: out.needsRule, sources, ...(notices.length ? { notices } : {}) };
   }
+  if (out.result === "abstained" && notices.length) return { ok: true, text: notices.join("\n"), needsRule: false, sources: [], notices };
   if (out.result === "abstained") return { ok: true, abstained: true, reason: out.reason ?? "unsupported" };
   if (out.result === "drafted") return { error: voError("failed") };
   if (out.failure === "unavailable") await closeIfOpen(begun.supabase, begun.started.runId, out.failure);

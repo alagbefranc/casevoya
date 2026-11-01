@@ -2,7 +2,7 @@
 // A separate Worker from casevoya-app; the app reaches it only through its service binding
 // "VO_AGENT" (see docs/integrations/vo-agent.md). Secrets, set with `wrangler secret put` before
 // the first deploy and never in this file: VO_AGENT_SECRET (shared with casevoya-app),
-// ANTHROPIC_API_KEY. No Supabase service-role key exists here: tools run as the staff member.
+// ANTHROPIC_API_KEY, COMPOSIO_API_KEY (Ask Vo connected-app reads). No Supabase service-role key exists here: tools run as the staff member.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "casevoya-vo-agent",

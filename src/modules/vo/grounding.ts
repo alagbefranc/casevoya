@@ -28,11 +28,12 @@ export const VO_CANT_ANSWER = "Vo can’t answer this from the file or approved 
 export const MAX_ANSWER_CHARS = 4000;
 
 /** The marker prefix for a citation kind: approved facts F, approved official content S, records R. */
-export function markerPrefix(kind: VoSourceRef["kind"]): "R" | "F" | "S" {
-  return kind === "fact" ? "F" : kind === "official" ? "S" : "R";
+export function markerPrefix(kind: VoSourceRef["kind"]): "R" | "F" | "S" | "C" {
+  return kind === "fact" ? "F" : kind === "official" ? "S" : kind === "connected_app" ? "C" : "R";
 }
 
-const MARKER = /\[([RFS])(\d{1,3})\]/g;
+/** [C#]: the staff member's own connected app (Composio), read for them only. */
+const MARKER = /\[([RFSC])(\d{1,3})\]/g;
 
 /**
  * A program rule in an answer: a fee or amount, eligibility, admissibility, a processing time, the
@@ -127,6 +128,8 @@ export function citationHref(ref: Pick<VoSourceRef, "kind" | "url">, at: { matte
       return `${base}?tab=documents`;
     case "fact":
       return `${base}?tab=intake`;
+    case "connected_app":
+      return "/sheet/settings?tab=integrations";
     case "message":
       return at.threadId && /^[0-9a-f-]{36}$/i.test(at.threadId) ? `${base}?tab=messages&thread=${at.threadId}` : `${base}?tab=messages`;
     default:

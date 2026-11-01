@@ -98,7 +98,8 @@ export async function runVoAsk(button: HTMLElement) {
     return;
   }
   text.textContent = result.text;
-  showCitations(sources, result.sources);
+  if (result.sources.length) showCitations(sources, result.sources);
+  else sources.textContent = "From your connected apps · for you only, not kept";
 }
 
 /**

@@ -118,3 +118,16 @@ with `[needs a sourced rule]`, which `send_vo_draft` refuses to send.
    The owner must turn Vo on per firm (off by default for real firms).
 
 Without steps 2–3 the app reports Vo as unavailable and every workflow works by hand.
+
+## Connected apps in Ask Vo (2026-10-31)
+
+When the firm owner has turned on connected accounts, an Ask Vo run has two more tools:
+
+- `connected_app_read` runs one listed read action in the asker's own connected app. It runs as the asker's Composio user (their membership id), through Composio REST, using the Worker secret `COMPOSIO_API_KEY`.
+- `connected_app_propose` saves a `connected_action_proposals` row and creates nothing. The asker confirms or dismisses it in Settings › Integrations.
+
+Every call checks `composio_connection_ready` for that app as the asker. The list of allowed actions is `src/modules/integrations/vo-connected-tools.ts`.
+
+Results are cited with `[C#]`, source kind `connected_app`. `finish_vo_run` accepts only the asker's own active connection or pending proposal (migration 20261103120000).
+
+The next step the asker sees ("Connect your Zoom first…", "Vo is waiting for you to confirm…") is Casevoya's own text (`notices`), not model text.
