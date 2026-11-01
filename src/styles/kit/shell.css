@@ -70,7 +70,7 @@
  .sheet,.sheet.wr{display:block;border-radius:16px 16px 0 0;min-height:calc(100dvh - 56px);overflow:visible}
  .main{overflow:visible;padding:0 16px 40px}
  .top{position:relative;padding:14px 0 10px;background:#fff}
- .acts{margin-left:0}
+ .acts{margin-left:0;flex-wrap:wrap;max-width:100%}
  #rbar{border-left:0;border-top:1px solid var(--line);padding:20px 16px}
  .statusbar{display:none}
  .ph h1{font-size:30px}.ph p{font-size:15px}
