@@ -16,6 +16,8 @@
  */
 import { z } from "zod";
 import {
+  VO_MAIL_MAX,
+  voCompactMail,
   VO_COMPOSIO_TOOLKIT,
   VO_CONNECTED_ACTIONS,
   VO_CONNECTED_TOOLKITS,
@@ -151,7 +153,9 @@ export const CONNECTED_TOOL_SPECS: Record<ConnectedToolName, ToolSpec> = {
         return refused(`${CONNECTED_APP_NAME[toolkit]} didn't answer. Try again later.`);
       }
       if (!out.successful) return refused(`${CONNECTED_APP_NAME[toolkit]} didn't answer that.`);
-      const raw = JSON.stringify(out.data ?? null);
+      const raw = action.slug === "GMAIL_FETCH_EMAILS"
+        ? JSON.stringify({ messages: voCompactMail(out.data, Number(callArgs.max_results) || VO_MAIL_MAX) })
+        : JSON.stringify(out.data ?? null);
       const shown = raw.length > MAX_RESULT ? `${raw.slice(0, MAX_RESULT)}…` : raw;
       const mark = cite(ctx, { kind: "connected_app", id: row.id, label: `${CONNECTED_APP_NAME[toolkit]} (your account)` }, shown);
       return text(`${mark}${CONNECTED_APP_NAME[toolkit]} · ${oneLine(action.description, 120)}\n${dataBlock(ctx.nonce, shown, MAX_RESULT + 10)}`);
