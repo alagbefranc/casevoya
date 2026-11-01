@@ -7,6 +7,7 @@
  * download that the storage policy allows only with that grant. No service-role key exists here.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { isDocumentFileUrl } from "../../../src/modules/vo/sign";
 import type { Database } from "../../../src/types/database.types";
 import type { VoDocSettings } from "../../../src/modules/vo/vo-doc";
 
@@ -27,12 +28,12 @@ export type VoDocVersion = {
 export interface VoDocData {
   settings(): Promise<VoDocSettings | null>;
   version(versionId: string): Promise<VoDocVersion | null>;
-  /** The file's bytes, after a fresh audited authorization as the staff member; null if refused. */
+  /** The file's bytes, from the 60 s link the app signed after the staff member's own audited authorization (#302); null if missing or refused. */
   download(versionId: string, maxBytes: number): Promise<Uint8Array | null>;
   rpc(name: "finish_vo_document_review", args: Record<string, unknown>): Promise<{ data: unknown; error: { message: string } | null }>;
 }
 
-export function supabaseVoDocData(input: { url: string; publishableKey: string; accessToken: string; organizationId: string }): VoDocData {
+export function supabaseVoDocData(input: { url: string; publishableKey: string; accessToken: string; organizationId: string; fileUrl?: string | null; fetcher?: typeof fetch }): VoDocData {
   const db: SupabaseClient<Database> = createClient<Database>(input.url, input.publishableKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: { headers: { Authorization: `Bearer ${input.accessToken}`, "x-casevoya-org": input.organizationId } },
@@ -65,14 +66,16 @@ export function supabaseVoDocData(input: { url: string; publishableKey: string; 
         sensitivity: String(doc.sensitivity),
       };
     },
-    async download(versionId, maxBytes) {
-      const { data, error } = await db.rpc("authorize_document_download", { p_version_id: versionId });
-      if (error || !data || typeof data !== "object" || Array.isArray(data)) return null;
-      const grant = data as { bucket?: unknown; storage_key?: unknown };
-      if (grant.bucket !== "documents" || typeof grant.storage_key !== "string") return null;
-      const file = await db.storage.from("documents").download(grant.storage_key);
-      if (file.error || !file.data || file.data.size > maxBytes) return null;
-      return new Uint8Array(await file.data.arrayBuffer());
+    async download(_versionId, maxBytes) {
+      // #302: only the link the app signed, only on this project's Storage, only the documents bucket.
+      const link = input.fileUrl ?? null;
+      if (!isDocumentFileUrl(link, input.url)) return null;
+      const res = await (input.fetcher ?? fetch)(link, { redirect: "error" }).catch(() => null);
+      if (!res || !res.ok) return null;
+      const length = Number(res.headers.get("content-length") ?? "0");
+      if (length > maxBytes) return null;
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      return bytes.byteLength > maxBytes ? null : bytes;
     },
     async rpc(name, args) {
       const { data, error } = await db.rpc(name, args as never);

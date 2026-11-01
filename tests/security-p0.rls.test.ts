@@ -478,14 +478,16 @@ describe("documents bucket reads need a fresh download authorization", () => {
     const ctx = await firm();
     const intent = await uploadIntent(ctx, "passport.pdf", 40);
 
-    // Upload path: the uploader may insert (and read back) its own object while the intent is open.
+    // Upload path: the uploader may insert its own object while the intent is open, but (#302)
+    // can't read it back, even mid-upload.
     await asUser(db, { userId: ctx.client, aal: "aal1", orgId: ctx.orgId });
-    const inserted = await db.query<{ id: string }>(
+    const inserted = await db.query(
       `insert into storage.objects (id, bucket_id, name, owner, metadata)
-       values ($1, 'documents', $2, $3, '{"size":40}'::jsonb) returning id`,
+       values ($1, 'documents', $2, $3, '{"size":40}'::jsonb)`,
       [randomUUID(), intent.storage_key, ctx.client],
     );
-    expect(inserted.rows).toHaveLength(1);
+    expect(inserted.rowCount).toBe(1);
+    expect(await visibleObjects(intent.storage_key)).toBe(0);
     await forceClean(intent.version_id);
 
     // Direct Storage API read without the audited authorization is refused.
@@ -497,7 +499,9 @@ describe("documents bucket reads need a fresh download authorization", () => {
       [intent.version_id],
     );
     expect(grant.rows[0].result.seconds).toBe(120);
-    expect(await visibleObjects(intent.storage_key)).toBe(1);
+    // #302: even with a fresh grant the person's token can't read or sign the object; the app
+    // server signs a 120 s link with the service role after this audited call.
+    expect(await visibleObjects(intent.storage_key)).toBe(0);
 
     // Another participant without document access gets nothing, even after trying to authorize.
     await asUser(db, { userId: ctx.sponsor, aal: "aal1", orgId: ctx.orgId });

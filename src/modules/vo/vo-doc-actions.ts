@@ -1,5 +1,6 @@
 "use server";
 
+import { VO_FILE_URL_SECONDS, documentGrant, signDocumentGrant } from "@/modules/documents/signed-url";
 import { safeAccessError } from "@/lib/auth/step-up";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
@@ -80,6 +81,13 @@ export async function readDocumentWithVo(input: {
     return { error: voError(run.error ?? "failed") };
   }
 
+  // #302: the app authorizes the read as this person (audited) and signs a 60 s link for Vo; Vo
+  // can't sign or read storage objects. Without a link Vo records the run as failed.
+  let fileUrl: string | null = null;
+  const granted = await supabase.rpc("authorize_document_download", { p_version_id: input.versionId });
+  const grant = granted.error ? null : documentGrant(granted.data);
+  if (grant) fileUrl = (await signDocumentGrant(grant, VO_FILE_URL_SECONDS).catch(() => null))?.url ?? null;
+
   const out = await callVoAgent(
     {
       v: 1,
@@ -92,6 +100,7 @@ export async function readDocumentWithVo(input: {
       threadId: null,
       question: null,
       versionId: input.versionId,
+      fileUrl,
       accessToken,
       expiresAt: Date.now() + TOKEN_LIFETIME_MS,
     },

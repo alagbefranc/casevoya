@@ -214,6 +214,21 @@ describe("upload virus scanning (#263-B)", () => {
     expect(flag.rows[0].on).toBe(false);
   });
 
+  it("#302: a signed-in user can't read or sign a documents object, even clean with a fresh grant", async () => {
+    await scanning(false);
+    const ctx = await firm();
+    const { versionId, key, finished } = await upload(ctx);
+    expect(finished).toMatchObject({ upload_state: "clean" });
+    // The audited authorization still works (the server signs after it)...
+    expect(await clientCanDownload(ctx, versionId)).toBe(true);
+    expect(await staffCanDownload(ctx, versionId)).toBe(true);
+    // ...but the person's own token can't read or sign the object, so it can't pick a long expiry.
+    expect(await canReadObject(ctx, key)).toBe(false);
+    await asUser(db, { userId: ctx.consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    const staff = await db.query<{ ok: boolean }>(`select app.can_read_storage_object($1) as ok`, [key]);
+    expect(staff.rows[0].ok).toBe(false);
+  });
+
   it("holds a new upload as scanning: nobody can open it until the scanner says clean", async () => {
     await scanning(true);
     const ctx = await firm();

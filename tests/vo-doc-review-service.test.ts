@@ -409,7 +409,7 @@ describe("document reading pieces", () => {
         cwd: "/tmp/vo",
         docModel: model,
         docDataFor: (input) => {
-          expect(input).toEqual({ accessToken: TOKEN, organizationId: ORG });
+          expect(input).toEqual({ accessToken: TOKEN, organizationId: ORG, fileUrl: null });
           return data;
         },
       },
