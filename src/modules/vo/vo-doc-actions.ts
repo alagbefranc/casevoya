@@ -42,7 +42,7 @@ export async function voReadConsentRefusal(input: { organizationId: string; vers
  * "Read with Vo" from a document's review dialog (PRD AI-01..AI-06). The database checks the
  * person (staff, MFA and a fresh second factor, like Open file), the version and its matter, Vo
  * and its document switches, the document's category, sample mode and rate limits, and starts a
- * run; the Vo agent service then downloads the file with this person's own token and saves
+ * run; the app signs a 60 s link to the file (#302) and the Vo agent service reads it and saves
  * PROPOSALS ONLY. Nothing about the document or the matter changes here.
  */
 export async function readDocumentWithVo(input: {
