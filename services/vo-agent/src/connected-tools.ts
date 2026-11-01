@@ -46,7 +46,27 @@ export const CONNECTED_APP_NAME: Record<VoConnectedToolkit, string> = {
 const MAX_RESULT = 6000;
 
 /** The run's view of connected accounts: the firm switch, and which of this person's apps are active. */
-export type ConnectedState = { membershipId: string; active: { id: string; toolkit: VoConnectedToolkit }[] };
+export type ConnectedState = { membershipId: string; active: { id: string; toolkit: VoConnectedToolkit }[]; timeZone?: string | null };
+
+/**
+ * The firm's own clock for Vo (the service runs in UTC), so "tomorrow at 10am" lands on the firm's
+ * tomorrow, in the firm's zone. Falls back to America/Toronto when the zone is missing or unknown.
+ */
+export function firmClock(timeZone: string | null | undefined, now: Date = new Date()): string {
+  let zone = timeZone || "America/Toronto";
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: zone });
+  } catch {
+    zone = "America/Toronto";
+  }
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "long", hourCycle: "h23", timeZoneName: "longOffset" })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value]),
+  );
+  const offset = String(parts.timeZoneName ?? "GMT").replace("GMT", "UTC") || "UTC";
+  return `Firm's local date and time now: ${parts.weekday} ${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute} (${zone}, ${offset === "UTC" ? "UTC+00:00" : offset}). Work out relative dates and times ("today", "tomorrow at 10am", "next Monday") in this zone, never in UTC. When an action takes a start time, give the local time in this zone and set its timezone argument (if it has one) to "${zone}".`;
+}
 
 /** Composio, as the service calls it (tests replace it). */
 export type ComposioExec = (input: { userId: string; slug: string; arguments: Record<string, unknown> }) => Promise<{ successful: boolean; data: unknown }>;
@@ -80,9 +100,9 @@ const READS = VO_CONNECTED_TOOLKITS.flatMap((toolkit) => VO_CONNECTED_ACTIONS[to
 const WRITES = VO_CONNECTED_TOOLKITS.flatMap((toolkit) => VO_CONNECTED_ACTIONS[toolkit].filter((a) => a.kind === "write").map((a) => a.slug));
 
 /** The catalogue Vo is shown: every app, whether it is connected, and its actions with their arguments. */
-export function connectedCatalogue(state: ConnectedState): string {
+export function connectedCatalogue(state: ConnectedState, now: Date = new Date()): string {
   const active = new Set(state.active.map((row) => row.toolkit));
-  return VO_CONNECTED_TOOLKITS.map((toolkit) => {
+  return `${firmClock(state.timeZone, now)}\n` + VO_CONNECTED_TOOLKITS.map((toolkit) => {
     const actions = VO_CONNECTED_ACTIONS[toolkit].map((a) => `${a.slug} [${a.kind === "read" ? "connected_app_read" : "connected_app_propose"}] ${a.description}${a.args.length ? ` args: ${a.args.join(", ")}` : ""}`).join("; ");
     return `- app "${toolkit}" (${CONNECTED_APP_NAME[toolkit]}, ${active.has(toolkit) ? "connected" : "not connected"}): ${actions}`;
   }).join("\n");

@@ -3915,8 +3915,8 @@ describe("Designer fidelity: Settings, Integrations and Notifications tabs", () 
     for (const cls of [...classes(live), ...classes(notifications)]) expect(designer.has(cls), cls).toBe(true);
     expect(region(live, '<div id="content">', "</main>")).not.toMatch(/Northline|\(demo\)|Degraded|Expired|fictional/);
     // Stripping the live attributes from a planned row leaves the Designer's "Not connected" row.
-    const zoom = region(live, '<img src="/assets/logos/zoom.svg"', "</span></div>").replace(/ (disabled=""|title="[^"]*")/g, "");
-    expect(capturedInt).toContain(zoom);
+    const planned = region(live, '<img src="/assets/logos/twilio.svg"', "</span></div>").replace(/ (disabled=""|title="[^"]*")/g, "");
+    expect(capturedInt).toContain(planned);
   });
 });
 

@@ -14,6 +14,7 @@ import type {
 } from "@/components/sheet/designer/settings-integrations";
 import type { MatterBadge } from "@/components/sheet/designer/matters";
 import { DEFAULT_QUIET_HOURS, IN_APP_ROWS, STAFF_EMAIL_ROWS } from "@/modules/notifications/preferences";
+import { firmTime } from "@/modules/auth/mfa-reset-time";
 
 export type ComposioToolkit =
   | "gmail"
@@ -152,10 +153,10 @@ function proposalRow(input: IntegrationsInput, item: ConnectedProposal): Integra
     logo: null,
     name: "Vo is waiting for you to confirm",
     tag: "connected app",
-    sub: { left: item.summary, right: `proposed ${when(item.createdAt, input.timeZone)}` },
+    sub: { left: item.summary, right: `proposed ${firmTime(item.createdAt, input.timeZone)}` },
     state: { tone: "chg", label: "Waiting" },
-    unlink: { "aria-label": "Dismiss", "data-int-dismiss": item.id, "data-org": input.organizationId },
-    action: { label: "Confirm", attrs: { "data-int-confirm": item.id, "data-org": input.organizationId } },
+    dismiss: { label: "Dismiss", attrs: { "aria-label": `Dismiss: ${item.summary}`, "data-int-dismiss": item.id, "data-org": input.organizationId } },
+    action: { label: "Confirm", attrs: { "aria-label": `Confirm: ${item.summary}`, "data-int-confirm": item.id, "data-org": input.organizationId } },
   };
 }
 

@@ -127,6 +127,8 @@ export type IntegrationRow = {
   /** The unlink button's attributes (aria-label first), or null for none. */
   unlink?: Attrs | null;
   action?: { label: string; attrs?: Attrs } | null;
+  /** A secondary text button before the action (a Vo proposal's Dismiss). */
+  dismiss?: { label: string; attrs?: Attrs } | null;
   bell?: SettingsBell | null;
 };
 
@@ -167,6 +169,11 @@ function Row({ row, index }: { row: IntegrationRow; index: number }) {
         {row.unlink ? (
           <button className={"btn sm"} style={{ background: "none" }} {...row.unlink}>
             <Icon name={"unlink"} cls={"ic s"} />
+          </button>
+        ) : null}
+        {row.dismiss ? (
+          <button className={"btn sm"} {...row.dismiss.attrs}>
+            {row.dismiss.label}
           </button>
         ) : null}
         {row.action ? (
