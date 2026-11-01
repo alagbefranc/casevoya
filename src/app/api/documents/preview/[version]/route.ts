@@ -1,4 +1,5 @@
 import { stepUpHref } from "@/lib/auth/mfa-step";
+import { documentGrant, downloadDocumentGrant } from "@/modules/documents/signed-url";
 import { redirectUrl, safeRedirect } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
@@ -58,9 +59,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ vers
     }
     return page("You can’t open this file.", 403);
   }
-  const record = grant.data && typeof grant.data === "object" && !Array.isArray(grant.data) ? (grant.data as Record<string, unknown>) : {};
-  if (typeof record.bucket !== "string" || typeof record.storage_key !== "string") return page("That file can’t be previewed.", 500);
-  const { data: blob } = await supabase.storage.from(record.bucket).download(record.storage_key);
+  const record = documentGrant(grant.data);
+  if (!record) return page("That file can’t be previewed.", 500);
+  // #302: read by the server after the audited authorization; the person's token can't read objects.
+  const blob = await downloadDocumentGrant(record).catch(() => null);
   if (!blob) return page("That file can’t be previewed right now. Try again.", 502);
 
   const { data: profile } = await supabase.from("profiles").select("display_name").eq("id", userId).maybeSingle();

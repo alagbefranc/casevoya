@@ -33,7 +33,7 @@ export type HandlerDeps = {
   now?: () => number;
   /** Document reading: the Messages API client (runtime/server.ts) and its data layer. */
   docModel?: DocModel | null;
-  docDataFor?: (input: { accessToken: string; organizationId: string }) => VoDocData;
+  docDataFor?: (input: { accessToken: string; organizationId: string; fileUrl?: string | null }) => VoDocData;
   classifyError?: (error: unknown) => "unavailable" | "failed";
   /** Lead follow-ups and call summaries: their data layer (tests replace it). */
   crmDataFor?: (input: { accessToken: string; organizationId: string }) => VoCrmData;
@@ -62,7 +62,7 @@ export async function handleRun(
     if (!crm) return { status: 400, body: { error: "body" } };
     const crmDataFor =
       deps.crmDataFor ??
-      ((input: { accessToken: string; organizationId: string }) => {
+      ((input: { accessToken: string; organizationId: string; fileUrl?: string | null }) => {
         if (!deps.env.SUPABASE_URL || !deps.env.SUPABASE_PUBLISHABLE_KEY) throw new Error("not configured");
         return supabaseVoCrmData({ url: deps.env.SUPABASE_URL, publishableKey: deps.env.SUPABASE_PUBLISHABLE_KEY, ...input });
       });
@@ -83,13 +83,13 @@ export async function handleRun(
   if (task.task === "document_review") {
     const docDataFor =
       deps.docDataFor ??
-      ((input: { accessToken: string; organizationId: string }) => {
+      ((input: { accessToken: string; organizationId: string; fileUrl?: string | null }) => {
         if (!deps.env.SUPABASE_URL || !deps.env.SUPABASE_PUBLISHABLE_KEY) throw new Error("not configured");
         return supabaseVoDocData({ url: deps.env.SUPABASE_URL, publishableKey: deps.env.SUPABASE_PUBLISHABLE_KEY, ...input });
       });
     let docData: VoDocData;
     try {
-      docData = docDataFor({ accessToken: task.accessToken, organizationId: task.organizationId });
+      docData = docDataFor({ accessToken: task.accessToken, organizationId: task.organizationId, fileUrl: task.fileUrl ?? null });
     } catch {
       return { status: 503, body: { result: "failed", failure: "unavailable" } };
     }
@@ -102,7 +102,7 @@ export async function handleRun(
   }
   const dataFor =
     deps.dataFor ??
-    ((input: { accessToken: string; organizationId: string }) => {
+    ((input: { accessToken: string; organizationId: string; fileUrl?: string | null }) => {
       if (!deps.env.SUPABASE_URL || !deps.env.SUPABASE_PUBLISHABLE_KEY) throw new Error("not configured");
       return supabaseVoData({ url: deps.env.SUPABASE_URL, publishableKey: deps.env.SUPABASE_PUBLISHABLE_KEY, ...input });
     });

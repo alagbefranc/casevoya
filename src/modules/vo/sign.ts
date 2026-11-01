@@ -30,6 +30,12 @@ export type VoTaskRequest = {
   question: string | null;
   /** document_review only: the document version Vo reads, downloaded with the staff member's own token. */
   versionId?: string | null;
+  /**
+   * document_review only (#302): a fresh signed URL for that version's file, minted by the app with
+   * the service role right after the staff member's own authorize_document_download, valid 60 s.
+   * Vo can't sign or read storage objects itself.
+   */
+  fileUrl?: string | null;
   /** letter_draft only (AI-01): the kind of letter Vo drafts (src/modules/vo/letter.ts). */
   letterType?: string | null;
   /** The staff member's own Supabase access token (RLS applies to every tool). */
@@ -115,6 +121,26 @@ export async function verifyVoRequest(
   return same(await signVoRequest(secret, timestamp, body), headers.signature);
 }
 
+/** A Supabase Storage signed URL for the private documents bucket, over https (#302). */
+export function isDocumentFileUrl(value: unknown, supabaseUrl?: string): value is string {
+  if (typeof value !== "string" || value.length > 4000) return false;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" || !url.pathname.startsWith("/storage/v1/object/sign/documents/") || !url.searchParams.get("token")) return false;
+  if (supabaseUrl) {
+    try {
+      if (new URL(supabaseUrl).origin !== url.origin) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The request body, checked field by field; null when anything is off. */
@@ -129,6 +155,7 @@ export function parseVoTaskRequest(raw: unknown, now: number = Date.now()): VoTa
   // A document reading has no conversation and no question, only the version it reads; no other
   // task names a version.
   if (r.task === "document_review" ? !id(r.versionId) : r.versionId !== undefined && r.versionId !== null) return null;
+  if (r.task === "document_review" ? !(r.fileUrl === undefined || r.fileUrl === null || isDocumentFileUrl(r.fileUrl)) : r.fileUrl !== undefined && r.fileUrl !== null) return null;
   if (r.task === "ask" || r.task === "document_review" || r.task === "letter_draft" ? r.threadId !== null : !id(r.threadId)) return null;
   if (r.task === "ask" ? typeof r.question !== "string" || !r.question.trim() || r.question.length > 1000 : r.question !== null) return null;
   if (typeof r.accessToken !== "string" || r.accessToken.length < 20 || r.accessToken.length > 8000) return null;

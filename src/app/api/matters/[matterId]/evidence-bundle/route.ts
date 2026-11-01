@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { documentGrant, downloadDocumentGrant } from "@/modules/documents/signed-url";
 import { stepUpHref } from "@/lib/auth/mfa-step";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
@@ -55,13 +56,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ matt
       }
       return NextResponse.json({ error: "A selected file can’t be included." }, { status: 403 });
     }
-    const record = grant.data && typeof grant.data === "object" && !Array.isArray(grant.data) ? (grant.data as Record<string, unknown>) : {};
-    if (typeof record.bucket !== "string" || typeof record.storage_key !== "string") {
+    const record = documentGrant(grant.data);
+    if (!record) {
       return NextResponse.json({ error: "A selected file can’t be read right now." }, { status: 502 });
     }
-    const downloaded = await supabase.storage.from(record.bucket).download(record.storage_key);
-    if (!downloaded.data) return NextResponse.json({ error: "A selected file can’t be read right now." }, { status: 502 });
-    documents.push({ fileName, purpose, mediaType, bytes: new Uint8Array(await downloaded.data.arrayBuffer()) });
+    // #302: read by the server after the audited authorization; the person's token can't read objects.
+    const downloaded = await downloadDocumentGrant(record).catch(() => null);
+    if (!downloaded) return NextResponse.json({ error: "A selected file can’t be read right now." }, { status: 502 });
+    documents.push({ fileName, purpose, mediaType, bytes: new Uint8Array(await downloaded.arrayBuffer()) });
   }
 
   const rule = body.rule && typeof body.rule === "object" && !Array.isArray(body.rule) ? (body.rule as Record<string, unknown>) : {};

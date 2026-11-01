@@ -14,6 +14,7 @@ import { verifyTotpCode } from "@/lib/auth/verify-totp";
 import { RATE_LIMIT_MESSAGE, rateLimit } from "@/lib/security/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { documentGrant, signDocumentGrant } from "@/modules/documents/signed-url";
 import { isUuid } from "@/lib/tenant/context";
 import type { Database, Json } from "@/types/database.types";
 
@@ -125,7 +126,9 @@ export async function createUploadIntent(input: {
     });
     if (attached.error) return { error: documentError(attached.error.message) };
   }
-  const signed = await session.supabase.storage.from("documents").createSignedUploadUrl(storageKey, { upsert: false });
+  // #302: signed by the server for the path create_upload_intent just authorized for this person
+  // (their own token can't read objects, which Storage's upload-permission check needs).
+  const signed = await createServiceClient().storage.from("documents").createSignedUploadUrl(storageKey, { upsert: false });
   if (signed.error || !signed.data?.token) return { error: "The upload could not be authorized." };
   return {
     documentId,
@@ -212,16 +215,12 @@ export async function authorizeDocumentDownload(input: {
     p_version_id: input.versionId,
   });
   if (error) return { error: documentError(error.message) };
-  const grant = objectRecord(data);
-  const bucket = grant?.bucket;
-  const storageKey = grant?.storage_key;
-  const seconds = grant?.seconds;
-  if (typeof bucket !== "string" || typeof storageKey !== "string" || typeof seconds !== "number") {
-    return { error: "That file cannot be downloaded." };
-  }
-  const signed = await session.supabase.storage.from(bucket).createSignedUrl(storageKey, seconds);
-  if (signed.error || !signed.data?.signedUrl) return { error: "That file cannot be downloaded." };
-  return { url: signed.data.signedUrl, seconds };
+  const grant = documentGrant(data);
+  if (!grant) return { error: "That file cannot be downloaded." };
+  // #302: signed by the server with its own short lifetime; the person's token can't sign.
+  const signed = await signDocumentGrant(grant).catch(() => null);
+  if (!signed) return { error: "That file cannot be downloaded." };
+  return { url: signed.url, seconds: signed.seconds };
 }
 
 export async function createDocumentRequest(input: {
