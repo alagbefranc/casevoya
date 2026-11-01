@@ -12,10 +12,12 @@ import { runDocumentReview, type DocModel } from "./vo-doc-read";
 import { isVoCrmTask, parseVoCrmRequest, type VoCrmResponse } from "../../../src/modules/vo/crm";
 import { supabaseVoCrmData, type VoCrmData } from "./vo-crm-data";
 import { runVoCrmDraft } from "./vo-crm";
+import { composioRest, type ComposioExec } from "./connected-tools";
 
 export type ServiceEnv = {
   VO_AGENT_SECRET?: string;
   ANTHROPIC_API_KEY?: string;
+  COMPOSIO_API_KEY?: string;
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
   PATH?: string;
@@ -35,6 +37,8 @@ export type HandlerDeps = {
   classifyError?: (error: unknown) => "unavailable" | "failed";
   /** Lead follow-ups and call summaries: their data layer (tests replace it). */
   crmDataFor?: (input: { accessToken: string; organizationId: string }) => VoCrmData;
+  /** Connected-app reads (tests replace it); default: Composio REST with COMPOSIO_API_KEY. */
+  composio?: ComposioExec | null;
 };
 
 export async function handleRun(
@@ -115,6 +119,7 @@ export async function handleRun(
     cwd: deps.cwd,
     env: { PATH: deps.env.PATH, HOME: deps.env.HOME },
     now,
+    composio: deps.composio !== undefined ? deps.composio : deps.env.COMPOSIO_API_KEY ? composioRest(deps.env.COMPOSIO_API_KEY) : null,
   });
   // The tool log stays in the service's run record; the app gets the outcome only.
   const { log: _log, tools: _tools, ...body } = outcome;

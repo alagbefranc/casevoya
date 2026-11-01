@@ -11,6 +11,7 @@ type Env = {
   VO_AGENT: DurableObjectNamespace<VoAgentContainer>;
   VO_AGENT_SECRET: string;
   ANTHROPIC_API_KEY?: string;
+  COMPOSIO_API_KEY?: string;
   SUPABASE_URL: string;
   SUPABASE_PUBLISHABLE_KEY: string;
 };
@@ -24,6 +25,7 @@ export class VoAgentContainer extends Container<Env> {
     this.envVars = {
       VO_AGENT_SECRET: env.VO_AGENT_SECRET,
       ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY ?? "",
+      COMPOSIO_API_KEY: env.COMPOSIO_API_KEY ?? "",
       SUPABASE_URL: env.SUPABASE_URL,
       SUPABASE_PUBLISHABLE_KEY: env.SUPABASE_PUBLISHABLE_KEY,
     };

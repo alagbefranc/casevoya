@@ -52,12 +52,13 @@ export function qualified(name: VoToolName): string {
   return `mcp__${MCP_SERVER}__${name}`;
 }
 
-export function allowedToolNames(task: VoTask): string[] {
-  return TASK_TOOLS[task].map(qualified);
+/** `extra`: tools a run adds on top of its task's (Ask Vo's connected-app tools when the firm switch is on). */
+export function allowedToolNames(task: VoTask, extra: readonly VoToolName[] = []): string[] {
+  return [...TASK_TOOLS[task], ...extra].map(qualified);
 }
 
-export function isAllowedTool(task: VoTask, toolName: string): boolean {
-  return allowedToolNames(task).includes(toolName);
+export function isAllowedTool(task: VoTask, toolName: string, extra: readonly VoToolName[] = []): boolean {
+  return allowedToolNames(task, extra).includes(toolName);
 }
 
 export type ToolLog = { name: string; allowed: boolean }[];
@@ -67,10 +68,10 @@ type HookOutput = {
 };
 
 /** PreToolUse: deny anything off the allowlist; log every attempt. */
-export function preToolUseHook(task: VoTask, log: ToolLog) {
+export function preToolUseHook(task: VoTask, log: ToolLog, extra: readonly VoToolName[] = []) {
   return async (input: { hook_event_name?: string; tool_name?: string }): Promise<HookOutput> => {
     const name = String(input.tool_name ?? "");
-    const allowed = isAllowedTool(task, name);
+    const allowed = isAllowedTool(task, name, extra);
     log.push({ name, allowed });
     return {
       hookSpecificOutput: {
@@ -83,9 +84,9 @@ export function preToolUseHook(task: VoTask, log: ToolLog) {
 }
 
 /** The permission prompt fallback: same allowlist, never "ask". */
-export function canUseTool(task: VoTask) {
+export function canUseTool(task: VoTask, extra: readonly VoToolName[] = []) {
   return async (toolName: string, input: Record<string, unknown>) =>
-    isAllowedTool(task, toolName)
+    isAllowedTool(task, toolName, extra)
       ? { behavior: "allow" as const, updatedInput: input }
       : { behavior: "deny" as const, message: "Vo can only use its own Casevoya tools for this task.", interrupt: true };
 }
@@ -104,17 +105,19 @@ export function agentOptions(input: {
   cwd: string;
   env?: Record<string, string | undefined>;
   abortController?: AbortController;
+  extraTools?: readonly VoToolName[];
 }) {
+  const extra = input.extraTools ?? [];
   return {
     model: VO_MODEL,
     systemPrompt: input.systemPrompt,
     tools: [] as string[],
     disallowedTools: [...BUILTIN_TOOLS],
-    allowedTools: allowedToolNames(input.task),
+    allowedTools: allowedToolNames(input.task, extra),
     mcpServers: { [MCP_SERVER]: input.server },
     permissionMode: "dontAsk" as const,
-    canUseTool: canUseTool(input.task),
-    hooks: { PreToolUse: [{ hooks: [preToolUseHook(input.task, input.log)] }] },
+    canUseTool: canUseTool(input.task, extra),
+    hooks: { PreToolUse: [{ hooks: [preToolUseHook(input.task, input.log, extra)] }] },
     settingSources: [] as string[],
     maxTurns: MAX_TURNS,
     maxBudgetUsd: MAX_BUDGET_USD,

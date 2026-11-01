@@ -10,7 +10,16 @@ import type { VoTaskRequest, VoTaskResponse } from "../../../src/modules/vo/sign
 import type { VoData } from "./data";
 import { finishLetterRun } from "./letter-tools";
 import { agentOptions, MCP_SERVER, type ToolLog } from "./policy";
-import { TASK_TOOLS, TOOL_SPECS, type RunContext, type ToolResult } from "./tools";
+import { TASK_TOOLS, TOOL_SPECS, type RunContext, type ToolResult, type VoToolName } from "./tools";
+import { connectedCatalogue, type ComposioExec } from "./connected-tools";
+
+/** Ask Vo's extra instructions when connected accounts are on (the catalogue follows). */
+export const CONNECTED_PROMPT = [
+  "This staff member may also have their own connected apps. Use connected_app_read only when the question is about their own email, calendar, meetings, bookings, files or accounting, and connected_app_propose only when they ask you to create something (a meeting link, an event, an email draft, a folder, a booking link).",
+  "Pick the app they name (or the obvious one) and an action listed for it, with only its listed arguments. connected_app_propose creates nothing: the person confirms it. Cite a connected-app result by its marker [C#] like any other record.",
+  "If a connected-app tool says the app isn't connected, call nothing else for it and answer one short sentence saying it needs connecting first. Casevoya adds the exact steps.",
+  "Apps:",
+].join("\n");
 
 /** The part of @anthropic-ai/claude-agent-sdk this service uses. */
 export type AgentSdk = {
@@ -36,6 +45,8 @@ export type RunDeps = {
   env?: Record<string, string | undefined>;
   now?: () => number;
   nonce?: string;
+  /** Composio for connected-app reads (null: none on this server). */
+  composio?: ComposioExec | null;
 };
 
 export type RunOutcome = VoTaskResponse & { log: ToolLog; tools: string[] };
@@ -73,7 +84,19 @@ export async function runVoTask(request: VoTaskRequest, deps: RunDeps): Promise<
     abstainedByDraft: false,
   };
 
-  const allowed = TASK_TOOLS[request.task];
+  // Connected apps (Ask Vo only): the tools exist only when the firm owner turned connected accounts
+  // on; each call checks that person's own connection again (connected-tools.ts).
+  let extra: VoToolName[] = [];
+  let catalogue = "";
+  if (request.task === "ask" && deps.data.connectedState) {
+    ctx.connected = await deps.data.connectedState().catch(() => null);
+    if (ctx.connected) {
+      ctx.composio = deps.composio ?? null;
+      extra = ["connected_app_read", "connected_app_propose"];
+      catalogue = `\n\n${CONNECTED_PROMPT}\n${connectedCatalogue(ctx.connected)}`;
+    }
+  }
+  const allowed = [...TASK_TOOLS[request.task], ...extra];
   const tools = allowed.map((name) => {
     const spec = TOOL_SPECS[name];
     return deps.sdk.tool(
@@ -101,12 +124,13 @@ export async function runVoTask(request: VoTaskRequest, deps: RunDeps): Promise<
       prompt: voUserPrompt(request.task, ctx.nonce, request.question, request.letterType ?? null),
       options: agentOptions({
         task: request.task,
-        systemPrompt: voSystemPrompt(request.task, ctx.nonce),
+        systemPrompt: voSystemPrompt(request.task, ctx.nonce) + catalogue,
         server,
         log,
         apiKey: deps.apiKey,
         cwd: deps.cwd,
         env: deps.env,
+        extraTools: extra,
       }),
     });
     for await (const message of stream) {
@@ -142,14 +166,16 @@ export async function runVoTask(request: VoTaskRequest, deps: RunDeps): Promise<
     // SRC-09: only sentences that cite the run's allowed set survive; markers the run never handed
     // out are dropped. Nothing supported (or the model's own consultant marker): Vo abstains.
     const grounded = guardGroundedAnswer(resultText, ctx.markers ?? new Map(), ctx.markerContent ?? new Map());
-    if (grounded.kind === "empty") return failed("empty", metrics);
-    if (grounded.kind === "abstain") {
+    // Connected apps: what to do next (connect the app, confirm the proposal) is Casevoya's own text.
+    const notices = ctx.notices?.length ? { notices: ctx.notices.slice(0, 4) } : {};
+    if (grounded.kind === "empty" && !ctx.notices?.length) return failed("empty", metrics);
+    if (grounded.kind === "empty" || grounded.kind === "abstain") {
       await finish({ p_result: "abstained", p_model: VO_MODEL, ...metrics });
-      return { result: "abstained", reason: grounded.reason, log, tools: ctx.calls };
+      return { result: "abstained", reason: grounded.kind === "abstain" ? grounded.reason : "unsupported", ...notices, log, tools: ctx.calls };
     }
     const saved = await finish({ p_result: "answered", p_model: VO_MODEL, p_sources: grounded.cited.map(dbSource), p_needs_rule: false, ...metrics });
     if (saved.error) return { result: "failed", failure: "failed", log, tools: ctx.calls };
-    return { result: "answered", text: grounded.text, needsRule: false, sources: grounded.cited, log, tools: ctx.calls };
+    return { result: "answered", text: grounded.text, needsRule: false, sources: grounded.cited, ...notices, log, tools: ctx.calls };
   }
 
   if (!ctx.draft) {

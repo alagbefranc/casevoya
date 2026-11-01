@@ -39,7 +39,7 @@ export type VoTaskRequest = {
 };
 
 export type VoSourceRef = {
-  kind: "message" | "matter" | "document_request" | "task" | "deadline" | "document_version" | "fact" | "official";
+  kind: "message" | "matter" | "document_request" | "task" | "deadline" | "document_version" | "fact" | "official" | "connected_app";
   id: string;
   label: string;
   /** SRC-09 (Ask Vo): the marker the answer cites it by, e.g. R1, F2, S1. */
@@ -75,8 +75,8 @@ export type VoAbstainReason = "consultant" | "unsupported";
  */
 export type VoTaskResponse =
   | { result: "drafted"; draftId: string; text: string; needsRule: boolean; sources: VoSourceRef[] }
-  | { result: "answered"; text: string; needsRule: boolean; sources: VoSourceRef[] }
-  | { result: "abstained"; reason?: VoAbstainReason }
+  | { result: "answered"; text: string; needsRule: boolean; sources: VoSourceRef[]; notices?: string[] }
+  | { result: "abstained"; reason?: VoAbstainReason; notices?: string[] }
   | { result: "failed"; failure: "unavailable" | "failed" | "empty" | "nothing_to_draft" | "refused" | "unsupported_file" };
 
 const encoder = new TextEncoder();
