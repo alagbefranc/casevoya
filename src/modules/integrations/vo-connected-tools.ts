@@ -131,9 +131,48 @@ export function voConnectedArguments(action: VoConnectedAction, raw: unknown, ct
     if (!label) return { error: "Connect your mailbox first." };
     const extra = typeof out.query === "string" ? out.query.replace(/\blabel:\S+/gi, "").trim() : "";
     out.query = `label:"${label.replace(/"/g, "")}"${extra ? ` ${extra}` : ""}`;
-    out.max_results = Math.min(20, Math.max(1, Number(out.max_results) || 10));
+    out.max_results = Math.min(VO_MAIL_MAX, Math.max(1, Number(out.max_results) || VO_MAIL_MAX));
+    // Headers and a snippet are enough; full bodies push later messages out of Vo's result (#gmail-trim).
+    out.include_payload = false;
+    out.verbose = false;
   }
   return out;
+}
+
+/** Most messages Vo reads from a Gmail label in one call. */
+export const VO_MAIL_MAX = 10;
+const MAIL_SNIPPET = 200;
+
+function str(value: unknown, max: number): string {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
+}
+
+function header(message: Record<string, unknown>, name: string): string {
+  const payload = message.payload as { headers?: { name?: string; value?: string }[] } | undefined;
+  const found = payload?.headers?.find((h) => String(h?.name ?? "").toLowerCase() === name);
+  return typeof found?.value === "string" ? found.value : "";
+}
+
+export type VoMailItem = { id: string; threadId: string; date: string; from: string; subject: string; snippet: string; labels: string[] };
+
+/**
+ * A compact list of the messages a Gmail read returned: id, thread, date, from, subject, a short
+ * snippet and labels, each bounded, at most `limit` (≤ VO_MAIL_MAX). Never the bodies, so one long
+ * email can't cut the rest off. The text stays untrusted data; the caller wraps it in a DATA block.
+ */
+export function voCompactMail(data: unknown, limit: number = VO_MAIL_MAX): VoMailItem[] {
+  const root = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  const list = Array.isArray(root.messages) ? root.messages : Array.isArray((root.response_data as Record<string, unknown> | undefined)?.messages) ? ((root.response_data as Record<string, unknown>).messages as unknown[]) : Array.isArray(data) ? (data as unknown[]) : [];
+  const cap = Math.min(VO_MAIL_MAX, Math.max(1, Number(limit) || VO_MAIL_MAX));
+  return list.slice(0, cap).filter((m): m is Record<string, unknown> => !!m && typeof m === "object").map((m) => ({
+    id: str(m.messageId ?? m.id, 64),
+    threadId: str(m.threadId, 64),
+    date: str(m.messageTimestamp ?? m.date ?? header(m, "date"), 64),
+    from: str(m.sender ?? m.from ?? header(m, "from"), 200),
+    subject: str(m.subject ?? header(m, "subject"), 300),
+    snippet: str(m.preview && typeof m.preview === "object" ? (m.preview as Record<string, unknown>).body : m.snippet ?? m.preview, MAIL_SNIPPET),
+    labels: (Array.isArray(m.labelIds) ? m.labelIds : []).filter((l): l is string => typeof l === "string").slice(0, 12),
+  }));
 }
 
 /** One line a person reads before confirming a write, e.g. "Zoom: Create a Zoom meeting… (topic: Intake call)". */
