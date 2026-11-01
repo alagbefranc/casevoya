@@ -361,7 +361,8 @@ export function supabaseVoData(input: { url: string; publishableKey: string; acc
       const membershipId = !error && data && typeof data === "object" ? String((data as Record<string, unknown>).membership_id ?? "") : "";
       if (!membershipId) return null;
       const { data: rows } = await db.from("staff_connections").select("id, toolkit").eq("organization_id", org).eq("membership_id", membershipId).eq("status", "active");
-      return { membershipId, active: (rows ?? []).filter((row) => isVoConnectedToolkit(row.toolkit)).map((row) => ({ id: row.id, toolkit: row.toolkit as VoConnectedToolkit })) };
+      const { data: firm } = await db.from("organizations").select("timezone").eq("id", org).maybeSingle();
+      return { membershipId, timeZone: (firm as { timezone?: string } | null)?.timezone ?? null, active: (rows ?? []).filter((row) => isVoConnectedToolkit(row.toolkit)).map((row) => ({ id: row.id, toolkit: row.toolkit as VoConnectedToolkit })) };
     },
     async connectedReady(toolkit) {
       const { data, error } = await db.rpc("composio_connection_ready", { p_organization_id: org, p_toolkit: toolkit });

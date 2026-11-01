@@ -75,7 +75,11 @@ describe("Vo's connected-app tools", () => {
       proposals: [{ id: "p1", toolkit: "zoom", summary: "zoom: Create a Zoom meeting", createdAt: "2026-10-31T14:00:00Z" }],
     });
     const row = (data.lead ?? []).find((item) => item.name === "Vo is waiting for you to confirm")!;
-    expect(row.action).toEqual({ label: "Confirm", attrs: { "data-int-confirm": "p1", "data-org": "o1" } });
-    expect(row.unlink).toEqual({ "aria-label": "Dismiss", "data-int-dismiss": "p1", "data-org": "o1" });
+    expect(row.action).toEqual({ label: "Confirm", attrs: { "aria-label": "Confirm: zoom: Create a Zoom meeting", "data-int-confirm": "p1", "data-org": "o1" } });
+    // Dismiss is a text button (not an icon), with its own label.
+    expect(row.unlink ?? null).toBeNull();
+    expect(row.dismiss).toEqual({ label: "Dismiss", attrs: { "aria-label": "Dismiss: zoom: Create a Zoom meeting", "data-int-dismiss": "p1", "data-org": "o1" } });
+    // "proposed" is in the firm's zone, with the zone named (14:00Z is 09:00 CDT in Winnipeg).
+    expect(String((row.sub as { right: string }).right)).toMatch(/^proposed Oct 31, 2026, 9:00\s?a\.m\. CDT$/);
   });
 });
