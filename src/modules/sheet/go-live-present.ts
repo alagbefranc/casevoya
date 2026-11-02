@@ -80,7 +80,7 @@ function item(key: GoLiveKey, done: boolean, firm: string): GoLiveItem {
         title: "A plan with a card on file",
         note: done
           ? "Your trial or plan is billed to the card on file."
-          : "Choose a plan and add a card in Stripe Checkout. The 14-day trial still starts at $0 today.",
+          : "Choose a plan and add a card in Stripe Checkout. Your free trial still starts at $0 today.",
         href: PLAN_DIALOG,
         go: "Choose a plan",
       };

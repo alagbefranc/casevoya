@@ -87,7 +87,8 @@ export const LICENCE_ADDED = "Add your CICC licence";
 export const LICENCE_BLOCKED = "Your CICC licence needs attention";
 export const TRIAL_ENDED = "Your trial has ended: choose a plan";
 export const SUBSCRIPTION_PAUSED = "Your subscription is paused: choose a plan";
-export const CARD_REQUIRED = "Add a card to start your 14-day free trial";
+/** No number here: the length is the admin setting trial.duration, shown on the banner and plan dialog. */
+export const CARD_REQUIRED = "Add a card to start your free trial";
 
 export type GoLiveStep = { key: string; label: string; href: string };
 
@@ -142,7 +143,7 @@ export function remainingSummary(state: SetupState): string {
   if (state.remaining.some((step) => step.key === "licence_added")) parts.push("add your CICC licence");
   if (state.remaining.some((step) => step.key === "licence_blocked")) parts.push("sort out your CICC licence (its check paused it)");
   if (state.trialEnded) parts.push("choose a plan (your trial has ended)");
-  if (state.remaining.some((step) => step.key === "card")) parts.push("add a card to start your 14-day free trial (nothing is charged today)");
+  if (state.remaining.some((step) => step.key === "card")) parts.push("add a card to start your free trial (nothing is charged today)");
   if (state.remaining.some((step) => step.key === "firm_not_found")) parts.push("finish firm setup");
   return parts.join(", ");
 }

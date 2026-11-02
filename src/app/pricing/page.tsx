@@ -7,12 +7,20 @@ import { SheetScreen } from "@/components/sheet/screen";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { pricingPage, type PricingCard, type PricingCardPrice } from "@/modules/subscription/pricing-page";
-import { readPublicPricing } from "@/modules/subscription/pricing";
+import { pricingDescription, readPublicPricing } from "@/modules/subscription/pricing";
 
-export const metadata: Metadata = {
-  title: "Pricing · Casevoya",
-  description: "Casevoya plans for Canadian immigration consultants: Solo, Practice and Firm. 14-day free trial, cancel anytime.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  let trialDays: number | null = null;
+  if (hasPublicSupabaseEnv()) {
+    try {
+      const { data, error } = await (await createClient()).rpc("public_pricing");
+      if (!error && data) trialDays = readPublicPricing(data).trialDays;
+    } catch {
+      trialDays = null;
+    }
+  }
+  return { title: "Pricing · Casevoya", description: pricingDescription(trialDays) };
+}
 
 const TIME_ZONE = "America/Toronto";
 

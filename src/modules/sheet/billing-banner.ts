@@ -1,3 +1,4 @@
+import { trialStart } from "@/modules/subscription/pricing";
 import { publishedOn } from "@/modules/portal-policies/present";
 
 /**
@@ -39,7 +40,7 @@ function days(n: number): string {
 
 export function billingBanner(
   row: BillingBannerRow | null,
-  input: { now: Date; timeZone: string; canManage: boolean; isOwner: boolean; graceDays?: number; trialDays?: number },
+  input: { now: Date; timeZone: string; canManage: boolean; isOwner: boolean; graceDays?: number; trialDays?: number | null },
 ): BillingBannerData | null {
   if (!row) return null;
   const on = (iso: string) => publishedOn(iso, input.timeZone);
@@ -48,8 +49,10 @@ export function billingBanner(
     return {
       tone: "info",
       icon: "clock",
-      title: `Add a card to start your ${input.trialDays ?? 14}-day free trial`,
-      body: "$0 today. Real client invitations and real matters open once a card is on file; you are billed when the trial ends unless you cancel before then.",
+      title: `Add a card to start ${trialStart(input.trialDays)}`,
+      body: input.trialDays === 0
+        ? "Real client invitations and real matters open once a card is on file and your plan starts."
+        : "$0 today. Real client invitations and real matters open once a card is on file; you are billed when the trial ends unless you cancel before then.",
       link: input.isOwner ? { href: PLAN_DIALOG, label: "Add a card" } : null,
     };
   }
