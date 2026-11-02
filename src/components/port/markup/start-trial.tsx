@@ -5,14 +5,20 @@ import { toast2 } from "../kit";
 export const START_TRIAL_LICENCE_FIELDS = ["lno", "cl"] as const;
 
 /** Copy changed from the Designer capture on 2026-10-19 (firms start live). Text only. */
-export const START_TRIAL_COPY = {
+export function startTrialCopy(trialDays: number | null = null) {
+  const trial = trialDays === null ? "free trial" : trialDays > 0 ? `${trialDays}-day free trial` : null;
+  return {
   /** Designer: "After we verify your firm and each consultant’s licence. Usually takes a few business days." */
-  pilot: "Invite real clients once your firm is set up and a card is on file ($0 today, 14-day free trial). Your licence number is checked against the CICC register list.",
+  pilot: `Invite real clients once your firm is set up and a card is on file${trial ? ` ($0 today, ${trial})` : ""}. Your licence number is checked against the CICC register list.`,
   /** Designer: "Real client invitations stay locked until verification is done." */
   why: "Your firm starts live either way. The sample case stays available as an optional tour.",
   /** Designer: "Explore Casevoya with fictional clients. Real client invitations open once your firm and licence are verified." */
   poster: "Explore Casevoya with a fictional case. Real client invitations open once your CICC licence and a card are on file.",
-} as const;
+  };
+}
+
+/** The copy with the length unknown (no number). */
+export const START_TRIAL_COPY = startTrialCopy(null);
 
 /**
  * Converted from site/app-v2/auth/start-trial.html. Same DOM, classes and copy, except: the
@@ -21,13 +27,15 @@ export const START_TRIAL_COPY = {
  * `resume` is for an account that is already signed in but has no firm (its sign-up was
  * interrupted): step 0 then asks only for the firm name and goes straight to "How to start".
  */
-export function StartTrialMarkup({ resume }: { resume?: { email: string } } = {}) {
+export function StartTrialMarkup({ resume, trialDays = null }: { resume?: { email: string }; trialDays?: number | null } = {}) {
+  const copy = startTrialCopy(trialDays);
+  const lead = trialDays === null ? "Your free trial starts" : trialDays > 0 ? `Your ${trialDays}-day free trial starts` : "Your plan starts";
   return (
     <>
       <a className="sr" href="#main">Skip to content</a><picture className="au-sky" aria-hidden="true"><source type="image/avif" srcSet="/assets/sky/sky-A-800.avif 800w, /assets/sky/sky-A-1440.avif 1440w, /assets/sky/sky-A-2048.avif 2048w" sizes="100vw" /><source type="image/webp" srcSet="/assets/sky/sky-A-800.webp 800w, /assets/sky/sky-A-1440.webp 1440w, /assets/sky/sky-A-2048.webp 2048w" sizes="100vw" /><img src="/assets/sky/sky-A-1440.webp" alt="" width="2048" height="1152" fetchPriority="high" decoding="async" /></picture>
 <div className="au-grid"><main className="au-sheet" id="main"><div className="au-top"><a href="/"><img src="/assets/casevoya-wordmark.png" alt="Casevoya home" width="188" height="30" /></a><span className="lnk">Have an account?<a href="/sign-in">Sign in</a></span></div>
 <div className="au-body">
-<section data-step="0" className="on" data-title="Create your account" data-vo="wave"><div className="au-vo" data-size="56" data-pose="wave"></div><div className="dots" aria-hidden="true"><i></i><i></i><i></i></div><h1>Start a trial</h1><p className="lead">{resume ? `Signed in as ${resume.email}. Name your firm to finish setting up.` : "You’ll set up your firm next. Your 14-day free trial starts when you add a card; $0 today."}</p>
+<section data-step="0" className="on" data-title="Create your account" data-vo="wave"><div className="au-vo" data-size="56" data-pose="wave"></div><div className="dots" aria-hidden="true"><i></i><i></i><i></i></div><h1>Start a trial</h1><p className="lead">{resume ? `Signed in as ${resume.email}. Name your firm to finish setting up.` : `You’ll set up your firm next. ${lead} when you add a card${trialDays === 0 ? "" : "; $0 today"}.`}</p>
 <form noValidate onSubmit={(event) => event.preventDefault()}>{resume ? null : (<><div className="fld" data-req="Enter your name"><label htmlFor="nm">Your name</label><input className="inp" id="nm" type="text" autoComplete="name" defaultValue="" placeholder="Your name" aria-describedby="nm-h nm-e" /><span className="emsg" id="nm-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter your name</span></span></div>
 <div className="fld" data-req="Enter a work email, like name@firm.ca"><label htmlFor="wem">Work email</label><span className="hint" id="wem-h">We’ll send a code to confirm it.</span><input className="inp" id="wem" type="email" autoComplete="email" defaultValue="" placeholder="name@firm.ca" aria-describedby="wem-h wem-e" /><span className="emsg" id="wem-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter a work email, like name@firm.ca</span></span></div></>)}
 <div className="fld" data-req="Enter your firm’s name"><label htmlFor="firm">Firm name</label><input className="inp" id="firm" type="text" autoComplete="organization" defaultValue="" placeholder="Your firm" aria-describedby="firm-h firm-e" /><span className="emsg" id="firm-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter your firm’s name</span></span></div>
@@ -42,11 +50,11 @@ export function StartTrialMarkup({ resume }: { resume?: { email: string } } = {}
 <section data-step="2" data-title="How to start" data-vo="point"><span className="au-art" aria-hidden="true"><img src="/assets/generated/b2/sandbox-72@1x.webp" srcSet="/assets/generated/b2/sandbox-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span><div className="dots" aria-hidden="true"><i></i><i></i><i></i></div><h1>How do you want to start?</h1><p className="lead">You can switch later. Nothing you create is deleted when the trial ends.</p>
 <div role="radiogroup" aria-label="How to start">
 <button className="opt" role="radio" aria-checked="true" data-v="sample"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-sparkles" /></svg></span><span>Explore with sample data<small>A fictional firm with one sponsorship case. Try intake, an agreement, an upload, a reminder, an invoice and an export.</small></span></button>
-<button className="opt" role="radio" aria-checked="false" data-v="pilot"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-shield" /></svg></span><span>Pilot with real clients<small>{START_TRIAL_COPY.pilot}</small></span></button></div>
-<p className="why" style={{ "margin": "12px 0 18px" }}><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-lock" /></svg>{START_TRIAL_COPY.why}</p>
+<button className="opt" role="radio" aria-checked="false" data-v="pilot"><span className="oi"><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-shield" /></svg></span><span>Pilot with real clients<small>{copy.pilot}</small></span></button></div>
+<p className="why" style={{ "margin": "12px 0 18px" }}><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-lock" /></svg>{copy.why}</p>
 <button className="btn p blk" data-href="/setup" data-novalidate=""><span className="lab">Set up my firm</span><span className="spin" aria-hidden="true"></span></button></section>
 </div><footer className="au-foot"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/help">Help centre</a><a href="/status">Service status</a><span className="sp"><a href="#" aria-current="true">English</a> · <a href="#" onClick={(event) => { event.preventDefault(); toast2("Fran\u00e7ais arrive bient\u00f4t", { sub: "The French version of these screens is being designed." }); }}>Français</a></span></footer></main>
-<div className="au-poster" aria-hidden="true"><p className="big">Fourteen days.<br />One sample case.</p><p className="cap">{START_TRIAL_COPY.poster}</p><div className="au-chip"><span style={{ "width": "36px", "height": "36px", "borderRadius": "10px", "background": "var(--tint)", "display": "grid", "placeItems": "center", "color": "var(--blue)" }}><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-history" /></svg></span><span>When a trial ends, records stay<small>Export or subscribe. Nothing is deleted silently.</small></span></div></div></div>
+<div className="au-poster" aria-hidden="true"><p className="big">{trialDays ? `${trialDays} days.` : "Your firm."}<br />One sample case.</p><p className="cap">{copy.poster}</p><div className="au-chip"><span style={{ "width": "36px", "height": "36px", "borderRadius": "10px", "background": "var(--tint)", "display": "grid", "placeItems": "center", "color": "var(--blue)" }}><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-history" /></svg></span><span>When a trial ends, records stay<small>Export or subscribe. Nothing is deleted silently.</small></span></div></div></div>
 
 
     </>

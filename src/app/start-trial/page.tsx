@@ -6,6 +6,7 @@ import { PortScreen } from "@/components/port/screen";
 import { homeRoute } from "@/lib/auth/home-route";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
+import { readPublicPricing } from "@/modules/subscription/pricing";
 
 export const metadata: Metadata = {
   title: "Start a trial · Casevoya",
@@ -21,9 +22,15 @@ async function Trial() {
     const { data } = await (await createClient()).auth.getClaims();
     resume = { email: typeof data?.claims?.email === "string" ? data.claims.email : "your account" };
   }
+  // The trial length from the admin setting trial.duration; no number when it cannot be read.
+  let trialDays: number | null = null;
+  if (hasPublicSupabaseEnv()) {
+    const { data, error } = await (await createClient()).rpc("public_pricing");
+    if (!error && data) trialDays = readPublicPricing(data).trialDays;
+  }
   return (
     <PortScreen page="start-trial" variant="au" initialStep={resume ? 0 : undefined}>
-      <StartTrialMarkup resume={resume} />
+      <StartTrialMarkup resume={resume} trialDays={trialDays} />
     </PortScreen>
   );
 }

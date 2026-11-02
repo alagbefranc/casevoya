@@ -252,7 +252,11 @@ describe("billing banner", () => {
   const base = { now: NOW, timeZone: "America/Winnipeg", canManage: true, isOwner: true };
 
   it("asks the owner for a card; staff see the words only", () => {
-    expect(billingBanner(row({ card_required: true }), base)).toMatchObject({ title: "Add a card to start your 14-day free trial", link: { href: PLAN_DIALOG } });
+    expect(billingBanner(row({ card_required: true }), base)).toMatchObject({ title: "Add a card to start your free trial", link: { href: PLAN_DIALOG } });
+    expect(billingBanner(row({ card_required: true }), { ...base, trialDays: 30 })).toMatchObject({ title: "Add a card to start your 30-day free trial" });
+    const none = billingBanner(row({ card_required: true }), { ...base, trialDays: 0 });
+    expect(none?.title).toBe("Add a card to start your plan");
+    expect(none?.body).not.toMatch(/\$0 today|trial/);
     expect(billingBanner(row({ card_required: true }), { ...base, canManage: false, isOwner: false })?.link).toBeNull();
   });
 
@@ -299,5 +303,22 @@ describe("public pricing", () => {
     expect(page.founding?.line).toContain("25% off your first 12 months for the first 50 firms");
     expect(page.extraSeat).toContain("CAD 25/month or CAD 250/year");
     expect(pricingPage(readPublicPricing({}), NOW)).toBeNull();
+  });
+});
+
+describe("trial length follows the admin setting (trial.duration)", () => {
+  it("words 30, 0 and unknown", async () => {
+    const { trialStart, pricingDescription } = await import("@/modules/subscription/pricing");
+    expect(trialStart(30)).toBe("your 30-day free trial");
+    expect(trialStart(0)).toBe("your plan");
+    expect(trialStart(null)).toBe("your free trial");
+    expect(pricingDescription(30)).toContain("30-day free trial, cancel anytime.");
+    expect(pricingDescription(0)).not.toMatch(/trial/);
+    expect(pricingDescription(null)).not.toMatch(/\d+-day/);
+  });
+  it("start-trial copy uses the number", async () => {
+    const { startTrialCopy } = await import("@/components/port/markup/start-trial");
+    expect(startTrialCopy(30).pilot).toContain("($0 today, 30-day free trial)");
+    expect(startTrialCopy(0).pilot).not.toMatch(/trial|\$0/);
   });
 });

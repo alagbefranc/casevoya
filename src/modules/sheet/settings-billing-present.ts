@@ -13,7 +13,7 @@ import type { PlanDialogData, RetentionData, RetentionRow, SettingsBillingAlert,
 import { dayMonth } from "@/modules/sheet/home-present";
 import { publishedOn } from "@/modules/portal-policies/present";
 import { readContinuity, type Continuity } from "@/modules/sheet/sec-present";
-import type { PublicPricing } from "@/modules/subscription/pricing";
+import { trialStart, type PublicPricing } from "@/modules/subscription/pricing";
 import { isInterval, isPlan, money, PLAN_NAMES, planLabel, readCatalog, totalCents, type Catalog, type Interval, type Plan } from "@/modules/subscription/catalog";
 
 export type SubscriptionStatus = "trial" | "trial_ended" | "active" | "past_due" | "restricted" | "cancelled" | "archived";
@@ -249,10 +249,10 @@ function addDays(iso: string, days: number): string {
   return new Date(new Date(iso).getTime() + days * 86_400_000).toISOString();
 }
 
-function stateText(row: SubscriptionRow | null, state: SubscriptionStatus | null, detail: SubscriptionDetail | null, grace: FirmSubscription["grace"], timeZone: string, exportsUntil: string | null = null): string {
+function stateText(row: SubscriptionRow | null, state: SubscriptionStatus | null, detail: SubscriptionDetail | null, grace: FirmSubscription["grace"], timeZone: string, exportsUntil: string | null = null, trialDays: number | null = null): string {
   if (!row || !state) return "Not available";
   const on = (iso: string) => publishedOn(iso, timeZone);
-  if (state === "trial" && row.card_required) return "Not started: add a card to start your 14-day free trial. Nothing is charged today.";
+  if (state === "trial" && row.card_required) return `Not started: add a card to start ${trialStart(trialDays)}. Nothing is charged today.`;
   if (state === "trial" && row.stripe_trial) {
     if (!row.trial_ends_at) return "Free trial";
     return row.cancel_at_period_end
@@ -336,7 +336,8 @@ export function dialogTrial(
 ): Pick<PlanDialogData, "trialDays" | "trialNote" | "founding"> {
   const founding = offer?.founding ? { percent: offer.founding.percent, months: offer.founding.months } : null;
   if (state !== "trial" || !row) return { trialDays: null, trialNote: null, founding };
-  if (row.card_required) return { trialDays: offer?.trialDays || 14, trialNote: null, founding };
+  // 0 (no trial) or no pricing read: no trial line; the server decides again at Checkout.
+  if (row.card_required) return { trialDays: offer?.trialDays || null, trialNote: null, founding };
   const left = row.trial_ends_at ? new Date(row.trial_ends_at).getTime() - now.getTime() : 0;
   if (!row.stripe_trial && row.trial_ends_at && left > 49 * 3_600_000) {
     return { trialDays: null, trialNote: `$0 today. Your trial carries on until ${on(row.trial_ends_at)}; you are billed then unless you cancel before. Cancel anytime.`, founding };
@@ -411,7 +412,7 @@ export function subscriptionPage(input: {
 
   const rows: [string, string][] = [
     ["Plan", planText],
-    ["State", stateText(input.subscription, state, sub, grace, input.timeZone, windowEnd(detail, sub?.cancelled_at ?? null, grace.export_window_days))],
+    ["State", stateText(input.subscription, state, sub, grace, input.timeZone, windowEnd(detail, sub?.cancelled_at ?? null, grace.export_window_days), input.offer?.trialDays ?? null)],
   ];
   if (usage) {
     const since = `since ${dayMonth(usage.month_start)}`;
@@ -446,7 +447,7 @@ export function subscriptionPage(input: {
   );
 
   let alert: SettingsBillingAlert | null = null;
-  if (state === "trial" && input.subscription?.card_required) alert = { tone: "info", icon: "alert", title: "Add a card to start your 14-day free trial", body: "$0 today. Real client invitations and real matters open once a card is on file. You are billed when the trial ends unless you cancel before then; cancel anytime." };
+  if (state === "trial" && input.subscription?.card_required) alert = { tone: "info", icon: "alert", title: `Add a card to start ${trialStart(input.offer?.trialDays)}`, body: input.offer?.trialDays === 0 ? "Real client invitations and real matters open once a card is on file and your plan starts. Cancel anytime." : "$0 today. Real client invitations and real matters open once a card is on file. You are billed when the trial ends unless you cancel before then; cancel anytime." };
   else if (state === "trial" && input.subscription?.stripe_trial && input.subscription.trial_ends_at && !input.subscription.cancel_at_period_end) alert = { tone: "info", icon: "alert", title: `Your free trial ends ${on(input.subscription.trial_ends_at)}`, body: "Your card is charged then, plus applicable taxes, unless you cancel before then in Manage billing." };
   else if (state === "trial_ended") alert = { tone: "warn", icon: "alert", title: "Your trial has ended", body: "Your records are kept and you can still export them. New client portal invitations are paused until you choose a plan." };
   else if (state === "past_due") alert = { tone: "warn", icon: "alert", title: "The last payment failed", body: `Update your card in Manage billing within ${grace.past_due_days} days. After that, new work pauses until the payment goes through; nothing is deleted.` };

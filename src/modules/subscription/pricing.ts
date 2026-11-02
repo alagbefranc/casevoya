@@ -29,6 +29,22 @@ export function readPublicPricing(value: unknown): PublicPricing {
   };
 }
 
+/**
+ * The trial as copy says it, from public_pricing().trial_days (admin setting trial.duration):
+ * "your 30-day free trial"; "your plan" when the trial is 0 (no trial); "your free trial" when the
+ * length is not known (no number rather than a wrong one).
+ */
+export function trialStart(days: number | null | undefined): string {
+  if (days === null || days === undefined || !Number.isInteger(days) || days < 0) return "your free trial";
+  return days > 0 ? `your ${days}-day free trial` : "your plan";
+}
+
+/** The description follows the admin setting trial.duration (public_pricing().trial_days). */
+export function pricingDescription(trialDays: number | null): string {
+  const trial = trialDays === null ? "Free trial" : trialDays > 0 ? `${trialDays}-day free trial` : null;
+  return `Casevoya plans for Canadian immigration consultants: Solo, Practice and Firm. ${trial ? `${trial}, cancel anytime.` : "Cancel anytime."}`;
+}
+
 /** Whole cents after the founding discount, rounded as Stripe rounds a percent-off coupon. */
 export function foundingCents(cents: number, percent: number): number {
   return Math.round((cents * (100 - percent)) / 100);
