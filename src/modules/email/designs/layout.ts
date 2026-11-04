@@ -250,7 +250,7 @@ function bodyHtml(copy: EmailCopy): string {
 const CANVAS = "#EDEDED"; // Figma: rgba(0,0,0,0.05) over white
 const INK = "#131313"; // Colors/Neutral/900
 const MUTED = "#767676";
-const BUTTON = "#2F124F"; // Colors/Primary/900
+const BUTTON = "#035CFA"; // Casevoya logo blue (public/assets/brand/casevoya-wordmark.svg)
 const RULE = "#DDE0E1"; // Grey Scale/300
 const SERIF = "Erode,Georgia,'Times New Roman',serif";
 const SANS = "'Helvetica Neue',Helvetica,Arial,sans-serif";
