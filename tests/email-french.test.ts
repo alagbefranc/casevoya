@@ -136,7 +136,8 @@ const VARIANTS: { [K in Catalogued]: EmailContexts[K][] } = {
 const CATALOGUED = LOCALIZED_IDS.filter((id): id is Catalogued => id !== "generic");
 
 function hrefs(html: string): string[] {
-  return [...html.matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
+  // The footer social row is the same on every email; these checks are about the email's own links.
+  return [...html.replace(/<!--social-->[\s\S]*?<!--\/social-->/, "").matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
 }
 
 /** A copy of the committed drafts with the given templates (and _shared) approved by a named reviewer. */

@@ -201,7 +201,7 @@ const BUILDERS: Builders = {
   },
   EM05(kit) {
     const { t } = kit;
-    return copy(kit, { subject: t("subject"), preheader: t("preheader"), heading: t("subject"), body: t("body"), spot: "sign-in-code", brand: PLATFORM });
+    return copy(kit, { subject: t("subject"), preheader: t("preheader"), heading: t("subject"), body: t("body"), hero: "security", spot: "sign-in-code", brand: PLATFORM });
   },
   EM06(kit, context) {
     const { t, f, origin } = kit;
@@ -350,7 +350,7 @@ const BUILDERS: Builders = {
       heading: t("subject"),
       body: consultant ? t("body_consultant", { firm_name: firmName, consultant_name: consultant }) : t("body", { firm_name: firmName }),
       cta: cta(t("cta"), appLink(origin, PATHS.portal)),
-      spot: "receipt",
+      hero: "decision", spot: "receipt",
       brand: firmBrand(kit, context),
     });
   },
@@ -384,7 +384,7 @@ const BUILDERS: Builders = {
       heading: t("heading"),
       body: parts.join(" "),
       cta: context.portal ? cta(t("cta"), appLink(origin, PATHS.portalAppointments)) : manage ? cta(t("_shared.manage_cta"), manage) : null,
-      spot: "reminder",
+      hero: "consultation", spot: "reminder",
       brand: firmBrand(kit, context),
     });
   },
@@ -404,7 +404,7 @@ const BUILDERS: Builders = {
           : t("portal_no_time")
         : `${moved} ${manage ? t("_shared.manage_line") : t("_shared.contact_to_change", { firm_name: firmName })}`,
       cta: context.portal ? cta(t("cta"), appLink(origin, PATHS.portalAppointments)) : manage ? cta(t("_shared.manage_cta"), manage) : null,
-      spot: "reminder",
+      hero: "consultation", spot: "reminder",
       brand: firmBrand(kit, context),
     });
   },
@@ -425,7 +425,7 @@ const BUILDERS: Builders = {
       heading: t("heading"),
       body: href ? which : `${which} ${t("contact_to_book", { firm_name: firmName })}`,
       cta: href ? cta(t("cta"), href) : null,
-      spot: "reminder",
+      hero: "consultation", spot: "reminder",
       brand: firmBrand(kit, context),
     });
   },
@@ -445,7 +445,7 @@ const BUILDERS: Builders = {
       heading: t("subject"),
       body: parts.join(" "),
       cta: cta(t("cta"), appLink(origin, PATHS.sheetGrants)),
-      spot: "verify",
+      hero: "security", spot: "verify",
       brand: PLATFORM,
     });
   },
@@ -458,7 +458,7 @@ const BUILDERS: Builders = {
       heading: t("subject"),
       body: t("body", { firm_name: firm(kit, context), days }),
       cta: cta(t("cta"), appLink(origin, PATHS.sheetSettings)),
-      spot: "invoice",
+      hero: "billing", spot: "invoice",
       brand: PLATFORM,
     });
   },
@@ -473,7 +473,7 @@ const BUILDERS: Builders = {
       heading: t("subject"),
       body: ends && plan && amount ? t("body_date", { firm_name: firm(kit, context), date: ends, amount, plan }) : t("body", { firm_name: firm(kit, context) }),
       cta: cta(t("cta"), appLink(origin, PATHS.sheetSettings)),
-      spot: "invoice",
+      hero: "billing", spot: "invoice",
       brand: PLATFORM,
     });
   },
@@ -486,7 +486,7 @@ const BUILDERS: Builders = {
       heading: t("subject", { firm_name: firm(kit, context) }),
       body: days ? t("body_days", { days }) : t("body"),
       cta: cta(t("cta"), appLink(origin, PATHS.sheetSettings)),
-      spot: "invoice",
+      hero: "billing", spot: "invoice",
       brand: PLATFORM,
     });
   },
@@ -499,7 +499,7 @@ const BUILDERS: Builders = {
       heading: t("subject"),
       body: hours ? t("body_hours", { hours }) : t("body"),
       cta: cta(t("cta"), appLink(origin, PATHS.sheetExports)),
-      spot: "sign-in-code",
+      hero: "export", spot: "sign-in-code",
       brand: PLATFORM,
     });
   },
@@ -514,7 +514,7 @@ const BUILDERS: Builders = {
       heading: t("subject"),
       body: `${t(key, { short_date: started ?? "", hours: hours ?? "" })} ${t("after")}`,
       cta: cta(t("cta"), appLink(origin, PATHS.sheetExports)),
-      spot: "sign-in-code",
+      hero: "export", spot: "sign-in-code",
       brand: PLATFORM,
     });
   },
@@ -527,7 +527,7 @@ const BUILDERS: Builders = {
       heading: t("heading"),
       body: device ? t("body_device", { firm_name: firm(kit, context), device }) : t("body", { firm_name: firm(kit, context) }),
       cta: cta(t("cta"), appLink(origin, PATHS.sheetSettings)),
-      spot: "sign-in-code",
+      hero: "security", spot: "sign-in-code",
       brand: PLATFORM,
     });
   },

@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { EMAIL_TEMPLATES, INVITE_WITHOUT_LINK, renderTemplate, type TemplateId } from "@/modules/email/designs/catalog";
-import { firmInitial, renderCopy, safeUrl } from "@/modules/email/designs/layout";
+import { CASEVOYA_SOCIAL_LINKS, firmInitial, renderCopy, safeUrl } from "@/modules/email/designs/layout";
 import { dateTimeIn, dayDate, longDate, shortDate } from "@/modules/email/designs/format";
 import { designFor, renderEmail } from "@/modules/email/templates";
 
@@ -19,7 +19,8 @@ function render(id: TemplateId, context = EMAIL_TEMPLATES[id].sample, origin = O
 }
 
 function hrefs(html: string): string[] {
-  return [...html.matchAll(/href="([^"]*)"/g)].map((match) => match[1].replaceAll("&amp;", "&"));
+  // The footer social row is the same on every email; these checks are about the email's own links.
+  return [...html.replace(/<!--social-->[\s\S]*?<!--\/social-->/, "").matchAll(/href="([^"]*)"/g)].map((match) => match[1].replaceAll("&amp;", "&"));
 }
 
 function imageUrls(html: string): string[] {
@@ -72,6 +73,14 @@ describe("approved email designs", () => {
     expect(email.html).not.toContain("header-firm");
   });
 
+  it.each(IDS)("%s draws the hero illustration and all five social icons in the Figma order", (id) => {
+    const html = render(id).html;
+    expect(html).toMatch(/assets\/email\/illustrations\/[a-z]+\.png/);
+    const icons = [...html.matchAll(/social-([a-z]+)\.png"/g)].map((m) => m[1]);
+    expect(icons).toEqual(["linkedin", "x", "instagram", "facebook", "youtube"]);
+    for (const s of CASEVOYA_SOCIAL_LINKS) expect(html).toContain(`href="${s.href ?? "https://casevoya.ca/"}"`);
+  });
+
   it.each(IDS)("%s links only to absolute app URLs, never #", (id) => {
     const def = EMAIL_TEMPLATES[id];
     const email = render(id);
@@ -120,7 +129,7 @@ describe("approved email designs", () => {
     for (const link of hrefs(email.html)) expect(link.startsWith(`${ORIGIN}/`)).toBe(true);
   });
 
-  it("draws the firm header in HTML with the firm's name, and keeps the Casevoya header for platform mail", () => {
+  it("draws the firm mark in HTML with the firm's name; platform mail has no header image (Figma layout) and the Casevoya logo in the footer", () => {
     const firm = renderEmail({ template: "invoice", firm: "Maple & Birch Immigration", invoice_number: "INV-0007", due_on: "2026-11-06" });
     expect(firm.html).toContain("Maple &amp; Birch Immigration</td>");
     expect(firm.html).toContain(">M</td>");
@@ -131,7 +140,7 @@ describe("approved email designs", () => {
     expect(firm.html).not.toContain("header-platform");
     expect(firm.html).not.toContain("header-firm");
     const platform = renderEmail({ template: "invite", kind: "staff", firm: "Maple & Birch Immigration", role: "assistant" });
-    expect(platform.html).toContain(`${ORIGIN}/assets/email/header-platform.png`);
+    expect(platform.html).not.toContain("header-platform");
     expect(platform.html).toContain(`${ORIGIN}/assets/email/logo.png`);
     expect(platform.text).toContain("You’ve been invited as an Assistant.");
     expect(firmInitial("  élan Conseils")).toBe("É");

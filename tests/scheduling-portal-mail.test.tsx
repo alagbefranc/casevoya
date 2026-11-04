@@ -49,7 +49,8 @@ describe("consultation emails (EM16a–c) through the mail worker's renderer", (
   });
 
   const at = { starts_at: "2026-10-22T14:30:00Z", time_zone: "America/Toronto", firm: "Maple" };
-  const links = (html: string) => [...html.matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
+  // The footer social row is the same on every email; these checks are about the email's own links.
+  const links = (html: string) => [...html.replace(/<!--social-->[\s\S]*?<!--\/social-->/, "").matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
 
   it("EM16a: the portal button only for a portal login, and how they meet instead of a joining link", () => {
     const portal = renderEmail({ template: "consultation_booked", ...at, portal: true, location_kind: "video" });

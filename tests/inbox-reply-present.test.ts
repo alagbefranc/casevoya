@@ -96,7 +96,7 @@ describe("Inbox replies: the EX15 email", () => {
     expect(email.text).toContain("Hello <Dana>,\n\nLine two & more.\n\nSam Example\nMaple & Birch Immigration\n\nReply to this email to answer.");
     expect(email.html).toContain("Sent by Maple &amp; Birch Immigration via Casevoya");
     // No portal login: no button, no link at all.
-    expect(email.html).not.toMatch(/href=/);
+    expect(email.html.replace(/<!--social-->[\s\S]*?<!--\/social-->/, "")).not.toMatch(/href=/); // only the shared footer social row links
     const portal = renderEmail({ template: "staff_message", firm: "Maple Example", portal: true, body: "Hi" });
     expect(portal.subject).toBe("Message from Maple Example");
     expect(portal.text).toContain("Open your portal: https://app.casevoya.ca/portal");
