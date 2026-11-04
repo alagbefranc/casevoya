@@ -44,7 +44,7 @@ export function AcceptClientMarkup({ face }: { face?: InviteFace } = {}) {
 <PortalSignInFields email={email} then="#4" />
 <p className="why" style={{ "marginTop": "12px" }}><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-shield" /></svg>We’ll ask for an extra check before payments and before downloading your whole file.</p></section>
 <section data-step="4" data-title="Done" data-vo="cheer" data-nofoot=""><div className="wz-head"><div className="wz-vo" data-size="80" data-pose="cheer"></div><div><h1>You’re in</h1><p className="lead">Your first step is waiting.</p></div></div>
-<div className="ready" data-first-request="" style={{ "display": "none" }}><div><h2>Upload your passport copy</h2><p>Requested by {consultant}</p></div><a className="btn" href="/portal/upload">Start</a></div>
+<div className="ready" data-first-request="" style={{ "display": "none" }}><div><h2>Your first request</h2><p>Requested by {consultant}</p></div><a className="btn" href="/portal/upload">Start</a></div>
 <a className="btn" href="/portal" style={{ "height": "44px" }}>Go to my portal</a></section></main><footer className="wz-foot"><button className="btn" data-prev="" type="button"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-chevron-left" /></svg>Back</button><span className="save"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-check-circle" /></svg>Your answers are saved</span><span className="sp"></span><button className="btn p" data-next=""><span className="lab">Continue</span><span className="spin" aria-hidden="true"></span></button></footer></div></div>
 
 
