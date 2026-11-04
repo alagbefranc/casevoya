@@ -88,8 +88,9 @@ export async function loadSheetSample(staff: SheetStaff, now: Date = new Date(),
           owner: staff.role === "firm_owner",
         }
       : null,
-    // A live firm taking the optional tour: its invitations are open.
-    firmLive: !staff.sampleMode,
+    // A live firm taking the optional tour: its invitations are open. A firm still in test mode
+    // (go-live steps left) is not "live" here, so the copy matches the Test mode banner (#330).
+    firmLive: !staff.sampleMode && !base.chrome.statusbar.testMode,
     // Until both portal policies are published an invited client can't accept (same check as Home).
     policiesMissing: base.missingPolicies.length > 0,
   };

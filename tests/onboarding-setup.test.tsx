@@ -131,11 +131,11 @@ describe("setup steps 1 and 2 come back as saved (fixes 3 and 4)", () => {
 });
 
 describe("small copy fixes (fix 8)", () => {
-  it("Calendar and Stripe open Settings; Zoom and Calendly say they are coming later before being pressed", () => {
+  it("Calendar and Stripe open Settings; Zoom and Calendly are disabled and say Coming later (#330)", () => {
     const html = renderToStaticMarkup(<SetupMarkup firmName="Maple" />);
     expect(html).toContain(`<div>Google Calendar<small>Consultation bookings and deadlines on your calendar${SETUP_CONNECT.calendar.note}</small></div><button class="btn sm" type="button" title="${esc(SETUP_CONNECT.calendar.title)}">`);
-    expect(html).toContain(`<div>Zoom<small>Video links added to booked consultations${SETUP_CONNECT.later.note}</small></div><button class="btn sm" type="button" aria-disabled="true" title="${SETUP_CONNECT.later.title}">`);
-    expect(html).toContain(`<div>Calendly<small>Keep your existing booking page${SETUP_CONNECT.later.note}</small></div><button class="btn sm" type="button" aria-disabled="true"`);
+    expect(html).toContain(`<div>Zoom<small>Video links added to booked consultations${SETUP_CONNECT.later.note}</small></div><button class="btn sm" type="button" disabled="" aria-disabled="true" title="${SETUP_CONNECT.later.title}"><span class="lab">Coming later</span></button>`);
+    expect(html).toContain(`<div>Calendly<small>Keep your existing booking page${SETUP_CONNECT.later.note}</small></div><button class="btn sm" type="button" disabled="" aria-disabled="true"`);
     expect(html).toContain(`<div>Stripe<small>Card and bank payments for invoices · Maple${SETUP_CONNECT.stripe.note}</small></div><button class="btn sm p" type="button" title="${esc(SETUP_CONNECT.stripe.title)}">`);
     expect(SETUP_CONNECT.stripe.href).toBe("/sheet/settings?tab=billing#card-payments");
     expect(html).not.toContain("not available in this version");

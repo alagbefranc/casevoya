@@ -125,13 +125,13 @@ describe("public and live surfaces", () => {
     expect(isGatedPath("/")).toBe(false);
   });
 
-  it("renders auth pages with empty inputs and no demo copy", () => {
+  it("renders auth pages with empty inputs and no demo copy", async () => {
     assertClean(createElement(SignInPage), "sign-in page");
     assertClean(createElement(SignInMarkup), "sign-in");
     assertClean(createElement(TwoStepMarkup), "mfa");
     assertClean(createElement(RecoveryPage), "recovery page");
     assertClean(createElement(RecoveryMarkup), "recovery");
-    assertClean(createElement(StartTrialPage), "start-trial page");
+    assertClean(await StartTrialPage({ searchParams: Promise.resolve({}) }), "start-trial page");
     assertClean(createElement(StartTrialMarkup), "start-trial");
     assertClean(createElement(SetupMarkup), "setup");
     assertClean(createElement(AcceptClientMarkup), "accept client");

@@ -247,8 +247,8 @@ export function k2Count(el: HTMLElement, value: string) {
         .split("")
         .map((ch) =>
           /\d/.test(ch)
-            ? `<span class="k2-dg"><span class="k2-st">${[...Array(10).keys()].map((n) => `<span>${n}</span>`).join("")}</span></span>`
-            : `<span>${escapeHtml(ch)}</span>`,
+            ? `<span class="k2-dg" aria-hidden="true"><span class="k2-st">${[...Array(10).keys()].map((n) => `<span>${n}</span>`).join("")}</span></span>`
+            : `<span aria-hidden="true">${escapeHtml(ch)}</span>`,
         )
         .join("") + `<span class="k2-sr">${escapeHtml(text)}</span>`;
     el.dataset.len = String(text.length);

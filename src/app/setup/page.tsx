@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import type { FirmLogo } from "@/components/port/firm-logo-upload";
-import { SetupMarkup } from "@/components/port/markup/setup";
+import { SetupMarkup, setupTrialBadge } from "@/components/port/markup/setup";
 import { PortScreen } from "@/components/port/screen";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
@@ -16,6 +16,7 @@ import {
 import { setupSaved, type SetupSaved } from "@/modules/firm-onboarding/setup-saved";
 import { missingPolicies } from "@/modules/portal-policies/defaults";
 import { loadCurrentPolicies } from "@/modules/portal-policies/load";
+import { readPublicPricing } from "@/modules/subscription/pricing";
 
 export const metadata: Metadata = {
   title: "Set up your firm · Casevoya",
@@ -32,7 +33,11 @@ function SetupScreen({
   licence = null,
   saved = null,
   policiesMissing = false,
+  trialBadge,
+  card = null,
 }: {
+  trialBadge?: string;
+  card?: { trialDays: number | null } | null;
   codes: string[];
   firmName: string;
   logo: FirmLogo | null;
@@ -43,7 +48,7 @@ function SetupScreen({
 }) {
   return (
     <PortScreen page="setup" variant="wzb">
-      <SetupMarkup jurisdictionCodes={codes} firmName={firmName} logo={logo} accent={accent} licence={licence} saved={saved} policiesMissing={policiesMissing} />
+      <SetupMarkup jurisdictionCodes={codes} firmName={firmName} logo={logo} accent={accent} licence={licence} saved={saved} policiesMissing={policiesMissing} trialBadge={trialBadge} card={card} />
     </PortScreen>
   );
 }
@@ -69,6 +74,8 @@ async function SavedSetup() {
   let licence: SetupLicence | null = null;
   let saved: SetupSaved | null = null;
   let policiesMissing = false;
+  let trialBadge: string | undefined;
+  let card: { trialDays: number | null } | null = null;
   if (hasPublicSupabaseEnv()) {
     const supabase = await createClient();
     const { data: claims } = await supabase.auth.getClaims();
@@ -127,11 +134,18 @@ async function SavedSetup() {
           .eq("organization_id", membership.organization_id)
           .eq("membership_id", membership.id)
           .maybeSingle();
+        // The header pill and the last step's Add a card (#330): the trial length is the admin setting.
+        const [{ data: subscription }, pricing] = await Promise.all([
+          scoped.from("organization_subscriptions").select("status, trial_ends_at, card_required").eq("organization_id", orgId).maybeSingle(),
+          supabase.rpc("public_pricing"),
+        ]);
+        trialBadge = setupTrialBadge(subscription ?? null);
+        if (subscription?.status === "trial" && subscription.card_required) card = { trialDays: pricing.error ? null : readPublicPricing(pricing.data).trialDays };
         if (credential?.licence_type === "RCIC") licence = { number: credential.college_id, className: credential.scope_note === "RCIC-IRB" ? "RCIC-IRB" : "RCIC" };
       }
     }
   }
-  return <SetupScreen codes={codes} firmName={firmName} logo={logo} accent={accent} licence={licence} saved={saved} policiesMissing={policiesMissing} />;
+  return <SetupScreen codes={codes} firmName={firmName} logo={logo} accent={accent} licence={licence} saved={saved} policiesMissing={policiesMissing} trialBadge={trialBadge} card={card} />;
 }
 
 export default function SetupPage() {

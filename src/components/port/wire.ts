@@ -2,6 +2,8 @@
 
 import { useCallback, useRef } from "react";
 import { safeRedirect } from "@/lib/auth/redirect";
+import { verifyHref } from "@/lib/auth/pending-verify";
+import { rememberPlanChoice } from "@/lib/plan-choice";
 import { recoveryCodesShown } from "@/lib/auth/mfa-step";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -28,6 +30,7 @@ import {
   sendRecoveryEmail,
   signInWithPassword,
   signUpForTrial,
+  resendSignupCode,
   updatePassword,
   verifyEmailCode,
   verifyTotpCode,
@@ -380,6 +383,8 @@ export function usePortActions(page: string, token?: string) {
       };
 
       if (event.type === "step") {
+        // The plan picked on the pricing page rides along to the plan dialog (#330).
+        if (page === "start-trial") rememberPlanChoice(location.search, localStorage);
         if (page === "mfa" && event.step === 2 && !enrolled.current) {
           const preset = event.root.querySelector<HTMLElement>("[data-factor]")?.dataset.factor;
           if (preset) {
@@ -478,6 +483,8 @@ export function usePortActions(page: string, token?: string) {
           }
           return sent ? { ok: true } : null;
         }
+        // #330: the start-trial code step really sends a new sign-up code.
+        if (page === "start-trial") return resendSignupCode(val(event.root, "wem"));
         return null;
       }
 
@@ -510,7 +517,11 @@ export function usePortActions(page: string, token?: string) {
           return verifyEmailCode(val(event.root, "rem"), event.code, "recovery");
         }
         if (page === "start-trial" && event.then === "#2") {
-          return verifyEmailCode(val(event.root, "wem"), event.code, "signup");
+          const verified = await verifyEmailCode(val(event.root, "wem"), event.code, "signup");
+          // Resumed after a reload or a sign-in (#330): step 0's firm and licence weren't kept,
+          // so the signed-in start-trial screen asks for them.
+          if (verified?.ok && !val(event.root, "firm")) return { ok: true, href: "/start-trial" };
+          return verified;
         }
         if (page === "mfa" && event.then === "#3" && enrolled.current) {
           const verified = await verifyTotpCode(enrolled.current, event.code);
@@ -568,11 +579,20 @@ export function usePortActions(page: string, token?: string) {
         return { ok: true, href: destination };
       }
       if (page === "start-trial" && el.hasAttribute("data-next") && event.step === 0) {
-        return signUpForTrial({
+        const signedUp = await signUpForTrial({
           name: val(event.root, "nm"),
           email: val(event.root, "wem"),
           password: val(event.root, "tpw"),
         });
+        // #330: a reload on "Confirm your email" comes back to the code step for this address.
+        if (signedUp?.ok) {
+          const keep = new URL(verifyHref(val(event.root, "wem")), location.origin);
+          new URLSearchParams(location.search).forEach((value, key) => {
+            if (key === "plan" || key === "interval") keep.searchParams.set(key, value);
+          });
+          history.replaceState(history.state, "", `${keep.pathname}${keep.search}`);
+        }
+        return signedUp;
       }
       if (page === "start-trial" && el.dataset.href === "/setup") {
         const mode = event.root.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.dataset.v;

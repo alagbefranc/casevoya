@@ -159,8 +159,10 @@ describe("password sign-in", () => {
 
     state.serviceCalls = [];
     state.signIn = { message: "Email not confirmed", code: "email_not_confirmed" };
-    await signInWithPassword("person@example.test", "Harbour-view-19", "/app");
+    const unconfirmed = await signInWithPassword("person@example.test", "Harbour-view-19", "/app");
     expect(state.serviceCalls.at(-1)).toEqual(resolved(false));
+    // #330: the right password for an unconfirmed sign-up resumes at its code step.
+    expect(unconfirmed).toEqual({ ok: true, href: "/start-trial?verify=person%40example.test" });
   });
 
   it("allows the sign-in when the database reservation errors, and resolves nothing", async () => {
