@@ -9,6 +9,8 @@ const SECRET = "synthetic-dispatch-secret-0123456789";
 const TOKEN = "0123456789abcdef".repeat(4);
 const LINK = `https://app.casevoya.ca/accept/client?token=${TOKEN}`;
 
+const withoutSocialRow = (html: string) => html.replace(/<!--social-->[\s\S]*?<!--\/social-->/, "");
+
 function tamper(sealed: string): string {
   const bytes = Buffer.from(sealed, "base64");
   bytes[bytes.length - 1] ^= 0x01;
@@ -72,7 +74,9 @@ describe("invitation email copy", () => {
   it("says the link is not in the email when there is none, and carries no token", () => {
     const email = renderEmail({ template: "invite", kind: "portal", firm: "Northline", sealed_link: "abc", invitation_id: randomUUID() });
     expect(email.text).toContain(INVITE_WITHOUT_LINK);
-    expect(email.html).not.toContain("href");
+    // The footer social row links every email to Casevoya's profiles; the email body itself has no link.
+    expect(withoutSocialRow(email.html)).not.toContain("href");
+    expect(email.html).toContain("<!--social-->");
     expect(email.text).not.toMatch(/[0-9a-f]{64}/);
     expect(email.text).not.toContain("abc");
     const unsafe = renderEmail({ template: "invite", kind: "portal", firm: "Northline", link: "javascript:alert(1)" });
