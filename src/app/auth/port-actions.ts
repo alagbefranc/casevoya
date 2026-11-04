@@ -7,6 +7,7 @@ import { passwordOk } from "@/lib/auth/password";
 import { safeAccessError } from "@/lib/auth/step-up";
 import { homeRoute } from "@/lib/auth/home-route";
 import { safeRedirect } from "@/lib/auth/redirect";
+import { verifyHref } from "@/lib/auth/pending-verify";
 import { clearPendingTotp, readPendingTotp, withQr, writePendingTotp, type TotpSetup } from "@/lib/auth/mfa-pending";
 import { firmSlug } from "@/lib/auth/slug";
 import { syncClaimedFirmSlug } from "@/modules/email/sync-routing";
@@ -219,6 +220,16 @@ export async function signInWithPassword(email: string, password: string, next: 
   const signedIn = await guardedPasswordSignIn(supabase, clean, password);
   if (signedIn.limited !== undefined) return limited(signedIn.limited);
   const { error } = signedIn;
+  // #330: the right password for a sign-up that never confirmed its email goes back to the code
+  // step with a fresh code, instead of "didn't match".
+  if (error && unconfirmedEmail(error)) {
+    try {
+      await supabase.auth.resend({ type: "signup", email: clean, options: { emailRedirectTo: `${appOrigin()}/auth/confirm?next=${encodeURIComponent("/start-trial")}` } });
+    } catch {
+      // The code step still offers "Send a new code".
+    }
+    return { ok: true, href: verifyHref(clean) };
+  }
   if (error) {
     return lockedMessage(error.message) ? fail(error.message, "locked") : fail("Email or password didn’t match", "error");
   }
@@ -311,6 +322,32 @@ export async function requestMfaReset(
   return { ok: true, route, existing };
 }
 
+/** Supabase's "Email not confirmed" refusal (only given once the password matched). */
+function unconfirmedEmail(error: { code?: string; message?: string } | null): boolean {
+  return Boolean(error && (error.code === "email_not_confirmed" || /email not confirmed/i.test(error.message ?? "")));
+}
+
+/**
+ * #330: "Send a new code" on the start-trial code step. Answers the same way whether or not the
+ * address has an account, so it reveals nothing.
+ */
+export async function resendSignupCode(email: string): Promise<PortResult | null> {
+  if (!hasPublicSupabaseEnv()) return nullResult();
+  const clean = email.trim();
+  if (!isAcceptableEmail(clean)) return fail("Go back and enter your work email again.");
+  const emailGate = await authEmailGate(clean);
+  if (!emailGate.allowed) return limited(emailGate.retryAfterSeconds);
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email: clean,
+    options: { emailRedirectTo: `${appOrigin()}/auth/confirm?next=${encodeURIComponent("/start-trial")}` },
+  });
+  await resolveAuthAttempt(emailGate, !error);
+  if (error && isRateLimited(error)) return limited(rateLimitSeconds(error) ?? undefined);
+  return { ok: true };
+}
+
 export async function signUpForTrial(input: {
   name: string;
   email: string;
@@ -370,9 +407,8 @@ async function ownsFirm(supabase: Awaited<ReturnType<typeof createClient>>): Pro
 /**
  * Creates the trial firm with the owner's CICC licence (decision 2026-10-19: only licensed
  * consultants sign up, and firms start live). public.create_firm_with_licence makes the firm, the
- * owner's membership and the declared licence together, with sample mode off. The sample case
- * stays an optional tour; `sampleMode` (the "How do you want to start?" choice) no longer changes
- * the firm.
+ * owner's membership and the declared licence together, with sample mode off. `sampleMode` (the
+ * "How do you want to start?" choice, "Explore with sample data") then turns sample mode on (#330).
  */
 export async function createTrialFirm(input: {
   firmName: string;
@@ -413,6 +449,12 @@ export async function createTrialFirm(input: {
   const workspace = await createClient({ organizationId: data.id });
   const { error: trialError } = await workspace.rpc("sync_trial_status");
   if (trialError) return fromRpc(trialError);
+  // #330: "Explore with sample data" is saved on the firm (organizations.sample_mode). Going live
+  // later turns it off. A refusal here doesn't stop the sign-up; the tour still opens after setup.
+  if (input.sampleMode) {
+    const { error: sampleError } = await workspace.rpc("set_sample_mode", { p_enabled: true });
+    if (sampleError) console.warn("createTrialFirm: sample mode not saved", sampleError.code ?? "", sampleError.message);
+  }
   return { ok: true, href: "/setup" };
 }
 

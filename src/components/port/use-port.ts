@@ -435,6 +435,7 @@ export function usePort(
           if (stopped) return;
           if (left <= 0) {
             button.removeAttribute("aria-disabled");
+            button.removeAttribute("aria-label");
             button.textContent = label;
             return;
           }
@@ -442,6 +443,8 @@ export function usePort(
           if (!button.querySelector(".rc")) button.innerHTML = `Send a new code in 0:<span class="rc"></span>`;
           const slot = button.querySelector<HTMLElement>(".rc");
           if (slot) k2Count(slot, String(left).padStart(2, "0"));
+          // Screen readers hear the real value, not the digit reel (#330).
+          button.setAttribute("aria-label", `Send a new code in 0:${String(left).padStart(2, "0")}`);
           left -= 1;
           window.setTimeout(tick, 1000);
         };

@@ -53,7 +53,7 @@ describe("trial firm creation", () => {
     expect(state.created).toBe(1);
   });
 
-  it("creates it with the owner's licence, live: no sample-mode switch", async () => {
+  it("creates it with the owner's licence; Explore with sample data saves sample mode (#330)", async () => {
     await createTrialFirm(LICENSED);
     const create = state.calls.find((call) => call.name === "create_firm_with_licence");
     expect(create?.args).toEqual({
@@ -64,8 +64,13 @@ describe("trial firm creation", () => {
       college_id: "R512345",
       licence_class: "RCIC-IRB",
     });
-    expect(state.calls.map((call) => call.name)).not.toContain("set_sample_mode");
+    expect(state.calls.find((call) => call.name === "set_sample_mode")?.args).toEqual({ p_enabled: true });
     expect(state.calls.map((call) => call.name)).not.toContain("create_organization");
+  });
+
+  it("Pilot with real clients leaves sample mode off", async () => {
+    await createTrialFirm({ ...LICENSED, sampleMode: false });
+    expect(state.calls.map((call) => call.name)).not.toContain("set_sample_mode");
   });
 
   it("sends a sign-up without a licence back to the start-trial screen, and refuses an unusable one", async () => {

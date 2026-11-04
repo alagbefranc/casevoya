@@ -50,7 +50,7 @@ export const SAMPLE_COPY = {
   whyLive: "Your firm is live",
   lockedLive: "Real client invitations are open",
   /** A live firm without both portal policies published (the Sheet's PolicyMissingAlert says the same). */
-  leadPolicies: "Optional practice on fictional records. Your firm is live; publish your portal terms and privacy notice so invited clients can join.",
+  leadPolicies: "Optional practice on fictional records. Your workspace is ready; publish your portal terms and privacy notice so invited clients can join.",
   lockedPolicies: "Clients can’t accept portal invitations yet",
   whyPolicies: "Publish your portal terms first",
 } as const;

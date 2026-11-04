@@ -3,6 +3,8 @@
 import { useState, type CSSProperties } from "react";
 import { DPA_AVAILABLE } from "@/modules/firm-onboarding/legal";
 import type { SetupSaved } from "@/modules/firm-onboarding/setup-saved";
+import { PLAN_DIALOG } from "@/modules/sheet/billing-banner";
+import { trialStart } from "@/modules/subscription/pricing";
 import { connectOrRun } from "../kit";
 import { FirmLogoUpload, type FirmLogo } from "../firm-logo-upload";
 import { LicenceProofCard } from "../licence-proof-card";
@@ -20,16 +22,16 @@ export const SETUP_COPY = {
   /** Designer rail: "Try it before real clients". */
   sampleRail: "An optional practice tour",
   /** Designer: "Try the six key steps on a fictional case. Real client invitations open after that and after your licence check." */
-  sampleLead: "Your firm is live: you can invite real clients now. The sample case is an optional tour of the six key steps.",
+  sampleLead: "Your workspace is ready. It stays in test mode until you go live; then you can invite real clients. The sample case is an optional tour of the six key steps.",
   /** Designer: "Real client invitations are locked" / "They open when the six steps are done and your licence check passes." */
-  sampleAlertTitle: "Real client invitations are open",
-  sampleAlert: "Your licence is on file. The six steps are optional practice.",
+  sampleAlertTitle: "Real client invitations open when you go live",
+  sampleAlert: "Your licence is on file. Add a card and finish the go-live steps to invite real clients. The six steps are optional practice.",
   /**
    * Issue #259: until the firm publishes its portal terms and privacy notice, an invited client
    * stops at the accept screen (the same check as the Sheet's "Clients can’t accept portal
    * invitations yet", missingPolicies). Text only.
    */
-  sampleLeadPolicies: "Your firm is live. Publish your client portal terms and privacy notice in Settings so invited clients can join. The sample case is an optional tour of the six key steps.",
+  sampleLeadPolicies: "Your workspace is ready. Publish your client portal terms and privacy notice in Settings so invited clients can join. The sample case is an optional tour of the six key steps.",
   sampleAlertTitlePolicies: "Clients can’t accept portal invitations yet",
   sampleAlertPolicies: "Publish your portal terms of use and privacy notice in Settings > Client portal first. The six steps are optional practice.",
 } as const;
@@ -45,6 +47,32 @@ export const SETUP_CONNECT = {
   later: { note: " · Coming later", title: "Coming later: not available in Casevoya yet" },
 } as const;
 
+/**
+ * The setup header's trial pill (#330). Before a card is on file the trial has not started, so it
+ * says "Free trial" with no countdown; after, the real days left from trial_ends_at. Never a
+ * hardcoded length.
+ */
+export function setupTrialBadge(
+  sub: { status?: string | null; trial_ends_at?: string | null; card_required?: boolean | null } | null,
+  now: Date = new Date(),
+): string {
+  if (sub?.status === "trial" && sub.trial_ends_at && !sub.card_required) {
+    const left = Math.max(0, Math.ceil((Date.parse(sub.trial_ends_at) - now.getTime()) / 86_400_000));
+    if (Number.isFinite(left)) return `Trial · ${left} ${left === 1 ? "day" : "days"} left`;
+  }
+  return "Free trial";
+}
+
+/** The last step's card call to action (#330): opens the existing plan dialog (Stripe checkout). */
+export function setupCardCopy(trialDays: number | null) {
+  const start = trialStart(trialDays);
+  return {
+    title: `Add a card to start ${start}`,
+    body: trialDays === 0 ? "Real client invitations open once a card is on file and your plan starts." : "$0 today. You choose a plan and add a card on Stripe’s secure page; cancel before the trial ends and you aren’t billed.",
+    href: PLAN_DIALOG,
+  };
+}
+
 export function SetupMarkup({
   jurisdictionCodes = ["CA", "ON"],
   firmName = "",
@@ -53,7 +81,13 @@ export function SetupMarkup({
   licence = null,
   saved = null,
   policiesMissing = false,
+  trialBadge = "Free trial",
+  card = null,
 }: {
+  /** The header pill (setupTrialBadge). */
+  trialBadge?: string;
+  /** Shown when the firm still needs a card to start its trial: the admin trial length in days, or null when unknown. */
+  card?: { trialDays: number | null } | null;
   jurisdictionCodes?: readonly string[];
   firmName?: string;
   /** Steps 1 and 2 as saved, or the signed-in owner as the first contact (setupSaved). */
@@ -78,7 +112,7 @@ export function SetupMarkup({
     <>
       <a className="sr" href="#main">Skip to content</a>
 <div className="wz"><aside className="rail" aria-label="Steps"><div className="brand"><img src="/assets/casevoya-wordmark-white.png" alt="Casevoya" width="126" height="20" /></div><h2>{firm ? `Set up ${firm}` : "Set up your firm"}</h2><p className="sub">About 10 minutes. Your progress saves as you go.</p><ol className="stp"><i className="fill" aria-hidden="true"></i><li><button type="button"><span className="n">1</span><span>Firm details<small>Name, office, contacts</small></span></button></li><li><button type="button"><span className="n">2</span><span>Terms and privacy<small>Subscription, data processing</small></span></button></li><li><button type="button"><span className="n">3</span><span>Where you practise<small>Jurisdictions</small></span></button></li><li><button type="button"><span className="n">4</span><span>Your licence<small>Regulator and proof</small></span></button></li><li><button type="button"><span className="n">5</span><span>Branding<small>Logo and colour</small></span></button></li><li><button type="button"><span className="n">6</span><span>Calendar and payments<small>Connections</small></span></button></li><li><button type="button"><span className="n">7</span><span>Records and retention<small>How long you keep files</small></span></button></li><li><button type="button"><span className="n">8</span><span>Sample case<small>{SETUP_COPY.sampleRail}</small></span></button></li></ol><p className="mstep" data-stepname=""></p><div className="foot"><a href="/help/set-up-firm-workspace"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-help" /></svg> Setup guide</a><a href="/sheet/sample-mode">Finish later</a></div></aside>
-<div className="wz-sheet"><div className="wz-top"><span data-stepname=""></span><span className="acts"><span className="pill">Trial · 14 days left</span></span></div><main className="wz-main" id="main">
+<div className="wz-sheet"><div className="wz-top"><span data-stepname=""></span><span className="acts"><span className="pill">{trialBadge}</span></span></div><main className="wz-main" id="main">
 <section data-step="0" className="on" data-title="Firm details" data-vo="wave"><div className="wz-hi"><span className="wz-vo3d" aria-hidden="true"><img src="/assets/generated/b2/vo-3d-160@1x.webp" srcSet="/assets/generated/b2/vo-3d-160@2x.webp 2x" width="56" height="56" alt="" decoding="async" /></span><p><b>Welcome to Casevoya.</b> Eight short steps. Your answers save as you go, so you can stop and come back.</p></div><div className="wz-head"><div><h1>Tell us about your firm</h1><p className="lead">Clients see your display name in their portal. The legal name goes on agreements and invoices.</p></div><span className="wz-art" aria-hidden="true"><img src="/assets/generated/b2/firm-building-72@1x.webp" srcSet="/assets/generated/b2/firm-building-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span></div>
 <div className="g2"><div className="fld" data-req="Enter your firm’s legal name"><label htmlFor="ln">Legal name</label><input className="inp" id="ln" type="text" autoComplete="" defaultValue={saved?.legalName ?? ""} placeholder="" aria-describedby="ln-h ln-e" /><span className="emsg" id="ln-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter your firm’s legal name</span></span></div><div className="fld" data-req="Enter a display name"><label htmlFor="dn">Display name</label><span className="hint" id="dn-h">Shown to clients</span><input className="inp" id="dn" type="text" autoComplete="" defaultValue={firm} placeholder="" aria-describedby="dn-h dn-e" /><span className="emsg" id="dn-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter a display name</span></span></div></div>
 <div className="fld" data-req="Enter an office address"><label htmlFor="ad">Main office address</label><span className="hint" id="ad-h">You can add more offices in Settings later.</span><input className="inp" id="ad" type="text" autoComplete="" defaultValue={saved?.address ?? ""} placeholder="" aria-describedby="ad-h ad-e" /><span className="emsg" id="ad-e"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-alert" /></svg><span>Enter an office address</span></span></div>
@@ -111,8 +145,8 @@ export function SetupMarkup({
 </section>
 <section data-step="5" data-title="Calendar and payments" data-vo="point"><div className="wz-head"><div><h1>Calendar and payments</h1><p className="lead">Connect what you already use. You can skip this and do it from Settings.</p></div><span className="wz-art" aria-hidden="true"><img src="/assets/generated/b2/calendar-link-72@1x.webp" srcSet="/assets/generated/b2/calendar-link-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span></div>
 <div className="conn"><img src="/assets/logos/googlecalendar.svg" alt="" /><div>Google Calendar<small>{`Consultation bookings and deadlines on your calendar${SETUP_CONNECT.calendar.note}`}</small></div><button className="btn sm" type="button" title={SETUP_CONNECT.calendar.title} onClick={(event) => connectOrRun(event.currentTarget, SETUP_CONNECT.calendar.href)}><span className="lab">Connect</span><span className="spin" aria-hidden="true"></span></button></div>
-<div className="conn"><img src="/assets/logos/zoom.svg" alt="" /><div>Zoom<small>{`Video links added to booked consultations${SETUP_CONNECT.later.note}`}</small></div><button className="btn sm" type="button" aria-disabled="true" title={SETUP_CONNECT.later.title} onClick={(event) => connectOrRun(event.currentTarget)}><span className="lab">Connect</span><span className="spin" aria-hidden="true"></span></button></div>
-<div className="conn"><img src="/assets/logos/calendly.svg" alt="" /><div>Calendly<small>{`Keep your existing booking page${SETUP_CONNECT.later.note}`}</small></div><button className="btn sm" type="button" aria-disabled="true" title={SETUP_CONNECT.later.title} onClick={(event) => connectOrRun(event.currentTarget)}><span className="lab">Connect</span><span className="spin" aria-hidden="true"></span></button></div>
+<div className="conn"><img src="/assets/logos/zoom.svg" alt="" /><div>Zoom<small>{`Video links added to booked consultations${SETUP_CONNECT.later.note}`}</small></div><button className="btn sm" type="button" disabled aria-disabled="true" title={SETUP_CONNECT.later.title}><span className="lab">Coming later</span></button></div>
+<div className="conn"><img src="/assets/logos/calendly.svg" alt="" /><div>Calendly<small>{`Keep your existing booking page${SETUP_CONNECT.later.note}`}</small></div><button className="btn sm" type="button" disabled aria-disabled="true" title={SETUP_CONNECT.later.title}><span className="lab">Coming later</span></button></div>
 <div className="sec" style={{ "marginTop": "20px" }}><div style={{ "display": "flex", "gap": "14px", "alignItems": "center" }}><span className="au-art" aria-hidden="true"><img src="/assets/generated/b2/bank-72@1x.webp" srcSet="/assets/generated/b2/bank-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span><div><h3>Where client payments go</h3><p>Payments go straight to your firm’s account. Money held in trust stays in a separate client account and is shown separately to clients.</p></div></div>
 <div className="conn"><img src="/assets/logos/stripe.svg" alt="" /><div>Stripe<small>{`Card and bank payments for invoices${firm ? ` · ${firm}` : ""}${SETUP_CONNECT.stripe.note}`}</small></div><button className="btn sm p" type="button" title={SETUP_CONNECT.stripe.title} onClick={(event) => connectOrRun(event.currentTarget, SETUP_CONNECT.stripe.href)}><span className="lab">Connect</span><span className="spin" aria-hidden="true"></span></button></div>
 <p className="why" style={{ "marginTop": "10px" }}><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-lock" /></svg>Changing the payment destination later always asks you to confirm it’s you.</p></div>
@@ -126,6 +160,7 @@ export function SetupMarkup({
 </section>
 <section data-step="7" data-title="Sample case" data-vo="cheer" data-cta="Open my workspace"><div className="wz-head"><div><h1>Your workspace is ready</h1><p className="lead">{policiesMissing ? SETUP_COPY.sampleLeadPolicies : SETUP_COPY.sampleLead}</p></div><span className="wz-art" aria-hidden="true"><img src="/assets/generated/b2/sandbox-72@1x.webp" srcSet="/assets/generated/b2/sandbox-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span></div>
 <div className="ready"><div><h2>Sample case: a fictional sponsorship</h2><p>Fictional people, real screens. Nothing here reaches a real person.</p></div><a className="btn" href="/sheet/sample-mode">Open the sample case</a></div>
+{card ? (() => { const cc = setupCardCopy(card.trialDays); return (<div className="conn" data-setup-card="" style={{ "marginTop": "14px" }}><div>{cc.title}<small>{cc.body}</small></div><a className="btn sm p" href={cc.href}>Add a card</a></div>); })() : null}
 <div className="proof"><div><span className="st"></span><div>Send an intake form<small>The applicant fills in their history</small></div><span className="bd unv"><i></i>To try</span></div><div><span className="st"></span><div>Send a service agreement<small>Signing order: the applicant, then the sponsor</small></div><span className="bd unv"><i></i>To try</span></div><div><span className="st"></span><div>Request and review an upload<small>Marriage certificate</small></div><span className="bd unv"><i></i>To try</span></div><div><span className="st"></span><div>Schedule a reminder<small>Police certificate due in 14 days</small></div><span className="bd unv"><i></i>To try</span></div><div><span className="st"></span><div>Issue an invoice<small>From your firm to the applicant</small></div><span className="bd unv"><i></i>To try</span></div><div><span className="st"></span><div>Export the file<small>ZIP with the audit trail</small></div><span className="bd unv"><i></i>To try</span></div></div>
 <div className="alert lockd" style={{ "marginTop": "16px" }}><svg className="ic " aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-check-circle" /></svg><div><b>{policiesMissing ? SETUP_COPY.sampleAlertTitlePolicies : SETUP_COPY.sampleAlertTitle}</b>{policiesMissing ? SETUP_COPY.sampleAlertPolicies : SETUP_COPY.sampleAlert}</div></div>
 </section></main><footer className="wz-foot"><button className="btn" data-prev="" type="button"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-chevron-left" /></svg>Back</button><span className="save"><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-check-circle" /></svg>Saved a moment ago</span><span className="sp"></span><button className="btn p" data-next=""><span className="lab">Continue</span><span className="spin" aria-hidden="true"></span></button></footer></div></div>

@@ -4,6 +4,7 @@ import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { openBillingPortal, startSubscriptionCheckout } from "@/modules/subscription/actions";
 import { PLAN_DRAFT, subscriptionStepUpLocation } from "@/modules/subscription/errors";
+import { PLAN_CHOICE_KEY, parsePlanChoice, readPlanChoice } from "@/lib/plan-choice";
 
 /**
  * Settings > Subscription (firm owner): Choose a plan opens the live #dlgPlan dialog, whose total
@@ -91,6 +92,7 @@ export function mountSubscription(root: ParentNode, router: Router, open: Open) 
       const seats = dialog.querySelector<HTMLInputElement>("#plX");
       if (seats && Number.isInteger(saved.extraSeats)) seats.value = String(saved.extraSeats);
     }
+    else applyPlanChoice(dialog, parsePlanChoice(params.get("plan"), params.get("interval")) ?? readPlanChoice(localStorage));
   } catch {
     // Storage can be unavailable; the owner chooses again.
   }
@@ -103,6 +105,16 @@ export function mountSubscription(root: ParentNode, router: Router, open: Open) 
     const rest = search.toString();
     router.replace(`${window.location.pathname}${rest ? `?${rest}` : ""}`);
   });
+}
+
+/** #330: the plan picked on the pricing page (or `?plan=` here) starts pressed in the dialog. */
+function applyPlanChoice(dialog: HTMLDialogElement, choice: ReturnType<typeof readPlanChoice>) {
+  if (!choice) return;
+  const select = dialog.querySelector<HTMLSelectElement>("#plS");
+  if (select && [...select.options].some((option) => option.value === choice.plan)) select.value = choice.plan;
+  if (choice.interval) {
+    dialog.querySelectorAll<HTMLButtonElement>("#plI button[data-interval]").forEach((button) => button.setAttribute("aria-pressed", button.dataset.interval === choice.interval ? "true" : "false"));
+  }
 }
 
 function stepUp(draft: Record<string, unknown> | null) {
@@ -138,6 +150,11 @@ export async function runSubscriptionAct(button: HTMLElement, open: Open) {
       if (result.stepUp) stepUp(choice);
       else toast2(result.error, { kind: "bad", sub: "Nothing was charged." });
       return;
+    }
+    try {
+      localStorage.removeItem(PLAN_CHOICE_KEY);
+    } catch {
+      // Nothing to forget.
     }
     toast2("Opening Stripe’s secure checkout", { kind: "ok" });
     window.location.assign(result.url);
