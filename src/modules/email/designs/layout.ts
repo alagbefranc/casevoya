@@ -173,10 +173,10 @@ function firmHeader(firmName: string, tagline: string = SHELL_EN.tagline, look: 
     `<td width="52" valign="middle" style="width:52px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
     tile +
     `</tr></table></td>` +
-    `<td valign="middle" style="padding:0 16px 0 12px;font-family:Erode,Georgia,serif;font-size:22px;font-weight:400;line-height:1.2;color:#111">${name}</td>` +
-    `<td align="right" valign="middle" style="font-family:Erode,Georgia,serif;font-size:13px;line-height:1.3;color:#6b6862;white-space:nowrap;text-align:right">${escapeHtml(tagline)}</td>` +
+    `<td valign="middle" style="padding:0 16px 0 12px;font-family:Erode,Georgia,'Times New Roman',serif;font-size:22px;font-weight:500;line-height:1.2;color:#131313">${name}</td>` +
+    `<td align="right" valign="middle" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.3;color:#767676;white-space:nowrap;text-align:right">${escapeHtml(tagline)}</td>` +
     `</tr></table></td></tr>` +
-    `<tr><td style="padding:33px 40px 0"><div style="height:1px;line-height:1px;font-size:1px;background:#e6e2db">&nbsp;</div></td></tr>`
+    `<tr><td style="padding:33px 40px 0"><div style="height:1px;line-height:1px;font-size:1px;background:#DDE0E1">&nbsp;</div></td></tr>`
   );
 }
 
@@ -190,18 +190,19 @@ function platformHeader(origin: string): string {
 }
 
 function footer(origin: string, brand: Brand, shell: ShellText): string {
-  const style = "padding:16px 40px 24px;border-top:1px solid #eeebe6;font-size:13px;color:#6b6862";
+  const rule = `<tr><td style="padding:8px 40px 0"><div style="height:1px;line-height:1px;font-size:1px;background:#DDE0E1">&nbsp;</div></td></tr>`;
+  const style = `padding:20px 40px 28px;font-family:${SANS};font-size:12px;line-height:1.5;color:${MUTED};text-align:center`;
   if (brand.kind === "firm") {
     const line = firmLine(shell, brand.firmName);
-    return `<tr><td style="${style}">${img(origin, "via-casevoya.png", 'width="16" height="16" alt="" style="vertical-align:-3px;border:0"')} ${escapeHtml(line)}</td></tr>`;
+    return `${rule}<tr><td align="center" style="${style}">${img(origin, "via-casevoya.png", 'width="16" height="16" alt="" style="vertical-align:-3px;border:0"')} ${escapeHtml(line)}</td></tr>`;
   }
-  return `<tr><td style="${style}">${img(origin, "logo.png", 'width="100" height="16" alt="Casevoya" style="display:block;border:0;margin:0 0 8px"')}${escapeHtml(shell.footerPlatform)}</td></tr>`;
+  return `${rule}<tr><td align="center" style="${style}">${img(origin, "logo.png", 'width="100" height="16" alt="Casevoya" style="display:block;border:0;margin:0 auto 10px"')}${escapeHtml(shell.footerPlatform)}</td></tr>`;
 }
 
 /** Hidden inbox preview text, padded so clients do not pull body text into the preview. */
 function preheader(text: string): string {
   const pad = "&#847;&zwnj;&nbsp;".repeat(40);
-  return `<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;color:#F6F5F4">${escapeHtml(text)}${pad}</div>`;
+  return `<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;color:#F1F3F4">${escapeHtml(text)}${pad}</div>`;
 }
 
 /**
@@ -224,6 +225,23 @@ function bodyHtml(copy: EmailCopy): string {
   return copy.verbatim ? text.replace(/\r\n?|\n/g, "<br>") : text;
 }
 
+/**
+ * Visual style (Nov 2026): the look of Francis's Figma email set (file sOMPHnfjFmGNrB4D4afNAT),
+ * applied to Casevoya's own copy and brand. White card on a grey canvas, bold serif heading, sans
+ * body, the button in a mint box with a green border, a centred footer with the Casevoya logo.
+ * The Figma fonts (Larken, Faktum) are commercial and not shipped: headings use Erode (hosted on
+ * casevoya.ca) then web-safe serifs; body uses web-safe sans.
+ */
+const CANVAS = "#F1F3F4";
+const INK = "#131313";
+const BODY_INK = "#202124";
+const MUTED = "#767676";
+const BUTTON = "#2F124F";
+const INFO_BG = "#EFFCF5";
+const INFO_BORDER = "#58A55C";
+const SERIF = "Erode,Georgia,'Times New Roman',serif";
+const SANS = "'Helvetica Neue',Helvetica,Arial,sans-serif";
+
 export function renderHtml(copy: EmailCopy, origin: string = DEFAULT_EMAIL_ORIGIN): string {
   const lang = copy.lang ?? "en";
   const shell = shellFor(copy);
@@ -232,21 +250,21 @@ export function renderHtml(copy: EmailCopy, origin: string = DEFAULT_EMAIL_ORIGI
   const header = copy.brand.kind === "firm" ? firmHeader(copy.brand.firmName, tagline, copy.brand) : platformHeader(origin);
   const button =
     copy.cta && href
-      ? `<tr><td style="padding:8px 40px 28px"><a href="${escapeHtml(href)}" style="display:inline-block;background:#0075DE;color:#fff;text-decoration:none;font-weight:500;padding:12px 20px;border-radius:10px">${escapeHtml(copy.cta.label)}</a></td></tr>`
+      ? `<tr><td style="padding:8px 40px 28px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${INFO_BG}" style="background:${INFO_BG};border:1px solid ${INFO_BORDER};border-radius:8px"><tr><td style="padding:20px"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="${BUTTON}" style="background:${BUTTON};border-radius:6px"><a href="${escapeHtml(href)}" style="display:inline-block;background:${BUTTON};color:#ffffff;text-decoration:none;font-family:${SANS};font-size:14px;font-weight:600;line-height:20px;padding:12px 20px;border-radius:6px">${escapeHtml(copy.cta.label)}</a></td></tr></table></td></tr></table></td></tr>`
       : "";
   return (
     `<!doctype html>\n` +
-    `<html lang="${lang}" xmlns="http://www.w3.org/1999/xhtml"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="x-apple-disable-message-reformatting"><meta name="color-scheme" content="light"><title>${escapeHtml(copy.subject)}</title>\n` +
+    `<html lang="${lang}" xmlns="http://www.w3.org/1999/xhtml"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="x-apple-disable-message-reformatting"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${escapeHtml(copy.subject)}</title>\n` +
     `<style>${fontFaces()}\n` +
-    `body{margin:0;padding:0;background:#F6F5F4}table{border-collapse:collapse}img{border:0;outline:none;text-decoration:none}\n` +
+    `body{margin:0;padding:0;background:${CANVAS}}table{border-collapse:collapse}img{border:0;outline:none;text-decoration:none}\n` +
     `@media (max-width:620px){.mail{width:100%!important}}</style></head>\n` +
-    `<body style="margin:0;padding:0;background:#F6F5F4">\n` +
+    `<body style="margin:0;padding:0;background:${CANVAS}">\n` +
     `${preheader(copy.preheader)}\n` +
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F6F5F4"><tr><td align="center" style="padding:24px 0">\n` +
-    `<table role="presentation" width="600" cellpadding="0" cellspacing="0" class="mail" align="center" style="width:600px;max-width:600px;background:#ffffff;border-radius:14px;overflow:hidden;font-family:Erode,Georgia,serif">${header}\n` +
-    `<tr><td style="padding:28px 40px 4px">${img(origin, `spot-${copy.spot}.png`, 'class="spot" width="72" height="72" alt="" style="display:block;border:0"')}</td></tr>\n` +
-    `<tr><td style="padding:12px 40px 0"><h1 style="margin:0;font-weight:400;font-size:24px;line-height:1.25;color:#111">${escapeHtml(copy.heading)}</h1></td></tr>\n` +
-    `<tr><td style="padding:10px 40px 16px;font-size:16px;line-height:1.5;color:#3b3935">${bodyHtml(copy)}</td></tr>${button}\n` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${CANVAS}" style="background:${CANVAS}"><tr><td align="center" style="padding:32px 0">\n` +
+    `<table role="presentation" width="600" cellpadding="0" cellspacing="0" class="mail" align="center" bgcolor="#ffffff" style="width:600px;max-width:600px;background:#ffffff;border-radius:4px;overflow:hidden;font-family:${SANS};color:${BODY_INK}">${header}\n` +
+    `<tr><td style="padding:28px 40px 4px">${img(origin, `spot-${copy.spot}.png`, 'class="spot" width="56" height="56" alt="" style="display:block;border:0"')}</td></tr>\n` +
+    `<tr><td style="padding:12px 40px 0"><h1 style="margin:0;font-family:${SERIF};font-weight:700;font-size:30px;line-height:1.25;color:${INK}">${escapeHtml(copy.heading)}</h1></td></tr>\n` +
+    `<tr><td style="padding:14px 40px 16px;font-family:${SANS};font-size:15px;line-height:1.6;color:${BODY_INK}">${bodyHtml(copy)}</td></tr>${button}\n` +
     `${footer(origin, copy.brand, shell)}</table>\n` +
     `</td></tr></table>\n` +
     `</body></html>\n`
