@@ -590,7 +590,8 @@ export function usePortActions(page: string, token?: string) {
           new URLSearchParams(location.search).forEach((value, key) => {
             if (key === "plan" || key === "interval") keep.searchParams.set(key, value);
           });
-          history.replaceState(history.state, "", `${keep.pathname}${keep.search}`);
+          // null state: Next.js then adopts the new URL instead of restoring its own on the next render.
+          history.replaceState(null, "", `${keep.pathname}${keep.search}`);
         }
         return signedUp;
       }
