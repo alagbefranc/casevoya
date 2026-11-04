@@ -34,6 +34,31 @@ export type Brand = { kind: "platform" } | { kind: "firm"; firmName: string; log
 
 export type Cta = { label: string; href: string };
 
+/** The large hero illustration at the top of the card (public/assets/email/illustrations). */
+export type Hero =
+  | "invite"
+  | "documents"
+  | "deadline"
+  | "agreement"
+  | "payment"
+  | "decision"
+  | "consultation"
+  | "security"
+  | "billing"
+  | "export";
+
+const HERO_FOR_SPOT: Record<Spot, Hero> = {
+  agreement: "agreement",
+  "client-invite": "invite",
+  "document-requested": "documents",
+  invoice: "payment",
+  receipt: "payment",
+  reminder: "deadline",
+  "sign-in-code": "security",
+  "staff-invite": "invite",
+  verify: "security",
+};
+
 /** What one email says. Plain text everywhere: the renderer escapes it. */
 export type EmailCopy = {
   subject: string;
@@ -42,6 +67,8 @@ export type EmailCopy = {
   body: string;
   cta: Cta | null;
   spot: Spot;
+  /** The hero illustration; defaults from the spot. */
+  hero?: Hero;
   brand: Brand;
   lang?: "en" | "fr";
   /**
@@ -185,10 +212,6 @@ export function firmHeaderPreviewHtml(firmName: string, look: FirmHeaderLook & {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;font-family:Erode,Georgia,serif;border-collapse:collapse">${firmHeader(firmName, look.tagline, look)}<tr><td style="height:16px"></td></tr></table>`;
 }
 
-function platformHeader(origin: string): string {
-  return `<tr><td>${img(origin, "header-platform.png", 'width="600" height="120" alt="Casevoya" style="display:block;width:100%;height:auto;border:0"')}</td></tr>`;
-}
-
 /** Hidden inbox preview text, padded so clients do not pull body text into the preview. */
 function preheader(text: string): string {
   const pad = "&#847;&zwnj;&nbsp;".repeat(40);
@@ -219,27 +242,25 @@ function bodyHtml(copy: EmailCopy): string {
  * Visual style (Nov 2026): the layout of Francis's Figma email set (file sOMPHnfjFmGNrB4D4afNAT,
  * frames 1:2607, 1:7655, 1:10804), applied to Casevoya's own copy and brand. Measurements are the
  * Figma frame (784px card, 702px content, 60px top/bottom, 24px between blocks) scaled to 600px.
- * No header (as in Figma): heading first, then the paragraph, then the mint box, which holds the
- * email's existing secondary details (its tagline, its summary line with the spot icon) and the
- * button. Footer: rule, brand mark, social icons, footer line. The Figma fonts (Larken, Faktum)
+ * No header (as in Figma 1:7655): hero illustration, the tagline as a small eyebrow, heading,
+ * paragraph, button (no mint box: the payment, reset and reminder frames have none).
+ * Footer: rule, brand mark, the five social icons, footer line. The Figma fonts (Larken, Faktum)
  * are commercial and not shipped: headings use Erode (hosted on casevoya.ca) then web-safe serifs.
  */
 const CANVAS = "#EDEDED"; // Figma: rgba(0,0,0,0.05) over white
 const INK = "#131313"; // Colors/Neutral/900
 const MUTED = "#767676";
 const BUTTON = "#2F124F"; // Colors/Primary/900
-const INFO_BG = "#F7FDFA"; // Figma: rgba(217,246,231,0.3) over white
-const INFO_BORDER = "#2CC275"; // Colors/Secondary/600
-const ROW_RULE = "#BDBDBD"; // Colors/Neutral/300
 const RULE = "#DDE0E1"; // Grey Scale/300
 const SERIF = "Erode,Georgia,'Times New Roman',serif";
 const SANS = "'Helvetica Neue',Helvetica,Arial,sans-serif";
-const PAD = "0 30px";
 
 /**
- * Casevoya's public social profiles, in the Figma footer's order. Only networks with a URL get an
- * icon; adding a profile is a one-line change here. None are known yet (Nov 2026).
+ * Casevoya's public social profiles, in the Figma footer's order. Every icon is always drawn; a
+ * network without its own profile URL yet links to the Casevoya site. Setting a profile is a
+ * one-line change here. No profile URLs are known yet (Nov 2026).
  */
+const SOCIAL_FALLBACK = "https://casevoya.ca";
 export const CASEVOYA_SOCIAL_LINKS: ReadonlyArray<{ network: "linkedin" | "x" | "instagram" | "facebook" | "youtube"; label: string; href: string | null }> = [
   { network: "linkedin", label: "LinkedIn", href: null },
   { network: "x", label: "X", href: null },
@@ -249,12 +270,11 @@ export const CASEVOYA_SOCIAL_LINKS: ReadonlyArray<{ network: "linkedin" | "x" | 
 ];
 
 function socialRow(origin: string): string {
-  const cells = CASEVOYA_SOCIAL_LINKS.flatMap((s) => {
-    const href = s.href ? safeUrl(s.href) : null;
-    if (!href) return [];
-    return [`<td style="padding:0 6px"><a href="${escapeHtml(href)}" style="text-decoration:none">${img(origin, `social-${s.network}.png`, `width="33" height="33" alt="${escapeHtml(s.label)}" style="display:block;border:0"`)}</a></td>`];
+  const cells = CASEVOYA_SOCIAL_LINKS.map((s) => {
+    const href = safeUrl(s.href ?? SOCIAL_FALLBACK) ?? SOCIAL_FALLBACK;
+    return `<td style="padding:0 6px"><a href="${escapeHtml(href)}" style="text-decoration:none">${img(origin, `social-${s.network}.png`, `width="33" height="33" alt="${escapeHtml(s.label)}" style="display:block;border:0"`)}</a></td>`;
   });
-  return cells.length ? `<tr><td align="center" style="padding:16px 30px 0"><table role="presentation" cellpadding="0" cellspacing="0" align="center"><tr>${cells.join("")}</tr></table></td></tr>` : "";
+  return `<!--social--><tr><td align="center" style="padding:16px 30px 0"><table role="presentation" cellpadding="0" cellspacing="0" align="center"><tr>${cells.join("")}</tr></table></td></tr><!--/social-->`;
 }
 
 /** The firm's mark for the footer: its logo or initial tile, and its name. */
@@ -290,16 +310,12 @@ export function renderHtml(copy: EmailCopy, origin: string = DEFAULT_EMAIL_ORIGI
   const tagline = copy.shell ? shell.tagline : (copy.tagline ?? shell.tagline);
   const button =
     copy.cta && href
-      ? `<tr><td style="padding:20px 0 0"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="${BUTTON}" style="background:${BUTTON};border-radius:8px"><a href="${escapeHtml(href)}" style="display:inline-block;background:${BUTTON};color:#ffffff;text-decoration:none;font-family:${SANS};font-size:16px;font-weight:400;line-height:20px;padding:16px 40px;border-radius:8px">${escapeHtml(copy.cta.label)}</a></td></tr></table></td></tr>`
+      ? `<tr><td style="padding:24px 30px 0"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="${BUTTON}" style="background:${BUTTON};border-radius:8px"><a href="${escapeHtml(href)}" style="display:inline-block;background:${BUTTON};color:#ffffff;text-decoration:none;font-family:${SANS};font-size:16px;font-weight:400;line-height:20px;padding:16px 40px;border-radius:8px">${escapeHtml(copy.cta.label)}</a></td></tr></table></td></tr>`
       : "";
-  const info =
-    `<tr><td style="padding:24px 30px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${INFO_BG}" style="background:${INFO_BG};border:1px solid ${INFO_BORDER};border-radius:6px"><tr><td style="padding:28px 20px">` +
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">` +
-    `<tr><td style="font-family:${SANS};font-size:16px;font-weight:700;line-height:1.3;color:${INK}">${escapeHtml(tagline)}</td></tr>` +
-    `<tr><td style="padding:14px 0;border-bottom:1px solid ${ROW_RULE}"><table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
-    `<td width="30" valign="middle" style="width:30px">${img(origin, `spot-${copy.spot}.png`, 'class="spot" width="30" height="30" alt="" style="display:block;border:0"')}</td>` +
-    `<td valign="middle" style="padding:0 0 0 8px;font-family:${SANS};font-size:16px;line-height:1.4;color:${INK}">${escapeHtml(copy.preheader)}</td></tr></table></td></tr>` +
-    `${button}</table></td></tr></table></td></tr>`;
+  const hero = copy.hero ?? HERO_FOR_SPOT[copy.spot];
+  const heroRow = `<tr><td align="center" style="padding:48px 30px 8px">${img(origin, `illustrations/${hero}.png`, 'class="hero" width="300" height="200" alt="" style="display:block;margin:0 auto;width:300px;max-width:100%;height:auto;border:0"')}</td></tr>`;
+  const eyebrow = `<tr><td style="padding:16px 30px 0;font-family:${SANS};font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;line-height:1.3;color:${MUTED}">${escapeHtml(tagline)}</td></tr>`;
+  const info = button;
   return (
     `<!doctype html>\n` +
     `<html lang="${lang}" xmlns="http://www.w3.org/1999/xhtml"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="x-apple-disable-message-reformatting"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${escapeHtml(copy.subject)}</title>\n` +
@@ -310,7 +326,8 @@ export function renderHtml(copy: EmailCopy, origin: string = DEFAULT_EMAIL_ORIGI
     `${preheader(copy.preheader)}\n` +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${CANVAS}" style="background:${CANVAS}"><tr><td align="center" style="padding:16px 0">\n` +
     `<table role="presentation" width="600" cellpadding="0" cellspacing="0" class="mail" align="center" bgcolor="#ffffff" style="width:600px;max-width:600px;background:#ffffff;font-family:${SANS};color:${INK}">\n` +
-    `<tr><td style="padding:60px 30px 0"><h1 style="margin:0;font-family:${SERIF};font-weight:700;font-size:32px;line-height:48px;color:${INK}">${escapeHtml(copy.heading)}</h1></td></tr>\n` +
+    `${heroRow}${eyebrow}\n` +
+    `<tr><td style="padding:8px 30px 0"><h1 style="margin:0;font-family:${SERIF};font-weight:700;font-size:32px;line-height:48px;color:${INK}">${escapeHtml(copy.heading)}</h1></td></tr>\n` +
     `<tr><td style="padding:20px 30px 0;font-family:${SANS};font-size:16px;line-height:1.5;color:${INK}">${bodyHtml(copy)}</td></tr>\n` +
     `${info}\n` +
     `${footer(origin, copy.brand, shell)}<tr><td style="height:60px;line-height:60px;font-size:1px">&nbsp;</td></tr></table>\n` +

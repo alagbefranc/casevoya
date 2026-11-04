@@ -317,6 +317,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         heading: "Your other sessions were signed out",
         body: "After your password change, every other session was signed out. This is recorded in your firm’s audit trail.",
         spot: "sign-in-code",
+        hero: "security",
         brand: PLATFORM,
       });
     },
@@ -626,6 +627,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         body: `${firmName} recorded a decision on your file. For your privacy, the details are in your portal. ${next}`,
         cta: cta("Open your portal", appLink(origin, PATHS.portal)),
         spot: "receipt",
+        hero: "decision",
         brand: firmBrand(context),
       });
     },
@@ -663,6 +665,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         body: `${lead}${consultant ? ` with ${consultant}` : ""}.${meet ? ` ${meet}` : ""}${end}`,
         cta: context.portal ? cta("View booking", appLink(origin, PATHS.portalAppointments)) : manage ? cta(MANAGE_CTA, manage) : null,
         spot: "reminder",
+        hero: "consultation",
         brand: firmBrand(context),
       });
     },
@@ -694,6 +697,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
           : `${moved} ${manage ? MANAGE_LINE : contactToChange(firmName)}`,
         cta: context.portal ? cta("View booking", appLink(origin, PATHS.portalAppointments)) : manage ? cta(MANAGE_CTA, manage) : null,
         spot: "reminder",
+        hero: "consultation",
         brand: firmBrand(context),
       });
     },
@@ -734,6 +738,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         body: `${which}${href ? "" : ` To book another time, contact ${firmName}.`}`,
         cta: href ? cta("Book another time", href) : null,
         spot: "reminder",
+        hero: "consultation",
         brand: firmBrand(context),
       });
     },
@@ -760,6 +765,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         body: `${approver} approved ${minutes ? `${minutes} minutes of ` : ""}support access on one matter.${ends ? ` It ends ${ends}.` : ""} Every action is in your audit trail, and you can end it now.`,
         cta: cta("Review or end access", appLink(origin, PATHS.sheetGrants)),
         spot: "verify",
+        hero: "security",
         brand: PLATFORM,
       });
     },
@@ -784,6 +790,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         body: `We couldn’t collect ${firm(context)}’s subscription payment. Nothing is deleted. Update your card within ${days} days; after that, new matters and invitations pause until the payment goes through.`,
         cta: cta("Update billing", appLink(origin, PATHS.sheetSettings)),
         spot: "invoice",
+        hero: "billing",
         brand: PLATFORM,
       });
     },
@@ -813,6 +820,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
             : `${firm(context)}’s free trial ends in a few days. Unless you cancel before then, the card on file is charged for your plan, plus applicable taxes.`,
         cta: cta("Manage billing", appLink(origin, PATHS.sheetSettings)),
         spot: "invoice",
+        hero: "billing",
         brand: PLATFORM,
       });
     },
@@ -836,6 +844,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         body: `Your subscription has been past due${days ? ` for ${days} days` : ""}, so new matters, invitations and submission releases are paused. Clients can still sign in, upload and pay, and nothing is deleted.`,
         cta: cta("Update billing", appLink(origin, PATHS.sheetSettings)),
         spot: "invoice",
+        hero: "billing",
         brand: PLATFORM,
       });
     },
@@ -859,6 +868,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         body: `The client-file export you started is ready. The link ${hours ? `works for ${hours} hours and ` : ""}needs you to sign in.`,
         cta: cta("Download export", appLink(origin, PATHS.sheetExports)),
         spot: "sign-in-code",
+        hero: "export",
         brand: PLATFORM,
       });
     },
@@ -883,6 +893,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         body: `The export you started${started ? ` on ${started}` : ""} expires${hours ? ` in ${hours} ${hours === 1 ? "hour" : "hours"}` : " soon"}. After that you can start a new one; nothing in the file changes.`,
         cta: cta("Download export", appLink(origin, PATHS.sheetExports)),
         spot: "sign-in-code",
+        hero: "export",
         brand: PLATFORM,
       });
     },
@@ -906,6 +917,7 @@ export const EMAIL_TEMPLATES: { [K in TemplateId]: TemplateDef<EmailContexts[K]>
         body: `Someone signed in to ${firm(context)} on a new device${device ? ` (${device})` : ""}. If it wasn’t you, sign out everywhere now.`,
         cta: cta("Review sign-ins", appLink(origin, PATHS.sheetSettings)),
         spot: "sign-in-code",
+        hero: "security",
         brand: PLATFORM,
       });
     },

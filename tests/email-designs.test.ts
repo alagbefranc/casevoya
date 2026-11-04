@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { EMAIL_TEMPLATES, INVITE_WITHOUT_LINK, renderTemplate, type TemplateId } from "@/modules/email/designs/catalog";
-import { firmInitial, renderCopy, safeUrl } from "@/modules/email/designs/layout";
+import { CASEVOYA_SOCIAL_LINKS, firmInitial, renderCopy, safeUrl } from "@/modules/email/designs/layout";
 import { dateTimeIn, dayDate, longDate, shortDate } from "@/modules/email/designs/format";
 import { designFor, renderEmail } from "@/modules/email/templates";
 
@@ -19,7 +19,8 @@ function render(id: TemplateId, context = EMAIL_TEMPLATES[id].sample, origin = O
 }
 
 function hrefs(html: string): string[] {
-  return [...html.matchAll(/href="([^"]*)"/g)].map((match) => match[1].replaceAll("&amp;", "&"));
+  // The footer social row is the same on every email; these checks are about the email's own links.
+  return [...html.replace(/<!--social-->[\s\S]*?<!--\/social-->/, "").matchAll(/href="([^"]*)"/g)].map((match) => match[1].replaceAll("&amp;", "&"));
 }
 
 function imageUrls(html: string): string[] {
@@ -70,6 +71,14 @@ describe("approved email designs", () => {
     expect(email.html).not.toMatch(EXAMPLE_DATA);
     expect(email.text).not.toMatch(EXAMPLE_DATA);
     expect(email.html).not.toContain("header-firm");
+  });
+
+  it.each(IDS)("%s draws the hero illustration and all five social icons in the Figma order", (id) => {
+    const html = render(id).html;
+    expect(html).toMatch(/assets\/email\/illustrations\/[a-z]+\.png/);
+    const icons = [...html.matchAll(/social-([a-z]+)\.png"/g)].map((m) => m[1]);
+    expect(icons).toEqual(["linkedin", "x", "instagram", "facebook", "youtube"]);
+    for (const s of CASEVOYA_SOCIAL_LINKS) expect(html).toContain(`href="${s.href ?? "https://casevoya.ca/"}"`);
   });
 
   it.each(IDS)("%s links only to absolute app URLs, never #", (id) => {
