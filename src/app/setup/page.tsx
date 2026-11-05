@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import type { FirmLogo } from "@/components/port/firm-logo-upload";
-import { SetupMarkup, setupTrialBadge } from "@/components/port/markup/setup";
+import { SetupMarkup } from "@/components/port/markup/setup";
 import { PortScreen } from "@/components/port/screen";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
@@ -14,6 +14,7 @@ import {
   ownFirmLogoKey,
 } from "@/modules/firm-onboarding/firm-logo";
 import { setupSaved, type SetupSaved } from "@/modules/firm-onboarding/setup-saved";
+import { setupTrialBadge } from "@/modules/firm-onboarding/setup-trial";
 import { missingPolicies } from "@/modules/portal-policies/defaults";
 import { loadCurrentPolicies } from "@/modules/portal-policies/load";
 import { readPublicPricing } from "@/modules/subscription/pricing";
