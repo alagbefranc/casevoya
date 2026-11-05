@@ -270,65 +270,73 @@ export const CASEVOYA_SOCIAL_LINKS: ReadonlyArray<{ network: "linkedin" | "x" | 
 ];
 
 /**
- * Gmail iOS (mobile web) drops align/text-align on rows after a fragile nested footer table and
- * will separate a side-by-side logo+name pair, leaving an orphaned mark. Every footer band is a
- * full-width outer cell with text-align:center wrapping an auto-margined inner table — the usual
- * email-safe centering pattern — so the brand row, social row and "Sent by" row stay centered and
- * on one baseline.
+ * Shared footer stack for Gmail iOS: one outer centered cell, one shrink-wrapped inner table,
+ * three stacked rows (brand icon → socials → caption). No side-by-side logo+name (Gmail splits
+ * those and leaves an orphan mark). Brand icon is a single centered mark (~40px), never a
+ * left-aligned wordmark. Social icons stay.
  */
-function centerBand(padding: string, inner: string): string {
-  return `<tr><td align="center" style="padding:${padding};text-align:center">${inner}</td></tr>`;
+function stackRow(paddingTop: string, inner: string): string {
+  return `<tr><td align="center" style="padding:${paddingTop} 0 0;text-align:center">${inner}</td></tr>`;
 }
 
-function centerTable(innerRows: string): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;border-collapse:collapse"><tr>${innerRows}</tr></table>`;
+function centerTable(cells: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;border-collapse:collapse"><tr>${cells}</tr></table>`;
 }
 
-function socialRow(origin: string): string {
-  const cells = CASEVOYA_SOCIAL_LINKS.map((s) => {
-    const href = safeUrl(s.href ?? SOCIAL_FALLBACK) ?? SOCIAL_FALLBACK;
-    const icon = img(origin, `social-${s.network}.png`, `width="33" height="33" alt="${escapeHtml(s.label)}" style="display:block;border:0;height:33px;width:33px"`);
-    return `<td align="center" valign="middle" style="padding:0 6px"><a href="${escapeHtml(href)}" style="text-decoration:none;border:0;display:block;line-height:0">${icon}</a></td>`;
-  });
-  return `<!--social-->${centerBand("16px 30px 0", centerTable(cells.join("")))}<!--/social-->`;
+/** Casevoya blue vo mark for platform footers — large enough to read on Gmail iOS. */
+function platformMark(origin: string): string {
+  return img(
+    origin,
+    "mark.png",
+    'width="40" height="40" alt="Casevoya" style="display:block;margin:0 auto;border:0;height:40px;width:40px"',
+  );
 }
 
-/** The firm's mark for the footer: its logo or initial tile, and its name, on one baseline. */
+/** Firm footer brand: logo or initial tile alone (name lives in the Sent-by caption). */
 function firmMark(firmName: string, look: FirmHeaderLook): string {
   const name = escapeHtml(firmName);
   const logo = look.logoUrl ? safeUrl(look.logoUrl) : null;
   const accent = hexColour(look.accent);
   const colour = accent ?? TILE;
-  const tile = logo
-    ? `<td width="52" height="52" align="center" valign="middle" style="width:52px;height:52px;background:#ffffff;border:1px solid #e6e2db;border-radius:10px;text-align:center"><img src="${escapeHtml(logo)}" width="40" height="40" alt="${name}" style="display:block;margin:0 auto;width:40px;height:40px;object-fit:contain;border:0"></td>`
-    : `<td width="52" height="52" align="center" valign="middle" style="width:52px;height:52px;background:${colour};border-radius:10px;color:${accent ? accentInk(accent) : "#ffffff"};font-family:${SERIF};font-size:26px;font-weight:500;line-height:52px;text-align:center">${escapeHtml(firmInitial(firmName))}</td>`;
-  // Nested table keeps the coloured tile and the name in one shrink-wrapped unit Gmail cannot split.
-  const tileWrap = `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>${tile}</tr></table>`;
-  return centerTable(
-    `<td valign="middle" width="52" style="width:52px;padding:0">${tileWrap}</td>` +
-      `<td valign="middle" style="padding:0 0 0 12px;font-family:${SERIF};font-size:20px;font-weight:700;line-height:52px;color:${INK};white-space:nowrap;vertical-align:middle">${name}</td>`,
+  if (logo) {
+    return `<img src="${escapeHtml(logo)}" width="40" height="40" alt="${name}" style="display:block;margin:0 auto;width:40px;height:40px;object-fit:contain;border:0;border-radius:10px">`;
+  }
+  return (
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;border-collapse:collapse"><tr>` +
+    `<td width="40" height="40" align="center" valign="middle" style="width:40px;height:40px;background:${colour};border-radius:10px;color:${accent ? accentInk(accent) : "#ffffff"};font-family:${SERIF};font-size:20px;font-weight:500;line-height:40px;text-align:center">${escapeHtml(firmInitial(firmName))}</td>` +
+    `</tr></table>`
   );
 }
 
-/** Small Casevoya mark + "Sent by {firm} via Casevoya", vertically aligned on one baseline. */
-function sentByRow(origin: string, firmName: string, shell: ShellText): string {
-  const mark = img(origin, "via-casevoya.png", 'width="16" height="16" alt="" style="display:block;border:0;height:16px;width:16px"');
-  const label = escapeHtml(firmLine(shell, firmName));
-  const inner = centerTable(
-    `<td valign="middle" width="16" style="width:16px;padding:0;line-height:16px">${mark}</td>` +
-      `<td valign="middle" style="padding:0 0 0 8px;font-family:${SANS};font-size:12px;line-height:16px;color:${MUTED};text-align:left;vertical-align:middle">${label}</td>`,
-  );
-  return centerBand("16px 30px 0", inner);
+function socialIcons(origin: string): string {
+  const cells = CASEVOYA_SOCIAL_LINKS.map((s) => {
+    const href = safeUrl(s.href ?? SOCIAL_FALLBACK) ?? SOCIAL_FALLBACK;
+    const icon = img(origin, `social-${s.network}.png`, `width="33" height="33" alt="${escapeHtml(s.label)}" style="display:block;border:0;height:33px;width:33px"`);
+    return `<td align="center" valign="middle" style="padding:0 6px"><a href="${escapeHtml(href)}" style="text-decoration:none;border:0;display:block;line-height:0">${icon}</a></td>`;
+  });
+  return `<!--social-->${centerTable(cells.join(""))}<!--/social-->`;
+}
+
+/** Caption under socials: platform tagline, or "Sent by {firm} via Casevoya" (text only — no side-by-side icon). */
+function footerCaption(brand: Brand, shell: ShellText): string {
+  const text =
+    brand.kind === "firm"
+      ? escapeHtml(firmLine(shell, brand.firmName))
+      : escapeHtml(shell.footerPlatform);
+  return `<p style="margin:0;font-family:${SANS};font-size:12px;line-height:1.5;color:${MUTED};text-align:center">${text}</p>`;
 }
 
 function footer(origin: string, brand: Brand, shell: ShellText): string {
   const rule = `<tr><td style="padding:24px 30px 0"><div style="height:1px;line-height:1px;font-size:1px;background:${RULE}">&nbsp;</div></td></tr>`;
-  if (brand.kind === "firm") {
-    return `${rule}${centerBand("24px 30px 0", firmMark(brand.firmName, brand))}${socialRow(origin)}${sentByRow(origin, brand.firmName, shell)}`;
-  }
-  const wordmark = img(origin, "logo.png", 'width="112" height="18" alt="Casevoya" style="display:block;border:0;height:18px;width:112px"');
-  const platform = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;border-collapse:collapse"><tr><td align="center" style="font-family:${SANS};font-size:12px;line-height:1.5;color:${MUTED};text-align:center">${escapeHtml(shell.footerPlatform)}</td></tr></table>`;
-  return `${rule}${centerBand("24px 30px 0", wordmark)}${socialRow(origin)}${centerBand("16px 30px 0", platform)}`;
+  const brandIcon = brand.kind === "firm" ? firmMark(brand.firmName, brand) : platformMark(origin);
+  const stack =
+    `<tr><td align="center" style="padding:24px 30px 0;text-align:center">` +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;border-collapse:collapse">` +
+    `${stackRow("0", brandIcon)}` +
+    `${stackRow("16px", socialIcons(origin))}` +
+    `${stackRow("16px", footerCaption(brand, shell))}` +
+    `</table></td></tr>`;
+  return `${rule}${stack}`;
 }
 
 export function renderHtml(copy: EmailCopy, origin: string = DEFAULT_EMAIL_ORIGIN): string {
