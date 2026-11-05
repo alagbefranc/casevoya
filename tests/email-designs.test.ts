@@ -129,39 +129,43 @@ describe("approved email designs", () => {
     for (const link of hrefs(email.html)) expect(link.startsWith(`${ORIGIN}/`)).toBe(true);
   });
 
-  it("draws the firm mark in HTML with the firm's name; platform mail has no header image (Figma layout) and the Casevoya logo in the footer", () => {
+    it("draws the firm mark tile and Sent-by caption; platform mail uses the centered Casevoya mark (Figma footer stack)", () => {
     const firm = renderEmail({ template: "invoice", firm: "Maple & Birch Immigration", invoice_number: "INV-0007", due_on: "2026-11-06" });
-    expect(firm.html).toContain("Maple &amp; Birch Immigration</td>");
+    // Firm name is in the Sent-by caption, not beside the tile (Gmail iOS splits side-by-side marks).
+    expect(firm.html).toContain("Sent by Maple &amp; Birch Immigration via Casevoya");
     expect(firm.html).toContain(">M</td>");
     // ORG-01: each firm email says what it is about, not one line for every email.
     expect(firm.html).toContain(">Invoices</td>");
     expect(firm.html).not.toContain("Your immigration file");
-    expect(firm.html).toContain("Sent by Maple &amp; Birch Immigration via Casevoya");
     expect(firm.html).not.toContain("header-platform");
     expect(firm.html).not.toContain("header-firm");
     const platform = renderEmail({ template: "invite", kind: "staff", firm: "Maple & Birch Immigration", role: "assistant" });
     expect(platform.html).not.toContain("header-platform");
-    expect(platform.html).toContain(`${ORIGIN}/assets/email/logo.png`);
+    expect(platform.html).toContain(`${ORIGIN}/assets/email/mark.png`);
+    expect(platform.html).not.toContain(`${ORIGIN}/assets/email/logo.png`);
+    expect(platform.html).toContain("Case management for immigration consultants");
     expect(platform.text).toContain("You’ve been invited as an Assistant.");
     expect(firmInitial("  élan Conseils")).toBe("É");
     expect(firmInitial("***")).toBe("•");
   });
 
-  it("keeps the firm footer brand + social + Sent by rows as centered, valign-middle tables (Gmail iOS)", () => {
+  it("keeps the footer as one centered stack: mark → socials → caption (Gmail iOS)", () => {
     const firm = renderEmail({ template: "document_request", firm: "Casevoya Demo", due_on: "2026-11-12" });
-    // Shrink-wrapped centered tables, not inline img+text (which Gmail iOS mis-baselines).
-    expect(firm.html).toMatch(/margin:0 auto;border-collapse:collapse/);
-    expect(firm.html).toContain('valign="middle"');
-    expect(firm.html).toContain("via-casevoya.png");
+    const platform = renderEmail({ template: "billing_payment_failed", firm: "Casevoya Demo", audience: "staff", grace_days: 7 });
+    for (const email of [firm, platform]) {
+      expect(email.html).toMatch(/margin:0 auto;border-collapse:collapse/);
+      expect(email.html).toContain("<!--social-->");
+      expect(email.html).toContain("<!--/social-->");
+      expect(email.html).not.toContain("vertical-align:-3px");
+      // No left-leaning wordmark in the footer stack.
+      expect(email.html).not.toMatch(/assets\/email\/logo\.png/);
+    }
     expect(firm.html).toContain("Sent by Casevoya Demo via Casevoya");
-    // Small mark is in its own cell (display:block), not vertical-align:-3px next to text.
-    expect(firm.html).toMatch(/via-casevoya\.png"[^>]*style="display:block;border:0;height:16px;width:16px"/);
-    expect(firm.html).not.toContain("vertical-align:-3px");
-    // Default firm tile uses the Casevoya logo blue when the firm has no accent.
     expect(firm.html).toContain("background:#035CFA");
-    // Social row still present and marked for link-stripping helpers.
-    expect(firm.html).toContain("<!--social-->");
-    expect(firm.html).toContain("<!--/social-->");
+    expect(firm.html).toContain(">C</td>");
+    expect(platform.html).toMatch(/mark\.png"[^>]*width="40"[^>]*height="40"/);
+    expect(platform.html).toContain('style="display:block;margin:0 auto;border:0;height:40px;width:40px"');
+    expect(platform.html).toContain("Case management for immigration consultants · casevoya.ca");
   });
 
   it("maps every database template to its design", () => {
