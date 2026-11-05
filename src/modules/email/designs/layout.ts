@@ -172,7 +172,7 @@ export function firmInitial(firmName: string): string {
   return match ? match[0].toLocaleUpperCase("en-CA") : "•";
 }
 
-const TILE = "#0A4B93";
+const TILE = "#035CFA"; // Casevoya logo blue (same as BUTTON)
 
 function hexColour(value: string | null | undefined): string | null {
   return typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value.trim()) ? value.trim() : null;
@@ -269,38 +269,66 @@ export const CASEVOYA_SOCIAL_LINKS: ReadonlyArray<{ network: "linkedin" | "x" | 
   { network: "youtube", label: "YouTube", href: null },
 ];
 
+/**
+ * Gmail iOS (mobile web) drops align/text-align on rows after a fragile nested footer table and
+ * will separate a side-by-side logo+name pair, leaving an orphaned mark. Every footer band is a
+ * full-width outer cell with text-align:center wrapping an auto-margined inner table — the usual
+ * email-safe centering pattern — so the brand row, social row and "Sent by" row stay centered and
+ * on one baseline.
+ */
+function centerBand(padding: string, inner: string): string {
+  return `<tr><td align="center" style="padding:${padding};text-align:center">${inner}</td></tr>`;
+}
+
+function centerTable(innerRows: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;border-collapse:collapse"><tr>${innerRows}</tr></table>`;
+}
+
 function socialRow(origin: string): string {
   const cells = CASEVOYA_SOCIAL_LINKS.map((s) => {
     const href = safeUrl(s.href ?? SOCIAL_FALLBACK) ?? SOCIAL_FALLBACK;
-    return `<td style="padding:0 6px"><a href="${escapeHtml(href)}" style="text-decoration:none">${img(origin, `social-${s.network}.png`, `width="33" height="33" alt="${escapeHtml(s.label)}" style="display:block;border:0"`)}</a></td>`;
+    const icon = img(origin, `social-${s.network}.png`, `width="33" height="33" alt="${escapeHtml(s.label)}" style="display:block;border:0;height:33px;width:33px"`);
+    return `<td align="center" valign="middle" style="padding:0 6px"><a href="${escapeHtml(href)}" style="text-decoration:none;border:0;display:block;line-height:0">${icon}</a></td>`;
   });
-  return `<!--social--><tr><td align="center" style="padding:16px 30px 0"><table role="presentation" cellpadding="0" cellspacing="0" align="center"><tr>${cells.join("")}</tr></table></td></tr><!--/social-->`;
+  return `<!--social-->${centerBand("16px 30px 0", centerTable(cells.join("")))}<!--/social-->`;
 }
 
-/** The firm's mark for the footer: its logo or initial tile, and its name. */
+/** The firm's mark for the footer: its logo or initial tile, and its name, on one baseline. */
 function firmMark(firmName: string, look: FirmHeaderLook): string {
   const name = escapeHtml(firmName);
   const logo = look.logoUrl ? safeUrl(look.logoUrl) : null;
   const accent = hexColour(look.accent);
+  const colour = accent ?? TILE;
   const tile = logo
     ? `<td width="52" height="52" align="center" valign="middle" style="width:52px;height:52px;background:#ffffff;border:1px solid #e6e2db;border-radius:10px;text-align:center"><img src="${escapeHtml(logo)}" width="40" height="40" alt="${name}" style="display:block;margin:0 auto;width:40px;height:40px;object-fit:contain;border:0"></td>`
-    : `<td width="52" height="52" align="center" valign="middle" style="width:52px;height:52px;background:${accent ?? TILE};border-radius:10px;color:${accent ? accentInk(accent) : "#ffffff"};font-family:${SERIF};font-size:26px;font-weight:500;line-height:52px;text-align:center">${escapeHtml(firmInitial(firmName))}</td>`;
-  return `<table role="presentation" cellpadding="0" cellspacing="0" align="center"><tr>${tile}<td valign="middle" style="padding:0 0 0 12px;font-family:${SERIF};font-size:20px;font-weight:700;line-height:1.2;color:${INK}">${name}</td></tr></table>`;
+    : `<td width="52" height="52" align="center" valign="middle" style="width:52px;height:52px;background:${colour};border-radius:10px;color:${accent ? accentInk(accent) : "#ffffff"};font-family:${SERIF};font-size:26px;font-weight:500;line-height:52px;text-align:center">${escapeHtml(firmInitial(firmName))}</td>`;
+  // Nested table keeps the coloured tile and the name in one shrink-wrapped unit Gmail cannot split.
+  const tileWrap = `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>${tile}</tr></table>`;
+  return centerTable(
+    `<td valign="middle" width="52" style="width:52px;padding:0">${tileWrap}</td>` +
+      `<td valign="middle" style="padding:0 0 0 12px;font-family:${SERIF};font-size:20px;font-weight:700;line-height:52px;color:${INK};white-space:nowrap;vertical-align:middle">${name}</td>`,
+  );
+}
+
+/** Small Casevoya mark + "Sent by {firm} via Casevoya", vertically aligned on one baseline. */
+function sentByRow(origin: string, firmName: string, shell: ShellText): string {
+  const mark = img(origin, "via-casevoya.png", 'width="16" height="16" alt="" style="display:block;border:0;height:16px;width:16px"');
+  const label = escapeHtml(firmLine(shell, firmName));
+  const inner = centerTable(
+    `<td valign="middle" width="16" style="width:16px;padding:0;line-height:16px">${mark}</td>` +
+      `<td valign="middle" style="padding:0 0 0 8px;font-family:${SANS};font-size:12px;line-height:16px;color:${MUTED};text-align:left;vertical-align:middle">${label}</td>`,
+  );
+  return centerBand("16px 30px 0", inner);
 }
 
 function footer(origin: string, brand: Brand, shell: ShellText): string {
   const rule = `<tr><td style="padding:24px 30px 0"><div style="height:1px;line-height:1px;font-size:1px;background:${RULE}">&nbsp;</div></td></tr>`;
-  const line = `padding:16px 30px 0;font-family:${SANS};font-size:12px;line-height:1.5;color:${MUTED};text-align:center`;
   if (brand.kind === "firm") {
-    return (
-      `${rule}<tr><td align="center" style="padding:24px 30px 0">${firmMark(brand.firmName, brand)}</td></tr>${socialRow(origin)}` +
-      `<tr><td align="center" style="${line}">${img(origin, "via-casevoya.png", 'width="16" height="16" alt="" style="vertical-align:-3px;border:0"')} ${escapeHtml(firmLine(shell, brand.firmName))}</td></tr>`
-    );
+    return `${rule}${centerBand("24px 30px 0", firmMark(brand.firmName, brand))}${socialRow(origin)}${sentByRow(origin, brand.firmName, shell)}`;
   }
-  return (
-    `${rule}<tr><td align="center" style="padding:24px 30px 0">${img(origin, "logo.png", 'width="112" height="18" alt="Casevoya" style="display:block;border:0;margin:0 auto"')}</td></tr>${socialRow(origin)}` +
-    `<tr><td align="center" style="${line}">${escapeHtml(shell.footerPlatform)}</td></tr>`
-  );
+  const wordmark = img(origin, "logo.png", 'width="112" height="18" alt="Casevoya" style="display:block;border:0;height:18px;width:112px"');
+  const platform = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;border-collapse:collapse"><tr><td align="center" style="font-family:${SANS};font-size:12px;line-height:1.5;color:${MUTED};text-align:center">${escapeHtml(shell.footerPlatform)}</td></tr></table>`;
+  return `${rule}${centerBand("24px 30px 0", wordmark)}${socialRow(origin)}${centerBand("16px 30px 0", platform)}`;
 }
 
 export function renderHtml(copy: EmailCopy, origin: string = DEFAULT_EMAIL_ORIGIN): string {
