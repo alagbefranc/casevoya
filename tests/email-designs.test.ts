@@ -147,6 +147,23 @@ describe("approved email designs", () => {
     expect(firmInitial("***")).toBe("•");
   });
 
+  it("keeps the firm footer brand + social + Sent by rows as centered, valign-middle tables (Gmail iOS)", () => {
+    const firm = renderEmail({ template: "document_request", firm: "Casevoya Demo", due_on: "2026-11-12" });
+    // Shrink-wrapped centered tables, not inline img+text (which Gmail iOS mis-baselines).
+    expect(firm.html).toMatch(/margin:0 auto;border-collapse:collapse/);
+    expect(firm.html).toContain('valign="middle"');
+    expect(firm.html).toContain("via-casevoya.png");
+    expect(firm.html).toContain("Sent by Casevoya Demo via Casevoya");
+    // Small mark is in its own cell (display:block), not vertical-align:-3px next to text.
+    expect(firm.html).toMatch(/via-casevoya\.png"[^>]*style="display:block;border:0;height:16px;width:16px"/);
+    expect(firm.html).not.toContain("vertical-align:-3px");
+    // Default firm tile uses the Casevoya logo blue when the firm has no accent.
+    expect(firm.html).toContain("background:#035CFA");
+    // Social row still present and marked for link-stripping helpers.
+    expect(firm.html).toContain("<!--social-->");
+    expect(firm.html).toContain("<!--/social-->");
+  });
+
   it("maps every database template to its design", () => {
     const cases: [Record<string, unknown>, string][] = [
       [{ template: "invite", kind: "staff" }, "EM01"],
