@@ -81,6 +81,8 @@ describe("privacy notice facts", () => {
     }
     const titled = acceptNoticeDraft(complete(source).replace("Who is responsible", "Who Is Responsible"), source);
     expect("body" in titled).toBe(true);
+    const hollow = acceptNoticeDraft(complete(source).replace(source.recipients.join("; "), "We share files with IRCC."), source);
+    expect(hollow).toEqual({ error: "The draft did not cover every section." });
   });
 
   it("allows a country that is already part of the firm name", () => {

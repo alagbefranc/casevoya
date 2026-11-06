@@ -218,9 +218,27 @@ export function acceptNoticeDraft(text: string, facts: NoticeFacts): { body: str
   if (!stripped) return { error: "The draft came back empty." };
   if (stripped.length > 8000) return { error: "The draft was too long." };
   const lower = stripped.toLowerCase();
-  if (!HEADINGS.every((heading) => lower.includes(heading.toLowerCase()))) return { error: "The draft did not cover every section." };
-  if (!lower.includes(facts.firmName.toLowerCase()) || !lower.includes(facts.contactEmail.toLowerCase())) {
+  if (!sectionsCovered(stripped)) return { error: "The draft did not cover every section." };
+  if (!lower.includes(facts.firmName.toLowerCase()) || !lower.includes(facts.contactEmail.toLowerCase()) || !lower.includes("casevoya")) {
     return { error: "The draft left out the firm or the privacy contact." };
   }
+  if (facts.retention.includes("professional rules") && !lower.includes("professional rules")) return { error: "The draft left out the retention the firm chose." };
+  const years = facts.retention.match(/\b(\d+) years\b/);
+  if (years && !lower.includes(`${years[1]} years`)) return { error: "The draft left out the retention the firm chose." };
+  if (facts.enquiries.includes("90 days") && !lower.includes("90 days")) return { error: "The draft left out how long enquiries are kept." };
+  if (facts.recipients.some((item) => /government office/i.test(item)) && !lower.includes("government")) return { error: "The draft left out the recipient the firm chose." };
   return { body: stripped };
+}
+
+/** Every heading is present and has text of its own after invented sentences are removed. */
+function sectionsCovered(body: string): boolean {
+  const lower = body.toLowerCase();
+  const marks = HEADINGS.map((heading) => ({ heading, at: lower.indexOf(heading.toLowerCase()) }));
+  if (marks.some((mark) => mark.at < 0)) return false;
+  const ordered = [...marks].sort((a, b) => a.at - b.at);
+  return ordered.every((mark, index) => {
+    const start = mark.at + mark.heading.length;
+    const end = index + 1 < ordered.length ? ordered[index + 1].at : body.length;
+    return body.slice(start, end).trim().length >= 15;
+  });
 }
