@@ -15249,6 +15249,10 @@ export type Database = {
         Args: { p_code: string }
         Returns: boolean
       }
+      consume_policy_draft: {
+        Args: { p_char_count: number; p_organization_id: string }
+        Returns: Json
+      }
       consume_translation_draft: {
         Args: { p_char_count: number; p_organization_id: string }
         Returns: Json

@@ -19,10 +19,11 @@ import type { SheetStaff } from "@/modules/sheet/load";
 export async function loadSheetPortalPolicies(staff: SheetStaff) {
   const supabase = await createClient({ organizationId: staff.organizationId });
   const org = staff.organizationId;
-  const [chrome, current, firm] = await Promise.all([
+  const [chrome, current, firm, settings] = await Promise.all([
     loadSheetChrome(staff, "/sheet/settings"),
     loadCurrentPolicies(supabase, org),
     supabase.from("organizations").select("display_name, slug, privacy_contact_name, privacy_contact_email").eq("id", org).maybeSingle(),
+    supabase.from("compliance_settings").select("privacy_response_days").eq("organization_id", org).maybeSingle(),
   ]);
   const publicPages = publicPagesWarning(await loadPublicPagesState(supabase, org, current), Date.now(), staff.timezone);
   const facts = {
@@ -41,7 +42,12 @@ export async function loadSheetPortalPolicies(staff: SheetStaff) {
     canUnpublish,
     publicPages,
   };
-  const dialogs: PolicyDialogData[] = canPublish ? POLICY_KINDS.map((kind) => policyDialog(kind, current[kind], facts, org)) : [];
+  const requestDays = typeof settings.data?.privacy_response_days === "number" ? settings.data.privacy_response_days : null;
+  const notice =
+    facts.privacyContactName && facts.privacyContactEmail
+      ? { firmName: facts.firmName, contactName: facts.privacyContactName, contactEmail: facts.privacyContactEmail, requestDays }
+      : null;
+  const dialogs: PolicyDialogData[] = canPublish ? POLICY_KINDS.map((kind) => policyDialog(kind, current[kind], facts, org, notice)) : [];
   const unpublishOrg = canUnpublish && current.privacy_notice ? org : null;
   return { chrome, page, dialogs, unpublishOrg };
 }
