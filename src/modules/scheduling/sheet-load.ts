@@ -350,7 +350,8 @@ type AgreementTemplate = { id: string; name: string; version: number };
 function whereValue(kind: string, detail: string | null): string {
   if (isMeetingProvider(kind)) {
     const url = providerJoinUrl(kind, detail ?? "");
-    return url ? `${locationLabel(kind, null)} · ${url}` : `${locationLabel(kind, null)} · link not saved`;
+    const room = kind === "google_meet" ? "standing room · " : "";
+    return url ? `${locationLabel(kind, null)} · ${room}${url}` : `${locationLabel(kind, null)} · link not saved`;
   }
   return locationLabel(kind, kind === "in_person" ? detail : null);
 }

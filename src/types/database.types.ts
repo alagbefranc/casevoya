@@ -17500,9 +17500,21 @@ export type Database = {
         }
         Returns: string
       }
+      attach_booking_meeting: {
+        Args: { p_booking_id: string; p_join_url: string; p_organizer_ref: string | null; p_provider_ref: string | null }
+        Returns: undefined
+      }
       begin_booking_meeting: {
         Args: { p_booking_id: string }
         Returns: Json
+      }
+      booking_provider_state: {
+        Args: { p_booking_id: string | null; p_organization_id: string | null; p_ref: string | null; p_sha256: string | null }
+        Returns: Json
+      }
+      note_booking_meeting: {
+        Args: { p_booking_id: string; p_note: string }
+        Returns: undefined
       }
       confirm_provider_booking: {
         Args: { p_booking_id: string }

@@ -81,7 +81,8 @@ export const VO_CONNECTED_ACTIONS: Record<VoConnectedToolkit, readonly VoConnect
   calendly: [
     { slug: "CALENDLY_GET_CURRENT_USER", kind: "read", description: "Read your Calendly profile (needed for your user URI).", args: [] },
     { slug: "CALENDLY_LIST_USER_S_EVENT_TYPES", kind: "read", description: "List your Calendly event types.", args: ["user", "active", "count"] },
-    { slug: "CALENDLY_LIST_EVENTS", kind: "read", description: "List your scheduled Calendly events.", args: ["user", "min_start_time", "max_start_time", "status", "count"] },
+    { slug: "CALENDLY_LIST_EVENTS", kind: "read", description: "List your scheduled Calendly events.", args: ["user", "min_start_time", "max_start_time", "status", "count", "page_token"] },
+    { slug: "CALENDLY_LIST_SCHEDULED_EVENTS", kind: "read", description: "List your scheduled Calendly events, one page at a time.", args: ["user", "min_start_time", "max_start_time", "status", "count", "page_token"] },
     { slug: "CALENDLY_CREATE_SINGLE_USE_SCHEDULING_LINK", kind: "write", description: "Create a one-time Calendly booking link for one of your event types.", args: ["owner", "max_event_count"], fixed: { owner_type: "EventType" } },
   ],
   dropbox: [

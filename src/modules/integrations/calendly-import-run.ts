@@ -3,12 +3,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import type { Json } from "@/types/database.types";
-import { planCalendlyImport, parseCalendlyPage, parseCalendlyUser, type CalendlyEvent } from "./calendly-import";
+import { calendlyNextToken, mergeCalendlyPages, parseCalendlyPage, parseCalendlyUser, type CalendlyEvent, type CalendlyPage } from "./calendly-import";
 import { composioConfigured, executeAs } from "./composio";
 import { voConnectedAction, voConnectedArguments } from "./vo-connected-tools";
 
 const NOT_CONFIGURED = "Not connected — Composio not configured on this server.";
 const WINDOW_DAYS = 60;
+const MAX_PAGES = 20;
+const MAX_EVENTS = 2000;
 
 type ImportResult = { ok: true; imported: number; canceled: number; truncated: boolean } | { error: string };
 
@@ -20,7 +22,8 @@ function notReady(message: string | undefined): string {
 
 /**
  * Import the signed-in member's Calendly scheduled events into the firm calendar.
- * Two reads (active and canceled) and one upsert. Calendly is not changed.
+ * Pages active and canceled events until Calendly says it is finished, or until 20 pages.
+ * A short or failed fetch does not cancel events that were not returned. Calendly is not changed.
  */
 export async function importCalendlyEvents(organizationId: string): Promise<ImportResult> {
   if (!isUuid(organizationId)) return { error: "Choose a firm." };
@@ -37,29 +40,41 @@ export async function importCalendlyEvents(organizationId: string): Promise<Impo
     if (!userOut.successful) return { error: "Calendly didn’t answer. Nothing was imported." };
     const userUri = parseCalendlyUser(userOut.data);
     if (!userUri) return { error: "Calendly didn’t return your account. Nothing was imported." };
-    const list = voConnectedAction("calendly", "CALENDLY_LIST_EVENTS");
+    const list = voConnectedAction("calendly", "CALENDLY_LIST_SCHEDULED_EVENTS");
     if (!list) return { error: "Calendly import isn’t available." };
-    const pages = await Promise.all(
-      (["active", "canceled"] as const).map(async (status) => {
-        const args = voConnectedArguments(list, { user: userUri, min_start_time: from.toISOString(), max_start_time: to.toISOString(), status, count: 100 });
+    const collected: CalendlyPage[] = [];
+    let hitCap = false;
+    for (const status of ["active", "canceled"] as const) {
+      let token: string | null = null;
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const args = voConnectedArguments(list, {
+          user: userUri,
+          min_start_time: from.toISOString(),
+          max_start_time: to.toISOString(),
+          status,
+          count: 100,
+          ...(token ? { page_token: token } : {}),
+        });
         if ("error" in args) throw new Error(String(args.error));
         const out = await executeAs(membershipId, list.slug, args);
         if (!out.successful) throw new Error("list refused");
-        return parseCalendlyPage(out.data);
-      }),
-    );
-    const byUri = new Map<string, CalendlyEvent>();
-    for (const page of pages) for (const event of page.events) byUri.set(event.uri, event);
-    const events = [...byUri.values()];
-    const truncated = pages.some((page) => page.truncated) || events.length > 100;
-    const plan = planCalendlyImport({ user: { uri: userUri }, page: { collection: events.slice(0, 100) }, from, to });
-    if ("error" in plan) return { error: plan.error };
+        const parsed = parseCalendlyPage(out.data);
+        collected.push(parsed);
+        const next = calendlyNextToken(out.data);
+        if (!next) break;
+        token = next;
+        if (page === MAX_PAGES - 1) hitCap = true;
+      }
+    }
+    const merged = mergeCalendlyPages(collected, hitCap);
+    const events: CalendlyEvent[] = merged.events.slice(0, MAX_EVENTS);
+    const complete = merged.complete && merged.events.length <= MAX_EVENTS;
     const saved = await supabase.rpc("replace_calendly_import", {
       p_organization_id: organizationId,
-      p_from: plan.from,
-      p_to: plan.to,
-      p_events: (truncated ? events.slice(0, 100) : events) as unknown as Json,
-      p_complete: plan.complete && !truncated,
+      p_from: from.toISOString(),
+      p_to: to.toISOString(),
+      p_events: events as unknown as Json,
+      p_complete: complete,
     });
     if (saved.error || !saved.data || typeof saved.data !== "object") return { error: notReady(saved.error?.message) };
     const row = saved.data as { imported?: number; canceled?: number; truncated?: boolean };

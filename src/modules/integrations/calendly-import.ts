@@ -52,9 +52,25 @@ export function parseCalendlyUser(data: unknown): string | null {
   return /^https:\/\/api\.calendly\.com\/users\/[A-Za-z0-9_-]{1,80}$/.test(uri) ? uri : null;
 }
 
+const TOKEN = /^[A-Za-z0-9._~%-]{1,500}$/;
+
+/** The next page token, or null when this page is the last. */
+export function calendlyNextToken(data: unknown): string | null {
+  const pagination = record(record(data)?.pagination);
+  const direct = text(pagination?.next_page_token);
+  if (TOKEN.test(direct)) return direct;
+  const next = text(pagination?.next_page);
+  try {
+    const token = new URL(next).searchParams.get("page_token") ?? "";
+    return TOKEN.test(token) ? token : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * One list response. `truncated` is true when Calendly says there is another page: the allowlisted
- * action has no page token, so this import stops and must not treat missing events as canceled.
+ * One list response. `truncated` is true when Calendly says there is another page or this page
+ * was cut. A truncated import must not cancel events that were not fetched.
  */
 export function parseCalendlyPage(data: unknown): CalendlyPage {
   const row = record(data) ?? {};
@@ -68,10 +84,15 @@ export function parseCalendlyPage(data: unknown): CalendlyPage {
     events.push(parsed);
     if (events.length >= MAX_PAGE) break;
   }
-  const pagination = record(row.pagination);
-  const next = text(pagination?.next_page);
-  const truncated = Boolean(next) || list.length > events.length;
+  const truncated = Boolean(calendlyNextToken(data)) || list.length > events.length;
   return { events, truncated, userUri: null };
+}
+
+/** Merge pages. Complete only when every stream ended and the caller did not hit the page cap. */
+export function mergeCalendlyPages(pages: CalendlyPage[], hitCap: boolean): { events: CalendlyEvent[]; complete: boolean } {
+  const byUri = new Map<string, CalendlyEvent>();
+  for (const page of pages) for (const event of page.events) byUri.set(event.uri, event);
+  return { events: [...byUri.values()], complete: !hitCap && pages.every((page) => !page.truncated) };
 }
 
 export type CalendlyImportPlan = {

@@ -9,7 +9,7 @@ import { parseAvailability, slotsFromAvailability } from "./availability";
 import { shortWhen } from "./format";
 import { possibleMatchError } from "./sheet-present";
 import { isTimeZone } from "./slots";
-import { attachProviderMeeting } from "@/modules/integrations/meeting-link-run";
+import { alignProviderCancel, alignProviderReschedule, attachProviderMeeting } from "@/modules/integrations/meeting-link-run";
 import { composioConfigured } from "@/modules/integrations/composio";
 import { isMeetingProvider } from "@/modules/integrations/meeting-links";
 import { closeRoomForBooking } from "@/modules/video/service";
@@ -253,6 +253,8 @@ export async function cancelBooking(input: { organizationId: string; bookingId: 
   if (!isUuid(input.bookingId)) return { error: "Reload and try again." };
   const supabase = await session(input.organizationId);
   if (!supabase) return { error: "Sign in first." };
+  const aligned = await alignProviderCancel({ bookingId: input.bookingId, organizationId: input.organizationId, ref: null, sha256: null });
+  if ("error" in aligned) return { error: aligned.error };
   const { error } = await supabase.rpc("staff_cancel_booking", {
     p_org: input.organizationId,
     p_booking_id: input.bookingId,
@@ -270,6 +272,8 @@ export async function rescheduleBooking(input: { organizationId: string; booking
   if (!isUuid(input.bookingId) || !Number.isFinite(Date.parse(input.start))) return { error: "Choose a new time." };
   const supabase = await session(input.organizationId);
   if (!supabase) return { error: "Sign in first." };
+  const aligned = await alignProviderReschedule({ bookingId: input.bookingId, organizationId: input.organizationId, ref: null, sha256: null }, new Date(input.start).toISOString());
+  if ("error" in aligned) return { error: aligned.error };
   const { error } = await supabase.rpc("staff_reschedule_booking", {
     p_org: input.organizationId,
     p_booking_id: input.bookingId,

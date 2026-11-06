@@ -127,9 +127,9 @@ describe("Google Meet booking links", () => {
         const result = (await db.query<{ result: unknown }>(`select public.begin_booking_meeting($1) as result`, [id])).rows[0].result;
         return parseBegin(result);
       },
-      async store(id: string, joinUrl: string) {
+      async store(id: string, joinUrl: string, meta?: { providerRef: string | null; organizerRef: string | null }) {
         await asServiceRole(db);
-        await db.query(`select public.store_booking_meeting($1, $2)`, [id, joinUrl]);
+        await db.query(`select public.attach_booking_meeting($1, $2, $3, $4)`, [id, joinUrl, meta?.providerRef ?? null, meta?.organizerRef ?? null]);
       },
       async confirm(id: string) {
         await asServiceRole(db);
@@ -142,7 +142,7 @@ describe("Google Meet booking links", () => {
       },
       async create(input: { hostMembershipId: string; slug: string }) {
         calls.push({ host: input.hostMembershipId, slug: input.slug });
-        return { meetingUri: MEET };
+        return { meetingUri: MEET, name: "spaces/sampleSpace1" };
       },
     };
     const first = await fulfillProviderMeeting(row.id, deps);

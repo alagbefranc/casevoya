@@ -5,6 +5,7 @@
  * cancellation, each proved by the link's token (hashed here; the database compares hashes and
  * applies the booking type's rules). No sign-in.
  */
+import { alignProviderCancel, alignProviderReschedule } from "@/modules/integrations/meeting-link-run";
 import { createClient } from "@/lib/supabase/server";
 import { closeRoomForBooking } from "@/modules/video/service";
 import { parseAvailability, slotsFromAvailability } from "./availability";
@@ -44,6 +45,8 @@ export async function manageReschedule(input: { ref: string; token: string; star
   const start = Date.parse(input.start);
   if (!Number.isFinite(start) || start % 60_000 !== 0) return { error: "Choose a time." };
   if (!isTimeZone(input.timeZone)) return { error: "Choose a time zone." };
+  const aligned = await alignProviderReschedule({ bookingId: null, organizationId: null, ref: input.ref, sha256: hash }, new Date(start).toISOString());
+  if ("error" in aligned) return { error: aligned.error };
   const supabase = await createClient();
   const { error } = await supabase.rpc("booking_manage_reschedule", {
     p_ref: input.ref,
@@ -60,6 +63,8 @@ export async function manageCancel(input: { ref: string; token: string; reason: 
   if (!hash) return { error: manageError("access denied") };
   const reason = (input.reason ?? "").trim();
   if (reason.length < 3) return { error: manageError("say why") };
+  const aligned = await alignProviderCancel({ bookingId: input.bookingId ?? null, organizationId: null, ref: input.ref, sha256: hash });
+  if ("error" in aligned) return { error: aligned.error };
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("booking_manage_cancel", {
     p_ref: input.ref,
