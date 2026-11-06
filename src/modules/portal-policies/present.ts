@@ -34,10 +34,16 @@ export function policyCards(current: CurrentPolicies, timeZone: string): PolicyC
 }
 
 /** The publish dialog starts from the published text (next version label), or from the starting draft. */
-export function policyDialog(kind: PolicyKind, current: CurrentPolicy | null, firm: FirmFacts, organizationId: string): PolicyDialogData {
-  if (current) {
-    return { kind, organizationId, versionLabel: nextVersionLabel(current.versionLabel), title: current.title, body: current.body, draft: false };
-  }
-  const draft = defaultPolicy(kind, firm);
-  return { kind, organizationId, versionLabel: nextVersionLabel(null), title: draft.title, body: draft.body, draft: true };
+export function policyDialog(
+  kind: PolicyKind,
+  current: CurrentPolicy | null,
+  firm: FirmFacts,
+  organizationId: string,
+  notice?: PolicyDialogData["notice"],
+): PolicyDialogData {
+  const base =
+    current
+      ? { kind, organizationId, versionLabel: nextVersionLabel(current.versionLabel), title: current.title, body: current.body, draft: false as const }
+      : { kind, organizationId, versionLabel: nextVersionLabel(null), title: defaultPolicy(kind, firm).title, body: defaultPolicy(kind, firm).body, draft: true as const };
+  return kind === "privacy_notice" ? { ...base, notice: notice ?? null } : base;
 }

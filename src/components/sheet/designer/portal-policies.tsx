@@ -59,6 +59,11 @@ export type PolicyDialogData = {
   body: string;
   /** True when the text is the starting draft rather than the published version. */
   draft: boolean;
+  /**
+   * Privacy notice only. Null when the firm has no privacy contact: the draft button is not offered.
+   * requestDays is the saved privacy-request target, or null when the firm has not set one.
+   */
+  notice?: { firmName: string; contactName: string; contactEmail: string; requestDays: number | null } | null;
 };
 
 function i(n: number) {
@@ -216,6 +221,89 @@ export function SheetPortalPolicies({ data }: { data: PortalPoliciesData }) {
   );
 }
 
+/** Questions the owner answers before a machine draft. Nothing here is published. */
+function PrivacyDraftPanel({ data }: { data: PolicyDialogData }) {
+  const known = data.notice;
+  return (
+    <fieldset className={"fld"} style={{ border: "1px solid var(--line)", borderRadius: "12px", padding: "12px" }}>
+      <legend>{"Draft with AI"}</legend>
+      {known ? (
+        <>
+          <p className={"hint"}>
+            {`Uses ${known.firmName}, ${known.contactName}, ${known.contactEmail}. Casevoya provides the case file, booking page and client portal, and staff use two-step sign-in. No storage country is on file, so the draft will not name one. ${known.requestDays ? `A privacy request’s saved target is ${known.requestDays} days.` : "No number of days is saved for answering a privacy request."} This is not legal advice. Nothing is published until you press Publish.`}
+          </p>
+          <div className={"fld"}>
+            <span>{"Client information you collect"}</span>
+            {(
+              [
+                ["identity", "Name, contact details and identity documents"],
+                ["immigration", "Immigration history and file documents"],
+                ["family", "Family members named on a file"],
+                ["fees", "Fee and payment details"],
+              ] as const
+            ).map(([value, label]) => (
+              <label key={value} className={"check"}>
+                <input type={"checkbox"} name={"ppInfo"} value={value} />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"ppOther"}>{"Any other purpose"}</label>
+            <input className={"inp"} id={"ppOther"} type={"text"} maxLength={180} placeholder={"Leave blank if there is none"} />
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"ppShare"}>{"Other recipients"}</label>
+            <select className={"sel"} id={"ppShare"} defaultValue={""}>
+              <option value={""}>{"Choose"}</option>
+              <option value={"casevoya_only"}>{"Name only Casevoya"}</option>
+              <option value={"government_when_asked"}>{"Also a government office, only when a client asks us to deal with it"}</option>
+            </select>
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"ppCopies"}>{"Copies outside Casevoya"}</label>
+            <select className={"sel"} id={"ppCopies"} defaultValue={""}>
+              <option value={""}>{"Choose"}</option>
+              <option value={"none"}>{"Don’t describe any"}</option>
+              <option value={"office"}>{"We also keep copies in our office"}</option>
+            </select>
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"ppKeep"}>{"Closed client files"}</label>
+            <select className={"sel"} id={"ppKeep"} defaultValue={""}>
+              <option value={""}>{"Choose"}</option>
+              <option value={"professional_rules"}>{"As long as our professional rules require"}</option>
+              <option value={"2"}>{"2 years"}</option>
+              <option value={"6"}>{"6 years"}</option>
+              <option value={"10"}>{"10 years"}</option>
+            </select>
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"ppEnq"}>{"Enquiries that do not become clients"}</label>
+            <select className={"sel"} id={"ppEnq"} defaultValue={""}>
+              <option value={""}>{"Choose"}</option>
+              <option value={"same"}>{"The same period"}</option>
+              <option value={"90_days"}>{"90 days"}</option>
+            </select>
+          </div>
+          <div className={"fld"}>
+            <label htmlFor={"ppComplaint"}>{"If someone is not satisfied"}</label>
+            <input className={"inp"} id={"ppComplaint"} type={"text"} maxLength={120} placeholder={"Leave blank to name only the privacy contact"} />
+          </div>
+          <button className={"btn sm"} type={"button"} data-privacy-draft={"1"} data-org={data.organizationId} data-start={data.body}>
+            {"Write a draft"}
+          </button>
+          <p className={"hint"} id={"pPStatus"}>
+            {"The draft replaces the text below only after you confirm, when you have already edited it."}
+          </p>
+        </>
+      ) : (
+        <p className={"hint"}>{"Set a privacy contact name and email under Settings > Firm before a draft can be written."}</p>
+      )}
+    </fieldset>
+  );
+}
+
 /** One publish dialog per kind. The text starts from the published version, or from the draft. */
 export function PortalPolicyDialog({ data }: { data: PolicyDialogData }) {
   const { id } = POLICY_DIALOG[data.kind];
@@ -247,6 +335,7 @@ export function PortalPolicyDialog({ data }: { data: PolicyDialogData }) {
           <label htmlFor={`${k}N`}>{"Title"}</label>
           <input className={"inp"} id={`${k}N`} type={"text"} defaultValue={data.title} maxLength={200} />
         </div>
+        {data.kind === "privacy_notice" ? <PrivacyDraftPanel data={data} /> : null}
         <div className={"fld"}>
           <label htmlFor={`${k}B`}>{"Text clients read"}</label>
           <textarea className={"ta"} id={`${k}B`} rows={16} defaultValue={data.body} maxLength={POLICY_BODY_MAX} aria-describedby={`${k}B-h`}></textarea>

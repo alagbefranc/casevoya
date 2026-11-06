@@ -136,7 +136,7 @@ import { runExportAct } from "./export-acts";
 import { runMigrationAct, syncMigrationCheck } from "./migration-acts";
 import { inviteFromEdit, openPersonEdit, runPersonEdit } from "./person-edit-act";
 import { openPortalInvite, reopenPortalInvite, runPortalInvite } from "./portal-invite-act";
-import { policyDialogId, restorePolicyDraft, runPublishPolicy, runUnpublishPrivacy } from "./portal-policy-act";
+import { policyDialogId, restorePolicyDraft, runPrivacyDraft, runPublishPolicy, runUnpublishPrivacy } from "./portal-policy-act";
 import { POLICY_KINDS, policyKindForDialog } from "@/modules/portal-policies/defaults";
 import { restoreStaffInvite, runStaffInvite, runStaffResend, runStaffRevoke } from "./staff-invite-act";
 import { openGrantRevoke, reopenGrantDialog, reopenSupport, runGrantCreate, runGrantRevoke, runSupportAct, runSupportDecline } from "./grants-acts";
@@ -773,6 +773,14 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
         if (send.getAttribute("aria-busy") === "true") return;
         send.setAttribute("aria-busy", "true");
         void runPortalInvite(send, router).finally(() => send.removeAttribute("aria-busy"));
+        return;
+      }
+      const privacyDraft = target.closest<HTMLElement>("[data-privacy-draft][data-org]");
+      if (privacyDraft && root.contains(privacyDraft)) {
+        event.preventDefault();
+        if (privacyDraft.getAttribute("aria-busy") === "true") return;
+        privacyDraft.setAttribute("aria-busy", "true");
+        void runPrivacyDraft(privacyDraft).finally(() => privacyDraft.removeAttribute("aria-busy"));
         return;
       }
       // Settings > Client portal: Publish saves a new version of the terms or privacy notice.

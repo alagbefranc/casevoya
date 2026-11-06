@@ -120,6 +120,23 @@ async function uploadedVersion(ctx: Awaited<ReturnType<typeof firm>>) {
   return { versionId, expected: row.rows[0].version };
 }
 
+describe("privacy notice draft quota", () => {
+  it("lets an owner draft, refuses another firm, and shares the hourly limit", async () => {
+    const ctx = await firm();
+    await asUser(db, { userId: ctx.owner, aal: "aal2", orgId: ctx.orgId });
+    const ok = await db.query<{ result: { ok: boolean } }>(`select public.consume_policy_draft($1, 400) as result`, [ctx.orgId]);
+    expect(ok.rows[0].result.ok).toBe(true);
+    await asUser(db, { userId: ctx.outsider, aal: "aal2", orgId: ctx.otherOrg });
+    await expectDbError(() => db.query(`select public.consume_policy_draft($1, 40)`, [ctx.orgId]), /staff access denied/);
+    await asUser(db, { userId: ctx.finance, aal: "aal2", orgId: ctx.orgId });
+    await expectDbError(() => db.query(`select public.consume_policy_draft($1, 40)`, [ctx.orgId]), /staff access denied/);
+    await asUser(db, { userId: ctx.owner, aal: "aal2", orgId: ctx.orgId });
+    for (let i = 1; i < 20; i += 1) await db.query(`select public.consume_policy_draft($1, 20)`, [ctx.orgId]);
+    const limited = await db.query<{ result: { ok: boolean; error: string } }>(`select public.consume_policy_draft($1, 20) as result`, [ctx.orgId]);
+    expect(limited.rows[0].result).toEqual({ ok: false, error: "rate_limited" });
+  });
+});
+
 describe("Draft in French quota", () => {
   it("lets staff with MFA draft, refuses everyone else, and rate-limits per staff member", async () => {
     const ctx = await firm();

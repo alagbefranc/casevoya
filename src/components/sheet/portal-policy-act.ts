@@ -3,6 +3,8 @@
 import { goStepUp } from "@/lib/auth/step-up-resume";
 import { toast2 } from "@/components/port/kit";
 import { publishPortalPolicy, unpublishPrivacyNotice } from "@/modules/portal-invitations/actions";
+import { draftPrivacyNotice } from "@/modules/portal-policies/notice-actions";
+import type { ClientInfo, CopiesChoice, EnquiryChoice, RetentionChoice, SharingChoice } from "@/modules/portal-policies/notice-facts";
 import { stepUpHref } from "@/lib/auth/mfa-step";
 import { isPolicyKind, POLICY_DIALOG, POLICY_NAME, policyStepUpLocation, readPolicyDraft, type PolicyKind } from "@/modules/portal-policies/defaults";
 import { needsStepUp, withoutDialog } from "@/modules/sheet/matter-wire";
@@ -113,4 +115,44 @@ export function restorePolicyDraft(dialog: ParentNode, kind: PolicyKind) {
 
 export function policyDialogId(kind: PolicyKind): string {
   return POLICY_DIALOG[kind].id;
+}
+
+function valueOf(dialog: ParentNode, id: string): string {
+  return field(dialog, id)?.value ?? "";
+}
+
+/**
+ * Asks for a machine draft and, after a confirm when the box was edited, puts it in the text box.
+ * A failure or a cancelled confirm leaves the box as it was. Publishing is a separate button.
+ */
+export async function runPrivacyDraft(button: HTMLElement) {
+  const dialog = button.closest("dialog");
+  const status = dialog?.querySelector<HTMLElement>("#pPStatus");
+  const body = dialog ? field(dialog, "pPB") : null;
+  if (!dialog || !body) return;
+  const checked = [...dialog.querySelectorAll<HTMLInputElement>('input[name="ppInfo"]:checked')].map((box) => box.value);
+  const result = await draftPrivacyNotice({
+    organizationId: button.dataset.org ?? "",
+    answers: {
+      clientInfo: checked as ClientInfo[],
+      otherPurpose: valueOf(dialog, "ppOther"),
+      sharing: valueOf(dialog, "ppShare") as SharingChoice,
+      copies: valueOf(dialog, "ppCopies") as CopiesChoice,
+      retention: valueOf(dialog, "ppKeep") as RetentionChoice,
+      enquiries: valueOf(dialog, "ppEnq") as EnquiryChoice,
+      complaintName: valueOf(dialog, "ppComplaint"),
+    },
+  });
+  if ("error" in result) {
+    if (status) status.textContent = result.error;
+    toast2(result.error, { kind: "warn" });
+    return;
+  }
+  const start = button.dataset.start ?? "";
+  if (body.value !== start && !window.confirm("Replace the text in the box with this draft? Cancel keeps what you have typed.")) {
+    if (status) status.textContent = "The draft was not applied. Your text is unchanged.";
+    return;
+  }
+  body.value = result.body;
+  if (status) status.textContent = "Machine draft. Read it and edit it. Nothing is published until you press Publish. This is not legal advice.";
 }

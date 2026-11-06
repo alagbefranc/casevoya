@@ -11,7 +11,12 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The full vitest suite finished in 8m37s on a fast runner (job 12m21s, run 42245774750).
+    # On a slower runner the same files averaged 8.0s instead of 3.4s and only 251 of 420
+    # files had finished when the 15-minute job was cancelled (run 42248415329). Tests were
+    # still passing; none was stuck. 30 minutes covers that measured rate plus lint, typecheck
+    # and the production build.
+    timeout-minutes: 30
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
