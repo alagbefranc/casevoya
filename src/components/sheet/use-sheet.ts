@@ -167,6 +167,7 @@ import {
   runWaConnect,
   runWaDisconnect,
 } from "./settings-integrations-acts";
+import { runCalendlyImport } from "./calendly-acts";
 import { reopenFirmDialog, runFirmSave } from "./settings-firm-acts";
 import { bindOffboardHold, mountMember, mountOffboard, reopenStaffAdmin, runContinuitySave, runMemberAct } from "./settings-staff-admin-acts";
 import { prepareTransferDialog, runFirmTransferAct } from "./firm-transfer-acts";
@@ -1302,6 +1303,13 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
               ? () => runVoUseful(vo, router)
               : () => runVoAsk(vo);
         busyRun(vo, run);
+        return;
+      }
+      const calendly = target.closest<HTMLElement>("[data-calendly-import]");
+      if (calendly && root.contains(calendly)) {
+        event.preventDefault();
+        if (calendly.hasAttribute("disabled")) return;
+        busyRun(calendly, () => runCalendlyImport(calendly, router));
         return;
       }
       // Settings > Integrations and Notifications: connected accounts, connections, busy times,

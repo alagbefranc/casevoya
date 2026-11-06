@@ -9,6 +9,7 @@
 import { z } from "zod";
 import { ipKey } from "@/lib/security/client-address";
 import { parseAvailability, slotsFromAvailability } from "./availability";
+import { isMeetingProvider, providerJoinUrl } from "@/modules/integrations/meeting-links";
 import { locationLabel } from "./format";
 import { buildIcs } from "./ics";
 import { encodeStarts, isTimeZone } from "./slots";
@@ -60,6 +61,11 @@ export type PublicDeps = {
   hold: (args: HoldArgs) => Promise<unknown>;
   /** The booking's consultation agreement as its private link shows it (booking_agreement_for_signing). */
   agreement?: (publicRef: string) => Promise<unknown>;
+  /**
+   * Google Meet / Teams: the hold is not confirmed until this stores the host's join link.
+   * Absent, a provider booking is refused rather than returned without a link.
+   */
+  ensureMeeting?: (summary: BookingSummary) => Promise<{ summary: BookingSummary } | { error: string }>;
   now: () => number;
 };
 
@@ -228,8 +234,19 @@ export function parseSummary(raw: unknown): BookingSummary | null {
   };
 }
 
+function icsPlace(summary: BookingSummary): { location: string; url: string | null } {
+  if (isMeetingProvider(summary.locationKind)) {
+    return { location: locationLabel(summary.locationKind, null), url: providerJoinUrl(summary.locationKind, summary.locationDetail ?? "") };
+  }
+  if (summary.locationKind === "meeting_link" && summary.locationDetail && /^https:\/\/\S+$/.test(summary.locationDetail)) {
+    return { location: summary.locationDetail, url: summary.locationDetail };
+  }
+  return { location: locationLabel(summary.locationKind, summary.locationDetail), url: null };
+}
+
 /** The confirmation's calendar file. The same UID is used for every later update. */
 export function summaryIcs(summary: BookingSummary, stampedAt: number): string {
+  const place = icsPlace(summary);
   return buildIcs({
     publicRef: summary.publicRef,
     sequence: summary.icsSequence,
@@ -237,8 +254,8 @@ export function summaryIcs(summary: BookingSummary, stampedAt: number): string {
     endsAt: summary.endsAt,
     title: summary.title,
     firmName: summary.firmName,
-    location: summary.locationKind === "meeting_link" ? summary.locationDetail : locationLabel(summary.locationKind, summary.locationDetail),
-    url: summary.locationKind === "meeting_link" ? summary.locationDetail : null,
+    location: place.location,
+    url: place.url,
     cancelled: summary.status === "cancelled",
     stampedAt,
   });
@@ -286,8 +303,21 @@ export async function postPublicHold(deps: PublicDeps, firm: string, event: stri
   }
   const refusal = raw && typeof raw === "object" ? (raw as Record<string, unknown>).error : undefined;
   if (typeof refusal === "string") return HOLD_ERRORS[refusal] ?? { status: 400, body: { error: "refused", message: "The booking couldn’t be made." } };
-  const summary = parseSummary(raw);
+  let summary = parseSummary(raw);
   if (!summary) return { status: 502, body: { error: "unavailable", message: "The booking couldn’t be saved. Try again." } };
+  if (isMeetingProvider(summary.locationKind) && summary.status !== "confirmed") {
+    if (!deps.ensureMeeting) {
+      return { status: 502, body: { error: "meeting_unavailable", message: "The meeting link couldn’t be created. Nothing was confirmed." } };
+    }
+    const ensured = await deps.ensureMeeting(summary);
+    if ("error" in ensured) {
+      return { status: 502, body: { error: "meeting_unavailable", message: ensured.error } };
+    }
+    summary = ensured.summary;
+  }
+  if (isMeetingProvider(summary.locationKind) && (summary.status !== "confirmed" || !providerJoinUrl(summary.locationKind, summary.locationDetail ?? ""))) {
+    return { status: 502, body: { error: "meeting_unavailable", message: "The meeting link wasn’t saved, so the booking was not confirmed." } };
+  }
   // Never report a booking as confirmed unless the database says it is (REPORT §10.7).
   const confirmed = summary.status === "confirmed";
   return {

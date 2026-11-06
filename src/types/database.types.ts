@@ -17500,6 +17500,36 @@ export type Database = {
         }
         Returns: string
       }
+      begin_booking_meeting: {
+        Args: { p_booking_id: string }
+        Returns: Json
+      }
+      confirm_provider_booking: {
+        Args: { p_booking_id: string }
+        Returns: Json
+      }
+      release_provider_booking: {
+        Args: { p_booking_id: string }
+        Returns: undefined
+      }
+      replace_calendly_import: {
+        Args: {
+          p_complete: boolean
+          p_events: Json
+          p_from: string
+          p_organization_id: string
+          p_to: string
+        }
+        Returns: Json
+      }
+      sheet_calendar_providers: {
+        Args: { p_from: string; p_organization_id: string; p_to: string }
+        Returns: Json
+      }
+      store_booking_meeting: {
+        Args: { p_booking_id: string; p_join_url: string }
+        Returns: undefined
+      }
       save_booking_event_type: {
         Args: {
           p_buffer_after_min: number
@@ -18450,7 +18480,7 @@ export type Database = {
       answer_date_kind: "exact" | "year_month" | "year"
       answer_presence: "provided" | "unknown" | "not_applicable" | "approximate"
       booking_actor: "client" | "staff" | "system"
-      booking_location_kind: "video" | "phone" | "in_person" | "meeting_link"
+      booking_location_kind: "video" | "phone" | "in_person" | "meeting_link" | "google_meet" | "microsoft_teams"
       booking_status:
         | "held"
         | "pending_payment"
@@ -19012,7 +19042,7 @@ export const Constants = {
       whatsapp_delivery_status: ["sending", "sent", "delivered", "read", "failed", "skipped"],
       whatsapp_notice_channel: ["email", "whatsapp", "both"],
       booking_actor: ["client", "staff", "system"],
-      booking_location_kind: ["video", "phone", "in_person", "meeting_link"],
+      booking_location_kind: ["video", "phone", "in_person", "meeting_link", "google_meet", "microsoft_teams"],
       booking_status: ["held", "pending_payment", "confirmed", "cancelled", "expired", "no_show", "completed"],
       invoice_status: ["draft", "issued", "partially_paid", "paid", "voided", "credited", "refunded"],
       invoice_payment_status: ["requires_payment", "processing", "succeeded", "failed", "canceled"],

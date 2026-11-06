@@ -62,7 +62,7 @@ export function clock(ms: number, tz: string): string {
   return parts(ms, tz).local.time;
 }
 
-export type LocationKind = "video" | "phone" | "in_person" | "meeting_link";
+export type LocationKind = "video" | "phone" | "in_person" | "meeting_link" | "google_meet" | "microsoft_teams";
 
 export function locationLabel(kind: string, detail?: string | null): string {
   switch (kind) {
@@ -72,6 +72,10 @@ export function locationLabel(kind: string, detail?: string | null): string {
       return detail ? `In person, ${detail}` : "In person";
     case "meeting_link":
       return "Online meeting (link from the firm)";
+    case "google_meet":
+      return "Google Meet";
+    case "microsoft_teams":
+      return "Microsoft Teams";
     default:
       return "Video call";
   }
@@ -86,6 +90,10 @@ export function locationShort(kind: string): string {
       return "office";
     case "meeting_link":
       return "meeting link";
+    case "google_meet":
+      return "Google Meet";
+    case "microsoft_teams":
+      return "Teams";
     default:
       return "video (link to follow)";
   }
