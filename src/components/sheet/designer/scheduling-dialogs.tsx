@@ -68,7 +68,7 @@ export function AvailabilityDialog({ organizationId, zones }: { organizationId: 
   );
 }
 
-export type HostOption = { membershipId: string; name: string };
+export type HostOption = { membershipId: string; name: string; meet?: boolean; teams?: boolean };
 
 /** A booking type (firm owner, with a recent step-up). Free consultations only in this release. */
 /**
@@ -95,7 +95,7 @@ export function BookingTypeDialog({
           {hint}
         </small>
       ) : null}
-      <select className={"sel"} id={id}>
+      <select className={"sel"} id={id} aria-describedby={hint ? `${id}-h` : undefined}>
         {options.map(([value, text]) => (
           <option key={value} value={value}>
             {text}
@@ -142,7 +142,19 @@ export function BookingTypeDialog({
           <label htmlFor={"etC"}>{"Daily limit per person (optional)"}</label>
           <input className={"inp"} id={"etC"} type={"number"} min={1} max={48} step={1} />
         </div>
-        {select("etK", "How you meet", [["video", "Video call in Casevoya"], ["phone", "Phone"], ["in_person", "In person"], ["meeting_link", "Meeting link"]])}
+        {select(
+          "etK",
+          "How you meet",
+          [
+            ["video", "Video call in Casevoya"],
+            ["phone", "Phone"],
+            ["in_person", "In person"],
+            ["meeting_link", "Meeting link"],
+            ["google_meet", "Google Meet"],
+            ["microsoft_teams", "Microsoft Teams"],
+          ],
+          "Google Meet and Teams can be chosen when every selected host has that account connected in Settings. The join link is created when someone books.",
+        )}
         <div className={"fld"}>
           <label htmlFor={"etX"}>{"Address or meeting link"}</label>
           <small className={"hint"} id={"etX-h"}>
@@ -155,7 +167,7 @@ export function BookingTypeDialog({
           {hosts.length === 0 ? <small className={"hint"}>{"No staff can host yet."}</small> : null}
           {hosts.map((host) => (
             <label key={host.membershipId} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <input type={"checkbox"} name={"etH"} value={host.membershipId} />
+              <input type={"checkbox"} name={"etH"} value={host.membershipId} data-meet={host.meet ? "1" : "0"} data-teams={host.teams ? "1" : "0"} />
               {host.name}
             </label>
           ))}

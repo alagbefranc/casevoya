@@ -15,7 +15,7 @@ import { MonthCalendar, type MonthCal } from "./consultations";
 
 export type CalendarTab = "week" | "deadlines";
 
-export type BlockKind = "consultation" | "internal" | "tentative" | "deadline" | "cancelled";
+export type BlockKind = "consultation" | "internal" | "tentative" | "deadline" | "cancelled" | "calendly";
 
 const BLOCK_STYLE: Record<BlockKind, { background: string; border: string }> = {
   consultation: { background: "var(--tint)", border: "3px solid var(--blue)" },
@@ -23,6 +23,7 @@ const BLOCK_STYLE: Record<BlockKind, { background: string; border: string }> = {
   tentative: { background: "#fdf3e1", border: "3px solid #b86e00" },
   deadline: { background: "#fdecea", border: "3px solid #c4372c" },
   cancelled: { background: "#efedea", border: "3px solid #8c8781" },
+  calendly: { background: "#eef6f4", border: "3px solid #1f7a63" },
 };
 
 export type WeekBlock = {
@@ -46,12 +47,22 @@ export type WeekGrid = {
   live?: boolean;
 };
 
+/** Live meeting-link and Calendly state. Absent keeps the Designer's "Planned" rows. */
+export type CalendarProviders = {
+  /** unknown: the connection list could not be read, so the row is neither Ready nor Not connected. */
+  meet: "ready" | "off" | "unknown";
+  teams: "ready" | "off" | "unknown";
+  /** off: this person cannot import. unknown: the list could not be read. Otherwise the last import. */
+  calendly: "off" | "unknown" | { syncedAt: string | null; count: number; truncated: boolean; error: string | null; canImport: boolean };
+  organizationId: string;
+};
+
 /** live: one "Connected calendars" heading (the capture repeats it), and deadline cards open their matter. */
 export type CalendarRbar = {
   calendar: MonthCal;
   deadlines: { date: string; title: string; who: string; chip: { tone: string; label: string }; href?: string }[];
   calendars: { name: string; tool: string; logo: string | null; chip: { tone: string; label: string } }[];
-  live?: { emptyTitle: string; emptyCopy: string } | null;
+  live?: { emptyTitle: string; emptyCopy: string; providers?: CalendarProviders | null } | null;
 };
 
 export type CalendarData = {
@@ -252,6 +263,51 @@ export function SheetCalendar({ data }: { data: CalendarData }) {
   );
 }
 
+function ProviderBadge({ label }: { label: string }) {
+  const on = label === "Ready";
+  return (
+    <span className={"r"}>
+      <span className={on ? "bd ok" : "bd gr"}>
+        <i></i>
+        {label}
+      </span>
+    </span>
+  );
+}
+
+function ProviderLinks({ providers }: { providers: CalendarProviders }) {
+  const calendly = providers.calendly;
+  const calendlyLabel =
+    calendly === "off" ? "Not connected" : calendly === "unknown" ? "Couldn’t check" : calendly.syncedAt ? `Imported ${calendly.count}` : calendly.error ? "Import failed" : "Not imported yet";
+  return (
+    <>
+      <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <img src={"/assets/logos/integrations/googlemeet-color.png"} alt={""} width={20} height={20} />
+        {"Google Meet"}
+        <ProviderBadge label={providers.meet === "ready" ? "Ready" : providers.meet === "unknown" ? "Couldn’t check" : "Not connected"} />
+      </div>
+      <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <img src={"/assets/logos/integrations/microsoftteams-color.svg"} alt={""} width={20} height={20} />
+        {"Microsoft Teams"}
+        <ProviderBadge label={providers.teams === "ready" ? "Ready" : providers.teams === "unknown" ? "Couldn’t check" : "Not connected"} />
+      </div>
+      <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <img src={"/assets/logos/integrations/calendly.svg"} alt={""} width={20} height={20} />
+        <span>
+          {"Calendly import"}
+          {calendly !== "off" && calendly !== "unknown" && calendly.truncated ? <small style={{ display: "block", color: "var(--t2)" }}>{"Stopped before every event was fetched"}</small> : null}
+        </span>
+        <ProviderBadge label={calendlyLabel} />
+      </div>
+      {calendly !== "off" && calendly !== "unknown" && calendly.canImport ? (
+        <button className={"btn sm"} type={"button"} data-calendly-import={"1"} data-org={providers.organizationId}>
+          {calendly.syncedAt ? "Import again" : "Import Calendly"}
+        </button>
+      ) : null}
+    </>
+  );
+}
+
 export function CalendarRbarView({ data }: { data: CalendarRbar }) {
   return (
     <aside id={"rbar"} aria-label={"Details"}>
@@ -318,7 +374,7 @@ export function CalendarRbarView({ data }: { data: CalendarRbar }) {
       </div>
       <h4 style={{ marginTop: "18px" }}>{"Meeting links"}</h4>
       <div className={"rank"} style={{ fontSize: "13.5px" }}>
-        {/* live: Casevoya's own video calls are built in (/call/<ref>); the others are still planned. */}
+        {/* live: Casevoya's own video calls are built in (/call/<ref>). Meet, Teams and Calendly follow the signed-in account. */}
         {data.live ? (
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <svg className={"ic"} aria-hidden={"true"} width={20} height={20}>
@@ -333,22 +389,28 @@ export function CalendarRbarView({ data }: { data: CalendarRbar }) {
             </span>
           </div>
         ) : null}
-        {(
-          [
-            ["/assets/logos/integrations/googlemeet-color.png", "Google Meet"],
-            ["/assets/logos/integrations/microsoftteams-color.svg", "Microsoft Teams"],
-            ["/assets/logos/integrations/calendly.svg", "Calendly import"],
-          ] as const
-        ).map(([logo, label]) => (
-          <div key={label} style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <img src={logo} alt={""} width={20} height={20} />
-            {label}
-            <span className={"r"}>{"Planned"}</span>
-          </div>
-        ))}
+        {data.live?.providers ? (
+          <ProviderLinks providers={data.live.providers} />
+        ) : (
+          (
+            [
+              ["/assets/logos/integrations/googlemeet-color.png", "Google Meet"],
+              ["/assets/logos/integrations/microsoftteams-color.svg", "Microsoft Teams"],
+              ["/assets/logos/integrations/calendly.svg", "Calendly import"],
+            ] as const
+          ).map(([logo, label]) => (
+            <div key={label} style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              <img src={logo} alt={""} width={20} height={20} />
+              {label}
+              <span className={"r"}>{"Planned"}</span>
+            </div>
+          ))
+        )}
       </div>
       <p className={"fp-note"} style={{ fontSize: "12.5px" }}>
-        {"Only busy times are read from personal calendars. Event details stay in the calendar they came from."}
+        {data.live?.providers
+          ? "Google Calendar still shares busy times only. A Calendly import is that person’s scheduled events, shown separately, and is not written back. Google Meet and Teams links are created in the host’s account when someone books."
+          : "Only busy times are read from personal calendars. Event details stay in the calendar they came from."}
       </p>
     </aside>
   );

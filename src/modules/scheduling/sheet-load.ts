@@ -1,5 +1,5 @@
 import "server-only";
-import type { CalendarData, CalendarNav, CalendarRbar, CalendarTab } from "@/components/sheet/designer/calendar";
+import type { CalendarData, CalendarNav, CalendarProviders, CalendarRbar, CalendarTab } from "@/components/sheet/designer/calendar";
 import type {
   BookDialogData,
   BookingTypeRow,
@@ -21,6 +21,8 @@ import type { SheetStaff } from "@/modules/sheet/load";
 import type { SheetQuery } from "@/modules/sheet/present";
 import { parseAvailability, slotsFromAvailability } from "./availability";
 import { isUuid } from "@/lib/tenant/context";
+import { composioConfigured } from "@/modules/integrations/composio";
+import { isMeetingProvider, providerJoinUrl } from "@/modules/integrations/meeting-links";
 import { CALL_WAIT_TOAST, callHref, callIsOpen } from "@/modules/video/present";
 import { loadCallVo } from "@/modules/sheet/vo-crm-load";
 import { COMMON_ZONES, PRACTICE_NOTICE, locationLabel, locationShort, longWhen, safeZone, shortWhen, slotLabel } from "./format";
@@ -318,7 +320,7 @@ async function loadRecord(
         { term: "When (your time)", value: shortWhen(start, zone) },
         ...(clientZone && clientZone !== zone ? [{ term: "Client’s time", value: longWhen(start, clientZone) }] : []),
         { term: "With", value: booking.host_name ?? "—" },
-        { term: "Where", value: locationLabel(booking.location_kind, booking.location_kind === "in_person" ? booking.location_detail : null) },
+        { term: "Where", value: whereValue(booking.location_kind, booking.location_detail) },
         // CRM-03, slice 8 not built: calls are never recorded, and the record says so.
         ...(booking.location_kind === "video" ? [{ term: "Recording", value: RECORDING_NOT_AVAILABLE }] : []),
         { term: "Booked", value: booking.source === "public" ? "On the booking page" : "By the firm" },
@@ -344,6 +346,70 @@ async function loadRecord(
 }
 
 type AgreementTemplate = { id: string; name: string; version: number };
+
+function whereValue(kind: string, detail: string | null): string {
+  if (isMeetingProvider(kind)) {
+    const url = providerJoinUrl(kind, detail ?? "");
+    const room = kind === "google_meet" ? "standing room · " : "";
+    return url ? `${locationLabel(kind, null)} · ${room}${url}` : `${locationLabel(kind, null)} · link not saved`;
+  }
+  return locationLabel(kind, kind === "in_person" ? detail : null);
+}
+
+type ProviderPayload = {
+  composio_enabled?: boolean;
+  connections?: { membership_id?: string; toolkit?: string }[] | null;
+  events?: { name?: string; starts_at?: string; ends_at?: string; host?: string }[] | null;
+  sync?: { last_synced_at?: string | null; last_error?: string | null; imported_count?: number; truncated?: boolean } | null;
+};
+
+async function providerPayload(supabase: Awaited<ReturnType<typeof createClient>>, organizationId: string, from: string, to: string): Promise<ProviderPayload | null> {
+  const { data, error } = await supabase.rpc("sheet_calendar_providers", { p_organization_id: organizationId, p_from: from, p_to: to });
+  if (error || !data || typeof data !== "object") return null;
+  return data as ProviderPayload;
+}
+
+async function hostOptions(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string,
+  members: { membershipId: string; name: string }[],
+) {
+  const payload = await providerPayload(supabase, organizationId, new Date().toISOString(), new Date(Date.now() + 86_400_000).toISOString());
+  const configured = composioConfigured() && payload?.composio_enabled === true;
+  const connections = payload?.connections ?? [];
+  const has = (id: string, toolkit: string) => configured && connections.some((row) => row.membership_id === id && row.toolkit === toolkit);
+  return members.map((member) => ({
+    membershipId: member.membershipId,
+    name: member.name,
+    meet: has(member.membershipId, "googlemeet"),
+    teams: has(member.membershipId, "microsoft_teams"),
+  }));
+}
+
+function viewerProviders(input: { organizationId: string; membershipId: string; payload: ProviderPayload | null }): CalendarProviders {
+  if (!input.payload) {
+    return { organizationId: input.organizationId, meet: "unknown", teams: "unknown", calendly: "unknown" };
+  }
+  const configured = composioConfigured() && input.payload.composio_enabled === true;
+  const connections = input.payload?.connections ?? [];
+  const has = (toolkit: string) => connections.some((row) => row.membership_id === input.membershipId && row.toolkit === toolkit);
+  const sync = input.payload?.sync;
+  return {
+    organizationId: input.organizationId,
+    meet: configured && has("googlemeet") ? "ready" : "off",
+    teams: configured && has("microsoft_teams") ? "ready" : "off",
+    calendly:
+      configured && has("calendly")
+        ? {
+            syncedAt: sync?.last_synced_at ?? null,
+            count: sync?.imported_count ?? 0,
+            truncated: sync?.truncated === true,
+            error: sync?.last_error ?? null,
+            canImport: true,
+          }
+        : "off",
+  };
+}
 
 const AGREEMENT_COLUMNS =
   "booking_id, status, title, template_version, signed_name, signed_at, sent_at, opened_at, reminded_at, voided_at, voided_by, void_reason, declined_at, decline_reason, last_request_kind, last_request_at";
@@ -638,7 +704,7 @@ export async function loadSheetConsultations(staff: SheetStaff, query: SheetQuer
         submit: { data: { "data-booking-submit": "can", "data-org": org } },
       },
     },
-    settings: { organizationId: org, zones, hosts: members.map((m) => ({ membershipId: m.membershipId, name: m.name })), owner, practice: staff.sampleMode, agreements: agreementTemplates.map((t) => ({ label: `${t.name} v${t.version}`, value: t.id })) },
+    settings: { organizationId: org, zones, hosts: await hostOptions(supabase, org, members), owner, practice: staff.sampleMode, agreements: agreementTemplates.map((t) => ({ label: `${t.name} v${t.version}`, value: t.id })) },
   };
 }
 
@@ -696,7 +762,7 @@ export async function loadSheetCalendar(staff: SheetStaff, query: SheetQuery): P
   const monthEnd = localToUtc(nextMonthFirst, "00:00", zone);
   const deadlines = () => supabase.from("deadlines").select(DEADLINE_COLUMNS).eq("organization_id", org);
 
-  const [bookings, weekDeadlines, upcomingDeadlines, members, monthBookings, monthDeadlines, connections] = await Promise.all([
+  const [bookings, weekDeadlines, upcomingDeadlines, members, monthBookings, monthDeadlines, connections, providers] = await Promise.all([
     tab === "week" ? loadBookings(supabase, org, weekStart, weekEnd, ["confirmed", "held", "completed", "no_show"]) : Promise.resolve([]),
     Promise.all([
       deadlines().gte("due_on", monday).lte("due_on", sunday).order("due_on", { ascending: true }).limit(200),
@@ -717,6 +783,7 @@ export async function loadSheetCalendar(staff: SheetStaff, query: SheetQuery): P
       deadlines().gte("due_at", new Date(monthStart).toISOString()).lt("due_at", new Date(monthEnd).toISOString()).limit(300),
     ]),
     supabase.from("staff_connections").select("membership_id, toolkit, status").eq("organization_id", org).eq("toolkit", "googlecalendar"),
+    providerPayload(supabase, org, new Date(weekStart).toISOString(), new Date(weekEnd).toISOString()),
   ]);
   const inWeek = uniqueDeadlines(weekDeadlines[0].data as DeadlineRow[] | null, weekDeadlines[1].data as DeadlineRow[] | null);
   const overdue = uniqueDeadlines(upcomingDeadlines[0].data as DeadlineRow[] | null, upcomingDeadlines[1].data as DeadlineRow[] | null).filter((row) =>
@@ -743,6 +810,20 @@ export async function loadSheetCalendar(staff: SheetStaff, query: SheetQuery): P
       },
     });
   }
+  for (const event of providers?.events ?? []) {
+    const start = Date.parse(String(event.starts_at ?? ""));
+    const end = Date.parse(String(event.ends_at ?? ""));
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+    items.push({
+      start,
+      end,
+      block: {
+        kind: "calendly",
+        title: { left: String(event.name ?? "Calendly"), right: String(event.host ?? "Staff") },
+        note: "Calendly · not a Casevoya booking",
+      },
+    });
+  }
   for (const row of inWeek) {
     const date = localDate(row);
     if (date < monday || date > sunday) continue;
@@ -761,7 +842,7 @@ export async function loadSheetCalendar(staff: SheetStaff, query: SheetQuery): P
     });
   }
   // Date-only deadlines sit in the All day row; items that share an hour sit side by side.
-  const shown = tab === "week" ? items : items.filter((item) => item.block.kind !== "consultation");
+  const shown = tab === "week" ? items : items.filter((item) => item.block.kind !== "consultation" && item.block.kind !== "calendly");
   const week = buildWeek(monday, today, shown, zone, { live: true });
 
   const dateLabel = (date: string) => `${WEEKDAY[new Date(`${date}T12:00:00Z`).getUTCDay() || 7]} ${Number(date.slice(8))} ${MONTHS[Number(date.slice(5, 7)) - 1]}`;
@@ -827,7 +908,11 @@ export async function loadSheetCalendar(staff: SheetStaff, query: SheetQuery): P
       }),
       deadlines: upcoming,
       calendars: calendarConnections(members, connections.data ?? [], { membershipId: staff.membershipId, owner: staff.role === "firm_owner" }),
-      live: { emptyTitle: "No upcoming deadlines", emptyCopy: "Deadlines recorded on a matter appear here, with whether each is verified." },
+      live: {
+        emptyTitle: "No upcoming deadlines",
+        emptyCopy: "Deadlines recorded on a matter appear here, with whether each is verified.",
+        providers: viewerProviders({ organizationId: org, membershipId: staff.membershipId, payload: providers }),
+      },
     },
   };
 }

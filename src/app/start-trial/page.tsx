@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { StartTrialMarkup } from "@/components/port/markup/start-trial";
@@ -14,10 +15,18 @@ export const metadata: Metadata = {
 };
 
 /**
- * No Suspense fallback here (#330): a fallback form swapped for the streamed one replaced the
- * inputs and wiped whatever autofill or a password manager had already typed.
+ * The form is streamed after the session is known. The fallback is empty, not a second form:
+ * a fallback form swapped for this one wiped autofill and password-manager input (#330).
  */
-export default async function StartTrialPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+export default function StartTrialPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  return (
+    <Suspense fallback={null}>
+      <StartTrialScreen searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+export async function StartTrialScreen({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const query = await searchParams;
   const home = hasPublicSupabaseEnv() ? await homeRoute() : "/sign-in";
   if (home === "/sheet" || home === "/portal") redirect(home);

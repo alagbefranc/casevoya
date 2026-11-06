@@ -430,6 +430,14 @@ export function openBookingType(opener: HTMLElement, root: HTMLElement, open: Op
   });
   const publish = el(dialog, "etPub");
   if (publish) publish.checked = draft.published;
+  syncProviderChoices(dialog);
+  if (dialog.dataset.providerWired !== "1") {
+    dialog.dataset.providerWired = "1";
+    dialog.addEventListener("change", (event) => {
+      const target = event.target as HTMLElement;
+      if (target.id === "etK" || (target instanceof HTMLInputElement && target.name === "etH")) syncProviderChoices(dialog);
+    });
+  }
   // A new type's link name follows its name until someone edits the link name.
   const slug = el(dialog, "etS");
   if (slug) slug.dataset.auto = draft.id ? "" : "1";
@@ -444,6 +452,19 @@ export function openBookingType(opener: HTMLElement, root: HTMLElement, open: Op
     });
   }
   open("dlgType");
+}
+
+/** Google Meet and Teams stay unavailable until every selected host has that connection. */
+export function syncProviderChoices(dialog: ParentNode) {
+  const select = dialog.querySelector<HTMLSelectElement>("#etK");
+  if (!select || typeof select.querySelector !== "function") return;
+  const checked = [...dialog.querySelectorAll<HTMLInputElement>('input[name="etH"]')].filter((box) => box.checked);
+  const ready = (flag: "meet" | "teams") => checked.length > 0 && checked.every((box) => box.dataset[flag] === "1");
+  const option = (value: string) => select.querySelector<HTMLOptionElement>(`option[value="${value}"]`);
+  const meet = option("google_meet");
+  const teams = option("microsoft_teams");
+  if (meet) meet.disabled = select.value !== "google_meet" && !ready("meet");
+  if (teams) teams.disabled = select.value !== "microsoft_teams" && !ready("teams");
 }
 
 /** "Initial consultation (French)" → "initial-consultation-french". */

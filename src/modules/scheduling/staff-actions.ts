@@ -9,13 +9,16 @@ import { parseAvailability, slotsFromAvailability } from "./availability";
 import { shortWhen } from "./format";
 import { possibleMatchError } from "./sheet-present";
 import { isTimeZone } from "./slots";
+import { alignProviderCancel, alignProviderReschedule, attachProviderMeeting } from "@/modules/integrations/meeting-link-run";
+import { composioConfigured } from "@/modules/integrations/composio";
+import { isMeetingProvider } from "@/modules/integrations/meeting-links";
 import { closeRoomForBooking } from "@/modules/video/service";
 import { NOTICE_REQUIRED, noticeRequiredError } from "@/modules/portal-policies/public-pages";
 
 type Result = { ok: true } | { error: string; stepUp?: boolean };
 
 const DAY = 86_400_000;
-const LOCATIONS = ["video", "phone", "in_person", "meeting_link"] as const;
+const LOCATIONS = ["video", "phone", "in_person", "meeting_link", "google_meet", "microsoft_teams"] as const;
 
 /** A database refusal as words a person can act on. Never the raw message. */
 function bookingError(message: string): { error: string; stepUp?: boolean } {
@@ -26,7 +29,7 @@ function bookingError(message: string): { error: string; stepUp?: boolean } {
   if (/sample mode/.test(message)) return { error: message.charAt(0).toUpperCase() + message.slice(1) + "." };
   if (/staff access denied|sign in/i.test(message)) return { error: "You can’t change bookings in this firm." };
   if (/booking_event_types_organization_id_slug_key|duplicate key/.test(message)) return { error: "Another booking type already uses that link name." };
-  if (/needs a host|meeting link|choose active staff|choose a time zone|time is not valid|end after its start|both times|choose a client|no email|cannot be cancelled|only an upcoming|after the meeting|attended or no-show|too many availability rows/.test(message)) {
+  if (/needs a host|meeting link|connect that meeting|turned on connected|choose active staff|choose a time zone|time is not valid|end after its start|both times|choose a client|no email|cannot be cancelled|only an upcoming|after the meeting|attended or no-show|too many availability rows/.test(message)) {
     return { error: message.charAt(0).toUpperCase() + message.slice(1) + "." };
   }
   if (/check constraint|violates/.test(message)) return { error: "Some values are out of range. Check the form." };
@@ -97,6 +100,10 @@ export async function saveBookingType(input: {
   if (input.eventTypeId && !isUuid(input.eventTypeId)) return { error: "Reload and try again." };
   if (input.agreementTemplateId && !isUuid(input.agreementTemplateId)) return { error: "Reload and try again." };
   if (!(LOCATIONS as readonly string[]).includes(input.locationKind)) return { error: "Choose how you meet." };
+  if (isMeetingProvider(input.locationKind) && input.locationDetail?.trim()) return { error: "The meeting link is created when someone books." };
+  if (isMeetingProvider(input.locationKind) && input.publish && !composioConfigured()) {
+    return { error: "Meeting links aren’t available on this server." };
+  }
   const hosts = (input.hostMembershipIds ?? []).filter(isUuid);
   const whole = (value: number, min: number, max: number) => Number.isInteger(value) && value >= min && value <= max;
   if (!whole(input.durationMin, 5, 480) || !whole(input.bufferBeforeMin, 0, 240) || !whole(input.bufferAfterMin, 0, 240)) return { error: "Check the length and buffers." };
@@ -183,9 +190,14 @@ export async function bookForClient(input: {
     p_time_zone: isTimeZone(input.timeZone) ? input.timeZone : "America/Toronto",
     p_idempotency_key: input.idempotencyKey,
   });
-  if (error) return bookingError(error.message);
+  if (error || typeof bookingId !== "string") return bookingError(error?.message ?? "That couldn’t be saved. Try again.");
+  const booked = await supabase.from("bookings").select("status, location_kind").eq("id", bookingId).maybeSingle();
+  if (booked.data && isMeetingProvider(booked.data.location_kind) && booked.data.status !== "confirmed") {
+    const attached = await attachProviderMeeting(bookingId);
+    if (!attached.ok) return { error: attached.error };
+  }
   refresh();
-  if (!input.agreementTemplateId || !isUuid(input.agreementTemplateId) || typeof bookingId !== "string") return { ok: true, agreement: null };
+  if (!input.agreementTemplateId || !isUuid(input.agreementTemplateId)) return { ok: true, agreement: null };
   // The booking stands either way; a refused agreement can be sent again from the record.
   const sent = await supabase.rpc("send_booking_agreement", { p_booking_id: bookingId, p_template_id: input.agreementTemplateId });
   return { ok: true, agreement: sent.error && !/already has an agreement/.test(sent.error.message) ? "failed" : "sent" };
@@ -241,6 +253,8 @@ export async function cancelBooking(input: { organizationId: string; bookingId: 
   if (!isUuid(input.bookingId)) return { error: "Reload and try again." };
   const supabase = await session(input.organizationId);
   if (!supabase) return { error: "Sign in first." };
+  const aligned = await alignProviderCancel({ bookingId: input.bookingId, organizationId: input.organizationId, ref: null, sha256: null });
+  if ("error" in aligned) return { error: aligned.error };
   const { error } = await supabase.rpc("staff_cancel_booking", {
     p_org: input.organizationId,
     p_booking_id: input.bookingId,
@@ -258,13 +272,18 @@ export async function rescheduleBooking(input: { organizationId: string; booking
   if (!isUuid(input.bookingId) || !Number.isFinite(Date.parse(input.start))) return { error: "Choose a new time." };
   const supabase = await session(input.organizationId);
   if (!supabase) return { error: "Sign in first." };
+  const aligned = await alignProviderReschedule({ bookingId: input.bookingId, organizationId: input.organizationId, ref: null, sha256: null }, new Date(input.start).toISOString());
+  if ("error" in aligned) return { error: aligned.error };
   const { error } = await supabase.rpc("staff_reschedule_booking", {
     p_org: input.organizationId,
     p_booking_id: input.bookingId,
     p_start: new Date(input.start).toISOString(),
     p_expected_version: input.version,
   });
-  if (error) return bookingError(error.message);
+  if (error) {
+    const undone = aligned.restore ? await aligned.restore() : null;
+    return { error: undone ?? bookingError(error.message).error };
+  }
   refresh();
   return { ok: true };
 }

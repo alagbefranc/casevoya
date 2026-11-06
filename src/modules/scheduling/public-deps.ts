@@ -1,8 +1,9 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { attachProviderMeeting } from "@/modules/integrations/meeting-link-run";
 import { isUuid } from "@/lib/tenant/context";
-import type { PublicDeps } from "./public-api";
+import type { BookingSummary, PublicDeps } from "./public-api";
 
 type SessionClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -47,7 +48,25 @@ export async function publicDeps(): Promise<PublicDeps> {
       if (error) throw new Error("booking_agreement_for_signing failed");
       return data;
     },
+    ensureMeeting: (summary) => ensureProviderBooking(summary),
     now: () => Date.now(),
+  };
+}
+
+/** Looks up the held booking by its public reference and confirms it only after the host's link is stored. */
+async function ensureProviderBooking(summary: BookingSummary): Promise<{ summary: BookingSummary } | { error: string }> {
+  const service = createServiceClient();
+  const found = await service.from("bookings").select("id").eq("public_ref", summary.publicRef).maybeSingle();
+  if (!found.data?.id) return { error: "The booking couldn’t be saved. Try again." };
+  const attached = await attachProviderMeeting(found.data.id);
+  if (!attached.ok) return { error: attached.error };
+  return {
+    summary: {
+      ...summary,
+      status: attached.summary.status,
+      locationKind: attached.summary.locationKind,
+      locationDetail: attached.summary.locationDetail,
+    },
   };
 }
 

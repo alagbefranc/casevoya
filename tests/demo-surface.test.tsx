@@ -20,7 +20,7 @@ import { metadata as sheetMeta } from "@/app/sheet/page";
 import { metadata as signInMeta } from "@/app/sign-in/page";
 import SignInPage from "@/app/sign-in/page";
 import { metadata as trialMeta } from "@/app/start-trial/page";
-import StartTrialPage from "@/app/start-trial/page";
+import StartTrialPage, { StartTrialScreen } from "@/app/start-trial/page";
 import { AcceptClientMarkup } from "@/components/port/markup/accept-client";
 import { AcceptFamilyMarkup } from "@/components/port/markup/accept-family";
 import { AcceptSponsorMarkup } from "@/components/port/markup/accept-sponsor";
@@ -131,7 +131,8 @@ describe("public and live surfaces", () => {
     assertClean(createElement(TwoStepMarkup), "mfa");
     assertClean(createElement(RecoveryPage), "recovery page");
     assertClean(createElement(RecoveryMarkup), "recovery");
-    assertClean(await StartTrialPage({ searchParams: Promise.resolve({}) }), "start-trial page");
+    assertClean(await StartTrialScreen({ searchParams: Promise.resolve({}) }), "start-trial page");
+    expect(StartTrialPage({ searchParams: Promise.resolve({}) })).toBeTruthy();
     assertClean(createElement(StartTrialMarkup), "start-trial");
     assertClean(createElement(SetupMarkup), "setup");
     assertClean(createElement(AcceptClientMarkup), "accept client");

@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { parseAvailability, slotsFromAvailability } from "./availability";
 import { isTimeZone } from "./slots";
+import { alignProviderCancel, alignProviderReschedule } from "@/modules/integrations/meeting-link-run";
 import { closeRoomForBooking } from "@/modules/video/service";
 
 const DAY = 86_400_000;
@@ -67,6 +68,8 @@ export async function portalRescheduleBooking(input: { organizationId: string; b
   const version = input.version != null && Number.isInteger(input.version) ? input.version : null;
   const supabase = await session(input.organizationId);
   if (!supabase) return { error: "Sign in first." };
+  const aligned = await alignProviderReschedule({ bookingId: input.bookingId, organizationId: input.organizationId, ref: null, sha256: null }, new Date(start).toISOString());
+  if ("error" in aligned) return { error: aligned.error };
   const { error } = await supabase.rpc("portal_reschedule_booking", {
     p_org: input.organizationId,
     p_booking_id: input.bookingId,
@@ -74,7 +77,11 @@ export async function portalRescheduleBooking(input: { organizationId: string; b
     p_time_zone: input.timeZone,
     p_expected_version: version,
   });
-  return error ? portalBookingError(error.message) : { ok: true };
+  if (error) {
+    const undone = aligned.restore ? await aligned.restore() : null;
+    return { error: undone ?? portalBookingError(error.message).error };
+  }
+  return { ok: true };
 }
 
 /** Cancels the client's own booking. `late` says it was inside the type's minimum notice. */
@@ -83,6 +90,8 @@ export async function portalCancelBooking(input: { organizationId: string; booki
   const version = input.version != null && Number.isInteger(input.version) ? input.version : null;
   const supabase = await session(input.organizationId);
   if (!supabase) return { error: "Sign in first." };
+  const aligned = await alignProviderCancel({ bookingId: input.bookingId, organizationId: input.organizationId, ref: null, sha256: null });
+  if ("error" in aligned) return { error: aligned.error };
   const { data, error } = await supabase.rpc("portal_cancel_booking", {
     p_org: input.organizationId,
     p_booking_id: input.bookingId,

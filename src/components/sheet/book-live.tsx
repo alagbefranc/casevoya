@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { BookPage, type BookPageData } from "@/components/sheet/designer/book";
+import { isMeetingProvider, providerJoinUrl } from "@/modules/integrations/meeting-links";
 import { COMMON_ZONES, PRACTICE_NOTICE, locationLabel, longWhen, safeZone, slotLabel } from "@/modules/scheduling/format";
 import type { BookingSummary, PublicEvent } from "@/modules/scheduling/public-api";
 import { decodeStarts, isTimeZone } from "@/modules/scheduling/slots";
@@ -69,7 +70,10 @@ function Confirmation({
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const start = Date.parse(booking.startsAt);
-  const where = booking.locationKind === "meeting_link" && booking.locationDetail ? "Online meeting" : locationLabel(booking.locationKind, booking.locationDetail);
+  const providerUrl = isMeetingProvider(booking.locationKind) ? providerJoinUrl(booking.locationKind, booking.locationDetail ?? "") : null;
+  const manualUrl = booking.locationKind === "meeting_link" && booking.locationDetail && /^https:\/\/\S+$/.test(booking.locationDetail) ? booking.locationDetail : null;
+  const joinUrl = providerUrl ?? manualUrl;
+  const where = manualUrl ? "Online meeting" : locationLabel(booking.locationKind, booking.locationDetail);
   return (
     <div className={"card"} role={"status"} aria-live={"polite"}>
       <b style={{ fontWeight: "500" }}>{"You’re booked"}</b>
@@ -81,8 +85,8 @@ function Confirmation({
         <small style={{ color: "#615d59" }}>{`${booking.firmName}’s time: ${longWhen(start, firmZone)}`}</small>
       ) : null}
       <small style={{ color: "#615d59" }}>{where}</small>
-      {booking.locationKind === "meeting_link" && booking.locationDetail ? (
-        <a href={booking.locationDetail} rel={"noopener noreferrer"} target={"_blank"} style={{ color: "var(--blue)" }}>
+      {joinUrl ? (
+        <a href={joinUrl} rel={"noopener noreferrer"} target={"_blank"} style={{ color: "var(--blue)" }}>
           {"Meeting link"}
         </a>
       ) : null}

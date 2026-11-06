@@ -2,6 +2,7 @@
  * Pure helpers for the portal Appointments page (join window, the cancel dialog's words, the
  * reschedule picker's days and times). No I/O, no clock: time is passed in.
  */
+import { isMeetingProvider, providerJoinUrl } from "@/modules/integrations/meeting-links";
 import { locationLabel, safeZone } from "./format";
 import type { PortalAppointment } from "./portal-load";
 import { utcToLocal } from "./slots";
@@ -31,10 +32,15 @@ export type JoinState =
 
 /** How the join button renders for an upcoming call at `now`. */
 export function joinState(row: Pick<PortalAppointment, "locationKind" | "locationDetail" | "startsAt" | "endsAt"> & { publicRef?: string | null }, now: number, firmName: string): JoinState {
-  if (row.locationKind === "meeting_link" && row.locationDetail && /^https:\/\/\S+$/.test(row.locationDetail)) {
+  const link = isMeetingProvider(row.locationKind)
+    ? providerJoinUrl(row.locationKind, row.locationDetail ?? "")
+    : row.locationKind === "meeting_link" && row.locationDetail && /^https:\/\/\S+$/.test(row.locationDetail)
+      ? row.locationDetail
+      : null;
+  if (link) {
     const start = Date.parse(row.startsAt);
     const end = Date.parse(row.endsAt);
-    if (now >= start - JOIN_OPENS_BEFORE_MS && now < end) return { kind: "open", href: row.locationDetail };
+    if (now >= start - JOIN_OPENS_BEFORE_MS && now < end) return { kind: "open", href: link };
     return { kind: "wait", toast: JOIN_WAIT_TOAST };
   }
   if (row.locationKind === "video") {
@@ -48,6 +54,8 @@ export function joinState(row: Pick<PortalAppointment, "locationKind" | "locatio
 /** The location line: a stored meeting link is simply a video call to the client. */
 export function whereLabel(row: Pick<PortalAppointment, "locationKind" | "locationDetail">): string {
   if (row.locationKind === "meeting_link" && row.locationDetail) return "Video call";
+  if (row.locationKind === "google_meet") return "Google Meet";
+  if (row.locationKind === "microsoft_teams") return "Microsoft Teams";
   return locationLabel(row.locationKind, row.locationDetail);
 }
 
