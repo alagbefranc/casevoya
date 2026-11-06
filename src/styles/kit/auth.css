@@ -116,6 +116,10 @@ body.wzb{background:#111;min-height:100dvh;height:auto}
 .prev .pm{padding:16px;background:#fff}.prev .pm .bn{background:var(--brand,#0075DE);color:#fff;border-radius:10px;padding:12px 14px;font-size:14px;margin-top:10px}
 .sw{display:flex;gap:8px;flex-wrap:wrap}.sw button{width:34px;height:34px;border-radius:50%;box-shadow:inset 0 0 0 2px rgba(0,0,0,.08);transition:transform 150ms var(--ease)}.sw button[aria-pressed="true"]{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--ink)}.sw button:active{transform:scale(.94)}
 .conn{display:grid;grid-template-columns:44px 1fr auto;gap:14px;align-items:center;padding:14px 16px;border:1px solid var(--line);border-radius:12px}.conn+.conn{margin-top:10px}
+/* The trial row is copy plus a button. The connection rows' 44px icon column would hold that copy. */
+.conn[data-setup-card]{grid-template-columns:minmax(0,1fr) auto}
+.conn[data-setup-card]>div{min-width:0}
+.conn[data-setup-card] .btn{justify-self:end}
 .conn img{width:28px;height:28px;object-fit:contain;justify-self:center}.conn small{display:block;color:var(--t2);font-size:13px}
 .proof{display:grid;gap:0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .proof>div{display:grid;grid-template-columns:32px 1fr auto;gap:12px;align-items:center;padding:13px 16px;font-size:15px}.proof>div+div{border-top:1px solid var(--line)}
