@@ -59,3 +59,55 @@ document.documentElement.dataset.measure = JSON.stringify({
 </script>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fixture: setup sample-case add-card panel</title><style>${css}</style></head><body>${body}${script}</body></html>`;
 }
+
+const SAVED_MARK = `<svg class="k2-mark" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"></circle><path d="M7.5 12.25 10.5 15.25 16.75 8.75" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+
+/**
+ * Records and retention (step 7 of 8) inside the real setup sheet, with the primary
+ * footer button forced into the Saved flash (`is-ok` plus the check the kit draws).
+ * Fixture only: nothing is saved.
+ */
+export function setupSavedButtonFixtureHtml(): string {
+  let body = renderToStaticMarkup(createElement(SetupMarkup, { firmName: "Fixture Firm", trialBadge: "Free trial" }));
+  body = body.replace('data-step="0" class="on"', 'data-step="0"');
+  body = body.replace('data-step="6"', 'data-step="6" class="on"');
+  const button =
+    '<button class="btn p" data-next=""><span class="lab">Continue</span><span class="spin" aria-hidden="true"></span></button>';
+  const saved = `<button class="btn p is-ok" id="saved" data-next=""><span class="lab">Continue</span><span class="spin" aria-hidden="true"><span class="sw-in" style="display:flex;gap:6px;align-items:center">${SAVED_MARK}Saved</span></span></button>`;
+  if (!body.includes(button)) throw new Error("setup fixture is missing the primary footer button");
+  body = body.replace(button, saved);
+  const label =
+    '<p data-fixture-label="">Fixture, not a live account. Step 7 of 8, Records and retention. Saved state forced on the primary footer button.</p>';
+  body = body.replace('<footer class="wz-foot">', `${label}<footer class="wz-foot">`);
+  const css = ["base.css", "kit2.css", "auth.css", "compat.css"]
+    .map((name) => readFileSync(path.join(root, "src/styles/kit", name), "utf8"))
+    .join("\n");
+  const extra = `[data-fixture-label]{margin:0 0 10px;padding:8px 10px;background:#fff3bf;color:#3d2e00;font:600 13px/1.35 system-ui,sans-serif;border-radius:8px}
+#states{position:absolute;left:-9999px;top:0;display:flex;gap:8px}`;
+  const states = `<div id="states">
+<button class="btn p" id="normal" type="button"><span class="lab">Continue</span></button>
+<button class="btn p is-loading" id="saving" type="button" aria-busy="true"><span class="lab">Continue</span><span class="spin" aria-hidden="true"></span></button>
+<button class="btn p is-fail" id="fail" type="button"><span class="lab">Continue</span><span class="spin" aria-hidden="true"><span class="sw-in">Retry</span></span></button>
+<button class="btn p" id="disabled" type="button" aria-disabled="true">Continue</button>
+</div>`;
+  const script = `<script>
+window.__readSaved = () => {
+  const read = (id) => {
+    const el = document.getElementById(id);
+    const s = getComputedStyle(el);
+    const mark = el.querySelector(".k2-mark, .sw-in");
+    return { bg: s.backgroundColor, color: s.color, mark: mark ? getComputedStyle(mark).color : s.color, outline: s.outlineColor };
+  };
+  const saved = document.getElementById("saved");
+  saved.scrollIntoView({ block: "end" });
+  return {
+    saved: read("saved"),
+    normal: read("normal"),
+    saving: read("saving"),
+    fail: read("fail"),
+    disabled: read("disabled"),
+  };
+};
+</script>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Fixture: setup Saved button</title><style>${css}\n${extra}</style></head><body>${body}${states}${script}</body></html>`;
+}
