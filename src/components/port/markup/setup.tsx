@@ -37,14 +37,15 @@ export const SETUP_COPY = {
 } as const;
 
 /**
- * Step 6's connections (issue #259): Google Calendar and Stripe are set up in Settings (a new tab,
- * so setup stays open); Zoom and Calendly aren't built yet and say so before they are pressed.
- * Text and attributes only; the Designer's `.conn` rows are unchanged.
+ * Step 6's connections. Each Connect opens Settings in a new tab and leaves setup open.
+ * Zoom and Calendly use the same Integrations tab as Google Calendar: Composio connect, then Vo.
+ * They do not add a Zoom link to a booked consultation or replace Casevoya's booking page.
  */
 export const SETUP_CONNECT = {
   calendar: { href: "/sheet/settings?tab=integrations", note: " · Connect it in Settings", title: "Opens Settings > Integrations in a new tab" },
+  zoom: { href: "/sheet/settings?tab=integrations", note: " · Connect it in Settings", title: "Opens Settings > Integrations in a new tab" },
+  calendly: { href: "/sheet/settings?tab=integrations", note: " · Connect it in Settings", title: "Opens Settings > Integrations in a new tab" },
   stripe: { href: "/sheet/settings?tab=billing#card-payments", note: " · Set up in Settings", title: "Opens Settings > Billing in a new tab" },
-  later: { note: " · Coming later", title: "Coming later: not available in Casevoya yet" },
 } as const;
 
 /** The last step's card call to action (#330): opens the existing plan dialog (Stripe checkout). */
@@ -129,8 +130,8 @@ export function SetupMarkup({
 </section>
 <section data-step="5" data-title="Calendar and payments" data-vo="point"><div className="wz-head"><div><h1>Calendar and payments</h1><p className="lead">Connect what you already use. You can skip this and do it from Settings.</p></div><span className="wz-art" aria-hidden="true"><img src="/assets/generated/b2/calendar-link-72@1x.webp" srcSet="/assets/generated/b2/calendar-link-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span></div>
 <div className="conn"><img src="/assets/logos/googlecalendar.svg" alt="" /><div>Google Calendar<small>{`Consultation bookings and deadlines on your calendar${SETUP_CONNECT.calendar.note}`}</small></div><button className="btn sm" type="button" title={SETUP_CONNECT.calendar.title} onClick={(event) => connectOrRun(event.currentTarget, SETUP_CONNECT.calendar.href)}><span className="lab">Connect</span><span className="spin" aria-hidden="true"></span></button></div>
-<div className="conn"><img src="/assets/logos/zoom.svg" alt="" /><div>Zoom<small>{`Video links added to booked consultations${SETUP_CONNECT.later.note}`}</small></div><button className="btn sm" type="button" disabled aria-disabled="true" title={SETUP_CONNECT.later.title}><span className="lab">Coming later</span></button></div>
-<div className="conn"><img src="/assets/logos/calendly.svg" alt="" /><div>Calendly<small>{`Keep your existing booking page${SETUP_CONNECT.later.note}`}</small></div><button className="btn sm" type="button" disabled aria-disabled="true" title={SETUP_CONNECT.later.title}><span className="lab">Coming later</span></button></div>
+<div className="conn"><img src="/assets/logos/zoom.svg" alt="" /><div>Zoom<small>{`Meeting links Vo can create when you confirm${SETUP_CONNECT.zoom.note}`}</small></div><button className="btn sm" type="button" title={SETUP_CONNECT.zoom.title} onClick={(event) => connectOrRun(event.currentTarget, SETUP_CONNECT.zoom.href)}><span className="lab">Connect</span><span className="spin" aria-hidden="true"></span></button></div>
+<div className="conn"><img src="/assets/logos/calendly.svg" alt="" /><div>Calendly<small>{`One-time booking links Vo can make when you confirm${SETUP_CONNECT.calendly.note}`}</small></div><button className="btn sm" type="button" title={SETUP_CONNECT.calendly.title} onClick={(event) => connectOrRun(event.currentTarget, SETUP_CONNECT.calendly.href)}><span className="lab">Connect</span><span className="spin" aria-hidden="true"></span></button></div>
 <div className="sec" style={{ "marginTop": "20px" }}><div style={{ "display": "flex", "gap": "14px", "alignItems": "center" }}><span className="au-art" aria-hidden="true"><img src="/assets/generated/b2/bank-72@1x.webp" srcSet="/assets/generated/b2/bank-72@2x.webp 2x" width="72" height="72" alt="" decoding="async" /></span><div><h3>Where client payments go</h3><p>Payments go straight to your firm’s account. Money held in trust stays in a separate client account and is shown separately to clients.</p></div></div>
 <div className="conn"><img src="/assets/logos/stripe.svg" alt="" /><div>Stripe<small>{`Card and bank payments for invoices${firm ? ` · ${firm}` : ""}${SETUP_CONNECT.stripe.note}`}</small></div><button className="btn sm p" type="button" title={SETUP_CONNECT.stripe.title} onClick={(event) => connectOrRun(event.currentTarget, SETUP_CONNECT.stripe.href)}><span className="lab">Connect</span><span className="spin" aria-hidden="true"></span></button></div>
 <p className="why" style={{ "marginTop": "10px" }}><svg className="ic s" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-lock" /></svg>Changing the payment destination later always asks you to confirm it’s you.</p></div>
