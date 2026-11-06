@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
 import { draftNoticeFromFacts } from "@/modules/portal-policies/notice-draft";
+import { workersAi } from "@/modules/i18n/translate";
 import { canPublishPolicies } from "@/modules/portal-policies/defaults";
 import { noticeFacts, noticePrompt, readNoticeAnswers, type NoticeAnswers } from "@/modules/portal-policies/notice-facts";
 
@@ -45,13 +46,15 @@ export async function draftPrivacyNotice(input: { organizationId: string; answer
   if ("error" in facts) return { error: facts.error };
   const prompt = noticePrompt(facts);
   if (prompt.length > 4000) return { error: MESSAGES.failed };
+  const ai = workersAi();
+  if (!ai) return { error: MESSAGES.unavailable };
 
   const quota = await supabase.rpc("consume_policy_draft", { p_organization_id: input.organizationId, p_char_count: prompt.length });
   if (quota.error) return { error: MESSAGES.denied };
   const row = quota.data && typeof quota.data === "object" && !Array.isArray(quota.data) ? (quota.data as { ok?: unknown }) : null;
   if (row?.ok !== true) return { error: MESSAGES.rate_limited };
 
-  const drafted = await draftNoticeFromFacts(facts);
+  const drafted = await draftNoticeFromFacts(facts, { ai });
   if ("error" in drafted) return { error: MESSAGES[drafted.error] };
   return { body: drafted.body, model: drafted.model };
 }

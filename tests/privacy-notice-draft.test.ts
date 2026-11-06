@@ -63,26 +63,46 @@ describe("privacy notice facts", () => {
     expect(prompt.length).toBeLessThanOrEqual(4000);
   });
 
-  it("keeps a complete draft and discards invented claims", () => {
+  it("keeps a complete draft and drops invented claims", () => {
     const source = facts();
-    const kept = acceptNoticeDraft(complete(source), source);
+    const kept = acceptNoticeDraft(complete(source, "This is not legal advice."), source);
     expect("body" in kept).toBe(true);
     if ("body" in kept) {
+      expect(kept.body).not.toMatch(/legal advice/i);
       expect(readPolicyDraft({ kind: "privacy_notice", versionLabel: "1", title: "Privacy notice", body: kept.body })).toHaveProperty("input");
     }
-    const country = acceptNoticeDraft(complete(source, "Files are stored in Canada."), source);
+    const country = acceptNoticeDraft(complete(source, "Files are stored in Ireland."), source);
     const years = acceptNoticeDraft(complete(source, "We keep files for 7 years."), source);
     const recipient = acceptNoticeDraft(complete(source, "We share files with IRCC."), source);
     const blank = acceptNoticeDraft(complete(source, "[Add a regulator]"), source);
-    expect("error" in country && country.error).toMatch(/country/);
-    expect("error" in years && years.error).toMatch(/years/);
-    expect("error" in recipient && recipient.error).toMatch(/recipient/);
-    expect("error" in blank && blank.error).toMatch(/claim/);
+    for (const result of [country, years, recipient, blank]) {
+      expect("body" in result).toBe(true);
+      if ("body" in result) expect(result.body).not.toMatch(/Ireland|7 years|IRCC|\[Add/);
+    }
+    const titled = acceptNoticeDraft(complete(source).replace("Who is responsible", "Who Is Responsible"), source);
+    expect("body" in titled).toBe(true);
+  });
+
+  it("allows a country that is already part of the firm name", () => {
+    const built = noticeFacts(
+      { firmName: "Canada Path Immigration", contactName: "Ada Owner", contactEmail: "ada@northshore.test", requestDays: 30 },
+      { ...answers, retention: "2" },
+    );
+    if ("error" in built) throw new Error(built.error);
+    const kept = acceptNoticeDraft(complete(built, "We answer within 5 days."), built);
+    expect("body" in kept).toBe(true);
+    if ("body" in kept) {
+      expect(kept.body).toContain("Canada Path Immigration");
+      expect(kept.body).toContain("2 years");
+      expect(kept.body).not.toMatch(/5 days/);
+    }
   });
 
   it("discards a stub model that invents a placeholder and reports when AI is absent", async () => {
     const source = facts();
-    const rejected = await draftNoticeFromFacts(source, { ai: { run: async () => ({ response: complete(source, "[Add your regulator]") }) } });
+    const cleaned = await draftNoticeFromFacts(source, { ai: { run: async () => ({ response: complete(source, "[Add your regulator]") }) } });
+    expect(cleaned).toMatchObject({ body: expect.not.stringContaining("[Add") });
+    const rejected = await draftNoticeFromFacts(source, { ai: { run: async () => ({ response: "Stored in Ireland." }) } });
     expect(rejected).toEqual({ error: "rejected" });
     const unavailable = await draftNoticeFromFacts(source, { ai: null });
     expect(unavailable).toEqual({ error: "unavailable" });
