@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { SetupMarkup, setupCardCopy, setupTrialBadge } from "@/components/port/markup/setup";
+import { SetupMarkup, setupCardCopy } from "@/components/port/markup/setup";
+import { setupTrialBadge } from "@/modules/firm-onboarding/setup-trial";
 import { StartTrialMarkup } from "@/components/port/markup/start-trial";
 import { k2Count } from "@/components/port/kit";
 import { pendingVerifyEmail, verifyHref } from "@/lib/auth/pending-verify";
@@ -12,6 +15,19 @@ function memory() {
 }
 
 describe("signup E2E fixes (#330)", () => {
+  it("the signed-in setup page calls the trial pill from a server module", () => {
+    const root = path.resolve(import.meta.dirname, "..");
+    const page = readFileSync(path.join(root, "src/app/setup/page.tsx"), "utf8");
+    const shared = readFileSync(path.join(root, "src/modules/firm-onboarding/setup-trial.ts"), "utf8");
+    const screen = readFileSync(path.join(root, "src/components/port/markup/setup.tsx"), "utf8");
+    expect(shared).not.toMatch(/^\s*["']use client["']/m);
+    expect(screen.startsWith('"use client"')).toBe(true);
+    expect(page).toContain('import { setupTrialBadge } from "@/modules/firm-onboarding/setup-trial"');
+    expect(page).toContain("trialBadge = setupTrialBadge(subscription ?? null)");
+    expect(page).not.toMatch(/setupTrialBadge[\s\S]{0,120}markup\/setup/);
+    expect(screen).not.toMatch(/export function setupTrialBadge/);
+  });
+
   it("setup's trial pill never shows a hardcoded 14 days", () => {
     expect(setupTrialBadge(null)).toBe("Free trial");
     expect(setupTrialBadge({ status: "trial", trial_ends_at: null, card_required: true })).toBe("Free trial");

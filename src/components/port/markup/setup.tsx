@@ -47,22 +47,6 @@ export const SETUP_CONNECT = {
   later: { note: " · Coming later", title: "Coming later: not available in Casevoya yet" },
 } as const;
 
-/**
- * The setup header's trial pill (#330). Before a card is on file the trial has not started, so it
- * says "Free trial" with no countdown; after, the real days left from trial_ends_at. Never a
- * hardcoded length.
- */
-export function setupTrialBadge(
-  sub: { status?: string | null; trial_ends_at?: string | null; card_required?: boolean | null } | null,
-  now: Date = new Date(),
-): string {
-  if (sub?.status === "trial" && sub.trial_ends_at && !sub.card_required) {
-    const left = Math.max(0, Math.ceil((Date.parse(sub.trial_ends_at) - now.getTime()) / 86_400_000));
-    if (Number.isFinite(left)) return `Trial · ${left} ${left === 1 ? "day" : "days"} left`;
-  }
-  return "Free trial";
-}
-
 /** The last step's card call to action (#330): opens the existing plan dialog (Stripe checkout). */
 export function setupCardCopy(trialDays: number | null) {
   const start = trialStart(trialDays);
@@ -84,7 +68,7 @@ export function SetupMarkup({
   trialBadge = "Free trial",
   card = null,
 }: {
-  /** The header pill (setupTrialBadge). */
+  /** The header pill (setupTrialBadge, computed on the server). */
   trialBadge?: string;
   /** Shown when the firm still needs a card to start its trial: the admin trial length in days, or null when unknown. */
   card?: { trialDays: number | null } | null;
