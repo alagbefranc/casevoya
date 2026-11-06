@@ -88,27 +88,48 @@ async function remember(bookingId: string | null, note: string | null) {
   await createServiceClient().rpc("note_booking_meeting", { p_booking_id: bookingId, p_note: note });
 }
 
-/** Move the provider meeting before Casevoya changes the time. A failed Teams update leaves the booking where it was. */
-export async function alignProviderReschedule(access: Access, startIso: string): Promise<{ ok: true } | { error: string }> {
+async function runCall(call: { hostMembershipId: string; slug: string; args: Record<string, unknown> }): Promise<boolean> {
+  const out = await executeAs(call.hostMembershipId, call.slug, call.args);
+  return out.successful;
+}
+
+/**
+ * Move the provider meeting before Casevoya changes the time. A failed Teams update leaves the
+ * booking where it was. If Casevoya then refuses the move, `restore` puts the Teams meeting back.
+ */
+export async function alignProviderReschedule(access: Access, startIso: string): Promise<{ ok: true; restore: (() => Promise<string | null>) | null } | { error: string }> {
   const loaded = await providerState(access);
   if ("error" in loaded) return loaded;
   const state = loaded.state;
-  if (!state) return { ok: true };
+  if (!state) return { ok: true, restore: null };
   const span = Date.parse(state.endsAt) - Date.parse(state.startsAt);
   if (!Number.isFinite(span) || span <= 0) return { error: "The booking has no length." };
   const plan = reschedulePlan(state, startIso, new Date(Date.parse(startIso) + span).toISOString());
   if (plan.error) return { error: plan.error };
+  const previous = plan.call ? reschedulePlan(state, new Date(Date.parse(state.startsAt)).toISOString(), new Date(Date.parse(state.endsAt)).toISOString()) : null;
   if (plan.call) {
     if (!composioConfigured()) return { error: "Meeting links aren’t available on this server. The time was not changed." };
     try {
-      const out = await executeAs(plan.call.hostMembershipId, plan.call.slug, plan.call.args);
-      if (!out.successful) return { error: "Microsoft didn’t move the Teams meeting. The time was not changed." };
+      if (!(await runCall(plan.call))) return { error: "Microsoft didn’t move the Teams meeting. The time was not changed." };
     } catch {
       return { error: "Microsoft didn’t move the Teams meeting. The time was not changed." };
     }
   }
   await remember(state.bookingId || access.bookingId, plan.note);
-  return { ok: true };
+  const undo = previous?.call;
+  return {
+    ok: true,
+    restore: undo
+      ? async () => {
+          try {
+            if (await runCall(undo)) return null;
+          } catch {
+            // The meeting stays at the new time. The caller says so.
+          }
+          return "Microsoft already moved the meeting, and Casevoya could not move it back.";
+        }
+      : null,
+  };
 }
 
 /** End or delete the provider meeting before Casevoya cancels. A failed Teams delete leaves the booking in place. */

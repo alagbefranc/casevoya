@@ -280,7 +280,10 @@ export async function rescheduleBooking(input: { organizationId: string; booking
     p_start: new Date(input.start).toISOString(),
     p_expected_version: input.version,
   });
-  if (error) return bookingError(error.message);
+  if (error) {
+    const undone = aligned.restore ? await aligned.restore() : null;
+    return { error: undone ?? bookingError(error.message).error };
+  }
   refresh();
   return { ok: true };
 }

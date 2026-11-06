@@ -49,10 +49,11 @@ export type WeekGrid = {
 
 /** Live meeting-link and Calendly state. Absent keeps the Designer's "Planned" rows. */
 export type CalendarProviders = {
-  meet: "ready" | "off";
-  teams: "ready" | "off";
-  /** off: this person cannot import. Otherwise the last import, with a button only when they can run it. */
-  calendly: "off" | { syncedAt: string | null; count: number; truncated: boolean; error: string | null; canImport: boolean };
+  /** unknown: the connection list could not be read, so the row is neither Ready nor Not connected. */
+  meet: "ready" | "off" | "unknown";
+  teams: "ready" | "off" | "unknown";
+  /** off: this person cannot import. unknown: the list could not be read. Otherwise the last import. */
+  calendly: "off" | "unknown" | { syncedAt: string | null; count: number; truncated: boolean; error: string | null; canImport: boolean };
   organizationId: string;
 };
 
@@ -277,28 +278,28 @@ function ProviderBadge({ label }: { label: string }) {
 function ProviderLinks({ providers }: { providers: CalendarProviders }) {
   const calendly = providers.calendly;
   const calendlyLabel =
-    calendly === "off" ? "Not connected" : calendly.syncedAt ? `Imported ${calendly.count}` : calendly.error ? "Import failed" : "Not imported yet";
+    calendly === "off" ? "Not connected" : calendly === "unknown" ? "Couldn’t check" : calendly.syncedAt ? `Imported ${calendly.count}` : calendly.error ? "Import failed" : "Not imported yet";
   return (
     <>
       <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
         <img src={"/assets/logos/integrations/googlemeet-color.png"} alt={""} width={20} height={20} />
         {"Google Meet"}
-        <ProviderBadge label={providers.meet === "ready" ? "Ready" : "Not connected"} />
+        <ProviderBadge label={providers.meet === "ready" ? "Ready" : providers.meet === "unknown" ? "Couldn’t check" : "Not connected"} />
       </div>
       <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
         <img src={"/assets/logos/integrations/microsoftteams-color.svg"} alt={""} width={20} height={20} />
         {"Microsoft Teams"}
-        <ProviderBadge label={providers.teams === "ready" ? "Ready" : "Not connected"} />
+        <ProviderBadge label={providers.teams === "ready" ? "Ready" : providers.teams === "unknown" ? "Couldn’t check" : "Not connected"} />
       </div>
       <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
         <img src={"/assets/logos/integrations/calendly.svg"} alt={""} width={20} height={20} />
         <span>
           {"Calendly import"}
-          {calendly !== "off" && calendly.truncated ? <small style={{ display: "block", color: "var(--t2)" }}>{"Stopped at 100 events"}</small> : null}
+          {calendly !== "off" && calendly !== "unknown" && calendly.truncated ? <small style={{ display: "block", color: "var(--t2)" }}>{"Stopped before every event was fetched"}</small> : null}
         </span>
         <ProviderBadge label={calendlyLabel} />
       </div>
-      {calendly !== "off" && calendly.canImport ? (
+      {calendly !== "off" && calendly !== "unknown" && calendly.canImport ? (
         <button className={"btn sm"} type={"button"} data-calendly-import={"1"} data-org={providers.organizationId}>
           {calendly.syncedAt ? "Import again" : "Import Calendly"}
         </button>

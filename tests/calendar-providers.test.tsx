@@ -40,6 +40,13 @@ describe("calendar provider sidebar", () => {
     expect(html).toContain("Google Calendar still shares busy times only");
   });
 
+  it("does not call a failed status read Ready or Not connected", () => {
+    const html = rbar({ meet: "unknown", teams: "unknown", calendly: "unknown", organizationId: "org-1" });
+    expect(html).toContain("Couldn’t check");
+    expect(html).not.toContain(">Planned<");
+    expect(html).not.toContain(">Ready<");
+  });
+
   it("offers import only when Calendly is connected, and marks Meet and Teams ready", () => {
     const html = rbar(ready);
     expect(html).toContain(">Ready<");

@@ -21,12 +21,12 @@ export const metadata: Metadata = {
 export default function StartTrialPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   return (
     <Suspense fallback={null}>
-      <StartTrialBody searchParams={searchParams} />
+      <StartTrialScreen searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function StartTrialBody({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+export async function StartTrialScreen({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const query = await searchParams;
   const home = hasPublicSupabaseEnv() ? await homeRoute() : "/sign-in";
   if (home === "/sheet" || home === "/portal") redirect(home);

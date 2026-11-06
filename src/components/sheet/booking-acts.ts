@@ -457,7 +457,7 @@ export function openBookingType(opener: HTMLElement, root: HTMLElement, open: Op
 /** Google Meet and Teams stay unavailable until every selected host has that connection. */
 export function syncProviderChoices(dialog: ParentNode) {
   const select = dialog.querySelector<HTMLSelectElement>("#etK");
-  if (!select) return;
+  if (!select || typeof select.querySelector !== "function") return;
   const checked = [...dialog.querySelectorAll<HTMLInputElement>('input[name="etH"]')].filter((box) => box.checked);
   const ready = (flag: "meet" | "teams") => checked.length > 0 && checked.every((box) => box.dataset[flag] === "1");
   const option = (value: string) => select.querySelector<HTMLOptionElement>(`option[value="${value}"]`);

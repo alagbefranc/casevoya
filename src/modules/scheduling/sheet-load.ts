@@ -387,7 +387,10 @@ async function hostOptions(
 }
 
 function viewerProviders(input: { organizationId: string; membershipId: string; payload: ProviderPayload | null }): CalendarProviders {
-  const configured = composioConfigured() && input.payload?.composio_enabled === true;
+  if (!input.payload) {
+    return { organizationId: input.organizationId, meet: "unknown", teams: "unknown", calendly: "unknown" };
+  }
+  const configured = composioConfigured() && input.payload.composio_enabled === true;
   const connections = input.payload?.connections ?? [];
   const has = (toolkit: string) => connections.some((row) => row.membership_id === input.membershipId && row.toolkit === toolkit);
   const sync = input.payload?.sync;

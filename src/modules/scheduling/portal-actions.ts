@@ -77,7 +77,11 @@ export async function portalRescheduleBooking(input: { organizationId: string; b
     p_time_zone: input.timeZone,
     p_expected_version: version,
   });
-  return error ? portalBookingError(error.message) : { ok: true };
+  if (error) {
+    const undone = aligned.restore ? await aligned.restore() : null;
+    return { error: undone ?? portalBookingError(error.message).error };
+  }
+  return { ok: true };
 }
 
 /** Cancels the client's own booking. `late` says it was inside the type's minimum notice. */

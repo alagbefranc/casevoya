@@ -55,7 +55,11 @@ export async function manageReschedule(input: { ref: string; token: string; star
     p_time_zone: input.timeZone,
     p_expected_version: Number.isInteger(input.version) ? input.version : 0,
   });
-  return error ? { error: manageError(error.message) } : { ok: true };
+  if (error) {
+    const undone = aligned.restore ? await aligned.restore() : null;
+    return { error: undone ?? manageError(error.message) };
+  }
+  return { ok: true };
 }
 
 export async function manageCancel(input: { ref: string; token: string; reason: string; version: number; bookingId?: string }): Promise<ManageResult> {
