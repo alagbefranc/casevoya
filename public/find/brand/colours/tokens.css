@@ -1,0 +1,13 @@
+:root{
+  --cv-blue:#0075DE;      /* action, links, selected, illustration body */
+  --cv-paper:#F6F5F4;     /* page surface */
+  --cv-ink:#111111;       /* text, dark surface */
+  --cv-white:#FFFFFF;     /* raised surface, illustration plate */
+  --cv-muted:#5E5A57;     /* secondary text only */
+  --cv-error:#B3261E;     /* validation only */
+  --cv-focus:0 0 0 3px #FFFFFF,0 0 0 5px #0075DE;
+  --cv-radius:20px; --cv-radius-sm:12px;
+  --cv-space:4px 8px 12px 16px 24px 32px 48px 64px 96px 144px;
+  --cv-font-display:"Erode",Georgia,"Times New Roman",serif;
+  --cv-font-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+}

@@ -10,6 +10,30 @@ import { bookingPagePath, isBookablePublicEvent } from "@/modules/scheduling/pub
 import { enquiryPagePath, parsePublicFirm } from "@/modules/leads/enquiry";
 import { idleSignInLocation, isStaffPageLoad, readActivityState } from "@/modules/security/idle";
 import { isGuestCallPath } from "@/modules/scheduling/manage-present";
+import { isFindHost } from "@/modules/find/host";
+
+function markFindPage(response: NextResponse, path: string, findHost: boolean) {
+  if (path === "/find" || path.startsWith("/find/") || (findHost && !path.startsWith("/api") && !path.startsWith("/_next"))) {
+    response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+    response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    response.headers.set("X-Content-Type-Options", "nosniff");
+  }
+}
+
+/**
+ * On find.casevoya.ca, the site root is the public introduction page. Asset URLs already live
+ * under /find, so only the other paths are rewritten. /api stays the app's API.
+ */
+function rewriteFindHost(request: NextRequest, path: string, requestId: string): NextResponse | null {
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? request.nextUrl.host;
+  if (!isFindHost(host) || path.startsWith("/api") || path.startsWith("/_next") || path.startsWith("/find")) return null;
+  const url = request.nextUrl.clone();
+  url.pathname = path === "/" ? "/find/index.html" : `/find${path}`;
+  const rewrite = NextResponse.rewrite(url, { request });
+  rewrite.headers.set(REQUEST_ID_HEADER, requestId);
+  markFindPage(rewrite, url.pathname, true);
+  return rewrite;
+}
 
 function redirectKeepingSession(request: NextRequest, response: NextResponse, pathname: string, search: string) {
   const redirectUrl = request.nextUrl.clone();
@@ -38,11 +62,15 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const search = request.nextUrl.search;
+  const findHost = isFindHost(request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? request.nextUrl.host);
+  const findRewritten = rewriteFindHost(request, path, requestId);
+  if (findRewritten) return findRewritten;
   if (!hasPublicSupabaseEnv()) {
     if (isGatedPath(path)) {
       const destination = new URL(signInLocation(path, search), request.url);
       return redirectKeepingSession(request, response, destination.pathname, destination.search);
     }
+    markFindPage(response, path, findHost);
     return response;
   }
   const { url, publishableKey } = getPublicSupabaseEnv();
@@ -193,6 +221,9 @@ export async function updateSession(request: NextRequest) {
       }
     }
   }
+
+  // find.casevoya.ca is the public introduction page. It is not signed in and it is not indexed.
+  markFindPage(response, path, findHost);
 
   return response;
 }

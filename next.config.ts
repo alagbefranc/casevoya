@@ -1,14 +1,20 @@
 import type { NextConfig } from "next";
+import { FIND_HOST } from "./src/modules/find/host";
 
 const WORKERS = process.env.CASEVOYA_TARGET === "workers";
 
 const nextConfig: NextConfig = {
   /* config options here */
-  allowedDevOrigins: ["127.0.0.1"],
+  allowedDevOrigins: ["127.0.0.1", FIND_HOST],
   experimental: {
     // Consultation agreement signing: a drawn or uploaded signature image (PNG or JPEG, up to
     // 1.5 MB) is posted as form data to its server action. The default is 1 MB.
     serverActions: { bodySizeLimit: "2mb" },
+  },
+  async rewrites() {
+    // find.casevoya.ca's document paths are rewritten in src/lib/supabase/proxy.ts.
+    // /find on any host serves the same page. Assets stay at /find/* (the page's <base>).
+    return { beforeFiles: [{ source: "/find", destination: "/find/index.html" }] };
   },
   async redirects() {
     return [

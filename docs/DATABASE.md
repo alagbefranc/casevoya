@@ -1314,3 +1314,7 @@ Additive only; each redefined function is copied from its latest definition.
 * `20261102120002_composio_off_ends_connections.sql` (#299): `public.set_composio_enabled(false)` marks every connection of the firm `disconnected` and removes its `google` / `microsoft` busy blocks. `public.replace_external_busy_blocks` is refused while the switch is off. New `public.composio_connection_ready(org, toolkit?)` (authenticated staff): the switch is on and, with a toolkit, the caller's connection is active (returns the mail label); the app calls it before every Composio call.
 
 Tested in `tests/document-capture-redaction.rls.test.ts`, `tests/document-redacted-copy-action.test.ts`, `tests/rule-test-cases-firm-scope.rls.test.ts`, `tests/staff-connections.rls.test.ts` and `tests/security-review-portal-sources-document-grant.rls.test.ts`.
+
+## Consultant introductions (`20261107160000`, not applied on the live project)
+
+`public.consultant_connect_requests` holds find.casevoya.ca requests. It is not a firm table: no `organization_id`, no fee, no mail. `public.submit_consultant_connect` (service role only) inserts status `New` and returns null when that address hash already sent 5 in 10 minutes. `consent` must be true, and the stored sentence is the one on the page. Forced RLS, no policies. `anon` and `authenticated` have no grants. `service_role` may select and insert, not update. A later status needs a new migration because `status` may only be `New`. The human Send to one opted-in firm is not in this migration. Tested in `tests/consultant-connect.rls.test.ts`.
