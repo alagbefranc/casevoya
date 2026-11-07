@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { toast2 } from "@/components/port/kit";
 import { setEnquiryPageEnabled } from "@/modules/leads/enquiry-actions";
+import { setAcceptFindIntroductions } from "@/modules/find/opt-in";
 import { dialogId, withoutDialog } from "@/modules/sheet/matter-wire";
 import { withoutNew } from "@/modules/sheet/new-matter";
 import { HOME_TASK_SHOWN, filterHidden, nextHomeChip, withoutParam } from "@/modules/sheet/home-controls";
@@ -568,6 +569,33 @@ export function useSheet(ref: RefObject<HTMLElement | null>, page: string) {
             router.refresh();
           })
           .finally(() => enquiryToggle.removeAttribute("aria-busy"));
+        return;
+      }
+      // Settings > Firm: the owner turns introductions on or off. The switch does not move until the save succeeds.
+      const findIntro = target.closest<HTMLElement>("[data-find-intro]");
+      if (findIntro && root.contains(findIntro)) {
+        event.preventDefault();
+        if (findIntro.getAttribute("aria-busy") === "true") return;
+        findIntro.setAttribute("aria-busy", "true");
+        const enabled = findIntro.dataset.findIntro === "on";
+        void setAcceptFindIntroductions({ organizationId: findIntro.dataset.org ?? "", enabled })
+          .then((result) => {
+            if ("error" in result) {
+              if (result.stepUp) {
+                const next = `${window.location.pathname}${window.location.search}`;
+                goStepUp(stepUpHref(next, "find_introductions"), findIntro);
+                return;
+              }
+              toast2(result.error, { kind: "bad", sub: "Nothing was changed." });
+              return;
+            }
+            toast2(enabled ? "Introductions on" : "Introductions off", {
+              kind: "ok",
+              sub: enabled ? "Casevoya can send one request here. It does not email anyone." : "Future requests stop. A lead already created stays.",
+            });
+            router.refresh();
+          })
+          .finally(() => findIntro.removeAttribute("aria-busy"));
         return;
       }
       // Settings > Team and seats, firm transfers (ORG-06): record, review authority, close.

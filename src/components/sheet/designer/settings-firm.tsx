@@ -102,6 +102,11 @@ export type FirmData = {
   rows: { label: string; value: FirmValue; num?: boolean }[];
   /** Live only (OPS-06): the firm's inbound email address, in its own panel with a Copy button. */
   inbound?: InboundAddressData | null;
+  /**
+   * Live only. Omitted until the column exists, and omitted on the Designer capture.
+   * Off until the firm owner turns it on. Turning it off stops future sends and leaves any lead already created.
+   */
+  introductions?: { on: boolean; owner: boolean; organizationId: string } | null;
 };
 
 function Value({ value }: { value: FirmValue }) {
@@ -157,7 +162,41 @@ export function SheetSettingsFirm({ data }: { data: FirmData }) {
           </div>
         </section>
       ) : null}
+      {data.introductions ? <FindIntroductions data={data.introductions} /> : null}
     </>
+  );
+}
+
+/** Settings > Firm. Default off. Not part of the Designer capture. */
+export function FindIntroductions({ data }: { data: NonNullable<FirmData["introductions"]> }) {
+  return (
+    <section className={"panel rv"} style={i(3)} data-introductions={"1"}>
+      <h2>
+        <Icon name={"users"} />
+        {"Introductions"}
+      </h2>
+      <div className={"fp-pad"} style={{ display: "grid", gap: "10px" }}>
+        <div className={data.on ? "fp-row" : "alert warn"} style={{ alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+          {data.on ? null : <Icon name={"alert"} />}
+          <div style={{ flex: 1 }}>
+            <b>{data.on ? "Introductions are on" : "Introductions are off"}</b>
+            {data.on
+              ? " A person at Casevoya can send one request to this firm. That creates one lead, with their name, email, goal, country, language and time zone. It does not email you or them."
+              : " Casevoya does not share anyone’s request with this firm. Nothing is sent here until you turn this on."}
+          </div>
+          {data.owner ? (
+            <button className={"btn s sm"} type={"button"} data-find-intro={data.on ? "off" : "on"} data-org={data.organizationId} aria-pressed={data.on ? "true" : "false"}>
+              {data.on ? "Turn off" : "Turn on"}
+            </button>
+          ) : (
+            <small style={{ color: "var(--t2)" }}>{"The firm owner can change this."}</small>
+          )}
+        </div>
+        <p className={"fp-note"} style={{ margin: 0 }}>
+          {"Turning this on lets Casevoya share one person’s name, email, goal, country, language and time zone with this firm, as one lead. It does not email anyone. Asking is free and this is not a directory. Turning it off stops future requests. A lead already created stays on your pipeline."}
+        </p>
+      </div>
+    </section>
   );
 }
 

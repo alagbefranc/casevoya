@@ -204,6 +204,40 @@ describe("platform_send_consultant_connect", () => {
   });
 });
 
+describe("set_accept_find_introductions", () => {
+  async function flag(orgId: string) {
+    await asMaintenance(db);
+    const row = await db.query<{ on: boolean }>(`select accept_find_introductions as on from public.organizations where id = $1`, [orgId]);
+    return row.rows[0].on;
+  }
+
+  it("lets a firm owner with a fresh step-up turn it on and off, and keeps the flag when the check is stale or the person is not the owner", async () => {
+    const ctx = await firm({ optIn: false });
+    expect(await flag(ctx.orgId)).toBe(false);
+    await asUser(db, { userId: ctx.owner, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    await db.query(`select public.set_accept_find_introductions(true)`);
+    expect(await flag(ctx.orgId)).toBe(true);
+
+    await asUser(db, { userId: ctx.owner, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 3600 });
+    await expectDbError(() => db.query(`select public.set_accept_find_introductions(false)`), /step-up/i);
+    expect(await flag(ctx.orgId)).toBe(true);
+
+    const consultant = await createUser("staff");
+    await membership(ctx.orgId, consultant, "licensed_consultant");
+    await asUser(db, { userId: consultant, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    await expectDbError(() => db.query(`select public.set_accept_find_introductions(false)`), /step-up|42501/i);
+    expect(await flag(ctx.orgId)).toBe(true);
+
+    await asUser(db, { userId: ctx.owner, aal: "aal2", orgId: ctx.orgId, totpAgeSeconds: 0 });
+    await db.query(`select public.set_accept_find_introductions(false)`);
+    expect(await flag(ctx.orgId)).toBe(false);
+    const leads = await db.query<{ n: number }>(`select count(*)::int as n from public.leads where organization_id = $1`, [ctx.orgId]);
+    const mail = await db.query<{ n: number }>(`select count(*)::int as n from public.email_deliveries where organization_id = $1`, [ctx.orgId]);
+    expect(leads.rows[0].n).toBe(0);
+    expect(mail.rows[0].n).toBe(0);
+  });
+});
+
 describe("send before the migration", () => {
   it("has no send function when 20261107170000 has not been applied", async () => {
     const early = await createTestDb({ stopBefore: "20261107170000" });

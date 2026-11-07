@@ -62,6 +62,7 @@ const ACTIONS = {
   automations: { phrase: "change automations", icon: "lightning", title: "Change automations", detail: "Your firm’s deadline-reminder automations" },
   booking_settings: { phrase: "change booking settings", icon: "calendar", title: "Change booking settings", detail: "Booking types, times and your public page" },
   enquiry_page: { phrase: "turn the enquiry page on or off", icon: "globe", title: "Change the enquiry page", detail: "The public form new clients use to reach you" },
+  find_introductions: { phrase: "turn introductions on or off", icon: "users", title: "Change introductions", detail: "Whether Casevoya may send one request to this firm" },
   intake_publish: { phrase: "publish an intake form", icon: "file", title: "Publish an intake form", detail: "The questions clients are asked" },
   intake_delete: { phrase: "delete an intake form", icon: "trash", title: "Delete an intake form", detail: "The form stops being offered to clients" },
   portal_policy: { phrase: "publish a portal policy", icon: "privacy", title: "Publish a portal policy", detail: "Terms and privacy notice clients accept" },

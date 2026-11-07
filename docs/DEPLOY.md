@@ -63,7 +63,7 @@ Do not commit secrets. Copy the names below into the host environment. Account i
 pnpm run deploy:app
 ```
 
-- `wrangler.jsonc` mirrors the live Worker: compatibility date and flags, `ASSETS`, the `WORKER_SELF_REFERENCE` service binding, the custom domain `app.casevoya.ca`, `workers_dev = false`.
+- `wrangler.jsonc` mirrors the live Worker: compatibility date and flags, `ASSETS`, the `WORKER_SELF_REFERENCE` service binding, the custom domain `app.casevoya.ca`, and `find.casevoya.ca` beside it, `workers_dev = false`. The find route is in source so a later deploy can attach that hostname. It does not move DNS, and it does not replace `app.casevoya.ca`. Do not deploy it until the Pages site that currently owns `find.casevoya.ca` is ready to release the hostname.
 - Deploy from a clean checkout. Turbopack scans the project folder, so nested git worktrees (for example `.claude/worktrees/`, about 9 GB here) pushed the build past 15 GB and the kernel killed it; from a clean checkout the Workers build peaks near 5 GB. Do not switch the build to webpack: `globals.css` relies on Turbopack's Tailwind loader for its `@import ... layer(kit)` lines, and a webpack build ships the site without the kit CSS (tried and rolled back on 2026-10-19).
 - `CASEVOYA_TARGET=workers` (set by `build:workers`) turns `cacheComponents` and `partialPrefetching` off until opennextjs-cloudflare#1318 is fixed. Local and CI builds keep them on.
 - `.env.production` holds only the two public Supabase values, which Next.js inlines at build time.
