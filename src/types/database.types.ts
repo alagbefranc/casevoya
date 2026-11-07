@@ -1791,6 +1791,60 @@ export type Database = {
         }
         Relationships: []
       }
+      consultant_connect_requests: {
+        Row: {
+          code: string
+          consent: boolean
+          consent_statement: string
+          consent_version: string
+          country: string
+          email: string
+          goal: string
+          id: string
+          ip_hash: string
+          language: string
+          name: string
+          status: string
+          submitted_at: string
+          user_agent: string | null
+          zone: string
+        }
+        Insert: {
+          code: string
+          consent: boolean
+          consent_statement: string
+          consent_version: string
+          country: string
+          email: string
+          goal: string
+          id?: string
+          ip_hash: string
+          language: string
+          name: string
+          status?: string
+          submitted_at?: string
+          user_agent?: string | null
+          zone: string
+        }
+        Update: {
+          code?: string
+          consent?: boolean
+          consent_statement?: string
+          consent_version?: string
+          country?: string
+          email?: string
+          goal?: string
+          id?: string
+          ip_hash?: string
+          language?: string
+          name?: string
+          status?: string
+          submitted_at?: string
+          user_agent?: string | null
+          zone?: string
+        }
+        Relationships: []
+      }
       complaints: {
         Row: {
           ack_due_on: string | null
@@ -18199,6 +18253,23 @@ export type Database = {
           p_entry_id: string
         }
         Returns: number
+      }
+      submit_consultant_connect: {
+        Args: {
+          p_code: string
+          p_consent: boolean
+          p_consent_version: string
+          p_country: string
+          p_email: string
+          p_goal: string
+          p_ip_hash: string
+          p_language: string
+          p_name: string
+          p_statement: string
+          p_user_agent: string | null
+          p_zone: string
+        }
+        Returns: string
       }
       submit_enquiry:
         | {

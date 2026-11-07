@@ -14,7 +14,7 @@ import { clientAddress, ipKey, isIpAddress } from "./client-address";
  *   RL_AUTH        20/min per address   password sign-in, sign-up, invitation sign-in/sign-up
  *   RL_AUTH_EMAIL   5/min per address   anything that makes Supabase send an email
  *   RL_VERIFY      15/min per address and per user   email codes, invitation codes, TOTP
- *   RL_PUBLIC      10/min per address   public booking hold and enquiry POSTs
+ *   RL_PUBLIC      10/min per address   public booking hold, enquiry, and find-page POSTs
  *   RL_PAYMENT     10/min per user      invoice card payment, subscription checkout and portal
  *   RL_DOCUMENT_WORK 10/min per user    server-side document rewrites (redacted copies)
  *
