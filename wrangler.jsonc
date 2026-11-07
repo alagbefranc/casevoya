@@ -11,7 +11,13 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": false,
   "preview_urls": false,
-  "routes": [{ "pattern": "app.casevoya.ca", "custom_domain": true }],
+  // app.casevoya.ca stays. find.casevoya.ca serves the public introduction page
+  // (src/lib/supabase/proxy.ts rewrites that host). This route is source only:
+  // DNS and any Pages cutover stay a separate, reviewed step.
+  "routes": [
+    { "pattern": "app.casevoya.ca", "custom_domain": true },
+    { "pattern": "find.casevoya.ca", "custom_domain": true }
+  ],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

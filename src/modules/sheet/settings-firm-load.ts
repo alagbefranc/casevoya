@@ -85,7 +85,14 @@ export async function loadSheetSettingsFirm(staff: SheetStaff, tab: SettingsTab)
     // OPS-06: the firm's inbound address, slug@ the inbound domain (the inbound worker's own rule).
     const slug = await supabase.from("organizations").select("slug").eq("id", org).maybeSingle();
     const withInbound = slug.data?.slug ? { ...data, inbound: firmInboundAddress(firmAddress(slug.data.slug, emailRuntimeConfig().inboundDomain)) } : data;
-    return { chrome, header, dialogs, page: { tab, data: withInbound } as const };
+    // Hidden when the column is not there yet, so this page still loads before that migration.
+    const flag = firmOk
+      ? await supabase.from("organizations").select("accept_find_introductions").eq("id", org).maybeSingle()
+      : null;
+    const introductions = flag && !flag.error && flag.data
+      ? { on: flag.data.accept_find_introductions === true, owner, organizationId: org }
+      : null;
+    return { chrome, header, dialogs, page: { tab, data: { ...withInbound, introductions } } as const };
   }
 
   if (tab === "offices") {

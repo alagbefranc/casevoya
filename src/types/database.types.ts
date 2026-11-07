@@ -1804,6 +1804,10 @@ export type Database = {
           ip_hash: string
           language: string
           name: string
+          lead_id: string | null
+          organization_id: string | null
+          sent_at: string | null
+          sent_by: string | null
           status: string
           submitted_at: string
           user_agent: string | null
@@ -1820,7 +1824,11 @@ export type Database = {
           id?: string
           ip_hash: string
           language: string
+          lead_id?: string | null
           name: string
+          organization_id?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
           status?: string
           submitted_at?: string
           user_agent?: string | null
@@ -1837,7 +1845,11 @@ export type Database = {
           id?: string
           ip_hash?: string
           language?: string
+          lead_id?: string | null
           name?: string
+          organization_id?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
           status?: string
           submitted_at?: string
           user_agent?: string | null
@@ -9060,6 +9072,7 @@ export type Database = {
           quiet_hours_end: string | null
           quiet_hours_start: string | null
           retention_policy: Json | null
+          accept_find_introductions: boolean
           sample_mode: boolean
           slug: string
           staff_idle_timeout_minutes: number
@@ -9098,6 +9111,7 @@ export type Database = {
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null
           retention_policy?: Json | null
+          accept_find_introductions?: boolean
           sample_mode?: boolean
           slug: string
           staff_idle_timeout_minutes?: number
@@ -9136,6 +9150,7 @@ export type Database = {
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null
           retention_policy?: Json | null
+          accept_find_introductions?: boolean
           sample_mode?: boolean
           slug?: string
           staff_idle_timeout_minutes?: number
@@ -18253,6 +18268,22 @@ export type Database = {
           p_entry_id: string
         }
         Returns: number
+      }
+      set_accept_find_introductions: {
+        Args: { p_enabled: boolean }
+        Returns: undefined
+      }
+      platform_consultant_connect_requests: {
+        Args: { p_limit?: number; p_offset?: number; p_state?: string }
+        Returns: Json
+      }
+      platform_find_introduction_firms: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      platform_send_consultant_connect: {
+        Args: { p_admin_user_id: string; p_org: string; p_request: string }
+        Returns: Json
       }
       submit_consultant_connect: {
         Args: {
