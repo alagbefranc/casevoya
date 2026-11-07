@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { isFindHost } from "@/modules/find/host";
+import { fetchFindAsset, findAssetPath, isFindHost } from "@/modules/find/host";
 import { FIND_CONSENT_STATEMENT, FIND_NOT_SENT, findAddressHash, readFindRequest } from "@/modules/find/request";
 
 const sample = {
@@ -63,5 +64,33 @@ describe("isFindHost", () => {
     expect(isFindHost("FIND.casevoya.ca:443")).toBe(true);
     expect(isFindHost("app.casevoya.ca")).toBe(false);
     expect(isFindHost("find.casevoya.ca.evil.com")).toBe(false);
+  });
+});
+
+describe("fetchFindAsset", () => {
+  it("reads /find/index.html for the host root and does not rewrite the app host", async () => {
+    expect(findAssetPath("/")).toBe("/find/index.html");
+    expect(findAssetPath("/find")).toBeNull();
+    expect(findAssetPath("/find/app.js")).toBeNull();
+    expect(findAssetPath("/api/find")).toBeNull();
+    const page = readFileSync(new URL("../public/find/index.html", import.meta.url), "utf8");
+    const seen: string[] = [];
+    const assets = {
+      fetch: async (input: Request) => {
+        seen.push(new URL(input.url).pathname);
+        return new Response(page, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+      },
+    };
+    const served = await fetchFindAsset("https://find.casevoya.ca/", "/", assets);
+    expect(seen).toEqual(["/find/index.html"]);
+    expect(served?.status).toBe(200);
+    expect(await served?.text()).toContain("A clearer way to Canada · Casevoya");
+    expect(await fetchFindAsset("https://app.casevoya.ca/", "/find", assets)).toBeNull();
+  });
+
+  it("fails closed when the asset bucket is missing or refuses the file", async () => {
+    expect(await fetchFindAsset("https://find.casevoya.ca/", "/", null)).toBeNull();
+    const refused = { fetch: async () => new Response("missing", { status: 404 }) };
+    expect(await fetchFindAsset("https://find.casevoya.ca/", "/", refused)).toBeNull();
   });
 });

@@ -10,7 +10,8 @@ import { bookingPagePath, isBookablePublicEvent } from "@/modules/scheduling/pub
 import { enquiryPagePath, parsePublicFirm } from "@/modules/leads/enquiry";
 import { idleSignInLocation, isStaffPageLoad, readActivityState } from "@/modules/security/idle";
 import { isGuestCallPath } from "@/modules/scheduling/manage-present";
-import { isFindHost } from "@/modules/find/host";
+import { fetchFindAsset, findAssetPath, isFindHost, type AssetFetcher } from "@/modules/find/host";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 function markFindPage(response: NextResponse, path: string, findHost: boolean) {
   if (path === "/find" || path.startsWith("/find/") || (findHost && !path.startsWith("/api") && !path.startsWith("/_next"))) {
@@ -20,15 +21,38 @@ function markFindPage(response: NextResponse, path: string, findHost: boolean) {
   }
 }
 
+function findAssets(): AssetFetcher | null {
+  try {
+    const assets = (getCloudflareContext().env as { ASSETS?: AssetFetcher }).ASSETS;
+    return assets?.fetch ? assets : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * On find.casevoya.ca, the site root is the public introduction page. Asset URLs already live
- * under /find, so only the other paths are rewritten. /api stays the app's API.
+ * under /find, so only the other paths are served from there. /api stays the app's API.
+ *
+ * The OpenNext worker serves public files from the ASSETS binding before this proxy runs.
+ * A Next rewrite of `/` to `/find/index.html` stays inside the app router and 404s. Reading
+ * the file from ASSETS returns the page. Without that binding (`next dev`), the rewrite still
+ * reaches the public file.
  */
-function rewriteFindHost(request: NextRequest, path: string, requestId: string): NextResponse | null {
+async function rewriteFindHost(request: NextRequest, path: string, requestId: string): Promise<NextResponse | null> {
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? request.nextUrl.host;
-  if (!isFindHost(host) || path.startsWith("/api") || path.startsWith("/_next") || path.startsWith("/find")) return null;
+  const assetPath = isFindHost(host) ? findAssetPath(path) : null;
+  if (!assetPath) return null;
+  const asset = await fetchFindAsset(request.url, path, findAssets());
+  if (asset) {
+    const headers = new Headers(asset.headers);
+    headers.set(REQUEST_ID_HEADER, requestId);
+    const served = new NextResponse(asset.body, { status: asset.status, headers });
+    markFindPage(served, assetPath, true);
+    return served;
+  }
   const url = request.nextUrl.clone();
-  url.pathname = path === "/" ? "/find/index.html" : `/find${path}`;
+  url.pathname = assetPath;
   const rewrite = NextResponse.rewrite(url, { request });
   rewrite.headers.set(REQUEST_ID_HEADER, requestId);
   markFindPage(rewrite, url.pathname, true);
@@ -63,7 +87,7 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const search = request.nextUrl.search;
   const findHost = isFindHost(request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? request.nextUrl.host);
-  const findRewritten = rewriteFindHost(request, path, requestId);
+  const findRewritten = await rewriteFindHost(request, path, requestId);
   if (findRewritten) return findRewritten;
   if (!hasPublicSupabaseEnv()) {
     if (isGatedPath(path)) {
