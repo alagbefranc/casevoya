@@ -56,10 +56,50 @@ describe("rejected interface habits", () => {
     expect(text(join(ROOT, "src/styles/kit/kit2.css"))).not.toMatch(/\.k2-spot::before\{[^}]*radial-gradient/);
   });
 
-  it("hides sparkle sprites while leaving the control label", () => {
+  it("hides every runtime sparkle sprite and keeps a word on the drafts tile", () => {
     const type = text(join(ROOT, "src/styles/kit/typography.css"));
     expect(type).toContain('svg:has(> use[href*="#i-sparkles"]){display:none}');
     expect(type).toContain('.opt .oi:has(use[href*="#i-sparkles"]){display:none}');
+    expect(type).toContain('.tile:has(use[href*="#i-sparkles"])::before{content:"Vo"');
+    expect(text(join(ROOT, "public/assets/icons-coreui/sprite.svg"))).toContain('id="i-sparkles"');
+
+    const sources = [...walk(join(ROOT, "src")), ...walk(join(ROOT, "public"))].filter(
+      (path) => !path.endsWith("sprite.svg") && !path.endsWith("sparkles.svg") && !path.includes(`${join("tests", "")}`),
+    );
+    const nameRe = /(?:name|icon)=\{?["']sparkles["']\}?/g;
+    const hrefRe = /href\s*=\s*\{?["']([^"']*sparkles[^"']*)["']\}?/g;
+    let names = 0;
+    let hrefs = 0;
+    const uncovered: string[] = [];
+    for (const path of sources) {
+      const source = text(path);
+      if (!source.includes("sparkles")) continue;
+      for (const match of source.matchAll(nameRe)) {
+        names += 1;
+        const line = source.slice(0, match.index ?? 0).split("\n").length;
+        const around = source.slice(Math.max(0, (match.index ?? 0) - 80), (match.index ?? 0) + 40);
+        if (/xlinkHref|xlink:href/.test(around)) uncovered.push(`${path}:${line} uses xlink for a sparkle name`);
+      }
+      for (const match of source.matchAll(hrefRe)) {
+        hrefs += 1;
+        const href = match[1] ?? "";
+        const line = source.slice(0, match.index ?? 0).split("\n").length;
+        if (!href.includes("#i-sparkles")) uncovered.push(`${path}:${line} href ${href} is not #i-sparkles`);
+        const before = source.slice(0, match.index ?? 0);
+        const svgAt = before.lastIndexOf("<svg");
+        const useAt = before.lastIndexOf("<use");
+        const between = svgAt >= 0 && useAt > svgAt ? before.slice(svgAt, useAt) : "";
+        const openEnd = between.indexOf(">");
+        const rest = openEnd >= 0 ? between.slice(openEnd + 1) : between;
+        if (svgAt < 0 || useAt < svgAt || rest.trim() !== "") {
+          uncovered.push(`${path}:${line} sparkle use is not a direct svg child, so the hide selector misses it`);
+        }
+      }
+      if (/xlink:href\s*=\s*\{?["'][^"']*sparkles/.test(source)) uncovered.push(`${path} sets a sparkle xlink:href`);
+    }
+    expect(names).toBeGreaterThan(0);
+    expect(hrefs).toBeGreaterThan(0);
+    expect(uncovered).toEqual([]);
   });
 
   it("loads Source Sans 3 for interface text and keeps Erode for Find headings", () => {

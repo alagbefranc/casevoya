@@ -8,6 +8,8 @@
  */
 svg:has(> use[href*="#i-sparkles"]){display:none}
 .opt .oi:has(use[href*="#i-sparkles"]){display:none}
+/* The drafts tile's only painted mark was the sparkle. Keep a readable word so the control is not an empty square. The accessible name stays on the link. */
+.tile:has(use[href*="#i-sparkles"])::before{content:"Vo";font-size:13px;font-weight:600;line-height:1}
 body,.shell-au,.shell-wzb,.shell-sheet,.shell-public{font-family:var(--font-ui)}
 .otp input{font-family:var(--font-ui)}
 .vc-box textarea,.k2-wt,.side .admk,.av.ini{font-family:var(--font-ui)}
