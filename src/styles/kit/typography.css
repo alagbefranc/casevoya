@@ -1,8 +1,13 @@
 /*
- * Typography per DESIGN.md (approved 2026-10-17): Inter for the interface,
- * Erode for headings only. Loaded after the Designer's kit so it overrides
- * the kit's Erode body and control fonts without editing the captured CSS.
+ * Interface text is Source Sans 3. Erode stays for headings only.
+ * Loaded after the Designer's kit so it overrides the kit's Erode body
+ * and control fonts without editing the captured CSS.
+ *
+ * Sparkle glyphs are decoration. The control's words stay, and the
+ * captured markup can keep its sprite reference for fidelity checks.
  */
+svg:has(> use[href*="#i-sparkles"]){display:none}
+.opt .oi:has(use[href*="#i-sparkles"]){display:none}
 body,.shell-au,.shell-wzb,.shell-sheet,.shell-public{font-family:var(--font-ui)}
 .otp input{font-family:var(--font-ui)}
 .vc-box textarea,.k2-wt,.side .admk,.av.ini{font-family:var(--font-ui)}

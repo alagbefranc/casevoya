@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { erode } from "@/fonts/erode";
-import { inter } from "@/fonts/inter";
+import { sourceSans } from "@/fonts/source-sans";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -22,7 +22,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en-CA" className={`${erode.variable} ${inter.variable} h-full antialiased`}>
+    <html lang="en-CA" className={`${erode.variable} ${sourceSans.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-canvas text-ink">{children}</body>
     </html>
   );

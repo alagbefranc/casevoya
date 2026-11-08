@@ -36,7 +36,7 @@ function failed(next: string, request: NextRequest, status?: number) {
 function confirmPage(tokenHash: string, type: EmailOtpType, next: string) {
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="same-origin"><title>Continue to Casevoya</title>
-<style>body{margin:0;font-family:Inter,system-ui,sans-serif;background:#f7f6f3;color:#111;display:grid;place-items:center;min-height:100vh}main{background:#fff;border-radius:14px;padding:32px;max-width:420px;box-shadow:0 1px 3px rgba(0,0,0,.08)}h1{font-size:22px;margin:0 0 8px}p{color:#3b3935;line-height:1.5;margin:0 0 20px}button{background:#0075DE;color:#fff;border:0;border-radius:10px;padding:12px 20px;font:inherit;font-weight:500;cursor:pointer}</style>
+<style>body{margin:0;font-family:"Source Sans 3",system-ui,sans-serif;background:#f7f6f3;color:#111;display:grid;place-items:center;min-height:100vh}main{background:#fff;border-radius:14px;padding:32px;max-width:420px;box-shadow:0 1px 3px rgba(0,0,0,.08)}h1{font-size:22px;margin:0 0 8px}p{color:#3b3935;line-height:1.5;margin:0 0 20px}button{background:#0075DE;color:#fff;border:0;border-radius:10px;padding:12px 20px;font:inherit;font-weight:500;cursor:pointer}</style>
 </head><body><main><h1>Continue to Casevoya</h1><p>You opened a link from a Casevoya email. Continue only if you asked for it.</p>
 <form method="post" action="/auth/confirm"><input type="hidden" name="token_hash" value="${escapeHtml(tokenHash)}"><input type="hidden" name="type" value="${escapeHtml(type)}"><input type="hidden" name="next" value="${escapeHtml(next)}"><button type="submit">Continue</button></form>
 </main></body></html>`;

@@ -61,8 +61,8 @@
   --shadow-overlay: 0 12px 32px rgba(17, 17, 17, 0.12);
 
   --font-brand: var(--font-erode), Georgia, "Times New Roman", serif;
-  /* DESIGN.md: Inter for the interface; Erode stays for headings only. */
-  --font-ui: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Interface text is Source Sans 3. Erode stays for headings only. */
+  --font-ui: var(--font-source-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 @theme inline {
