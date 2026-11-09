@@ -30,6 +30,11 @@ function findAssets(): AssetFetcher | null {
   }
 }
 
+/** Platform Host. X-Forwarded-Host is chosen by the client and does not select the Find site. */
+function platformHost(request: NextRequest): string {
+  return request.headers.get("host") ?? request.nextUrl.host;
+}
+
 /**
  * On find.casevoya.ca, the site root is the public introduction page. Asset URLs already live
  * under /find, so only the other paths are served from there. /api stays the app's API.
@@ -40,7 +45,7 @@ function findAssets(): AssetFetcher | null {
  * reaches the public file.
  */
 async function rewriteFindHost(request: NextRequest, path: string, requestId: string): Promise<NextResponse | null> {
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? request.nextUrl.host;
+  const host = platformHost(request);
   const assetPath = isFindHost(host) ? findAssetPath(path) : null;
   if (!assetPath) return null;
   const asset = await fetchFindAsset(request.url, path, findAssets());
@@ -86,7 +91,7 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const search = request.nextUrl.search;
-  const findHost = isFindHost(request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? request.nextUrl.host);
+  const findHost = isFindHost(platformHost(request));
   const findRewritten = await rewriteFindHost(request, path, requestId);
   if (findRewritten) return findRewritten;
   if (!hasPublicSupabaseEnv()) {

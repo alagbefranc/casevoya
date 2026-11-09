@@ -22,7 +22,7 @@ const worker = `
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? url.host;
+    const host = request.headers.get("host") ?? url.host;
     const name = host.split(",")[0].trim().toLowerCase().replace(/:\\d+$/, "");
     const path = url.pathname;
     const assetPath = name === "find.casevoya.ca" && !path.startsWith("/api") && !path.startsWith("/_next") && !path.startsWith("/find")
@@ -65,9 +65,9 @@ async function ready(proc: ChildProcess): Promise<void> {
   });
 }
 
-function get(host: string, pathname: string) {
+function get(host: string, pathname: string, extra: Record<string, string> = {}) {
   return new Promise<{ status: number; location: string; title: string; text: string }>((resolve, reject) => {
-    const req = httpRequest({ hostname: "127.0.0.1", port, path: pathname, method: "GET", headers: { host } }, (response) => {
+    const req = httpRequest({ hostname: "127.0.0.1", port, path: pathname, method: "GET", headers: { host, ...extra } }, (response) => {
       const chunks: Buffer[] = [];
       response.on("data", (chunk) => chunks.push(chunk as Buffer));
       response.on("end", () => {
@@ -130,5 +130,10 @@ describe("find host on the asset worker", () => {
 
     expect((await get("app.casevoya.ca", "/sign-in")).title).toBe("Sign in · Casevoya");
     expect((await get("app.casevoya.ca", "/setup")).title).toBe("Set up your firm · Casevoya");
+
+    const forged = await get("app.casevoya.ca", "/", { "x-forwarded-host": "find.casevoya.ca" });
+    expect(forged.status).toBe(307);
+    expect(new URL(forged.location, "https://app.casevoya.ca").pathname).toBe("/app");
+    expect(forged.title).not.toBe("A clearer way to Canada · Casevoya");
   });
 });

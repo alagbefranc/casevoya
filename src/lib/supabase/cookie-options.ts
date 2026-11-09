@@ -1,8 +1,9 @@
 /**
  * Auth cookie settings shared by the three Supabase clients (server, proxy, browser).
  *
- * - secure: on every https request, and in production builds generally (TLS may end before the
- *   app); off only for plain-http localhost and development, where a Secure cookie isn't stored.
+ * - secure: always in a production build, so a client-supplied forwarded host or protocol cannot
+ *   drop the flag (TLS may end before the app). Outside production, on for https and off for
+ *   plain http, including localhost, where a Secure cookie is not stored.
  * - sameSite: lax (the email links and the OAuth-style redirects are top-level GETs).
  * - httpOnly stays off: the browser client reads the session (passkeys, realtime, wire.ts).
  * - maxAge: 30 days instead of @supabase/ssr's fixed 400. The refresh token itself does not expire
@@ -17,9 +18,10 @@ export const AUTH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60;
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
 export function authCookieSecure(protocol: string, hostname: string, production = process.env.NODE_ENV === "production"): boolean {
+  if (production) return true;
   if (protocol === "https:") return true;
   if (LOCAL_HOSTS.has(hostname.toLowerCase())) return false;
-  return production;
+  return false;
 }
 
 export function authCookieOptions(secure: boolean) {

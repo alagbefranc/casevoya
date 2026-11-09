@@ -94,7 +94,7 @@ async function main(argv) {
       const { runSql } = await import("./supabase-api.mjs");
       const quoted = (value) => `'${String(value).replace(/'/g, "''")}'`;
       await runSql(
-        `begin; select set_config('request.jwt.claims', '{"role":"service_role"}', true); ` +
+        `begin; set local role service_role; select set_config('request.jwt.claims', '{"role":"service_role"}', true); ` +
           `select public.connect_firm_whatsapp(${quoted(org)}::uuid, ${quoted(sandbox.accountId)}, ${quoted(sandbox.phoneNumber ?? "")}, true); commit;`,
       );
       console.log(`Linked the sandbox number to ${org}. Disconnect it from Settings > Integrations when testing is done.`);
