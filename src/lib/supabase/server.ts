@@ -12,7 +12,7 @@ type Options = {
   requestId?: string | null;
 };
 
-/** Whether this request is https (or production behind TLS), from the forwarded headers. */
+/** Whether the session cookie is Secure. Production ignores client forwarding headers. */
 async function requestIsSecure(): Promise<boolean> {
   const incoming = await headers();
   const proto = incoming.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();

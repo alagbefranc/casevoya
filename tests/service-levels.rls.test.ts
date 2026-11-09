@@ -249,4 +249,58 @@ describe("The monthly service-level report", () => {
     expect(reads.map((row) => row.context.by).sort()).toEqual(["platform_admin", "service"]);
     expect(await audits(b.orgId, "service_level.report_read")).toHaveLength(0);
   });
+
+  it("denies a same-statement JWT role spoof and still allows the service role and the firm's owner", async () => {
+    const a = await firm();
+    const b = await firm();
+    await as(a.owner, a.orgId);
+    const identity = await db.query<{ current_user: string; member: boolean }>(
+      `select current_user::text as current_user, pg_has_role(current_user, 'service_role', 'member') as member`,
+    );
+    expect(identity.rows[0].current_user).toBe("authenticated");
+    expect(identity.rows[0].member).toBe(false);
+
+    const spoof = `with cfg as (
+      select set_config('request.jwt.claim.sub', '', true),
+             set_config('request.jwt.claims', '{"role":"service_role"}', true)
+    )
+    select public.service_level_report($1, 1) as report from cfg`;
+    const spoofed = await db.query<{ report: { organization_id: string } }>(spoof, [b.orgId]).then(
+      (result) => ({ denied: false, organizationId: result.rows[0].report.organization_id }),
+      (error: unknown) => ({ denied: true, message: error instanceof Error ? error.message : String(error) }),
+    );
+    expect({ ...spoofed, victim: b.orgId }).toEqual({
+      denied: true,
+      message: expect.stringMatching(/service level report denied/),
+      victim: b.orgId,
+    });
+
+    await asServiceRole(db);
+    const serviceReport = await db.query<{ report: { organization_id: string } }>(
+      `select public.service_level_report($1, 1) as report`,
+      [b.orgId],
+    );
+    expect(serviceReport.rows[0].report.organization_id).toBe(b.orgId);
+    const serviceReads = await audits(b.orgId, "service_level.report_read");
+    expect(serviceReads.map((row) => row.actor_type)).toContain("service");
+
+    await as(a.owner, a.orgId);
+    const own = await report(a.orgId, 1);
+    expect(own.timezone).toBe("America/Toronto");
+    expect(own.uptime).toEqual({ measured: false });
+    expect(await audits(a.orgId, "service_level.report_read")).toHaveLength(0);
+
+    await asMaintenance(db);
+    const reportGrants = await db.query<{ auth: boolean; service: boolean; anon: boolean }>(
+      `select has_function_privilege('authenticated', 'public.service_level_report(uuid, integer)', 'execute') as auth,
+              has_function_privilege('service_role', 'public.service_level_report(uuid, integer)', 'execute') as service,
+              has_function_privilege('anon', 'public.service_level_report(uuid, integer)', 'execute') as anon`,
+    );
+    expect(reportGrants.rows[0]).toEqual({ auth: true, service: true, anon: false });
+    const actorGrants = await db.query<{ auth: boolean; anon: boolean }>(
+      `select has_function_privilege('authenticated', 'app.current_actor_type()', 'execute') as auth,
+              has_function_privilege('anon', 'app.current_actor_type()', 'execute') as anon`,
+    );
+    expect(actorGrants.rows[0]).toEqual({ auth: false, anon: false });
+  });
 });

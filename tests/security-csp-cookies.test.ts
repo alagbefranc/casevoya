@@ -85,12 +85,12 @@ describe("Content-Security-Policy", () => {
 });
 
 describe("auth cookie options", () => {
-  it("is Secure on https and in production, not on plain-http localhost", () => {
+  it("is Secure on https and in production, not on plain-http localhost outside production", () => {
     expect(authCookieSecure("https:", "app.casevoya.ca", false)).toBe(true);
     expect(authCookieSecure("https:", "localhost", false)).toBe(true);
-    expect(authCookieSecure("http:", "localhost", true)).toBe(false);
+    expect(authCookieSecure("http:", "localhost", true)).toBe(true);
     expect(authCookieSecure("http:", "127.0.0.1", false)).toBe(false);
-    expect(authCookieSecure("", "localhost", true)).toBe(false);
+    expect(authCookieSecure("", "localhost", true)).toBe(true);
     expect(authCookieSecure("http:", "app.casevoya.ca", true)).toBe(true);
     expect(authCookieSecure("http:", "192.168.1.5", false)).toBe(false);
     expect(authCookieOptions(true)).toEqual({ secure: true, sameSite: "lax", path: "/" });
