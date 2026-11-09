@@ -55,6 +55,15 @@ const pipeline = `<article class="lc" id="lead-card"><i class="lbar" style="back
 const trial = `<button class="opt" type="button" id="sample-opt" role="radio" aria-checked="true"><span class="oi"><svg class="ic" aria-hidden="true"><use href="/assets/icons-coreui/sprite.svg#i-sparkles"></use></svg></span><span>Explore with sample data<small>A fictional firm with one sponsorship case.</small></span></button>`;
 const pay = `<div class="pay-stage" id="pay-stage"><p class="pay-behind">Synthetic page colour behind the payment bar</p><div class="paybar" role="region" aria-label="Pay"><div><b class="num">CAD 1,130.00</b><small>to Synthetic Immigration</small></div><button class="btn p" type="button" id="pay-button"><span class="lab">Pay</span></button></div></div>`;
 
+const fixtureFonts = `
+@font-face{font-family:"Source Sans 3";src:url("/src/fonts/source-sans-3/SourceSans3-Latin-Variable.woff2") format("woff2");font-weight:200 900;font-style:normal;font-display:swap}
+@font-face{font-family:Erode;src:url("/src/fonts/erode/Erode-Light.woff2") format("woff2");font-weight:300;font-style:normal;font-display:swap}
+@font-face{font-family:Erode;src:url("/src/fonts/erode/Erode-Regular.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:Erode;src:url("/src/fonts/erode/Erode-Medium.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:Erode;src:url("/src/fonts/erode/Erode-Semibold.woff2") format("woff2");font-weight:600;font-style:normal;font-display:swap}
+:root{--font-source-sans:"Source Sans 3";--font-erode:Erode,Georgia,"Times New Roman",serif;--font-ui:var(--font-source-sans),system-ui,-apple-system,"Segoe UI",sans-serif}
+`;
+
 const fixtureCss = `
 body{margin:0;background:#F6F5F4;color:#111}
 .banner{padding:16px 20px;background:#111;color:#fff;font:600 14px/1.4 system-ui,sans-serif}
@@ -89,7 +98,7 @@ function page(before: boolean): string {
 <link rel="stylesheet" href="/src/styles/kit/shell.css">
 <link rel="stylesheet" href="/src/styles/kit/auth.css">
 <link rel="stylesheet" href="/src/styles/kit/typography.css">
-<style>${SAMPLE_CASE_CSS}${PAY_CSS}${fixtureCss}</style></head>
+<style>${fixtureFonts}${SAMPLE_CASE_CSS}${PAY_CSS}${fixtureCss}</style></head>
 <body class="${before ? "before fixture-pay" : "fixture-pay"}">
 <p class="banner">SYNTHETIC FIXTURE — ${mark}. Components rendered locally from the source. Not a signed-in session. Not a user journey. Not production.<small>Sheet sidebar, home quick actions, file card, pipeline card, sample-case row, trial option, and payment bar.</small></p>
 <div class="layout"><div class="shell-sheet">${sidebar}</div><main class="main">
@@ -112,6 +121,10 @@ describe("synthetic fixture markup from the real components", () => {
     expect(trial).toContain("Explore with sample data");
     expect(pay).toContain('aria-label="Pay"');
     expect(PAY_CSS).not.toContain("backdrop-filter");
+    const html = page(false);
+    expect(html).toContain("/src/fonts/source-sans-3/SourceSans3-Latin-Variable.woff2");
+    expect(html).toContain("/src/fonts/erode/Erode-Light.woff2");
+    expect(html).toContain('--font-ui:var(--font-source-sans),system-ui,-apple-system,"Segoe UI",sans-serif');
   });
 
   it("writes the local preview pages when WRITE_FIXTURE=1", () => {
