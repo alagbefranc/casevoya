@@ -14,6 +14,10 @@
 .btn .spin{position:absolute;inset:0;display:none;place-items:center}.btn.is-loading .spin,.btn.is-ok .spin,.btn.is-fail .spin{display:grid}
 .btn.is-ok{background:var(--ok-bg);color:var(--ok)}.btn.is-ok .lab,.btn.is-fail .lab{opacity:0}
 .btn.is-fail{background:var(--bad-bg);color:var(--bad)}
+/* .btn.p:hover only repaints the fill, so a tapped primary button stays blue while
+   .btn.is-ok paints the check and "Saved" in --ok. Keep both readable on the blue. */
+.btn.p.is-ok,.btn.p.is-ok:hover{background:var(--blue);color:#fff}
+.btn.p.is-fail,.btn.p.is-fail:hover{background:var(--bad);color:#fff}
 .spin svg{width:20px;height:20px}
 .spin .ring{animation:cvspin .8s linear infinite;transform-origin:50% 50%}
 @keyframes cvspin{to{transform:rotate(360deg)}}
