@@ -1,3 +1,4 @@
+import { ANALYTICS_BEACON_HOSTS } from "@/modules/analytics/policy";
 import { isEmbeddablePath } from "@/lib/security/framing";
 
 /**
@@ -42,6 +43,10 @@ const STRIPE_FRAMES = ["https://js.stripe.com", "https://*.js.stripe.com", "http
 const STRIPE_CONNECT = ["https://api.stripe.com", "https://connect-js.stripe.com", "https://*.stripe.com"];
 const LIVEKIT_CLOUD = ["wss://*.livekit.cloud", "https://*.livekit.cloud"];
 const TURNSTILE = "https://challenges.cloudflare.com";
+// Cloudflare injects its Web Analytics beacon at the edge. We do not load it.
+// The beacon (2026.10.1) calls https://cloudflareinsights.com and contains no eval.
+const CLOUDFLARE_INSIGHTS_SCRIPT = "https://static.cloudflareinsights.com";
+const CLOUDFLARE_INSIGHTS_CONNECT = "https://cloudflareinsights.com";
 
 /** Reports land here. Browsers post them without a reliable Origin. */
 export const CSP_REPORT_PATH = "/api/csp-report";
@@ -89,8 +94,11 @@ function originPair(raw: string | undefined): string[] {
 
 export function contentSecurityPolicy(pathname: string, env: CspEnv = cspEnv()): string {
   const turnstile = env.turnstile ? [TURNSTILE] : [];
-  const scripts = ["'self'", "'unsafe-inline'", ...(env.dev ? ["'unsafe-eval'"] : []), ...STRIPE_SCRIPTS, ...turnstile];
-  const connect = ["'self'", ...originPair(env.supabaseUrl), ...originPair(env.liveKitUrl), ...LIVEKIT_CLOUD, ...STRIPE_CONNECT, ...turnstile];
+  // unsafe-eval stays development-only. Production booking-page chunks, this repo's
+  // source, and the current Cloudflare beacon contain no eval or new Function.
+  const insights = (ANALYTICS_BEACON_HOSTS as readonly string[]).includes("static.cloudflareinsights.com") ? [CLOUDFLARE_INSIGHTS_SCRIPT] : [];
+  const scripts = ["'self'", "'unsafe-inline'", ...(env.dev ? ["'unsafe-eval'"] : []), ...STRIPE_SCRIPTS, ...turnstile, ...insights];
+  const connect = ["'self'", ...originPair(env.supabaseUrl), ...originPair(env.liveKitUrl), ...LIVEKIT_CLOUD, ...STRIPE_CONNECT, ...turnstile, CLOUDFLARE_INSIGHTS_CONNECT];
   const frames = ["'self'", ...STRIPE_FRAMES, ...turnstile];
   const directives = [
     "default-src 'self'",

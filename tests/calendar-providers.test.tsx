@@ -76,7 +76,8 @@ function page(body: string) {
 const chrome = ["/usr/bin/google-chrome", "/usr/local/bin/google-chrome"].find((file) => existsSync(file));
 
 describe("calendar provider screenshots", () => {
-  it.skipIf(!chrome)("writes mobile and desktop shots of the disconnected and ready sidebars", () => {
+  // Four headless Chrome launches. The default 30s test limit is too tight when the runner is busy.
+  it.skipIf(!chrome)("writes mobile and desktop shots of the disconnected and ready sidebars", { timeout: 90_000 }, () => {
     mkdirSync(out, { recursive: true });
     const shots: [string, string][] = [
       ["off-390", page(rbar(off))],
@@ -87,7 +88,7 @@ describe("calendar provider screenshots", () => {
       writeFileSync(file, html);
       for (const width of [390, 1280]) {
         const shot = path.join(out, `${name.split("-")[0]}-${width}.png`);
-        const result = spawnSync(chrome ?? "google-chrome", ["--headless", "--disable-gpu", "--no-sandbox", `--window-size=${width},900`, `--screenshot=${shot}`, file], { timeout: 30_000 });
+        const result = spawnSync(chrome ?? "google-chrome", ["--headless", "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage", `--window-size=${width},900`, `--screenshot=${shot}`, file], { timeout: 20_000 });
         expect(result.status, result.stderr?.toString()).toBe(0);
       }
     }

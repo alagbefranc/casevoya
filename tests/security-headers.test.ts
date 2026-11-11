@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HSTS, NOSNIFF, REFERRER_POLICY } from "@/lib/security/headers";
+import { buildId, databaseReachable } from "@/lib/health";
 
 const calls = vi.hoisted(() => ({ claims: 0 }));
 
@@ -69,12 +70,15 @@ describe("GET /api/health", () => {
     expect(calls.claims).toBeGreaterThan(0);
   });
 
-  it("returns 200 with only status, build_id and time when the database answers", async () => {
-    vi.stubEnv("CASEVOYA_BUILD_ID", "abc123");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("openapi", { status: 200 })),
-    );
+  it("returns 200 with only status, build_id and time when GoTrue answers", async () => {
+    vi.stubEnv("NEXT_BUILD_ID", "abc123");
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(String(url)).toBe("https://proj.supabase.co/auth/v1/health");
+      expect(new Headers(init?.headers).get("apikey")).toBe("sb_publishable_test");
+      expect(new Headers(init?.headers).has("authorization")).toBe(false);
+      return new Response("ok", { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
     const { GET } = await import("@/app/api/health/route");
     const response = await GET();
     expect(response.status).toBe(200);
@@ -85,9 +89,23 @@ describe("GET /api/health", () => {
     expect(JSON.stringify(body)).not.toContain("sb_publishable_test");
     expect(JSON.stringify(body)).not.toContain("proj.supabase.co");
     expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it("returns 503 when the database does not answer in time", async () => {
+  it("returns 503 when GoTrue refuses the publishable key or does not answer", async () => {
+    vi.stubEnv("NEXT_BUILD_ID", "");
+    vi.stubEnv("__NEXT_BUILD_ID", "");
+    vi.stubEnv("CASEVOYA_BUILD_ID", "");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("Secret API key required", { status: 401 })),
+    );
+    expect(await databaseReachable()).toBe(false);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 204 })),
+    );
+    expect(await databaseReachable()).toBe(true);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
@@ -97,6 +115,18 @@ describe("GET /api/health", () => {
     const { GET } = await import("@/app/api/health/route");
     const response = await GET();
     expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({ status: "unavailable", build_id: "unknown" });
+    expect(await response.json()).toMatchObject({ status: "unavailable", build_id: buildId() });
+  });
+});
+
+describe("build id", () => {
+  it("uses the Next build id that /BUILD_ID serves, ahead of a manual env var", () => {
+    const env = (value: Record<string, string>) => value as NodeJS.ProcessEnv;
+    expect(buildId(env({ NEXT_BUILD_ID: "ePMTuWgsXGMfEhDzjsDsw", CASEVOYA_BUILD_ID: "manual" }), null)).toBe("ePMTuWgsXGMfEhDzjsDsw");
+    expect(buildId(env({ __NEXT_BUILD_ID: "from-next" }), null)).toBe("from-next");
+    expect(buildId(env({}), "from-file\n")).toBe("from-file");
+    expect(buildId(env({ CASEVOYA_BUILD_ID: "abc123" }), null)).toBe("abc123");
+    expect(buildId(env({}), null)).toBe("unknown");
+    expect(buildId(env({ NEXT_BUILD_ID: "has space" }), null)).toBe("unknown");
   });
 });
