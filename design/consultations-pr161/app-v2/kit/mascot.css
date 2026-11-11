@@ -1,0 +1,19 @@
+/* Mascot motion (same rules as the landing) */
+.mascot{overflow:visible;flex:none}
+.mascot .m-eyes{animation:m-blink 4.6s infinite}
+.mascot .m-body{animation:m-breathe 3.6s var(--ease,ease) infinite}
+.m-thinking .m-eyes{animation:m-look 1.6s ease-in-out infinite}
+.m-thinking .m-dots circle{animation:m-dot 1s ease-in-out infinite}
+.m-thinking .m-dots circle:nth-child(2){animation-delay:.15s}
+.m-thinking .m-dots circle:nth-child(3){animation-delay:.3s}
+.m-done .m-badge,.m-review .m-badge{transform-origin:80px 22px;animation:m-pop 300ms cubic-bezier(.34,1.56,.64,1)}
+.m-review .m-body{animation:m-tilt 2.4s ease-in-out infinite}
+.mascot .m-wing{animation:m-wing 3.6s ease-in-out infinite}
+@keyframes m-blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+@keyframes m-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.025,.985)}}
+@keyframes m-look{0%,100%{transform:translate(0,0)}50%{transform:translate(2px,-3px)}}
+@keyframes m-dot{0%,100%{transform:translateY(0);opacity:.4}50%{transform:translateY(-4px);opacity:1}}
+@keyframes m-pop{from{transform:scale(.6);opacity:0}}
+@keyframes m-tilt{0%,100%{transform:rotate(0)}50%{transform:rotate(-4deg)}}
+@keyframes m-wing{0%,100%{transform:rotate(0)}50%{transform:rotate(-6deg)}}
+@media (prefers-reduced-motion:reduce){.mascot *{animation:none!important}}
