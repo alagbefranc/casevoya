@@ -23,11 +23,12 @@ import { isEmbeddablePath } from "@/lib/security/framing";
  *    `connect-src` for its websocket. A nonce would not help it, and a broken script policy
  *    would still take down the call page's Next scripts.
  *
- * The full allowlist is therefore enforced, including `script-src` with `'unsafe-inline'`
- * and the Stripe hosts. That blocks any other script origin. It does not stop an inline
- * script. Styles stay `'unsafe-inline'` because pages inject `<style>` elements.
- * `frame-ancestors` stays `*` only on the embedded enquiry form and `'self'` everywhere else.
- * API routes are not documents: they get `frame-ancestors 'self'` and no script policy.
+ * The full allowlist, including `script-src` with `'unsafe-inline'` and the Stripe hosts, is
+ * sent as Content-Security-Policy-Report-Only unless CSP_ENFORCE=1. Report-only does not block.
+ * `frame-ancestors` is ignored in a report-only policy, so a separate enforced
+ * Content-Security-Policy carries only that directive: `*` on the embedded enquiry form and
+ * `'self'` everywhere else, including API responses. X-Frame-Options stays SAMEORIGIN except
+ * on that embed. CSP_ENFORCE=1 moves the full policy onto the enforced header.
  *
  * Sources checked against the app: Next and the find page are `'self'` (public/find/index.html
  * loads `app.js`). Stripe.js and Connect are the hosts below. Supabase REST and Realtime are
@@ -41,6 +42,16 @@ const STRIPE_FRAMES = ["https://js.stripe.com", "https://*.js.stripe.com", "http
 const STRIPE_CONNECT = ["https://api.stripe.com", "https://connect-js.stripe.com", "https://*.stripe.com"];
 const LIVEKIT_CLOUD = ["wss://*.livekit.cloud", "https://*.livekit.cloud"];
 const TURNSTILE = "https://challenges.cloudflare.com";
+
+/** Reports land here. Browsers post them without a reliable Origin. */
+export const CSP_REPORT_PATH = "/api/csp-report";
+export const CSP_REPORT_GROUP = "csp";
+export const REPORTING_ENDPOINTS = `${CSP_REPORT_GROUP}="${CSP_REPORT_PATH}"`;
+
+/** CSP_ENFORCE=1 sends the full policy as Content-Security-Policy. Any other value is report-only. */
+export function cspEnforced(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.CSP_ENFORCE === "1";
+}
 
 export type CspEnv = {
   /** NEXT_PUBLIC_SUPABASE_URL. */
@@ -95,23 +106,45 @@ export function contentSecurityPolicy(pathname: string, env: CspEnv = cspEnv()):
     "base-uri 'self'",
     "form-action 'self'",
     `frame-ancestors ${isEmbeddablePath(pathname) ? "*" : "'self'"}`,
+    `report-uri ${CSP_REPORT_PATH}`,
+    `report-to ${CSP_REPORT_GROUP}`,
   ];
   return directives.join("; ");
 }
 
-/** @deprecated The policy is enforced. Kept so older imports still name the same allowlist. */
+/** @deprecated The policy is report-only by default. Kept so older imports still name the same allowlist. */
 export const reportOnlyCsp = contentSecurityPolicy;
 
 function isApiPath(pathname: string): boolean {
   return pathname === "/api" || pathname.startsWith("/api/");
 }
 
-/** Enforces the full page policy. API routes only pin frame-ancestors to this origin. */
+/** Enforced clickjacking directive. Report-only policies ignore frame-ancestors. */
+export function enforcedFrameAncestors(pathname: string): string {
+  if (!isApiPath(pathname) && isEmbeddablePath(pathname)) return "frame-ancestors *";
+  return "frame-ancestors 'self'";
+}
+
+/**
+ * Pages: the full allowlist is report-only, and the enforced header is only frame-ancestors.
+ * CSP_ENFORCE=1 moves that same allowlist onto Content-Security-Policy.
+ * API responses are not documents: they get frame-ancestors and no script policy.
+ */
 export function applyContentSecurityPolicy(headers: Headers, pathname: string, env: CspEnv = cspEnv()): void {
-  headers.delete("Content-Security-Policy-Report-Only");
+  const ancestors = enforcedFrameAncestors(pathname);
   if (isApiPath(pathname)) {
-    if (!headers.get("Content-Security-Policy")) headers.set("Content-Security-Policy", "frame-ancestors 'self'");
+    headers.set("Content-Security-Policy", ancestors);
+    headers.delete("Content-Security-Policy-Report-Only");
+    headers.delete("Reporting-Endpoints");
     return;
   }
-  headers.set("Content-Security-Policy", contentSecurityPolicy(pathname, env));
+  const policy = contentSecurityPolicy(pathname, env);
+  headers.set("Reporting-Endpoints", REPORTING_ENDPOINTS);
+  if (cspEnforced()) {
+    headers.set("Content-Security-Policy", policy);
+    headers.delete("Content-Security-Policy-Report-Only");
+    return;
+  }
+  headers.set("Content-Security-Policy", ancestors);
+  headers.set("Content-Security-Policy-Report-Only", policy);
 }

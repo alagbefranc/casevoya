@@ -92,8 +92,9 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const search = request.nextUrl.search;
-  // Uptime probes must not depend on a session refresh or an auth redirect.
-  if (path === "/api/health") {
+  // Uptime probes and CSP reports must not depend on a session refresh or an auth redirect.
+  // Browsers post CSP reports without a reliable Origin, so this path also skips the session client.
+  if (path === "/api/health" || path === "/api/csp-report") {
     response.headers.set("Cache-Control", "no-store");
     return response;
   }

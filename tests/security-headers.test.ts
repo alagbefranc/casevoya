@@ -37,7 +37,8 @@ describe("security headers", () => {
     expect(page.headers.get("Strict-Transport-Security")).not.toContain("includeSubDomains");
     expect(page.headers.get("Referrer-Policy")).toBe(REFERRER_POLICY);
     expect(page.headers.get("Permissions-Policy")).toBe("camera=(), microphone=()");
-    expect(page.headers.get("Content-Security-Policy")).toContain("script-src");
+    expect(page.headers.get("Content-Security-Policy")).toBe("frame-ancestors 'self'");
+    expect(page.headers.get("Content-Security-Policy-Report-Only")).toContain("script-src");
 
     const api = await proxy(new NextRequest("https://app.casevoya.ca/api/leads/move"));
     expect(api.headers.get("X-Content-Type-Options")).toBe("nosniff");

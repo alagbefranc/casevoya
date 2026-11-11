@@ -9,7 +9,7 @@ export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   // Only a firm's embedded enquiry form may be framed by another site.
   applyFraming(response.headers, pathname);
-  // Enforced CSP on pages (script-src included). API routes only pin frame-ancestors.
+  // Full CSP is report-only unless CSP_ENFORCE=1. frame-ancestors stays enforced.
   applyContentSecurityPolicy(response.headers, pathname);
   applySecurityHeaders(response.headers, pathname);
   return response;
